@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/assertion-gate/1.0",
+  "title": "WOS Assertion Gate Library",
+  "description": "A WOS Assertion Gate Library sidecar document. Provides a reusable collection of assertion gate definitions for WOS data validation pipelines. Pipelines reference assertions by identifier, enabling shared definitions across multiple pipelines and governance documents.",
+  "type": "object",
+  "required": [
+    "$wosAssertionLibrary",
+    "assertions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosAssertionLibrary": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Assertion Gate Library specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Assertion Gate Library sidecar"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical URI identifier for this library.",
+      "examples": ["https://agency.gov/assertion-libraries/income-verification"]
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this library document.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this assertion library.",
+      "examples": ["Income Verification Assertions", "Document Extraction Assertions"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this library's purpose."
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AssertionDefinition"
+      },
+      "minItems": 1,
+      "description": "Reusable assertion definitions. Referenced by pipeline stages via id.",
+      "examples": [
+        [
+          {
+            "id": "incomeSourceGrounded",
+            "type": "source-grounded",
+            "description": "Extracted income values must appear in source pay stub",
+            "fields": ["applicantIncome"],
+            "rejectionPolicy": "retryWithCorrections"
+          },
+          {
+            "id": "totalArithmetic",
+            "type": "arithmetic",
+            "description": "Total income must equal sum of components",
+            "expression": "totalIncome = wageIncome + investmentIncome + otherIncome",
+            "rejectionPolicy": "failWithExplanation"
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "The collection of named, reusable assertion gates"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "AssertionDefinition": {
+      "type": "object",
+      "required": ["id", "type", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique assertion identifier. Referenced by pipeline stages.",
+          "examples": ["incomeSourceGrounded", "totalIncomeArithmetic", "filingDateRange"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["source-grounded", "arithmetic", "range", "consistency", "format", "cross-document", "temporal"],
+          "description": "Assertion gate type (Governance S5.4).",
+          "examples": ["source-grounded", "arithmetic"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the verification method for this assertion"
+          }
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression defining the assertion constraint.",
+          "examples": [
+            "totalIncome = wageIncome + investmentIncome + otherIncome",
+            "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields subject to this assertion.",
+          "examples": [["applicantIncome", "filingDate"]]
+        },
+        "referenceStage": {
+          "type": "string",
+          "description": "Reference to a pipeline stage for consistency checking."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this assertion checks.",
+          "examples": ["Extracted income values must appear in the source pay stub document"]
+        },
+        "rejectionPolicy": {
+          "type": "string",
+          "enum": ["retryWithCorrections", "escalateToSupervisor", "holdPendingData", "failWithExplanation"],
+          "description": "Default rejection policy when this assertion fails."
+        }
+      }
+    }
+  }
+}

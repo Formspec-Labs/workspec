@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/verification-report/1.0",
+  "title": "WOS Verification Report",
+  "description": "A WOS Verification Report sidecar document. Records the results of SMT-based formal verification of deontic constraints and governance rules. Captures which constraints were verified, the result (proven-safe, proven-unsafe, inconclusive), counterexamples, and solver metadata. Reports are immutable provenance artifacts.",
+  "type": "object",
+  "required": ["$wosVerificationReport", "targetWorkflow", "timestamp", "solver", "results"],
+  "additionalProperties": false,
+  "properties": {
+    "$wosVerificationReport": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Verification Report specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Verification Report sidecar"
+      }
+    },
+    "$schema": { "type": "string", "format": "uri" },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document whose constraints were verified. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": { "critical": true, "intent": "Binds this report to the verified workflow" }
+    },
+    "version": { "type": "string", "minLength": 1 },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the verification was performed.",
+      "examples": ["2026-04-09T14:30:00Z"]
+    },
+    "solver": {
+      "$ref": "#/$defs/SolverInfo",
+      "description": "Information about the verification tool."
+    },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ConstraintResult" },
+      "minItems": 1,
+      "description": "Per-constraint verification results.",
+      "examples": [
+        [{ "constraintRef": "noFinalDenial", "result": "proven-safe", "solverTimeMs": 42, "notes": "Constraint holds for all possible input combinations" }]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "The verification outcome for each constraint -- proven-safe, proven-unsafe, or inconclusive"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/VerificationSummary",
+      "description": "Aggregate verification summary."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" }
+    }
+  },
+  "$defs": {
+    "SolverInfo": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Solver name.",
+          "examples": ["Z3", "CVC5", "custom-wos-verifier"]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Solver version.",
+          "examples": ["4.13.0", "1.1.0"]
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Solver timeout per constraint.",
+          "examples": ["PT30S", "PT5M"]
+        }
+      }
+    },
+    "ConstraintResult": {
+      "type": "object",
+      "required": ["constraintRef", "result"],
+      "additionalProperties": false,
+      "properties": {
+        "constraintRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to the deontic constraint that was verified.",
+          "examples": ["noFinalDenial", "outputFieldScope"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies which constraint this result applies to"
+          }
+        },
+        "result": {
+          "type": "string",
+          "enum": ["proven-safe", "proven-unsafe", "inconclusive"],
+          "description": "Verification result. 'proven-safe': constraint holds for all possible inputs within declared domains. 'proven-unsafe': a counterexample exists. 'inconclusive': solver timed out or construct outside verifiable subset.",
+          "x-lm": {
+            "critical": true,
+            "intent": "The formal verification outcome for this constraint"
+          }
+        },
+        "counterexample": {
+          "$ref": "#/$defs/Counterexample",
+          "description": "Counterexample data when result is 'proven-unsafe'."
+        },
+        "solverTimeMs": {
+          "type": "integer",
+          "description": "Time the solver spent on this constraint in milliseconds."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes from the verification process."
+        }
+      }
+    },
+    "Counterexample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "description": "Input values that violate the constraint.",
+          "examples": [{ "output.eligible": false, "instance.impactLevel": "rights-impacting" }]
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Human-readable explanation of why this input violates the constraint."
+        }
+      }
+    },
+    "VerificationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "totalConstraints": { "type": "integer", "minimum": 0 },
+        "provenSafe": { "type": "integer", "minimum": 0 },
+        "provenUnsafe": { "type": "integer", "minimum": 0 },
+        "inconclusive": { "type": "integer", "minimum": 0 },
+        "totalSolverTimeMs": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/equity/1.0",
+  "title": "WOS Equity Config",
+  "description": "A WOS Equity Config sidecar document. Provides detailed equity monitoring configuration -- protected category definitions, disparity calculation methods, reporting schedules, remediation triggers. Equity monitoring applies to human AND AI decisions.",
+  "type": "object",
+  "required": ["$wosEquityConfig", "targetWorkflow"],
+  "additionalProperties": false,
+  "properties": {
+    "$wosEquityConfig": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Equity Config specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Equity Config sidecar"
+      }
+    },
+    "$schema": { "type": "string", "format": "uri" },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this config targets. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": { "critical": true, "intent": "Binds this sidecar to the monitored workflow" }
+    },
+    "version": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "protectedCategories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ProtectedCategory" },
+      "description": "Demographic or categorical groupings for equity monitoring."
+    },
+    "disparityMethods": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/DisparityMethod" },
+      "description": "Statistical methods for computing disparity."
+    },
+    "reportingSchedule": {
+      "$ref": "#/$defs/ReportingSchedule",
+      "description": "Automated equity reporting configuration."
+    },
+    "remediationTriggers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RemediationTrigger" },
+      "description": "Conditions that trigger structured remediation review."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" }
+    }
+  },
+  "$defs": {
+    "ProtectedCategory": {
+      "type": "object",
+      "required": ["id", "groupByPath"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "examples": ["geographicRegion", "ageGroup"] },
+        "groupByPath": { "type": "string", "minLength": 1, "description": "Case file path for grouping.", "examples": ["caseFile.application.geographicRegion"] },
+        "description": { "type": "string" },
+        "groups": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Expected group values for validation."
+        }
+      }
+    },
+    "DisparityMethod": {
+      "type": "object",
+      "required": ["id", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "method": {
+          "type": "string",
+          "enum": ["rateDifference", "rateRatio", "standardizedDifference", "chi2"],
+          "description": "Statistical method for disparity calculation."
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "ReportingSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frequency": { "type": "string", "description": "ISO 8601 duration.", "examples": ["P30D", "P7D"] },
+        "recipientRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "examples": [["equityOfficer", "programDirector"]]
+        },
+        "includeHistoricalTrend": { "type": "boolean", "default": true }
+      }
+    },
+    "RemediationTrigger": {
+      "type": "object",
+      "required": ["condition", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "condition": { "type": "string", "minLength": 1, "description": "Condition expression.", "examples": ["disparity > 0.20 for 2 consecutive periods"] },
+        "action": {
+          "type": "string",
+          "enum": ["review", "audit", "suspend", "notify"],
+          "description": "Action to take."
+        },
+        "notifyRoles": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

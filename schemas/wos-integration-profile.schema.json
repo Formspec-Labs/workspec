@@ -1,0 +1,533 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/integration-profile/1.0",
+  "title": "WOS Integration Profile Document",
+  "description": "A WOS Integration Profile Document per the WOS Integration Profile specification v1.0. A parallel seam document that declares named integration bindings for a WOS workflow: Arazzo sequences for multi-step API orchestration, CWL-informed tool descriptors for non-HTTP invocations, CloudEvents extension attributes for event interoperability, external policy engine bridges (XACML, OPA, Cedar), and standard request-response/event/callback patterns. Each binding declares interface references, input/output mappings, retry policies, and optional Formspec Definition contracts for request and response validation. The Integration Profile adds structure to the kernel's invokeService action (Kernel S9.2) without introducing new kernel seams. WOS MUST NOT alter core Formspec processing semantics.",
+  "type": "object",
+  "required": [
+    "$wosIntegrationProfile",
+    "targetWorkflow",
+    "bindings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosIntegrationProfile": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Integration Profile specification version. MUST be '1.0'. Identifies this document as a WOS Integration Profile Document and pins the specification version.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Integration Profile documents"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation and autocompletion."
+    },
+    "targetWorkflow": {
+      "$ref": "#/$defs/TargetWorkflow",
+      "description": "The WOS Kernel Document this profile targets. Specifies URL and compatible version range.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this integration profile to a specific kernel workflow and version range"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Integration Profile Document. SemVer is RECOMMENDED.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this integration profile."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the integration profile's purpose and scope."
+    },
+    "bindings": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/IntegrationBinding"
+      },
+      "propertyNames": {
+        "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+      },
+      "description": "Named integration bindings. Keys are binding identifiers referenced by invokeService serviceRef (Kernel S9.2). Values are typed binding declarations.",
+      "x-lm": {
+        "critical": true,
+        "intent": "The map of named integration bindings that the workflow can invoke"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Extension data for this Integration Profile Document. Property names MUST begin with 'x-'."
+    }
+  },
+  "$defs": {
+    "TargetWorkflow": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Canonical URI of the target WOS Kernel Document.",
+          "examples": ["https://agency.gov/workflows/benefits-adjudication"]
+        },
+        "compatibleVersions": {
+          "type": "string",
+          "description": "SemVer range expression for compatible kernel document versions.",
+          "examples": [">=1.0.0 <2.0.0"]
+        }
+      }
+    },
+    "IntegrationBinding": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "description": "A named integration binding declaration. The type property determines which additional properties are valid.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Integration binding type (Integration Profile S3.2). Standard types: request-response, event-emit, event-consume, callback, arazzo-sequence, tool, policy-engine. Custom types use x- prefix.",
+          "examples": ["request-response", "arazzo-sequence", "tool", "event-emit", "event-consume", "callback", "policy-engine"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the kind of external system interaction this binding performs"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this integration binding."
+        },
+        "interface": {
+          "$ref": "#/$defs/InterfaceRef",
+          "description": "OpenAPI interface reference. Required for request-response and callback bindings."
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operation ID within the referenced OpenAPI document. Required for request-response and callback bindings."
+        },
+        "arazzoRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the Arazzo document. Required for arazzo-sequence bindings.",
+          "examples": ["urn:agency.gov:arazzo:eligibility-check:1.0.0"],
+          "x-lm": {
+            "critical": true,
+            "intent": "References the Arazzo workflow document for multi-step API orchestration"
+          }
+        },
+        "invocation": {
+          "$ref": "#/$defs/InvocationDescriptor",
+          "description": "Invocation descriptor for non-HTTP tool bindings. Required for tool bindings."
+        },
+        "engineType": {
+          "type": "string",
+          "description": "Policy engine type (Integration Profile S8.2). Standard types: xacml, opa, cedar. Custom types use x- prefix.",
+          "examples": ["xacml", "opa", "cedar"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the external policy engine technology"
+          }
+        },
+        "endpoint": {
+          "type": "string",
+          "format": "uri",
+          "description": "The policy engine's decision endpoint. Required for policy-engine bindings.",
+          "examples": ["https://policy.agency.gov/v1/data/wos/benefits/eligibility"]
+        },
+        "contextMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Maps WOS evaluation context fields to policy engine request parameters. Keys are engine-specific parameter names; values are FEL expressions or case state paths. Required for policy-engine bindings."
+        },
+        "decisionMapping": {
+          "$ref": "#/$defs/DecisionMapping",
+          "description": "Maps the policy engine's response to a WOS governance decision. Required for policy-engine bindings."
+        },
+        "eventType": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CloudEvents type attribute value. Required for event-emit, event-consume, and callback (as callbackEventType) bindings.",
+          "examples": ["gov.agency.benefits.notification", "gov.agency.documents.received"]
+        },
+        "callbackEventType": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CloudEvents type attribute value of the expected callback event. Required for callback bindings."
+        },
+        "correlation": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CorrelationRule"
+          },
+          "minItems": 1,
+          "description": "Correlation rules for matching inbound events to workflow instances (Integration Profile S6). Required for event-consume and callback bindings."
+        },
+        "dataMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Maps case state paths to event data fields. Keys are event data field names; values are FEL expressions or case state paths. Used with event-emit bindings."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Delivery channel hint (e.g., 'email', 'webhook', 'queue'). Implementation-defined. Used with event-emit bindings.",
+          "examples": ["email", "webhook", "queue"]
+        },
+        "inputMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Maps case state paths to service/tool input parameters. Keys are parameter names; values are FEL expressions or case state paths."
+        },
+        "outputBinding": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Maps service/tool output to case state paths. Keys are case state paths; values are JSON Path expressions into the response."
+        },
+        "requestContract": {
+          "$ref": "#/$defs/ContractRef",
+          "description": "Formspec Definition contract for request validation (Integration Profile S4)."
+        },
+        "responseContract": {
+          "$ref": "#/$defs/ContractRef",
+          "description": "Formspec Definition contract for response validation (Integration Profile S4)."
+        },
+        "resourceRequirements": {
+          "$ref": "#/$defs/ResourceRequirements",
+          "description": "Resource constraints for tool bindings (Integration Profile S3.6.2)."
+        },
+        "retry": {
+          "$ref": "#/$defs/RetryPolicy",
+          "description": "Retry policy for failed invocations (Integration Profile S3.8)."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Maximum time to wait for a response. ISO 8601 duration.",
+          "examples": ["PT30S", "PT5M", "PT30M"]
+        },
+        "idempotencyKeyExpression": {
+          "type": "string",
+          "description": "FEL expression evaluated against case state to produce an idempotency key (Integration Profile S7). Maps to Kernel S9.3.",
+          "examples": ["caseFile.application.id"]
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^x-"
+          },
+          "description": "Extension data for this binding. Property names MUST begin with 'x-'."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "request-response" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["interface", "operation"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "arazzo-sequence" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["arazzoRef"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "tool" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["invocation"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "event-emit" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["eventType"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "event-consume" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["eventType", "correlation"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "callback" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["interface", "operation", "callbackEventType", "correlation"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "policy-engine" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["engineType", "endpoint", "contextMapping", "decisionMapping"]
+          }
+        }
+      ]
+    },
+    "InterfaceRef": {
+      "type": "object",
+      "required": ["$ref"],
+      "additionalProperties": false,
+      "properties": {
+        "$ref": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to an OpenAPI document.",
+          "examples": ["https://api.example.gov/background-checks/openapi.yaml"]
+        }
+      }
+    },
+    "InvocationDescriptor": {
+      "type": "object",
+      "required": ["method", "command"],
+      "additionalProperties": false,
+      "description": "Non-HTTP invocation descriptor informed by CWL's CommandLineTool pattern (Integration Profile S3.6.1).",
+      "properties": {
+        "method": {
+          "type": "string",
+          "description": "Invocation method. Standard methods: command-line, batch-file, database-procedure, graph-query. Custom methods use x- prefix.",
+          "examples": ["command-line", "database-procedure", "graph-query"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the non-HTTP invocation mechanism"
+          }
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The command, procedure name, or query to execute.",
+          "examples": ["/opt/legacy/eligibility-check", "CALL sp_check_eligibility"]
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered command arguments. FEL expressions in {{ }} delimiters are evaluated against case state before invocation.",
+          "examples": [["--ssn", "{{ caseFile.application.ssn }}", "--household-size", "{{ caseFile.application.householdSize }}"]]
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Execution environment metadata (e.g., container image, runtime version). Implementation-defined.",
+          "examples": [{ "image": "legacy-tools:2024.1" }]
+        }
+      }
+    },
+    "ContractRef": {
+      "type": "object",
+      "required": ["definitionRef"],
+      "additionalProperties": false,
+      "description": "Reference to a Formspec Definition used as a validation contract (Integration Profile S4).",
+      "properties": {
+        "definitionRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the Formspec Definition used for validation. The processor MUST delegate validation to a Formspec-conformant processor (Core S1.4).",
+          "examples": [
+            "urn:agency.gov:contracts:eligibility-response:1.0.0",
+            "urn:agency.gov:contracts:legacy-output:1.0.0"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "References the Formspec Definition contract for structural validation"
+          }
+        }
+      }
+    },
+    "CorrelationRule": {
+      "type": "object",
+      "required": ["attribute", "caseStateMapping"],
+      "additionalProperties": false,
+      "description": "A correlation rule for matching inbound events to workflow instances (Integration Profile S6).",
+      "properties": {
+        "attribute": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The CloudEvents attribute or extension attribute containing the correlation value.",
+          "examples": ["subject", "wosinstanceid"]
+        },
+        "caseStateMapping": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case state path whose value MUST match the correlation attribute.",
+          "examples": ["caseFile.application.applicationId", "$instance.id"]
+        }
+      }
+    },
+    "DecisionMapping": {
+      "type": "object",
+      "required": ["permitPath"],
+      "additionalProperties": false,
+      "description": "Maps a policy engine's response to a WOS governance decision (Integration Profile S8.3).",
+      "properties": {
+        "permitPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON Path expression into the engine's response that evaluates to a boolean indicating 'permit'.",
+          "examples": ["$.result.allow", "$.decision.authorized"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Extracts the permit/deny decision from the policy engine response"
+          }
+        },
+        "denyPath": {
+          "type": "string",
+          "description": "JSON Path expression for explicit 'deny'. If omitted, deny is inferred as the negation of permit."
+        },
+        "reasonPath": {
+          "type": "string",
+          "description": "JSON Path expression for the engine's human-readable reason. Recorded in provenance.",
+          "examples": ["$.result.reason"]
+        },
+        "obligationsPath": {
+          "type": "string",
+          "description": "JSON Path expression for obligations attached to the decision (XACML obligation pattern).",
+          "examples": ["$.result.obligations"]
+        },
+        "indeterminatePath": {
+          "type": "string",
+          "description": "JSON Path expression for 'indeterminate' (engine could not decide). When present and truthy, the decision is indeterminate. If omitted, indeterminate is not possible -- results are always permit or deny."
+        }
+      }
+    },
+    "RetryPolicy": {
+      "type": "object",
+      "required": ["maxAttempts"],
+      "additionalProperties": false,
+      "description": "Retry policy for failed integration invocations (Integration Profile S3.8).",
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of invocation attempts (including the initial attempt).",
+          "examples": [3]
+        },
+        "backoff": {
+          "type": "string",
+          "enum": ["fixed", "linear", "exponential"],
+          "default": "fixed",
+          "description": "Backoff strategy between retries. 'fixed': constant interval. 'linear': interval grows linearly. 'exponential': interval doubles each retry."
+        },
+        "initialInterval": {
+          "type": "string",
+          "default": "PT1S",
+          "description": "Initial interval between retries. ISO 8601 duration.",
+          "examples": ["PT1S", "PT5S", "PT10S"]
+        },
+        "maxInterval": {
+          "type": "string",
+          "description": "Maximum interval between retries (for exponential/linear backoff). ISO 8601 duration.",
+          "examples": ["PT60S", "PT5M"]
+        }
+      }
+    },
+    "ResourceRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Resource constraints for tool invocations (Integration Profile S3.6.2).",
+      "properties": {
+        "maxExecutionTime": {
+          "type": "string",
+          "description": "Maximum execution time. ISO 8601 duration. The processor MUST terminate the invocation if exceeded.",
+          "examples": ["PT30S", "PT5M"]
+        },
+        "maxMemory": {
+          "type": "string",
+          "description": "Maximum memory allocation (e.g., '512MB', '2GB'). Implementation-defined enforcement.",
+          "examples": ["512MB", "2GB"]
+        },
+        "maxCores": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum CPU cores. Implementation-defined enforcement."
+        }
+      }
+    },
+    "CloudEventsExtension": {
+      "type": "object",
+      "required": ["wosinstanceid", "wosdefid", "wosdefversion"],
+      "additionalProperties": true,
+      "description": "WOS CloudEvents extension attributes (Integration Profile S5). All events produced by a WOS workflow MUST include these attributes.",
+      "properties": {
+        "wosinstanceid": {
+          "type": "string",
+          "format": "uri",
+          "description": "The workflow instance identifier.",
+          "examples": ["urn:agency.gov:instance:2025-001-12345"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Unique identifier of the running workflow instance for event routing"
+          }
+        },
+        "wosdefid": {
+          "type": "string",
+          "format": "uri",
+          "description": "The workflow definition identifier (kernel document URL).",
+          "examples": ["https://agency.gov/workflows/benefits-adjudication"]
+        },
+        "wosdefversion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The workflow definition version (kernel document version).",
+          "examples": ["1.0.0"]
+        },
+        "wosstate": {
+          "type": "string",
+          "description": "The current lifecycle state at the time of event emission."
+        },
+        "wostaskid": {
+          "type": "string",
+          "description": "The task identifier, if the event relates to a task."
+        },
+        "woscorrelationkey": {
+          "type": "string",
+          "description": "The primary business correlation key for the workflow instance."
+        },
+        "woscausationeventid": {
+          "type": "string",
+          "description": "The CloudEvents id of the event that triggered this event. Enables causal chains."
+        }
+      }
+    }
+  }
+}

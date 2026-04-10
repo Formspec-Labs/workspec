@@ -1,0 +1,560 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/advanced-governance/1.0",
+  "title": "WOS Advanced Governance Document",
+  "description": "A WOS Advanced Governance Document per the WOS Advanced Governance Specification v1.0 (Layer 3). Targets a WOS Kernel Document and declares verifiable constraint subsets (SMT), equity guardrails, constraint zones (DCR-style), multi-step sessions, tool use governance, agent lifecycle state machines, calibration methods, drift detection methods, shadow mode, and circuit breaker patterns. These capabilities serve any complex workflow -- DCR constraint zones model compliance rules for human case management, equity monitoring applies to human decisions. WOS MUST NOT alter core Formspec processing semantics.",
+  "type": "object",
+  "required": [
+    "$wosAdvancedGovernance",
+    "targetWorkflow"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosAdvancedGovernance": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Advanced Governance specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Advanced Governance documents"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this document targets.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this advanced governance document to a specific kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Advanced Governance Document.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this advanced governance configuration."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description."
+    },
+    "equityGuardrails": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/EquityGuardrail" },
+      "description": "Equity guardrails monitoring statistical disparities across demographic groupings (Advanced S3). Applies to human AND AI decisions. Evaluated asynchronously."
+    },
+    "constraintZones": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ConstraintZone" },
+      "description": "DCR-style constraint zones for adaptive case management (Advanced S4). Activities governed by declarative relations, not explicit transitions.",
+      "examples": [
+        [{ "id": "investigation", "activities": [{ "id": "interview", "initialIncluded": true, "initialPending": true }], "relations": [{ "type": "condition", "source": "interview", "target": "report" }] }]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Adaptive case management phases where valid actions are governed by DCR relations"
+      }
+    },
+    "multiStepSessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/MultiStepSession" },
+      "description": "Multi-step session definitions with checkpoints and intervention points (Advanced S5)."
+    },
+    "toolGovernance": {
+      "$ref": "#/$defs/ToolGovernance",
+      "description": "Tool use governance: permitted/prohibited registries, side-effect policy (Advanced S6)."
+    },
+    "agentLifecycle": {
+      "$ref": "#/$defs/AgentLifecycleConfig",
+      "description": "Agent lifecycle state machine configuration (Advanced S7)."
+    },
+    "verifiableConstraints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/VerifiableConstraint" },
+      "description": "Constraints annotated for SMT verification (Advanced S8)."
+    },
+    "calibration": {
+      "$ref": "#/$defs/CalibrationConfig",
+      "description": "Calibration method configuration (Advanced S9)."
+    },
+    "driftDetection": {
+      "$ref": "#/$defs/DriftDetectionConfig",
+      "description": "Drift detection method configuration (Advanced S10)."
+    },
+    "shadowMode": {
+      "$ref": "#/$defs/ShadowMode",
+      "description": "Shadow mode configuration (Advanced S11.1). RECOMMENDED starting point for agents in rights-impacting workflows."
+    },
+    "circuitBreaker": {
+      "$ref": "#/$defs/CircuitBreaker",
+      "description": "Circuit breaker pattern for automatic fallback on high error rates (Advanced S11.2)."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "EquityGuardrail": {
+      "type": "object",
+      "required": ["id", "metric", "groupBy", "maxDisparity", "evaluationWindow", "minimumSampleSize", "onViolation"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique guardrail identifier.",
+          "examples": ["approvalRateByRegion", "denialRateByAge"]
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Outcome metric to monitor.",
+          "examples": ["approvalRate", "denialRate", "processingTimeDays"],
+          "x-lm": {
+            "critical": true,
+            "intent": "The workflow outcome being monitored for statistical disparity"
+          }
+        },
+        "groupBy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Case file path defining the grouping dimension.",
+          "examples": ["caseFile.application.geographicRegion", "caseFile.application.ageGroup"],
+          "x-lm": {
+            "critical": true,
+            "intent": "The demographic or categorical dimension across which disparity is measured"
+          }
+        },
+        "maxDisparity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum acceptable difference between highest and lowest group rates.",
+          "examples": [0.15, 0.10, 0.20]
+        },
+        "evaluationWindow": {
+          "type": "string",
+          "description": "ISO 8601 duration of the evaluation window.",
+          "examples": ["P30D", "P90D"]
+        },
+        "minimumSampleSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum observations per group for valid evaluation.",
+          "examples": [50, 100]
+        },
+        "onViolation": {
+          "type": "string",
+          "enum": ["flag", "alert", "suspend"],
+          "description": "Action when disparity exceeds threshold. 'flag': record in provenance. 'alert': notify configured roles. 'suspend': alert plus suspend further autonomous processing."
+        },
+        "monitorTags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Transition tags whose outcomes are monitored.",
+          "examples": [["determination", "adverse-decision"]]
+        },
+        "notifyRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Roles to notify on violation.",
+          "examples": [["equityOfficer", "programDirector"]]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation of this guardrail.",
+          "examples": ["Monitors for geographic disparity in benefits approval rates"]
+        }
+      }
+    },
+    "ConstraintZone": {
+      "type": "object",
+      "required": ["id", "activities", "relations"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique constraint zone identifier.",
+          "examples": ["fraudInvestigation", "complianceReview"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this constraint zone."
+        },
+        "activities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ZoneActivity" },
+          "minItems": 1,
+          "description": "Activities within this constraint zone with initial markings.",
+          "examples": [
+            [{ "id": "witnessInterview", "initialIncluded": true, "initialPending": false }, { "id": "finalReport", "initialIncluded": true, "initialPending": true }]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The set of activities available in this adaptive case management phase"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ZoneRelation" },
+          "description": "DCR relations governing activity dependencies.",
+          "examples": [
+            [{ "type": "condition", "source": "witnessInterview", "target": "finalReport" }, { "type": "response", "source": "witnessInterview", "target": "documentRequest" }]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Declarative constraints governing which activities can execute and when"
+          }
+        },
+        "completionEvent": {
+          "type": "string",
+          "default": "constraintZone.satisfied",
+          "description": "Event raised when the zone is satisfied."
+        }
+      }
+    },
+    "ZoneActivity": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Activity identifier within this zone.",
+          "examples": ["witnessInterview", "documentRequest", "finalReport"]
+        },
+        "activityRef": {
+          "type": "string",
+          "description": "Reference to an activity definition.",
+          "examples": ["urn:wos:agency.gov:activities:witness-interview:1.0.0"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description."
+        },
+        "initialIncluded": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this activity starts as included (available)."
+        },
+        "initialPending": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this activity starts as pending (must execute before zone completes)."
+        }
+      }
+    },
+    "ZoneRelation": {
+      "type": "object",
+      "required": ["type", "source", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["condition", "response", "include", "exclude", "milestone"],
+          "description": "DCR relation type (Advanced S4.3).",
+          "examples": ["condition", "response"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the constraint semantics between two activities"
+          }
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source activity identifier.",
+          "examples": ["witnessInterview"]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target activity identifier.",
+          "examples": ["finalReport"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of this relation."
+        }
+      }
+    },
+    "MultiStepSession": {
+      "type": "object",
+      "required": ["id", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Session identifier.",
+          "examples": ["evidenceAnalysis", "documentReview"]
+        },
+        "description": { "type": "string" },
+        "maxSteps": { "type": "integer", "minimum": 1 },
+        "maxDuration": { "type": "string", "description": "ISO 8601 duration." },
+        "checkpointPolicy": {
+          "type": "string",
+          "enum": ["afterEachStep", "atInterventionPoints", "onDemand"],
+          "default": "atInterventionPoints"
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SessionStep" },
+          "minItems": 1,
+          "description": "DAG-ordered steps."
+        }
+      }
+    },
+    "SessionStep": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "examples": ["documentInventory", "contentExtraction"] },
+        "description": { "type": "string" },
+        "dependsOn": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Step identifiers that must complete before this step."
+        },
+        "interventionPoint": { "type": "boolean", "default": false },
+        "interventionPrompt": { "type": "string" }
+      }
+    },
+    "ToolGovernance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolRegistry": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolDefinition" },
+          "description": "Registry of permitted tools."
+        },
+        "defaultSideEffectPolicy": {
+          "type": "string",
+          "enum": ["block", "allow", "requireApproval"],
+          "default": "block",
+          "description": "Default policy for tools with side effects at autonomous level."
+        }
+      }
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "required": ["id", "category", "sideEffects"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "examples": ["databaseLookup", "documentParser"] },
+        "category": { "type": "string", "minLength": 1, "examples": ["dataRetrieval", "computation", "externalApi"] },
+        "sideEffects": { "type": "boolean" },
+        "rateLimit": { "$ref": "#/$defs/RateLimit" },
+        "outputSchema": { "type": "object", "description": "Expected output schema." },
+        "description": { "type": "string" }
+      }
+    },
+    "RateLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxPerMinute": { "type": "integer", "minimum": 0 },
+        "maxPerHour": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "AgentLifecycleConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initialState": {
+          "type": "string",
+          "enum": ["active", "degraded", "suspended"],
+          "default": "active",
+          "description": "Initial lifecycle state for agents in this workflow (Advanced S7.1)."
+        },
+        "transitions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/LifecycleTransition" },
+          "description": "Lifecycle transition triggers. When omitted, transitions are manual-only.",
+          "examples": [
+            [
+              { "name": "demote", "trigger": "confidence.overall < 0.7 for P7D", "description": "Sustained low confidence triggers demotion" },
+              { "name": "suspend", "trigger": "errorRate > 0.15", "description": "High error rate triggers suspension" }
+            ]
+          ]
+        },
+        "degradedAutonomyCap": {
+          "type": "string",
+          "enum": ["autonomous", "supervisory", "assistive", "manual"],
+          "default": "assistive",
+          "description": "Maximum autonomy level when agent is in degraded state."
+        },
+        "versionChangeNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify administrators on model version changes."
+        },
+        "suspensionNotifyRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Roles to notify when an agent is suspended."
+        }
+      }
+    },
+    "LifecycleTransition": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["demote", "restore", "suspend", "resume", "retire"],
+          "description": "Transition name (Advanced S7.2)."
+        },
+        "trigger": {
+          "type": "string",
+          "description": "Condition that triggers this transition. FEL expression or human-readable description. When omitted, transition is manual-only."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this trigger."
+        }
+      }
+    },
+    "VerifiableConstraint": {
+      "type": "object",
+      "required": ["constraintRef", "verifiable"],
+      "additionalProperties": false,
+      "properties": {
+        "constraintRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a deontic constraint id in the AI Integration Document.",
+          "examples": ["noFinalDenial", "outputFieldScope"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies which deontic constraint is subject to SMT verification"
+          }
+        },
+        "verifiable": {
+          "type": "boolean",
+          "const": true,
+          "description": "MUST be true. Annotates this constraint for SMT verification."
+        },
+        "expectedResult": {
+          "type": "string",
+          "enum": ["proven-safe", "proven-unsafe", "inconclusive"],
+          "description": "Expected verification result, if known from prior runs."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes on verifiability (e.g., which restrictions apply)."
+        }
+      }
+    },
+    "CalibrationConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["plattScaling", "isotonic", "binning", "custom"],
+          "default": "binning",
+          "description": "Calibration method (Advanced S9.2)."
+        },
+        "minimumSamples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum reviewed outputs for valid calibration."
+        },
+        "retrainingFrequency": {
+          "type": "string",
+          "description": "ISO 8601 duration for recalibration."
+        }
+      }
+    },
+    "DriftDetectionConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "methods": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DriftMethod" },
+          "description": "Configured drift detection methods."
+        }
+      }
+    },
+    "DriftMethod": {
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["psi", "ks", "chi2", "accuracy"],
+          "description": "Statistical method for drift detection."
+        },
+        "threshold": { "type": "number" },
+        "window": { "type": "string", "description": "ISO 8601 duration." },
+        "dimensions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DriftDimension" }
+        }
+      }
+    },
+    "DriftDimension": {
+      "type": "object",
+      "required": ["field", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "field": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "enum": ["continuous", "categorical"] }
+      }
+    },
+    "ShadowMode": {
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "compareTo": {
+          "type": "string",
+          "enum": ["human", "productionAgent"],
+          "default": "human"
+        },
+        "duration": { "type": "string", "description": "ISO 8601 duration." },
+        "minimumSamples": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "CircuitBreaker": {
+      "type": "object",
+      "required": ["enabled", "errorRateThreshold", "evaluationWindow", "cooldownDuration"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "errorRateThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Error rate that trips the breaker.",
+          "examples": [0.15, 0.20]
+        },
+        "evaluationWindow": { "type": "string", "examples": ["PT1H", "PT30M"] },
+        "minimumInvocations": { "type": "integer", "minimum": 1, "description": "Minimum invocations before the breaker can trip." },
+        "cooldownDuration": { "type": "string", "examples": ["PT5M", "PT15M"] },
+        "probeCount": { "type": "integer", "minimum": 1, "default": 1 }
+      }
+    }
+  }
+}

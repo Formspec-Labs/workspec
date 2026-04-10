@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/lifecycle-detail/1.0",
+  "title": "WOS Lifecycle Detail Configuration",
+  "description": "A WOS Lifecycle Detail Configuration document per the WOS Lifecycle Detail Companion v1.0. Provides detailed compensation, history, and timer configuration that elaborates the kernel's lifecycle semantics. This is an optional companion to a WOS Kernel Document -- a Kernel Structural processor does not need it. A Kernel Complete processor SHOULD use it to configure advanced execution behavior: compensation recovery mode, parallel cancellation behavior, history state policies, and timer tolerance.",
+  "type": "object",
+  "required": [
+    "$wosLifecycleDetail",
+    "targetWorkflow"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosLifecycleDetail": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Lifecycle Detail specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Lifecycle Detail Configuration"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this configuration targets.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this lifecycle detail configuration to a specific kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Lifecycle Detail Configuration.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name."
+    },
+    "compensation": {
+      "$ref": "#/$defs/CompensationConfig",
+      "description": "Compensation execution configuration (Lifecycle Detail S5). Elaborates the kernel's compensation seam (Kernel S9.5).",
+      "examples": [
+        { "defaultRecoveryMode": "backward", "onCompensationFailure": "continue" }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Configures the saga-pattern compensation algorithm for compensable scopes"
+      }
+    },
+    "timerConfig": {
+      "$ref": "#/$defs/TimerConfig",
+      "description": "Timer behavior configuration (Lifecycle Detail S6)."
+    },
+    "scxmlMapping": {
+      "$ref": "#/$defs/ScxmlMappingConfig",
+      "description": "SCXML interoperability mapping configuration (Lifecycle Detail S7)."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "CompensationConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultRecoveryMode": {
+          "type": "string",
+          "enum": ["backward", "forward"],
+          "default": "backward",
+          "description": "Default recovery mode for compensable scopes (Lifecycle Detail S5.6). 'backward': execute compensation in reverse order, then transition to error state. 'forward': skip compensation, retry or take alternative path.",
+          "examples": ["backward", "forward"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines whether failed scopes reverse their completed actions (saga rollback) or attempt to continue forward"
+          }
+        },
+        "onCompensationFailure": {
+          "type": "string",
+          "enum": ["continue", "halt"],
+          "default": "continue",
+          "description": "Behavior when a compensating action itself fails. 'continue': best effort, proceed to next compensation. 'halt': stop compensation sequence on first failure."
+        },
+        "scopeOverrides": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CompensationScopeOverride" },
+          "description": "Per-scope compensation overrides for specific states or regions."
+        }
+      }
+    },
+    "CompensationScopeOverride": {
+      "type": "object",
+      "required": ["scopeRef"],
+      "additionalProperties": false,
+      "properties": {
+        "scopeRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a state or region identifier in the kernel lifecycle.",
+          "examples": ["incomeVerification", "evaluation.technicalReview"]
+        },
+        "recoveryMode": {
+          "type": "string",
+          "enum": ["backward", "forward"],
+          "description": "Recovery mode override for this scope."
+        },
+        "onCompensationFailure": {
+          "type": "string",
+          "enum": ["continue", "halt"],
+          "description": "Compensation failure behavior override for this scope."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of why this scope has a non-default compensation policy."
+        }
+      }
+    },
+    "TimerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "firingTolerance": {
+          "type": "string",
+          "description": "Maximum acceptable delay between a timer's scheduled firing time and actual firing. ISO 8601 duration. A tolerance greater than the timer's own duration is a conformance violation (Lifecycle Detail S6.6).",
+          "examples": ["PT1S", "PT5S", "PT100MS"]
+        },
+        "resetOnReentry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether timers created in a state's onEntry are automatically cancelled and recreated when the state is re-entered (Lifecycle Detail S6.4). Default: true."
+        }
+      }
+    },
+    "ScxmlMappingConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether SCXML export/import is enabled for this workflow."
+        },
+        "expressionMapping": {
+          "type": "string",
+          "enum": ["ecmascript", "xpath", "manual"],
+          "default": "ecmascript",
+          "description": "How FEL guard expressions are mapped to SCXML's expression language. 'ecmascript': automatic translation to ECMAScript. 'xpath': automatic translation to XPath. 'manual': expressions must be manually mapped."
+        },
+        "dropUnsupported": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether WOS-specific properties with no SCXML equivalent (tags, impact level, contracts, milestones) are silently dropped on export. When false, export fails if unsupported properties are present."
+        },
+        "eventPrefixMapping": {
+          "type": "string",
+          "default": "wos.",
+          "description": "Prefix added to kernel-generated events (which use '$' prefix in WOS) when exported to SCXML, since '$' may not be valid in all SCXML implementations.",
+          "examples": ["wos.", "internal."]
+        }
+      }
+    }
+  }
+}

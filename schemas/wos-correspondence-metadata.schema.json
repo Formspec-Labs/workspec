@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/correspondence-metadata/1.0",
+  "title": "WOS Correspondence Metadata Config",
+  "description": "A WOS Correspondence Metadata Config sidecar document. Declares the metadata schema for correspondence entries stored in case state. Government workflows track correspondence (letters, phone calls, emails, portal submissions, in-person interactions) as part of the case record. The kernel's existing event mechanism handles correspondence events -- events that match no transition are recorded in provenance (Kernel S4.9). This sidecar defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.",
+  "type": "object",
+  "required": [
+    "$wosCorrespondenceMetadata",
+    "targetWorkflow",
+    "correspondenceField",
+    "entryTemplates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosCorrespondenceMetadata": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Correspondence Metadata Config specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Correspondence Metadata Config sidecar"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this correspondence config applies to.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this sidecar to its parent kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Correspondence Metadata Config document.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this correspondence configuration.",
+      "examples": ["Benefits Adjudication Correspondence Metadata"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this correspondence configuration."
+    },
+    "correspondenceField": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Case state field path where correspondence entries are stored. The workflow stores an array of correspondence entry objects at this path.",
+      "examples": ["caseFile.correspondence", "caseFile.communications"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Identifies which case state field holds the array of correspondence entries"
+      }
+    },
+    "entryTemplates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/EntryTemplate"
+      },
+      "minItems": 1,
+      "description": "Templates defining the metadata structure for correspondence entries. Each template declares the channel, direction, actor type, and required fields for a category of correspondence.",
+      "examples": [
+        [
+          {
+            "id": "inboundMail",
+            "description": "Physical mail received from applicant or representative",
+            "channel": "mail",
+            "direction": "inbound",
+            "actorType": "applicant"
+          },
+          {
+            "id": "outboundNotice",
+            "description": "Official notice sent to applicant",
+            "channel": "mail",
+            "direction": "outbound",
+            "actorType": "agency",
+            "requiredFields": ["contentRef", "relatedTaskRef"]
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Templates that define what metadata each category of correspondence entry must carry"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "EntryTemplate": {
+      "type": "object",
+      "required": ["id", "channel", "direction", "actorType"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique template identifier. Referenced by correspondence entries via templateRef.",
+          "examples": ["inboundMail", "outboundNotice", "phoneContact", "portalSubmission"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of when this template applies.",
+          "examples": ["Physical mail received from applicant or representative", "Phone call with applicant or representative"]
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["in-person", "phone", "mail", "email", "portal", "fax"],
+          "description": "Communication channel. 'in-person': face-to-face contact. 'phone': telephone call. 'mail': physical mail. 'email': electronic mail. 'portal': web portal submission or message. 'fax': facsimile transmission. Extensible via x- prefixed values in the extensions property.",
+          "examples": ["mail", "phone", "email", "portal"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Declares the communication channel for this correspondence category"
+          }
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["inbound", "outbound"],
+          "description": "Direction of the correspondence. 'inbound': received by the agency. 'outbound': sent by the agency.",
+          "examples": ["inbound", "outbound"]
+        },
+        "actorType": {
+          "type": "string",
+          "enum": ["applicant", "representative", "third-party", "system", "agency"],
+          "description": "Who sent or received the correspondence. 'applicant': the primary case subject. 'representative': authorized representative acting on behalf of the applicant. 'third-party': external party (e.g., employer, medical provider). 'system': automated system-generated correspondence. 'agency': agency staff.",
+          "examples": ["applicant", "representative", "agency", "third-party"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the actor role for this correspondence category"
+          }
+        },
+        "requiredFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, actorType, contentRef, summary, timestamp).",
+          "examples": [["contentRef", "relatedTaskRef"]]
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^x-" },
+          "description": "Extension data. All keys MUST be prefixed with 'x-'."
+        }
+      }
+    },
+    "CorrespondenceEntry": {
+      "type": "object",
+      "required": ["templateRef", "channel", "direction", "actorType", "contentRef", "summary", "timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "templateRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The id of the EntryTemplate this entry follows.",
+          "examples": ["inboundMail", "outboundNotice", "phoneContact"]
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["in-person", "phone", "mail", "email", "portal", "fax"],
+          "description": "Communication channel for this entry.",
+          "examples": ["mail", "phone", "email"]
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["inbound", "outbound"],
+          "description": "Direction of this correspondence.",
+          "examples": ["inbound", "outbound"]
+        },
+        "actorType": {
+          "type": "string",
+          "enum": ["applicant", "representative", "third-party", "system", "agency"],
+          "description": "Actor type for this correspondence entry.",
+          "examples": ["applicant", "agency"]
+        },
+        "contentRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Claim check reference -- a URI or storage reference for the actual content. The content itself is not stored in case state; this is a pointer to it.",
+          "examples": [
+            "s3://agency-docs/cases/2025-001/mail/scan-20250315.pdf",
+            "https://agency.gov/dms/documents/DOC-2025-12345"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Pointer to the actual correspondence content stored outside case state"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable summary of the correspondence.",
+          "examples": [
+            "Applicant submitted income verification documents",
+            "Adverse decision notice mailed to applicant"
+          ]
+        },
+        "relatedTaskRef": {
+          "type": "string",
+          "description": "Optional reference to a task this correspondence relates to.",
+          "examples": ["task-income-verification", "task-initial-review"]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the correspondence occurred (ISO 8601 date-time).",
+          "examples": ["2025-03-15T14:30:00Z"]
+        }
+      }
+    }
+  }
+}

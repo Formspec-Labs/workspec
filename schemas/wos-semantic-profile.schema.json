@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/semantic-profile/1.0",
+  "title": "WOS Semantic Profile Document",
+  "description": "A WOS Semantic Profile Document per the WOS Semantic Profile specification v1.0. A parallel seam document that declares linked data semantics for a WOS workflow: a JSON-LD @context mapping WOS properties to RDF terms, SHACL shape references for semantic validation, PROV-O vocabulary mappings for provenance export, and XES/OCEL export configuration for process mining interoperability. The Semantic Profile adds interpretation and export capability without changing how WOS documents are processed. WOS MUST NOT alter core Formspec processing semantics.",
+  "type": "object",
+  "required": [
+    "$wosSemanticProfile",
+    "targetWorkflow",
+    "context"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosSemanticProfile": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Semantic Profile specification version. MUST be '1.0'. Identifies this document as a WOS Semantic Profile Document and pins the specification version.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Semantic Profile documents"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation and autocompletion."
+    },
+    "targetWorkflow": {
+      "$ref": "#/$defs/TargetWorkflow",
+      "description": "The WOS Kernel Document this profile targets. Specifies URL and compatible version range.",
+      "examples": [{ "url": "https://agency.gov/workflows/benefits-adjudication", "compatibleVersions": ["1.0.*"] }],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this semantic profile to a specific kernel workflow and version range"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Semantic Profile Document. SemVer is RECOMMENDED.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this semantic profile."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the semantic profile's purpose and scope."
+    },
+    "context": {
+      "$ref": "#/$defs/ContextConfiguration",
+      "description": "JSON-LD @context configuration. Declares the context document URL, version, additional namespaces, and domain vocabulary extensions.",
+      "examples": [{ "contextUrl": "https://wos-spec.org/context/v1.0.jsonld", "contextVersion": "1.0" }],
+      "x-lm": {
+        "critical": true,
+        "intent": "JSON-LD context configuration that maps WOS properties to RDF terms"
+      }
+    },
+    "shapes": {
+      "$ref": "#/$defs/ShapeConfiguration",
+      "description": "SHACL shape configuration. Declares shape graph URIs for semantic validation of WOS documents interpreted as RDF."
+    },
+    "provMapping": {
+      "$ref": "#/$defs/ProvMappingConfiguration",
+      "description": "PROV-O vocabulary mapping configuration. Declares how WOS provenance records map to W3C PROV-O graphs."
+    },
+    "processMining": {
+      "$ref": "#/$defs/ProcessMiningConfiguration",
+      "description": "XES/OCEL export configuration. Declares how WOS provenance records map to process mining event formats."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "TargetWorkflow": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Canonical URL of the target WOS Kernel Document.",
+          "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the kernel workflow this profile provides linked data semantics for"
+          }
+        },
+        "compatibleVersions": {
+          "type": "string",
+          "description": "SemVer range expression for compatible kernel document versions.",
+          "examples": [">=1.0.0 <2.0.0", "1.x"]
+        }
+      }
+    },
+    "ContextConfiguration": {
+      "type": "object",
+      "required": ["contextUrl", "contextVersion"],
+      "additionalProperties": false,
+      "properties": {
+        "contextUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the JSON-LD @context document to apply to WOS documents. The normative WOS context is published at https://wos-spec.org/context/{version}.",
+          "examples": ["https://wos-spec.org/context/1.0.0"],
+          "x-lm": {
+            "critical": true,
+            "intent": "URL of the JSON-LD context document that maps WOS properties to RDF IRIs"
+          }
+        },
+        "contextVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the context document. Synchronized with the WOS specification version. A semantic processor MUST reject a context document whose major version it does not support.",
+          "examples": ["1.0.0"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Context document version for compatibility checking"
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "Additional namespace prefix-to-IRI mappings beyond the base WOS context. Keys are namespace prefixes, values are namespace IRIs.",
+          "examples": [
+            {
+              "niem-hs": "https://release.niem.gov/niem/domains/humanServices/5.2/",
+              "fhir": "http://hl7.org/fhir/"
+            }
+          ]
+        },
+        "domainVocabularies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DomainVocabulary"
+          },
+          "description": "External domain vocabularies to incorporate into the @context. Each vocabulary declares a namespace prefix and IRI for domain-specific case data interoperability."
+        }
+      }
+    },
+    "DomainVocabulary": {
+      "type": "object",
+      "required": ["prefix", "namespace"],
+      "additionalProperties": false,
+      "properties": {
+        "prefix": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Namespace prefix for this vocabulary. Used in the expanded @context.",
+          "examples": ["niem-hs", "fhir"]
+        },
+        "namespace": {
+          "type": "string",
+          "format": "uri",
+          "description": "Namespace IRI for this vocabulary.",
+          "examples": [
+            "https://release.niem.gov/niem/domains/humanServices/5.2/",
+            "http://hl7.org/fhir/"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this vocabulary's purpose and scope."
+        }
+      }
+    },
+    "ShapeConfiguration": {
+      "type": "object",
+      "required": ["shapeGraphs"],
+      "additionalProperties": false,
+      "properties": {
+        "shapeGraphs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "minItems": 1,
+          "description": "URIs of SHACL shape graphs to apply when validating WOS documents as RDF. The standard WOS shapes (SP-01 through SP-08) are published at https://wos-spec.org/shapes/1.0.0.",
+          "examples": [
+            ["https://wos-spec.org/shapes/1.0.0"]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "SHACL shape graph URIs for semantic validation of WOS documents"
+          }
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["violation", "warning", "info"],
+          "default": "violation",
+          "description": "Minimum severity for reported SHACL violations. 'violation': only sh:Violation results. 'warning': sh:Violation and sh:Warning. 'info': all results."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["definition", "provenance", "all"],
+          "default": "all",
+          "description": "What to validate with SHACL shapes. 'definition': the workflow definition only. 'provenance': provenance records only. 'all': both definition and provenance."
+        }
+      }
+    },
+    "ProvMappingConfiguration": {
+      "type": "object",
+      "required": ["provenanceNamespace"],
+      "additionalProperties": false,
+      "properties": {
+        "provenanceNamespace": {
+          "type": "string",
+          "format": "uri",
+          "description": "Base namespace for minting provenance IRIs in the PROV-O output graph. Record identifiers are appended to this namespace to form Activity IRIs.",
+          "examples": ["https://agency.gov/provenance/benefits/"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Base IRI namespace for PROV-O provenance graph output"
+          }
+        },
+        "actorMapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "Customized mapping of WOS actor types to PROV-O Agent subclass IRIs. Keys are WOS actor types ('human', 'system', 'agent'), values are RDF type IRIs. Defaults: human -> prov:Person, system -> prov:SoftwareAgent, agent -> wos:AIAgent.",
+          "examples": [
+            {
+              "human": "http://www.w3.org/ns/prov#Person",
+              "system": "http://www.w3.org/ns/prov#SoftwareAgent",
+              "agent": "https://wos-spec.org/ns/AIAgent"
+            }
+          ]
+        },
+        "tierMapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reasoning": {
+              "type": "string",
+              "format": "uri",
+              "default": "https://wos-spec.org/ns/ReasoningBundle",
+              "description": "RDF type IRI for Reasoning tier prov:Bundle instances."
+            },
+            "counterfactual": {
+              "type": "string",
+              "format": "uri",
+              "default": "https://wos-spec.org/ns/CounterfactualBundle",
+              "description": "RDF type IRI for Counterfactual tier prov:Bundle instances."
+            },
+            "narrative": {
+              "type": "string",
+              "format": "uri",
+              "default": "https://wos-spec.org/ns/NarrativeBundle",
+              "description": "RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false."
+            }
+          },
+          "description": "Customized mapping of WOS provenance tiers to PROV-O Bundle type IRIs."
+        }
+      }
+    },
+    "ProcessMiningConfiguration": {
+      "type": "object",
+      "required": ["formats"],
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["xes", "ocel"]
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Process mining export formats to support. 'xes': IEEE XES (Std 1849-2016) for legacy process mining tools. 'ocel': OCEL 2.0 object-centric event logs for modern process mining. Both may be specified.",
+          "examples": [
+            ["xes", "ocel"],
+            ["ocel"]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Process mining export format selection (XES and/or OCEL 2.0)"
+          }
+        },
+        "caseIdentifier": {
+          "type": "string",
+          "default": "instanceId",
+          "description": "The case state field used as the XES case identifier (trace concept:name). Default: 'instanceId'.",
+          "examples": ["instanceId", "caseFile.caseNumber"]
+        },
+        "eventClassifier": {
+          "type": "string",
+          "default": "action",
+          "description": "The provenance field used as the XES activity classifier (event concept:name). Default: 'action'.",
+          "examples": ["action", "recordType"]
+        },
+        "objectTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For OCEL export: WOS object types (case file item types) to include in the object-centric event log. When omitted, all case file item types are included.",
+          "examples": [
+            ["application", "eligibility", "determination"]
+          ]
+        }
+      }
+    }
+  }
+}

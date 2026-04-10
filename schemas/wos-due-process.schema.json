@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/due-process/1.0",
+  "title": "WOS Due Process Config",
+  "description": "A WOS Due Process Config sidecar document. Provides detailed due process configuration -- notice templates, explanation templates, appeal routing, continuation-of-service policies -- for a WOS Workflow Governance Document. Operational parameters can be updated independently of the governance structure.",
+  "type": "object",
+  "required": [
+    "$wosDueProcess",
+    "targetGovernance"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosDueProcess": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Due Process Config specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Due Process Config sidecar"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetGovernance": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Workflow Governance Document this config targets.",
+      "examples": ["https://agency.gov/governance/benefits-adjudication-governance"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this sidecar to its parent governance document"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Due Process Config document.",
+      "examples": ["1.0.0"]
+    },
+    "noticeTemplates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/NoticeTemplate"
+      },
+      "description": "Templates for adverse decision notices."
+    },
+    "explanationTemplates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExplanationTemplate"
+      },
+      "description": "Templates for decision explanations at various levels."
+    },
+    "appealRouting": {
+      "$ref": "#/$defs/AppealRouting",
+      "description": "Detailed appeal routing configuration."
+    },
+    "continuationPolicies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContinuationPolicy"
+      },
+      "description": "Continuation-of-service policies for different adverse decision types."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "NoticeTemplate": {
+      "type": "object",
+      "required": ["id", "title", "sections"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique template identifier.",
+          "examples": ["adverseDecisionNotice", "appealAcknowledgment"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Notice title displayed to the recipient.",
+          "examples": ["Notice of Adverse Determination"]
+        },
+        "sections": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Required sections in the notice.",
+          "examples": [["determination", "factualBasis", "appealRights", "deadline"]]
+        },
+        "formspecDefinitionRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional reference to a Formspec Definition for structured notice rendering."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of when this template is used."
+        }
+      }
+    },
+    "ExplanationTemplate": {
+      "type": "object",
+      "required": ["id", "level"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique template identifier.",
+          "examples": ["individualizedExplanation", "categoricalExplanation"]
+        },
+        "level": {
+          "type": "string",
+          "enum": ["individualized", "categorical", "aggregate"],
+          "description": "Explanation level this template serves."
+        },
+        "requiredElements": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Required elements in the explanation.",
+          "examples": [["specificDetermination", "factualBasis", "regulatoryAuthority", "counterfactuals"]]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this template."
+        }
+      }
+    },
+    "AppealRouting": {
+      "type": "object",
+      "required": ["independenceConstraint"],
+      "additionalProperties": false,
+      "properties": {
+        "defaultReviewerPool": {
+          "type": "string",
+          "description": "Default pool of eligible appeal reviewers.",
+          "examples": ["independentAdjudicators"]
+        },
+        "independenceConstraint": {
+          "type": "string",
+          "description": "How independence from the original determination is ensured.",
+          "examples": ["differentUnit", "differentAgency", "externalPanel"]
+        },
+        "escalationPath": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Ordered escalation path for contested appeal reviews.",
+          "examples": [["supervisorReview", "directorReview", "externalPanel"]]
+        }
+      }
+    },
+    "ContinuationPolicy": {
+      "type": "object",
+      "required": ["decisionType", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "decisionType": {
+          "type": "string",
+          "description": "Type of adverse decision this policy applies to.",
+          "examples": ["benefitTermination", "benefitReduction", "applicationDenial"]
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope of service continuation.",
+          "examples": ["currentLevel", "reducedLevel", "emergencyOnly"]
+        },
+        "duration": {
+          "type": "string",
+          "description": "ISO 8601 duration of the continuation period.",
+          "examples": ["P30D", "P90D"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this continuation policy."
+        }
+      }
+    }
+  }
+}

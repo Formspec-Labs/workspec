@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/policy-parameters/1.0",
+  "title": "WOS Policy Parameter Config",
+  "description": "A WOS Policy Parameter Config sidecar document. Provides date-indexed parameter values for temporal parameter resolution in WOS workflows. Government workflows apply rules effective at specific dates, not today's date. Each parameter declares its effective-date schedule and a resolution date reference -- the case state field that determines which date-effective value applies. Follows the OpenFisca model of date-indexed parameter values.",
+  "type": "object",
+  "required": [
+    "$wosPolicyParameters",
+    "targetWorkflow",
+    "parameters"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosPolicyParameters": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Policy Parameter Config specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Policy Parameter Config sidecar"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document these parameters apply to.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this sidecar to its parent kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Policy Parameter Config document.",
+      "examples": ["2026.1.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this parameter configuration.",
+      "examples": ["Benefits Program Parameters FY2025-2026"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this parameter set."
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ParameterDefinition"
+      },
+      "description": "Named parameters with date-indexed values. Parameter names become available in the evaluation context under 'parameters.[name]'.",
+      "examples": [
+        {
+          "eligibilityThreshold": {
+            "description": "Maximum household income for program eligibility",
+            "type": "number",
+            "unit": "USD",
+            "resolutionDateRef": "caseFile.applicationDate",
+            "values": [
+              { "effectiveDate": "2025-01-01", "value": 35000 },
+              { "effectiveDate": "2026-01-01", "value": 38000 }
+            ]
+          }
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Date-indexed parameters that resolve to the correct value for each case based on its relevant dates"
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/RegulatoryBinding"
+      },
+      "description": "Named regulatory version bindings with date-indexed document references. Binding names become available in the evaluation context under 'parameters.[name]', resolved to the effective URI for the case's resolution date.",
+      "examples": [
+        {
+          "eligibilityForm": {
+            "id": "eligibilityForm",
+            "description": "Formspec Definition for the eligibility determination form",
+            "resolutionDateRef": "caseFile.applicationDate",
+            "bindingType": "formspec",
+            "values": [
+              { "effectiveDate": "2025-01-01", "value": "https://agency.gov/forms/eligibility/v2.1" },
+              { "effectiveDate": "2025-09-01", "value": "https://agency.gov/forms/eligibility/v3.0" }
+            ]
+          }
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Date-indexed document bindings that resolve to the correct versioned URI for each case based on its relevant dates"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "ParameterDefinition": {
+      "type": "object",
+      "required": ["description", "type", "resolutionDateRef", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this parameter.",
+          "examples": ["Maximum household income for program eligibility"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["number", "integer", "string", "boolean"],
+          "description": "Parameter value type.",
+          "examples": ["number", "integer"]
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measure.",
+          "examples": ["USD", "days", "percent"]
+        },
+        "resolutionDateRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Case state field path that provides the resolution date. Different parameters MAY resolve against different dates.",
+          "examples": ["caseFile.applicationDate", "caseFile.adverseDecisionDate", "caseFile.appealFilingDate"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines WHICH date is used to look up this parameter's effective value -- different parameters can use different dates"
+          }
+        },
+        "authority": {
+          "type": "string",
+          "description": "Regulatory or statutory authority for this parameter.",
+          "examples": ["42 USC 1396a", "APA 5 USC 554"]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DateValue"
+          },
+          "minItems": 1,
+          "description": "Date-indexed values ordered by effective date. Each entry is effective from its date until the next entry's date.",
+          "examples": [
+            [
+              { "effectiveDate": "2025-01-01", "value": 35000, "authority": "Annual COLA adjustment" },
+              { "effectiveDate": "2025-07-01", "value": 36500, "authority": "Public Law 118-XXX" },
+              { "effectiveDate": "2026-01-01", "value": 37200 }
+            ]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The temporal schedule of values -- resolution picks the most recent entry on or before the resolution date"
+          }
+        }
+      }
+    },
+    "DateValue": {
+      "type": "object",
+      "required": ["effectiveDate", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date this value becomes effective (ISO 8601 date).",
+          "examples": ["2025-01-01", "2025-07-01", "2026-01-01"]
+        },
+        "value": {
+          "description": "The parameter value effective from this date until the next entry."
+        },
+        "authority": {
+          "type": "string",
+          "description": "Specific authority for this value change.",
+          "examples": ["Public Law 118-XXX", "Annual COLA adjustment"]
+        }
+      }
+    },
+    "RegulatoryBinding": {
+      "type": "object",
+      "required": ["id", "description", "resolutionDateRef", "bindingType", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique binding identifier. Becomes the key in the evaluation context under 'parameters.[id]'.",
+          "examples": ["eligibilityForm", "decisionService", "incomeVerificationSchema"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this binding controls.",
+          "examples": ["Formspec Definition for the eligibility determination form", "Decision service endpoint for income verification"]
+        },
+        "resolutionDateRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Case state field path that provides the resolution date. Uses the same mechanism as ParameterDefinition.resolutionDateRef.",
+          "examples": ["caseFile.applicationDate", "caseFile.eligibility.determinationDate"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines WHICH date is used to look up this binding's effective document version"
+          }
+        },
+        "bindingType": {
+          "type": "string",
+          "enum": ["formspec", "jsonSchema", "service", "mapping"],
+          "description": "Type of document being versioned. 'formspec': Formspec Definition (Core S1.4). 'jsonSchema': JSON Schema document. 'service': service endpoint URI. 'mapping': Formspec Mapping DSL document. Processors MAY apply type-specific validation but MUST NOT alter the resolution mechanism based on bindingType.",
+          "examples": ["formspec", "jsonSchema", "service"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Declares what kind of versioned document the binding URI references"
+          }
+        },
+        "authority": {
+          "type": "string",
+          "description": "Regulatory or statutory authority for this binding.",
+          "examples": ["Agency directive 2024-03", "OMB Circular A-130"]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingDateValue"
+          },
+          "minItems": 1,
+          "description": "Date-indexed document references ordered by effective date. Each entry is effective from its date until the next entry's date.",
+          "examples": [
+            [
+              { "effectiveDate": "2025-01-01", "value": "https://agency.gov/forms/eligibility/v2.1" },
+              { "effectiveDate": "2025-09-01", "value": "https://agency.gov/forms/eligibility/v3.0" }
+            ]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The temporal schedule of document versions -- resolution picks the most recent entry on or before the resolution date"
+          }
+        }
+      }
+    },
+    "BindingDateValue": {
+      "type": "object",
+      "required": ["effectiveDate", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date this binding becomes effective (ISO 8601 date).",
+          "examples": ["2025-01-01", "2025-09-01", "2026-01-01"]
+        },
+        "value": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the document version effective from this date until the next entry.",
+          "examples": [
+            "https://agency.gov/forms/eligibility/v2.1",
+            "https://agency.gov/services/income-verification/v1.2"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "description": "Specific authority for this version change.",
+          "examples": ["Agency directive 2025-07", "Regulatory update per Public Law 118-XXX"]
+        }
+      }
+    }
+  }
+}
