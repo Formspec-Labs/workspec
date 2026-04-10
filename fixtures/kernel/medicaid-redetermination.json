@@ -1,0 +1,461 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://agency.gov/workflows/medicaid-redetermination",
+  "version": "1.0.0",
+  "title": "Medicaid Benefits Redetermination",
+  "description": "Cyclical benefits workflow with no reachable final state on the happy path. Intake -> eligibility review -> determination -> active benefits (12-month cycle) -> redetermination due -> eligibility review (loop). Proves the kernel handles periodic review without a new construct. Uses stateTimeout on active-benefits, pre-notification timer 60 days before redetermination, hold state for pending applicant response, history state on eligibility-review for context resumption, and append-only case data accumulating across redetermination cycles.",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human",
+      "description": "Individual receiving Medicaid benefits"
+    },
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Caseworker performing eligibility determinations"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor for escalations and overrides"
+    },
+    {
+      "id": "notificationSystem",
+      "type": "system",
+      "description": "Sends notices to beneficiaries"
+    },
+    {
+      "id": "verificationSystem",
+      "type": "system",
+      "description": "External income and eligibility verification"
+    }
+  ],
+
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "processApplication",
+            "assignTo": "caseworker"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.currentCycle",
+            "value": "${(caseFile.currentCycle or 0) + 1}"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "applicationComplete",
+            "target": "eligibilityReview",
+            "guard": "caseFile.application.isComplete = true"
+          },
+          {
+            "event": "applicationIncomplete",
+            "target": "pendingApplicantResponse",
+            "tags": ["hold"]
+          }
+        ]
+      },
+
+      "pendingApplicantResponse": {
+        "type": "atomic",
+        "tags": ["hold"],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "notificationSystem",
+            "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-incomplete-notice"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "applicantResponseDeadline",
+            "duration": "P30D",
+            "event": "$timeout.state"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "applicantResponse",
+            "target": "intake",
+            "actions": [
+              { "action": "cancelTimer", "timerId": "applicantResponseDeadline" }
+            ],
+            "description": "Applicant responds -- return to intake for reprocessing"
+          },
+          {
+            "event": "$timeout.state",
+            "target": "deniedForNonResponse",
+            "tags": ["adverse-decision"],
+            "description": "30-day response window expired"
+          }
+        ]
+      },
+
+      "eligibilityReview": {
+        "type": "compound",
+        "tags": ["review", "determination"],
+        "initialState": "incomeVerification",
+        "states": {
+          "incomeVerification": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "invokeService",
+                "serviceRef": "verificationSystem",
+                "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-verify",
+                "correlationKey": "${instance.id}"
+              }
+            ],
+            "transitions": [
+              {
+                "event": "verificationComplete",
+                "target": "caseworkerReview"
+              },
+              {
+                "event": "verificationFailed",
+                "target": "manualVerification"
+              }
+            ]
+          },
+          "manualVerification": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "createTask",
+                "taskRef": "manualIncomeVerification",
+                "assignTo": "caseworker"
+              }
+            ],
+            "transitions": [
+              {
+                "event": "manualVerificationComplete",
+                "target": "caseworkerReview"
+              }
+            ]
+          },
+          "caseworkerReview": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "createTask",
+                "taskRef": "eligibilityDetermination",
+                "assignTo": "caseworker"
+              }
+            ],
+            "transitions": [
+              {
+                "event": "determinationComplete",
+                "target": "reviewComplete"
+              }
+            ]
+          },
+          "reviewComplete": {
+            "type": "final"
+          }
+        },
+        "transitions": [
+          {
+            "event": "eligible",
+            "target": "activeBenefits",
+            "tags": ["determination"],
+            "description": "Applicant found eligible -- benefits activated or renewed"
+          },
+          {
+            "event": "ineligible",
+            "target": "adverseNotice",
+            "tags": ["determination", "adverse-decision"],
+            "description": "Applicant found ineligible -- triggers due process"
+          }
+        ]
+      },
+
+      "activeBenefits": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "setData",
+            "path": "caseFile.benefitsActiveDate",
+            "value": "${event.timestamp}"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.redeterminationDue",
+            "value": "false"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "preNotification",
+            "duration": "P305D",
+            "event": "preRedeterminationNotice"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "redeterminationDue",
+            "duration": "P365D",
+            "event": "$timeout.state"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "preRedeterminationNotice",
+            "target": "activeBenefits",
+            "actions": [
+              {
+                "action": "invokeService",
+                "serviceRef": "notificationSystem",
+                "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-preredet-notice"
+              },
+              {
+                "action": "setData",
+                "path": "caseFile.preNotificationSent",
+                "value": "true"
+              }
+            ],
+            "description": "60 days before redetermination: send pre-notification (self-transition)"
+          },
+          {
+            "event": "$timeout.state",
+            "target": "redeterminationDue",
+            "description": "12-month cycle complete -- redetermination required"
+          },
+          {
+            "event": "voluntaryTermination",
+            "target": "terminated",
+            "description": "Beneficiary voluntarily terminates benefits"
+          },
+          {
+            "event": "reportedChange",
+            "target": "eligibilityReview",
+            "description": "Reported change of circumstances triggers early review"
+          }
+        ]
+      },
+
+      "redeterminationDue": {
+        "type": "atomic",
+        "tags": ["notification"],
+        "onEntry": [
+          {
+            "action": "setData",
+            "path": "caseFile.redeterminationDue",
+            "value": "true"
+          },
+          {
+            "action": "invokeService",
+            "serviceRef": "notificationSystem",
+            "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-redet-notice"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "redeterminationResponseDeadline",
+            "duration": "P30D",
+            "event": "$timeout.state"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "redeterminationSubmitted",
+            "target": "eligibilityReview",
+            "actions": [
+              { "action": "cancelTimer", "timerId": "redeterminationResponseDeadline" }
+            ],
+            "description": "Beneficiary submits redetermination -- cycle back to review"
+          },
+          {
+            "event": "$timeout.state",
+            "target": "pendingApplicantResponse",
+            "tags": ["hold"],
+            "description": "No response to redetermination notice -- enter hold state"
+          }
+        ]
+      },
+
+      "adverseNotice": {
+        "type": "atomic",
+        "tags": ["notification", "adverse-decision"],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "notificationSystem",
+            "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-adverse-notice"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "appealWindow",
+            "duration": "P30D",
+            "event": "appealWindowExpired"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appealFiled",
+            "target": "appeal",
+            "tags": ["appeal"],
+            "actions": [
+              { "action": "cancelTimer", "timerId": "appealWindow" }
+            ]
+          },
+          {
+            "event": "appealWindowExpired",
+            "target": "terminated",
+            "description": "Appeal window expired -- benefits terminated"
+          }
+        ]
+      },
+
+      "appeal": {
+        "type": "atomic",
+        "tags": ["appeal", "review"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "appealReview",
+            "assignTo": "supervisor"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appealGranted",
+            "target": "activeBenefits",
+            "tags": ["determination"],
+            "description": "Appeal granted -- benefits restored"
+          },
+          {
+            "event": "appealDenied",
+            "target": "terminated",
+            "tags": ["determination", "adverse-decision"],
+            "description": "Appeal denied -- benefits terminated"
+          }
+        ]
+      },
+
+      "deniedForNonResponse": {
+        "type": "atomic",
+        "tags": ["adverse-decision"],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "notificationSystem",
+            "idempotencyKey": "${instance.id}-cycle-${caseFile.currentCycle}-nonresponse-notice"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "lateResponse",
+            "target": "intake",
+            "description": "Late response accepted -- restart intake"
+          },
+          {
+            "event": "finalClose",
+            "target": "terminated"
+          }
+        ]
+      },
+
+      "terminated": {
+        "type": "final"
+      }
+    },
+
+    "milestones": {
+      "applicationReceived": {
+        "condition": "caseFile.application != null",
+        "description": "Application has been submitted"
+      },
+      "incomeVerified": {
+        "condition": "caseFile.verification.status = 'verified'",
+        "description": "Income has been verified for this cycle"
+      },
+      "benefitsActive": {
+        "condition": "caseFile.benefitsActiveDate != null and caseFile.redeterminationDue = false",
+        "description": "Benefits are currently active"
+      },
+      "multiCycle": {
+        "condition": "caseFile.currentCycle > 1",
+        "description": "Case has been through at least one redetermination cycle"
+      }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "application": {
+        "type": "object",
+        "description": "Current application data (overwritten each cycle)"
+      },
+      "verification": {
+        "type": "object",
+        "description": "Current income verification results"
+      },
+      "eligibility": {
+        "type": "object",
+        "description": "Current eligibility determination"
+      },
+      "currentCycle": {
+        "type": "integer",
+        "description": "Redetermination cycle counter (increments on each intake)",
+        "default": 0
+      },
+      "benefitsActiveDate": {
+        "type": "datetime",
+        "description": "When benefits were last activated"
+      },
+      "redeterminationDue": {
+        "type": "boolean",
+        "description": "Whether a redetermination is currently due",
+        "default": false
+      },
+      "preNotificationSent": {
+        "type": "boolean",
+        "description": "Whether pre-redetermination notice was sent this cycle"
+      },
+      "householdIncome": {
+        "type": "number",
+        "description": "Verified household income"
+      },
+      "dependentCount": {
+        "type": "integer",
+        "description": "Number of dependents"
+      }
+    },
+    "relationships": [
+      {
+        "type": "related",
+        "targetCase": "urn:wos:agency.gov:cases:household-001",
+        "relationship": "household-member",
+        "bidirectional": true
+      }
+    ]
+  },
+
+  "contracts": {
+    "applicationForm": {
+      "binding": "formspec",
+      "ref": "urn:formspec:agency.gov:medicaid-application:1.0.0",
+      "description": "Formspec Definition for the Medicaid application/redetermination form"
+    },
+    "incomeVerificationContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:agency.gov:income-verification:1.0.0",
+      "description": "Formspec Definition for income verification data"
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P3650D",
+    "defaultTaskTimeout": "P30D",
+    "defaultServiceTimeout": "PT5M",
+    "instanceVersioning": "pinned"
+  }
+}

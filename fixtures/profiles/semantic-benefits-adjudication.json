@@ -1,0 +1,68 @@
+{
+  "$wosSemanticProfile": "1.0",
+  "$schema": "https://wos-spec.org/schemas/semantic-profile/1.0",
+  "targetWorkflow": {
+    "url": "https://agency.gov/workflows/benefits-adjudication",
+    "compatibleVersions": ">=1.0.0 <2.0.0"
+  },
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Semantic Profile",
+  "description": "Linked data semantics for the benefits adjudication workflow. Applies the WOS JSON-LD context with NIEM Human Services domain vocabulary for cross-agency case data interoperability. Enables SHACL validation of due process completeness, PROV-O provenance export for audit, and OCEL process mining for workflow analysis.",
+
+  "context": {
+    "contextUrl": "https://wos-spec.org/context/1.0.0",
+    "contextVersion": "1.0.0",
+    "namespaces": {
+      "niem-hs": "https://release.niem.gov/niem/domains/humanServices/5.2/",
+      "niem-nc": "https://release.niem.gov/niem/niem-core/5.0/"
+    },
+    "domainVocabularies": [
+      {
+        "prefix": "niem-hs",
+        "namespace": "https://release.niem.gov/niem/domains/humanServices/5.2/",
+        "description": "NIEM Human Services domain for benefits case data. Maps applicant demographics, household composition, and eligibility factors to NIEM terms for cross-agency data exchange."
+      },
+      {
+        "prefix": "niem-nc",
+        "namespace": "https://release.niem.gov/niem/niem-core/5.0/",
+        "description": "NIEM Core namespace for common government data types (PersonType, AddressType, DateType)."
+      }
+    ]
+  },
+
+  "shapes": {
+    "shapeGraphs": [
+      "https://wos-spec.org/shapes/1.0.0",
+      "https://agency.gov/shapes/benefits-adjudication/1.0.0"
+    ],
+    "severity": "violation",
+    "scope": "all"
+  },
+
+  "provMapping": {
+    "provenanceNamespace": "https://agency.gov/provenance/benefits/",
+    "actorMapping": {
+      "human": "http://www.w3.org/ns/prov#Person",
+      "system": "http://www.w3.org/ns/prov#SoftwareAgent",
+      "agent": "https://wos-spec.org/ns/AIAgent"
+    },
+    "tierMapping": {
+      "reasoning": "https://wos-spec.org/ns/ReasoningBundle",
+      "counterfactual": "https://wos-spec.org/ns/CounterfactualBundle",
+      "narrative": "https://wos-spec.org/ns/NarrativeBundle"
+    }
+  },
+
+  "processMining": {
+    "formats": ["xes", "ocel"],
+    "caseIdentifier": "instanceId",
+    "eventClassifier": "action",
+    "objectTypes": [
+      "application",
+      "eligibility",
+      "determination",
+      "appeal",
+      "supportingDocuments"
+    ]
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "$wosAIIntegration": "1.0",
+  "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication AI Integration",
+  "description": "AI integration for the benefits adjudication workflow. Two agents assist: a generative document extractor that reads pay stubs and extracts income data (assistive), and a statistical eligibility pre-screener that flags likely-eligible cases for expedited processing (supervisory). The workflow is rights-impacting — agents may not issue final denials and must disclose AI involvement in adverse decisions.",
+  "defaultAutonomy": "assistive",
+  "agents": [
+    {
+      "id": "documentExtractor",
+      "type": "agent",
+      "agentType": "generative",
+      "modelIdentifier": "document-extraction-v3",
+      "modelVersion": "3.0.0",
+      "modelVersionPolicy": "pinned",
+      "description": "Reads uploaded pay stubs and extracts income data for case file population. Human caseworker confirms all extracted values before commit.",
+      "capabilities": [
+        {
+          "id": "payStubExtraction",
+          "description": "Extracts income fields (gross income, employer, pay period) from uploaded pay stub documents.",
+          "inputContractRef": "urn:formspec:agency.gov:pay-stub-upload:1.0.0",
+          "outputContractRef": "urn:formspec:agency.gov:income-extraction-output:1.0.0"
+        }
+      ],
+      "fallbackChain": [
+        {
+          "action": "retry",
+          "maxRetries": 1,
+          "backoff": "exponential",
+          "initialInterval": "PT5S"
+        },
+        {
+          "action": "escalateToHuman",
+          "taskRef": "manualDocumentReview"
+        }
+      ]
+    },
+    {
+      "id": "eligibilityScreener",
+      "type": "agent",
+      "agentType": "statistical",
+      "modelIdentifier": "benefits-eligibility-screener",
+      "modelVersion": "2.1.0",
+      "modelVersionPolicy": "pinned",
+      "description": "Flags likely-eligible cases for expedited processing based on income and household data. Operates at supervisory autonomy: output auto-commits but human reviews within 48 hours.",
+      "capabilities": [
+        {
+          "id": "eligibilityPreScreen",
+          "description": "Computes a pre-screening eligibility flag and confidence score based on application data.",
+          "inputContractRef": "urn:formspec:agency.gov:eligibility-screening-input:1.0.0",
+          "outputContractRef": "urn:formspec:agency.gov:eligibility-screening-output:1.0.0"
+        }
+      ]
+    }
+  ],
+  "deonticConstraints": {
+    "prohibitions": [
+      {
+        "id": "noFinalDenial",
+        "condition": "output.eligible = false and instance.impactLevel = 'rights-impacting'",
+        "reason": "Agent MUST NOT issue a final denial on a rights-impacting benefits case. Denials require human determination.",
+        "onViolation": "escalateToHuman",
+        "nullBehavior": "escalate"
+      }
+    ],
+    "obligations": [
+      {
+        "id": "requireAIDisclosureOnAdverseDecision",
+        "requirement": "output.aiAssisted = true or output.eligible != false",
+        "reason": "Any adverse output must carry AI-involvement disclosure for due process compliance.",
+        "onViolation": "reject"
+      },
+      {
+        "id": "requireConfidenceFloorMet",
+        "requirement": "output.confidence.overall >= 0.80",
+        "reason": "Agent output must meet the workflow confidence floor before being committed.",
+        "onViolation": "escalateToHuman"
+      }
+    ],
+    "rights": [
+      {
+        "id": "receivesApplicationData",
+        "entitlement": "caseFile.application",
+        "description": "Agents must receive the full application data as input to make valid determinations."
+      },
+      {
+        "id": "receivesUploadedDocuments",
+        "entitlement": "caseFile.documents",
+        "description": "Document extractor must receive the uploaded pay stubs as input."
+      }
+    ]
+  },
+  "confidenceFloor": {
+    "threshold": 0.80,
+    "onViolation": "escalateToHuman"
+  },
+  "fallbackChain": [
+    {
+      "action": "retry",
+      "maxRetries": 2,
+      "backoff": "exponential",
+      "initialInterval": "PT10S"
+    },
+    {
+      "action": "escalateToHuman",
+      "taskRef": "manualCaseworkerReview"
+    }
+  ],
+  "agentDisclosure": {
+    "discloseThatAgentAssisted": true,
+    "discloseModelIdentity": false,
+    "discloseConfidence": false
+  },
+  "oversightExtensions": {
+    "suppressAgentOutput": true,
+    "presentation": {
+      "showConfidence": true,
+      "highlightLowConfidenceFields": true,
+      "showAlternatives": false,
+      "showDiffFromIndependent": false
+    }
+  },
+  "reviewSampling": {
+    "rate": 0.20,
+    "method": "stratified",
+    "scope": "agent"
+  },
+  "narrativeTier": {
+    "enabled": true,
+    "requiredForTags": ["determination", "adverse-decision", "review"]
+  },
+  "driftDetection": {
+    "trainingDataDisclosure": true,
+    "optimizationObjectiveDisclosure": false,
+    "rubberStampMonitoring": {
+      "enabled": true,
+      "minReviewTime": "PT2M",
+      "maxAgreementRate": 0.95,
+      "evaluationWindow": "P30D"
+    }
+  }
+}

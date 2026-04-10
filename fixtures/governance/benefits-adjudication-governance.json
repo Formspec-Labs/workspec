@@ -1,0 +1,155 @@
+{
+  "$wosWorkflowGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Governance",
+  "description": "Governance for a pure-human benefits adjudication workflow. Dual-blind review, due process with 30-day notice and appeal, separation of duties, income verification pipeline, structured reasoning traces. No AI -- proves Layer 1 serves human workflows independently.",
+
+  "dueProcess": {
+    "adverseDecisionPolicy": {
+      "noticeRequired": true,
+      "noticeTiming": "beforeEffective",
+      "noticeGracePeriod": "P30D",
+      "noticeTemplateRef": "adverseDecisionNotice",
+      "explanationLevel": "individualized",
+      "counterfactualRequired": true,
+      "appealMechanism": {
+        "enabled": true,
+        "appealWindow": "P30D",
+        "reviewerConstraint": "independentFromOriginal",
+        "reviewerRoles": ["appealAdjudicator"],
+        "continuationOfServices": true,
+        "continuationScope": "currentLevel"
+      }
+    }
+  },
+
+  "reviewProtocols": [
+    {
+      "tags": ["review", "determination"],
+      "protocols": ["dualBlind"],
+      "description": "All review and determination steps use dual-blind protocol -- two independent reviewers assess without seeing each other's work"
+    },
+    {
+      "tags": ["appeal"],
+      "protocols": ["independentFirst", "considerOpposite"],
+      "description": "Appeal reviews use independent-first plus consider-opposite to ensure genuine reconsideration"
+    }
+  ],
+
+  "pipelines": [
+    {
+      "id": "income-verification",
+      "description": "Validates income data from external verification service before eligibility determination",
+      "stages": [
+        {
+          "id": "validate-contract",
+          "type": "contract-validation",
+          "contractRef": "urn:formspec:agency.gov:income-verification:1.0.0",
+          "rejectionPolicy": "holdPendingData",
+          "description": "Validate income data against the income verification contract"
+        },
+        {
+          "id": "arithmetic-check",
+          "type": "assertion-gate",
+          "assertions": [
+            {
+              "type": "arithmetic",
+              "expression": "totalIncome = wageIncome + investmentIncome + otherIncome",
+              "description": "Total income must equal the sum of its components"
+            },
+            {
+              "type": "range",
+              "expression": "totalIncome >= 0",
+              "description": "Total income must be non-negative"
+            }
+          ],
+          "rejectionPolicy": "retryWithCorrections",
+          "description": "Verify arithmetic consistency of income figures"
+        },
+        {
+          "id": "source-grounding",
+          "type": "assertion-gate",
+          "assertions": [
+            {
+              "type": "source-grounded",
+              "fields": ["wageIncome", "employerName", "filingDate"],
+              "description": "Key income values must appear in the source tax documents"
+            }
+          ],
+          "rejectionPolicy": "escalateToSupervisor",
+          "description": "Verify income values are grounded in source documents"
+        },
+        {
+          "id": "temporal-check",
+          "type": "assertion-gate",
+          "assertions": [
+            {
+              "type": "temporal",
+              "expression": "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd",
+              "description": "Filing date must be within the applicable fiscal year"
+            }
+          ],
+          "rejectionPolicy": "retryWithCorrections",
+          "description": "Verify temporal validity of filing dates"
+        }
+      ]
+    }
+  ],
+
+  "audit": {
+    "reasoningTier": {
+      "requiredForTags": ["determination"],
+      "requireDecisionRequirements": true
+    },
+    "counterfactualTier": {
+      "requiredForTags": ["adverse-decision"],
+      "requireProtectedCharacteristics": true
+    }
+  },
+
+  "qualityControls": {
+    "reviewSampling": {
+      "rate": 0.15,
+      "method": "random",
+      "scope": "workflow"
+    },
+    "separationOfDuties": {
+      "scope": "sameInstance",
+      "excludeRoles": ["intakeWorker"]
+    },
+    "overrideAuthority": {
+      "requireStructuredRationale": true,
+      "requireAuthorityVerification": true,
+      "requireSupportingEvidence": true
+    }
+  },
+
+  "taskCatalog": [
+    {
+      "pattern": "applicationCompleteness",
+      "verifiable": "yes",
+      "verificationMethod": "Field presence/absence against schema",
+      "description": "Check whether all required application fields are present"
+    },
+    {
+      "pattern": "incomeVerification",
+      "verifiable": "yes",
+      "verificationMethod": "Source-grounding plus arithmetic recomputation",
+      "description": "Verify income data against source documents and arithmetic constraints"
+    },
+    {
+      "pattern": "eligibilityDetermination",
+      "verifiable": "partially",
+      "verificationMethod": "Rule application is verifiable; judgment calls are not",
+      "description": "Determine eligibility based on criteria, income, and circumstances"
+    },
+    {
+      "pattern": "appealReview",
+      "verifiable": "no",
+      "verificationMethod": "Requires independent professional judgment",
+      "description": "Independent review of the original determination on appeal"
+    }
+  ]
+}

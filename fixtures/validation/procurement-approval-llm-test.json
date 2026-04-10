@@ -1,0 +1,312 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://procurement.example.gov/workflows/purchase-order-approval",
+  "version": "1.0.0",
+  "title": "Government Procurement Approval",
+  "description": "A government procurement approval workflow where a purchase request is submitted by a requester, reviewed by a procurement officer for budget availability and compliance, then approved or rejected by a department head. Approved requests proceed to purchase order generation.",
+  "status": "active",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "requester",
+      "type": "human",
+      "description": "Employee submitting a purchase request"
+    },
+    {
+      "id": "procurementOfficer",
+      "type": "human",
+      "description": "Procurement officer who verifies budget availability and compliance"
+    },
+    {
+      "id": "departmentHead",
+      "type": "human",
+      "description": "Department head who approves or rejects the purchase request"
+    },
+    {
+      "id": "purchaseOrderSystem",
+      "type": "system",
+      "description": "System that generates purchase orders for approved requests"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "draft",
+    "states": {
+      "draft": {
+        "type": "atomic",
+        "description": "Purchase request is being prepared by the requester.",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "complete-purchase-request",
+            "assignTo": "requester"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "submit",
+            "target": "pendingReview",
+            "description": "Requester submits the purchase request for procurement review.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.submittedAt",
+                "value": "${event.timestamp}"
+              }
+            ]
+          }
+        ]
+      },
+      "pendingReview": {
+        "type": "atomic",
+        "description": "Purchase request is under review by the procurement officer for budget availability and compliance.",
+        "tags": ["review"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "review-purchase-request",
+            "assignTo": "procurementOfficer"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "reviewComplete",
+            "target": "pendingApproval",
+            "guard": "caseFile.budgetAvailable = true and caseFile.complianceVerified = true",
+            "description": "Procurement officer has verified budget availability and compliance; request proceeds to department head for approval.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.reviewedBy",
+                "value": "${actor.id}"
+              },
+              {
+                "action": "setData",
+                "path": "caseFile.reviewedAt",
+                "value": "${event.timestamp}"
+              }
+            ]
+          },
+          {
+            "event": "reviewRejected",
+            "target": "rejected",
+            "description": "Procurement officer rejected the request due to budget or compliance failure.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.rejectionReason",
+                "value": "${event.reason}"
+              },
+              {
+                "action": "setData",
+                "path": "caseFile.rejectedBy",
+                "value": "${actor.id}"
+              }
+            ],
+            "tags": ["adverse-decision"]
+          }
+        ]
+      },
+      "pendingApproval": {
+        "type": "atomic",
+        "description": "Purchase request awaiting approval or rejection by the department head.",
+        "tags": ["determination"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "approve-purchase-request",
+            "assignTo": "departmentHead"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "approve",
+            "target": "approved",
+            "description": "Department head approves the purchase request.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.approvedBy",
+                "value": "${actor.id}"
+              },
+              {
+                "action": "setData",
+                "path": "caseFile.approvedAt",
+                "value": "${event.timestamp}"
+              }
+            ]
+          },
+          {
+            "event": "reject",
+            "target": "rejected",
+            "description": "Department head rejects the purchase request.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.rejectionReason",
+                "value": "${event.reason}"
+              },
+              {
+                "action": "setData",
+                "path": "caseFile.rejectedBy",
+                "value": "${actor.id}"
+              }
+            ],
+            "tags": ["adverse-decision"]
+          }
+        ]
+      },
+      "approved": {
+        "type": "atomic",
+        "description": "Purchase request has been approved by the department head; system generates purchase order.",
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "purchase-order-generator",
+            "idempotencyKey": "${instance.id}-generate-po",
+            "correlationKey": "${instance.id}"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.status",
+            "value": "approved"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "purchaseOrderCreated",
+            "target": "completed",
+            "description": "Purchase order has been generated by the system.",
+            "actions": [
+              {
+                "action": "setData",
+                "path": "caseFile.purchaseOrderNumber",
+                "value": "${event.purchaseOrderNumber}"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected": {
+        "type": "final",
+        "description": "Purchase request has been rejected."
+      },
+      "completed": {
+        "type": "final",
+        "description": "Purchase order has been generated and the workflow is complete."
+      }
+    },
+    "milestones": {
+      "requestSubmitted": {
+        "condition": "caseFile.submittedAt != null",
+        "description": "Purchase request has been submitted by the requester."
+      },
+      "budgetVerified": {
+        "condition": "caseFile.budgetAvailable = true and caseFile.complianceVerified = true",
+        "description": "Budget availability and compliance have been verified by the procurement officer."
+      },
+      "purchaseOrderIssued": {
+        "condition": "caseFile.purchaseOrderNumber != null",
+        "description": "A purchase order number has been issued."
+      }
+    }
+  },
+  "caseFile": {
+    "fields": {
+      "requestTitle": {
+        "type": "string",
+        "description": "Short title or summary of the purchase request."
+      },
+      "requestDescription": {
+        "type": "string",
+        "description": "Detailed description of the goods or services being requested."
+      },
+      "requestAmount": {
+        "type": "number",
+        "description": "Total monetary amount of the purchase request."
+      },
+      "departmentId": {
+        "type": "string",
+        "description": "Identifier of the department submitting the request."
+      },
+      "remainingAnnualBudget": {
+        "type": "number",
+        "description": "Department's remaining annual budget at time of review."
+      },
+      "budgetAvailable": {
+        "type": "boolean",
+        "description": "Whether sufficient budget is available for this request (requestAmount <= remainingAnnualBudget).",
+        "default": false
+      },
+      "complianceVerified": {
+        "type": "boolean",
+        "description": "Whether the request meets procurement compliance requirements.",
+        "default": false
+      },
+      "submittedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the request was submitted."
+      },
+      "reviewedBy": {
+        "type": "string",
+        "description": "Identifier of the procurement officer who reviewed the request."
+      },
+      "reviewedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the request was reviewed."
+      },
+      "approvedBy": {
+        "type": "string",
+        "description": "Identifier of the department head who approved the request."
+      },
+      "approvedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the request was approved."
+      },
+      "rejectedBy": {
+        "type": "string",
+        "description": "Identifier of the actor who rejected the request."
+      },
+      "rejectionReason": {
+        "type": "string",
+        "description": "Reason provided for rejecting the purchase request."
+      },
+      "purchaseOrderNumber": {
+        "type": "string",
+        "description": "Purchase order number assigned by the system upon approval."
+      },
+      "status": {
+        "type": "string",
+        "description": "Current status label for the procurement request."
+      }
+    }
+  },
+  "contracts": {
+    "purchaseRequest": {
+      "binding": "formspec",
+      "ref": "urn:formspec:example.gov:purchase-request:1.0.0",
+      "description": "Formspec definition for the purchase request form submitted by the requester."
+    },
+    "procurementReview": {
+      "binding": "formspec",
+      "ref": "urn:formspec:example.gov:procurement-review:1.0.0",
+      "description": "Formspec definition for the procurement officer's review form including budget verification."
+    },
+    "approvalDecision": {
+      "binding": "formspec",
+      "ref": "urn:formspec:example.gov:approval-decision:1.0.0",
+      "description": "Formspec definition for the department head's approval or rejection form."
+    }
+  },
+  "provenance": {
+    "digestAlgorithm": "SHA-256"
+  },
+  "execution": {
+    "workflowTimeout": "P90D",
+    "defaultTaskTimeout": "P7D",
+    "defaultServiceTimeout": "PT30S",
+    "compensable": false,
+    "instanceVersioning": "pinned"
+  }
+}

@@ -1,0 +1,412 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://agency.gov/workflows/foia-request-processing",
+  "version": "1.0.0",
+  "title": "FOIA Request Processing Workflow",
+  "description": "Processes Freedom of Information Act requests from submission through determination, including exemption review and appeal.",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+  "actors": [
+    {
+      "id": "requester",
+      "type": "human",
+      "description": "Member of the public or organization submitting a FOIA request for government records."
+    },
+    {
+      "id": "intakeClerk",
+      "type": "human",
+      "description": "Clerk who reviews FOIA requests for completeness and assigns them to a FOIA officer."
+    },
+    {
+      "id": "foiaOfficer",
+      "type": "human",
+      "description": "FOIA officer responsible for searching records, reviewing exemptions, and preparing determinations."
+    },
+    {
+      "id": "reviewPanel",
+      "type": "human",
+      "description": "Independent review panel that adjudicates FOIA appeals. Must be independent of the original determination."
+    },
+    {
+      "id": "recordsSystem",
+      "type": "system",
+      "description": "Government records management system used for searching responsive records."
+    }
+  ],
+  "lifecycle": {
+    "initialState": "submitted",
+    "states": {
+      "submitted": {
+        "type": "atomic",
+        "description": "Requester has submitted a FOIA request. Awaiting intake review.",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "startTimer",
+            "timerId": "statutory-response-deadline",
+            "duration": "P20BD",
+            "event": "deadline.exceeded"
+          },
+          {
+            "action": "createTask",
+            "taskRef": "intake-completeness-review",
+            "assignTo": "intakeClerk"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "intake.complete",
+            "target": "intake-review",
+            "description": "Intake clerk confirms request is complete and assigns to FOIA officer."
+          },
+          {
+            "event": "intake.deficient",
+            "target": "deficiency-notice",
+            "description": "Request is missing required information; requester must be notified."
+          }
+        ]
+      },
+      "deficiency-notice": {
+        "type": "atomic",
+        "description": "Requester notified of deficiencies; awaiting corrected submission.",
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "send-deficiency-notice",
+            "assignTo": "intakeClerk"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "requester.resubmitted",
+            "target": "submitted",
+            "description": "Requester has corrected and resubmitted the request."
+          },
+          {
+            "event": "request.withdrawn",
+            "target": "closed-withdrawn",
+            "description": "Requester withdraws the FOIA request."
+          }
+        ]
+      },
+      "intake-review": {
+        "type": "atomic",
+        "description": "FOIA officer assigned; searching for responsive records.",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "records-search",
+            "assignTo": "foiaOfficer"
+          },
+          {
+            "action": "invokeService",
+            "serviceRef": "records-system-search",
+            "idempotencyKey": "${instance.id}-records-search",
+            "correlationKey": "${instance.id}"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "records.found",
+            "target": "exemption-review",
+            "description": "Responsive records found; proceeding to exemption review."
+          },
+          {
+            "event": "records.none-found",
+            "target": "no-records-determination",
+            "description": "No responsive records exist."
+          }
+        ]
+      },
+      "exemption-review": {
+        "type": "atomic",
+        "description": "FOIA officer reviews responsive records for applicable exemptions (national security, personal privacy, law enforcement).",
+        "tags": ["review", "determination"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "exemption-review-task",
+            "assignTo": "foiaOfficer"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "determination.full-disclosure",
+            "target": "full-disclosure-response",
+            "description": "All responsive records are releasable; full disclosure.",
+            "tags": ["determination"]
+          },
+          {
+            "event": "determination.partial-withholding",
+            "target": "adverse-decision-preparation",
+            "description": "Some records withheld under exemptions; partial disclosure adverse decision.",
+            "tags": ["determination", "adverse-decision"]
+          },
+          {
+            "event": "determination.full-withholding",
+            "target": "adverse-decision-preparation",
+            "description": "All records withheld under exemptions; full denial adverse decision.",
+            "tags": ["determination", "adverse-decision"]
+          }
+        ]
+      },
+      "adverse-decision-preparation": {
+        "type": "atomic",
+        "description": "FOIA officer prepares adverse decision notice with itemized exemption citations and appeal instructions.",
+        "tags": ["adverse-decision"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "prepare-adverse-decision-notice",
+            "assignTo": "foiaOfficer"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "notice.ready",
+            "target": "adverse-decision-issued",
+            "description": "Adverse decision notice prepared and ready for issuance."
+          }
+        ]
+      },
+      "adverse-decision-issued": {
+        "type": "atomic",
+        "description": "Adverse decision notice sent to requester. Appeal window open.",
+        "tags": ["adverse-decision"],
+        "onEntry": [
+          {
+            "action": "setData",
+            "path": "caseFile.adverseDecisionIssuedAt",
+            "value": "${event.timestamp}"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "appeal-window",
+            "duration": "P90D",
+            "event": "appeal.window.closed"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appeal.filed",
+            "target": "appeal-review",
+            "description": "Requester has filed an administrative appeal within the appeal window.",
+            "tags": ["appeal"]
+          },
+          {
+            "event": "appeal.window.closed",
+            "target": "closed-final",
+            "description": "Appeal window elapsed with no appeal filed. Decision is final."
+          }
+        ]
+      },
+      "appeal-review": {
+        "type": "atomic",
+        "description": "Independent review panel adjudicates the appeal. Must be independent of original determination.",
+        "tags": ["review", "appeal"],
+        "onEntry": [
+          {
+            "action": "cancelTimer",
+            "timerId": "appeal-window"
+          },
+          {
+            "action": "createTask",
+            "taskRef": "independent-appeal-review",
+            "assignTo": "reviewPanel"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appeal.granted",
+            "target": "appeal-granted-response",
+            "description": "Appeal panel grants the appeal; records will be disclosed.",
+            "tags": ["determination"]
+          },
+          {
+            "event": "appeal.denied",
+            "target": "appeal-denied-final",
+            "description": "Appeal panel denies the appeal; original determination stands.",
+            "tags": ["determination", "adverse-decision"]
+          },
+          {
+            "event": "appeal.partially-granted",
+            "target": "appeal-granted-response",
+            "description": "Appeal panel partially grants the appeal.",
+            "tags": ["determination", "adverse-decision"]
+          }
+        ]
+      },
+      "no-records-determination": {
+        "type": "atomic",
+        "description": "Determination that no responsive records exist; requester notified.",
+        "tags": ["determination", "adverse-decision"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "send-no-records-notice",
+            "assignTo": "foiaOfficer"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "notice.sent",
+            "target": "adverse-decision-issued",
+            "description": "No-records notice sent; appeal window opens."
+          }
+        ]
+      },
+      "full-disclosure-response": {
+        "type": "atomic",
+        "description": "All responsive records released to requester.",
+        "onEntry": [
+          {
+            "action": "cancelTimer",
+            "timerId": "statutory-response-deadline"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.outcome",
+            "value": "full-disclosure"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "records.released",
+            "target": "closed-final",
+            "description": "Records transmitted to requester; case closed."
+          }
+        ]
+      },
+      "appeal-granted-response": {
+        "type": "atomic",
+        "description": "Appeal granted; records released pursuant to appeal determination.",
+        "onEntry": [
+          {
+            "action": "setData",
+            "path": "caseFile.outcome",
+            "value": "appeal-granted"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "records.released",
+            "target": "closed-final",
+            "description": "Records transmitted per appeal determination; case closed."
+          }
+        ]
+      },
+      "appeal-denied-final": {
+        "type": "final",
+        "description": "Appeal denied. Requester may seek judicial review. Workflow complete."
+      },
+      "closed-final": {
+        "type": "final",
+        "description": "Workflow complete. Case closed."
+      },
+      "closed-withdrawn": {
+        "type": "final",
+        "description": "Request withdrawn by requester. Workflow closed."
+      }
+    },
+    "milestones": {
+      "requestAssigned": {
+        "condition": "caseFile.assignedOfficer != null",
+        "description": "FOIA officer has been assigned to the request."
+      },
+      "recordsSearchComplete": {
+        "condition": "caseFile.recordsSearchCompletedAt != null",
+        "description": "Records search has been completed."
+      },
+      "determinationMade": {
+        "condition": "caseFile.determinationOutcome != null",
+        "description": "A determination has been made on the FOIA request."
+      },
+      "adverseDecisionIssued": {
+        "condition": "caseFile.adverseDecisionIssuedAt != null",
+        "description": "An adverse decision notice has been issued to the requester."
+      },
+      "appealFiled": {
+        "condition": "caseFile.appealFiledAt != null",
+        "description": "Requester has filed an administrative appeal."
+      }
+    }
+  },
+  "caseFile": {
+    "fields": {
+      "requestId": {
+        "type": "string",
+        "description": "Unique identifier for the FOIA request."
+      },
+      "requesterName": {
+        "type": "string",
+        "description": "Full name of the FOIA requester."
+      },
+      "requesterContact": {
+        "type": "string",
+        "description": "Contact information for the requester (email or mailing address)."
+      },
+      "requestDescription": {
+        "type": "string",
+        "description": "Description of the records sought."
+      },
+      "submittedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the FOIA request was submitted."
+      },
+      "assignedOfficer": {
+        "type": "string",
+        "description": "Identifier of the FOIA officer assigned to this request."
+      },
+      "assignedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the request was assigned to an officer."
+      },
+      "recordsSearchCompletedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the records search was completed."
+      },
+      "responsiveRecordsCount": {
+        "type": "integer",
+        "description": "Number of responsive records identified."
+      },
+      "exemptionsApplied": {
+        "type": "array",
+        "description": "List of FOIA exemption codes applied during review (e.g., b1 national security, b6 personal privacy, b7 law enforcement)."
+      },
+      "determinationOutcome": {
+        "type": "string",
+        "description": "Outcome of the FOIA determination: full-disclosure, partial-withholding, full-withholding, or no-records."
+      },
+      "withholdingJustification": {
+        "type": "string",
+        "description": "Itemized explanation of withholding decisions with exemption citations."
+      },
+      "adverseDecisionIssuedAt": {
+        "type": "datetime",
+        "description": "Timestamp when the adverse decision notice was issued."
+      },
+      "appealFiledAt": {
+        "type": "datetime",
+        "description": "Timestamp when the requester filed an administrative appeal."
+      },
+      "appealOutcome": {
+        "type": "string",
+        "description": "Outcome of the administrative appeal: granted, partially-granted, or denied."
+      },
+      "outcome": {
+        "type": "string",
+        "description": "Final case outcome."
+      }
+    }
+  },
+  "provenance": {
+    "digestAlgorithm": "SHA-256"
+  },
+  "execution": {
+    "workflowTimeout": "P1Y",
+    "defaultTaskTimeout": "P20BD",
+    "instanceVersioning": "pinned"
+  }
+}

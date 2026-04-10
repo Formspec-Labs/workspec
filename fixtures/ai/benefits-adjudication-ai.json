@@ -1,0 +1,191 @@
+{
+  "$wosAIIntegration": "1.0",
+  "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication AI Integration",
+  "description": "Extends the benefits adjudication workflow with AI-assisted document extraction and eligibility pre-screening. The kernel and governance documents are unchanged. AI governance plugs into Layer 1 structures via named seams: agent output validated through the same pipeline, review protocols gain suppression, due process gains agent disclosure.",
+
+  "defaultAutonomy": "assistive",
+
+  "agents": [
+    {
+      "id": "documentExtractor",
+      "type": "agent",
+      "agentType": "generative",
+      "modelIdentifier": "claude-sonnet-4-20250514",
+      "modelVersion": "2025-05-14",
+      "description": "Extracts income data, employer information, and filing dates from uploaded tax documents and pay stubs",
+      "capabilities": [
+        {
+          "id": "incomeExtraction",
+          "description": "Extract structured income data from tax documents",
+          "inputContractRef": "urn:formspec:agency.gov:doc-extraction-input:1.0.0",
+          "outputContractRef": "urn:formspec:agency.gov:income-verification:1.0.0"
+        }
+      ],
+      "modelVersionPolicy": "pinned",
+      "confidenceDecay": {
+        "enabled": true,
+        "halfLife": "P14D",
+        "triggers": [
+          {
+            "event": "caseFile.documents.added",
+            "decayFactor": 0.7
+          },
+          {
+            "event": "caseFile.application.modified",
+            "decayFactor": 0.5
+          }
+        ]
+      },
+      "fallbackChain": [
+        {
+          "action": "retry",
+          "maxRetries": 2,
+          "backoff": "exponential",
+          "initialInterval": "PT5S"
+        },
+        {
+          "action": "escalateToHuman",
+          "taskRef": "manualDocumentExtraction"
+        }
+      ]
+    },
+    {
+      "id": "eligibilityScreener",
+      "type": "agent",
+      "agentType": "statistical",
+      "modelIdentifier": "custom-eligibility-model",
+      "modelVersion": "3.2.1",
+      "description": "Pre-screens applications for eligibility based on extracted data. Produces a recommendation, not a determination.",
+      "capabilities": [
+        {
+          "id": "eligibilityPreScreen",
+          "description": "Pre-screen application for likely eligibility",
+          "inputContractRef": "urn:formspec:agency.gov:eligibility-input:1.0.0",
+          "outputContractRef": "urn:formspec:agency.gov:eligibility-determination:1.0.0"
+        }
+      ],
+      "modelVersionPolicy": "approved",
+      "confidenceDecay": {
+        "enabled": false
+      }
+    }
+  ],
+
+  "deonticConstraints": {
+    "permissions": [
+      {
+        "id": "extractorOutputScope",
+        "allowedFields": ["wageIncome", "investmentIncome", "otherIncome", "totalIncome", "employerName", "filingDate", "dependentCount", "confidence"],
+        "onViolation": "reject"
+      },
+      {
+        "id": "screenerOutputScope",
+        "allowedFields": ["eligible", "reason", "confidence", "riskFactors"],
+        "onViolation": "reject"
+      }
+    ],
+    "prohibitions": [
+      {
+        "id": "noFinalDenial",
+        "condition": "output.eligible = false and instance.impactLevel = 'rights-impacting'",
+        "reason": "Agent may not render final denial in rights-impacting workflow. Agent produces recommendations only -- human caseworkers make determinations.",
+        "onViolation": "escalateToHuman"
+      },
+      {
+        "id": "noInconsistentApproval",
+        "condition": "output.eligible = true and caseFile.verification.totalIncome > parameters.eligibilityThreshold * 1.5",
+        "reason": "Approval recommendation with income far above threshold requires human review.",
+        "onViolation": "escalateToHuman"
+      }
+    ],
+    "obligations": [
+      {
+        "id": "perFieldConfidence",
+        "requirement": "output.confidence.fieldLevel != null",
+        "reason": "Per-field confidence is required for all agent outputs in this workflow.",
+        "onViolation": "reject"
+      }
+    ],
+    "rights": [
+      {
+        "id": "receivesApplicationData",
+        "entitlement": "caseFile.application",
+        "description": "Agents must receive application data as input context."
+      },
+      {
+        "id": "receivesVerificationData",
+        "entitlement": "caseFile.verification",
+        "description": "Eligibility screener must receive verified income data."
+      },
+      {
+        "id": "receivesParameterValues",
+        "entitlement": "parameters.eligibilityThreshold",
+        "description": "Agents must receive current temporal parameter values for eligibility evaluation."
+      }
+    ]
+  },
+
+  "confidenceFloor": {
+    "threshold": 0.80,
+    "onViolation": "escalateToHuman"
+  },
+
+  "fallbackChain": [
+    {
+      "action": "retry",
+      "maxRetries": 1,
+      "backoff": "fixed",
+      "initialInterval": "PT10S"
+    },
+    {
+      "action": "escalateToHuman",
+      "taskRef": "manualProcessing"
+    }
+  ],
+
+  "oversightExtensions": {
+    "suppressAgentOutput": true,
+    "presentation": {
+      "showConfidence": true,
+      "showAlternatives": false,
+      "highlightLowConfidenceFields": true,
+      "showDiffFromIndependent": true
+    }
+  },
+
+  "volumeConstraints": {
+    "maxAutonomousPerHour": 50,
+    "maxAutonomousPerDay": 200
+  },
+
+  "reviewSampling": {
+    "rate": 0.20,
+    "method": "stratified",
+    "scope": "agent"
+  },
+
+  "agentDisclosure": {
+    "discloseThatAgentAssisted": true,
+    "discloseModelIdentity": false,
+    "discloseConfidence": false
+  },
+
+  "narrativeTier": {
+    "enabled": true,
+    "requiredForTags": ["determination"]
+  },
+
+  "driftDetection": {
+    "trainingDataDisclosure": true,
+    "optimizationObjectiveDisclosure": true,
+    "rubberStampMonitoring": {
+      "enabled": true,
+      "minReviewTime": "PT60S",
+      "maxAgreementRate": 0.95,
+      "evaluationWindow": "P30D"
+    }
+  }
+}

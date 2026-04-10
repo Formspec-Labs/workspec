@@ -1,0 +1,81 @@
+{
+  "description": "Expected provenance records for a scripted purchase order approval scenario. A $5,000 order is submitted by the requester, approved by the approver, and processed by the system. NOTE: This is a conformance test artifact, not a WOS Kernel Document -- it does not have a $schema reference.",
+  "scenario": "Submit $5,000 purchase order -> approve -> process -> complete",
+  "records": [
+    {
+      "id": "prov-001",
+      "timestamp": "2026-03-15T10:00:00Z",
+      "actorId": "requester",
+      "actorType": "human",
+      "action": "transition",
+      "lifecycleState": "submitted",
+      "definitionVersion": "1.0.0",
+      "inputs": {
+        "event": "submit",
+        "data": {
+          "orderId": "PO-2026-0042",
+          "description": "Office supplies",
+          "amount": 5000,
+          "vendor": "Acme Supply Co"
+        }
+      },
+      "outputs": {
+        "newState": "submitted",
+        "taskCreated": "reviewPurchaseOrder"
+      }
+    },
+    {
+      "id": "prov-002",
+      "timestamp": "2026-03-15T14:30:00Z",
+      "actorId": "approver",
+      "actorType": "human",
+      "action": "transition",
+      "lifecycleState": "approved",
+      "definitionVersion": "1.0.0",
+      "inputs": {
+        "event": "approve",
+        "guard": "caseFile.amount <= 50000",
+        "guardResult": true
+      },
+      "outputs": {
+        "previousState": "submitted",
+        "newState": "approved",
+        "serviceInvoked": "procurementSystem"
+      }
+    },
+    {
+      "id": "prov-003",
+      "timestamp": "2026-03-15T14:30:01Z",
+      "actorId": "procurementSystem",
+      "actorType": "system",
+      "action": "setData",
+      "lifecycleState": "approved",
+      "definitionVersion": "1.0.0",
+      "inputs": {
+        "path": "caseFile.approvedBy",
+        "value": "approver"
+      },
+      "outputs": {
+        "previousValue": null,
+        "newValue": "approver"
+      }
+    },
+    {
+      "id": "prov-004",
+      "timestamp": "2026-03-15T14:31:00Z",
+      "actorId": "procurementSystem",
+      "actorType": "system",
+      "action": "transition",
+      "lifecycleState": "completed",
+      "definitionVersion": "1.0.0",
+      "inputs": {
+        "event": "orderProcessed"
+      },
+      "outputs": {
+        "previousState": "approved",
+        "newState": "completed",
+        "final": true
+      }
+    }
+  ]
+}

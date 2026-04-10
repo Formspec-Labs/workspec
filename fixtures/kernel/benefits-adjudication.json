@@ -1,0 +1,408 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Workflow",
+  "description": "Pure-human benefits adjudication: intake, review, determination, notice, appeal. No AI. Due process, dual-blind review, separation of duties, data validation for income verification, structured reasoning trace. Proves Kernel + Layer 1 fully supports complex governed human workflows.",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human",
+      "description": "Individual applying for benefits"
+    },
+    {
+      "id": "intakeWorker",
+      "type": "human",
+      "description": "Staff member processing initial applications"
+    },
+    {
+      "id": "caseworkerA",
+      "type": "human",
+      "description": "First eligibility reviewer"
+    },
+    {
+      "id": "caseworkerB",
+      "type": "human",
+      "description": "Second eligibility reviewer (dual-blind)"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor who reconciles reviewer disagreements and handles overrides"
+    },
+    {
+      "id": "appealAdjudicator",
+      "type": "human",
+      "description": "Independent adjudicator for appeal review"
+    },
+    {
+      "id": "verificationSystem",
+      "type": "system",
+      "description": "External income verification system"
+    },
+    {
+      "id": "notificationSystem",
+      "type": "system",
+      "description": "System that sends notices to applicants"
+    }
+  ],
+
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": {
+        "type": "atomic",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "processApplication",
+            "assignTo": "intakeWorker"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "applicationComplete",
+            "target": "incomeVerification",
+            "guard": "caseFile.application.isComplete = true",
+            "description": "Complete application proceeds to income verification"
+          },
+          {
+            "event": "applicationIncomplete",
+            "target": "returnedToApplicant",
+            "guard": "caseFile.application.isComplete = false",
+            "description": "Incomplete application returned to applicant"
+          }
+        ]
+      },
+
+      "returnedToApplicant": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "emitEvent",
+            "eventType": "applicationReturned",
+            "data": { "reason": "${caseFile.returnReason}" }
+          },
+          {
+            "action": "startTimer",
+            "timerId": "resubmitDeadline",
+            "duration": "P30D",
+            "event": "resubmitExpired"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "resubmit",
+            "target": "intake",
+            "actions": [
+              { "action": "cancelTimer", "timerId": "resubmitDeadline" }
+            ]
+          },
+          {
+            "event": "resubmitExpired",
+            "target": "closed",
+            "description": "Application closed after 30-day resubmit window"
+          }
+        ]
+      },
+
+      "incomeVerification": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "verificationSystem",
+            "idempotencyKey": "${instance.id}-income-verify",
+            "correlationKey": "${instance.id}",
+            "contractRef": "incomeVerificationContract"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "verificationComplete",
+            "target": "eligibilityReview",
+            "guard": "caseFile.verification.status = 'verified'",
+            "description": "Income verified -- proceed to eligibility review"
+          },
+          {
+            "event": "verificationFailed",
+            "target": "manualVerification",
+            "description": "Automated verification failed -- route to manual review"
+          }
+        ]
+      },
+
+      "manualVerification": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "manualIncomeVerification",
+            "assignTo": "intakeWorker"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "manualVerificationComplete",
+            "target": "eligibilityReview"
+          }
+        ]
+      },
+
+      "eligibilityReview": {
+        "type": "parallel",
+        "tags": ["review", "determination"],
+        "cancellationPolicy": "wait-all",
+        "regions": {
+          "reviewerA": {
+            "initialState": "pendingReviewA",
+            "states": {
+              "pendingReviewA": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "createTask",
+                    "taskRef": "eligibilityDetermination",
+                    "assignTo": "caseworkerA"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": "reviewAComplete",
+                    "target": "reviewADone"
+                  }
+                ]
+              },
+              "reviewADone": { "type": "final" }
+            }
+          },
+          "reviewerB": {
+            "initialState": "pendingReviewB",
+            "states": {
+              "pendingReviewB": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "createTask",
+                    "taskRef": "eligibilityDetermination",
+                    "assignTo": "caseworkerB"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": "reviewBComplete",
+                    "target": "reviewBDone"
+                  }
+                ]
+              },
+              "reviewBDone": { "type": "final" }
+            }
+          }
+        },
+        "transitions": [
+          {
+            "event": "$join",
+            "target": "reconciliation",
+            "guard": "caseFile.reviewA.decision != caseFile.reviewB.decision",
+            "description": "Reviewers disagree -- escalate to supervisor"
+          },
+          {
+            "event": "$join",
+            "target": "determination",
+            "guard": "caseFile.reviewA.decision = caseFile.reviewB.decision",
+            "description": "Reviewers agree -- proceed to determination"
+          }
+        ]
+      },
+
+      "reconciliation": {
+        "type": "atomic",
+        "tags": ["review"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "reconcileReviews",
+            "assignTo": "supervisor"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "reconciled",
+            "target": "determination"
+          }
+        ]
+      },
+
+      "determination": {
+        "type": "atomic",
+        "tags": ["determination"],
+        "transitions": [
+          {
+            "event": "approved",
+            "target": "benefitsActive",
+            "tags": ["determination"],
+            "description": "Applicant found eligible"
+          },
+          {
+            "event": "denied",
+            "target": "adverseNotice",
+            "tags": ["determination", "adverse-decision"],
+            "description": "Applicant found ineligible -- triggers due process"
+          }
+        ]
+      },
+
+      "adverseNotice": {
+        "type": "atomic",
+        "tags": ["notification", "adverse-decision"],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "notificationSystem",
+            "idempotencyKey": "${instance.id}-adverse-notice"
+          },
+          {
+            "action": "startTimer",
+            "timerId": "appealWindow",
+            "duration": "P30D",
+            "event": "appealWindowExpired"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appealFiled",
+            "target": "appeal",
+            "tags": ["appeal"],
+            "actions": [
+              { "action": "cancelTimer", "timerId": "appealWindow" },
+              {
+                "action": "log",
+                "message": "Appeal filed",
+                "data": { "appealDate": "${event.timestamp}" }
+              }
+            ]
+          },
+          {
+            "event": "appealWindowExpired",
+            "target": "deniedFinal",
+            "description": "Appeal window expired without filing"
+          }
+        ]
+      },
+
+      "appeal": {
+        "type": "atomic",
+        "tags": ["appeal", "review"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "appealReview",
+            "assignTo": "appealAdjudicator"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "appealGranted",
+            "target": "benefitsActive",
+            "tags": ["determination"],
+            "description": "Appeal successful -- benefits granted"
+          },
+          {
+            "event": "appealDenied",
+            "target": "deniedFinal",
+            "tags": ["determination", "adverse-decision"],
+            "description": "Appeal denied -- final determination"
+          }
+        ]
+      },
+
+      "benefitsActive": {
+        "type": "final"
+      },
+      "deniedFinal": {
+        "type": "final"
+      },
+      "closed": {
+        "type": "final"
+      }
+    },
+
+    "milestones": {
+      "applicationReceived": {
+        "condition": "caseFile.application != null",
+        "description": "Application has been submitted"
+      },
+      "incomeVerified": {
+        "condition": "caseFile.verification.status = 'verified'",
+        "description": "Income has been verified"
+      },
+      "eligibilityDetermined": {
+        "condition": "caseFile.eligibility.decision != null",
+        "description": "Eligibility determination has been made"
+      }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "application": {
+        "type": "object",
+        "description": "Application data submitted by the applicant"
+      },
+      "returnReason": {
+        "type": "string",
+        "description": "Reason the application was returned to the applicant"
+      },
+      "verification": {
+        "type": "object",
+        "description": "Income verification results"
+      },
+      "reviewA": {
+        "type": "object",
+        "description": "First reviewer's eligibility determination"
+      },
+      "reviewB": {
+        "type": "object",
+        "description": "Second reviewer's eligibility determination"
+      },
+      "reconciliation": {
+        "type": "object",
+        "description": "Supervisor reconciliation decision"
+      },
+      "eligibility": {
+        "type": "object",
+        "description": "Final eligibility determination"
+      }
+    }
+  },
+
+  "contracts": {
+    "applicationForm": {
+      "binding": "formspec",
+      "ref": "urn:formspec:agency.gov:benefits-application:1.0.0",
+      "description": "Formspec Definition for the benefits application form"
+    },
+    "incomeVerificationContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:agency.gov:income-verification:1.0.0",
+      "description": "Formspec Definition for income verification data"
+    },
+    "eligibilityDeterminationContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:agency.gov:eligibility-determination:1.0.0",
+      "description": "Formspec Definition for the eligibility determination form"
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P365D",
+    "defaultTaskTimeout": "P30D",
+    "defaultServiceTimeout": "PT5M",
+    "instanceVersioning": "pinned"
+  }
+}

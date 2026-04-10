@@ -1,0 +1,178 @@
+{
+  "$wosIntegrationProfile": "1.0",
+  "$schema": "https://wos-spec.org/schemas/integration-profile/1.0",
+  "targetWorkflow": {
+    "url": "https://agency.gov/workflows/benefits-adjudication",
+    "compatibleVersions": ">=1.0.0 <2.0.0"
+  },
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Integration Profile",
+  "description": "Integration bindings for the benefits adjudication workflow. Includes Arazzo-based eligibility verification, legacy system tool invocation, CloudEvents-based document notification, and OPA policy engine delegation.",
+  "bindings": {
+    "eligibilityCheck": {
+      "type": "arazzo-sequence",
+      "description": "Multi-step eligibility verification via federal eligibility APIs. The Arazzo document defines a three-step sequence: identity verification, income verification, and categorical eligibility check.",
+      "arazzoRef": "urn:agency.gov:arazzo:eligibility-check:1.0.0",
+      "responseContract": {
+        "definitionRef": "urn:agency.gov:contracts:eligibility-response:1.0.0"
+      },
+      "inputMapping": {
+        "applicantSSN": "caseFile.application.ssn",
+        "householdSize": "caseFile.application.householdSize",
+        "annualIncome": "caseFile.application.annualIncome",
+        "stateOfResidence": "caseFile.application.stateOfResidence"
+      },
+      "outputBinding": {
+        "caseFile.eligibility.identityVerified": "$.steps.identity.output.verified",
+        "caseFile.eligibility.incomeVerified": "$.steps.income.output.verified",
+        "caseFile.eligibility.categoricalResult": "$.steps.eligibility.output.result",
+        "caseFile.eligibility.verifiedAt": "$.steps.eligibility.output.completedAt"
+      },
+      "idempotencyKeyExpression": "caseFile.application.id",
+      "timeout": "PT5M",
+      "retry": {
+        "maxAttempts": 3,
+        "backoff": "exponential",
+        "initialInterval": "PT5S",
+        "maxInterval": "PT60S"
+      }
+    },
+    "legacyMainframeCheck": {
+      "type": "tool",
+      "description": "Cross-reference eligibility against the legacy mainframe system. Required for applications predating the digital filing system.",
+      "invocation": {
+        "method": "command-line",
+        "command": "/opt/legacy/eligibility-xref",
+        "arguments": [
+          "--ssn", "{{ caseFile.application.ssn }}",
+          "--household-size", "{{ caseFile.application.householdSize }}",
+          "--output-format", "json"
+        ],
+        "environment": {
+          "image": "agency-legacy-tools:2024.1",
+          "runtime": "containerd"
+        }
+      },
+      "requestContract": {
+        "definitionRef": "urn:agency.gov:contracts:legacy-xref-input:1.0.0"
+      },
+      "responseContract": {
+        "definitionRef": "urn:agency.gov:contracts:legacy-xref-output:1.0.0"
+      },
+      "outputBinding": {
+        "caseFile.legacyCheck.result": "$.eligibilityStatus",
+        "caseFile.legacyCheck.priorCaseId": "$.priorCaseReference",
+        "caseFile.legacyCheck.completedAt": "$.timestamp"
+      },
+      "resourceRequirements": {
+        "maxExecutionTime": "PT30S",
+        "maxMemory": "256MB"
+      }
+    },
+    "backgroundCheckService": {
+      "type": "request-response",
+      "description": "Submit background check to the federal background check service.",
+      "interface": {
+        "$ref": "https://api.agency.gov/background-checks/openapi.yaml"
+      },
+      "operation": "submitCheck",
+      "inputMapping": {
+        "applicantId": "caseFile.application.applicantId",
+        "checkType": "'standard'"
+      },
+      "outputBinding": {
+        "caseFile.backgroundCheck.requestId": "$.requestId",
+        "caseFile.backgroundCheck.submittedAt": "$.submittedAt"
+      },
+      "timeout": "PT30S",
+      "retry": {
+        "maxAttempts": 3,
+        "backoff": "exponential",
+        "initialInterval": "PT10S"
+      }
+    },
+    "backgroundCheckCallback": {
+      "type": "callback",
+      "description": "Receive background check results via callback. The background check service sends a CloudEvents event when the check is complete.",
+      "interface": {
+        "$ref": "https://api.agency.gov/background-checks/openapi.yaml"
+      },
+      "operation": "submitCheck",
+      "callbackEventType": "gov.agency.backgroundcheck.completed",
+      "correlation": [
+        {
+          "attribute": "subject",
+          "caseStateMapping": "caseFile.backgroundCheck.requestId"
+        }
+      ],
+      "outputBinding": {
+        "caseFile.backgroundCheck.result": "$.data.result",
+        "caseFile.backgroundCheck.completedAt": "$.time"
+      },
+      "timeout": "P7D"
+    },
+    "applicantNotification": {
+      "type": "event-emit",
+      "description": "Send determination notification to the applicant communication service.",
+      "eventType": "gov.agency.benefits.determination.notice",
+      "dataMapping": {
+        "applicantId": "caseFile.application.applicantId",
+        "applicantName": "caseFile.application.name",
+        "noticeType": "caseFile.determination.noticeType",
+        "determinationDate": "caseFile.determination.date",
+        "benefitAmount": "caseFile.determination.monthlyAmount",
+        "effectiveDate": "caseFile.determination.effectiveDate"
+      },
+      "channel": "email"
+    },
+    "documentReceived": {
+      "type": "event-consume",
+      "description": "Receive uploaded supporting documents from the document management system. Correlates on the application ID.",
+      "eventType": "gov.agency.documents.received",
+      "correlation": [
+        {
+          "attribute": "subject",
+          "caseStateMapping": "caseFile.application.applicationId"
+        }
+      ],
+      "outputBinding": {
+        "caseFile.documents.latest.ref": "$.data.documentRef",
+        "caseFile.documents.latest.type": "$.data.documentType",
+        "caseFile.documents.latest.receivedAt": "$.time"
+      }
+    },
+    "eligibilityPolicy": {
+      "type": "policy-engine",
+      "description": "OPA-based categorical eligibility policy evaluation. Evaluates federal and state eligibility rules to produce a permit/deny decision with required documentation obligations.",
+      "engineType": "opa",
+      "endpoint": "https://policy.agency.gov/v1/data/benefits/categorical_eligibility",
+      "contextMapping": {
+        "input.applicant.income": "caseFile.application.annualIncome",
+        "input.applicant.householdSize": "caseFile.application.householdSize",
+        "input.applicant.stateOfResidence": "caseFile.application.stateOfResidence",
+        "input.applicant.age": "caseFile.application.age",
+        "input.applicant.disabilityStatus": "caseFile.application.disabilityStatus",
+        "input.federalPovertyLevel": "caseFile.referenceData.federalPovertyLevel",
+        "input.action": "'determineEligibility'",
+        "input.actor.id": "event.actorId",
+        "input.actor.type": "event.actorType"
+      },
+      "decisionMapping": {
+        "permitPath": "$.result.eligible",
+        "reasonPath": "$.result.reason",
+        "obligationsPath": "$.result.requiredDocuments"
+      },
+      "outputBinding": {
+        "caseFile.policy.eligibilityDecision": "$.result.eligible",
+        "caseFile.policy.eligibilityReason": "$.result.reason",
+        "caseFile.policy.requiredDocuments": "$.result.requiredDocuments"
+      },
+      "timeout": "PT5S",
+      "retry": {
+        "maxAttempts": 2,
+        "backoff": "fixed",
+        "initialInterval": "PT1S"
+      }
+    }
+  }
+}

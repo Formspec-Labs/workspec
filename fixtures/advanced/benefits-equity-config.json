@@ -1,0 +1,69 @@
+{
+  "$wosEquityConfig": "1.0",
+  "$schema": "https://wos-spec.org/schemas/equity/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Equity Monitoring",
+  "protectedCategories": [
+    {
+      "id": "geographicRegion",
+      "groupByPath": "caseFile.application.geographicRegion",
+      "description": "Geographic region of applicant residence",
+      "groups": ["northeast", "southeast", "midwest", "southwest", "west", "pacific"]
+    },
+    {
+      "id": "ageGroup",
+      "groupByPath": "caseFile.application.ageGroup",
+      "description": "Applicant age bracket",
+      "groups": ["18-25", "26-35", "36-45", "46-55", "56-65", "65+"]
+    },
+    {
+      "id": "applicationChannel",
+      "groupByPath": "caseFile.application.channel",
+      "description": "How the application was submitted -- monitors for channel-based disparity",
+      "groups": ["online", "paper", "phone", "in-person"]
+    }
+  ],
+  "disparityMethods": [
+    {
+      "id": "approvalRateDifference",
+      "method": "rateDifference",
+      "description": "Absolute difference between highest and lowest group approval rates"
+    },
+    {
+      "id": "processingTimeRatio",
+      "method": "rateRatio",
+      "description": "Ratio of longest to shortest group mean processing time"
+    },
+    {
+      "id": "denialDistribution",
+      "method": "chi2",
+      "description": "Chi-squared test for uniform denial distribution across groups"
+    }
+  ],
+  "reportingSchedule": {
+    "frequency": "P30D",
+    "recipientRoles": ["equityOfficer", "programDirector", "civilRightsLiaison"],
+    "includeHistoricalTrend": true
+  },
+  "remediationTriggers": [
+    {
+      "condition": "disparity > 0.15 for 2 consecutive periods",
+      "action": "review",
+      "notifyRoles": ["equityOfficer"],
+      "description": "Moderate disparity triggers equity review"
+    },
+    {
+      "condition": "disparity > 0.25 for 1 period",
+      "action": "audit",
+      "notifyRoles": ["equityOfficer", "programDirector"],
+      "description": "Severe disparity triggers immediate audit"
+    },
+    {
+      "condition": "disparity > 0.30 for 1 period and category = 'ageGroup'",
+      "action": "suspend",
+      "notifyRoles": ["equityOfficer", "programDirector", "civilRightsLiaison"],
+      "description": "Critical age-based disparity suspends autonomous processing pending review"
+    }
+  ]
+}

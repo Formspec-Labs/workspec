@@ -1,0 +1,258 @@
+{
+  "$wosAdvancedGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/advanced-governance/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Advanced Governance",
+  "description": "Advanced governance for the benefits adjudication workflow: equity monitoring across geographic regions, a fraud investigation constraint zone (DCR) modeling adaptive case management, verifiable constraints for SMT verification, calibration and drift detection methods, and circuit breaker for operational resilience.",
+
+  "equityGuardrails": [
+    {
+      "id": "approvalRateByRegion",
+      "metric": "approvalRate",
+      "groupBy": "caseFile.application.geographicRegion",
+      "maxDisparity": 0.15,
+      "evaluationWindow": "P30D",
+      "minimumSampleSize": 50,
+      "onViolation": "alert",
+      "monitorTags": ["determination"],
+      "notifyRoles": ["equityOfficer", "programDirector"],
+      "reason": "Monitors for geographic disparity in benefits approval rates -- applies to human and AI decisions alike"
+    },
+    {
+      "id": "denialRateByAgeGroup",
+      "metric": "denialRate",
+      "groupBy": "caseFile.application.ageGroup",
+      "maxDisparity": 0.10,
+      "evaluationWindow": "P90D",
+      "minimumSampleSize": 100,
+      "onViolation": "alert",
+      "monitorTags": ["adverse-decision"],
+      "notifyRoles": ["equityOfficer"],
+      "reason": "Monitors for age-based disparity in denial rates"
+    },
+    {
+      "id": "processingTimeByRegion",
+      "metric": "processingTimeDays",
+      "groupBy": "caseFile.application.geographicRegion",
+      "maxDisparity": 0.20,
+      "evaluationWindow": "P30D",
+      "minimumSampleSize": 30,
+      "onViolation": "flag",
+      "monitorTags": ["determination"],
+      "reason": "Monitors for geographic disparity in processing times"
+    }
+  ],
+
+  "constraintZones": [
+    {
+      "id": "fraudInvestigation",
+      "description": "Adaptive case management zone activated when fraud indicators are detected during benefits adjudication. An investigator may interview witnesses, request documents, consult experts, or issue subpoenas in any order -- subject to constraints. The final report cannot be written until at least one interview is conducted, and every interview triggers a document request obligation.",
+
+      "activities": [
+        {
+          "id": "witnessInterview",
+          "activityRef": "urn:wos:agency.gov:activities:witness-interview:1.0.0",
+          "description": "Interview a witness or the applicant about fraud indicators",
+          "initialIncluded": true,
+          "initialPending": false
+        },
+        {
+          "id": "documentRequest",
+          "activityRef": "urn:wos:agency.gov:activities:document-request:1.0.0",
+          "description": "Request additional documents from the applicant or third parties",
+          "initialIncluded": true,
+          "initialPending": false
+        },
+        {
+          "id": "expertConsultation",
+          "activityRef": "urn:wos:agency.gov:activities:expert-consultation:1.0.0",
+          "description": "Consult a subject matter expert about the case",
+          "initialIncluded": false,
+          "initialPending": false
+        },
+        {
+          "id": "subpoenaIssuance",
+          "activityRef": "urn:wos:agency.gov:activities:subpoena:1.0.0",
+          "description": "Issue a subpoena for records or testimony",
+          "initialIncluded": false,
+          "initialPending": false
+        },
+        {
+          "id": "investigationReport",
+          "activityRef": "urn:wos:agency.gov:activities:investigation-report:1.0.0",
+          "description": "Produce the final investigation report with findings",
+          "initialIncluded": true,
+          "initialPending": true
+        }
+      ],
+
+      "relations": [
+        {
+          "type": "condition",
+          "source": "witnessInterview",
+          "target": "investigationReport",
+          "description": "Cannot write the final report until at least one witness interview is conducted"
+        },
+        {
+          "type": "response",
+          "source": "witnessInterview",
+          "target": "documentRequest",
+          "description": "Every interview triggers an obligation to request supporting documents"
+        },
+        {
+          "type": "include",
+          "source": "documentRequest",
+          "target": "expertConsultation",
+          "description": "Receiving documents may reveal the need for expert consultation"
+        },
+        {
+          "type": "include",
+          "source": "documentRequest",
+          "target": "subpoenaIssuance",
+          "description": "Document request may reveal the need for a subpoena"
+        },
+        {
+          "type": "exclude",
+          "source": "investigationReport",
+          "target": "witnessInterview",
+          "description": "No more interviews after the final report is filed"
+        },
+        {
+          "type": "exclude",
+          "source": "investigationReport",
+          "target": "documentRequest",
+          "description": "No more document requests after the final report is filed"
+        },
+        {
+          "type": "milestone",
+          "source": "witnessInterview",
+          "target": "subpoenaIssuance",
+          "description": "Subpoenas can only be issued while witness interviews are still active"
+        }
+      ],
+
+      "completionEvent": "constraintZone.satisfied"
+    }
+  ],
+
+  "multiStepSessions": [
+    {
+      "id": "evidencePackageAnalysis",
+      "description": "Multi-step session for analyzing a submitted evidence package",
+      "maxSteps": 4,
+      "maxDuration": "PT15M",
+      "checkpointPolicy": "atInterventionPoints",
+      "steps": [
+        {
+          "id": "documentInventory",
+          "description": "Catalog all documents in the evidence package"
+        },
+        {
+          "id": "contentExtraction",
+          "description": "Extract key facts and figures from each document",
+          "dependsOn": ["documentInventory"]
+        },
+        {
+          "id": "crossReference",
+          "description": "Cross-reference extracted facts against existing case data",
+          "dependsOn": ["contentExtraction"],
+          "interventionPoint": true,
+          "interventionPrompt": "The agent has inventoried documents and extracted key facts. Review intermediate findings before the agent produces a recommendation."
+        },
+        {
+          "id": "findingsReport",
+          "description": "Produce structured findings report",
+          "dependsOn": ["crossReference"]
+        }
+      ]
+    }
+  ],
+
+  "toolGovernance": {
+    "toolRegistry": [
+      {
+        "id": "databaseLookup",
+        "category": "dataRetrieval",
+        "sideEffects": false,
+        "rateLimit": { "maxPerMinute": 30, "maxPerHour": 500 },
+        "description": "Query internal case database"
+      },
+      {
+        "id": "documentParser",
+        "category": "computation",
+        "sideEffects": false,
+        "description": "Parse and extract structured data from uploaded documents"
+      },
+      {
+        "id": "externalVerification",
+        "category": "externalApi",
+        "sideEffects": true,
+        "rateLimit": { "maxPerMinute": 5, "maxPerHour": 50 },
+        "description": "Call external income verification service"
+      }
+    ],
+    "defaultSideEffectPolicy": "block"
+  },
+
+  "agentLifecycle": {
+    "versionChangeNotification": true,
+    "suspensionNotifyRoles": ["systemAdministrator", "programDirector"]
+  },
+
+  "verifiableConstraints": [
+    {
+      "constraintRef": "noFinalDenial",
+      "verifiable": true,
+      "expectedResult": "proven-safe",
+      "notes": "This prohibition uses only linear arithmetic and finite domain enumerations. The condition (output.eligible = false AND instance.impactLevel = 'rights-impacting') is fully within the verifiable subset."
+    },
+    {
+      "constraintRef": "outputFieldScope",
+      "verifiable": true,
+      "expectedResult": "proven-safe",
+      "notes": "Field scope permissions use finite set membership, fully decidable."
+    }
+  ],
+
+  "calibration": {
+    "method": "isotonic",
+    "minimumSamples": 100,
+    "retrainingFrequency": "P30D"
+  },
+
+  "driftDetection": {
+    "methods": [
+      {
+        "method": "psi",
+        "threshold": 0.2,
+        "window": "P7D",
+        "dimensions": [
+          { "field": "extractedIncome", "type": "continuous" },
+          { "field": "eligibilityRecommendation", "type": "categorical" }
+        ]
+      },
+      {
+        "method": "accuracy",
+        "threshold": 0.90,
+        "window": "P30D"
+      }
+    ]
+  },
+
+  "shadowMode": {
+    "enabled": false,
+    "compareTo": "human",
+    "duration": "P14D",
+    "minimumSamples": 200
+  },
+
+  "circuitBreaker": {
+    "enabled": true,
+    "errorRateThreshold": 0.15,
+    "evaluationWindow": "PT1H",
+    "minimumInvocations": 20,
+    "cooldownDuration": "PT15M",
+    "probeCount": 3
+  }
+}

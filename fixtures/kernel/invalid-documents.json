@@ -1,0 +1,139 @@
+{
+  "description": "Expected rejections for invalid WOS Kernel Documents. A conformant Kernel Structural processor MUST reject each of these documents with diagnostics.",
+  "invalidDocuments": [
+    {
+      "id": "missing-lifecycle",
+      "description": "Kernel Document missing required lifecycle property",
+      "expectedError": "Required property 'lifecycle' is missing",
+      "document": {
+        "$wosKernel": "1.0",
+        "impactLevel": "operational"
+      }
+    },
+    {
+      "id": "missing-document-marker",
+      "description": "Document missing the $wosKernel document type marker",
+      "expectedError": "Required property '$wosKernel' is missing",
+      "document": {
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": { "type": "atomic" },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    },
+    {
+      "id": "wrong-version",
+      "description": "Document type marker with wrong version",
+      "expectedError": "$wosKernel must be '1.0'",
+      "document": {
+        "$wosKernel": "2.0",
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": { "type": "atomic" },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-impact-level",
+      "description": "Impact level not in the allowed enum",
+      "expectedError": "impactLevel must be one of: rights-impacting, safety-impacting, operational, informational",
+      "document": {
+        "$wosKernel": "1.0",
+        "impactLevel": "critical",
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": { "type": "atomic" },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    },
+    {
+      "id": "invalid-actor-type",
+      "description": "Actor type not in the allowed kernel enum",
+      "expectedError": "actor type must be one of: human, system",
+      "document": {
+        "$wosKernel": "1.0",
+        "actors": [
+          { "id": "bot", "type": "agent" }
+        ],
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": { "type": "atomic" },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    },
+    {
+      "id": "transition-missing-event",
+      "description": "Transition missing required event property",
+      "expectedError": "Required property 'event' is missing in transition",
+      "document": {
+        "$wosKernel": "1.0",
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                { "target": "end" }
+              ]
+            },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    },
+    {
+      "id": "final-state-with-transitions",
+      "description": "Final state with outgoing transitions (semantically invalid -- caught by schema via processing, not structural constraint)",
+      "expectedError": "Final states MUST NOT have outgoing transitions",
+      "note": "This is a semantic constraint. Schema validation alone may not catch this -- a Kernel Complete processor MUST reject it.",
+      "document": {
+        "$wosKernel": "1.0",
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": {
+              "type": "atomic",
+              "transitions": [
+                { "event": "go", "target": "end" }
+              ]
+            },
+            "end": {
+              "type": "final",
+              "transitions": [
+                { "event": "restart", "target": "start" }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "additional-properties",
+      "description": "Document with undeclared top-level properties",
+      "expectedError": "Additional property 'deonticConstraints' is not allowed",
+      "document": {
+        "$wosKernel": "1.0",
+        "deonticConstraints": {},
+        "lifecycle": {
+          "initialState": "start",
+          "states": {
+            "start": { "type": "atomic" },
+            "end": { "type": "final" }
+          }
+        }
+      }
+    }
+  ]
+}

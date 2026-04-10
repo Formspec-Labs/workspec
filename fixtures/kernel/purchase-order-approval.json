@@ -1,0 +1,204 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://procurement.example.gov/workflows/purchase-order-approval",
+  "version": "1.0.0",
+  "title": "Purchase Order Approval",
+  "description": "A simple internal workflow: purchase order submitted by an employee, approved or rejected by a manager. No governance structures. Proves the kernel stands alone without Layer 1 coupling.",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "actors": [
+    {
+      "id": "requester",
+      "type": "human",
+      "description": "Employee submitting a purchase order"
+    },
+    {
+      "id": "approver",
+      "type": "human",
+      "description": "Manager who approves or rejects the purchase order"
+    },
+    {
+      "id": "procurementSystem",
+      "type": "system",
+      "description": "Automated procurement system that processes approved orders"
+    }
+  ],
+
+  "lifecycle": {
+    "initialState": "submitted",
+    "states": {
+      "submitted": {
+        "type": "atomic",
+        "tags": ["intake"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "reviewPurchaseOrder",
+            "assignTo": "approver"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "approve",
+            "target": "approved",
+            "guard": "caseFile.amount <= 50000",
+            "tags": ["determination"],
+            "description": "Manager approves the purchase order (under $50k threshold)"
+          },
+          {
+            "event": "approve",
+            "target": "pendingDirectorApproval",
+            "guard": "caseFile.amount > 50000",
+            "description": "Orders over $50k require director approval"
+          },
+          {
+            "event": "reject",
+            "target": "rejected",
+            "tags": ["determination"],
+            "description": "Manager rejects the purchase order"
+          }
+        ]
+      },
+      "pendingDirectorApproval": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "event": "approve",
+            "target": "approved",
+            "tags": ["determination"]
+          },
+          {
+            "event": "reject",
+            "target": "rejected",
+            "tags": ["determination"]
+          }
+        ]
+      },
+      "approved": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "procurementSystem",
+            "idempotencyKey": "${instance.id}-process-order"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.approvedBy",
+            "value": "${event.actorId}"
+          },
+          {
+            "action": "setData",
+            "path": "caseFile.approvedAt",
+            "value": "${event.timestamp}"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "orderProcessed",
+            "target": "completed"
+          }
+        ]
+      },
+      "rejected": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "setData",
+            "path": "caseFile.rejectedBy",
+            "value": "${event.actorId}"
+          },
+          {
+            "action": "emitEvent",
+            "eventType": "orderRejected",
+            "data": {
+              "orderId": "${caseFile.orderId}",
+              "reason": "${event.reason}"
+            }
+          }
+        ],
+        "transitions": [
+          {
+            "event": "resubmit",
+            "target": "submitted",
+            "description": "Requester revises and resubmits the order"
+          },
+          {
+            "event": "cancel",
+            "target": "cancelled"
+          }
+        ]
+      },
+      "completed": {
+        "type": "final"
+      },
+      "cancelled": {
+        "type": "final"
+      }
+    },
+    "milestones": {
+      "orderReceived": {
+        "condition": "caseFile.orderId != null",
+        "description": "Purchase order has been submitted"
+      },
+      "orderApproved": {
+        "condition": "caseFile.approvedBy != null",
+        "description": "Purchase order has been approved"
+      }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "orderId": {
+        "type": "string",
+        "description": "Unique purchase order identifier"
+      },
+      "description": {
+        "type": "string",
+        "description": "Description of goods or services requested"
+      },
+      "amount": {
+        "type": "number",
+        "description": "Total purchase order amount in USD"
+      },
+      "vendor": {
+        "type": "string",
+        "description": "Vendor name"
+      },
+      "requestedBy": {
+        "type": "string",
+        "description": "Actor ID of the requester"
+      },
+      "approvedBy": {
+        "type": "string",
+        "description": "Actor ID of the approver"
+      },
+      "approvedAt": {
+        "type": "datetime",
+        "description": "Timestamp of approval"
+      },
+      "rejectedBy": {
+        "type": "string",
+        "description": "Actor ID of the rejector (if rejected)"
+      }
+    }
+  },
+
+  "contracts": {
+    "purchaseOrderForm": {
+      "binding": "formspec",
+      "ref": "urn:formspec:example.gov:purchase-order-form:1.0.0",
+      "description": "Formspec Definition for the purchase order submission form"
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P90D",
+    "defaultTaskTimeout": "P7D",
+    "defaultServiceTimeout": "PT30S",
+    "instanceVersioning": "pinned"
+  }
+}
