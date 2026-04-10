@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/workflow-governance/1.0",
+  "title": "WOS Workflow Governance Document",
+  "description": "A WOS Workflow Governance Document per the WOS Workflow Governance Specification v1.0 (Layer 1). Targets a WOS Kernel Document and declares due process requirements, review protocols, data validation pipelines with assertion gates, structured audit (Reasoning and Counterfactual tiers), quality controls (review sampling, separation of duties, override authority), rejection and remediation policies, task catalog with verifiability matrix, delegation of authority, and typed hold policies. Layer 1 exists because human workflows need it -- due process, review protocols, and data validation predate AI. WOS MUST NOT alter core Formspec processing semantics.",
+  "type": "object",
+  "required": [
+    "$wosWorkflowGovernance",
+    "targetWorkflow"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosWorkflowGovernance": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Workflow Governance specification version. MUST be '1.0'. Identifies this document as a WOS Workflow Governance Document.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Workflow Governance documents"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation and autocompletion."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this governance document targets. MUST match the url property of the target Kernel Document (Governance S14).",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://procurement.example.gov/workflows/purchase-order-approval"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this governance document to a specific kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Workflow Governance Document.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this governance configuration."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the governance requirements."
+    },
+    "dueProcess": {
+      "$ref": "#/$defs/DueProcess",
+      "description": "Due process requirements for adverse decisions (Governance S3). Normative for workflows with rights-impacting or safety-impacting impact level.",
+      "examples": [
+        {
+          "notice": { "gracePeriodDays": 30, "includeExplanation": true, "includeAppealInstructions": true },
+          "explanation": { "individualized": true, "includeFactorsConsidered": true, "includeCounterfactual": true },
+          "appeal": { "adjudicatorIndependence": "independent", "continuationOfServices": true, "deadlineDays": 60 }
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Ensures procedural fairness for adverse decisions affecting individuals"
+      }
+    },
+    "reviewProtocols": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReviewProtocolBinding"
+      },
+      "description": "Review protocol bindings declaring which protocols apply to which transition tags (Governance S4).",
+      "examples": [
+        [
+          {
+            "tags": ["review"],
+            "protocols": ["independentFirst"],
+            "description": "All review steps use independent-first protocol"
+          },
+          {
+            "tags": ["determination"],
+            "protocols": ["dualBlind"],
+            "description": "All determination steps use dual-blind review"
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Attaches empirically grounded review procedures to workflow transitions"
+      }
+    },
+    "pipelines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Pipeline"
+      },
+      "description": "Data validation pipelines for staged processing with assertion gates (Governance S5)."
+    },
+    "audit": {
+      "$ref": "#/$defs/AuditConfig",
+      "description": "Structured audit configuration for Reasoning and Counterfactual tiers (Governance S6)."
+    },
+    "qualityControls": {
+      "$ref": "#/$defs/QualityControls",
+      "description": "Quality control configuration: review sampling, separation of duties, override authority (Governance S7)."
+    },
+    "taskCatalog": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TaskPattern"
+      },
+      "description": "Task patterns with verifiability classification (Governance S9)."
+    },
+    "delegations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Delegation"
+      },
+      "description": "Delegation of authority declarations (Governance S11). Defines who is authorized to make specific types of determinations. Attaches via lifecycleHook on determination-tagged transitions.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Establishes the chain of authority for determinations -- who can sign what"
+      }
+    },
+    "maxDelegationDepth": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 1,
+      "description": "Maximum sub-delegation chain levels (Governance S11.5). 1 (default): direct delegation only, no sub-delegation. 2: one level of sub-delegation allowed. 0: delegation enforcement disabled entirely."
+    },
+    "holdPolicies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/HoldPolicy"
+      },
+      "description": "Typed hold policies for case suspension (Governance S12). Attach via lifecycleHook on hold-tagged states.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Declares the semantics for each type of case hold -- expected duration, resume trigger, timeout behavior"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "DueProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "description": "FEL expression that determines when this due process policy applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the policy applies unconditionally.",
+          "examples": ["impactLevel = 'rights-impacting'"]
+        },
+        "adverseDecisionPolicy": {
+          "$ref": "#/$defs/AdverseDecisionPolicy",
+          "description": "Policy governing adverse decisions: denial, reduction, termination, or other unfavorable determinations."
+        }
+      }
+    },
+    "AdverseDecisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noticeRequired": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure."
+        },
+        "noticeTiming": {
+          "type": "string",
+          "enum": ["beforeEffective", "onEffective", "afterEffective"],
+          "description": "When notice is delivered relative to the adverse decision taking effect.",
+          "examples": ["beforeEffective"]
+        },
+        "noticeGracePeriod": {
+          "type": "string",
+          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'.",
+          "examples": ["P30D", "P14D"]
+        },
+        "noticeTemplateRef": {
+          "type": "string",
+          "description": "Reference to a Notification Template sidecar for notice formatting."
+        },
+        "explanationLevel": {
+          "type": "string",
+          "enum": ["individualized", "categorical", "aggregate"],
+          "description": "Level of explanation provided with adverse decisions (Governance S3.3). 'individualized': REQUIRED for rights-impacting. 'categorical': RECOMMENDED for operational. 'aggregate': minimum for informational.",
+          "examples": ["individualized"]
+        },
+        "counterfactualRequired": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'."
+        },
+        "appealMechanism": {
+          "$ref": "#/$defs/AppealMechanism",
+          "description": "Appeal mechanism configuration (Governance S3.5)."
+        }
+      }
+    },
+    "AppealMechanism": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, an appeal pathway is available for adverse decisions."
+        },
+        "appealWindow": {
+          "type": "string",
+          "description": "ISO 8601 duration for the appeal filing window.",
+          "examples": ["P30D", "P60D"]
+        },
+        "reviewerConstraint": {
+          "type": "string",
+          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5).",
+          "examples": ["independentFromOriginal"]
+        },
+        "reviewerRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Roles eligible to review appeals.",
+          "examples": [["humanAdjudicator"]]
+        },
+        "continuationOfServices": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6)."
+        },
+        "continuationScope": {
+          "type": "string",
+          "description": "Scope of service continuation during appeal.",
+          "examples": ["currentLevel"]
+        }
+      }
+    },
+    "ReviewProtocolBinding": {
+      "type": "object",
+      "required": ["tags", "protocols"],
+      "additionalProperties": false,
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "description": "Semantic transition tags this protocol binding matches (Governance S4.3). Matches any transition or state in the kernel that carries any of these tags.",
+          "examples": [["review"], ["determination", "adverse-decision"]],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tag-based governance attachment -- declares which transitions this protocol applies to"
+          }
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["independentFirst", "considerOpposite", "calibratedConfidence", "dualBlind", "unassisted"]
+          },
+          "minItems": 1,
+          "description": "Review protocols to apply (Governance S4.1). Multiple protocols MAY be combined.",
+          "examples": [["independentFirst"], ["dualBlind", "calibratedConfidence"]],
+          "x-lm": {
+            "critical": true,
+            "intent": "Empirically grounded review procedures that produce genuine cognitive engagement"
+          }
+        },
+        "transitionOverride": {
+          "type": "string",
+          "description": "Optional: target a specific transition by identifier instead of by tag. Overrides tag-based matching for this binding."
+        },
+        "scope": {
+          "type": "string",
+          "description": "FEL expression that determines when this protocol binding applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the binding applies to all matching tagged transitions.",
+          "examples": ["caseFile.amount > 10000"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of why this protocol combination was chosen."
+        }
+      }
+    },
+    "Pipeline": {
+      "type": "object",
+      "required": ["id", "stages"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique pipeline identifier.",
+          "examples": ["income-verification", "document-extraction"]
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PipelineStage"
+          },
+          "minItems": 1,
+          "description": "Ordered processing stages. Each stage's output is validated before the next stage executes."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable pipeline description."
+        }
+      }
+    },
+    "PipelineStage": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique stage identifier within this pipeline.",
+          "examples": ["extract", "validate", "enrich", "present"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["contract-validation", "assertion-gate", "transform", "human-review"],
+          "description": "Stage type (Governance S5.3). 'contract-validation': validate against a contract. 'assertion-gate': apply assertion checks. 'transform': apply data transformation. 'human-review': route to human.",
+          "examples": ["contract-validation", "assertion-gate"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the processing behavior of this pipeline stage"
+          }
+        },
+        "contractRef": {
+          "type": "string",
+          "description": "Reference to a contract for validation. Used with contract-validation type.",
+          "examples": ["urn:formspec:example.gov:income-extraction:1.0.0"]
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Assertion"
+          },
+          "description": "Assertion checks for assertion-gate stages."
+        },
+        "rejectionPolicy": {
+          "type": "string",
+          "enum": ["retryWithCorrections", "escalateToSupervisor", "holdPendingData", "failWithExplanation"],
+          "description": "What happens when this stage fails (Governance S8.1).",
+          "examples": ["retryWithCorrections", "escalateToSupervisor"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable stage description."
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^x-" },
+          "description": "Extension data for this stage."
+        }
+      }
+    },
+    "Assertion": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["source-grounded", "arithmetic", "range", "consistency", "format", "cross-document", "temporal"],
+          "description": "Assertion gate type (Governance S5.4).",
+          "examples": ["source-grounded", "arithmetic", "range"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines the verification method for this assertion gate"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this assertion checks.",
+          "examples": ["Extracted income values must appear in the source pay stub"]
+        },
+        "expression": {
+          "type": "string",
+          "description": "FEL expression defining the assertion constraint. Evaluated in the pipeline's data context.",
+          "examples": [
+            "totalIncome = wageIncome + investmentIncome + otherIncome",
+            "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields subject to this assertion. Used with source-grounded and consistency types.",
+          "examples": [["applicantIncome", "filingDate", "dependentCount"]]
+        },
+        "referenceStage": {
+          "type": "string",
+          "description": "Reference to a prior pipeline stage for consistency checking.",
+          "examples": ["extract"]
+        },
+        "rejectionPolicy": {
+          "type": "string",
+          "enum": ["retryWithCorrections", "escalateToSupervisor", "holdPendingData", "failWithExplanation"],
+          "description": "Override rejection policy for this specific assertion."
+        }
+      }
+    },
+    "AuditConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reasoningTier": {
+          "$ref": "#/$defs/ReasoningTierConfig",
+          "description": "Reasoning tier configuration (Governance S6.2). Attach to transitions tagged 'determination'."
+        },
+        "counterfactualTier": {
+          "$ref": "#/$defs/CounterfactualTierConfig",
+          "description": "Counterfactual tier configuration (Governance S6.4). Attach to transitions tagged 'adverse-decision' in rights-impacting workflows."
+        }
+      }
+    },
+    "ReasoningTierConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredForTags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": ["determination"],
+          "description": "Transition tags that require Reasoning tier records."
+        },
+        "requireDecisionRequirements": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, Reasoning tier records MUST include decision requirements declarations."
+        }
+      }
+    },
+    "CounterfactualTierConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredForTags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": ["adverse-decision"],
+          "description": "Transition tags that require Counterfactual tier records."
+        },
+        "requireProtectedCharacteristics": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics."
+        }
+      }
+    },
+    "QualityControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewSampling": {
+          "$ref": "#/$defs/ReviewSampling",
+          "description": "Review sampling configuration (Governance S7.1)."
+        },
+        "separationOfDuties": {
+          "$ref": "#/$defs/SeparationOfDuties",
+          "description": "Separation of duties rules (Governance S7.2)."
+        },
+        "overrideAuthority": {
+          "$ref": "#/$defs/OverrideAuthority",
+          "description": "Override authority requirements (Governance S7.3)."
+        }
+      }
+    },
+    "ReviewSampling": {
+      "type": "object",
+      "required": ["rate"],
+      "additionalProperties": false,
+      "properties": {
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of decisions to sample for quality review (Governance S7.1). 0.1 means 10% of decisions are reviewed.",
+          "examples": [0.1, 0.25, 1.0]
+        },
+        "method": {
+          "type": "string",
+          "enum": ["random", "stratified"],
+          "default": "random",
+          "description": "Sampling method."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["workflow", "actor"],
+          "default": "workflow",
+          "description": "Sampling scope: per-workflow or per-actor."
+        }
+      }
+    },
+    "SeparationOfDuties": {
+      "type": "object",
+      "required": ["scope"],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["sameInstance", "global"],
+          "description": "Scope of separation (Governance S7.2). 'sameInstance': reviewer != decision-maker within the same workflow instance. 'global': reviewer != decision-maker across all instances.",
+          "examples": ["sameInstance"]
+        },
+        "excludeRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Roles excluded from reviewing their own category of work."
+        }
+      }
+    },
+    "OverrideAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requireStructuredRationale": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, overrides MUST include structured rationale (Governance S7.3)."
+        },
+        "requireAuthorityVerification": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, the processor MUST verify the overriding actor has override authority."
+        },
+        "requireSupportingEvidence": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, overrides MUST reference supporting evidence."
+        }
+      }
+    },
+    "TaskPattern": {
+      "type": "object",
+      "required": ["pattern", "verifiable"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Task pattern name.",
+          "examples": ["fieldExtraction", "completenessCheck", "credibilityAssessment"]
+        },
+        "verifiable": {
+          "type": "string",
+          "enum": ["yes", "partially", "no"],
+          "description": "Whether the task's output can be independently verified (Governance S9.1).",
+          "examples": ["yes", "no"]
+        },
+        "verificationMethod": {
+          "type": "string",
+          "description": "How verification is performed, if verifiable.",
+          "examples": ["source-grounding", "recomputation", "parse-check"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this task pattern."
+        }
+      }
+    },
+    "Delegation": {
+      "type": "object",
+      "required": ["id", "delegator", "delegate", "scope", "authority"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique delegation identifier.",
+          "examples": ["directorToCaseworker", "commissionerToDirector"]
+        },
+        "delegator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor reference of the authority granting the delegation.",
+          "examples": ["divisionDirector", "commissioner"]
+        },
+        "delegate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor reference receiving the delegated authority.",
+          "examples": ["seniorCaseworker", "divisionDirector"]
+        },
+        "scope": {
+          "$ref": "#/$defs/DelegationScope",
+          "description": "Limits on the delegated authority."
+        },
+        "authority": {
+          "type": "string",
+          "enum": ["signing", "determination", "review", "override"],
+          "description": "Type of authority delegated (Governance S11.2). 'signing': authority to sign official determinations. 'determination': authority to make case decisions. 'review': authority to review others' work. 'override': authority to override prior determinations.",
+          "examples": ["determination", "signing"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the type of power being delegated"
+          }
+        },
+        "legalInstrument": {
+          "type": "string",
+          "description": "Reference to the legal delegation order, memorandum, or statutory citation.",
+          "examples": ["Delegation Order 2026-003", "42 USC 1396a(a)(5)"]
+        },
+        "effectiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date the delegation becomes active."
+        },
+        "expirationDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date the delegation expires."
+        },
+        "revocable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the delegation can be revoked."
+        },
+        "revokedDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date the delegation was revoked, if applicable."
+        }
+      }
+    },
+    "DelegationScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "impactLevels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["rights-impacting", "safety-impacting", "operational", "informational"]
+          },
+          "description": "Impact levels this delegation covers.",
+          "examples": [["operational", "informational"]]
+        },
+        "caseTypes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Case types this delegation covers.",
+          "examples": [["standard-application", "renewal"]]
+        },
+        "maxDollarThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum dollar value for determinations under this delegation.",
+          "examples": [50000, 100000]
+        },
+        "conditions": {
+          "type": "string",
+          "description": "Additional FEL expression narrowing the delegation scope.",
+          "examples": ["caseFile.programType = 'supplemental'"]
+        }
+      }
+    },
+    "HoldPolicy": {
+      "type": "object",
+      "required": ["holdType", "expectedDuration", "resumeTrigger", "timeoutAction"],
+      "additionalProperties": false,
+      "properties": {
+        "holdType": {
+          "type": "string",
+          "description": "Reason for the hold. Standard values: pending-applicant-response, pending-external-verification, pending-legal-review, pending-legislation, pending-related-case, voluntary-hold. Extensible via x- prefixed values.",
+          "examples": ["pending-applicant-response", "pending-external-verification", "pending-legislation"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the type of hold so the processor can apply the correct timeout and resume behavior"
+          }
+        },
+        "expectedDuration": {
+          "type": "string",
+          "description": "ISO 8601 duration or the string 'indefinite'.",
+          "examples": ["P30D", "P14D", "indefinite"]
+        },
+        "resumeTrigger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule.",
+          "examples": ["applicantResponse", "verificationComplete", "legislationEnacted"],
+          "x-lm": {
+            "critical": true,
+            "intent": "The event that unblocks the case -- event-driven, not polling-based"
+          }
+        },
+        "timeoutAction": {
+          "type": "string",
+          "enum": ["escalate", "auto-resume", "cancel"],
+          "description": "Action when expectedDuration expires without the resume trigger (Governance S12.2). 'escalate': route to supervisor. 'auto-resume': resume the case automatically. 'cancel': cancel the case.",
+          "examples": ["escalate", "auto-resume"]
+        },
+        "notificationTemplateRef": {
+          "type": "string",
+          "description": "Reference to a Notification Template sidecar for hold notifications."
+        },
+        "scope": {
+          "type": "string",
+          "description": "FEL expression that determines when this hold policy applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the policy applies to all holds of the declared holdType.",
+          "examples": ["caseFile.holdReason = 'pending-legislation'"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this hold policy."
+        }
+      }
+    },
+    "RuleReference": {
+      "type": "object",
+      "required": ["ruleId"],
+      "additionalProperties": false,
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the rule (e.g., statute section, regulation paragraph, policy ID).",
+          "examples": ["42-cfr-435-916", "snap-eligibility-rule-3.2"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable summary of the rule."
+        },
+        "sourceAuthority": {
+          "type": "string",
+          "enum": ["statute", "regulation", "policy", "guideline"],
+          "default": "policy",
+          "description": "Authority level of the rule's source (Governance S6.2). Determines ordering in explanation assembly (Runtime Companion S9.3): statute (rank 1) > regulation (rank 2) > policy (rank 3) > guideline (rank 4). Default: policy. Distinct from the 'authority' property on Delegation (Governance S11), which declares delegated power scope.",
+          "examples": ["statute", "regulation"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Authority ranking for explanation assembly ordering"
+          }
+        },
+        "citation": {
+          "type": "string",
+          "description": "Formal citation to the authoritative source.",
+          "examples": ["42 CFR § 435.916", "OMB M-24-10 §3.1"]
+        }
+      }
+    }
+  }
+}

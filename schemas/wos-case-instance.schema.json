@@ -1,0 +1,453 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/case-instance/1.0",
+  "title": "WOS Case Instance",
+  "description": "A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact, not a WOS document type: it has no $wos* marker because it is produced and consumed by processors, not authored by workflow designers. The instance shape is normatively defined so that instances can migrate between conformant processors without data loss.",
+  "type": "object",
+  "required": [
+    "instanceId",
+    "definitionUrl",
+    "definitionVersion",
+    "configuration",
+    "caseState",
+    "provenancePosition",
+    "timers",
+    "status",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation and autocompletion."
+    },
+    "instanceId": {
+      "type": "string",
+      "format": "uri",
+      "description": "Globally unique identifier for this workflow instance. Stable for the lifetime of the instance.",
+      "examples": [
+        "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
+        "https://agency.gov/cases/2026/12345"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Unique instance identity for routing, persistence, and cross-case references"
+      }
+    },
+    "definitionUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical URL of the Kernel Document governing this instance. Together with definitionVersion, identifies the exact document that controls this instance's lifecycle, case state schema, and contract bindings.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://procurement.example.gov/workflows/purchase-order-approval"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Link from running instance to its governing Kernel Document"
+      }
+    },
+    "definitionVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of the Kernel Document, pinned at instance creation (Kernel S9.6). Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion S11).",
+      "examples": ["1.0.0", "2025.3.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Version pin ensuring instance behavior does not change on definition update"
+      }
+    },
+    "configuration": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "description": "Active leaf states as an ordered array. The order is deterministic: document order of state declarations within the kernel, depth-first. In a workflow without parallel states, this array contains exactly one element. In a workflow with parallel states, it contains one element per active region. Empty array only for completed or terminated instances.",
+      "examples": [
+        ["intake"],
+        ["review.initial"],
+        ["eligibility.income-check", "eligibility.identity-check"]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Current lifecycle position -- which states the instance is in right now"
+      }
+    },
+    "caseState": {
+      "type": "object",
+      "description": "Current case file field values. The keys are field names declared in the Kernel Document's caseFile.fields (Kernel S5.2). Values conform to the declared field types (Kernel S5.3).",
+      "examples": [
+        {
+          "applicantName": "Jane Doe",
+          "income": 42000,
+          "householdSize": 3,
+          "applicationDate": "2026-03-15"
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Current data payload -- the case file snapshot at this point in processing"
+      }
+    },
+    "provenancePosition": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Index into the append-only provenance log. Indicates how many provenance records have been durably persisted for this instance. Used for crash recovery: on restart, the processor knows which provenance records are already durable.",
+      "examples": [0, 47, 1283],
+      "x-lm": {
+        "critical": true,
+        "intent": "Provenance log cursor for crash recovery and audit synchronization"
+      }
+    },
+    "timers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TimerState"
+      },
+      "description": "Pending timer state. Empty array when no timers are active. After a processor restart, all timers in this array are reconstituted and scheduled for firing at their original deadlines (Runtime Companion S7.3).",
+      "examples": [
+        [],
+        [
+          {
+            "timerId": "review-deadline",
+            "deadline": "2026-04-20T00:00:00Z",
+            "event": "$timeout.task",
+            "scopeState": "review"
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Durable timer state that survives processor restarts"
+      }
+    },
+    "historyStore": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Saved configuration for this compound state -- the states that were active when the compound state was last exited."
+      },
+      "description": "Saved history state configurations, keyed by compound state identifier. Present only when the Kernel Document uses history states (Kernel S4.14, Lifecycle Detail S3). Each entry is the saved leaf-state configuration within that compound state.",
+      "examples": [
+        {
+          "review": ["review.detailed"]
+        }
+      ]
+    },
+    "compensationLogs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/CompensationLog"
+      },
+      "description": "Active compensation logs, keyed by compensable scope identifier. Present only when compensable scopes are active (Lifecycle Detail S5). Each log records completed actions that have declared compensatingActions, in forward completion order."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "suspended", "migrating", "completed", "terminated"],
+      "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. Completed and terminated are irreversible terminal states.",
+      "examples": ["active"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Instance lifecycle position -- whether this instance accepts events"
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of instance creation.",
+      "examples": ["2026-04-09T14:30:00Z"]
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last state change (transition fired, case state mutated, status changed).",
+      "examples": ["2026-04-09T15:45:00Z"]
+    },
+    "pendingEvents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PendingEvent"
+      },
+      "description": "Events enqueued but not yet processed (Kernel S9.1 G5, Runtime Companion S12.8). FIFO order. Empty array when no events are pending. On processor restart, the processor resumes processing from the head of this queue.",
+      "examples": [
+        [],
+        [
+          {
+            "event": "documentSubmitted",
+            "actorId": "applicant-123",
+            "data": { "documentType": "income-verification" },
+            "timestamp": "2026-04-09T16:00:00Z"
+          }
+        ]
+      ]
+    },
+    "governanceState": {
+      "$ref": "#/$defs/GovernanceState",
+      "description": "Runtime state for governance enforcement. Present only when a Governance Document is attached to the workflow. Tracks delegation chains, active holds, and review protocol state."
+    },
+    "volumeCounters": {
+      "$ref": "#/$defs/VolumeCounters",
+      "description": "Counters for AI Integration volume constraints (AI Integration S11). Present only when an AI Integration Document is attached. Tracks autonomous actions per hour/day for autonomy cap enforcement."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'. Implementations MAY use this for deployment-specific metadata (e.g., x-correlationId, x-tenantId, x-deploymentRegion)."
+    }
+  },
+  "$defs": {
+    "TimerState": {
+      "type": "object",
+      "required": ["timerId", "deadline", "event"],
+      "additionalProperties": false,
+      "properties": {
+        "timerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Timer identifier, as declared in the startTimer action (Kernel S9.2).",
+          "examples": ["review-deadline", "sla-warning"]
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Absolute deadline when this timer fires (ISO 8601). If the original startTimer action used a relative duration, the processor converts it to an absolute deadline at creation time.",
+          "examples": ["2026-04-20T00:00:00Z"]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event to emit when the timer fires. Typically a $timeout.* kernel-generated event (Kernel S4.10).",
+          "examples": ["$timeout.task", "$timeout.state"]
+        },
+        "scopeState": {
+          "type": "string",
+          "description": "The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4)."
+        }
+      },
+      "description": "Captures the state of a pending durable timer."
+    },
+    "CompensationLog": {
+      "type": "object",
+      "required": ["scopeId", "entries"],
+      "additionalProperties": false,
+      "properties": {
+        "scopeId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the compensable scope this log belongs to."
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompensationEntry"
+          },
+          "description": "Completed actions in forward completion order. On compensation, these are executed in reverse order (Lifecycle Detail S5.4)."
+        }
+      },
+      "description": "Records completed actions within a compensable scope for potential reverse-order compensation (Lifecycle Detail S5)."
+    },
+    "CompensationEntry": {
+      "type": "object",
+      "required": ["actionId", "actionType", "compensatingAction", "completedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "actionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the original action that completed."
+        },
+        "actionType": {
+          "type": "string",
+          "description": "Type of the original action (e.g., invokeService, setData)."
+        },
+        "compensatingAction": {
+          "type": "object",
+          "description": "The compensating action to execute during backward recovery. Structure matches a Kernel Action (Kernel S9.2)."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the original action completed."
+        },
+        "output": {
+          "description": "Persisted output of the original action, available to the compensating action."
+        }
+      },
+      "description": "A single entry in the compensation log -- one completed action with its compensating counterpart."
+    },
+    "PendingEvent": {
+      "type": "object",
+      "required": ["event", "timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event name matching a transition's event property.",
+          "examples": ["documentSubmitted", "approve", "reject"]
+        },
+        "actorId": {
+          "type": "string",
+          "description": "Identifier of the actor who submitted this event."
+        },
+        "data": {
+          "type": "object",
+          "description": "Event payload, available in the evaluation context as 'event' (Kernel S7.2)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of event submission."
+        },
+        "idempotencyToken": {
+          "type": "string",
+          "description": "Token for exactly-once delivery deduplication (Runtime Companion S4.3)."
+        }
+      },
+      "description": "An event enqueued for processing but not yet consumed by the evaluation engine."
+    },
+    "GovernanceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "activeDelegations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActiveDelegation"
+          },
+          "description": "Currently active delegation chains (Governance S11). Each entry records a delegation from one actor to another within a defined scope."
+        },
+        "activeHolds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActiveHold"
+          },
+          "description": "Currently active holds (Governance S12). Each entry records a hold with its type, start time, and expected duration."
+        },
+        "reviewState": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Runtime state for review protocols (Governance S4). Keyed by review protocol binding identifier. Tracks which reviews are pending, completed, and their outcomes."
+        }
+      },
+      "description": "Runtime governance state maintained across events. Separate from case state (which tracks business data) and provenance (which is append-only)."
+    },
+    "ActiveDelegation": {
+      "type": "object",
+      "required": ["delegatorId", "delegateId", "scope", "grantedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "delegatorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor who delegated authority."
+        },
+        "delegateId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor who received delegated authority."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope of the delegation (Governance S11.3). May be a transition tag, state identifier, or FEL expression."
+        },
+        "authority": {
+          "type": "string",
+          "enum": ["signing", "determination", "review", "override"],
+          "description": "Type of authority delegated (Governance S11.2)."
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the delegation was granted."
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry."
+        }
+      },
+      "description": "A currently active delegation of authority from one actor to another."
+    },
+    "ActiveHold": {
+      "type": "object",
+      "required": ["holdType", "startedAt", "resumeTrigger"],
+      "additionalProperties": false,
+      "properties": {
+        "holdType": {
+          "type": "string",
+          "description": "Type of hold, matching a HoldPolicy's holdType (Governance S12).",
+          "examples": ["pending-applicant-response", "pending-external-verification"]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the hold began."
+        },
+        "expectedEnd": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the hold is expected to end (startedAt + expectedDuration). Absent for indefinite holds."
+        },
+        "resumeTrigger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event name that will resume the case from this hold."
+        },
+        "holdState": {
+          "type": "string",
+          "description": "The lifecycle state the instance was in when the hold started."
+        }
+      },
+      "description": "A currently active hold on the workflow instance."
+    },
+    "VolumeCounters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hourly": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/VolumeCounter"
+          },
+          "description": "Per-agent hourly autonomous action counters. Keyed by agent actor ID."
+        },
+        "daily": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/VolumeCounter"
+          },
+          "description": "Per-agent daily autonomous action counters. Keyed by agent actor ID."
+        }
+      },
+      "description": "Tracks autonomous action counts for AI volume constraint enforcement (AI Integration S11). Counters reset at the start of each hour/day (UTC)."
+    },
+    "VolumeCounter": {
+      "type": "object",
+      "required": ["count", "windowStart"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of autonomous actions in the current window."
+        },
+        "windowStart": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of the current counting window start."
+        }
+      },
+      "description": "A single volume counter tracking autonomous actions within a time window."
+    }
+  }
+}
