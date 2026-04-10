@@ -1,0 +1,553 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/core/1.0",
+  "title": "WOS Core Document",
+  "description": "A WOS Core Document per the Workflow Orchestration Standard (WOS) v7.0 Core Specification. A WOS Core Document is the governance envelope that wraps a workflow, declaring its impact level, default autonomy, deontic constraints on agent behavior, structured oversight protocols, due process requirements, actor declarations, and interface contracts. WOS is a companion framework to Formspec v1.0 -- it governs the orchestration envelope (who does the work, when, under what authority, with what agent assistance, with what oversight, and what gets recorded) without altering core Formspec processing semantics. Tier specification content (lifecycle topology, task management, agent configuration, integration, provenance) is NOT part of this core document.",
+  "type": "object",
+  "required": [
+    "$wos",
+    "impactLevel"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wos": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Core specification version. MUST be '1.0'. Identifies this document as a WOS Core Document and pins the specification version for structural and semantic compatibility.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Version pin for WOS Core document compatibility"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation and autocompletion."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical URI identifier for this WOS Core Document. Stable across versions -- the pair (url, version) SHOULD be globally unique. RECOMMENDED but not required; a WOS governance envelope may be embedded in a larger document without its own identity.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://grants.example.gov/workflows/sf-425-review"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable identifier of the workflow across versions"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this WOS Core Document. SemVer is RECOMMENDED. RECOMMENDED but not required; a WOS governance envelope may be embedded without its own versioning.",
+      "examples": [
+        "1.0.0",
+        "2025.1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Workflow revision identifier for the (url, version) identity tuple"
+      }
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this workflow. Displayed by authoring tools and workflow management interfaces.",
+      "examples": [
+        "Benefits Adjudication Workflow",
+        "Grant Application Review"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the workflow's purpose and scope."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "retired"],
+      "description": "Workflow lifecycle state. Transitions: draft -> active -> retired. Backward transitions are forbidden. 'draft': under development, not for production use. 'active': in production, governance envelope is binding. 'retired': no longer used for new workflow instances."
+    },
+    "impactLevel": {
+      "type": "string",
+      "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
+      "default": "operational",
+      "description": "Consequence level classification for decisions made within this workflow (Core S4). Governs the proportionality of governance mechanisms. 'rights-impacting': decisions affect individual legal rights, benefits, services, or obligations -- requires full due process, agent autonomy capped at assistive, counterfactual audit required. 'safety-impacting': decisions affect individual or public safety -- requires full due process, agent autonomy capped at assistive. 'operational': organizational operations without direct individual impact -- due process RECOMMENDED, agent autonomy up to autonomous with deontic constraints. 'informational': informational outputs with no binding decisions -- due process OPTIONAL, no autonomy restrictions. When omitted, the effective default is 'operational'.",
+      "examples": ["rights-impacting", "operational"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Controls proportionality of governance mechanisms across the workflow"
+      }
+    },
+    "defaultAutonomy": {
+      "type": "string",
+      "enum": ["autonomous", "supervisory", "assistive", "manual"],
+      "default": "manual",
+      "description": "Default autonomy level for actions in this workflow (Core S5). Autonomy is a property of the action site, not the agent. Individual actions MAY override this default. 'autonomous': agent output committed without human review, REQUIRES deontic constraints and fallback to human. 'supervisory': agent output provisionally committed, human reviews within a reviewWindow, implicit confirmation on expiry. 'assistive': agent produces a recommendation, human reviews, modifies, and explicitly confirms. 'manual': action performed entirely by a human, agent MAY provide contextual assistance on demand. The effective autonomy MUST NOT exceed the impact-level cap (assistive for rights-impacting and safety-impacting).",
+      "examples": ["assistive", "manual"]
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ActorDeclaration"
+      },
+      "description": "Declarations of actor types participating in this workflow (Core S3). WOS recognizes three actor types: human, system, and agent. An actor's type is determined by who bears decision authority for the specific action. The agent is outside the trust boundary -- the WOS Processor enforces constraints, validates outputs, and controls workflow progression."
+    },
+    "deonticConstraints": {
+      "$ref": "#/$defs/DeonticConstraints",
+      "description": "Deontic constraint framework governing agent behavior (Core S6). Uses four constraint types adopted from OASIS LegalRuleML: permissions, prohibitions, obligations, and rights. Constraints are evaluated after interface contract validation and before output is committed to workflow state. The WOS Processor is the Policy Enforcement Point.",
+      "examples": [
+        {
+          "permissions": [
+            { "id": "outputFieldScope", "allowedFields": ["eligible", "reason", "confidence"], "onViolation": "reject" }
+          ],
+          "prohibitions": [
+            { "id": "noFinalDenial", "condition": "output.eligible = false and instance.impactLevel = 'rights-impacting'", "reason": "Agent may not render final denial in rights-impacting workflow.", "onViolation": "escalateToHuman" }
+          ]
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Structural governance boundary for all agent outputs in this workflow"
+      }
+    },
+    "oversight": {
+      "$ref": "#/$defs/Oversight",
+      "description": "Structured oversight protocol configuration for human review of AI-assisted tasks (Core S7). Addresses the empirical finding that naive human-AI review degrades decision quality (Vaccaro et al., 2024)."
+    },
+    "dueProcess": {
+      "$ref": "#/$defs/DueProcess",
+      "description": "Due process requirements for adverse decisions (Core S9). Normative for rights-impacting and safety-impacting workflows. Informed by constitutional due process principles, APA, ECOA Regulation B, OMB M-24-10, and EU AI Act Art. 13-14.",
+      "examples": [
+        {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeGracePeriod": "P30D",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": { "enabled": true, "appealWindow": "P30D", "continuationOfServices": true },
+            "agentDisclosure": { "discloseThatAgentAssisted": true }
+          }
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Ensures procedural fairness for adverse decisions affecting individuals"
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ContractReference"
+      },
+      "description": "Interface contracts defining typed data exchanges between workflow participants (Core S10). Maps contract names to contract references. Two conformant bindings are defined: Formspec (recommended, full reactive behavior) and JSON Schema (baseline, structural validation only)."
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'. Extensions allow tier specifications and implementations to attach additional metadata without modifying the core schema."
+    }
+  },
+  "$defs": {
+    "ActorDeclaration": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this actor declaration within the workflow.",
+          "examples": ["eligibilityScreener", "humanReviewer", "intakeSystem"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["human", "system", "agent"],
+          "description": "Actor type (Core S3). 'human': a person who performs tasks, makes decisions, and exercises judgment -- provenance requires identity, role, timestamp. 'system': a deterministic software component that executes automated actions -- provenance requires component identifier, version, timestamp. 'agent': an AI system that performs reasoning, classification, recommendation, or decision-making with non-deterministic outputs -- provenance requires model identifier, model version, confidence, input summary, timestamp.",
+          "examples": ["human", "agent"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Determines provenance requirements and trust boundary placement"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of this actor's role in the workflow."
+        }
+      }
+    },
+    "DeonticConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "description": "Permissions bounding what agents are allowed to produce (Core S6.1). Agent outputs within permission bounds are accepted; outputs outside are violations."
+        },
+        "prohibitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Prohibition"
+          },
+          "description": "Prohibitions forbidding specified agent outputs or actions regardless of confidence (Core S6.2)."
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Obligation"
+          },
+          "description": "Obligations requiring agents to perform specified actions or include specified content (Core S6.3). Checked after output, before commit."
+        },
+        "rights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Right"
+          },
+          "description": "Rights specifying what agents are entitled to receive as input context (Core S6.4). The WOS Processor has an Obligation to provide data specified in agent Rights. A Rights violation MUST trigger a system-level error, not an agent fallback."
+        }
+      },
+      "description": "Deontic constraint framework using four constraint types adopted from OASIS LegalRuleML (Core S6). Constraints are evaluated in order: permissions, prohibitions, obligations, then tier-spec constraints (confidence floor, volume constraints, review sampling). When multiple constraints are violated simultaneously, the most restrictive enforcement action applies. Restriction ordering: reject > escalateToHuman > switchToAssistive > flag."
+    },
+    "Permission": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this permission within the deontic constraint set.",
+          "examples": ["outputFieldScope", "eligibilityRange"]
+        },
+        "allowedFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "List of field names the agent is permitted to produce. Agent outputs referencing fields not in this list are violations.",
+          "examples": [["eligible", "reason", "confidence"]]
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Specific field this permission constrains. Used with 'bounds' to define value-level permissions.",
+          "examples": ["eligible"]
+        },
+        "bounds": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression defining the value bounds for the specified field. The expression receives the field value as '$' or 'value'.",
+          "examples": ["value = true or value = false"]
+        },
+        "onViolation": {
+          "$ref": "#/$defs/ViolationAction",
+          "description": "Enforcement action when the permission is violated."
+        },
+        "nullBehavior": {
+          "$ref": "#/$defs/NullBehavior",
+          "description": "Override for null propagation behavior when this constraint's expression evaluates to null. When omitted, behavior is determined by the workflow's impactLevel per Core S6.6."
+        }
+      }
+    },
+    "Prohibition": {
+      "type": "object",
+      "required": ["id", "condition"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this prohibition within the deontic constraint set.",
+          "examples": ["noFinalDenial", "noInconsistentApproval"]
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression defining the forbidden condition. When the expression evaluates to true, the prohibition is triggered.",
+          "examples": [
+            "output.eligible = false and instance.impactLevel = 'rights-impacting'"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation of why this output or action is prohibited. Included in provenance records when the prohibition is triggered.",
+          "examples": ["Agent may not render final denial in rights-impacting workflow."]
+        },
+        "onViolation": {
+          "$ref": "#/$defs/ViolationAction",
+          "description": "Enforcement action when the prohibition is triggered."
+        },
+        "nullBehavior": {
+          "$ref": "#/$defs/NullBehavior",
+          "description": "Override for null propagation behavior when this constraint's expression evaluates to null. When omitted, behavior is determined by the workflow's impactLevel per Core S6.6."
+        }
+      }
+    },
+    "Obligation": {
+      "type": "object",
+      "required": ["id", "requirement"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this obligation within the deontic constraint set.",
+          "examples": ["citesRegulation", "perFieldConfidence"]
+        },
+        "requirement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL expression defining the required condition. When the expression evaluates to false, the obligation is unmet.",
+          "examples": [
+            "contains(output.reason, 'CFR') or contains(output.reason, 'USC')",
+            "output.confidence.fieldLevel != null"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation of what the agent is required to produce and why. Included in provenance records when the obligation is unmet.",
+          "examples": ["Determination must cite regulatory authority."]
+        },
+        "onViolation": {
+          "$ref": "#/$defs/ViolationAction",
+          "description": "Enforcement action when the obligation is unmet."
+        },
+        "nullBehavior": {
+          "$ref": "#/$defs/NullBehavior",
+          "description": "Override for null propagation behavior when this constraint's expression evaluates to null. When omitted, behavior is determined by the workflow's impactLevel per Core S6.6."
+        }
+      }
+    },
+    "Right": {
+      "type": "object",
+      "required": ["id", "entitlement"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this right within the deontic constraint set.",
+          "examples": ["receivesApplicationData", "receivesParameterValues"]
+        },
+        "entitlement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path or reference specifying the data the agent is entitled to receive from the WOS Processor. A Rights violation (the processor fails to provide entitled data) MUST NOT be attributed to the agent and MUST trigger a system-level error.",
+          "examples": ["caseFile.application", "parameters.incomeThreshold"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what the agent is entitled to receive and why.",
+          "examples": ["Agent must receive application data as input."]
+        }
+      }
+    },
+    "ViolationAction": {
+      "type": "string",
+      "enum": ["reject", "escalateToHuman", "switchToAssistive", "flag"],
+      "description": "Enforcement action for a deontic constraint violation (Core S6.5). When multiple constraints are violated simultaneously, the most restrictive action applies. Restriction ordering from most to least restrictive: 'reject': output is rejected, not committed to workflow state. 'escalateToHuman': output is withheld and a human task is created for review. 'switchToAssistive': autonomy level is degraded to assistive for this action. 'flag': output is committed but flagged for subsequent review."
+    },
+    "NullBehavior": {
+      "type": "string",
+      "enum": ["pass", "deny", "escalate"],
+      "description": "Explicit override for null propagation behavior when a deontic constraint expression evaluates to null (Core S6.6). 'pass': treat null as constraint satisfied (true). 'deny': treat null as constraint violated (false), applying the onViolation action. 'escalate': escalate to human review regardless of onViolation. When omitted, behavior is determined by the workflow's impactLevel: rights-impacting and safety-impacting default to escalate; operational and informational default to pass."
+    },
+    "Oversight": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": ["independentFirst", "considerOpposite", "calibratedConfidence", "dualBlind", "unassisted"],
+          "description": "Structured oversight protocol for human review of AI-assisted tasks (Core S7). Multiple protocols MAY be combined at the action level. 'independentFirst': reviewer forms and records an independent assessment before the agent's recommendation is revealed -- the interface MUST enforce this ordering. 'considerOpposite': after viewing the recommendation, the reviewer articulates reasons it might be wrong before confirming. 'calibratedConfidence': calibrated confidence displayed alongside the recommendation with per-field scores and low-confidence highlighting. 'dualBlind': two independent reviewers assess the case without seeing each other's or the agent's assessment, then results are reconciled. 'unassisted': no agent assistance is provided, task performed entirely by a human.",
+          "examples": ["independentFirst"]
+        },
+        "presentation": {
+          "$ref": "#/$defs/OversightPresentation",
+          "description": "Presentation configuration controlling how agent outputs are displayed to human reviewers."
+        }
+      }
+    },
+    "OversightPresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "showConfidence": {
+          "type": "boolean",
+          "description": "When true, display the agent's confidence score alongside the recommendation.",
+          "default": false
+        },
+        "showAlternatives": {
+          "type": "boolean",
+          "description": "When true, display alternative recommendations or outcomes the agent considered.",
+          "default": false
+        },
+        "highlightLowConfidenceFields": {
+          "type": "boolean",
+          "description": "When true, visually highlight fields where the agent's confidence is below a threshold.",
+          "default": false
+        },
+        "showDiffFromIndependent": {
+          "type": "boolean",
+          "description": "When true, highlight differences between the reviewer's independent assessment and the agent's recommendation, focusing attention on points of disagreement. Only meaningful when the oversight protocol includes 'independentFirst'.",
+          "default": false
+        }
+      }
+    },
+    "DueProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adverseDecisionPolicy": {
+          "$ref": "#/$defs/AdverseDecisionPolicy",
+          "description": "Policy governing adverse decisions (denial, reduction, termination, or other unfavorable determinations). Normative for rights-impacting and safety-impacting workflows (Core S9)."
+        }
+      }
+    },
+    "AdverseDecisionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noticeRequired": {
+          "type": "boolean",
+          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect. The notice MUST include: the specific determination, individualized factual basis, appeal rights with deadline and process, and AI assistance disclosure if applicable (Core S9.1).",
+          "default": false
+        },
+        "noticeTiming": {
+          "type": "string",
+          "enum": ["beforeEffective", "onEffective", "afterEffective"],
+          "description": "When the notice is delivered relative to the adverse decision taking effect. 'beforeEffective': notice is delivered before the decision takes effect, providing a grace period. 'onEffective': notice is delivered simultaneously with the decision taking effect. 'afterEffective': notice is delivered after the decision takes effect (discouraged for rights-impacting workflows).",
+          "examples": ["beforeEffective"]
+        },
+        "noticeGracePeriod": {
+          "type": "string",
+          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the adverse decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'.",
+          "examples": ["P30D", "P14D"]
+        },
+        "explanationLevel": {
+          "type": "string",
+          "enum": ["individualized", "categorical", "aggregate"],
+          "description": "Level of explanation provided with adverse decisions (Core S9.2). 'individualized': specific factual reasons tied to the individual's case -- REQUIRED for rights-impacting workflows. 'categorical': category-level explanation -- RECOMMENDED for operational workflows. 'aggregate': system-level transparency without individual explanation -- minimum for informational workflows.",
+          "examples": ["individualized"]
+        },
+        "counterfactualRequired": {
+          "type": "boolean",
+          "description": "When true, adverse decision explanations MUST include counterfactuals: positive (what controllable factors would change the outcome) and negative (what irrelevant factors, including protected characteristics, did NOT affect the outcome). REQUIRED when impactLevel is 'rights-impacting' (Core S9.2).",
+          "default": false
+        },
+        "appealMechanism": {
+          "$ref": "#/$defs/AppealMechanism",
+          "description": "Appeal mechanism configuration. An appeal MUST be reviewed by a human adjudicator independent of the original determination. AI agents MAY assist in preparing information but MUST NOT serve as the appeal decision-maker (Core S9.3)."
+        },
+        "agentDisclosure": {
+          "$ref": "#/$defs/AgentDisclosure",
+          "description": "Agent disclosure configuration controlling what is revealed about AI involvement in the decision. For rights-impacting workflows, discloseThatAgentAssisted MUST be true (Core S9.5)."
+        }
+      }
+    },
+    "AppealMechanism": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, an appeal pathway is available for adverse decisions.",
+          "default": false
+        },
+        "appealWindow": {
+          "type": "string",
+          "description": "ISO 8601 duration defining the time window within which an appeal may be filed.",
+          "examples": ["P30D", "P60D"]
+        },
+        "appealReviewedBy": {
+          "$ref": "#/$defs/AppealReviewer",
+          "description": "Constraints on who may review the appeal. MUST be a human adjudicator independent of the original determination (Core S9.3)."
+        },
+        "continuationOfServices": {
+          "type": "boolean",
+          "description": "When true, the workflow MUST include topology that freezes adverse impacts and maintains current service levels during the appeal window. This is a structural workflow requirement, not a policy preference (Core S9.4).",
+          "default": false
+        },
+        "continuationScope": {
+          "type": "string",
+          "description": "Defines the scope of service continuation during the appeal window.",
+          "examples": ["currentLevel"]
+        }
+      }
+    },
+    "AppealReviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Roles eligible to review appeals.",
+          "examples": [["humanAdjudicator"]]
+        },
+        "constraint": {
+          "type": "string",
+          "description": "Constraint on the reviewer's relationship to the original determination. Typically 'independentFromOriginal' to ensure independence.",
+          "examples": ["independentFromOriginal"]
+        }
+      }
+    },
+    "AgentDisclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "discloseThatAgentAssisted": {
+          "type": "boolean",
+          "description": "When true, the notice discloses that an AI system assisted in the determination. MUST be true for rights-impacting workflows, consistent with OMB M-24-10 and EU AI Act Art. 13 (Core S9.5).",
+          "default": false
+        },
+        "discloseModelIdentity": {
+          "type": "boolean",
+          "description": "When true, the notice discloses the identity of the AI model that assisted.",
+          "default": false
+        },
+        "discloseConfidence": {
+          "type": "boolean",
+          "description": "When true, the notice discloses the AI model's confidence score for the determination.",
+          "default": false
+        }
+      }
+    },
+    "ContractReference": {
+      "type": "object",
+      "required": ["binding"],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "type": "string",
+          "enum": ["formspec", "jsonSchema"],
+          "description": "Interface contract binding type (Core S10). 'formspec': recommended binding providing full reactive behavior, cross-field Shapes, Mapping DSL for data flow, and the sidecar ecosystem. 'jsonSchema': baseline binding providing structural validation only, no reactive behavior, no cross-field rules, no Mapping DSL.",
+          "examples": ["formspec"]
+        },
+        "ref": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the interface contract document. For Formspec bindings, this is a Formspec Definition URI. For JSON Schema bindings, this is a JSON Schema URI.",
+          "examples": [
+            "https://agency.gov/forms/benefits-intake",
+            "https://agency.gov/schemas/eligibility-output.schema.json"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the contract's purpose in the workflow."
+        }
+      }
+    }
+  }
+}
