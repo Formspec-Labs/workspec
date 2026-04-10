@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/notification-template/1.0",
+  "title": "WOS Notification Template Config",
+  "description": "A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1).",
+  "type": "object",
+  "required": [
+    "$wosNotificationTemplate",
+    "targetWorkflow",
+    "templates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$wosNotificationTemplate": {
+      "type": "string",
+      "const": "1.0",
+      "description": "WOS Notification Template specification version. MUST be '1.0'.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for WOS Notification Template Config sidecar"
+      }
+    },
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI for editor validation."
+    },
+    "targetWorkflow": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the WOS Kernel Document this notification template config applies to.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binds this sidecar to its parent kernel workflow"
+      }
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Notification Template Config document.",
+      "examples": ["1.0.0"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name for this notification template configuration.",
+      "examples": ["Benefits Adjudication Notification Templates"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this notification template collection."
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/NotificationTemplate"
+      },
+      "minProperties": 1,
+      "description": "Named notification templates. Template keys are the identifiers referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1) in governance documents.",
+      "examples": [
+        {
+          "adverseBenefitsDecision": {
+            "category": "adverse-decision",
+            "description": "Notice of adverse benefits determination",
+            "sections": [
+              { "id": "determination", "contentType": "structured", "content": "Your application for {{programName}} has been {{determination}}." },
+              { "id": "reasons", "contentType": "structured", "content": "Reason(s): {{reasonCodes}}" },
+              { "id": "appealRights", "contentType": "appeal-rights", "content": "You have the right to appeal this decision." }
+            ]
+          }
+        }
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Named templates that governance mechanisms resolve via notificationTemplateRef and noticeTemplateRef"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Extension data. All keys MUST be prefixed with 'x-'."
+    }
+  },
+  "$defs": {
+    "NotificationTemplate": {
+      "type": "object",
+      "required": ["category", "sections"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "adverse-decision",
+            "hold-notification",
+            "appeal-acknowledgment",
+            "sla-warning",
+            "case-status-update",
+            "resume-notification"
+          ],
+          "description": "Template category. Determines which governance mechanism uses this template. 'adverse-decision': adverse decision notice (Governance S3.1-S3.2). 'hold-notification': hold notice (Governance S12.2). 'appeal-acknowledgment': appeal receipt confirmation (Governance S3.5). 'sla-warning': SLA deadline warning (Governance S10.3). 'case-status-update': general case status notification. 'resume-notification': notice that a case resumed from hold (Governance S12.3).",
+          "examples": ["adverse-decision", "hold-notification", "sla-warning"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the template by governance event type to enforce category-specific requirements"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of when this template is used.",
+          "examples": ["Notice of adverse benefits determination sent to applicant"]
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject line or title for the notification. MAY contain placeholder variables using {{variableName}} syntax.",
+          "examples": [
+            "Notice of Decision: {{programName}} Application",
+            "Case {{caseId}} - Hold Notification"
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TemplateSection"
+          },
+          "minItems": 1,
+          "description": "Ordered content sections composing the notification body. For 'adverse-decision' templates, sections MUST address: specific determination, individualized reason codes, appeal rights and filing deadline, and appeal instructions (Notification Template S4.4).",
+          "x-lm": {
+            "critical": true,
+            "intent": "Ordered sections that compose the notification -- adverse-decision templates must include due process required sections"
+          }
+        },
+        "requiredVariables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Variables that MUST be present in the rendering context. If any required variable is missing, the processor MUST NOT send the notification and MUST record the failure in provenance.",
+          "examples": [["caseId", "applicantName", "determination", "reasonCodes", "appealDeadline"]]
+        },
+        "deliveryChannels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["postal", "email", "portal", "sms", "in-app"]
+          },
+          "description": "Channels through which this notification can be delivered. 'postal': physical mail. 'email': electronic mail. 'portal': web portal notification. 'sms': text message. 'in-app': in-application notification. When absent, delivery channel is implementation-defined.",
+          "examples": [["postal", "email", "portal"]]
+        },
+        "localeRef": {
+          "type": "string",
+          "description": "Reference to a locale-specific variant of this template.",
+          "examples": ["es-US", "zh-Hans"]
+        },
+        "authority": {
+          "type": "string",
+          "description": "Regulatory or statutory authority requiring this notification.",
+          "examples": ["42 USC 1396a", "APA 5 USC 554", "ECOA Regulation B 12 CFR 1002"]
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^x-" },
+          "description": "Extension data. All keys MUST be prefixed with 'x-'."
+        }
+      }
+    },
+    "TemplateSection": {
+      "type": "object",
+      "required": ["id", "contentType"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Section identifier. MUST be unique within the template.",
+          "examples": ["determination", "reasons", "appealRights", "appealInstructions", "contactInfo"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Section heading displayed in the rendered notification.",
+          "examples": ["Decision", "Reason(s) for This Decision", "Your Right to Appeal", "How to File an Appeal"]
+        },
+        "contentType": {
+          "type": "string",
+          "enum": ["text", "structured", "appeal-rights", "action-required", "contact-information"],
+          "description": "Type of content in this section. 'text': free-text with optional placeholders. 'structured': structured content with labeled fields. 'appeal-rights': standardized appeal rights block (must include filing deadline, review body, continuation status). 'action-required': describes actions the recipient must take. 'contact-information': contact details for questions.",
+          "examples": ["text", "structured", "appeal-rights"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the section content for rendering and validation of due process requirements"
+          }
+        },
+        "content": {
+          "type": "string",
+          "description": "Content body. MAY contain placeholder variables using {{variableName}} syntax. Required when contentType is 'text' or 'structured'. For 'appeal-rights', 'action-required', and 'contact-information', content provides additional context beyond the structured elements.",
+          "examples": [
+            "Your application for {{programName}} has been {{determination}}.",
+            "You have the right to appeal this decision within {{appealWindow}} of the date of this notice.",
+            "Please submit the following documents within {{expectedDuration}}: {{requiredAction}}"
+          ]
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this section MUST appear in the rendered notification. Default: true."
+        },
+        "condition": {
+          "type": "string",
+          "description": "FEL expression that controls section visibility. When the expression evaluates to false, the section is omitted from the rendered notification. Evaluated against the standard FEL evaluation context (Kernel S7.3).",
+          "examples": [
+            "caseFile.continuationOfServices = true",
+            "caseFile.appealEligible = true"
+          ]
+        }
+      }
+    }
+  }
+}

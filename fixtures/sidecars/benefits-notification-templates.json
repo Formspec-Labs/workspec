@@ -1,0 +1,176 @@
+{
+  "$wosNotificationTemplate": "1.0",
+  "$schema": "https://wos-spec.org/schemas/notification-template/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication Notification Templates",
+  "description": "Notification templates for a federal benefits adjudication workflow. Covers adverse decision notices (with due process requirements), hold notifications, appeal acknowledgments, and SLA warnings.",
+
+  "templates": {
+    "adverseBenefitsDecision": {
+      "category": "adverse-decision",
+      "description": "Notice of adverse benefits determination sent to applicant via postal mail and portal",
+      "subject": "Notice of Decision: {{programName}} Application - Case {{caseId}}",
+      "sections": [
+        {
+          "id": "header",
+          "contentType": "text",
+          "title": "Official Notice",
+          "content": "Dear {{applicantName}},\n\nThis letter is to inform you of the decision regarding your application for {{programName}} benefits."
+        },
+        {
+          "id": "determination",
+          "contentType": "structured",
+          "title": "Decision",
+          "content": "After reviewing your application and supporting documentation, your request for {{programName}} benefits has been {{determination}}."
+        },
+        {
+          "id": "reasons",
+          "contentType": "structured",
+          "title": "Reason(s) for This Decision",
+          "content": "This decision was made for the following reason(s):\n\n{{reasonCodes}}\n\nThese reasons are based on the specific facts of your case and the applicable eligibility criteria in effect on your application date of {{applicationDate}}."
+        },
+        {
+          "id": "appealRights",
+          "contentType": "appeal-rights",
+          "title": "Your Right to Appeal",
+          "content": "You have the right to appeal this decision. To file an appeal, you must submit a written request to the {{appealBody}} within {{appealWindow}} of the date of this notice. The deadline to file your appeal is {{appealDeadline}}.\n\nYour appeal will be reviewed by an adjudicator who was not involved in the original decision."
+        },
+        {
+          "id": "appealInstructions",
+          "contentType": "action-required",
+          "title": "How to File an Appeal",
+          "content": "To file an appeal:\n\n1. Submit a written statement explaining why you disagree with this decision.\n2. Include any additional documentation that supports your case.\n3. Mail your appeal to: {{appealAddress}}\n   Or submit online at: {{appealPortalUrl}}\n\nYour appeal must be received by {{appealDeadline}}."
+        },
+        {
+          "id": "continuationOfServices",
+          "contentType": "text",
+          "title": "Continuation of Benefits During Appeal",
+          "content": "If you file your appeal before the effective date of this decision, your current benefits will continue at the existing level during the appeal process. If the appeal decision upholds the original determination, you may be required to repay benefits received during the appeal period.",
+          "condition": "caseFile.continuationOfServices = true"
+        },
+        {
+          "id": "contactInfo",
+          "contentType": "contact-information",
+          "title": "Questions?",
+          "content": "If you have questions about this decision or need assistance filing an appeal, contact us at:\n\nPhone: {{agencyPhone}}\nEmail: {{agencyEmail}}\nOffice hours: Monday - Friday, 8:00 AM - 5:00 PM Eastern"
+        }
+      ],
+      "requiredVariables": [
+        "caseId",
+        "applicantName",
+        "programName",
+        "determination",
+        "reasonCodes",
+        "applicationDate",
+        "appealBody",
+        "appealWindow",
+        "appealDeadline"
+      ],
+      "deliveryChannels": ["postal", "portal"],
+      "authority": "42 USC 1396a; APA 5 USC 554"
+    },
+
+    "holdPendingDocuments": {
+      "category": "hold-notification",
+      "description": "Notice sent when case is placed on hold pending applicant document submission",
+      "subject": "Action Required: Additional Documents Needed - Case {{caseId}}",
+      "sections": [
+        {
+          "id": "header",
+          "contentType": "text",
+          "title": "Notice of Hold",
+          "content": "Dear {{applicantName}},\n\nYour {{programName}} application (Case {{caseId}}) has been placed on hold because additional documentation is needed to process your application."
+        },
+        {
+          "id": "holdDetails",
+          "contentType": "structured",
+          "title": "What We Need",
+          "content": "Reason for hold: {{holdReason}}\n\nPlease provide the following: {{requiredAction}}"
+        },
+        {
+          "id": "deadline",
+          "contentType": "action-required",
+          "title": "Response Deadline",
+          "content": "You must submit the requested documents within {{expectedDuration}} of the date of this notice. If we do not receive the required documents by the deadline, your case will be escalated for administrative review."
+        },
+        {
+          "id": "contactInfo",
+          "contentType": "contact-information",
+          "title": "Need Help?",
+          "content": "If you have questions or need assistance gathering the required documents, contact us at:\n\nPhone: {{agencyPhone}}\nEmail: {{agencyEmail}}"
+        }
+      ],
+      "requiredVariables": [
+        "caseId",
+        "applicantName",
+        "programName",
+        "holdReason",
+        "requiredAction",
+        "expectedDuration"
+      ],
+      "deliveryChannels": ["email", "portal"]
+    },
+
+    "appealAcknowledgment": {
+      "category": "appeal-acknowledgment",
+      "description": "Acknowledgment sent when an appeal is received",
+      "subject": "Appeal Received - Case {{caseId}}",
+      "sections": [
+        {
+          "id": "header",
+          "contentType": "text",
+          "title": "Appeal Acknowledgment",
+          "content": "Dear {{applicantName}},\n\nWe have received your appeal regarding the {{programName}} decision for Case {{caseId}}."
+        },
+        {
+          "id": "timeline",
+          "contentType": "structured",
+          "title": "What Happens Next",
+          "content": "Your appeal will be reviewed by an independent adjudicator within {{reviewTimeline}}. You will receive a written decision at the conclusion of the review."
+        },
+        {
+          "id": "continuationNotice",
+          "contentType": "text",
+          "title": "Benefits During Appeal",
+          "content": "Your current benefits will continue at the existing level while your appeal is under review.",
+          "condition": "caseFile.continuationOfServices = true"
+        },
+        {
+          "id": "contactInfo",
+          "contentType": "contact-information",
+          "title": "Questions?",
+          "content": "Phone: {{agencyPhone}}\nEmail: {{agencyEmail}}"
+        }
+      ],
+      "requiredVariables": [
+        "caseId",
+        "applicantName",
+        "programName",
+        "reviewTimeline"
+      ],
+      "deliveryChannels": ["email", "portal"]
+    },
+
+    "slaDeadlineWarning": {
+      "category": "sla-warning",
+      "description": "Internal warning sent to caseworkers when a task SLA is approaching its deadline",
+      "subject": "SLA Warning: {{taskName}} approaching deadline - Case {{caseId}}",
+      "sections": [
+        {
+          "id": "warning",
+          "contentType": "text",
+          "title": "SLA Deadline Warning",
+          "content": "Task '{{taskName}}' for Case {{caseId}} is approaching its SLA deadline.\n\nDeadline: {{slaDeadline}}\nAssigned to: {{assignedActor}}\n\nPlease take action to complete this task before the deadline."
+        }
+      ],
+      "requiredVariables": [
+        "caseId",
+        "taskName",
+        "slaDeadline",
+        "assignedActor"
+      ],
+      "deliveryChannels": ["in-app", "email"]
+    }
+  }
+}
