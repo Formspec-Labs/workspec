@@ -1,0 +1,18 @@
+[package]
+name = "wos-core"
+version = "0.1.0"
+edition = "2024"
+description = "Domain model and evaluation algorithm for WOS (Workflow Orchestration Standard)"
+license = "AGPL-3.0"
+repository = "https://github.com/formspec/formspec"
+
+[dependencies]
+fel-core = { path = "../../../crates/fel-core" }
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+indexmap = "2"
+insta = { version = "1", features = ["json"] }

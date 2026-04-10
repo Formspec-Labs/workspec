@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/wos-core",
+    "crates/wos-lint",
+    "crates/wos-conformance",
+]
+resolver = "3"
