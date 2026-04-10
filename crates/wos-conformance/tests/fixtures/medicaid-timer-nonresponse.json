@@ -1,0 +1,24 @@
+{
+  "id": "K-MR-002-timer-nonresponse",
+  "rule": "K-TIMER-001",
+  "description": "Applicant does not respond within 30 days; timer fires and routes to deniedForNonResponse",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/medicaid-redetermination.json"
+  },
+  "initial_case_state": {
+    "application": { "isComplete": true },
+    "currentCycle": 0
+  },
+  "event_sequence": [
+    { "event": "applicationIncomplete", "actor": "caseworker" },
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P31D"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "pendingApplicantResponse", "event": "applicationIncomplete" },
+    { "from": "pendingApplicantResponse", "to": "deniedForNonResponse", "event": "$timeout.state" }
+  ]
+}

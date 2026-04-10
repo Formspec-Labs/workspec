@@ -1,0 +1,32 @@
+{
+  "id": "K-PO-002-director-approval",
+  "rule": "K-LIFECYCLE-001",
+  "description": "Purchase order over $50k routes to pendingDirectorApproval via guard",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/purchase-order-approval.json"
+  },
+  "initial_case_state": {
+    "amount": 75000,
+    "orderId": "ORD-2026-002",
+    "vendor": "BigCo Inc"
+  },
+  "event_sequence": [
+    {
+      "event": "approve",
+      "actor": "approver"
+    },
+    {
+      "event": "approve",
+      "actor": "director"
+    },
+    {
+      "event": "orderProcessed",
+      "actor": "procurementSystem"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "submitted", "to": "pendingDirectorApproval", "event": "approve" },
+    { "from": "pendingDirectorApproval", "to": "approved", "event": "approve" },
+    { "from": "approved", "to": "completed", "event": "orderProcessed" }
+  ]
+}

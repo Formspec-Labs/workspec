@@ -1,0 +1,112 @@
+{
+  "id": "G-030-hold-resume",
+  "rule": "G-030",
+  "description": "On entering a hold state the processor must start a timer; when the resume trigger arrives before the timer fires, the timer must be cancelled. Uses medicaid-redetermination: advance to pendingApplicantResponse (hold state, starts 'applicantResponseDeadline' timer with P30D), then fire 'applicantResponse' to trigger resume. Expects the timer cancellation provenance record.",
+  "documents": {
+    "kernel": "fixtures/kernel/medicaid-redetermination.json"
+  },
+  "event_sequence": [
+    {
+      "event": "applicationComplete",
+      "actor": "caseworker",
+      "data": {
+        "application": { "isComplete": true }
+      }
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem",
+      "data": {
+        "verification": { "status": "verified" }
+      }
+    },
+    {
+      "event": "determinationComplete",
+      "actor": "caseworker",
+      "data": {
+        "eligibility": { "decision": "eligible" }
+      }
+    },
+    {
+      "event": "eligible",
+      "actor": "caseworker",
+      "data": {}
+    },
+    {
+      "event": "$timeout.state",
+      "actor": "system",
+      "data": {}
+    },
+    {
+      "event": "redeterminationSubmitted",
+      "actor": "applicant",
+      "data": {}
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem",
+      "data": {
+        "verification": { "status": "verified" }
+      }
+    },
+    {
+      "event": "determinationComplete",
+      "actor": "caseworker",
+      "data": {}
+    },
+    {
+      "event": "eligible",
+      "actor": "caseworker",
+      "data": {}
+    },
+    {
+      "event": "$timeout.state",
+      "actor": "system",
+      "description": "12-month cycle expires — enters redeterminationDue",
+      "data": {}
+    },
+    {
+      "event": "$timeout.state",
+      "actor": "system",
+      "description": "30-day redetermination notice window expires — enters pendingApplicantResponse (hold state)",
+      "data": {}
+    },
+    {
+      "event": "applicantResponse",
+      "actor": "applicant",
+      "data": {
+        "application": { "isComplete": true }
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "redeterminationDue",
+      "to": "pendingApplicantResponse",
+      "event": "$timeout.state"
+    },
+    {
+      "from": "pendingApplicantResponse",
+      "to": "intake",
+      "event": "applicantResponse"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "timerStarted",
+      "timerId": "applicantResponseDeadline",
+      "duration": "P30D"
+    },
+    {
+      "type": "timerCancelled",
+      "timerId": "applicantResponseDeadline"
+    },
+    {
+      "type": "stateTransition",
+      "from": "pendingApplicantResponse",
+      "to": "intake",
+      "actorId": "applicant"
+    }
+  ],
+  "expected_errors": []
+}

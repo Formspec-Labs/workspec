@@ -1,0 +1,31 @@
+{
+  "id": "K-BA-002-parallel-reviewers-disagree",
+  "rule": "K-PARALLEL-001",
+  "description": "Reviewers disagree; $join fires to reconciliation then determination then denied",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/benefits-adjudication.json"
+  },
+  "initial_case_state": {
+    "application": { "isComplete": true },
+    "verification": { "status": "verified" },
+    "reviewA": { "decision": "eligible" },
+    "reviewB": { "decision": "ineligible" }
+  },
+  "event_sequence": [
+    { "event": "applicationComplete", "actor": "intakeWorker" },
+    { "event": "verificationComplete", "actor": "verificationSystem" },
+    { "event": "reviewAComplete", "actor": "caseworkerA" },
+    { "event": "reviewBComplete", "actor": "caseworkerB" },
+    { "event": "reconciled", "actor": "supervisor" },
+    { "event": "denied", "actor": "supervisor" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "incomeVerification", "event": "applicationComplete" },
+    { "from": "incomeVerification", "to": "eligibilityReview", "event": "verificationComplete" },
+    { "from": "pendingReviewA", "to": "reviewADone", "event": "reviewAComplete" },
+    { "from": "pendingReviewB", "to": "reviewBDone", "event": "reviewBComplete" },
+    { "from": "eligibilityReview", "to": "reconciliation", "event": "$join" },
+    { "from": "reconciliation", "to": "determination", "event": "reconciled" },
+    { "from": "determination", "to": "adverseNotice", "event": "denied" }
+  ]
+}

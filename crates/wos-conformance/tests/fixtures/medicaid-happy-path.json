@@ -1,0 +1,24 @@
+{
+  "id": "K-MR-001-happy-path",
+  "rule": "K-COMPOUND-001",
+  "description": "Medicaid intake through compound eligibilityReview to activeBenefits",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/medicaid-redetermination.json"
+  },
+  "initial_case_state": {
+    "application": { "isComplete": true },
+    "currentCycle": 0
+  },
+  "event_sequence": [
+    { "event": "applicationComplete", "actor": "caseworker" },
+    { "event": "verificationComplete", "actor": "verificationSystem" },
+    { "event": "determinationComplete", "actor": "caseworker" },
+    { "event": "eligible", "actor": "caseworker" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "eligibilityReview", "event": "applicationComplete" },
+    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
+    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
+    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" }
+  ]
+}

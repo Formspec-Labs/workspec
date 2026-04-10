@@ -1,0 +1,76 @@
+{
+  "id": "K-046-timer-provenance",
+  "rule": "K-046",
+  "description": "Every timer lifecycle event (creation, firing, cancellation) must produce provenance records. The benefits-adjudication workflow starts an appealWindow timer on entry to adverseNotice. Verify that provenance records are emitted for timer creation when the state is entered, and for timer cancellation when an appeal is filed.",
+  "documents": {
+    "kernel": "fixtures/kernel/benefits-adjudication.json"
+  },
+  "event_sequence": [
+    {
+      "event": "applicationComplete",
+      "actor": "intakeWorker",
+      "data": {
+        "application": { "isComplete": true }
+      }
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem",
+      "data": {
+        "verification": { "status": "verified" }
+      }
+    },
+    {
+      "event": "reviewAComplete",
+      "actor": "caseworkerA",
+      "data": {
+        "reviewA": { "decision": "ineligible" }
+      }
+    },
+    {
+      "event": "reviewBComplete",
+      "actor": "caseworkerB",
+      "data": {
+        "reviewB": { "decision": "ineligible" }
+      }
+    },
+    {
+      "event": "denied",
+      "actor": "caseworkerA",
+      "data": {
+        "eligibility": { "decision": "ineligible", "reason": "income-exceeds-threshold" }
+      }
+    },
+    {
+      "event": "appealFiled",
+      "actor": "applicant",
+      "data": {
+        "appeal": { "filedAt": "2026-04-09T10:00:00Z" }
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "determination",
+      "to": "adverseNotice",
+      "event": "denied"
+    },
+    {
+      "from": "adverseNotice",
+      "to": "appeal",
+      "event": "appealFiled"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "timerStarted",
+      "timerId": "appealWindow",
+      "duration": "P30D"
+    },
+    {
+      "type": "timerCancelled",
+      "timerId": "appealWindow"
+    }
+  ],
+  "expected_errors": []
+}

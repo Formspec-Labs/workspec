@@ -1,0 +1,86 @@
+{
+  "id": "K-011-parallel-join",
+  "rule": "K-011",
+  "description": "Parallel regions in the benefits-adjudication workflow must both reach their final states before the $join event fires and the workflow transitions out. Feed reviewAComplete and reviewBComplete with matching decisions so the $join routes to 'determination' (not 'reconciliation').",
+  "documents": {
+    "kernel": "fixtures/kernel/benefits-adjudication.json"
+  },
+  "event_sequence": [
+    {
+      "event": "applicationComplete",
+      "actor": "intakeWorker",
+      "data": {
+        "application": {
+          "isComplete": true,
+          "applicantId": "APP-2026-001"
+        }
+      }
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem",
+      "data": {
+        "verification": {
+          "status": "verified",
+          "verifiedIncome": 28000
+        }
+      }
+    },
+    {
+      "event": "reviewAComplete",
+      "actor": "caseworkerA",
+      "data": {
+        "reviewA": {
+          "decision": "eligible",
+          "notes": "Income within threshold"
+        }
+      }
+    },
+    {
+      "event": "reviewBComplete",
+      "actor": "caseworkerB",
+      "data": {
+        "reviewB": {
+          "decision": "eligible",
+          "notes": "Confirmed eligibility"
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "to": "incomeVerification",
+      "event": "applicationComplete"
+    },
+    {
+      "from": "incomeVerification",
+      "to": "eligibilityReview",
+      "event": "verificationComplete"
+    },
+    {
+      "from": "pendingReviewA",
+      "to": "reviewADone",
+      "event": "reviewAComplete"
+    },
+    {
+      "from": "pendingReviewB",
+      "to": "reviewBDone",
+      "event": "reviewBComplete"
+    },
+    {
+      "from": "eligibilityReview",
+      "to": "determination",
+      "event": "$join"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "stateTransition",
+      "from": "eligibilityReview",
+      "to": "determination",
+      "event": "$join"
+    }
+  ],
+  "expected_errors": []
+}

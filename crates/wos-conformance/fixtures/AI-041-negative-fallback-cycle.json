@@ -1,0 +1,60 @@
+{
+  "id": "AI-041-negative-fallback-cycle",
+  "rule": "AI-041",
+  "description": "Negative test: an AI integration document with a fallback chain that cycles must be rejected at lint time. A conformant fallback chain must terminate in 'escalateToHuman' or 'fail'. The inline AI document declares three fallback steps that form a cycle (stepA → stepB → stepC → stepA), with no terminal action.",
+  "documents": {
+    "ai": "inline"
+  },
+  "inline_documents": {
+    "ai": {
+      "$wosAI": "1.0",
+      "$schema": "https://wos-spec.org/schemas/ai/1.0",
+      "url": "https://test.example/ai/cyclic-fallback",
+      "version": "1.0.0",
+      "title": "Cyclic Fallback Chain Test",
+      "description": "Intentionally invalid: fallback chain cycles without a terminal action. Must be rejected by wos-lint.",
+      "targetKernel": "https://test.example/workflows/placeholder",
+      "agents": [
+        {
+          "id": "documentClassifier",
+          "type": "classifier",
+          "description": "Classifies uploaded documents",
+          "model": {
+            "provider": "internal",
+            "modelId": "doc-classifier-v1",
+            "version": "1.0.0"
+          },
+          "fallbackChain": [
+            {
+              "id": "stepA",
+              "action": "retryWithBackoff",
+              "maxRetries": 3,
+              "next": "stepB"
+            },
+            {
+              "id": "stepB",
+              "action": "switchModel",
+              "alternateModelId": "doc-classifier-v2",
+              "next": "stepC"
+            },
+            {
+              "id": "stepC",
+              "action": "reduceContext",
+              "next": "stepA",
+              "description": "INVALID: cycles back to stepA instead of terminating"
+            }
+          ]
+        }
+      ],
+      "execution": {
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "AI-041: fallback chain for agent 'documentClassifier' contains a cycle: stepA → stepB → stepC → stepA"
+  ]
+}

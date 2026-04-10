@@ -1,0 +1,28 @@
+{
+  "id": "K-PO-001-simple-approval",
+  "rule": "K-LIFECYCLE-001",
+  "description": "Purchase order under $50k: submitted -> approved -> completed via guard on caseFile.amount",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/purchase-order-approval.json"
+  },
+  "initial_case_state": {
+    "amount": 25000,
+    "orderId": "ORD-2026-001",
+    "vendor": "Acme Corp"
+  },
+  "event_sequence": [
+    {
+      "event": "approve",
+      "actor": "approver",
+      "data": { "actorId": "approver", "timestamp": "2026-01-15T10:00:00Z" }
+    },
+    {
+      "event": "orderProcessed",
+      "actor": "procurementSystem"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "submitted", "to": "approved", "event": "approve" },
+    { "from": "approved", "to": "completed", "event": "orderProcessed" }
+  ]
+}

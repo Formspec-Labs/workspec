@@ -1,0 +1,62 @@
+{
+  "id": "K-020-provenance-completeness",
+  "rule": "K-020",
+  "description": "Every state transition and case mutation must produce a Facts-tier provenance record. Walk the purchase order through its full happy path: submit → approve (amount=3000, guard passes) → orderProcessed. Expect a provenance record for each state transition and each setData mutation.",
+  "documents": {
+    "kernel": "fixtures/kernel/purchase-order-approval.json"
+  },
+  "event_sequence": [
+    {
+      "event": "approve",
+      "actor": "approver",
+      "data": {
+        "amount": 3000,
+        "orderId": "PO-2026-042",
+        "vendor": "Office Supplies Inc",
+        "actorId": "approver"
+      }
+    },
+    {
+      "event": "orderProcessed",
+      "actor": "procurementSystem",
+      "data": {
+        "processingRef": "PROC-2026-042"
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "submitted",
+      "to": "approved",
+      "event": "approve"
+    },
+    {
+      "from": "approved",
+      "to": "completed",
+      "event": "orderProcessed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "stateTransition",
+      "from": "submitted",
+      "to": "approved",
+      "actorId": "approver"
+    },
+    {
+      "type": "dataMutation",
+      "path": "caseFile.approvedBy"
+    },
+    {
+      "type": "dataMutation",
+      "path": "caseFile.approvedAt"
+    },
+    {
+      "type": "stateTransition",
+      "from": "approved",
+      "to": "completed",
+      "actorId": "procurementSystem"
+    }
+  ],
+  "expected_errors": []
+}

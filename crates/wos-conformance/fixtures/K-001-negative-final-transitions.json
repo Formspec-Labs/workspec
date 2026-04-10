@@ -1,0 +1,65 @@
+{
+  "id": "K-001-negative-final-transitions",
+  "rule": "K-001",
+  "description": "Negative test: a final state MUST NOT have outgoing transitions. The linter must catch this structural violation before the document can be executed. The inline kernel declares a 'completed' final state with a transition, which violates K-001.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+      "url": "https://test.example/workflows/invalid-final-state",
+      "version": "1.0.0",
+      "title": "Invalid Final State Test",
+      "description": "Intentionally invalid: final state has an outgoing transition. Must be rejected by wos-lint before execution.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Test actor"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "complete",
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final",
+            "transitions": [
+              {
+                "event": "reopen",
+                "target": "pending",
+                "description": "INVALID: final states must not have outgoing transitions"
+              }
+            ]
+          }
+        }
+      },
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "K-001: final state 'completed' must not have outgoing transitions"
+  ]
+}

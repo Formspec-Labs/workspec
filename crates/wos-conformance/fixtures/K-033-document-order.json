@@ -1,0 +1,102 @@
+{
+  "id": "K-033-document-order",
+  "rule": "K-033",
+  "description": "When two transitions match the same event, the first in document order wins. The inline kernel has two 'approve' transitions: first targets 'fastApproved' (guard: amount <= 50000), second targets 'directorReview' (guard: amount > 0). An amount of 3000 satisfies both guards, but the first transition must win.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+      "url": "https://test.example/workflows/guard-order-test",
+      "version": "1.0.0",
+      "title": "Guard Document Order Test",
+      "description": "Minimal kernel with two overlapping guards on the same event to verify first-match-wins evaluation.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "approver",
+          "type": "human",
+          "description": "Decision-maker"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "approve",
+                "target": "fastApproved",
+                "guard": "caseFile.amount <= 50000",
+                "description": "First transition: standard approval for amounts under $50k"
+              },
+              {
+                "event": "approve",
+                "target": "directorReview",
+                "guard": "caseFile.amount > 0",
+                "description": "Second transition: would also match amount=3000, but must NOT fire due to document order"
+              }
+            ]
+          },
+          "fastApproved": {
+            "type": "final"
+          },
+          "directorReview": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "directorApprove",
+                "target": "approved"
+              }
+            ]
+          },
+          "approved": {
+            "type": "final"
+          }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "amount": {
+            "type": "number",
+            "description": "Request amount in USD"
+          }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [
+    {
+      "event": "approve",
+      "actor": "approver",
+      "data": {
+        "amount": 3000
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "pending",
+      "to": "fastApproved",
+      "event": "approve"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "stateTransition",
+      "from": "pending",
+      "to": "fastApproved",
+      "actorId": "approver"
+    }
+  ],
+  "expected_errors": []
+}
