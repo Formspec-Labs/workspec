@@ -323,7 +323,7 @@ The most significant architectural gap: no specified handoff protocol between WO
   - **Context:** Coprocessor examples can reference quantifiers over case-shaped data using Core-aligned FEL.
 
 - [ ] **COPROCESSOR: Author Runtime Companion S15 (Formspec coprocessor protocol).**
-  - **Design draft (Formspec monorepo):** **`thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md`** — single merged doc (gaps + Phase 11 plan + S15 draft). Detailed §15 paste source: `thoughts/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md`. Original gaps: `thoughts/specs/2026-04-10-formspec-integration-gaps.md`.
+  - **Design draft (Formspec monorepo):** **`thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md`** — single merged doc (gaps + Phase 11 plan + S15 draft). Detailed §15 paste source: `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md`. Original gaps: `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md`.
   - **Pre-flight checklist (8 items)** — addressed in design docs; **normative land** in `wos-spec/specs/companions/runtime.md` + schemas still TODO:
     1. Ledger vs notice — S15 proposal §15.10.
     2. Validator input — `validateFormspecTaskResponse` + full Response.
@@ -334,7 +334,7 @@ The most significant architectural gap: no specified handoff protocol between WO
     7. Processor unavailable — §15.6 idempotency + host retry.
     8. `actorId` vs `assignedActor` — executive table + §15.6 step 1.
   - Deliverables: spec prose in **`wos-spec`**, schema additions (`activeTasks` per §15.8, kernel `ContractReference` extensions), `TaskPresenter` (S12.9).
-  - **Context:** `thoughts/specs/2026-04-10-formspec-integration-gaps.md`. Depends on FEL-QUANTIFIERS and FEL-RECORDS (done).
+  - **Context:** `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md`. Depends on FEL-QUANTIFIERS and FEL-RECORDS (done).
 
 ---
 
