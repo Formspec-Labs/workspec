@@ -1985,3 +1985,420 @@ fn k010_on_exit_undeclared_actor_flagged() {
         "expected path through onExit, got: {path}"
     );
 }
+
+// ========================================================================
+// AG-012: Quantifiers must quantify over finite domains.
+// ========================================================================
+
+/// AG-012: `every()` in a verifiable constraint produces a warning.
+#[test]
+fn ag012_quantifier_in_verifiable_constraint_flagged() {
+    let adv = json!({
+        "$wosAdvancedGovernance": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "verifiableConstraints": [
+            { "expression": "every($items, $item.amount > 0)" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", base_kernel()),
+        ("advanced.json", adv),
+    ]);
+    assert!(
+        has_rule(&diags, "AG-012"),
+        "expected AG-012 warning for quantifier: {diags:?}"
+    );
+    assert_eq!(
+        severity_of(&diags, "AG-012"),
+        Some(Severity::Warning),
+        "AG-012 should be a warning (manual review needed)"
+    );
+}
+
+/// AG-012: Expression without quantifiers in verifiable constraint is clean.
+#[test]
+fn ag012_no_quantifier_clean() {
+    let adv = json!({
+        "$wosAdvancedGovernance": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "verifiableConstraints": [
+            { "expression": "$amount > 0 and $amount < 100000" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", base_kernel()),
+        ("advanced.json", adv),
+    ]);
+    assert!(
+        !has_rule(&diags, "AG-012"),
+        "unexpected AG-012: {diags:?}"
+    );
+}
+
+/// AG-012: `some()` also triggers the quantifier warning.
+#[test]
+fn ag012_some_quantifier_flagged() {
+    let adv = json!({
+        "$wosAdvancedGovernance": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "verifiableConstraints": [
+            { "expression": "some($items, $item.valid = true)" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", base_kernel()),
+        ("advanced.json", adv),
+    ]);
+    assert!(
+        has_rule(&diags, "AG-012"),
+        "expected AG-012 warning for 'some' quantifier: {diags:?}"
+    );
+}
+
+// ========================================================================
+// AI-023: Agent-free completion path must be reachable.
+// ========================================================================
+
+/// AI-023: Kernel where only agents are assigned tasks but a human path
+/// exists through transitions — no warning.
+#[test]
+fn ai023_agent_free_path_exists_clean() {
+    // Kernel: intake -> review (agent assigned) -> completed (final)
+    // But intake has no agent, so there IS a path through non-agent states.
+    let kernel = json!({
+        "$wosKernel": "1.0",
+        "url": "https://example.com/workflow/test",
+        "impactLevel": "operational",
+        "actors": [
+            { "id": "caseworker", "type": "human" },
+            { "id": "classifier", "type": "system" }
+        ],
+        "lifecycle": {
+            "initialState": "intake",
+            "states": {
+                "intake": {
+                    "type": "atomic",
+                    "transitions": [
+                        { "event": "submit", "target": "review" },
+                        { "event": "manualComplete", "target": "completed" }
+                    ]
+                },
+                "review": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "createTask", "taskRef": "classify", "assignTo": "classifier" }
+                    ],
+                    "transitions": [
+                        { "event": "classified", "target": "completed" }
+                    ]
+                },
+                "completed": { "type": "final" }
+            }
+        },
+        "caseFile": { "fields": {} }
+    });
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "agents": [
+            { "id": "classifier", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("ai.json", ai),
+    ]);
+    assert!(
+        !has_rule(&diags, "AI-023"),
+        "unexpected AI-023: agent-free path exists via intake->completed: {diags:?}"
+    );
+}
+
+/// AI-023: Every non-final state requires an agent — no agent-free path.
+#[test]
+fn ai023_no_agent_free_path_flagged() {
+    // Kernel: agentOnly -> agentReview -> completed
+    // Both non-final states assign tasks exclusively to agents.
+    let kernel = json!({
+        "$wosKernel": "1.0",
+        "url": "https://example.com/workflow/test",
+        "impactLevel": "operational",
+        "actors": [
+            { "id": "triageBot", "type": "system" },
+            { "id": "reviewBot", "type": "system" }
+        ],
+        "lifecycle": {
+            "initialState": "agentOnly",
+            "states": {
+                "agentOnly": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "createTask", "taskRef": "triage", "assignTo": "triageBot" }
+                    ],
+                    "transitions": [
+                        { "event": "triaged", "target": "agentReview" }
+                    ]
+                },
+                "agentReview": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "createTask", "taskRef": "review", "assignTo": "reviewBot" }
+                    ],
+                    "transitions": [
+                        { "event": "reviewed", "target": "completed" }
+                    ]
+                },
+                "completed": { "type": "final" }
+            }
+        },
+        "caseFile": { "fields": {} }
+    });
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "agents": [
+            { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
+            { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("ai.json", ai),
+    ]);
+    assert!(
+        has_rule(&diags, "AI-023"),
+        "expected AI-023: all non-final states are agent-only: {diags:?}"
+    );
+}
+
+/// AI-023: No AI integration document means no agents — skip check.
+#[test]
+fn ai023_no_ai_doc_skips() {
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", base_kernel()),
+    ]);
+    assert!(
+        !has_rule(&diags, "AI-023"),
+        "unexpected AI-023 without AI document: {diags:?}"
+    );
+}
+
+/// AI-023: Compound state with substates — agent-free path goes through a
+/// substate that is NOT agent-assigned, so the global check should pass.
+#[test]
+fn ai023_compound_substate_agent_free_path() {
+    // Kernel:
+    //   initialState: "processing" (compound)
+    //     substates:
+    //       "agentStep" (agent-only, transitions to "humanStep")
+    //       "humanStep" (human, transitions to "done")
+    //     parent transitions: target "done"
+    //   "done" (final)
+    //
+    // The agent-free path: processing (compound, not agent-only) has parent
+    // transition to "done". Additionally, "humanStep" substate is not agent-only
+    // and transitions to "done". The initial state "processing" is the compound
+    // parent — it is not agent-only, so the BFS can traverse through it.
+    let kernel = json!({
+        "$wosKernel": "1.0",
+        "url": "https://example.com/workflow/compound",
+        "impactLevel": "operational",
+        "actors": [
+            { "id": "worker", "type": "human" },
+            { "id": "bot", "type": "system" }
+        ],
+        "lifecycle": {
+            "initialState": "processing",
+            "states": {
+                "processing": {
+                    "type": "compound",
+                    "transitions": [
+                        { "event": "skip", "target": "done" }
+                    ],
+                    "states": {
+                        "agentStep": {
+                            "type": "atomic",
+                            "onEntry": [
+                                { "action": "createTask", "taskRef": "classify", "assignTo": "bot" }
+                            ],
+                            "transitions": [
+                                { "event": "classified", "target": "humanStep" }
+                            ]
+                        },
+                        "humanStep": {
+                            "type": "atomic",
+                            "onEntry": [
+                                { "action": "createTask", "taskRef": "review", "assignTo": "worker" }
+                            ],
+                            "transitions": [
+                                { "event": "reviewed", "target": "done" }
+                            ]
+                        }
+                    }
+                },
+                "done": { "type": "final" }
+            }
+        },
+        "caseFile": { "fields": {} }
+    });
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/compound",
+        "agents": [
+            { "id": "bot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("ai.json", ai),
+    ]);
+    assert!(
+        !has_rule(&diags, "AI-023"),
+        "unexpected AI-023: compound state has agent-free substate path: {diags:?}"
+    );
+}
+
+/// AI-023: Parallel regions — one region is agent-only but another region
+/// provides an agent-free path through the workflow, so the global check passes.
+#[test]
+fn ai023_parallel_region_one_agent_only_still_clean() {
+    // Kernel:
+    //   initialState: "parallel"
+    //     regions:
+    //       "agentRegion": states: { "agentWork" (agent-only) -> "agentDone" (final) }
+    //       "humanRegion": states: { "humanWork" (human) -> "humanDone" (final) }
+    //     parent transitions: target "completed"
+    //   "completed" (final)
+    //
+    // The parent "parallel" state is not agent-only. Its parent transitions
+    // reach "completed" (final). Also the humanRegion substates are human-only.
+    // Global agent-free path: parallel -> completed.
+    let kernel = json!({
+        "$wosKernel": "1.0",
+        "url": "https://example.com/workflow/parallel",
+        "impactLevel": "operational",
+        "actors": [
+            { "id": "analyst", "type": "human" },
+            { "id": "aiBot", "type": "system" }
+        ],
+        "lifecycle": {
+            "initialState": "parallel",
+            "states": {
+                "parallel": {
+                    "type": "parallel",
+                    "transitions": [
+                        { "event": "allDone", "target": "completed" }
+                    ],
+                    "regions": {
+                        "agentRegion": {
+                            "states": {
+                                "agentWork": {
+                                    "type": "atomic",
+                                    "onEntry": [
+                                        { "action": "createTask", "taskRef": "autoClassify", "assignTo": "aiBot" }
+                                    ],
+                                    "transitions": [
+                                        { "event": "classified", "target": "agentDone" }
+                                    ]
+                                },
+                                "agentDone": { "type": "final" }
+                            }
+                        },
+                        "humanRegion": {
+                            "states": {
+                                "humanWork": {
+                                    "type": "atomic",
+                                    "onEntry": [
+                                        { "action": "createTask", "taskRef": "manualReview", "assignTo": "analyst" }
+                                    ],
+                                    "transitions": [
+                                        { "event": "reviewed", "target": "humanDone" }
+                                    ]
+                                },
+                                "humanDone": { "type": "final" }
+                            }
+                        }
+                    }
+                },
+                "completed": { "type": "final" }
+            }
+        },
+        "caseFile": { "fields": {} }
+    });
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/parallel",
+        "agents": [
+            { "id": "aiBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("ai.json", ai),
+    ]);
+    assert!(
+        !has_rule(&diags, "AI-023"),
+        "unexpected AI-023: parallel state has agent-free parent transition: {diags:?}"
+    );
+}
+
+/// AI-023: Verify the severity is `error`, not `warning`.
+#[test]
+fn ai023_severity_is_error() {
+    // Same setup as ai023_no_agent_free_path_flagged — all non-final states are agent-only.
+    let kernel = json!({
+        "$wosKernel": "1.0",
+        "url": "https://example.com/workflow/test",
+        "impactLevel": "operational",
+        "actors": [
+            { "id": "triageBot", "type": "system" },
+            { "id": "reviewBot", "type": "system" }
+        ],
+        "lifecycle": {
+            "initialState": "agentOnly",
+            "states": {
+                "agentOnly": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "createTask", "taskRef": "triage", "assignTo": "triageBot" }
+                    ],
+                    "transitions": [
+                        { "event": "triaged", "target": "agentReview" }
+                    ]
+                },
+                "agentReview": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "createTask", "taskRef": "review", "assignTo": "reviewBot" }
+                    ],
+                    "transitions": [
+                        { "event": "reviewed", "target": "completed" }
+                    ]
+                },
+                "completed": { "type": "final" }
+            }
+        },
+        "caseFile": { "fields": {} }
+    });
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "agents": [
+            { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
+            { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
+        ]
+    });
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("ai.json", ai),
+    ]);
+    assert!(
+        has_rule(&diags, "AI-023"),
+        "expected AI-023: {diags:?}"
+    );
+    assert_eq!(
+        severity_of(&diags, "AI-023"),
+        Some(Severity::Error),
+        "AI-023 should be error severity (MUST violation when no agent-free path exists)"
+    );
+}

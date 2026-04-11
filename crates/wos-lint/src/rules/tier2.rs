@@ -52,6 +52,7 @@
 //! | AI-007 | error   | cascadingInvocations required when autonomous agents invoke others  |
 //! | AI-018 | warning | autonomous agents should have deontic constraints                   |
 //! | AI-020 | warning | supervisory agents should define reviewWindow                       |
+//! | AI-023 | error   | agent-free completion path must be reachable                       |
 //! | AI-026 | warning | escalationRules should declare escalationExpiry                     |
 //! | AI-031 | warning | agent outputContract formUrl should match kernel formUrl            |
 //! | AI-042 | warning | agent modelConfig should disclose trainingDataCharacteristics       |
@@ -174,6 +175,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
             check_target_workflow_match(ai, kernel, diagnostics);
             check_ai_disclosure_for_impact(ai, kernel, diagnostics);
             check_agent_output_contract(ai, kernel, diagnostics);
+            check_agent_free_completion_path(ai, kernel, diagnostics);
         }
         check_cascading_invocations_declared(ai, diagnostics);
         check_autonomous_actions_have_deontic(ai, diagnostics);
@@ -1222,6 +1224,36 @@ fn check_policy_param_date_refs(
 }
 
 // ---------------------------------------------------------------------------
+// Shared helper: iterate agents from both array and object formats
+// ---------------------------------------------------------------------------
+
+/// Extract `(id, &Value)` pairs from an AI Integration document's `agents` field.
+///
+/// The AI Integration schema defines agents as `"type": "array"` with each
+/// element having an `"id"` field. However, some documents may use the legacy
+/// object format (`"agents": {"agentId": {...}}`). This helper normalises both
+/// representations so that all AI rules work with either format.
+fn iter_agents(ai: &crate::document::WosDocument) -> Vec<(String, &serde_json::Value)> {
+    let Some(agents) = ai.value.get("agents") else {
+        return Vec::new();
+    };
+    if let Some(arr) = agents.as_array() {
+        arr.iter()
+            .filter_map(|agent| {
+                agent
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|id| (id.to_string(), agent))
+            })
+            .collect()
+    } else if let Some(obj) = agents.as_object() {
+        obj.iter().map(|(k, v)| (k.clone(), v)).collect()
+    } else {
+        Vec::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AI-007: cascadingInvocations declared for autonomous-invoking-autonomous
 // ---------------------------------------------------------------------------
 
@@ -1231,9 +1263,10 @@ fn check_cascading_invocations_declared(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
+    let agents = iter_agents(ai);
+    if agents.is_empty() {
         return;
-    };
+    }
     let autonomous: std::collections::HashSet<&str> = agents
         .iter()
         .filter(|(_, a)| a.get("autonomy").and_then(Value::as_str) == Some("autonomous"))
@@ -1242,7 +1275,7 @@ fn check_cascading_invocations_declared(
     if autonomous.len() < 2 {
         return;
     }
-    let cascades = agents.values().any(|agent| {
+    let cascades = agents.iter().any(|(_, agent)| {
         agent
             .get("invokes")
             .and_then(Value::as_array)
@@ -1273,10 +1306,7 @@ fn check_autonomous_actions_have_deontic(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").and_then(Value::as_str) != Some("autonomous") {
             continue;
         }
@@ -1303,10 +1333,7 @@ fn check_supervisory_actions_review_window(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").and_then(Value::as_str) != Some("supervisory") {
             continue;
         }
@@ -1329,10 +1356,7 @@ fn check_escalation_expiry_present(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         let Some(rules) = agent.get("escalationRules").and_then(Value::as_array) else {
             continue;
         };
@@ -1362,10 +1386,7 @@ fn check_agent_output_contract(
     let Some(kernel_form_url) = kernel.value.get("formUrl").and_then(Value::as_str) else {
         return; // No human-facing form declared; nothing to compare.
     };
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         let Some(contract) = agent.get("outputContract") else { continue };
         let contract_form = contract.get("formUrl").and_then(Value::as_str);
         if contract_form != Some(kernel_form_url) {
@@ -1387,10 +1408,7 @@ fn check_agent_output_contract(
 
 /// AI-042: Agent config MUST disclose training data characteristics.
 fn check_training_data_disclosure(ai: &crate::document::WosDocument, diagnostics: &mut Vec<Diagnostic>) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         let has_disclosure = agent
             .get("modelConfig")
             .and_then(|c| c.get("trainingDataCharacteristics"))
@@ -1410,10 +1428,7 @@ fn check_optimization_objective_disclosure(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         let has_objective = agent
             .get("modelConfig")
             .and_then(|c| c.get("optimizationObjective"))
@@ -1469,10 +1484,7 @@ fn check_autonomy_is_action_site_property(
     ai: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(agents) = ai.value.get("agents").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, agent) in agents {
+    for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").is_none() {
             continue;
         }
@@ -1489,6 +1501,243 @@ fn check_autonomy_is_action_site_property(
             ));
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// AI-023: Every agent invocation MUST have a reachable agent-free completion path
+// ---------------------------------------------------------------------------
+
+/// AI-023: There MUST be at least one path from the initial state to a final
+/// state that does not pass through any agent-only state.
+///
+/// **This is a conservative global approximation, not a per-invocation check.**
+/// The spec (AI S5.3 constraint 6) requires that every agent invocation has a
+/// reachable path to workflow completion without requiring any agent to succeed.
+/// A true per-invocation check would verify that from each agent-assigned state,
+/// an alternative non-agent path exists (e.g., via fallback transitions or
+/// parallel paths). This implementation checks a weaker property: whether ANY
+/// agent-free path from the initial state to a final state exists at all. If
+/// this global check fails, the per-invocation property certainly fails too —
+/// no agent-free path exists AT ALL. If the global check passes, there may
+/// still be individual agent states without fallback paths.
+fn check_agent_free_completion_path(
+    ai: &crate::document::WosDocument,
+    kernel: &crate::document::WosDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Collect agent IDs from the AI document. Support both array and object formats.
+    let agent_ids: std::collections::HashSet<String> = collect_ai_agent_ids(ai);
+    if agent_ids.is_empty() {
+        return;
+    }
+
+    let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) else {
+        return;
+    };
+
+    // Build a flat map of state_name -> (is_final, is_agent_only, transition_targets).
+    let graph = build_lifecycle_graph(states, &agent_ids);
+
+    // Find all final states.
+    let final_states: std::collections::HashSet<&str> = graph
+        .iter()
+        .filter(|(_, info)| info.is_final)
+        .map(|(name, _)| name.as_str())
+        .collect();
+
+    if final_states.is_empty() {
+        return;
+    }
+
+    // Check: from the initial state, can we reach a final state without going
+    // through any agent-only state?
+    let initial = kernel
+        .value
+        .pointer("/lifecycle/initialState")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    if initial.is_empty() {
+        return;
+    }
+
+    // BFS: only traverse through states that are NOT agent-only.
+    let reachable = bfs_reachable_non_agent(initial, &graph);
+
+    // If no final state is reachable without agents, emit an error.
+    let can_complete = reachable.iter().any(|s| final_states.contains(s.as_str()));
+    if !can_complete {
+        diagnostics.push(Diagnostic::error(
+            "AI-023",
+            "/lifecycle",
+            "no agent-free path from the initial state to a final state exists; \
+             every agent invocation MUST have a reachable completion path that \
+             does not require any agent to succeed"
+            .to_string(),
+        ));
+    }
+}
+
+/// State metadata for the lifecycle graph used by AI-023.
+struct StateInfo {
+    /// Whether this state is a final state (type = "final").
+    is_final: bool,
+    /// Whether every createTask in onEntry assigns to an agent.
+    is_agent_only: bool,
+    /// Target state names reachable via outgoing transitions.
+    targets: Vec<String>,
+}
+
+/// Build a flat lifecycle graph from the kernel states map.
+///
+/// Recursively walks compound states and parallel regions to build a
+/// flat name->info map. For compound states, outgoing transitions from
+/// the parent are included for all substates. Parallel regions contribute
+/// their states as flat entries with parent-path-prefixed names so that
+/// identically named substates in different regions do not collide.
+fn build_lifecycle_graph(
+    states: &serde_json::Map<String, Value>,
+    agent_ids: &std::collections::HashSet<String>,
+) -> std::collections::HashMap<String, StateInfo> {
+    let mut graph = std::collections::HashMap::new();
+    collect_states_into_graph(states, agent_ids, &[], "", &mut graph);
+    graph
+}
+
+/// Recursively collect states into a flat graph with path-prefixed names.
+///
+/// `parent_prefix` disambiguates identically named substates in compound
+/// states and parallel regions.  Top-level states have an empty prefix;
+/// compound substates get `"{compound_name}."`, and parallel region
+/// substates get `"{parallel_name}.{region_name}."`.
+fn collect_states_into_graph(
+    states: &serde_json::Map<String, Value>,
+    agent_ids: &std::collections::HashSet<String>,
+    parent_targets: &[String],
+    parent_prefix: &str,
+    graph: &mut std::collections::HashMap<String, StateInfo>,
+) {
+    for (name, state) in states {
+        let prefixed_name = format!("{parent_prefix}{name}");
+        let state_type = state.get("type").and_then(Value::as_str).unwrap_or("atomic");
+        let is_final = state_type == "final";
+
+        // Determine if this state is agent-only: every createTask in onEntry assigns to an agent.
+        let is_agent_only = is_state_agent_only(state, agent_ids);
+
+        // Collect outgoing transition targets, applying the parent prefix so
+        // that targets referencing sibling states within the same compound or
+        // region are correctly resolved to their prefixed names.
+        let mut targets: Vec<String> = state
+            .get("transitions")
+            .and_then(Value::as_array)
+            .map(|transitions| {
+                transitions
+                    .iter()
+                    .filter_map(|t| {
+                        t.get("target")
+                            .and_then(Value::as_str)
+                            .map(|tgt| format!("{parent_prefix}{tgt}"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Include parent targets (compound states can be exited via parent transitions).
+        targets.extend(parent_targets.iter().cloned());
+
+        graph.insert(prefixed_name.clone(), StateInfo {
+            is_final,
+            is_agent_only,
+            targets: targets.clone(),
+        });
+
+        // Recurse into compound substates.
+        if let Some(substates) = state.get("states").and_then(Value::as_object) {
+            let compound_prefix = format!("{prefixed_name}.");
+            collect_states_into_graph(substates, agent_ids, &targets, &compound_prefix, graph);
+        }
+
+        // Recurse into parallel regions.
+        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
+            for (region_name, region) in regions {
+                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
+                    let region_prefix = format!("{prefixed_name}.{region_name}.");
+                    collect_states_into_graph(rstates, agent_ids, &targets, &region_prefix, graph);
+                }
+            }
+        }
+    }
+}
+
+/// Returns true if every `createTask` in the state's `onEntry` assigns to an agent.
+///
+/// A state with no `createTask` actions is NOT agent-only (it may be a
+/// system/automatic state). A state with a mix of agent and human tasks is
+/// NOT agent-only (the human task provides the fallback path).
+fn is_state_agent_only(state: &Value, agent_ids: &std::collections::HashSet<String>) -> bool {
+    let Some(on_entry) = state.get("onEntry").and_then(Value::as_array) else {
+        return false;
+    };
+
+    let create_tasks: Vec<&Value> = on_entry
+        .iter()
+        .filter(|a| a.get("action").and_then(Value::as_str) == Some("createTask"))
+        .collect();
+
+    if create_tasks.is_empty() {
+        return false;
+    }
+
+    create_tasks.iter().all(|task| {
+        task.get("assignTo")
+            .and_then(Value::as_str)
+            .is_some_and(|actor| agent_ids.contains(actor))
+    })
+}
+
+/// BFS from `start`, only traversing through states that are NOT agent-only.
+///
+/// Returns all reachable state names. Agent-only states are dead ends in this
+/// traversal (their targets are not explored), but the agent-only states
+/// themselves ARE included in the reachable set if they can be reached.
+fn bfs_reachable_non_agent(
+    start: &str,
+    graph: &std::collections::HashMap<String, StateInfo>,
+) -> std::collections::HashSet<String> {
+    let mut visited = std::collections::HashSet::new();
+    let mut queue = std::collections::VecDeque::new();
+
+    visited.insert(start.to_string());
+    queue.push_back(start.to_string());
+
+    while let Some(current) = queue.pop_front() {
+        let Some(info) = graph.get(&current) else {
+            continue;
+        };
+
+        // If this state is agent-only, we can reach it but cannot proceed through it.
+        // A final state that happens to be agent-only is still reachable.
+        if info.is_agent_only && !info.is_final {
+            continue;
+        }
+
+        for target in &info.targets {
+            if visited.insert(target.clone()) {
+                queue.push_back(target.clone());
+            }
+        }
+    }
+
+    visited
+}
+
+/// Collect agent IDs from an AI Integration document.
+///
+/// Delegates to `iter_agents` which already handles both the array and
+/// object agent formats, eliminating duplicated parsing logic.
+fn collect_ai_agent_ids(ai: &crate::document::WosDocument) -> std::collections::HashSet<String> {
+    iter_agents(ai).into_iter().map(|(id, _)| id).collect()
 }
 
 // ---------------------------------------------------------------------------
