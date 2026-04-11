@@ -463,7 +463,7 @@
         "deadline": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 datetime deadline. Used with startTimer."
+          "description": "ISO 8601 datetime deadline. Used with startTimer and createTask."
         },
         "event": {
           "type": "string",
@@ -485,7 +485,27 @@
         "contractRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to a contract in the contracts map for validation."
+          "description": "Reference to a contract in the contracts map for validation or Formspec-backed task presentation."
+        },
+        "prefillMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to prefill a Formspec-backed task response. Used with createTask; overrides the ContractReference value for this task."
+        },
+        "responseMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to project a completed Formspec Response into case state. Used with createTask; overrides the ContractReference value for this task."
+        },
+        "completionEvent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event emitted when a Formspec-backed task completes successfully."
+        },
+        "failureEvent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event emitted when a Formspec-backed task fails validation, ledger gating, abandonment, or post-pass checks."
         },
         "extensions": {
           "type": "object",
@@ -629,6 +649,16 @@
         "description": {
           "type": "string",
           "description": "Human-readable description of this contract's purpose."
+        },
+        "prefillMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to prefill Formspec-backed tasks that use this contract. Prefer the same bidirectional Mapping document as responseMappingRef when the host supports Mapping Bidirectional."
+        },
+        "responseMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to project completed Formspec Responses into WOS case state. If absent, Runtime Companion S15 forbids automatic host-defined Response-to-case projection."
         }
       }
     },

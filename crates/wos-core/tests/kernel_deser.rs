@@ -126,7 +126,9 @@ fn contract_reference_typed() {
             "myForm": {
                 "binding": "formspec",
                 "ref": "urn:formspec:test:1.0",
-                "description": "Test contract"
+                "description": "Test contract",
+                "prefillMappingRef": "urn:formspec:test-prefill:1.0",
+                "responseMappingRef": "urn:formspec:test-response:1.0"
             }
         },
         "execution": {
@@ -139,8 +141,55 @@ fn contract_reference_typed() {
     assert_eq!(contract.binding, "formspec");
     assert_eq!(contract.reference, "urn:formspec:test:1.0");
     assert_eq!(contract.description.as_deref(), Some("Test contract"));
+    assert_eq!(
+        contract.prefill_mapping_ref.as_deref(),
+        Some("urn:formspec:test-prefill:1.0")
+    );
+    assert_eq!(
+        contract.response_mapping_ref.as_deref(),
+        Some("urn:formspec:test-response:1.0")
+    );
     let exec = doc.execution.as_ref().unwrap();
     assert!(exec.compensable);
+}
+
+#[test]
+fn create_task_formspec_coprocessor_fields_round_trip() {
+    let json = r#"{
+        "$wosKernel": "1.0",
+        "lifecycle": {
+            "initialState": "s",
+            "states": {
+                "s": {
+                    "type": "atomic",
+                    "onEntry": [{
+                        "action": "createTask",
+                        "taskRef": "complete-intake",
+                        "assignTo": "applicant-123",
+                        "contractRef": "intakeApplication",
+                        "prefillMappingRef": "urn:formspec:intake-prefill:1.0",
+                        "responseMappingRef": "urn:formspec:intake-response:1.0",
+                        "completionEvent": "intake.completed",
+                        "failureEvent": "intake.failed"
+                    }]
+                }
+            }
+        }
+    }"#;
+
+    let doc: wos_core::KernelDocument = serde_json::from_str(json).unwrap();
+    let action = &doc.lifecycle.states["s"].on_entry[0];
+    assert_eq!(action.contract_ref.as_deref(), Some("intakeApplication"));
+    assert_eq!(
+        action.prefill_mapping_ref.as_deref(),
+        Some("urn:formspec:intake-prefill:1.0")
+    );
+    assert_eq!(
+        action.response_mapping_ref.as_deref(),
+        Some("urn:formspec:intake-response:1.0")
+    );
+    assert_eq!(action.completion_event.as_deref(), Some("intake.completed"));
+    assert_eq!(action.failure_event.as_deref(), Some("intake.failed"));
 }
 
 #[test]

@@ -34,6 +34,9 @@ pub struct CaseInstance {
     /// Pending timer state.
     pub timers: Vec<TimerState>,
 
+    /// Active nonterminal task state.
+    pub active_tasks: Vec<ActiveTask>,
+
     /// Saved history state configurations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_store: Option<HashMap<String, Vec<String>>>,
@@ -92,6 +95,156 @@ pub struct TimerState {
     /// State that scoped this timer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope_state: Option<String>,
+}
+
+/// Active nonterminal task state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveTask {
+    /// Stable task identifier.
+    pub task_id: String,
+
+    /// Task definition reference.
+    pub task_ref: String,
+
+    /// Current nonterminal task status.
+    pub status: ActiveTaskStatus,
+
+    /// Assigned actor identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assigned_actor: Option<String>,
+
+    /// Kernel contract reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contract_ref: Option<String>,
+
+    /// Contract binding type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding: Option<String>,
+
+    /// Formspec Definition URL for Formspec-backed tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition_url: Option<String>,
+
+    /// Formspec Definition version for Formspec-backed tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition_version: Option<String>,
+
+    /// Mapping used to prefill a Formspec task response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefill_mapping_ref: Option<String>,
+
+    /// Mapping used to project a completed Formspec response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_mapping_ref: Option<String>,
+
+    /// Task deadline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadline: Option<String>,
+
+    /// Task impact level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact_level: Option<String>,
+
+    /// Presentation context for a Formspec-backed task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<FormspecTaskContext>,
+
+    /// Last Formspec task validation outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_validation_outcome: Option<ValidationOutcome>,
+
+    /// Creation timestamp.
+    pub created_at: String,
+
+    /// Last update timestamp.
+    pub updated_at: String,
+
+    /// Extension data.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extensions: HashMap<String, serde_json::Value>,
+}
+
+/// Active task status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActiveTaskStatus {
+    Created,
+    Assigned,
+    Claimed,
+    Delegated,
+    Escalated,
+}
+
+/// Presentation context for a Formspec-backed task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormspecTaskContext {
+    /// Stable task identifier.
+    pub task_id: String,
+
+    /// Case instance identifier.
+    pub instance_id: String,
+
+    /// Kernel contract map key.
+    pub contract_ref: String,
+
+    /// Formspec Definition URL.
+    pub definition_url: String,
+
+    /// Formspec Definition version.
+    pub definition_version: String,
+
+    /// Task binding discriminator.
+    pub binding: String,
+
+    /// Assigned actor identifier.
+    pub assigned_actor: String,
+
+    /// Host-provided prefill data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefill_data: Option<serde_json::Value>,
+
+    /// Mapping used to prefill the Response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefill_mapping_ref: Option<String>,
+
+    /// Mapping used to project a completed Response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_mapping_ref: Option<String>,
+
+    /// Task deadline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadline: Option<String>,
+
+    /// Effective task impact level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impact_level: Option<String>,
+
+    /// Extension data.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extensions: HashMap<String, serde_json::Value>,
+}
+
+/// Validation outcome for a Formspec-backed task.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationOutcome {
+    /// Whether the Response envelope is valid.
+    pub envelope_valid: bool,
+
+    /// Whether the Response pin matches the task pin.
+    pub pin_match: bool,
+
+    /// Whether Definition validation passed.
+    pub definition_valid: bool,
+
+    /// WOS-level validation errors.
+    pub errors: Vec<serde_json::Value>,
+
+    /// Formspec-shaped validation results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_results: Option<Vec<serde_json::Value>>,
 }
 
 /// A pending event in the instance queue.

@@ -83,6 +83,7 @@ pub struct KernelDocument {
 
 /// A contract reference (Kernel S11).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ContractReference {
     /// Binding type.
     pub binding: String,
@@ -94,6 +95,14 @@ pub struct ContractReference {
     /// Human-readable description.
     #[serde(default)]
     pub description: Option<String>,
+
+    /// Mapping used to prefill a Formspec task response.
+    #[serde(default)]
+    pub prefill_mapping_ref: Option<String>,
+
+    /// Mapping used to project a completed Formspec response.
+    #[serde(default)]
+    pub response_mapping_ref: Option<String>,
 }
 
 /// Execution configuration (Kernel S9).
@@ -381,6 +390,22 @@ pub struct Action {
     /// Contract reference for validation.
     #[serde(default)]
     pub contract_ref: Option<String>,
+
+    /// Mapping used to prefill a Formspec task response.
+    #[serde(default)]
+    pub prefill_mapping_ref: Option<String>,
+
+    /// Mapping used to project a completed Formspec response.
+    #[serde(default)]
+    pub response_mapping_ref: Option<String>,
+
+    /// Event emitted when a Formspec-backed task completes.
+    #[serde(default)]
+    pub completion_event: Option<String>,
+
+    /// Event emitted when a Formspec-backed task fails.
+    #[serde(default)]
+    pub failure_event: Option<String>,
 
     /// Compensating action (Kernel S9.5).
     #[serde(default)]

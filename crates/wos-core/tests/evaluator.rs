@@ -253,6 +253,10 @@ fn set_data_action_mutates_case_state() {
         message: None,
         description: None,
         contract_ref: None,
+        prefill_mapping_ref: None,
+        response_mapping_ref: None,
+        completion_event: None,
+        failure_event: None,
         compensating_action: None,
         extensions: HashMap::new(),
     };
@@ -409,6 +413,10 @@ fn timer_fires_after_advance() {
         message: None,
         description: None,
         contract_ref: None,
+        prefill_mapping_ref: None,
+        response_mapping_ref: None,
+        completion_event: None,
+        failure_event: None,
         compensating_action: None,
         extensions: HashMap::new(),
     };

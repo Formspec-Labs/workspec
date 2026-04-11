@@ -179,6 +179,7 @@ mod tests {
             case_state: serde_json::json!({}),
             provenance_position: 0,
             timers: Vec::new(),
+            active_tasks: Vec::new(),
             history_store: None,
             compensation_logs: None,
             status: wos_core::instance::InstanceStatus::Active,

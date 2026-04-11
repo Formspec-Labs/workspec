@@ -12,6 +12,7 @@
     "caseState",
     "provenancePosition",
     "timers",
+    "activeTasks",
     "status",
     "createdAt",
     "updatedAt"
@@ -125,6 +126,35 @@
         "intent": "Durable timer state that survives processor restarts"
       }
     },
+    "activeTasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ActiveTask"
+      },
+      "description": "Durable nonterminal task state. Empty array when no tasks are active. Terminal task history lives in provenance.",
+      "examples": [
+        [],
+        [
+          {
+            "taskId": "task-1",
+            "taskRef": "complete-intake",
+            "status": "claimed",
+            "assignedActor": "applicant-123",
+            "contractRef": "intakeApplication",
+            "binding": "formspec",
+            "definitionUrl": "urn:formspec:intake",
+            "definitionVersion": "2.0.0",
+            "responseMappingRef": "urn:formspec:intake-response:1.0",
+            "createdAt": "2026-04-11T14:00:00Z",
+            "updatedAt": "2026-04-11T14:05:00Z"
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Durable task state needed to resume active human or Formspec-backed work"
+      }
+    },
     "historyStore": {
       "type": "object",
       "additionalProperties": {
@@ -234,6 +264,204 @@
         }
       },
       "description": "Captures the state of a pending durable timer."
+    },
+    "ActiveTask": {
+      "type": "object",
+      "required": ["taskId", "taskRef", "status", "createdAt", "updatedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable processor task identifier."
+        },
+        "taskRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to the task definition or task pattern."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["created", "assigned", "claimed", "delegated", "escalated"],
+          "description": "Current nonterminal task status. Completed, failed, and skipped tasks leave activeTasks and remain in provenance."
+        },
+        "assignedActor": {
+          "type": "string",
+          "description": "Actor assigned to complete the task."
+        },
+        "contractRef": {
+          "type": "string",
+          "description": "Kernel contract map key used by this task."
+        },
+        "binding": {
+          "type": "string",
+          "enum": ["formspec", "jsonSchema"],
+          "description": "Contract binding type for this task when backed by a contract."
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Formspec Definition URL for Formspec-backed tasks."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "description": "Pinned Formspec Definition version for Formspec-backed tasks."
+        },
+        "prefillMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to prefill the task response."
+        },
+        "responseMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to project the completed task response into case state."
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Task deadline."
+        },
+        "impactLevel": {
+          "type": "string",
+          "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
+          "description": "Effective task impact level. Defaults to the Kernel impactLevel when absent."
+        },
+        "context": {
+          "$ref": "#/$defs/FormspecTaskContext",
+          "description": "Presentation context for a Formspec-backed task."
+        },
+        "lastValidationOutcome": {
+          "$ref": "#/$defs/ValidationOutcome",
+          "description": "Most recent Formspec task validation outcome, if validation has run."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the task was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the task state last changed."
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^x-" },
+          "description": "Extension data for this active task."
+        }
+      },
+      "description": "Durable nonterminal task state for an active task."
+    },
+    "FormspecTaskContext": {
+      "type": "object",
+      "required": ["taskId", "instanceId", "contractRef", "definitionUrl", "definitionVersion", "binding", "assignedActor"],
+      "additionalProperties": false,
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Processor task identifier. Stable for idempotency and provenance."
+        },
+        "instanceId": {
+          "type": "string",
+          "format": "uri",
+          "description": "WOS CaseInstance identifier."
+        },
+        "contractRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel contract map key used by the task."
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Formspec Definition URL. Must match response.definitionUrl."
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pinned Formspec Definition version. Must match response.definitionVersion."
+        },
+        "binding": {
+          "type": "string",
+          "const": "formspec",
+          "description": "Task binding discriminator."
+        },
+        "assignedActor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor assigned by the createTask action."
+        },
+        "prefillData": {
+          "type": "object",
+          "description": "Host-provided initial values for rendering."
+        },
+        "prefillMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to prefill the Response."
+        },
+        "responseMappingRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Mapping document used to project a completed Response into case state."
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Task deadline."
+        },
+        "impactLevel": {
+          "type": "string",
+          "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
+          "description": "Effective task impact level."
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^x-" },
+          "description": "Extension data for this task context."
+        }
+      },
+      "description": "Presentation context for a Formspec-backed task.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable handoff shape between WOS task creation and Formspec rendering"
+      }
+    },
+    "ValidationOutcome": {
+      "type": "object",
+      "required": ["envelopeValid", "pinMatch", "definitionValid", "errors"],
+      "additionalProperties": false,
+      "properties": {
+        "envelopeValid": {
+          "type": "boolean",
+          "description": "Whether the Response envelope validated against Formspec response.schema.json."
+        },
+        "pinMatch": {
+          "type": "boolean",
+          "description": "Whether response.definitionUrl and response.definitionVersion matched the task pin."
+        },
+        "definitionValid": {
+          "type": "boolean",
+          "description": "Whether Formspec Definition validation over response.data passed."
+        },
+        "errors": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "WOS-level validation errors, including envelope and pin errors."
+        },
+        "validationResults": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Formspec-shaped ValidationResult entries from Definition validation."
+        }
+      },
+      "description": "WOS wrapper for Formspec task validation outcomes.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable validation outcome shape for Formspec-backed task submission"
+      }
     },
     "CompensationLog": {
       "type": "object",
