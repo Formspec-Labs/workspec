@@ -6,4 +6,4 @@
 //! types live in wos-core; this module provides the public API surface
 //! that conformance tests import.
 
-pub use wos_core::provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+pub use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};

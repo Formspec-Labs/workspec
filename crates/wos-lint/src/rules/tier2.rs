@@ -7,6 +7,12 @@
 //!
 //! # Rule coverage
 //!
+//! ## Kernel — cross-path
+//! | Rule  | Sev     | What is checked                                                      |
+//! |-------|---------|----------------------------------------------------------------------|
+//! | K-010 | error   | createTask assignTo MUST reference a declared kernel actor          |
+//! | K-037 | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
+//!
 //! ## Governance — due process
 //! | Rule  | Sev     | What is checked                                                      |
 //! |-------|---------|----------------------------------------------------------------------|
@@ -84,6 +90,8 @@ struct KernelCollections {
     events: std::collections::HashSet<String>,
     /// All case file field names in `caseFile.fields` (as `"caseFile.<name>"`).
     case_fields: std::collections::HashSet<String>,
+    /// All declared actor IDs from the kernel `actors` array.
+    actor_ids: std::collections::HashSet<String>,
 }
 
 impl KernelCollections {
@@ -92,6 +100,7 @@ impl KernelCollections {
             tags: collect_kernel_tags(kernel),
             events: collect_kernel_events(kernel),
             case_fields: collect_kernel_case_fields(kernel),
+            actor_ids: collect_kernel_actor_ids(kernel),
         }
     }
 }
@@ -106,6 +115,12 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 
     // Pre-compute kernel index once so rule functions don't rebuild it per call.
     let kernel_collections = kernel.map(KernelCollections::from_kernel);
+
+    // Kernel-internal cross-path checks.
+    if let (Some(kernel), Some(kc)) = (kernel, kernel_collections.as_ref()) {
+        check_action_actor_references(kernel, &kc.actor_ids, diagnostics);
+        check_fail_fast_error_final_states(kernel, diagnostics);
+    }
 
     // Governance documents — all checks that need the kernel.
     for gov in project.of_kind(DocumentKind::WorkflowGovernance) {
@@ -198,6 +213,168 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 
     // FEL AST analysis (T2-ast rules).
     fel_analysis::check(project, diagnostics);
+}
+
+// ---------------------------------------------------------------------------
+// K-010: createTask assignTo MUST reference a declared kernel actor
+// ---------------------------------------------------------------------------
+
+/// K-010: Action `assignTo` fields MUST reference an actor declared in the
+/// kernel's `actors` array.
+///
+/// Walks all states (including compound substates and parallel regions) and
+/// checks every `createTask` action's `assignTo` value against the declared
+/// actor set.
+fn check_action_actor_references(
+    kernel: &crate::document::WosDocument,
+    actor_ids: &std::collections::HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
+        check_action_actors_recursive(states, "/lifecycle/states", actor_ids, diagnostics);
+    }
+}
+
+fn check_action_actors_recursive(
+    states: &serde_json::Map<String, Value>,
+    parent_path: &str,
+    actor_ids: &std::collections::HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (name, state) in states {
+        let state_path = format!("{parent_path}/{name}");
+        // Check onEntry actions.
+        check_actions_for_actor_refs(
+            state.get("onEntry").and_then(Value::as_array),
+            &format!("{state_path}/onEntry"),
+            actor_ids,
+            diagnostics,
+        );
+        // Check onExit actions.
+        check_actions_for_actor_refs(
+            state.get("onExit").and_then(Value::as_array),
+            &format!("{state_path}/onExit"),
+            actor_ids,
+            diagnostics,
+        );
+        // Check transition actions.
+        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
+            for (i, transition) in transitions.iter().enumerate() {
+                check_actions_for_actor_refs(
+                    transition.get("actions").and_then(Value::as_array),
+                    &format!("{state_path}/transitions/{i}/actions"),
+                    actor_ids,
+                    diagnostics,
+                );
+            }
+        }
+        // Recurse into substates and regions.
+        if let Some(substates) = state.get("states").and_then(Value::as_object) {
+            check_action_actors_recursive(substates, &format!("{state_path}/states"), actor_ids, diagnostics);
+        }
+        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
+            for (region_name, region) in regions {
+                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
+                    check_action_actors_recursive(rstates, &format!("{state_path}/regions/{region_name}/states"), actor_ids, diagnostics);
+                }
+            }
+        }
+    }
+}
+
+fn check_actions_for_actor_refs(
+    actions: Option<&Vec<Value>>,
+    path: &str,
+    actor_ids: &std::collections::HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(actions) = actions else { return };
+    for (i, action) in actions.iter().enumerate() {
+        let Some(assign_to) = action.get("assignTo").and_then(Value::as_str) else {
+            continue;
+        };
+        if !actor_ids.contains(assign_to) {
+            diagnostics.push(Diagnostic::error(
+                "K-010",
+                &format!("{path}/{i}/assignTo"),
+                format!("action assignTo '{assign_to}' does not reference a declared actor"),
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// K-037: Fail-fast $join fires only on error final state
+// ---------------------------------------------------------------------------
+
+/// K-037: When a parallel state has `cancellationPolicy: "fail-fast"`, every
+/// region MUST contain at least one final state tagged `error`.
+///
+/// Without an error-tagged final state, the fail-fast policy has no trigger
+/// and is a structural misconfiguration.
+fn check_fail_fast_error_final_states(
+    kernel: &crate::document::WosDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
+        check_fail_fast_recursive(states, "/lifecycle/states", diagnostics);
+    }
+}
+
+fn check_fail_fast_recursive(
+    states: &serde_json::Map<String, Value>,
+    parent_path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (name, state) in states {
+        let state_path = format!("{parent_path}/{name}");
+        let is_parallel = state.get("type").and_then(Value::as_str) == Some("parallel");
+        let is_fail_fast = state
+            .get("cancellationPolicy")
+            .and_then(Value::as_str)
+            == Some("fail-fast");
+
+        if is_parallel && is_fail_fast {
+            if let Some(regions) = state.get("regions").and_then(Value::as_object) {
+                for (region_name, region_def) in regions {
+                    let has_error_final = region_def
+                        .get("states")
+                        .and_then(Value::as_object)
+                        .is_some_and(|region_states| {
+                            region_states.values().any(|s| {
+                                s.get("type").and_then(Value::as_str) == Some("final")
+                                    && s.get("tags")
+                                        .and_then(Value::as_array)
+                                        .is_some_and(|tags| {
+                                            tags.iter().any(|t| t.as_str() == Some("error"))
+                                        })
+                            })
+                        });
+                    if !has_error_final {
+                        diagnostics.push(Diagnostic::error(
+                            "K-037",
+                            &format!("{state_path}/regions/{region_name}"),
+                            format!(
+                                "fail-fast parallel '{name}' region '{region_name}' has no final state tagged 'error'; fail-fast cannot trigger"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Recurse into substates and regions (to find nested parallel states).
+        if let Some(substates) = state.get("states").and_then(Value::as_object) {
+            check_fail_fast_recursive(substates, &format!("{state_path}/states"), diagnostics);
+        }
+        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
+            for (region_name, region) in regions {
+                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
+                    check_fail_fast_recursive(rstates, &format!("{state_path}/regions/{region_name}/states"), diagnostics);
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -521,10 +698,8 @@ fn check_sla_business_calendar(
     project: &WosProject,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Detect a business calendar sidecar by any document that carries the
-    // $wosBusinessCalendar marker key or a top-level businessCalendar field.
     let has_calendar = project.documents().iter().any(|d| {
-        d.value.get("$wosBusinessCalendar").is_some() || d.value.get("businessCalendar").is_some()
+        d.kind == DocumentKind::BusinessCalendar
     });
     if !has_calendar {
         return;
@@ -1554,6 +1729,22 @@ fn collect_states_with_tag_recursive(
             }
         }
     }
+}
+
+/// Collect all declared actor IDs from the kernel's `actors` array.
+fn collect_kernel_actor_ids(kernel: &crate::document::WosDocument) -> std::collections::HashSet<String> {
+    kernel
+        .value
+        .get("actors")
+        .and_then(Value::as_array)
+        .map(|actors| {
+            actors
+                .iter()
+                .filter_map(|a| a.get("id").and_then(Value::as_str))
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Collect all event names from kernel transitions (recursive).

@@ -1,0 +1,89 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/parallel-timer-scoping",
+  "version": "1.0.0",
+  "title": "Parallel Timer Region Scoping",
+  "description": "Minimal parallel state with two regions, each starting a timer. Tests that timer events are routed to the creating region only (LCD S6.5).",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "actors": [
+    { "id": "system", "type": "system", "description": "System actor" },
+    { "id": "operator", "type": "human", "description": "Operator" }
+  ],
+
+  "lifecycle": {
+    "initialState": "processing",
+    "states": {
+      "processing": {
+        "type": "parallel",
+        "cancellationPolicy": "wait-all",
+        "regions": {
+          "regionA": {
+            "initialState": "waitingA",
+            "states": {
+              "waitingA": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "startTimer",
+                    "timerId": "timerA",
+                    "duration": "PT10S",
+                    "event": "$timeout.regionA"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": "$timeout.regionA",
+                    "target": "doneA"
+                  }
+                ]
+              },
+              "doneA": { "type": "final" }
+            }
+          },
+          "regionB": {
+            "initialState": "waitingB",
+            "states": {
+              "waitingB": {
+                "type": "atomic",
+                "onEntry": [
+                  {
+                    "action": "startTimer",
+                    "timerId": "timerB",
+                    "duration": "PT30S",
+                    "event": "$timeout.regionB"
+                  }
+                ],
+                "transitions": [
+                  {
+                    "event": "$timeout.regionB",
+                    "target": "doneB"
+                  }
+                ]
+              },
+              "doneB": { "type": "final" }
+            }
+          }
+        },
+        "transitions": [
+          {
+            "event": "$join",
+            "target": "completed"
+          }
+        ]
+      },
+      "completed": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {}
+  },
+
+  "execution": {
+    "workflowTimeout": "P1D",
+    "instanceVersioning": "pinned"
+  }
+}

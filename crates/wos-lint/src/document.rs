@@ -25,6 +25,8 @@ pub enum DocumentKind {
     SemanticProfile,
     LifecycleDetail,
     CorrespondenceMetadata,
+    BusinessCalendar,
+    NotificationTemplate,
 }
 
 /// A parsed WOS document with its kind and raw JSON value.
@@ -95,6 +97,8 @@ const MARKERS: &[(&str, DocumentKind)] = &[
     ("$wosSemanticProfile", DocumentKind::SemanticProfile),
     ("$wosLifecycleDetail", DocumentKind::LifecycleDetail),
     ("$wosCorrespondenceMetadata", DocumentKind::CorrespondenceMetadata),
+    ("$wosBusinessCalendar", DocumentKind::BusinessCalendar),
+    ("$wosNotificationTemplate", DocumentKind::NotificationTemplate),
 ];
 
 /// Parse a JSON string into a `WosDocument`.

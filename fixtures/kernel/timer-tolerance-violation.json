@@ -1,0 +1,48 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/timer-tolerance-violation",
+  "version": "1.0.0",
+  "title": "Timer Tolerance Violation",
+  "description": "Minimal workflow with a timer whose tolerance exceeds its duration, which is a conformance violation (LCD S6.6, Runtime S7.2).",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "actors": [
+    { "id": "system", "type": "system", "description": "System actor" }
+  ],
+
+  "lifecycle": {
+    "initialState": "waiting",
+    "states": {
+      "waiting": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "startTimer",
+            "timerId": "shortTimer",
+            "duration": "PT5S",
+            "tolerance": "PT30S",
+            "event": "$timeout.state"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "$timeout.state",
+            "target": "done"
+          }
+        ]
+      },
+      "done": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {}
+  },
+
+  "execution": {
+    "workflowTimeout": "P1D",
+    "instanceVersioning": "pinned"
+  }
+}

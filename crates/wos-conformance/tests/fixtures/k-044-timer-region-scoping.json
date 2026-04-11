@@ -1,0 +1,24 @@
+{
+  "id": "K-044-timer-region-scoping",
+  "rule": "K-044",
+  "description": "Timer events are routed to the creating region only (LCD S6.5). Region A fires a 10s timer; region B has a 30s timer. After 11s, only region A transitions to its final state. Region B remains in waitingB.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/parallel-timer-scoping.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "PT11S"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "waitingA", "to": "doneA", "event": "$timeout.regionA" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "timerCreated", "data": { "timerId": "timerA" } },
+    { "record_kind": "timerCreated", "data": { "timerId": "timerB" } },
+    { "record_kind": "timerFired", "data": { "timerId": "timerA" } }
+  ]
+}

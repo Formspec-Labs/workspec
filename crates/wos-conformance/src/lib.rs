@@ -13,10 +13,12 @@
 mod engine;
 mod fixture;
 mod provenance;
+pub mod stubs;
 
 pub use engine::WorkflowEngine;
-pub use fixture::{ConformanceFixture, EventEntry, ExpectedTransition};
+pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
+pub use stubs::{InMemoryStore, StubValidator, StubService};
 
 /// Run a conformance fixture and return the results.
 ///

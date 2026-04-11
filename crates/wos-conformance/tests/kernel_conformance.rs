@@ -166,6 +166,34 @@ fn set_data_produces_case_state_mutation_provenance() {
     );
 }
 
+// ── T3 conformance fixtures (Phase 4) ───────────────────────────
+//
+// These tests are #[ignore]d because they require engine capabilities
+// not yet implemented (Phase 5). Run `cargo test -- --ignored` to see
+// which capabilities are needed.
+
+/// K-044: Timer events are routed to the creating region only (LCD S6.5).
+///
+/// A parallel state has two regions, each starting a timer. After region A's
+/// timer fires, only region A transitions. Region B remains unaffected.
+#[test]
+#[ignore = "Phase 5: requires timer region scoping in eval.rs -- K-044"]
+fn k044_timer_region_scoping() {
+    assert_fixture_passes("k-044-timer-region-scoping.json");
+}
+
+/// K-045: Timer tolerance > duration is a conformance violation (LCD S6.6).
+///
+/// A timer with tolerance PT30S and duration PT5S must produce a diagnostic
+/// provenance record indicating the violation.
+#[test]
+#[ignore = "Phase 5: requires timer tolerance validation in eval.rs -- K-045"]
+fn k045_timer_tolerance_violation() {
+    assert_fixture_passes("k-045-timer-tolerance-violation.json");
+}
+
+// ── Guard evaluation unit tests ──────────────────────────────────
+
 /// Timer provenance records are emitted when a timer is created.
 #[test]
 fn timer_created_provenance_on_entry() {

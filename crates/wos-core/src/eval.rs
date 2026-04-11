@@ -160,6 +160,15 @@ impl Evaluator {
         &self.provenance
     }
 
+    /// Append an external provenance record.
+    ///
+    /// Used by conformance and runtime harnesses to record events that
+    /// originate outside the lifecycle algorithm (e.g., delay parse errors
+    /// in fixture event sequences).
+    pub fn record_provenance(&mut self, record: ProvenanceRecord) {
+        self.provenance.push(record);
+    }
+
     /// The timer state.
     pub fn timers(&self) -> &Timers {
         &self.timers

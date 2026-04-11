@@ -1192,14 +1192,12 @@ dependencies = [
 name = "wos-conformance"
 version = "0.1.0"
 dependencies = [
- "fel-core",
  "insta",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "wos-core",
- "wos-lint",
 ]
 
 [[package]]

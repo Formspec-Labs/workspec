@@ -43,6 +43,25 @@ pub struct ConformanceFixture {
     /// Expected diagnostic errors (for negative tests).
     #[serde(default)]
     pub expected_errors: Vec<String>,
+
+    /// Expected contract validation outcomes (for Formspec coprocessor tests).
+    ///
+    /// Each entry maps a contract reference to whether validation should
+    /// pass or fail, allowing fixtures to test the `StubValidator` integration
+    /// path where task submissions are validated against Formspec Definitions.
+    #[serde(default)]
+    pub contract_outcomes: HashMap<String, ContractOutcome>,
+}
+
+/// Expected outcome of a Formspec contract validation.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ContractOutcome {
+    /// Whether validation should pass (`true`) or fail (`false`).
+    pub valid: bool,
+
+    /// Expected validation errors (when `valid` is `false`).
+    #[serde(default)]
+    pub errors: Vec<String>,
 }
 
 /// An event in the test sequence.
