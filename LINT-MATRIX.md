@@ -4,11 +4,11 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)           36 rules                  │
+│  Tier 1: wos-lint (static)           35 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)  54 rules                  │
+│  Tier 2: wos-lint --project (cross)  55 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory (kernel + governance + AI + sidecars), resolves       │
 │  cross-references, parses FEL expressions into ASTs.            │
@@ -220,7 +220,7 @@
 | AI-043 | AI S9.2 | Agent config MUST disclose optimization objective. | Empirical accuracy of disclosure. | T2-xdoc | drift-config-validity | T2 |
 | AI-044 | AI S9.3 | Training data contamination triggers reclassification to determination. | Runtime operational decision. | T3 | drift-config-validity | — |
 | AI-045 | AI S10.2 | `independentFirst` suppression MUST hide agent output until independent assessment recorded. | Runtime UI behavior. | T3 | agent-consistency | — |
-| AI-046 | AI S12.2 | `rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`. | Cross-document conditional. | T1 | disclosure | T1+T2 |
+| AI-046 | AI S12.2 | `rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`. | Cross-document conditional. | T2-xdoc | disclosure | T2 |
 | AI-047 | AI S13.2 | Narrative tier provenance MUST be labeled non-authoritative. | Runtime emission requirement. | T3 | agent-consistency | — |
 | AI-048 | AI S13.2 | Narrative tier MUST NOT be treated as dispositive evidence. | Downstream usage behavior. | T3 | disclosure | — |
 | AI-049 | AI S13.3 | `authoritative` field MUST be `false` on Narrative records. | Lintable as const check. | T1 | agent-consistency | T1 |
@@ -268,8 +268,8 @@
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
 | Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 31 | 65% |
 | Governance + Sidecars | 65 | 14 | 29 | 22 | 37 | 57% |
-| AI + Advanced | 82 | 6 | 19 | 57 | 24 | 29% |
-| **Total** | **195** | **36** | **54** | **105** | **92** | **47%** |
+| AI + Advanced | 82 | 5 | 20 | 57 | 24 | 29% |
+| **Total** | **195** | **35** | **55** | **105** | **92** | **47%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -277,7 +277,7 @@
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
-| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 29 (K-001..K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049, DM-001, EQ-001) |
+| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 28 (K-001..K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-049, DM-001, EQ-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 42 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 12 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047) |
@@ -286,7 +286,7 @@
 
 ## Verification Tools
 
-### Tier 1: `wos-lint` (36 rules)
+### Tier 1: `wos-lint` (35 rules)
 
 Single-document structural checks. Input: one JSON document + its `$wos*` type marker. Output: diagnostics with severity, path, rule ID. No dependencies beyond the document itself.
 
@@ -306,7 +306,7 @@ Single-document structural checks. Input: one JSON document + its `$wos*` type m
 
 **Provenance (1):** K-022 — digest present implies algorithm in extensions.
 
-**Disclosure (2):** AI-046, AI-049 — rights-impacting requires disclosure true, narrative authoritative must be false.
+**Disclosure (1):** AI-049 — narrative authoritative must be false.
 
 **Extension keys (2):** DM-001, EQ-001 — `x-` prefix on extension object keys.
 
@@ -316,11 +316,11 @@ Single-document structural checks. Input: one JSON document + its `$wos*` type m
 
 **Notification validity (2):** G-062, G-065 — adverse-decision templates cover required sections, section ids unique within template.
 
-### Tier 2: `wos-lint --project` (54 rules)
+### Tier 2: `wos-lint --project` (55 rules)
 
 Loads a project directory containing kernel + governance + AI + sidecars. Two sub-modes:
 
-**Cross-document resolution (42 rules):** governance tags match kernel tags (G-011), `targetWorkflow` matches kernel `url` (G-034), `resolutionDateRef` points to kernel case file field (G-031), delegation actors exist in kernel (G-046), hold resumeTrigger is a kernel event (G-029), rights-impacting kernel requires disclosure (AI-046 already T1 within AI doc, but cross-doc validation when loading kernel), autonomous actions have deontic constraints (AI-018), agent declarations match across AI doc and agent config sidecar.
+**Cross-document resolution (43 rules):** governance tags match kernel tags (G-011), `targetWorkflow` matches kernel `url` (G-034), `resolutionDateRef` points to kernel case file field (G-031), delegation actors exist in kernel (G-046), hold resumeTrigger is a kernel event (G-029), rights-impacting kernel requires disclosure (AI-046), autonomous actions have deontic constraints (AI-018), agent declarations match across AI doc and agent config sidecar.
 
 **FEL AST analysis (12 rules):** guard expressions parse (K-012, K-013), delegation conditions parse (G-043), assertion expressions parse (G-042), no cross-case variable references (K-017), only built-in + extension functions (K-019), FEL escalation conditions reference agent context (AI-024), SMT subset restrictions — all SMT rules satisfied (AG-010), no recursion (AG-011), linear arithmetic (AG-013), no extension functions (AG-014), finite quantification (AG-012).
 
@@ -376,7 +376,7 @@ Audit date: 2026-04-09. Cross-referenced against all test files in `crates/wos-l
 
 ### Tested rule inventory (92 rules)
 
-**From `tier1_rules.rs` (29 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049, DM-001, EQ-001.
+**From `tier1_rules.rs` (28 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-049, DM-001, EQ-001.
 
 **From `tier2_rules.rs` (42 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 
