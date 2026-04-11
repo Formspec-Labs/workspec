@@ -1,20 +1,20 @@
 # WOS Verification Matrix
 
-189 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
+195 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)           34 rules                  │
+│  Tier 1: wos-lint (static)           36 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)  51 rules                  │
+│  Tier 2: wos-lint --project (cross)  54 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory (kernel + governance + AI + sidecars), resolves       │
 │  cross-references, parses FEL expressions into ASTs.            │
-│  (39 cross-doc + 12 AST)                                       │
+│  (42 cross-doc + 12 AST)                                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 3: wos-conformance (dynamic)   104 rules                 │
+│  Tier 3: wos-conformance (dynamic)   105 rules                 │
 │  Event-driven test fixtures. Feeds event sequences through the  │
 │  lifecycle algorithm, asserts on state transitions, provenance  │
 │  records, timer behavior, compensation ordering, deontic        │
@@ -167,7 +167,7 @@
 | G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | -- |
 | G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | -- |
 
-**Governance:** 65 constraints — 14 T1, 27 T2, 24 T3. **Tested: 37 of 65** (10 T1, 2 AST, 25 T2).
+**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 37 of 65** (10 T1, 2 AST, 25 T2).
 
 ---
 
@@ -197,7 +197,7 @@
 | AI-020 | AI S5.3 | `supervisory` actions MUST define `reviewWindow`. | Partially lintable within-document. | T2-xdoc | autonomy-constraint | T2 |
 | AI-021 | AI S5.3 | Effective autonomy MUST NOT exceed impact-level cap. | Cross-document minimum computation. | T3 | autonomy-constraint | — |
 | AI-022 | AI S5.3 | Effective autonomy = minimum of 4 sources. | Cross-document computation. | T3 | autonomy-constraint | — |
-| AI-023 | AI S5.3 | Every agent invocation MUST have a reachable path to completion without any agent. | Graph reachability analysis over lifecycle. | T2-xdoc | fallback-chain-validity | — |
+| AI-023 | AI S5.3 | Every agent invocation MUST have a reachable path to completion without any agent. | Graph reachability analysis over lifecycle. Conservative global approximation; per-invocation compliance requires manual review. | T2-xdoc | fallback-chain-validity | T2 |
 | AI-024 | AI S5.4 | Escalation conditions MUST be valid FEL referencing `agent` context. | FEL AST analysis. | T2-ast | expression-validity | AST |
 | AI-025 | AI S5.4 | Human approval required for escalation. | Runtime workflow event. | T3 | autonomy-constraint | — |
 | AI-026 | AI S5.4 | Escalation MUST have `escalationExpiry`; agent reverts when expired. | Runtime temporal constraint. | T2-xdoc | autonomy-constraint | tier2_rules.rs |
@@ -245,9 +245,9 @@
 | AG-007 | AdvGov S6.1 | Tool invocations MUST respect rate limits. | Runtime invocation counting. | T3 | autonomy-constraint | — |
 | AG-008 | AdvGov S6.1 | Side-effect tools at `autonomous` MUST have `sideEffectPolicy`. | Cross-referencing tool flags, autonomy level, and policy presence. | T2-xdoc | autonomy-constraint | T2 |
 | AG-009 | AdvGov S7.2 | Agent state transitions MUST produce provenance; suspension pauses in-flight sessions. | Runtime processor obligation. | T3 | agent-consistency | — |
-| AG-010 | AdvGov S8.2 | Verifiable constraints MUST satisfy all SMT subset restrictions. | FEL AST analysis for each restriction. | T2-ast | smt-compatibility | — |
+| AG-010 | AdvGov S8.2 | Verifiable constraints MUST satisfy all SMT subset restrictions. | FEL AST analysis for each restriction. | T2-ast | smt-compatibility | AST |
 | AG-011 | AdvGov S8.2 | `let` bindings MUST NOT create recursive definitions. | FEL AST cycle detection. | T2-ast | smt-compatibility | AST |
-| AG-012 | AdvGov S8.2 | Quantifiers MUST quantify over finite domains. | Requires type/ontology knowledge. | T2-ast | smt-compatibility | — |
+| AG-012 | AdvGov S8.2 | Quantifiers MUST quantify over finite domains. | Requires type/ontology knowledge. | T2-ast | smt-compatibility | T2 |
 | AG-013 | AdvGov S8.2 | Arithmetic MUST be linear (no variable*variable). | FEL AST analysis. | T2-ast | smt-compatibility | AST |
 | AG-014 | AdvGov S8.2 | Verifiable subset MUST NOT include extension function calls. | Cross-reference against Core S3.5 catalog. | T2-ast | smt-compatibility | AST |
 | AG-015 | AdvGov S8.3 | Proven-unsafe constraint MUST be corrected before workflow reaches `active`. | Runtime lifecycle gating. | T3 | smt-compatibility | — |
@@ -258,7 +258,7 @@
 | VR-002 | VerifReport S1 | Proven-unsafe MUST prevent workflow activation until corrected. | Cross-document lifecycle gating. | T3 | smt-compatibility | — |
 | VR-003 | VerifReport S1 | `counterexample` MUST be present when result is `proven-unsafe`. | Conditional field presence based on sibling value. | T2-xdoc | smt-compatibility | T2 |
 
-**AI + Advanced:** 82 constraints — 6 T1, 19 T2, 57 T3. **Tested: 21 of 82** (5 T1, 4 AST, 12 T2).
+**AI + Advanced:** 82 constraints — 6 T1, 19 T2, 57 T3. **Tested: 24 of 82** (5 T1, 5 AST, 14 T2).
 
 ---
 
@@ -267,36 +267,38 @@
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
 | Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 31 | 65% |
-| Governance + Sidecars | 65 | 14 | 28 | 23 | 37 | 57% |
-| AI + Advanced | 76 | 4 | 17 | 55 | 17 | 22% |
-| **Total** | **189** | **34** | **51** | **104** | **85** | **45%** |
+| Governance + Sidecars | 65 | 14 | 29 | 22 | 37 | 57% |
+| AI + Advanced | 82 | 6 | 19 | 57 | 24 | 29% |
+| **Total** | **195** | **36** | **54** | **105** | **92** | **47%** |
+
+> **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
 **Test coverage by test type:**
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
 | T1 | `crates/wos-lint/tests/tier1_rules.rs` | 29 (K-001..K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049, DM-001, EQ-001) |
-| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 40 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-017, DM-002, VR-003) |
-| AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 10 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-011, AG-013, AG-014) |
+| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 42 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
+| AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 12 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047) |
 
-**Untested T3 rules (104 total, 0 tested):** All Tier 3 rules require runtime behavioral fixtures that are not yet implemented beyond the engine integration smoke tests. The E2E column above reflects conformance engine behavioral properties exercised indirectly by `kernel_conformance.rs` and `provenance_tests.rs`.
+**T3 rules (105 total, 11 with E2E coverage):** Of 105 Tier 3 rules, 11 are exercised indirectly by conformance engine behavioral tests in `kernel_conformance.rs` and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 94 require dedicated runtime fixtures that are not yet implemented.
 
 ## Verification Tools
 
-### Tier 1: `wos-lint` (30 rules)
+### Tier 1: `wos-lint` (36 rules)
 
 Single-document structural checks. Input: one JSON document + its `$wos*` type marker. Output: diagnostics with severity, path, rule ID. No dependencies beyond the document itself.
 
 **Lifecycle soundness (8):** K-001 through K-008 — state type validation (final with transitions, compound without initialState, parallel without regions), event naming (`$` prefix reserved), parallel join events (`$join` required).
 
-**Cross-reference integrity (5):** K-006, K-014, K-015, K-030, G-048 — transition targets exist in states map, milestone ids unique, setData paths reference declared fields, extension keys `x-` prefixed, binding id matches map key.
+**Cross-reference integrity (6):** K-006, K-014, K-015, K-030, K-048, G-048 — transition targets exist in states map, milestone ids unique, setData paths reference declared fields, extension keys `x-` prefixed, case relationship `x-` prefix, binding id matches map key.
 
-**Temporal ordering (3):** G-044, G-045, G-047 — delegation expiration after effective, revocation after effective, parameter values in ascending date order.
+**Temporal ordering (4):** G-044, G-045, G-047, G-057 — delegation expiration after effective, revocation after effective, parameter values in ascending date order, binding values in ascending date order.
 
 **Type consistency (4):** G-037, G-038, G-039, G-050 — assertion id uniqueness, conditional field presence by assertion type, parameter value matches declared type.
 
-**Fallback chain validity (3):** AI-003, AI-041, AI-023 — chains terminate in escalateToHuman or fail, no cycles, agent-free completion path reachable.
+**Fallback chain validity (2):** AI-003, AI-041 — chains terminate in escalateToHuman or fail, no cycles.
 
 **Timer (1):** K-029 — startTimer has exactly one of duration or deadline.
 
@@ -306,17 +308,23 @@ Single-document structural checks. Input: one JSON document + its `$wos*` type m
 
 **Disclosure (2):** AI-046, AI-049 — rights-impacting requires disclosure true, narrative authoritative must be false.
 
-**Extension keys (1):** DM-001, EQ-001 — `x-` prefix on extension object keys.
+**Extension keys (2):** DM-001, EQ-001 — `x-` prefix on extension object keys.
 
-### Tier 2: `wos-lint --project` (50 rules)
+**Hold validity (1):** G-055 — expectedDuration must be valid ISO 8601 duration or `"indefinite"`.
+
+**Calendar validity (2):** G-058, G-059 — holiday entry has exactly one of date/rule, operating hours end strictly after start.
+
+**Notification validity (2):** G-062, G-065 — adverse-decision templates cover required sections, section ids unique within template.
+
+### Tier 2: `wos-lint --project` (54 rules)
 
 Loads a project directory containing kernel + governance + AI + sidecars. Two sub-modes:
 
-**Cross-document resolution (37 rules):** governance tags match kernel tags (G-011), `targetWorkflow` matches kernel `url` (G-034), `resolutionDateRef` points to kernel case file field (G-031), delegation actors exist in kernel (G-046), hold resumeTrigger is a kernel event (G-029), rights-impacting kernel requires disclosure (AI-046 already T1 within AI doc, but cross-doc validation when loading kernel), autonomous actions have deontic constraints (AI-018), agent declarations match across AI doc and agent config sidecar.
+**Cross-document resolution (42 rules):** governance tags match kernel tags (G-011), `targetWorkflow` matches kernel `url` (G-034), `resolutionDateRef` points to kernel case file field (G-031), delegation actors exist in kernel (G-046), hold resumeTrigger is a kernel event (G-029), rights-impacting kernel requires disclosure (AI-046 already T1 within AI doc, but cross-doc validation when loading kernel), autonomous actions have deontic constraints (AI-018), agent declarations match across AI doc and agent config sidecar.
 
-**FEL AST analysis (10 rules):** guard expressions parse (K-012, K-013), delegation conditions parse (G-043), assertion expressions parse (G-042), no cross-case variable references (K-017), only built-in + extension functions (K-019), FEL escalation conditions reference agent context (AI-024), SMT subset restrictions — no recursion (AG-011), linear arithmetic (AG-013), no extension functions (AG-014), finite quantification (AG-012).
+**FEL AST analysis (12 rules):** guard expressions parse (K-012, K-013), delegation conditions parse (G-043), assertion expressions parse (G-042), no cross-case variable references (K-017), only built-in + extension functions (K-019), FEL escalation conditions reference agent context (AI-024), SMT subset restrictions — all SMT rules satisfied (AG-010), no recursion (AG-011), linear arithmetic (AG-013), no extension functions (AG-014), finite quantification (AG-012).
 
-### Tier 3: `wos-conformance` (101 rules)
+### Tier 3: `wos-conformance` (105 rules)
 
 Event-driven test fixtures. Each fixture declares:
 
@@ -352,7 +360,7 @@ Event-driven test fixtures. Each fixture declares:
 - **Hold/resume (1):** G-030 — timer starts on hold entry, cancels on resume trigger
 - **DCR (2):** AG-002, AG-003 — exclude-pending raises error, zone satisfaction conditions
 - **Lifecycle (10):** K-023, K-031, K-032, K-034, K-035, K-036, G-010, G-012, G-013, G-017 — crash recovery, separation principle, compound entry, history clearing, atomic region init, independent-first ordering, pipeline provenance, weakest-link risk, separation of duties
-- **Remaining (39):** processor conformance claims, architectural invariants, operational data completeness, downstream usage constraints
+- **Remaining (44):** processor conformance claims, architectural invariants, operational data completeness, downstream usage constraints
 
 ---
 
@@ -362,58 +370,60 @@ Audit date: 2026-04-09. Cross-referenced against all test files in `crates/wos-l
 
 | Metric | Count |
 |--------|-------|
-| Total rules in matrix | 181 |
-| Rules with at least one test | 76 |
-| Rules with **no** test | 105 |
+| Total rules in matrix | 195 |
+| Rules with at least one test | 92 |
+| Rules with **no** test | 103 |
 
-### Tested rule inventory (85 rules)
+### Tested rule inventory (92 rules)
 
-**From `tier1_rules.rs` (27 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049.
+**From `tier1_rules.rs` (29 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049, DM-001, EQ-001.
 
-**From `tier2_rules.rs` (40 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-017, DM-002, VR-003.
+**From `tier2_rules.rs` (42 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014.
 
-**From `provenance_tests.rs` + `kernel_conformance.rs` (7 rules):** K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-046.
+**From `provenance_tests.rs` + `kernel_conformance.rs` (12 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047.
 
 ### Gap list by tier
 
-#### T1 gaps (5 rules) -- static checks, not yet tested
+#### T1 gaps (7 rules) -- static checks, not yet tested
 
 | ID | Note |
 |----|------|
 | K-009 | Actor id uniqueness. Implementation is a no-op (JSON keys are inherently unique). Low value. |
 | K-021 | Provenance `actorId` references declared actor. **Not implemented** -- needs rule code first. |
 | AI-003 | Processor must validate fallback chains at load time. Covered semantically by AI-041 tests; rule ID not asserted directly. |
-| DM-001 | DriftMonitor extension keys `x-` prefixed. Reuses K-030 logic; no DriftMonitor-specific test. |
-| EQ-001 | EquityConfig extension keys `x-` prefixed. Reuses K-030 logic; no EquityConfig-specific test. |
+| G-058 | Holiday entry must specify exactly one of `date` or `rule`. New (Business Calendar sidecar). |
+| G-059 | Operating hours `end` must be strictly after `start`. New (Business Calendar sidecar). |
+| G-062 | Adverse-decision templates must include determination/reason/appeal sections. New (Notification Template sidecar). |
+| G-065 | Template section `id` values must be unique. New (Notification Template sidecar). |
 
-#### T2 gaps (3 rules) -- cross-document / AST, not yet implemented
+#### T2 gaps (2 rules) -- cross-document / AST, not yet implemented
 
 | ID | Tier | Note |
 |----|------|------|
-| AG-012 | T2-ast | Quantifiers over finite domains. **Not implemented** (requires type/ontology knowledge). |
-| AI-023 | T2-xdoc | Agent-free completion path reachable. **Not implemented** (graph reachability). |
-| AG-010 | T2-ast | Verifiable constraints MUST satisfy SMT subset restrictions. **Not implemented** (FEL AST analysis). |
+| G-060 | T2-xdoc | Business Calendar sidecar presence requires business-day SLA evaluation. New. |
+| G-063 | T2-xdoc | `notificationTemplateRef` must resolve to a template in a Notification Template sidecar. New. |
 
-#### T3 gaps (89 rules) -- dynamic conformance, fixture-tested at runtime
+#### T3 gaps (94 rules) -- dynamic conformance, fixture-tested at runtime
 
-All 89 remaining untested rules are Tier 3 (dynamic/conformance). These require runtime event-sequence fixtures and are outside the scope of the current static lint and unit-level conformance tests. They cover:
+The remaining 94 untested Tier 3 rules require runtime event-sequence fixtures and are outside the scope of the current static lint and unit-level conformance tests. (11 additional T3 rules are exercised via E2E conformance tests; see the Tested rule inventory above.) They cover:
 
 - **Determinism / durability (4):** K-023, K-024, K-026, K-031 -- crash recovery, persist-before-advance, idempotency, structured validation.
 - **Provenance completeness (3):** K-018, K-028, G-007 -- relationship change provenance, migration provenance, appeal provenance.
-- **Timer behavior (5):** K-038, K-043, K-044, K-045, K-047 -- cancel on region exit, reentry reset, route to creator, tolerance, case-relationship metadata-only.
+- **Timer behavior (2):** K-044, K-045 -- route to creating region, tolerance enforcement.
 - **Compensation (5):** K-027, K-039, K-040, K-041, K-042 -- append-only, reverse order, pivot excluded, nested scope, completion event.
 - **Lifecycle semantics (2):** K-032, K-035 -- state/case separation, history clearing. (K-037 fail-fast join moved to T2 static check.)
 - **Due process enforcement (7):** G-002, G-006, G-010, G-016, G-017, G-018, G-019 -- notice timing, independent adjudicator, first-impression, random selection, separation of duties, override rationale, immutable overrides.
 - **Pipeline / provenance (5):** G-012, G-013, G-020, G-021, G-025 -- stage provenance, weakest-link risk, rejection records, task transition records, delegation conformance errors.
 - **Delegation / hold (5):** G-026, G-030, G-032, G-049, G-054 -- delegation in provenance, hold timer, temporal resolution algorithm, binding-type neutrality, resume-before-timer.
-- **Processor conformance (3):** G-051, G-052, G-054 -- basic/complete processor conformance claims.
+- **Processor conformance (2):** G-051, G-052 -- basic/complete processor conformance claims.
 - **Deontic enforcement (12):** AI-009 through AI-017, AI-027, AI-054, AI-055.
-- **Autonomy / escalation (13):** AI-005, AI-008, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AI-057, AC-001, AC-002, AG-005 through AG-007.
-- **Confidence / drift (9):** AI-034 through AI-040, AI-044, AI-045, AG-004, AG-016.
-- **Agent consistency (8):** AI-001, AI-002, AI-004, AI-006, AI-033, AI-047, AI-048, AI-053.
+- **Autonomy / escalation (15):** AI-005, AI-008, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AI-057, AC-001, AC-002, AG-005 through AG-007.
+- **Confidence / drift (11):** AI-034 through AI-040, AI-044, AI-045, AG-004, AG-016.
+- **Agent consistency (9):** AI-001, AI-002, AI-004, AI-006, AI-032, AI-033, AI-047, AI-048, AI-053.
 - **Disclosure / proxy (5):** AI-050, AI-051, AI-052, AG-009, AG-015.
-- **DCR / equity / verification (6):** AG-001, AG-002, AG-003, VR-001, VR-002.
+- **DCR / equity / verification (5):** AG-001, AG-002, AG-003, VR-001, VR-002.
+- **Sidecar runtime (2):** G-061, G-064 -- expired calendar handling, notification variable resolution.
 
 These T3 rules require building out the conformance engine's deontic, compensation, and advanced governance subsystems before tests can be written.
