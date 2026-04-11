@@ -5,7 +5,7 @@
 
 [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) |
 [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs. implementation boundary) |
-[Implementation Plan](../thoughts/reviews/2026-04-09-wos-core-companion-review.md) (phases, success criteria, content recovery) |
+[Implementation Plan](../thoughts/archive/reviews/2026-04-09-wos-core-companion-review.md) (phases, success criteria, content recovery) |
 [LINT-MATRIX](LINT-MATRIX.md) |
 [Runtime Companion](specs/companions/runtime.md) |
 [Feature Matrix](WOS-FEATURE-MATRIX.md) (competitive comparison, implementation status, audit corrections)
@@ -219,9 +219,12 @@ After wos-core has typed models for kernel, governance, and AI documents:
 
 Only after the things being documented are stable.
 
-- [ ] **`wos-spec/README.md`** — add Runtime Companion, CaseInstance schema, update counts, add wos-core to architecture.
-- [ ] **`context.md`** — add WOS section. _(CLAUDE.md: "Update when a new spec is added.")_
-- [ ] **Main `README.md`** — add WOS to repository structure.
+- [x] **`wos-spec/README.md`** — add Runtime Companion, CaseInstance schema, update counts, add wos-core to architecture.
+  - **Done:** `wos-spec/README.md` now reflects the current spec/schema counts, includes the Runtime Companion and `wos-case-instance` schema in the inventory, and adds the `wos-core` / `wos-lint` / `wos-conformance` implementation view under Architecture.
+- [x] **`context.md`** — add WOS section. _(CLAUDE.md: "Update when a new spec is added.")_
+  - **Done:** root `context.md` now includes a dedicated WOS relationship section explaining how Formspec and WOS compose and where each standard owns the boundary.
+- [x] **Main `README.md`** — add WOS to repository structure.
+  - **Done:** root `README.md` repository structure now includes `wos-spec/` as the sibling workflow-governance specification.
 - [ ] **`filemap.json`** — add wos-spec directory and crates.
 - [x] **`wos-core/README.md`** — document typed model, evaluation algorithm, trait interfaces.
   - **Done:** added `crates/wos-core/README.md` covering the typed document model, evaluator structure, host traits, and downstream crate boundaries.
