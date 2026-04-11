@@ -223,7 +223,8 @@ Only after the things being documented are stable.
 - [ ] **`context.md`** — add WOS section. _(CLAUDE.md: "Update when a new spec is added.")_
 - [ ] **Main `README.md`** — add WOS to repository structure.
 - [ ] **`filemap.json`** — add wos-spec directory and crates.
-- [ ] **`wos-core/README.md`** — document typed model, evaluation algorithm, trait interfaces.
+- [x] **`wos-core/README.md`** — document typed model, evaluation algorithm, trait interfaces.
+  - **Done:** added `crates/wos-core/README.md` covering the typed document model, evaluator structure, host traits, and downstream crate boundaries.
 - [ ] **Review document Section 12** — add Runtime Companion, CaseInstance schema, correspondence metadata, 3 missing fixtures.
 - [ ] **ADR-0057** — already updated (Alternative 3 reflects runtime spec was written).
 
@@ -319,7 +320,7 @@ The most significant architectural gap: no specified handoff protocol between WO
 
 - [x] **FEL-RECORDS: Align WOS examples and edge cases with Core FEL.**
   - **Core (§3.5.1, shipped):** Predicate is always a FEL expression; `$` is rebound per element; object elements support `$.property` via normal postfix rules.
-  - **Done:** WOS samples checked; **Formspec ADR-0060** (`formspec` monorepo: `thoughts/adr/0060-fel-constraint-self-dollar-nesting.md`) documents `constraint` `$` (field value) vs predicate `$` (element) nesting—no separate WOS-only doc required for that edge case.
+  - **Done:** WOS samples checked; **Formspec ADR-0060** (`formspec` monorepo: `thoughts/archive/adr/0060-fel-constraint-self-dollar-nesting.md`) documents `constraint` `$` (field value) vs predicate `$` (element) nesting—no separate WOS-only doc required for that edge case.
   - **Context:** Coprocessor examples can reference quantifiers over case-shaped data using Core-aligned FEL.
 
 - [ ] **COPROCESSOR: Author Runtime Companion S15 (Formspec coprocessor protocol).**
@@ -342,19 +343,21 @@ The most significant architectural gap: no specified handoff protocol between WO
 
 Document architectural constraints that can't be lint-checked or fixture-tested.
 
-- [ ] **SECURITY-PROFILE: Write conformance profile guidance for Runtime S13.**
+- [x] **SECURITY-PROFILE: Write conformance profile guidance for Runtime S13.**
   - S13.1 (Engine Isolation): Engine MUST NOT have direct network access; all external comms through `ExternalService` (S12.4). Architectural constraint — verified by code review, not lintable.
   - S13.2 (Expression Sandboxing): Informative. FEL provides this by construction (no I/O, no side effects).
   - S13.3 (Data Protection): Host SHOULD encrypt at rest via `InstanceStore`. Host-level concern.
   - S13.4 (Provenance Immutability): Host SHOULD implement write-once append-only storage. Explicitly SHOULD (not MUST) due to expungement requirements.
   - Deliverable: A "Conformance Profile" section in `wos-core/README.md` or a standalone `CONFORMANCE.md` explaining what S13 requires and how a host demonstrates compliance.
   - **Context:** Only S13.1 is a hard MUST. The SHOULDs are host-level deployment concerns, not engine-enforced.
+  - **Done:** `crates/wos-core/README.md` now includes a "Conformance Profile Guidance" section that explains the evidence model for Runtime S13 and separates engine-enforced behavior from host responsibilities.
 
-- [ ] **ARCH-AI004: Document AI-004 / AI-050 verification strategy.**
+- [x] **ARCH-AI004: Document AI-004 / AI-050 verification strategy.**
   - AI-004 (delegate Formspec evaluation to conformant processor): Cannot be fixture-tested without Formspec processor instrumentation or differential testing.
   - AI-050 (proxy must not modify conformance requirements): Partially addressable via differential proxy fixtures.
   - Deliverable: A section in conformance profile guidance explaining how these are verified (self-declaration + conformance profile matching). Becomes testable when a second processor or proxy implementation exists.
   - **Context:** These are the only genuinely untestable rules. They require inter-processor trust, not engine behavior.
+  - **Done:** `crates/wos-core/README.md` documents the current verification strategy for AI-004 and AI-050: fixture-backed local behavior plus architectural review and delegated-processor self-declaration until differential testing exists.
 
 ---
 
