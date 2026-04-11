@@ -58,7 +58,11 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 
 /// Check FEL in a Kernel document (K-012, K-013, K-017, K-019).
 fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
-    if let Some(states) = doc.value.pointer("/lifecycle/states").and_then(Value::as_object) {
+    if let Some(states) = doc
+        .value
+        .pointer("/lifecycle/states")
+        .and_then(Value::as_object)
+    {
         check_states_fel(states, "/lifecycle/states", diagnostics);
     }
     check_milestones_fel(&doc.value, diagnostics);
@@ -175,7 +179,10 @@ fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diag
 
 /// K-013: Milestone condition fields must be valid FEL.
 fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
-    let Some(milestones) = root.pointer("/lifecycle/milestones").and_then(Value::as_array) else {
+    let Some(milestones) = root
+        .pointer("/lifecycle/milestones")
+        .and_then(Value::as_array)
+    else {
         return;
     };
 
@@ -347,7 +354,10 @@ fn check_no_related_case_refs(
                     ));
                 }
             }
-            Expr::PostfixAccess { expr: inner, path: segments } => {
+            Expr::PostfixAccess {
+                expr: inner,
+                path: segments,
+            } => {
                 // Postfix chains like `$someField.relatedCase` — check the first dot segment.
                 if let Some(PathSegment::Dot(first)) = segments.first() {
                     if is_related_case_name(first) {
@@ -396,10 +406,7 @@ fn check_only_builtin_functions(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let builtin_names: HashSet<&str> = builtin_function_catalog()
-        .iter()
-        .map(|e| e.name)
-        .collect();
+    let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
@@ -567,10 +574,7 @@ fn check_no_extension_functions(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let builtin_names: HashSet<&str> = builtin_function_catalog()
-        .iter()
-        .map(|e| e.name)
-        .collect();
+    let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
@@ -673,7 +677,9 @@ fn visit_children(expr: &Expr, f: &mut impl FnMut(&Expr)) {
             f(else_branch.as_ref());
         }
 
-        Expr::Membership { value, container, .. } => {
+        Expr::Membership {
+            value, container, ..
+        } => {
             f(value.as_ref());
             f(container.as_ref());
         }
@@ -759,7 +765,8 @@ mod tests {
         let mut diag = Vec::new();
         check_kernel_fel(&doc, &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "K-012" && d.severity == Severity::Error),
+            diag.iter()
+                .any(|d| d.rule_id == "K-012" && d.severity == Severity::Error),
             "expected K-012 error, got: {diag:?}"
         );
     }
@@ -809,7 +816,8 @@ mod tests {
         let mut diag = Vec::new();
         check_kernel_fel(&doc, &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "K-017" && d.severity == Severity::Error),
+            diag.iter()
+                .any(|d| d.rule_id == "K-017" && d.severity == Severity::Error),
             "expected K-017 error, got: {diag:?}"
         );
     }
@@ -865,7 +873,8 @@ mod tests {
         let mut diag = Vec::new();
         check_kernel_fel(&doc, &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "K-019" && d.severity == Severity::Warning),
+            diag.iter()
+                .any(|d| d.rule_id == "K-019" && d.severity == Severity::Warning),
             "expected K-019 warning, got: {diag:?}"
         );
     }
@@ -972,7 +981,8 @@ mod tests {
         let mut diag = Vec::new();
         check_ai_integration_fel(&doc, &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "AI-024" && d.severity == Severity::Warning),
+            diag.iter()
+                .any(|d| d.rule_id == "AI-024" && d.severity == Severity::Warning),
             "expected AI-024 warning, got: {diag:?}"
         );
     }
@@ -1032,7 +1042,8 @@ mod tests {
         let mut diag = Vec::new();
         check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
+            diag.iter()
+                .any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
             "expected AG-013 error, got: {diag:?}"
         );
     }
@@ -1056,7 +1067,8 @@ mod tests {
         let mut diag = Vec::new();
         check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
         assert!(
-            diag.iter().any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
+            diag.iter()
+                .any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
             "expected AG-014 error, got: {diag:?}"
         );
     }

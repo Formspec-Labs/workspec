@@ -10,7 +10,7 @@
 // Rule IDs match LINT-MATRIX.md exactly (K-001, G-037, AI-041, etc.).
 
 use serde_json::json;
-use wos_lint::{lint_document, Severity};
+use wos_lint::{Severity, lint_document};
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -28,14 +28,19 @@ fn count_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> usize {
 }
 
 fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Severity> {
-    diagnostics.iter().find(|d| d.rule_id == rule_id).map(|d| d.severity)
+    diagnostics
+        .iter()
+        .find(|d| d.rule_id == rule_id)
+        .map(|d| d.severity)
 }
 
+const TEST_WORKFLOW_URL: &str = "https://example.com/wf";
+
 /// Minimal valid kernel with a two-state flat lifecycle (no violations).
-fn minimal_kernel() -> serde_json::Value {
+fn minimal_kernel_with_relationships(relationships: serde_json::Value) -> serde_json::Value {
     json!({
         "$wosKernel": "1.0",
-        "url": "https://example.com/wf",
+        "url": TEST_WORKFLOW_URL,
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -50,8 +55,40 @@ fn minimal_kernel() -> serde_json::Value {
                 }
             }
         },
-        "caseFile": { "fields": {} },
+        "caseFile": {
+            "fields": {},
+            "relationships": relationships
+        },
         "actors": []
+    })
+}
+
+fn minimal_kernel() -> serde_json::Value {
+    minimal_kernel_with_relationships(json!([]))
+}
+
+/// Schema-valid governance base so Tier 1 exercises typed deserialization.
+fn minimal_governance_document() -> serde_json::Value {
+    json!({
+        "$wosWorkflowGovernance": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL
+    })
+}
+
+/// Schema-valid AI integration base so Tier 1 exercises typed deserialization.
+fn minimal_ai_integration_document() -> serde_json::Value {
+    json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL,
+        "agents": [
+            {
+                "id": "reviewAgent",
+                "type": "agent",
+                "agentType": "generative",
+                "modelIdentifier": "gpt-4o",
+                "modelVersion": "2025-03"
+            }
+        ]
     })
 }
 
@@ -77,7 +114,10 @@ fn k001_final_state_with_transitions_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-001"), "expected K-001 diagnostic, got: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-001"),
+        "expected K-001 diagnostic, got: {diags:?}"
+    );
     assert_eq!(severity_of(&diags, "K-001"), Some(Severity::Error));
 }
 
@@ -85,7 +125,10 @@ fn k001_final_state_with_transitions_flagged() {
 fn k001_final_state_without_transitions_clean() {
     let doc = minimal_kernel();
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-001"), "unexpected K-001 on valid kernel: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-001"),
+        "unexpected K-001 on valid kernel: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -110,7 +153,10 @@ fn k002_compound_without_initial_state_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-002"), "expected K-002 for missing initialState: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-002"),
+        "expected K-002 for missing initialState: {diags:?}"
+    );
 }
 
 #[test]
@@ -129,7 +175,10 @@ fn k002_compound_without_states_map_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-002"), "expected K-002 for missing states: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-002"),
+        "expected K-002 for missing states: {diags:?}"
+    );
 }
 
 #[test]
@@ -151,7 +200,10 @@ fn k002_compound_with_initial_state_and_states_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-002"), "unexpected K-002 on valid compound: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-002"),
+        "unexpected K-002 on valid compound: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -200,7 +252,10 @@ fn k003_parallel_with_regions_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-003"), "unexpected K-003 on valid parallel: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-003"),
+        "unexpected K-003 on valid parallel: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -250,7 +305,10 @@ fn k004_cancellation_policy_on_parallel_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-004"), "unexpected K-004 on parallel: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-004"),
+        "unexpected K-004 on parallel: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -294,7 +352,10 @@ fn k005_history_state_on_compound_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-005"), "unexpected K-005 on compound: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-005"),
+        "unexpected K-005 on compound: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -346,14 +407,20 @@ fn k006_cross_scope_target_is_valid_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-006"), "unexpected K-006 on cross-scope target: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-006"),
+        "unexpected K-006 on cross-scope target: {diags:?}"
+    );
 }
 
 #[test]
 fn k006_same_scope_valid_target_clean() {
     let doc = minimal_kernel();
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-006"), "unexpected K-006 on valid target: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-006"),
+        "unexpected K-006 on valid target: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -378,7 +445,10 @@ fn k007_dollar_prefix_event_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-007"), "expected K-007 for $custom event: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-007"),
+        "expected K-007 for $custom event: {diags:?}"
+    );
 }
 
 #[test]
@@ -406,14 +476,20 @@ fn k007_join_event_is_exempt_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-007"), "unexpected K-007 for $join event: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-007"),
+        "unexpected K-007 for $join event: {diags:?}"
+    );
 }
 
 #[test]
 fn k007_normal_event_name_clean() {
     let doc = minimal_kernel();
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-007"), "unexpected K-007 on normal event names: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-007"),
+        "unexpected K-007 on normal event names: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -491,7 +567,10 @@ fn k014_empty_milestone_id_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-014"), "expected K-014 for empty milestone id: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-014"),
+        "expected K-014 for empty milestone id: {diags:?}"
+    );
 }
 
 #[test]
@@ -537,7 +616,10 @@ fn k015_set_data_undeclared_field_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-015"), "expected K-015 for undeclared field: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-015"),
+        "expected K-015 for undeclared field: {diags:?}"
+    );
 }
 
 #[test]
@@ -562,7 +644,10 @@ fn k015_set_data_declared_field_clean() {
         }
     });
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-015"), "unexpected K-015 on declared field: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-015"),
+        "unexpected K-015 on declared field: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -610,7 +695,10 @@ fn k022_digest_with_algorithm_clean() {
     // must be x-prefixed. So this doc will also get K-030.
     // For this test, we only assert K-022 is absent.
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-022"), "unexpected K-022 when algorithm present: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-022"),
+        "unexpected K-022 when algorithm present: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -641,7 +729,10 @@ fn k029_start_timer_both_duration_and_deadline_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-029"), "expected K-029 for both duration+deadline: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-029"),
+        "expected K-029 for both duration+deadline: {diags:?}"
+    );
 }
 
 #[test]
@@ -667,7 +758,10 @@ fn k029_start_timer_neither_duration_nor_deadline_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-029"), "expected K-029 for missing duration/deadline: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-029"),
+        "expected K-029 for missing duration/deadline: {diags:?}"
+    );
 }
 
 #[test]
@@ -748,7 +842,10 @@ fn k030_nested_extension_key_without_prefix_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-030"), "expected K-030 for nested extensions: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-030"),
+        "expected K-030 for nested extensions: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -757,51 +854,36 @@ fn k030_nested_extension_key_without_prefix_flagged() {
 
 #[test]
 fn k048_non_standard_relationship_type_flagged() {
-    let doc = json!({
-        "$wosKernel": "1.0",
-        "lifecycle": {
-            "initialState": "open",
-            "states": { "open": { "type": "atomic" } }
-        },
-        "caseRelationships": [
-            { "type": "customRelation", "target": "urn:case:123" }
-        ]
-    });
+    let doc = minimal_kernel_with_relationships(json!([
+        { "type": "derived-from", "targetCase": "https://example.com/cases/123" }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "K-048"), "expected K-048: {diags:?}");
 }
 
 #[test]
 fn k048_standard_relationship_type_clean() {
-    let doc = json!({
-        "$wosKernel": "1.0",
-        "lifecycle": {
-            "initialState": "open",
-            "states": { "open": { "type": "atomic" } }
-        },
-        "caseRelationships": [
-            { "type": "parent", "target": "urn:case:123" },
-            { "type": "sibling", "target": "urn:case:456" }
-        ]
-    });
+    let doc = minimal_kernel_with_relationships(json!([
+        { "type": "parent", "targetCase": "https://example.com/cases/123" },
+        { "type": "supersedes", "targetCase": "https://example.com/cases/456" }
+    ]));
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-048"), "unexpected K-048 on standard types: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-048"),
+        "unexpected K-048 on standard types: {diags:?}"
+    );
 }
 
 #[test]
 fn k048_extension_relationship_type_clean() {
-    let doc = json!({
-        "$wosKernel": "1.0",
-        "lifecycle": {
-            "initialState": "open",
-            "states": { "open": { "type": "atomic" } }
-        },
-        "caseRelationships": [
-            { "type": "x-custom", "target": "urn:case:123" }
-        ]
-    });
+    let doc = minimal_kernel_with_relationships(json!([
+        { "type": "x-custom", "targetCase": "https://example.com/cases/123" }
+    ]));
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "K-048"), "unexpected K-048 on x- prefixed type: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-048"),
+        "unexpected K-048 on x- prefixed type: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -873,7 +955,10 @@ fn g038_temporal_without_expression_flagged() {
         ]
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "G-038"), "expected G-038 for temporal type: {diags:?}");
+    assert!(
+        has_rule(&diags, "G-038"),
+        "expected G-038 for temporal type: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -911,17 +996,21 @@ fn g039_consistency_with_fields_clean() {
 
 #[test]
 fn g044_expiration_before_effective_flagged() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "delegations": [
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "delegations".to_string(),
+        json!([
             {
+                "id": "delegation-1",
                 "delegator": "alice",
                 "delegate": "bob",
+                "scope": {},
+                "authority": "determination",
                 "effectiveDate": "2026-06-01",
                 "expirationDate": "2026-01-01"
             }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-044"), "expected G-044: {diags:?}");
     assert_eq!(severity_of(&diags, "G-044"), Some(Severity::Error));
@@ -930,34 +1019,45 @@ fn g044_expiration_before_effective_flagged() {
 #[test]
 fn g044_expiration_equal_to_effective_flagged() {
     // Spec says "strictly after" so equal dates should fail.
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "delegations": [
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "delegations".to_string(),
+        json!([
             {
+                "id": "delegation-1",
                 "delegator": "alice",
                 "delegate": "bob",
+                "scope": {},
+                "authority": "determination",
                 "effectiveDate": "2026-06-01",
                 "expirationDate": "2026-06-01"
             }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(has_rule(&diags, "G-044"), "expected G-044 for equal dates: {diags:?}");
+    assert!(
+        has_rule(&diags, "G-044"),
+        "expected G-044 for equal dates: {diags:?}"
+    );
 }
 
 #[test]
 fn g044_expiration_after_effective_clean() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "delegations": [
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "delegations".to_string(),
+        json!([
             {
+                "id": "delegation-1",
                 "delegator": "alice",
                 "delegate": "bob",
+                "scope": {},
+                "authority": "determination",
                 "effectiveDate": "2026-01-01",
                 "expirationDate": "2026-12-31"
             }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-044"), "unexpected G-044: {diags:?}");
 }
@@ -968,17 +1068,21 @@ fn g044_expiration_after_effective_clean() {
 
 #[test]
 fn g045_revoked_before_effective_flagged() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "delegations": [
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "delegations".to_string(),
+        json!([
             {
+                "id": "delegation-1",
                 "delegator": "alice",
                 "delegate": "bob",
+                "scope": {},
+                "authority": "determination",
                 "effectiveDate": "2026-06-01",
                 "revokedDate": "2026-01-01"
             }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-045"), "expected G-045: {diags:?}");
 }
@@ -986,19 +1090,26 @@ fn g045_revoked_before_effective_flagged() {
 #[test]
 fn g045_revoked_same_as_effective_clean() {
     // Spec says "on or after" so same date is OK.
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "delegations": [
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "delegations".to_string(),
+        json!([
             {
+                "id": "delegation-1",
                 "delegator": "alice",
                 "delegate": "bob",
+                "scope": {},
+                "authority": "determination",
                 "effectiveDate": "2026-06-01",
                 "revokedDate": "2026-06-01"
             }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "G-045"), "unexpected G-045 for same-date revocation: {diags:?}");
+    assert!(
+        !has_rule(&diags, "G-045"),
+        "unexpected G-045 for same-date revocation: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1127,7 +1238,10 @@ fn g050_string_parameter_with_number_value_flagged() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "G-050"), "expected G-050 for string/number mismatch: {diags:?}");
+    assert!(
+        has_rule(&diags, "G-050"),
+        "expected G-050 for string/number mismatch: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1136,38 +1250,59 @@ fn g050_string_parameter_with_number_value_flagged() {
 
 #[test]
 fn g055_invalid_duration_format_flagged() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "holdPolicies": [
-            { "stateRef": "hold", "expectedDuration": "30 days" }
-        ]
-    });
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "holdPolicies".to_string(),
+        json!([
+            {
+                "holdType": "pending-applicant-response",
+                "expectedDuration": "30 days",
+                "resumeTrigger": "applicantResponse",
+                "timeoutAction": "escalate"
+            }
+        ]),
+    );
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-055"), "expected G-055: {diags:?}");
 }
 
 #[test]
 fn g055_valid_iso_duration_clean() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "holdPolicies": [
-            { "stateRef": "hold", "expectedDuration": "P30D" }
-        ]
-    });
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "holdPolicies".to_string(),
+        json!([
+            {
+                "holdType": "pending-applicant-response",
+                "expectedDuration": "P30D",
+                "resumeTrigger": "applicantResponse",
+                "timeoutAction": "escalate"
+            }
+        ]),
+    );
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-055"), "unexpected G-055: {diags:?}");
 }
 
 #[test]
 fn g055_indefinite_literal_clean() {
-    let doc = json!({
-        "$wosWorkflowGovernance": "1.0",
-        "holdPolicies": [
-            { "stateRef": "hold", "expectedDuration": "indefinite" }
-        ]
-    });
+    let mut doc = minimal_governance_document();
+    doc.as_object_mut().unwrap().insert(
+        "holdPolicies".to_string(),
+        json!([
+            {
+                "holdType": "pending-applicant-response",
+                "expectedDuration": "indefinite",
+                "resumeTrigger": "applicantResponse",
+                "timeoutAction": "escalate"
+            }
+        ]),
+    );
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "G-055"), "unexpected G-055 for 'indefinite': {diags:?}");
+    assert!(
+        !has_rule(&diags, "G-055"),
+        "unexpected G-055 for 'indefinite': {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1216,93 +1351,71 @@ fn g057_binding_values_in_order_clean() {
 
 #[test]
 fn ai041_fallback_chain_without_terminal_action_flagged() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "fallbackChain": [
+    let mut doc = minimal_ai_integration_document();
+    doc.as_object_mut().unwrap().insert(
+        "fallbackChain".to_string(),
+        json!([
             { "action": "retry" },
             { "action": "alternateAgent", "alternateAgentRef": "agent-b" }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-041"), "expected AI-041 for non-terminal chain: {diags:?}");
+    assert!(
+        has_rule(&diags, "AI-041"),
+        "expected AI-041 for non-terminal chain: {diags:?}"
+    );
 }
 
 #[test]
 fn ai041_fallback_chain_terminates_with_escalate_clean() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "fallbackChain": [
+    let mut doc = minimal_ai_integration_document();
+    doc.as_object_mut().unwrap().insert(
+        "fallbackChain".to_string(),
+        json!([
             { "action": "retry" },
             { "action": "escalateToHuman" }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "AI-041"), "unexpected AI-041 for escalateToHuman: {diags:?}");
+    assert!(
+        !has_rule(&diags, "AI-041"),
+        "unexpected AI-041 for escalateToHuman: {diags:?}"
+    );
 }
 
 #[test]
 fn ai041_fallback_chain_terminates_with_fail_clean() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "fallbackChain": [
+    let mut doc = minimal_ai_integration_document();
+    doc.as_object_mut().unwrap().insert(
+        "fallbackChain".to_string(),
+        json!([
             { "action": "retry" },
             { "action": "fail" }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(!has_rule(&diags, "AI-041"), "unexpected AI-041 for fail: {diags:?}");
+    assert!(
+        !has_rule(&diags, "AI-041"),
+        "unexpected AI-041 for fail: {diags:?}"
+    );
 }
 
 #[test]
 fn ai041_fallback_chain_with_cycle_flagged() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "fallbackChain": [
+    let mut doc = minimal_ai_integration_document();
+    doc.as_object_mut().unwrap().insert(
+        "fallbackChain".to_string(),
+        json!([
             { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
             { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
             { "action": "escalateToHuman" }
-        ]
-    });
+        ]),
+    );
     let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-041"), "expected AI-041 for cycle: {diags:?}");
-}
-
-// ========================================================================
-// AI-046: Rights-impacting without disclosure -> error.
-// ========================================================================
-
-#[test]
-fn ai046_rights_impacting_without_disclosure_flagged() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "impactLevel": "rights-impacting",
-        "discloseThatAgentAssisted": false
-    });
-    let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-046"), "expected AI-046: {diags:?}");
-}
-
-#[test]
-fn ai046_rights_impacting_with_disclosure_clean() {
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "impactLevel": "rights-impacting",
-        "discloseThatAgentAssisted": true
-    });
-    let diags = lint(doc);
-    assert!(!has_rule(&diags, "AI-046"), "unexpected AI-046: {diags:?}");
-}
-
-#[test]
-fn ai046_operational_without_disclosure_clean() {
-    // Non-rights-impacting should not trigger AI-046.
-    let doc = json!({
-        "$wosAIIntegration": "1.0",
-        "impactLevel": "operational",
-        "discloseThatAgentAssisted": false
-    });
-    let diags = lint(doc);
-    assert!(!has_rule(&diags, "AI-046"), "unexpected AI-046 for operational impact: {diags:?}");
+    assert!(
+        has_rule(&diags, "AI-041"),
+        "expected AI-041 for cycle: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1331,7 +1444,10 @@ fn ai049_narrative_authoritative_missing_warns() {
         ]
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-049"), "expected AI-049 warning: {diags:?}");
+    assert!(
+        has_rule(&diags, "AI-049"),
+        "expected AI-049 warning: {diags:?}"
+    );
     assert_eq!(severity_of(&diags, "AI-049"), Some(Severity::Warning));
 }
 
@@ -1357,7 +1473,10 @@ fn ai049_provenance_tier_narrative_authoritative_true_flagged() {
         ]
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "AI-049"), "expected AI-049 for provenance tier=narrative: {diags:?}");
+    assert!(
+        has_rule(&diags, "AI-049"),
+        "expected AI-049 for provenance tier=narrative: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1379,7 +1498,10 @@ fn dm001_drift_monitor_extension_key_without_prefix() {
         }
     });
     let diags = lint(doc);
-    assert!(has_rule(&diags, "K-030"), "expected K-030 on AI doc extensions: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-030"),
+        "expected K-030 on AI doc extensions: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1390,7 +1512,10 @@ fn dm001_drift_monitor_extension_key_without_prefix() {
 fn minimal_valid_kernel_has_zero_diagnostics() {
     let doc = minimal_kernel();
     let diags = lint(doc);
-    assert!(diags.is_empty(), "minimal valid kernel should have 0 diagnostics, got: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "minimal valid kernel should have 0 diagnostics, got: {diags:?}"
+    );
 }
 
 // ========================================================================

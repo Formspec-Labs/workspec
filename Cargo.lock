@@ -1217,12 +1217,14 @@ name = "wos-lint"
 version = "0.1.0"
 dependencies = [
  "fel-core",
+ "indexmap",
  "insta",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "url",
+ "wos-core",
 ]
 
 [[package]]

@@ -33,7 +33,7 @@
 //! | G-023 | warning | SLA should set calendarType=business when calendar sidecar present   |
 //! | G-024 | warning | Delegation verification config present when kernel has determination  |
 //! | G-027 | error   | Sub-delegation chain depth must not exceed maxDelegationDepth        |
-//! | G-028 | error   | holdPolicy stateRef must reference a hold-tagged kernel state        |
+//! | G-028 | error   | hold policies MUST attach to hold-tagged kernel states               |
 //! | G-029 | warning | resumeTrigger must be a kernel event                                 |
 //! | G-031 | warning | resolutionDateRef must be a kernel caseFile field (policy params)    |
 //! | G-033 | warning | Parameter values array must not be empty (coverage gap)              |
@@ -57,7 +57,7 @@
 //! | AI-031 | warning | agent outputContract formUrl should match kernel formUrl            |
 //! | AI-042 | warning | agent modelConfig should disclose trainingDataCharacteristics       |
 //! | AI-043 | warning | agent modelConfig should disclose optimizationObjective             |
-//! | AI-046 | error   | rights/safety-impacting kernel requires discloseThatAgentAssisted   |
+//! | AI-046 | error   | rights-impacting kernel requires discloseThatAgentAssisted          |
 //! | AI-056 | warning | autonomy should be declared per action site, not at agent level     |
 //!
 //! ## Advanced governance / drift / verification
@@ -69,6 +69,8 @@
 //! | VR-003 | error   | counterexample required when result is proven-unsafe                |
 
 use serde_json::Value;
+
+use wos_core::model::kernel::{CancellationPolicy, ImpactLevel, KernelDocument, State, StateKind};
 
 use crate::diagnostic::Diagnostic;
 use crate::document::{DocumentKind, WosProject};
@@ -82,8 +84,7 @@ use super::fel_analysis;
 /// Pre-computed index of kernel data used by multiple Tier 2 rules.
 ///
 /// Building these collections once per `check()` call avoids repeatedly
-/// walking the entire state hierarchy for each governance document rule
-/// (Finding #1/#3).
+/// walking the entire typed state tree for each governance document rule.
 struct KernelCollections {
     /// All tags appearing on any kernel state or transition.
     tags: std::collections::HashSet<String>,
@@ -96,12 +97,64 @@ struct KernelCollections {
 }
 
 impl KernelCollections {
-    fn from_kernel(kernel: &crate::document::WosDocument) -> Self {
+    /// Build from a typed `KernelDocument`.
+    fn from_typed(kernel: &KernelDocument) -> Self {
+        let mut tags = std::collections::HashSet::new();
+        collect_tags_typed(&kernel.lifecycle.states, &mut tags);
+
+        let mut events = std::collections::HashSet::new();
+        collect_events_typed(&kernel.lifecycle.states, &mut events);
+
+        let case_fields = kernel
+            .case_file
+            .as_ref()
+            .map(|cf| cf.fields.keys().map(|k| format!("caseFile.{k}")).collect())
+            .unwrap_or_default();
+
+        let actor_ids = kernel.actors.iter().map(|a| a.id.clone()).collect();
+
         Self {
-            tags: collect_kernel_tags(kernel),
-            events: collect_kernel_events(kernel),
-            case_fields: collect_kernel_case_fields(kernel),
-            actor_ids: collect_kernel_actor_ids(kernel),
+            tags,
+            events,
+            case_fields,
+            actor_ids,
+        }
+    }
+}
+
+/// Collect tags from typed state tree.
+fn collect_tags_typed(
+    states: &indexmap::IndexMap<String, State>,
+    tags: &mut std::collections::HashSet<String>,
+) {
+    for state in states.values() {
+        for tag in &state.tags {
+            tags.insert(tag.clone());
+        }
+        for transition in &state.transitions {
+            for tag in &transition.tags {
+                tags.insert(tag.clone());
+            }
+        }
+        collect_tags_typed(&state.states, tags);
+        for region in state.regions.values() {
+            collect_tags_typed(&region.states, tags);
+        }
+    }
+}
+
+/// Collect events from typed state tree.
+fn collect_events_typed(
+    states: &indexmap::IndexMap<String, State>,
+    events: &mut std::collections::HashSet<String>,
+) {
+    for state in states.values() {
+        for transition in &state.transitions {
+            events.insert(transition.event.clone());
+        }
+        collect_events_typed(&state.states, events);
+        for region in state.regions.values() {
+            collect_events_typed(&region.states, events);
         }
     }
 }
@@ -112,45 +165,49 @@ impl KernelCollections {
 
 /// Run all Tier 2 cross-document checks across the project.
 pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
-    let kernel = project.kernel();
+    let kernel_doc = project.kernel();
+    let typed_kernel: Option<KernelDocument> =
+        kernel_doc.and_then(|k| serde_json::from_value::<KernelDocument>(k.value.clone()).ok());
 
-    // Pre-compute kernel index once so rule functions don't rebuild it per call.
-    let kernel_collections = kernel.map(KernelCollections::from_kernel);
+    let kernel_collections = typed_kernel.as_ref().map(KernelCollections::from_typed);
 
-    // Kernel-internal cross-path checks.
-    if let (Some(kernel), Some(kc)) = (kernel, kernel_collections.as_ref()) {
-        check_action_actor_references(kernel, &kc.actor_ids, diagnostics);
-        check_fail_fast_error_final_states(kernel, diagnostics);
+    if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+        check_action_actor_references_typed(kernel, &kc.actor_ids, diagnostics);
+        check_fail_fast_error_final_states_typed(kernel, diagnostics);
     }
 
-    // Governance documents — all checks that need the kernel.
     for gov in project.of_kind(DocumentKind::WorkflowGovernance) {
-        if let (Some(kernel), Some(kc)) = (kernel, kernel_collections.as_ref()) {
-            check_target_workflow_match(gov, kernel, diagnostics);
+        let typed_gov =
+            serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
+
+        if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+            check_target_workflow_match_typed(gov, kernel, diagnostics);
+            if let Some(tg) = &typed_gov {
+                check_delegation_actors_exist_typed(tg, kernel, diagnostics);
+                check_hold_policies_attach_to_hold_states_typed(tg, kernel, diagnostics);
+                check_hold_resume_triggers_typed(tg, &kc.events, diagnostics);
+                check_sub_delegation_depth_typed(tg, diagnostics);
+            }
+            check_due_process_for_impact_typed(gov, kernel, diagnostics);
+            check_notice_individualized_for_rights_typed(gov, kernel, diagnostics);
+            check_explanation_level_for_rights_typed(gov, kernel, diagnostics);
+            check_counterfactual_for_rights_typed(gov, kernel, diagnostics);
+            check_counterfactual_tier_for_adverse_typed(gov, kernel, &kc.tags, diagnostics);
             check_governance_tags_exist(gov, &kc.tags, diagnostics);
-            check_delegation_actors_exist(gov, kernel, diagnostics);
-            check_hold_resume_triggers(gov, &kc.events, diagnostics);
             check_resolution_date_refs(gov, &kc.case_fields, diagnostics);
-            check_due_process_for_impact(gov, kernel, diagnostics);
-            check_notice_individualized_for_rights(gov, kernel, diagnostics);
-            check_explanation_level_for_rights(gov, kernel, diagnostics);
-            check_counterfactual_for_rights(gov, kernel, diagnostics);
             check_continuation_of_services(gov, &kc.tags, diagnostics);
             check_adverse_decision_due_process(gov, &kc.tags, diagnostics);
             check_reasoning_tier_for_determination(gov, &kc.tags, diagnostics);
-            check_counterfactual_tier_for_adverse(gov, kernel, &kc.tags, diagnostics);
             check_excluded_owner_override(gov, diagnostics);
             check_sla_business_calendar(gov, project, diagnostics);
             check_delegation_verification_on_determination(gov, &kc.tags, diagnostics);
-            check_sub_delegation_depth(gov, diagnostics);
-            check_hold_policies_on_hold_states(gov, kernel, diagnostics);
             check_binding_resolution_date_refs(gov, &kc.case_fields, diagnostics);
         }
 
-        // Checks that only need the governance document itself.
         check_parameter_coverage(gov, diagnostics);
         check_independence_constraint(gov, diagnostics);
-        check_sub_delegation_permission(gov, diagnostics);
+        // G-053 reads `allowsSubDelegation` which is not yet in the typed model.
+        check_sub_delegation_permission_value(gov, diagnostics);
     }
 
     // Due-process documents.
@@ -169,13 +226,14 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
         check_pipeline_assertion_ids(gov, project, diagnostics);
     }
 
-    // AI integration documents.
     for ai in project.of_kind(DocumentKind::AiIntegration) {
-        if let Some(kernel) = kernel {
-            check_target_workflow_match(ai, kernel, diagnostics);
-            check_ai_disclosure_for_impact(ai, kernel, diagnostics);
-            check_agent_output_contract(ai, kernel, diagnostics);
-            check_agent_free_completion_path(ai, kernel, diagnostics);
+        if let Some(kernel) = &typed_kernel {
+            check_target_workflow_match_typed(ai, kernel, diagnostics);
+            check_ai_disclosure_for_impact_typed(ai, kernel, diagnostics);
+            if let Some(kernel_raw) = kernel_doc {
+                check_agent_output_contract(ai, kernel_raw, diagnostics);
+                check_agent_free_completion_path(ai, kernel_raw, diagnostics);
+            }
         }
         check_cascading_invocations_declared(ai, diagnostics);
         check_autonomous_actions_have_deontic(ai, diagnostics);
@@ -193,18 +251,16 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
         }
     }
 
-    // Advanced governance documents.
     for adv in project.of_kind(DocumentKind::Advanced) {
-        if let Some(kernel) = kernel {
+        if let Some(kernel) = &typed_kernel {
             check_side_effect_tools_policy(adv, diagnostics);
-            check_shadow_mode_recommended(adv, kernel, diagnostics);
+            check_shadow_mode_recommended_typed(adv, kernel, diagnostics);
         }
     }
 
-    // Drift monitor documents.
     for dm in project.of_kind(DocumentKind::DriftMonitor) {
-        if let Some(kernel) = kernel {
-            check_deployment_sequence(dm, kernel, diagnostics);
+        if let Some(kernel) = &typed_kernel {
+            check_deployment_sequence_typed(dm, kernel, diagnostics);
         }
     }
 
@@ -221,86 +277,87 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 // K-010: createTask assignTo MUST reference a declared kernel actor
 // ---------------------------------------------------------------------------
 
-/// K-010: Action `assignTo` fields MUST reference an actor declared in the
-/// kernel's `actors` array.
-///
-/// Walks all states (including compound substates and parallel regions) and
-/// checks every `createTask` action's `assignTo` value against the declared
-/// actor set.
-fn check_action_actor_references(
-    kernel: &crate::document::WosDocument,
+/// K-010 (typed): Action `assignTo` fields MUST reference a declared kernel actor.
+fn check_action_actor_references_typed(
+    kernel: &KernelDocument,
     actor_ids: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
-        check_action_actors_recursive(states, "/lifecycle/states", actor_ids, diagnostics);
-    }
+    check_action_actors_recursive_typed(
+        &kernel.lifecycle.states,
+        "/lifecycle/states",
+        actor_ids,
+        diagnostics,
+    );
 }
 
-fn check_action_actors_recursive(
-    states: &serde_json::Map<String, Value>,
+fn check_action_actors_recursive_typed(
+    states: &indexmap::IndexMap<String, State>,
     parent_path: &str,
     actor_ids: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for (name, state) in states {
         let state_path = format!("{parent_path}/{name}");
-        // Check onEntry actions.
-        check_actions_for_actor_refs(
-            state.get("onEntry").and_then(Value::as_array),
-            &format!("{state_path}/onEntry"),
-            actor_ids,
-            diagnostics,
-        );
-        // Check onExit actions.
-        check_actions_for_actor_refs(
-            state.get("onExit").and_then(Value::as_array),
-            &format!("{state_path}/onExit"),
-            actor_ids,
-            diagnostics,
-        );
-        // Check transition actions.
-        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
-            for (i, transition) in transitions.iter().enumerate() {
-                check_actions_for_actor_refs(
-                    transition.get("actions").and_then(Value::as_array),
-                    &format!("{state_path}/transitions/{i}/actions"),
-                    actor_ids,
-                    diagnostics,
-                );
-            }
-        }
-        // Recurse into substates and regions.
-        if let Some(substates) = state.get("states").and_then(Value::as_object) {
-            check_action_actors_recursive(substates, &format!("{state_path}/states"), actor_ids, diagnostics);
-        }
-        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-            for (region_name, region) in regions {
-                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
-                    check_action_actors_recursive(rstates, &format!("{state_path}/regions/{region_name}/states"), actor_ids, diagnostics);
+        // onEntry
+        for (i, action) in state.on_entry.iter().enumerate() {
+            if let Some(assign_to) = &action.assign_to {
+                if !actor_ids.contains(assign_to.as_str()) {
+                    diagnostics.push(Diagnostic::error(
+                        "K-010",
+                        &format!("{state_path}/onEntry/{i}/assignTo"),
+                        format!(
+                            "action assignTo '{assign_to}' does not reference a declared actor"
+                        ),
+                    ));
                 }
             }
         }
-    }
-}
-
-fn check_actions_for_actor_refs(
-    actions: Option<&Vec<Value>>,
-    path: &str,
-    actor_ids: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some(actions) = actions else { return };
-    for (i, action) in actions.iter().enumerate() {
-        let Some(assign_to) = action.get("assignTo").and_then(Value::as_str) else {
-            continue;
-        };
-        if !actor_ids.contains(assign_to) {
-            diagnostics.push(Diagnostic::error(
-                "K-010",
-                &format!("{path}/{i}/assignTo"),
-                format!("action assignTo '{assign_to}' does not reference a declared actor"),
-            ));
+        // onExit
+        for (i, action) in state.on_exit.iter().enumerate() {
+            if let Some(assign_to) = &action.assign_to {
+                if !actor_ids.contains(assign_to.as_str()) {
+                    diagnostics.push(Diagnostic::error(
+                        "K-010",
+                        &format!("{state_path}/onExit/{i}/assignTo"),
+                        format!(
+                            "action assignTo '{assign_to}' does not reference a declared actor"
+                        ),
+                    ));
+                }
+            }
+        }
+        // Transition actions
+        for (ti, transition) in state.transitions.iter().enumerate() {
+            for (ai, action) in transition.actions.iter().enumerate() {
+                if let Some(assign_to) = &action.assign_to {
+                    if !actor_ids.contains(assign_to.as_str()) {
+                        diagnostics.push(Diagnostic::error(
+                            "K-010",
+                            &format!("{state_path}/transitions/{ti}/actions/{ai}/assignTo"),
+                            format!(
+                                "action assignTo '{assign_to}' does not reference a declared actor"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        // Recurse into substates
+        check_action_actors_recursive_typed(
+            &state.states,
+            &format!("{state_path}/states"),
+            actor_ids,
+            diagnostics,
+        );
+        // Recurse into regions
+        for (region_name, region) in &state.regions {
+            check_action_actors_recursive_typed(
+                &region.states,
+                &format!("{state_path}/regions/{region_name}/states"),
+                actor_ids,
+                diagnostics,
+            );
         }
     }
 }
@@ -309,72 +366,54 @@ fn check_actions_for_actor_refs(
 // K-037: Fail-fast $join fires only on error final state
 // ---------------------------------------------------------------------------
 
-/// K-037: When a parallel state has `cancellationPolicy: "fail-fast"`, every
-/// region MUST contain at least one final state tagged `error`.
-///
-/// Without an error-tagged final state, the fail-fast policy has no trigger
-/// and is a structural misconfiguration.
-fn check_fail_fast_error_final_states(
-    kernel: &crate::document::WosDocument,
+/// K-037 (typed): Fail-fast parallel regions MUST have an error-tagged final state.
+fn check_fail_fast_error_final_states_typed(
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
-        check_fail_fast_recursive(states, "/lifecycle/states", diagnostics);
-    }
+    check_fail_fast_recursive_typed(&kernel.lifecycle.states, "/lifecycle/states", diagnostics);
 }
 
-fn check_fail_fast_recursive(
-    states: &serde_json::Map<String, Value>,
+fn check_fail_fast_recursive_typed(
+    states: &indexmap::IndexMap<String, State>,
     parent_path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for (name, state) in states {
         let state_path = format!("{parent_path}/{name}");
-        let is_parallel = state.get("type").and_then(Value::as_str) == Some("parallel");
-        let is_fail_fast = state
-            .get("cancellationPolicy")
-            .and_then(Value::as_str)
-            == Some("fail-fast");
 
-        if is_parallel && is_fail_fast {
-            if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-                for (region_name, region_def) in regions {
-                    let has_error_final = region_def
-                        .get("states")
-                        .and_then(Value::as_object)
-                        .is_some_and(|region_states| {
-                            region_states.values().any(|s| {
-                                s.get("type").and_then(Value::as_str) == Some("final")
-                                    && s.get("tags")
-                                        .and_then(Value::as_array)
-                                        .is_some_and(|tags| {
-                                            tags.iter().any(|t| t.as_str() == Some("error"))
-                                        })
-                            })
-                        });
-                    if !has_error_final {
-                        diagnostics.push(Diagnostic::error(
-                            "K-037",
-                            &format!("{state_path}/regions/{region_name}"),
-                            format!(
-                                "fail-fast parallel '{name}' region '{region_name}' has no final state tagged 'error'; fail-fast cannot trigger"
-                            ),
-                        ));
-                    }
+        if state.kind == StateKind::Parallel
+            && state.cancellation_policy == Some(CancellationPolicy::FailFast)
+        {
+            for (region_name, region) in &state.regions {
+                let has_error_final = region
+                    .states
+                    .values()
+                    .any(|s| s.kind == StateKind::Final && s.tags.iter().any(|t| t == "error"));
+                if !has_error_final {
+                    diagnostics.push(Diagnostic::error(
+                        "K-037",
+                        &format!("{state_path}/regions/{region_name}"),
+                        format!(
+                            "fail-fast parallel '{name}' region '{region_name}' has no final state tagged 'error'; fail-fast cannot trigger"
+                        ),
+                    ));
                 }
             }
         }
 
-        // Recurse into substates and regions (to find nested parallel states).
-        if let Some(substates) = state.get("states").and_then(Value::as_object) {
-            check_fail_fast_recursive(substates, &format!("{state_path}/states"), diagnostics);
-        }
-        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-            for (region_name, region) in regions {
-                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
-                    check_fail_fast_recursive(rstates, &format!("{state_path}/regions/{region_name}/states"), diagnostics);
-                }
-            }
+        // Recurse
+        check_fail_fast_recursive_typed(
+            &state.states,
+            &format!("{state_path}/states"),
+            diagnostics,
+        );
+        for (region_name, region) in &state.regions {
+            check_fail_fast_recursive_typed(
+                &region.states,
+                &format!("{state_path}/regions/{region_name}/states"),
+                diagnostics,
+            );
         }
     }
 }
@@ -383,14 +422,14 @@ fn check_fail_fast_recursive(
 // G-034: targetWorkflow must match kernel url
 // ---------------------------------------------------------------------------
 
-/// G-034: `targetWorkflow` must match the `url` of the target kernel document.
-fn check_target_workflow_match(
+/// G-034 (typed): `targetWorkflow` must match the kernel's `url`.
+fn check_target_workflow_match_typed(
     doc: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let target = doc.value.get("targetWorkflow").and_then(Value::as_str);
-    let kernel_url = kernel.value.get("url").and_then(Value::as_str);
+    let kernel_url = kernel.url.as_deref();
 
     if let (Some(target), Some(url)) = (target, kernel_url) {
         if target != url {
@@ -407,14 +446,13 @@ fn check_target_workflow_match(
 // G-001: Due process required for rights/safety-impacting
 // ---------------------------------------------------------------------------
 
-/// G-001: Governance MUST declare a `dueProcess` section when the kernel's
-/// `impactLevel` is `rights-impacting` or `safety-impacting`.
-fn check_due_process_for_impact(
+/// G-001 (typed): Governance MUST declare `dueProcess` for rights/safety-impacting kernels.
+fn check_due_process_for_impact_typed(
     gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if !is_rights_or_safety_impacting(kernel) {
+    if !is_rights_or_safety_impacting_typed(kernel) {
         return;
     }
     if gov.value.get("dueProcess").is_none() {
@@ -430,18 +468,17 @@ fn check_due_process_for_impact(
 // G-003: Notice content must be individualized for rights-impacting
 // ---------------------------------------------------------------------------
 
-/// G-003: The `dueProcess.notice` section MUST declare `determinationField`,
-/// `reasonCodes`, and `appealInstructions` when `impactLevel` is `rights-impacting`.
-fn check_notice_individualized_for_rights(
+/// G-003 (typed): Notice must declare individualized content fields for rights-impacting.
+fn check_notice_individualized_for_rights_typed(
     gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if kernel.value.get("impactLevel").and_then(Value::as_str) != Some("rights-impacting") {
+    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
     let Some(notice) = gov.value.pointer("/dueProcess/notice") else {
-        return; // G-001 already reported the missing dueProcess.
+        return;
     };
     let path = "/dueProcess/notice";
     for field in ["determinationField", "reasonCodes", "appealInstructions"] {
@@ -449,7 +486,9 @@ fn check_notice_individualized_for_rights(
             diagnostics.push(Diagnostic::warning(
                 "G-003",
                 path,
-                format!("rights-impacting notice must declare '{field}' for individualized content"),
+                format!(
+                    "rights-impacting notice must declare '{field}' for individualized content"
+                ),
             ));
         }
     }
@@ -459,14 +498,13 @@ fn check_notice_individualized_for_rights(
 // G-004: Explanation level must be individualized for rights-impacting
 // ---------------------------------------------------------------------------
 
-/// G-004: `dueProcess.explanationLevel` MUST be `"individualized"` when the
-/// kernel's `impactLevel` is `rights-impacting`.
-fn check_explanation_level_for_rights(
+/// G-004 (typed): explanationLevel MUST be 'individualized' for rights-impacting.
+fn check_explanation_level_for_rights_typed(
     gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if kernel.value.get("impactLevel").and_then(Value::as_str) != Some("rights-impacting") {
+    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
     let level = gov
@@ -486,14 +524,13 @@ fn check_explanation_level_for_rights(
 // G-005: Counterfactual required for rights-impacting adverse decisions
 // ---------------------------------------------------------------------------
 
-/// G-005: Adverse decisions MUST include positive and negative counterfactuals
-/// when `impactLevel` is `rights-impacting`.
-fn check_counterfactual_for_rights(
+/// G-005 (typed): Counterfactuals required for rights-impacting.
+fn check_counterfactual_for_rights_typed(
     gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if kernel.value.get("impactLevel").and_then(Value::as_str) != Some("rights-impacting") {
+    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
     match gov.value.pointer("/dueProcess/counterfactuals") {
@@ -630,22 +667,24 @@ fn check_reasoning_tier_for_determination(
 // G-015: Counterfactual tier required for adverse-decision in rights-impacting
 // ---------------------------------------------------------------------------
 
-/// G-015: Governance MUST declare a counterfactual tier when the workflow is
-/// `rights-impacting` and has `adverse-decision`-tagged transitions.
-fn check_counterfactual_tier_for_adverse(
+/// G-015 (typed): Counterfactual tier required for rights-impacting + adverse-decision.
+fn check_counterfactual_tier_for_adverse_typed(
     gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     kernel_tags: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if kernel.value.get("impactLevel").and_then(Value::as_str) != Some("rights-impacting") {
+    if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
     if !kernel_tags.contains("adverse-decision") {
         return;
     }
     let has_counterfactual = gov.value.get("counterfactualTier").is_some()
-        || gov.value.pointer("/provenanceTiers/counterfactual").is_some();
+        || gov
+            .value
+            .pointer("/provenanceTiers/counterfactual")
+            .is_some();
     if !has_counterfactual {
         diagnostics.push(Diagnostic::error(
             "G-015",
@@ -700,9 +739,10 @@ fn check_sla_business_calendar(
     project: &WosProject,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let has_calendar = project.documents().iter().any(|d| {
-        d.kind == DocumentKind::BusinessCalendar
-    });
+    let has_calendar = project
+        .documents()
+        .iter()
+        .any(|d| d.kind == DocumentKind::BusinessCalendar);
     if !has_calendar {
         return;
     }
@@ -759,42 +799,31 @@ fn check_delegation_verification_on_determination(
 // G-027: Sub-delegation depth traversal
 // ---------------------------------------------------------------------------
 
-/// G-027: Sub-delegation MUST respect `maxDelegationDepth`.
-///
-/// Traverses the delegation chain and reports any branch that exceeds the
-/// declared ceiling.
-fn check_sub_delegation_depth(
-    gov: &crate::document::WosDocument,
+/// G-027 (typed): Sub-delegation MUST respect `maxDelegationDepth`.
+fn check_sub_delegation_depth_typed(
+    gov: &wos_core::GovernanceDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(max_depth) = gov.value.get("maxDelegationDepth").and_then(Value::as_u64) else {
-        return; // No ceiling declared; nothing to enforce statically.
-    };
-    let max_depth = max_depth as usize;
-    let Some(delegations) = gov.value.get("delegations").and_then(Value::as_array) else {
+    let max_depth = gov.max_delegation_depth as usize;
+    if gov.delegations.is_empty() {
         return;
-    };
+    }
 
-    // Build (delegate → delegator) pairs for chain traversal.
-    let links: Vec<(&str, &str)> = delegations
+    let links: Vec<(&str, &str)> = gov
+        .delegations
         .iter()
-        .filter_map(|d| {
-            let delegator = d.get("delegator").and_then(Value::as_str)?;
-            let delegate = d.get("delegate").and_then(Value::as_str)?;
-            Some((delegate, delegator))
-        })
+        .map(|d| (d.delegate.as_str(), d.delegator.as_str()))
         .collect();
 
-    for (i, delegation) in delegations.iter().enumerate() {
-        let Some(delegate) = delegation.get("delegate").and_then(Value::as_str) else {
-            continue;
-        };
-        let depth = delegation_chain_depth(delegate, &links, 0);
+    for (i, delegation) in gov.delegations.iter().enumerate() {
+        let depth = delegation_chain_depth(&delegation.delegate, &links, 0);
         if depth > max_depth {
             diagnostics.push(Diagnostic::error(
                 "G-027",
                 &format!("/delegations/{i}"),
-                format!("sub-delegation chain depth {depth} exceeds maxDelegationDepth {max_depth}"),
+                format!(
+                    "sub-delegation chain depth {depth} exceeds maxDelegationDepth {max_depth}"
+                ),
             ));
         }
     }
@@ -820,27 +849,47 @@ fn delegation_chain_depth(actor: &str, links: &[(&str, &str)], current: usize) -
 // G-028: Hold policies attach to hold-tagged kernel states
 // ---------------------------------------------------------------------------
 
-/// G-028: Every `holdPolicy.stateRef` MUST reference a kernel state that
-/// carries the `hold` tag.
-fn check_hold_policies_on_hold_states(
-    gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+/// G-028 (typed): hold policies require at least one hold-tagged kernel state.
+fn check_hold_policies_attach_to_hold_states_typed(
+    gov: &wos_core::GovernanceDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let hold_states = collect_kernel_states_with_tag(kernel, "hold");
-    let Some(hold_policies) = gov.value.get("holdPolicies").and_then(Value::as_array) else {
+    if gov.hold_policies.is_empty() {
         return;
-    };
-    for (i, policy) in hold_policies.iter().enumerate() {
-        let Some(state_ref) = policy.get("stateRef").and_then(Value::as_str) else {
-            continue;
-        };
-        if !hold_states.contains(state_ref) {
-            diagnostics.push(Diagnostic::error(
-                "G-028",
-                &format!("/holdPolicies/{i}/stateRef"),
-                format!("holdPolicy references state '{state_ref}' which is not tagged 'hold' in the kernel"),
-            ));
+    }
+    let hold_states = collect_states_with_tag_typed(&kernel.lifecycle.states, "hold");
+    if hold_states.is_empty() {
+        diagnostics.push(Diagnostic::error(
+            "G-028",
+            "/holdPolicies",
+            "hold policies declare tag-based attachment, but the kernel has no state tagged 'hold'",
+        ));
+    }
+}
+
+/// Collect states with a given tag from typed model.
+fn collect_states_with_tag_typed(
+    states: &indexmap::IndexMap<String, State>,
+    tag: &str,
+) -> std::collections::HashSet<String> {
+    let mut matching = std::collections::HashSet::new();
+    collect_states_with_tag_recursive_typed(states, tag, &mut matching);
+    matching
+}
+
+fn collect_states_with_tag_recursive_typed(
+    states: &indexmap::IndexMap<String, State>,
+    tag: &str,
+    matching: &mut std::collections::HashSet<String>,
+) {
+    for (name, state) in states {
+        if state.tags.iter().any(|t| t == tag) {
+            matching.insert(name.clone());
+        }
+        collect_states_with_tag_recursive_typed(&state.states, tag, matching);
+        for region in state.regions.values() {
+            collect_states_with_tag_recursive_typed(&region.states, tag, matching);
         }
     }
 }
@@ -849,20 +898,14 @@ fn check_hold_policies_on_hold_states(
 // G-029: Hold resumeTrigger must correspond to a kernel event
 // ---------------------------------------------------------------------------
 
-/// G-029: `holdPolicy.resumeTrigger` MUST correspond to an event in the
-/// target kernel document.
-fn check_hold_resume_triggers(
-    gov: &crate::document::WosDocument,
+/// G-029 (typed): `holdPolicy.resumeTrigger` MUST correspond to a kernel event.
+fn check_hold_resume_triggers_typed(
+    gov: &wos_core::GovernanceDocument,
     kernel_events: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(holds) = gov.value.get("holdPolicies").and_then(Value::as_array) else {
-        return;
-    };
-    for (i, hold) in holds.iter().enumerate() {
-        let Some(trigger) = hold.get("resumeTrigger").and_then(Value::as_str) else {
-            continue;
-        };
+    for (i, hold) in gov.hold_policies.iter().enumerate() {
+        let trigger = hold.resume_trigger.as_str();
         if !kernel_events.contains(trigger) {
             diagnostics.push(Diagnostic::warning(
                 "G-029",
@@ -962,7 +1005,10 @@ fn check_target_governance_valid(
 ///
 /// Statically checks the field is present and non-empty; semantic adequacy of
 /// the constraint content is a T3 property.
-fn check_independence_constraint(gov: &crate::document::WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_independence_constraint(
+    gov: &crate::document::WosDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     if gov.value.get("reviewProtocols").is_none() {
         return;
     }
@@ -992,7 +1038,8 @@ fn check_independence_constraint_in_due_process(
     dp: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if dp.value.get("reviewProtocols").is_some() && dp.value.get("independenceConstraint").is_none() {
+    if dp.value.get("reviewProtocols").is_some() && dp.value.get("independenceConstraint").is_none()
+    {
         diagnostics.push(Diagnostic::warning(
             "G-036",
             "/independenceConstraint",
@@ -1075,7 +1122,9 @@ fn check_pipeline_assertion_ids(
                 diagnostics.push(Diagnostic::error(
                     "G-041",
                     &format!("/pipeline/{si}/assertions/{ai}"),
-                    format!("assertion id '{id}' not found in any assertion library in the project"),
+                    format!(
+                        "assertion id '{id}' not found in any assertion library in the project"
+                    ),
                 ));
             }
         }
@@ -1086,37 +1135,28 @@ fn check_pipeline_assertion_ids(
 // G-046: Delegation actors must exist in kernel
 // ---------------------------------------------------------------------------
 
-/// G-046: `delegator` and `delegate` MUST correspond to actors in the target
-/// kernel document.
-fn check_delegation_actors_exist(
-    gov: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+/// G-046 (typed): delegator and delegate MUST correspond to kernel actors.
+fn check_delegation_actors_exist_typed(
+    gov: &wos_core::GovernanceDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let kernel_actors: std::collections::HashSet<&str> = kernel
-        .value
-        .get("actors")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|a| a.get("id").and_then(Value::as_str))
-                .collect()
-        })
-        .unwrap_or_default();
-    let Some(delegations) = gov.value.get("delegations").and_then(Value::as_array) else {
-        return;
-    };
-    for (i, delegation) in delegations.iter().enumerate() {
+    let kernel_actors: std::collections::HashSet<&str> =
+        kernel.actors.iter().map(|a| a.id.as_str()).collect();
+    for (i, delegation) in gov.delegations.iter().enumerate() {
         let path = format!("/delegations/{i}");
         for field in ["delegator", "delegate"] {
-            if let Some(actor) = delegation.get(field).and_then(Value::as_str) {
-                if !kernel_actors.contains(actor) {
-                    diagnostics.push(Diagnostic::warning(
-                        "G-046",
-                        &path,
-                        format!("{field} '{actor}' not found in kernel actors"),
-                    ));
-                }
+            let actor = match field {
+                "delegator" => delegation.delegator.as_str(),
+                "delegate" => delegation.delegate.as_str(),
+                _ => unreachable!(),
+            };
+            if !kernel_actors.contains(actor) {
+                diagnostics.push(Diagnostic::warning(
+                    "G-046",
+                    &path,
+                    format!("{field} '{actor}' not found in kernel actors"),
+                ));
             }
         }
     }
@@ -1128,14 +1168,14 @@ fn check_delegation_actors_exist(
 
 /// G-053: Sub-delegation MUST only be permitted if the original delegation
 /// explicitly sets `allowsSubDelegation: true`.
-fn check_sub_delegation_permission(
+/// G-053 (Value): Sub-delegation only if original permits.
+fn check_sub_delegation_permission_value(
     gov: &crate::document::WosDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let Some(delegations) = gov.value.get("delegations").and_then(Value::as_array) else {
         return;
     };
-    // Actors who are themselves delegates may attempt to sub-delegate further.
     let delegates: std::collections::HashSet<&str> = delegations
         .iter()
         .filter_map(|d| d.get("delegate").and_then(Value::as_str))
@@ -1144,8 +1184,6 @@ fn check_sub_delegation_permission(
         let Some(delegator) = delegation.get("delegator").and_then(Value::as_str) else {
             continue;
         };
-        // This delegation is a sub-delegation only when its delegator is
-        // themselves a delegate in another entry.
         if !delegates.contains(delegator) {
             continue;
         }
@@ -1387,7 +1425,9 @@ fn check_agent_output_contract(
         return; // No human-facing form declared; nothing to compare.
     };
     for (name, agent) in iter_agents(ai) {
-        let Some(contract) = agent.get("outputContract") else { continue };
+        let Some(contract) = agent.get("outputContract") else {
+            continue;
+        };
         let contract_form = contract.get("formUrl").and_then(Value::as_str);
         if contract_form != Some(kernel_form_url) {
             diagnostics.push(Diagnostic::warning(
@@ -1407,7 +1447,10 @@ fn check_agent_output_contract(
 // ---------------------------------------------------------------------------
 
 /// AI-042: Agent config MUST disclose training data characteristics.
-fn check_training_data_disclosure(ai: &crate::document::WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_training_data_disclosure(
+    ai: &crate::document::WosDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for (name, agent) in iter_agents(ai) {
         let has_disclosure = agent
             .get("modelConfig")
@@ -1417,7 +1460,9 @@ fn check_training_data_disclosure(ai: &crate::document::WosDocument, diagnostics
             diagnostics.push(Diagnostic::warning(
                 "AI-042",
                 &format!("/agents/{name}/modelConfig/trainingDataCharacteristics"),
-                format!("agent '{name}' should disclose training data characteristics in modelConfig"),
+                format!(
+                    "agent '{name}' should disclose training data characteristics in modelConfig"
+                ),
             ));
         }
     }
@@ -1447,14 +1492,13 @@ fn check_optimization_objective_disclosure(
 // AI-046: Disclosure for impact
 // ---------------------------------------------------------------------------
 
-/// AI-046: Rights-impacting or safety-impacting workflows require
-/// `agentDisclosure.discloseThatAgentAssisted: true`.
-fn check_ai_disclosure_for_impact(
+/// AI-046 (typed): Rights-impacting requires discloseThatAgentAssisted.
+fn check_ai_disclosure_for_impact_typed(
     ai: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if !is_rights_or_safety_impacting(kernel) {
+    if !is_rights_impacting_typed(kernel) {
         return;
     }
     let disclosed = ai
@@ -1467,7 +1511,7 @@ fn check_ai_disclosure_for_impact(
         diagnostics.push(Diagnostic::error(
             "AI-046",
             "/agentDisclosure/discloseThatAgentAssisted",
-            "rights-impacting or safety-impacting workflow requires discloseThatAgentAssisted: true",
+            "rights-impacting workflow requires discloseThatAgentAssisted: true",
         ));
     }
 }
@@ -1531,7 +1575,11 @@ fn check_agent_free_completion_path(
         return;
     }
 
-    let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) else {
+    let Some(states) = kernel
+        .value
+        .pointer("/lifecycle/states")
+        .and_then(Value::as_object)
+    else {
         return;
     };
 
@@ -1573,7 +1621,7 @@ fn check_agent_free_completion_path(
             "no agent-free path from the initial state to a final state exists; \
              every agent invocation MUST have a reachable completion path that \
              does not require any agent to succeed"
-            .to_string(),
+                .to_string(),
         ));
     }
 }
@@ -1619,7 +1667,10 @@ fn collect_states_into_graph(
 ) {
     for (name, state) in states {
         let prefixed_name = format!("{parent_prefix}{name}");
-        let state_type = state.get("type").and_then(Value::as_str).unwrap_or("atomic");
+        let state_type = state
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("atomic");
         let is_final = state_type == "final";
 
         // Determine if this state is agent-only: every createTask in onEntry assigns to an agent.
@@ -1646,11 +1697,14 @@ fn collect_states_into_graph(
         // Include parent targets (compound states can be exited via parent transitions).
         targets.extend(parent_targets.iter().cloned());
 
-        graph.insert(prefixed_name.clone(), StateInfo {
-            is_final,
-            is_agent_only,
-            targets: targets.clone(),
-        });
+        graph.insert(
+            prefixed_name.clone(),
+            StateInfo {
+                is_final,
+                is_agent_only,
+                targets: targets.clone(),
+            },
+        );
 
         // Recurse into compound substates.
         if let Some(substates) = state.get("states").and_then(Value::as_object) {
@@ -1759,7 +1813,10 @@ fn check_side_effect_tools_policy(
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let autonomy = tool.get("autonomy").and_then(Value::as_str);
-        if is_side_effect && autonomy == Some("autonomous") && tool.get("sideEffectPolicy").is_none() {
+        if is_side_effect
+            && autonomy == Some("autonomous")
+            && tool.get("sideEffectPolicy").is_none()
+        {
             diagnostics.push(Diagnostic::warning(
                 "AG-008",
                 &format!("/tools/{tool_name}"),
@@ -1773,14 +1830,13 @@ fn check_side_effect_tools_policy(
 // AG-017: Shadow mode recommended for rights-impacting
 // ---------------------------------------------------------------------------
 
-/// AG-017: Shadow mode is RECOMMENDED before granting operational authority
-/// in rights-impacting workflows.
-fn check_shadow_mode_recommended(
+/// AG-017 (typed): Shadow mode recommended for rights-impacting.
+fn check_shadow_mode_recommended_typed(
     adv: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if !is_rights_or_safety_impacting(kernel) {
+    if !is_rights_impacting_typed(kernel) {
         return;
     }
     let has_shadow = adv.value.get("shadowMode").is_some()
@@ -1806,16 +1862,23 @@ fn check_shadow_mode_recommended(
 // DM-002: Rights/safety workflows should follow deployment sequence
 // ---------------------------------------------------------------------------
 
-/// DM-002: Rights/safety workflows SHOULD follow the shadow → canary →
-/// production deployment sequence.
-fn check_deployment_sequence(
+/// DM-002 (typed): Deployment sequence for rights/safety workflows.
+fn check_deployment_sequence_typed(
     dm: &crate::document::WosDocument,
-    kernel: &crate::document::WosDocument,
+    kernel: &KernelDocument,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if !is_rights_or_safety_impacting(kernel) {
+    if !is_rights_or_safety_impacting_typed(kernel) {
         return;
     }
+    check_deployment_sequence_impl(dm, diagnostics);
+}
+
+/// DM-002 shared implementation (operates on the drift monitor document).
+fn check_deployment_sequence_impl(
+    dm: &crate::document::WosDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let stages: Vec<&str> = dm
         .value
         .get("deploymentSequence")
@@ -1833,7 +1896,6 @@ fn check_deployment_sequence(
         }
     }
 
-    // Order checks: shadow before canary, canary before production.
     let phase_order = [("shadow", "canary"), ("canary", "production")];
     for (earlier, later) in phase_order {
         let earlier_pos = stages.iter().position(|&s| s == earlier);
@@ -1843,7 +1905,9 @@ fn check_deployment_sequence(
                 diagnostics.push(Diagnostic::warning(
                     "DM-002",
                     "/deploymentSequence",
-                    format!("'{earlier}' phase should precede '{later}' phase in deployment sequence"),
+                    format!(
+                        "'{earlier}' phase should precede '{later}' phase in deployment sequence"
+                    ),
                 ));
             }
         }
@@ -1880,152 +1944,14 @@ fn check_counterexample_on_unsafe(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Return true if the kernel's `impactLevel` is `rights-impacting` or
-/// `safety-impacting`.
-fn is_rights_or_safety_impacting(kernel: &crate::document::WosDocument) -> bool {
-    matches!(
-        kernel.value.get("impactLevel").and_then(Value::as_str),
-        Some("rights-impacting") | Some("safety-impacting")
-    )
-}
-
-/// Collect all field paths from the kernel's `caseFile.fields` map, formatted
-/// as `caseFile.<field_name>` for direct comparison with `resolutionDateRef`.
-fn collect_kernel_case_fields(kernel: &crate::document::WosDocument) -> std::collections::HashSet<String> {
+/// Typed: check if kernel impact level is rights or safety impacting.
+fn is_rights_or_safety_impacting_typed(kernel: &KernelDocument) -> bool {
     kernel
-        .value
-        .pointer("/caseFile/fields")
-        .and_then(Value::as_object)
-        .map(|m| m.keys().map(|k| format!("caseFile.{k}")).collect())
-        .unwrap_or_default()
+        .impact_level
+        .is_some_and(|il| il.requires_due_process())
 }
 
-/// Collect all tags from kernel states and transitions (recursive).
-fn collect_kernel_tags(kernel: &crate::document::WosDocument) -> std::collections::HashSet<String> {
-    let mut tags = std::collections::HashSet::new();
-    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
-        collect_tags_recursive(states, &mut tags);
-    }
-    tags
-}
-
-fn collect_tags_recursive(
-    states: &serde_json::Map<String, Value>,
-    tags: &mut std::collections::HashSet<String>,
-) {
-    for state in states.values() {
-        if let Some(state_tags) = state.get("tags").and_then(Value::as_array) {
-            for tag in state_tags.iter().filter_map(Value::as_str) {
-                tags.insert(tag.to_string());
-            }
-        }
-        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
-            for transition in transitions {
-                if let Some(t_tags) = transition.get("tags").and_then(Value::as_array) {
-                    for tag in t_tags.iter().filter_map(Value::as_str) {
-                        tags.insert(tag.to_string());
-                    }
-                }
-            }
-        }
-        // Recurse into substates and regions.
-        if let Some(substates) = state.get("states").and_then(Value::as_object) {
-            collect_tags_recursive(substates, tags);
-        }
-        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-            for region in regions.values() {
-                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
-                    collect_tags_recursive(rstates, tags);
-                }
-            }
-        }
-    }
-}
-
-/// Collect the names of all kernel states that carry a specific tag.
-fn collect_kernel_states_with_tag(
-    kernel: &crate::document::WosDocument,
-    tag: &str,
-) -> std::collections::HashSet<String> {
-    let mut matching = std::collections::HashSet::new();
-    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
-        collect_states_with_tag_recursive(states, tag, &mut matching);
-    }
-    matching
-}
-
-fn collect_states_with_tag_recursive(
-    states: &serde_json::Map<String, Value>,
-    tag: &str,
-    matching: &mut std::collections::HashSet<String>,
-) {
-    for (name, state) in states {
-        let has_tag = state
-            .get("tags")
-            .and_then(Value::as_array)
-            .is_some_and(|tags| tags.iter().any(|t| t.as_str() == Some(tag)));
-        if has_tag {
-            matching.insert(name.clone());
-        }
-        if let Some(substates) = state.get("states").and_then(Value::as_object) {
-            collect_states_with_tag_recursive(substates, tag, matching);
-        }
-        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-            for region in regions.values() {
-                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
-                    collect_states_with_tag_recursive(rstates, tag, matching);
-                }
-            }
-        }
-    }
-}
-
-/// Collect all declared actor IDs from the kernel's `actors` array.
-fn collect_kernel_actor_ids(kernel: &crate::document::WosDocument) -> std::collections::HashSet<String> {
-    kernel
-        .value
-        .get("actors")
-        .and_then(Value::as_array)
-        .map(|actors| {
-            actors
-                .iter()
-                .filter_map(|a| a.get("id").and_then(Value::as_str))
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// Collect all event names from kernel transitions (recursive).
-fn collect_kernel_events(kernel: &crate::document::WosDocument) -> std::collections::HashSet<String> {
-    let mut events = std::collections::HashSet::new();
-    if let Some(states) = kernel.value.pointer("/lifecycle/states").and_then(Value::as_object) {
-        collect_events_recursive(states, &mut events);
-    }
-    events
-}
-
-fn collect_events_recursive(
-    states: &serde_json::Map<String, Value>,
-    events: &mut std::collections::HashSet<String>,
-) {
-    for state in states.values() {
-        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
-            for transition in transitions {
-                if let Some(event) = transition.get("event").and_then(Value::as_str) {
-                    events.insert(event.to_string());
-                }
-            }
-        }
-        if let Some(substates) = state.get("states").and_then(Value::as_object) {
-            collect_events_recursive(substates, events);
-        }
-        if let Some(regions) = state.get("regions").and_then(Value::as_object) {
-            for region in regions.values() {
-                if let Some(rstates) = region.get("states").and_then(Value::as_object) {
-                    collect_events_recursive(rstates, events);
-                }
-            }
-        }
-    }
+/// Typed: check if kernel impact level is rights-impacting.
+fn is_rights_impacting_typed(kernel: &KernelDocument) -> bool {
+    kernel.impact_level == Some(ImpactLevel::RightsImpacting)
 }

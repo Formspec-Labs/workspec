@@ -96,9 +96,15 @@ const MARKERS: &[(&str, DocumentKind)] = &[
     ("$wosIntegrationProfile", DocumentKind::IntegrationProfile),
     ("$wosSemanticProfile", DocumentKind::SemanticProfile),
     ("$wosLifecycleDetail", DocumentKind::LifecycleDetail),
-    ("$wosCorrespondenceMetadata", DocumentKind::CorrespondenceMetadata),
+    (
+        "$wosCorrespondenceMetadata",
+        DocumentKind::CorrespondenceMetadata,
+    ),
     ("$wosBusinessCalendar", DocumentKind::BusinessCalendar),
-    ("$wosNotificationTemplate", DocumentKind::NotificationTemplate),
+    (
+        "$wosNotificationTemplate",
+        DocumentKind::NotificationTemplate,
+    ),
 ];
 
 /// Parse a JSON string into a `WosDocument`.
@@ -109,10 +115,10 @@ const MARKERS: &[(&str, DocumentKind)] = &[
 ///
 /// Returns `LintError::Parse` if the JSON is invalid or no marker is found.
 pub fn parse(json: &str) -> Result<WosDocument, LintError> {
-    let value: Value = serde_json::from_str(json)
-        .map_err(|e| LintError::Parse(e.to_string()))?;
+    let value: Value = serde_json::from_str(json).map_err(|e| LintError::Parse(e.to_string()))?;
 
-    let obj = value.as_object()
+    let obj = value
+        .as_object()
         .ok_or_else(|| LintError::Parse("document root must be an object".into()))?;
 
     let kind = MARKERS
@@ -167,7 +173,10 @@ fn walkdir(dir: &Path) -> Result<Vec<std::path::PathBuf>, std::io::Error> {
     Ok(paths)
 }
 
-fn collect_json_files(dir: &Path, paths: &mut Vec<std::path::PathBuf>) -> Result<(), std::io::Error> {
+fn collect_json_files(
+    dir: &Path,
+    paths: &mut Vec<std::path::PathBuf>,
+) -> Result<(), std::io::Error> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();

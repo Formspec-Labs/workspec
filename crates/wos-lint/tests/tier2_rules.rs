@@ -20,11 +20,17 @@ fn has_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> bool {
 }
 
 fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Severity> {
-    diagnostics.iter().find(|d| d.rule_id == rule_id).map(|d| d.severity)
+    diagnostics
+        .iter()
+        .find(|d| d.rule_id == rule_id)
+        .map(|d| d.severity)
 }
 
 fn path_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<String> {
-    diagnostics.iter().find(|d| d.rule_id == rule_id).map(|d| d.path.clone())
+    diagnostics
+        .iter()
+        .find(|d| d.rule_id == rule_id)
+        .map(|d| d.path.clone())
 }
 
 /// Write multiple WOS documents to a temporary directory and run `lint_project`.
@@ -34,7 +40,8 @@ fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint:
         let path = dir.path().join(filename);
         let mut file = std::fs::File::create(&path).expect("failed to create file");
         let json_str = serde_json::to_string_pretty(doc).expect("serialization failed");
-        file.write_all(json_str.as_bytes()).expect("failed to write");
+        file.write_all(json_str.as_bytes())
+            .expect("failed to write");
     }
     wos_lint::lint_project(dir.path()).expect("lint_project returned Err")
 }
@@ -110,6 +117,27 @@ fn base_governance() -> serde_json::Value {
     })
 }
 
+fn schema_valid_delegation(id: &str, delegator: &str, delegate: &str) -> serde_json::Value {
+    json!({
+        "id": id,
+        "delegator": delegator,
+        "delegate": delegate,
+        "scope": {
+            "impactLevels": ["operational"]
+        },
+        "authority": "determination"
+    })
+}
+
+fn schema_valid_hold_policy(resume_trigger: &str) -> serde_json::Value {
+    json!({
+        "holdType": "pending-applicant-response",
+        "expectedDuration": "P30D",
+        "resumeTrigger": resume_trigger,
+        "timeoutAction": "escalate"
+    })
+}
+
 // ========================================================================
 // G-034: targetWorkflow MUST match kernel url.
 // ========================================================================
@@ -120,10 +148,7 @@ fn g034_target_workflow_mismatch_flagged() {
     let mut gov = base_governance();
     gov["targetWorkflow"] = json!("https://wrong.example.com/workflow");
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-034"), "expected G-034: {diags:?}");
     assert_eq!(severity_of(&diags, "G-034"), Some(Severity::Error));
 }
@@ -133,10 +158,7 @@ fn g034_target_workflow_matches_clean() {
     let kernel = base_kernel();
     let gov = base_governance();
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-034"), "unexpected G-034: {diags:?}");
 }
 
@@ -152,10 +174,7 @@ fn g011_review_tag_not_in_kernel_flagged() {
         { "tags": ["nonExistentTag"], "protocol": "standard" }
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-011"), "expected G-011: {diags:?}");
     assert_eq!(severity_of(&diags, "G-011"), Some(Severity::Warning));
 }
@@ -168,10 +187,7 @@ fn g011_review_tag_exists_in_kernel_clean() {
         { "tags": ["intake"], "protocol": "standard" }
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-011"), "unexpected G-011: {diags:?}");
 }
 
@@ -183,19 +199,9 @@ fn g011_review_tag_exists_in_kernel_clean() {
 fn g046_delegation_actor_not_in_kernel_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["delegations"] = json!([
-        {
-            "delegator": "nonExistentActor",
-            "delegate": "bob",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
-    ]);
+    gov["delegations"] = json!([schema_valid_delegation("d1", "nonExistentActor", "bob")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-046"), "expected G-046: {diags:?}");
 }
 
@@ -203,19 +209,9 @@ fn g046_delegation_actor_not_in_kernel_flagged() {
 fn g046_delegation_actors_exist_in_kernel_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["delegations"] = json!([
-        {
-            "delegator": "alice",
-            "delegate": "bob",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
-    ]);
+    gov["delegations"] = json!([schema_valid_delegation("d1", "alice", "bob")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-046"), "unexpected G-046: {diags:?}");
 }
 
@@ -227,18 +223,9 @@ fn g046_delegation_actors_exist_in_kernel_clean() {
 fn g029_resume_trigger_not_a_kernel_event_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["holdPolicies"] = json!([
-        {
-            "stateRef": "holdState",
-            "resumeTrigger": "nonExistentEvent",
-            "expectedDuration": "P30D"
-        }
-    ]);
+    gov["holdPolicies"] = json!([schema_valid_hold_policy("nonExistentEvent")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-029"), "expected G-029: {diags:?}");
     assert_eq!(severity_of(&diags, "G-029"), Some(Severity::Warning));
 }
@@ -247,18 +234,9 @@ fn g029_resume_trigger_not_a_kernel_event_flagged() {
 fn g029_resume_trigger_is_a_kernel_event_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["holdPolicies"] = json!([
-        {
-            "stateRef": "holdState",
-            "resumeTrigger": "resume",
-            "expectedDuration": "P30D"
-        }
-    ]);
+    gov["holdPolicies"] = json!([schema_valid_hold_policy("resume")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-029"), "unexpected G-029: {diags:?}");
 }
 
@@ -274,10 +252,7 @@ fn g031_resolution_date_ref_not_in_kernel_flagged() {
         "resolutionDateRef": "caseFile.nonExistentField"
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-031"), "expected G-031: {diags:?}");
 }
 
@@ -289,10 +264,7 @@ fn g031_resolution_date_ref_exists_in_kernel_clean() {
         "resolutionDateRef": "caseFile.filingDate"
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-031"), "unexpected G-031: {diags:?}");
 }
 
@@ -306,10 +278,7 @@ fn g001_rights_impacting_without_due_process_flagged() {
     kernel["impactLevel"] = json!("rights-impacting");
     let gov = base_governance();
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-001"), "expected G-001: {diags:?}");
 }
 
@@ -331,10 +300,7 @@ fn g001_rights_impacting_with_due_process_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-001"), "unexpected G-001: {diags:?}");
 }
 
@@ -351,10 +317,7 @@ fn g004_explanation_not_individualized_for_rights_flagged() {
         "explanationLevel": "general"
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-004"), "expected G-004: {diags:?}");
 }
 
@@ -372,10 +335,7 @@ fn g005_missing_counterfactuals_for_rights_flagged() {
         // missing counterfactuals
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-005"), "expected G-005: {diags:?}");
 }
 
@@ -391,11 +351,11 @@ fn g005_missing_positive_counterfactual_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(has_rule(&diags, "G-005"), "expected G-005 for missing positive: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        has_rule(&diags, "G-005"),
+        "expected G-005 for missing positive: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -409,7 +369,8 @@ fn g009_adverse_policy_without_kernel_tag_flagged() {
     // Remove adverse-decision tags from all transitions.
     if let Some(states) = kernel.pointer_mut("/lifecycle/states") {
         if let Some(review) = states.get_mut("review") {
-            if let Some(transitions) = review.get_mut("transitions").and_then(|t| t.as_array_mut()) {
+            if let Some(transitions) = review.get_mut("transitions").and_then(|t| t.as_array_mut())
+            {
                 for t in transitions.iter_mut() {
                     if let Some(tags) = t.get_mut("tags").and_then(|t| t.as_array_mut()) {
                         tags.retain(|tag| tag.as_str() != Some("adverse-decision"));
@@ -422,10 +383,7 @@ fn g009_adverse_policy_without_kernel_tag_flagged() {
     let mut gov = base_governance();
     gov["adverseDecisionPolicy"] = json!({ "enabled": true });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-009"), "expected G-009: {diags:?}");
 }
 
@@ -438,10 +396,7 @@ fn g014_determination_tag_without_reasoning_tier_flagged() {
     let kernel = base_kernel(); // has determination-tagged transitions
     let gov = base_governance(); // no reasoningTier
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-014"), "expected G-014: {diags:?}");
 }
 
@@ -451,10 +406,7 @@ fn g014_determination_tag_with_reasoning_tier_clean() {
     let mut gov = base_governance();
     gov["reasoningTier"] = json!({ "enabled": true });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-014"), "unexpected G-014: {diags:?}");
 }
 
@@ -477,10 +429,7 @@ fn g015_adverse_decision_rights_without_counterfactual_tier_flagged() {
     gov["reasoningTier"] = json!({ "enabled": true });
     // no counterfactualTier
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-015"), "expected G-015: {diags:?}");
 }
 
@@ -499,10 +448,7 @@ fn g022_actor_in_both_potential_and_excluded_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-022"), "expected G-022: {diags:?}");
     assert_eq!(severity_of(&diags, "G-022"), Some(Severity::Warning));
 }
@@ -518,116 +464,106 @@ fn g027_sub_delegation_exceeds_max_depth_flagged() {
     gov["maxDelegationDepth"] = json!(1);
     gov["delegations"] = json!([
         {
+            "id": "d1",
             "delegator": "alice",
             "delegate": "bob",
+            "scope": { "impactLevels": ["operational"] },
+            "authority": "determination",
             "effectiveDate": "2026-01-01",
             "expirationDate": "2027-01-01",
             "allowsSubDelegation": true
         },
         {
+            "id": "d2",
             "delegator": "bob",
             "delegate": "system",
+            "scope": { "impactLevels": ["operational"] },
+            "authority": "determination",
             "effectiveDate": "2026-01-01",
             "expirationDate": "2027-01-01"
         }
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-027"), "expected G-027: {diags:?}");
 }
-
 
 #[test]
 fn g027_delegation_within_max_depth_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["maxDelegationDepth"] = json!(1);
-    gov["delegations"] = json!([
-        {
-            "delegator": "alice",
-            "delegate": "bob",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
-    ]);
+    gov["delegations"] = json!([schema_valid_delegation("d1", "alice", "bob")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-027"), "unexpected G-027: {diags:?}");
 }
 
 #[test]
-fn g027_no_max_delegation_depth_skips_check() {
+fn g027_default_max_depth_applies_when_absent_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    // maxDelegationDepth absent — rule cannot enforce a ceiling.
+    // maxDelegationDepth is absent, so the schema default of 1 applies.
     gov["delegations"] = json!([
         {
+            "id": "d1",
             "delegator": "alice",
             "delegate": "bob",
+            "scope": { "impactLevels": ["operational"] },
+            "authority": "determination",
             "effectiveDate": "2026-01-01",
             "expirationDate": "2027-01-01",
             "allowsSubDelegation": true
         },
         {
+            "id": "d2",
             "delegator": "bob",
             "delegate": "system",
+            "scope": { "impactLevels": ["operational"] },
+            "authority": "determination",
             "effectiveDate": "2026-01-01",
             "expirationDate": "2027-01-01"
         }
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-027"), "unexpected G-027 without maxDelegationDepth: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        has_rule(&diags, "G-027"),
+        "expected G-027 with default maxDelegationDepth: {diags:?}"
+    );
 }
 
 // ========================================================================
-// G-028: holdPolicy stateRef must reference a hold-tagged state.
+// G-028: hold policies require at least one hold-tagged kernel state.
 // ========================================================================
 
 #[test]
-fn g028_hold_policy_references_non_hold_state_flagged() {
-    let kernel = base_kernel();
-    let mut gov = base_governance();
-    gov["holdPolicies"] = json!([
-        {
-            "stateRef": "review",  // review is not tagged 'hold'
-            "resumeTrigger": "resume",
-            "expectedDuration": "P30D"
+fn g028_hold_policy_without_hold_tagged_state_flagged() {
+    let mut kernel = base_kernel();
+    if let Some(states) = kernel.pointer_mut("/lifecycle/states") {
+        if let Some(hold_state) = states.get_mut("holdState") {
+            if let Some(tags) = hold_state
+                .get_mut("tags")
+                .and_then(|value| value.as_array_mut())
+            {
+                tags.retain(|tag| tag.as_str() != Some("hold"));
+            }
         }
-    ]);
+    }
+    let mut gov = base_governance();
+    gov["holdPolicies"] = json!([schema_valid_hold_policy("resume")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-028"), "expected G-028: {diags:?}");
 }
 
 #[test]
-fn g028_hold_policy_references_hold_tagged_state_clean() {
+fn g028_hold_policy_with_hold_tagged_state_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
-    gov["holdPolicies"] = json!([
-        {
-            "stateRef": "holdState",  // holdState IS tagged 'hold' in base_kernel
-            "resumeTrigger": "resume",
-            "expectedDuration": "P30D"
-        }
-    ]);
+    gov["holdPolicies"] = json!([schema_valid_hold_policy("resume")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-028"), "unexpected G-028: {diags:?}");
 }
 
@@ -784,25 +720,11 @@ fn g053_sub_delegation_without_permission_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["delegations"] = json!([
-        {
-            "delegator": "alice",
-            "delegate": "bob",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-            // allowsSubDelegation is absent (defaults to false)
-        },
-        {
-            "delegator": "bob",  // bob is a delegate, so this is sub-delegation
-            "delegate": "system",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
+        schema_valid_delegation("d1", "alice", "bob"),
+        schema_valid_delegation("d2", "bob", "system")
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-053"), "expected G-053: {diags:?}");
 }
 
@@ -812,24 +734,19 @@ fn g053_sub_delegation_with_permission_clean() {
     let mut gov = base_governance();
     gov["delegations"] = json!([
         {
+            "id": "d1",
             "delegator": "alice",
             "delegate": "bob",
+            "scope": { "impactLevels": ["operational"] },
+            "authority": "determination",
             "effectiveDate": "2026-01-01",
             "expirationDate": "2027-01-01",
             "allowsSubDelegation": true
         },
-        {
-            "delegator": "bob",
-            "delegate": "system",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
+        schema_valid_delegation("d2", "bob", "system")
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-053"), "unexpected G-053: {diags:?}");
 }
 
@@ -838,20 +755,13 @@ fn g053_no_sub_delegations_skips_check() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     // Only direct delegations — no delegator is also a delegate elsewhere.
-    gov["delegations"] = json!([
-        {
-            "delegator": "alice",
-            "delegate": "bob",
-            "effectiveDate": "2026-01-01",
-            "expirationDate": "2027-01-01"
-        }
-    ]);
+    gov["delegations"] = json!([schema_valid_delegation("d1", "alice", "bob")]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-053"), "unexpected G-053 without sub-delegations: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        !has_rule(&diags, "G-053"),
+        "unexpected G-053 without sub-delegations: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -868,11 +778,11 @@ fn ai046_cross_doc_rights_kernel_ai_without_disclosure_flagged() {
         "agents": {}
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
-    assert!(has_rule(&diags, "AI-046"), "expected AI-046 cross-doc: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    assert!(
+        has_rule(&diags, "AI-046"),
+        "expected AI-046 cross-doc: {diags:?}"
+    );
 }
 
 #[test]
@@ -888,11 +798,25 @@ fn ai046_cross_doc_rights_kernel_ai_with_disclosure_clean() {
         "agents": {}
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(!has_rule(&diags, "AI-046"), "unexpected AI-046: {diags:?}");
+}
+
+#[test]
+fn ai046_cross_doc_safety_kernel_skips_disclosure_check() {
+    let mut kernel = base_kernel();
+    kernel["impactLevel"] = json!("safety-impacting");
+    let ai = json!({
+        "$wosAIIntegration": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "agents": {}
+    });
+
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    assert!(
+        !has_rule(&diags, "AI-046"),
+        "unexpected AI-046 for safety-impacting: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -918,10 +842,7 @@ fn ai007_cascading_invocations_not_declared_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-007"), "expected AI-007: {diags:?}");
 }
 
@@ -943,10 +864,7 @@ fn ai018_autonomous_without_deontic_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-018"), "expected AI-018: {diags:?}");
 }
 
@@ -964,10 +882,7 @@ fn ai018_autonomous_with_deontic_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(!has_rule(&diags, "AI-018"), "unexpected AI-018: {diags:?}");
 }
 
@@ -988,10 +903,7 @@ fn ai020_supervisory_without_review_window_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-020"), "expected AI-020: {diags:?}");
 }
 
@@ -1008,9 +920,7 @@ fn vr003_proven_unsafe_without_counterexample_flagged() {
         ]
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("verification-report.json", vr),
-    ]);
+    let diags = lint_project_with_docs(vec![("verification-report.json", vr)]);
     assert!(has_rule(&diags, "VR-003"), "expected VR-003: {diags:?}");
 }
 
@@ -1027,9 +937,7 @@ fn vr003_proven_unsafe_with_counterexample_clean() {
         ]
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("verification-report.json", vr),
-    ]);
+    let diags = lint_project_with_docs(vec![("verification-report.json", vr)]);
     assert!(!has_rule(&diags, "VR-003"), "unexpected VR-003: {diags:?}");
 }
 
@@ -1047,10 +955,7 @@ fn g056_binding_resolution_date_ref_not_in_kernel_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-056"), "expected G-056: {diags:?}");
 }
 
@@ -1064,10 +969,7 @@ fn g056_binding_resolution_date_ref_exists_in_kernel_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-056"), "unexpected G-056: {diags:?}");
 }
 
@@ -1086,10 +988,7 @@ fn g033_empty_parameter_values_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-033"), "expected G-033: {diags:?}");
 }
 
@@ -1106,10 +1005,7 @@ fn dm002_missing_shadow_phase_flagged() {
         "deploymentSequence": ["canary", "production"]
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("drift-monitor.json", dm),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("drift-monitor.json", dm)]);
     assert!(has_rule(&diags, "DM-002"), "expected DM-002: {diags:?}");
 }
 
@@ -1122,11 +1018,24 @@ fn dm002_correct_sequence_clean() {
         "deploymentSequence": ["shadow", "canary", "production"]
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("drift-monitor.json", dm),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("drift-monitor.json", dm)]);
     assert!(!has_rule(&diags, "DM-002"), "unexpected DM-002: {diags:?}");
+}
+
+#[test]
+fn dm002_safety_impacting_missing_shadow_phase_flagged() {
+    let mut kernel = base_kernel();
+    kernel["impactLevel"] = json!("safety-impacting");
+    let dm = json!({
+        "$wosDriftMonitor": "1.0",
+        "deploymentSequence": ["canary", "production"]
+    });
+
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("drift-monitor.json", dm)]);
+    assert!(
+        has_rule(&diags, "DM-002"),
+        "expected DM-002 for safety-impacting: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1172,10 +1081,7 @@ fn ai042_missing_training_data_disclosure_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-042"), "expected AI-042: {diags:?}");
 }
 
@@ -1198,10 +1104,7 @@ fn ai043_missing_optimization_objective_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-043"), "expected AI-043: {diags:?}");
 }
 
@@ -1223,10 +1126,7 @@ fn ai056_agent_level_autonomy_without_action_sites_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-056"), "expected AI-056: {diags:?}");
 }
 
@@ -1250,6 +1150,25 @@ fn ag017_rights_impacting_without_shadow_mode_flagged() {
     assert!(has_rule(&diags, "AG-017"), "expected AG-017: {diags:?}");
 }
 
+#[test]
+fn ag017_safety_impacting_skips_shadow_mode_check() {
+    let mut kernel = base_kernel();
+    kernel["impactLevel"] = json!("safety-impacting");
+    let adv = json!({
+        "$wosAdvancedGovernance": "1.0",
+        "tools": {}
+    });
+
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("advanced-governance.json", adv),
+    ]);
+    assert!(
+        !has_rule(&diags, "AG-017"),
+        "unexpected AG-017 for safety-impacting: {diags:?}"
+    );
+}
+
 // ========================================================================
 // G-003: Notice MUST include determinationField, reasonCodes, appealInstructions
 //        when kernel is rights-impacting.
@@ -1268,10 +1187,7 @@ fn g003_rights_impacting_notice_missing_fields_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-003"), "expected G-003: {diags:?}");
     assert_eq!(severity_of(&diags, "G-003"), Some(Severity::Warning));
 }
@@ -1290,10 +1206,7 @@ fn g003_rights_impacting_notice_with_all_fields_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-003"), "unexpected G-003: {diags:?}");
 }
 
@@ -1306,11 +1219,11 @@ fn g003_operational_impact_skips_check() {
         "notice": {}
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-003"), "unexpected G-003 for operational: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        !has_rule(&diags, "G-003"),
+        "unexpected G-003 for operational: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1328,10 +1241,7 @@ fn g008_continuation_of_services_without_hold_tag_flagged() {
         "continuationOfServices": true
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-008"), "expected G-008: {diags:?}");
     assert_eq!(severity_of(&diags, "G-008"), Some(Severity::Warning));
 }
@@ -1344,10 +1254,7 @@ fn g008_continuation_of_services_with_hold_tag_clean() {
         "continuationOfServices": true
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-008"), "unexpected G-008: {diags:?}");
 }
 
@@ -1359,11 +1266,11 @@ fn g008_no_continuation_skips_check() {
         "continuationOfServices": false
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-008"), "unexpected G-008 when continuation is false: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        !has_rule(&diags, "G-008"),
+        "unexpected G-008 when continuation is false: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1435,11 +1342,11 @@ fn g023_no_calendar_sidecar_skips_check() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-023"), "unexpected G-023 without calendar: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        !has_rule(&diags, "G-023"),
+        "unexpected G-023 without calendar: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1451,10 +1358,7 @@ fn g024_determination_without_delegation_flagged() {
     let kernel = base_kernel(); // has determination-tagged transitions
     let gov = base_governance(); // no delegationVerification or delegations
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-024"), "expected G-024: {diags:?}");
     assert_eq!(severity_of(&diags, "G-024"), Some(Severity::Warning));
 }
@@ -1467,10 +1371,7 @@ fn g024_determination_with_delegation_verification_clean() {
         "method": "identity-check"
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-024"), "unexpected G-024: {diags:?}");
 }
 
@@ -1482,10 +1383,7 @@ fn g024_determination_with_delegations_list_clean() {
         { "delegator": "alice", "delegate": "bob", "scope": "all" }
     ]);
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-024"), "unexpected G-024: {diags:?}");
 }
 
@@ -1502,10 +1400,7 @@ fn g036_review_protocols_without_independence_constraint_flagged() {
     ]);
     // No independenceConstraint.
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-036"), "expected G-036: {diags:?}");
     assert_eq!(severity_of(&diags, "G-036"), Some(Severity::Warning));
 }
@@ -1519,11 +1414,11 @@ fn g036_review_protocols_with_empty_independence_constraint_flagged() {
     ]);
     gov["independenceConstraint"] = json!("");
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(has_rule(&diags, "G-036"), "expected G-036 for empty constraint: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        has_rule(&diags, "G-036"),
+        "expected G-036 for empty constraint: {diags:?}"
+    );
 }
 
 #[test]
@@ -1535,10 +1430,7 @@ fn g036_review_protocols_with_valid_independence_constraint_clean() {
     ]);
     gov["independenceConstraint"] = json!("actorId != caseFile.originalDecisionMaker");
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(!has_rule(&diags, "G-036"), "unexpected G-036: {diags:?}");
 }
 
@@ -1547,11 +1439,11 @@ fn g036_no_review_protocols_skips_check() {
     let kernel = base_kernel();
     let gov = base_governance();
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-    ]);
-    assert!(!has_rule(&diags, "G-036"), "unexpected G-036 without reviewProtocols: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(
+        !has_rule(&diags, "G-036"),
+        "unexpected G-036 without reviewProtocols: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1578,10 +1470,7 @@ fn ai026_escalation_without_expiry_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-026"), "expected AI-026: {diags:?}");
     assert_eq!(severity_of(&diags, "AI-026"), Some(Severity::Warning));
 }
@@ -1606,10 +1495,7 @@ fn ai026_escalation_with_expiry_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(!has_rule(&diags, "AI-026"), "unexpected AI-026: {diags:?}");
 }
 
@@ -1626,11 +1512,11 @@ fn ai026_no_escalation_rules_skips_check() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
-    assert!(!has_rule(&diags, "AI-026"), "unexpected AI-026 without escalation rules: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    assert!(
+        !has_rule(&diags, "AI-026"),
+        "unexpected AI-026 without escalation rules: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1654,10 +1540,7 @@ fn ai031_output_contract_mismatch_flagged() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-031"), "expected AI-031: {diags:?}");
     assert_eq!(severity_of(&diags, "AI-031"), Some(Severity::Warning));
 }
@@ -1679,10 +1562,7 @@ fn ai031_output_contract_matches_kernel_clean() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(!has_rule(&diags, "AI-031"), "unexpected AI-031: {diags:?}");
 }
 
@@ -1702,11 +1582,11 @@ fn ai031_no_kernel_form_url_skips_check() {
         }
     });
 
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai-integration.json", ai),
-    ]);
-    assert!(!has_rule(&diags, "AI-031"), "unexpected AI-031 without kernel formUrl: {diags:?}");
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
+    assert!(
+        !has_rule(&diags, "AI-031"),
+        "unexpected AI-031 without kernel formUrl: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1777,7 +1657,10 @@ fn k010_no_assign_to_skips_check() {
     ]);
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
-    assert!(!has_rule(&diags, "K-010"), "unexpected K-010 for non-createTask: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-010"),
+        "unexpected K-010 for non-createTask: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1905,7 +1788,10 @@ fn k037_wait_all_without_error_final_skips_check() {
     });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
-    assert!(!has_rule(&diags, "K-037"), "unexpected K-037 for wait-all: {diags:?}");
+    assert!(
+        !has_rule(&diags, "K-037"),
+        "unexpected K-037 for wait-all: {diags:?}"
+    );
 }
 
 // ========================================================================
@@ -1977,7 +1863,10 @@ fn k010_on_exit_undeclared_actor_flagged() {
     ]);
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
-    assert!(has_rule(&diags, "K-010"), "expected K-010 for onExit: {diags:?}");
+    assert!(
+        has_rule(&diags, "K-010"),
+        "expected K-010 for onExit: {diags:?}"
+    );
 
     let path = path_of(&diags, "K-010").expect("K-010 diagnostic missing");
     assert!(
@@ -2000,10 +1889,8 @@ fn ag012_quantifier_in_verifiable_constraint_flagged() {
             { "expression": "every($items, $item.amount > 0)" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", base_kernel()),
-        ("advanced.json", adv),
-    ]);
+    let diags =
+        lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
     assert!(
         has_rule(&diags, "AG-012"),
         "expected AG-012 warning for quantifier: {diags:?}"
@@ -2025,14 +1912,9 @@ fn ag012_no_quantifier_clean() {
             { "expression": "$amount > 0 and $amount < 100000" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", base_kernel()),
-        ("advanced.json", adv),
-    ]);
-    assert!(
-        !has_rule(&diags, "AG-012"),
-        "unexpected AG-012: {diags:?}"
-    );
+    let diags =
+        lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
+    assert!(!has_rule(&diags, "AG-012"), "unexpected AG-012: {diags:?}");
 }
 
 /// AG-012: `some()` also triggers the quantifier warning.
@@ -2045,10 +1927,8 @@ fn ag012_some_quantifier_flagged() {
             { "expression": "some($items, $item.valid = true)" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", base_kernel()),
-        ("advanced.json", adv),
-    ]);
+    let diags =
+        lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
     assert!(
         has_rule(&diags, "AG-012"),
         "expected AG-012 warning for 'some' quantifier: {diags:?}"
@@ -2104,10 +1984,7 @@ fn ai023_agent_free_path_exists_clean() {
             { "id": "classifier", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: agent-free path exists via intake->completed: {diags:?}"
@@ -2161,10 +2038,7 @@ fn ai023_no_agent_free_path_flagged() {
             { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
     assert!(
         has_rule(&diags, "AI-023"),
         "expected AI-023: all non-final states are agent-only: {diags:?}"
@@ -2174,9 +2048,7 @@ fn ai023_no_agent_free_path_flagged() {
 /// AI-023: No AI integration document means no agents — skip check.
 #[test]
 fn ai023_no_ai_doc_skips() {
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", base_kernel()),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", base_kernel())]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023 without AI document: {diags:?}"
@@ -2248,10 +2120,7 @@ fn ai023_compound_substate_agent_free_path() {
             { "id": "bot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: compound state has agent-free substate path: {diags:?}"
@@ -2332,10 +2201,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
             { "id": "aiBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai.json", ai),
-    ]);
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
     assert!(
         !has_rule(&diags, "AI-023"),
         "unexpected AI-023: parallel state has agent-free parent transition: {diags:?}"
@@ -2388,14 +2254,8 @@ fn ai023_severity_is_error() {
             { "id": "reviewBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
         ]
     });
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("ai.json", ai),
-    ]);
-    assert!(
-        has_rule(&diags, "AI-023"),
-        "expected AI-023: {diags:?}"
-    );
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai.json", ai)]);
+    assert!(has_rule(&diags, "AI-023"), "expected AI-023: {diags:?}");
     assert_eq!(
         severity_of(&diags, "AI-023"),
         Some(Severity::Error),

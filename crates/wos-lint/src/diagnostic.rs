@@ -36,7 +36,11 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Create an error diagnostic.
-    pub fn error(rule_id: &'static str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn error(
+        rule_id: &'static str,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             rule_id,
             path: path.into(),
@@ -46,7 +50,11 @@ impl Diagnostic {
     }
 
     /// Create a warning diagnostic.
-    pub fn warning(rule_id: &'static str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn warning(
+        rule_id: &'static str,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             rule_id,
             path: path.into(),
@@ -56,7 +64,11 @@ impl Diagnostic {
     }
 
     /// Create an informational diagnostic.
-    pub fn info(rule_id: &'static str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn info(
+        rule_id: &'static str,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             rule_id,
             path: path.into(),
@@ -88,6 +100,10 @@ impl fmt::Display for Diagnostic {
             Severity::Warning => "warning",
             Severity::Info => "info",
         };
-        write!(f, "[{}] {} at {}: {}", self.rule_id, severity_label, self.path, self.message)
+        write!(
+            f,
+            "[{}] {} at {}: {}",
+            self.rule_id, severity_label, self.path, self.message
+        )
     }
 }
