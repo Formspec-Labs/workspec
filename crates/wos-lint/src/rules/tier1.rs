@@ -26,6 +26,8 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
         DocumentKind::AiIntegration => check_ai_integration(doc, diagnostics),
         DocumentKind::AssertionLibrary => check_assertion_library(doc, diagnostics),
         DocumentKind::PolicyParameters => check_policy_parameters(doc, diagnostics),
+        DocumentKind::BusinessCalendar => check_business_calendar(doc, diagnostics),
+        DocumentKind::NotificationTemplate => check_notification_template(doc, diagnostics),
         _ => {} // Other document types: no Tier 1 rules yet.
     }
 }
@@ -48,6 +50,7 @@ fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
         check_milestone_uniqueness_typed(&kernel, diagnostics);
         check_timer_exclusivity_typed(&kernel, diagnostics);
         check_case_relationship_type_prefix_typed(&kernel, diagnostics);
+        check_provenance_actor_ids_typed(&kernel, diagnostics);
     }
 
     check_digest_algorithm(root, diagnostics);
@@ -624,6 +627,224 @@ fn check_case_relationship_type_prefix_typed(
             ));
         }
     }
+}
+
+/// K-021: Provenance `actorId` MUST reference a declared kernel actor.
+fn check_provenance_actor_ids_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let actors: std::collections::HashSet<&str> =
+        kernel.actors.iter().map(|a| a.id.as_str()).collect();
+
+    let Some(prov) = &kernel.provenance else {
+        return;
+    };
+    let Value::Array(records) = prov else {
+        return;
+    };
+
+    for (i, rec) in records.iter().enumerate() {
+        let Some(obj) = rec.as_object() else {
+            continue;
+        };
+        let Some(actor_id) = obj.get("actorId").and_then(Value::as_str) else {
+            continue;
+        };
+        if !actors.contains(actor_id) {
+            diagnostics.push(Diagnostic::error(
+                "K-021",
+                &format!("/provenance/{i}/actorId"),
+                format!(
+                    "provenance actorId '{actor_id}' does not reference a declared kernel actor"
+                ),
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Business Calendar + Notification Template (sidecars)
+// ---------------------------------------------------------------------------
+
+/// G-058 / G-059: Business calendar structural validity.
+fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+    let root = &doc.value;
+
+    if let Some(holidays) = root.get("holidays").and_then(Value::as_array) {
+        for (i, h) in holidays.iter().enumerate() {
+            let path = format!("/holidays/{i}");
+            let has_date = h.get("date").is_some();
+            let has_rule = h.get("rule").is_some();
+            if has_date == has_rule {
+                diagnostics.push(Diagnostic::error(
+                    "G-058",
+                    &path,
+                    if !has_date {
+                        "holiday entry MUST specify exactly one of 'date' or 'rule'"
+                    } else {
+                        "holiday entry MUST specify exactly one of 'date' or 'rule', not both"
+                    },
+                ));
+            }
+        }
+    }
+
+    if let Some(oh) = root.get("operatingHours") {
+        let start = oh.get("start").and_then(Value::as_str);
+        let end = oh.get("end").and_then(Value::as_str);
+        if let (Some(s), Some(e)) = (start, end) {
+            let start_m = hh_mm_to_minutes(s);
+            let end_m = hh_mm_to_minutes(e);
+            match (start_m, end_m) {
+                (Some(sm), Some(em)) if em <= sm => {
+                    diagnostics.push(Diagnostic::error(
+                        "G-059",
+                        "/operatingHours/end",
+                        "operating hours 'end' MUST be strictly after 'start'",
+                    ));
+                }
+                (Some(_), Some(_)) => {}
+                _ => {
+                    diagnostics.push(Diagnostic::error(
+                        "G-059",
+                        "/operatingHours",
+                        "operating hours 'start' and 'end' MUST be valid 24-hour HH:MM values",
+                    ));
+                }
+            }
+        }
+    }
+
+    check_extension_prefixes(root, "", diagnostics);
+}
+
+/// G-062 / G-065: Notification template content and section id uniqueness.
+fn check_notification_template(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+    let root = &doc.value;
+
+    let Some(templates) = root.get("templates").and_then(Value::as_object) else {
+        check_extension_prefixes(root, "", diagnostics);
+        return;
+    };
+
+    for (key, template) in templates {
+        let base = format!("/templates/{key}");
+        check_adverse_decision_template_sections(template, &base, diagnostics);
+        check_template_section_id_uniqueness(template, &base, diagnostics);
+    }
+
+    check_extension_prefixes(root, "", diagnostics);
+}
+
+/// G-062: Adverse-decision category requires four section classes (NT S4.4).
+///
+/// Uses **heuristic** id / `contentType` checks (canonical ids such as `determination`,
+/// `reasons`, `appealRights`, `appealInstructions`, and `contentType: appeal-rights`).
+/// Templates that satisfy the spec with different ids may need schema-only validation or
+/// expanded matchers if false negatives appear in real documents.
+fn check_adverse_decision_template_sections(
+    template: &Value,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if template.get("category").and_then(Value::as_str) != Some("adverse-decision") {
+        return;
+    }
+    let Some(sections) = template.get("sections").and_then(Value::as_array) else {
+        return;
+    };
+
+    let mut has_determination = false;
+    let mut has_reason_codes = false;
+    let mut has_appeal_rights = false;
+    let mut has_appeal_instructions = false;
+
+    for sec in sections {
+        let id = sec
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_lowercase)
+            .unwrap_or_default();
+        let ct = sec.get("contentType").and_then(Value::as_str).unwrap_or("");
+
+        if id == "determination" {
+            has_determination = true;
+        }
+        if matches!(id.as_str(), "reasons" | "reasoncodes" | "reason") {
+            has_reason_codes = true;
+        }
+        if ct == "appeal-rights" || id == "appealrights" {
+            has_appeal_rights = true;
+        }
+        if id == "appealinstructions" {
+            has_appeal_instructions = true;
+        }
+    }
+
+    if !has_determination {
+        diagnostics.push(Diagnostic::error(
+            "G-062",
+            path,
+            "adverse-decision template MUST include a section with id 'determination'",
+        ));
+    }
+    if !has_reason_codes {
+        diagnostics.push(Diagnostic::error(
+            "G-062",
+            path,
+            "adverse-decision template MUST include reason code coverage (section id 'reasons', 'reasonCodes', or 'reason')",
+        ));
+    }
+    if !has_appeal_rights {
+        diagnostics.push(Diagnostic::error(
+            "G-062",
+            path,
+            "adverse-decision template MUST include appeal rights (section id 'appealRights' or contentType 'appeal-rights')",
+        ));
+    }
+    if !has_appeal_instructions {
+        diagnostics.push(Diagnostic::error(
+            "G-062",
+            path,
+            "adverse-decision template MUST include a section with id 'appealInstructions'",
+        ));
+    }
+}
+
+/// G-065: Section `id` values unique within each template.
+fn check_template_section_id_uniqueness(
+    template: &Value,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(sections) = template.get("sections").and_then(Value::as_array) else {
+        return;
+    };
+    let mut seen = std::collections::HashSet::new();
+    for (i, sec) in sections.iter().enumerate() {
+        let Some(id) = sec.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if !seen.insert(id) {
+            diagnostics.push(Diagnostic::error(
+                "G-065",
+                &format!("{path}/sections/{i}/id"),
+                format!("duplicate section id '{id}' within template"),
+            ));
+        }
+    }
+}
+
+/// Parse `HH:MM` (24h) to minutes since midnight; returns `None` if malformed.
+fn hh_mm_to_minutes(s: &str) -> Option<u16> {
+    let (h, m) = s.split_once(':')?;
+    let hh: u16 = h.parse().ok()?;
+    let mm: u16 = m.parse().ok()?;
+    if hh > 23 || mm > 59 {
+        return None;
+    }
+    Some(hh * 60 + mm)
 }
 
 // ---------------------------------------------------------------------------

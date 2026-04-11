@@ -34,6 +34,13 @@ fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Se
         .map(|d| d.severity)
 }
 
+fn path_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<String> {
+    diagnostics
+        .iter()
+        .find(|d| d.rule_id == rule_id)
+        .map(|d| d.path.clone())
+}
+
 const TEST_WORKFLOW_URL: &str = "https://example.com/wf";
 
 /// Minimal valid kernel with a two-state flat lifecycle (no violations).
@@ -887,6 +894,46 @@ fn k048_extension_relationship_type_clean() {
 }
 
 // ========================================================================
+// K-021: Provenance actorId MUST reference a declared actor.
+// ========================================================================
+
+#[test]
+fn k021_provenance_actor_not_declared_flagged() {
+    let mut doc = minimal_kernel();
+    doc.as_object_mut().unwrap().insert(
+        "provenance".to_string(),
+        json!([
+            { "actorId": "unknownActor", "recordKind": "stateTransition" }
+        ]),
+    );
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "K-021"), "expected K-021: {diags:?}");
+    assert_eq!(severity_of(&diags, "K-021"), Some(Severity::Error));
+}
+
+#[test]
+fn k021_provenance_actor_declared_clean() {
+    let mut doc = minimal_kernel();
+    doc.as_object_mut().unwrap().insert(
+        "actors".to_string(),
+        json!([{ "id": "alice", "type": "human" }]),
+    );
+    doc.as_object_mut().unwrap().insert(
+        "provenance".to_string(),
+        json!([{ "actorId": "alice", "recordKind": "stateTransition" }]),
+    );
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "K-021"), "unexpected K-021: {diags:?}");
+}
+
+#[test]
+fn k021_no_provenance_skips_check() {
+    let doc = minimal_kernel();
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "K-021"), "unexpected K-021: {diags:?}");
+}
+
+// ========================================================================
 // G-037: Assertion id values MUST be unique.
 // ========================================================================
 
@@ -1343,6 +1390,214 @@ fn g057_binding_values_in_order_clean() {
     });
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-057"), "unexpected G-057: {diags:?}");
+}
+
+// ========================================================================
+// G-058: Holiday entry MUST have exactly one of date or rule.
+// ========================================================================
+
+fn minimal_business_calendar() -> serde_json::Value {
+    json!({
+        "$wosBusinessCalendar": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "timezone": "America/New_York",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    })
+}
+
+#[test]
+fn g058_holiday_both_date_and_rule_flagged() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut().unwrap().insert(
+        "holidays".to_string(),
+        json!([{ "name": "Bad", "date": "2026-01-01", "rule": "nthWeekday(3, monday, january)" }]),
+    );
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-058"), "expected G-058: {diags:?}");
+}
+
+#[test]
+fn g058_holiday_neither_date_nor_rule_flagged() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut()
+        .unwrap()
+        .insert("holidays".to_string(), json!([{ "name": "Incomplete" }]));
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-058"), "expected G-058: {diags:?}");
+}
+
+#[test]
+fn g058_holiday_date_only_clean() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut().unwrap().insert(
+        "holidays".to_string(),
+        json!([{ "name": "New Year", "date": "2026-01-01" }]),
+    );
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-058"), "unexpected G-058: {diags:?}");
+}
+
+#[test]
+fn g058_no_holidays_skips_check() {
+    let doc = minimal_business_calendar();
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-058"), "unexpected G-058: {diags:?}");
+}
+
+// ========================================================================
+// G-059: Operating hours end MUST be strictly after start.
+// ========================================================================
+
+#[test]
+fn g059_operating_hours_end_not_after_start_flagged() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut().unwrap().insert(
+        "operatingHours".to_string(),
+        json!({ "start": "17:00", "end": "08:00" }),
+    );
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-059"), "expected G-059: {diags:?}");
+}
+
+#[test]
+fn g059_operating_hours_invalid_hhmm_flagged() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut().unwrap().insert(
+        "operatingHours".to_string(),
+        json!({ "start": "08:00", "end": "not-a-time" }),
+    );
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-059"), "expected G-059 for invalid time: {diags:?}");
+    assert!(
+        path_of(&diags, "G-059").is_some_and(|p| p == "/operatingHours"),
+        "expected path /operatingHours, got: {diags:?}"
+    );
+}
+
+#[test]
+fn g059_operating_hours_end_after_start_clean() {
+    let mut doc = minimal_business_calendar();
+    doc.as_object_mut().unwrap().insert(
+        "operatingHours".to_string(),
+        json!({ "start": "08:00", "end": "17:00" }),
+    );
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-059"), "unexpected G-059: {diags:?}");
+}
+
+#[test]
+fn g059_no_operating_hours_skips_check() {
+    let doc = minimal_business_calendar();
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-059"), "unexpected G-059: {diags:?}");
+}
+
+// ========================================================================
+// G-062: Adverse-decision templates MUST cover required sections.
+// ========================================================================
+
+fn minimal_notification_sidecar() -> serde_json::Value {
+    json!({
+        "$wosNotificationTemplate": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "templates": {}
+    })
+}
+
+#[test]
+fn g062_adverse_template_missing_sections_flagged() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "badAdverse": {
+            "category": "adverse-decision",
+            "sections": [
+                { "id": "determination", "contentType": "structured", "content": "x" }
+            ]
+        }
+    });
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-062"), "expected G-062: {diags:?}");
+    assert!(count_rule(&diags, "G-062") >= 2, "expected multiple G-062: {diags:?}");
+}
+
+#[test]
+fn g062_adverse_template_complete_clean() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "fullAdverse": {
+            "category": "adverse-decision",
+            "sections": [
+                { "id": "determination", "contentType": "structured", "content": "d" },
+                { "id": "reasons", "contentType": "structured", "content": "r" },
+                { "id": "appealRights", "contentType": "appeal-rights", "content": "a" },
+                { "id": "appealInstructions", "contentType": "action-required", "content": "i" }
+            ]
+        }
+    });
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-062"), "unexpected G-062: {diags:?}");
+}
+
+#[test]
+fn g062_non_adverse_category_skips_section_rules() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "hold": {
+            "category": "hold-notification",
+            "sections": [{ "id": "only", "contentType": "text", "content": "x" }]
+        }
+    });
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-062"), "unexpected G-062: {diags:?}");
+}
+
+// ========================================================================
+// G-065: Section ids MUST be unique within a template.
+// ========================================================================
+
+#[test]
+fn g065_duplicate_section_id_flagged() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "dup": {
+            "category": "case-status-update",
+            "sections": [
+                { "id": "same", "contentType": "text", "content": "a" },
+                { "id": "same", "contentType": "text", "content": "b" }
+            ]
+        }
+    });
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "G-065"), "expected G-065: {diags:?}");
+}
+
+#[test]
+fn g065_unique_section_ids_clean() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "ok": {
+            "category": "case-status-update",
+            "sections": [
+                { "id": "a", "contentType": "text", "content": "1" },
+                { "id": "b", "contentType": "text", "content": "2" }
+            ]
+        }
+    });
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-065"), "unexpected G-065: {diags:?}");
+}
+
+#[test]
+fn g065_single_section_skips_uniqueness_violation() {
+    let mut doc = minimal_notification_sidecar();
+    doc["templates"] = json!({
+        "one": {
+            "category": "case-status-update",
+            "sections": [{ "id": "only", "contentType": "text", "content": "x" }]
+        }
+    });
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "G-065"), "unexpected G-065: {diags:?}");
 }
 
 // ========================================================================

@@ -30,7 +30,9 @@
 //! |-------|---------|----------------------------------------------------------------------|
 //! | G-011 | warning | Review protocol tags exist in kernel                                 |
 //! | G-022 | warning | Actor in both potentialOwner and excludedOwner                       |
-//! | G-023 | warning | SLA should set calendarType=business when calendar sidecar present   |
+//! | G-023 | warning | SLA should set calendarType=business when scoped calendar sidecar present |
+//! | G-060 | error   | SLA MUST use business days when a Business Calendar targets this workflow (no kernel required) |
+//! | G-063 | error   | notificationTemplateRef / noticeTemplateRef MUST resolve to template keys (no kernel required) |
 //! | G-024 | warning | Delegation verification config present when kernel has determination  |
 //! | G-027 | error   | Sub-delegation chain depth must not exceed maxDelegationDepth        |
 //! | G-028 | error   | hold policies MUST attach to hold-tagged kernel states               |
@@ -180,6 +182,10 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
         let typed_gov =
             serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
 
+        // G-023 / G-060 / G-063 only need governance + project sidecars (no typed kernel).
+        check_sla_business_calendar(gov, project, diagnostics);
+        check_notification_template_refs(gov, project, diagnostics);
+
         if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
             check_target_workflow_match_typed(gov, kernel, diagnostics);
             if let Some(tg) = &typed_gov {
@@ -199,7 +205,6 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
             check_adverse_decision_due_process(gov, &kc.tags, diagnostics);
             check_reasoning_tier_for_determination(gov, &kc.tags, diagnostics);
             check_excluded_owner_override(gov, diagnostics);
-            check_sla_business_calendar(gov, project, diagnostics);
             check_delegation_verification_on_determination(gov, &kc.tags, diagnostics);
             check_binding_resolution_date_refs(gov, &kc.case_fields, diagnostics);
         }
@@ -729,21 +734,87 @@ fn check_excluded_owner_override(
 }
 
 // ---------------------------------------------------------------------------
-// G-023: SLA uses business calendar when sidecar present
+// G-023 / G-060: SLA uses business days when scoped Business Calendar exists
 // ---------------------------------------------------------------------------
 
-/// G-023: SLA evaluation MUST use business calendar days when a Business
-/// Calendar sidecar is present in the project.
+/// True when some Business Calendar document's `targetWorkflow` equals `workflow_url`.
+fn business_calendar_targets_workflow(project: &WosProject, workflow_url: &str) -> bool {
+    project
+        .documents()
+        .iter()
+        .filter(|d| d.kind == DocumentKind::BusinessCalendar)
+        .any(|d| {
+            d.value
+                .get("targetWorkflow")
+                .and_then(Value::as_str)
+                .is_some_and(|t| t == workflow_url)
+        })
+}
+
+/// Template keys declared in Notification Template sidecars for `workflow_url`.
+fn notification_template_keys_for_workflow(
+    project: &WosProject,
+    workflow_url: &str,
+) -> std::collections::HashSet<String> {
+    let mut keys = std::collections::HashSet::new();
+    for d in project.of_kind(DocumentKind::NotificationTemplate) {
+        let matches_wf = d
+            .value
+            .get("targetWorkflow")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t == workflow_url);
+        if !matches_wf {
+            continue;
+        }
+        if let Some(templates) = d.value.get("templates").and_then(Value::as_object) {
+            for k in templates.keys() {
+                keys.insert(k.clone());
+            }
+        }
+    }
+    keys
+}
+
+/// Collect `(jsonPath, refValue)` for every `notificationTemplateRef` / `noticeTemplateRef`.
+fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(String, String)>) {
+    match value {
+        Value::Object(map) => {
+            for (k, v) in map {
+                let p = if base.is_empty() {
+                    format!("/{k}")
+                } else {
+                    format!("{base}/{k}")
+                };
+                if (k == "notificationTemplateRef" || k == "noticeTemplateRef")
+                    && let Some(s) = v.as_str()
+                {
+                    out.push((p, s.to_string()));
+                    continue;
+                }
+                collect_governance_template_refs(v, &p, out);
+            }
+        }
+        Value::Array(arr) => {
+            for (i, v) in arr.iter().enumerate() {
+                collect_governance_template_refs(v, &format!("{base}/{i}"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// G-023: When a Business Calendar targets this workflow, SLA should use `calendarType: business`.
+///
+/// G-060 (BC S6.1): Same condition is a MUST — emit an error.
 fn check_sla_business_calendar(
     gov: &crate::document::WosDocument,
     project: &WosProject,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let has_calendar = project
-        .documents()
-        .iter()
-        .any(|d| d.kind == DocumentKind::BusinessCalendar);
-    if !has_calendar {
+    let Some(target_wf) = gov.value.get("targetWorkflow").and_then(Value::as_str) else {
+        return;
+    };
+    if !business_calendar_targets_workflow(project, target_wf) {
         return;
     }
     let Some(tasks) = gov.value.get("tasks").and_then(Value::as_object) else {
@@ -757,10 +828,67 @@ fn check_sla_business_calendar(
             .map(|c| c == "business")
             .unwrap_or(false);
         if !uses_business {
+            let path = format!("/tasks/{task_name}/sla");
+            // G-023 (Governance S10): authoring SHOULD; G-060 (BC S6.1): normative MUST — both fire so
+            // authors get a warning-level hint plus the error-level obligation.
             diagnostics.push(Diagnostic::warning(
                 "G-023",
-                &format!("/tasks/{task_name}/sla"),
-                "a business calendar sidecar is present; SLA should set calendarType to 'business'",
+                &path,
+                "a business calendar sidecar targets this workflow; SLA should set calendarType to 'business'",
+            ));
+            diagnostics.push(Diagnostic::error(
+                "G-060",
+                &path,
+                "when a Business Calendar sidecar targets this workflow, SLA evaluation MUST use business days (set calendarType to 'business')",
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// G-063: Notification template references resolve
+// ---------------------------------------------------------------------------
+
+/// G-063: `notificationTemplateRef` / `noticeTemplateRef` MUST resolve to a
+/// template key in a Notification Template sidecar for the same `targetWorkflow`.
+fn check_notification_template_refs(
+    gov: &crate::document::WosDocument,
+    project: &WosProject,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(target_wf) = gov.value.get("targetWorkflow").and_then(Value::as_str) else {
+        return;
+    };
+
+    let mut refs = Vec::new();
+    collect_governance_template_refs(&gov.value, "", &mut refs);
+    if refs.is_empty() {
+        return;
+    }
+
+    let keys = notification_template_keys_for_workflow(project, target_wf);
+
+    if keys.is_empty() {
+        for (path, r) in refs {
+            diagnostics.push(Diagnostic::error(
+                "G-063",
+                &path,
+                format!(
+                    "notification template ref '{r}' but no Notification Template sidecar targets this workflow"
+                ),
+            ));
+        }
+        return;
+    }
+
+    for (path, r) in refs {
+        if !keys.contains(&r) {
+            diagnostics.push(Diagnostic::error(
+                "G-063",
+                &path,
+                format!(
+                    "notification template ref '{r}' does not match any template key in the Notification Template sidecar"
+                ),
             ));
         }
     }

@@ -1289,9 +1289,12 @@ fn g023_sla_without_business_calendar_type_flagged() {
             }
         }
     });
-    // Add a business calendar sidecar.
+    // Business calendar MUST target the same workflow as governance (G-060 scoping).
     let calendar = json!({
         "$wosBusinessCalendar": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "timezone": "UTC",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
         "holidays": []
     });
 
@@ -1302,6 +1305,8 @@ fn g023_sla_without_business_calendar_type_flagged() {
     ]);
     assert!(has_rule(&diags, "G-023"), "expected G-023: {diags:?}");
     assert_eq!(severity_of(&diags, "G-023"), Some(Severity::Warning));
+    assert!(has_rule(&diags, "G-060"), "expected G-060: {diags:?}");
+    assert_eq!(severity_of(&diags, "G-060"), Some(Severity::Error));
 }
 
 #[test]
@@ -1318,6 +1323,9 @@ fn g023_sla_with_business_calendar_type_clean() {
     });
     let calendar = json!({
         "$wosBusinessCalendar": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "timezone": "UTC",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
         "holidays": []
     });
 
@@ -1327,6 +1335,7 @@ fn g023_sla_with_business_calendar_type_clean() {
         ("business-calendar.json", calendar),
     ]);
     assert!(!has_rule(&diags, "G-023"), "unexpected G-023: {diags:?}");
+    assert!(!has_rule(&diags, "G-060"), "unexpected G-060: {diags:?}");
 }
 
 #[test]
@@ -1347,6 +1356,167 @@ fn g023_no_calendar_sidecar_skips_check() {
         !has_rule(&diags, "G-023"),
         "unexpected G-023 without calendar: {diags:?}"
     );
+}
+
+#[test]
+fn g060_calendar_different_workflow_skips_mandatory_sla_check() {
+    let kernel = base_kernel();
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "sla": { "duration": "P5D", "calendarType": "calendar" }
+        }
+    });
+    let calendar = json!({
+        "$wosBusinessCalendar": "1.0",
+        "targetWorkflow": "https://other.example.com/other-workflow",
+        "timezone": "UTC",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        "holidays": []
+    });
+
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("governance.json", gov),
+        ("business-calendar.json", calendar),
+    ]);
+    assert!(
+        !has_rule(&diags, "G-060"),
+        "G-060 must only apply when the calendar targets the same workflow: {diags:?}"
+    );
+    assert!(
+        !has_rule(&diags, "G-023"),
+        "G-023 should also be scoped to matching targetWorkflow: {diags:?}"
+    );
+}
+
+// ========================================================================
+// G-063: Template refs MUST resolve to Notification Template sidecar keys.
+// ========================================================================
+
+#[test]
+fn g063_notice_template_ref_without_sidecar_flagged() {
+    let kernel = base_kernel();
+    let mut gov = base_governance();
+    gov["dueProcess"] = json!({
+        "noticeRequired": true,
+        "noticeTemplateRef": "missingTemplate"
+    });
+
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
+    assert_eq!(severity_of(&diags, "G-063"), Some(Severity::Error));
+}
+
+#[test]
+fn g063_notice_template_ref_resolves_clean() {
+    let kernel = base_kernel();
+    let mut gov = base_governance();
+    gov["dueProcess"] = json!({
+        "noticeRequired": true,
+        "noticeTemplateRef": "adverseTpl"
+    });
+    let notifications = json!({
+        "$wosNotificationTemplate": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "templates": {
+            "adverseTpl": {
+                "category": "adverse-decision",
+                "sections": [
+                    { "id": "determination", "contentType": "structured", "content": "d" },
+                    { "id": "reasons", "contentType": "structured", "content": "r" },
+                    { "id": "appealRights", "contentType": "appeal-rights", "content": "a" },
+                    { "id": "appealInstructions", "contentType": "action-required", "content": "i" }
+                ]
+            }
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![
+        ("kernel.json", kernel),
+        ("governance.json", gov),
+        ("notifications.json", notifications),
+    ]);
+    assert!(!has_rule(&diags, "G-063"), "unexpected G-063: {diags:?}");
+}
+
+#[test]
+fn g063_no_template_refs_skips_check() {
+    let kernel = base_kernel();
+    let gov = base_governance();
+
+    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-063"), "unexpected G-063: {diags:?}");
+}
+
+#[test]
+fn g063_notice_template_ref_runs_without_kernel() {
+    let mut gov = base_governance();
+    gov["dueProcess"] = json!({
+        "noticeRequired": true,
+        "noticeTemplateRef": "adverseTpl"
+    });
+    let notifications = json!({
+        "$wosNotificationTemplate": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "templates": {
+            "adverseTpl": {
+                "category": "adverse-decision",
+                "sections": [
+                    { "id": "determination", "contentType": "structured", "content": "d" },
+                    { "id": "reasons", "contentType": "structured", "content": "r" },
+                    { "id": "appealRights", "contentType": "appeal-rights", "content": "a" },
+                    { "id": "appealInstructions", "contentType": "action-required", "content": "i" }
+                ]
+            }
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![
+        ("governance.json", gov),
+        ("notifications.json", notifications),
+    ]);
+    assert!(!has_rule(&diags, "G-063"), "unexpected G-063: {diags:?}");
+}
+
+#[test]
+fn g063_notice_template_ref_without_kernel_missing_sidecar_flagged() {
+    let mut gov = base_governance();
+    gov["dueProcess"] = json!({
+        "noticeRequired": true,
+        "noticeTemplateRef": "orphanRef"
+    });
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
+}
+
+#[test]
+fn g060_sla_violation_runs_without_kernel() {
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "sla": {
+                "duration": "P5D",
+                "calendarType": "calendar"
+            }
+        }
+    });
+    let calendar = json!({
+        "$wosBusinessCalendar": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "timezone": "UTC",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        "holidays": []
+    });
+
+    let diags = lint_project_with_docs(vec![
+        ("governance.json", gov),
+        ("business-calendar.json", calendar),
+    ]);
+    assert!(has_rule(&diags, "G-060"), "expected G-060: {diags:?}");
+    assert_eq!(severity_of(&diags, "G-060"), Some(Severity::Error));
+    assert!(has_rule(&diags, "G-023"), "expected G-023: {diags:?}");
 }
 
 // ========================================================================
