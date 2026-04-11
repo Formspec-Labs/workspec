@@ -53,7 +53,7 @@
 | K-007 | Kernel S4.10 / S13.3 | Event names MUST NOT use the `$` prefix (kernel-reserved). | Event name pattern not enforced. | T1 | lifecycle-soundness | T1 |
 | K-008 | Kernel S4.8 | Parallel state outgoing transitions MUST use `$join` as event. | Conditional event constraint by parent type. | T1 | lifecycle-soundness | T1+E2E |
 | K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Map key uniqueness + cross-ref. | T1 | actor-consistency | — |
-| K-010 | Kernel S3.3 | Every action MUST reference a declared actor. | Cross-path reference. | T2-xdoc | actor-consistency | — |
+| K-010 | Kernel S3.3 | createTask `assignTo` MUST reference a declared kernel actor. | Cross-path reference. | T2-xdoc | actor-consistency | tier2_rules.rs |
 | K-011 | Kernel S4.2 / LCD S2.1 | Same document + events MUST produce same transitions (determinism). | Runtime behavioral property. | T3 | determinism | E2E |
 | K-012 | Kernel S4.6 | Guards MUST be valid FEL expressions. | Opaque string in schema. | T2-ast | expression-validity | AST |
 | K-013 | Kernel S4.13 | Milestone conditions MUST be valid FEL expressions. | Opaque string in schema. | T2-ast | expression-validity | AST |
@@ -80,7 +80,7 @@
 | K-034 | LCD S2.4 | Compound entry: initialState if target, skip if descendant. | Runtime entry-path computation. | T3 | lifecycle-soundness | E2E |
 | K-035 | LCD S3.4 | History cleared on parent exit or region cancellation. | Runtime clearing rule. | T3 | lifecycle-soundness | — |
 | K-036 | LCD S4.1 | All parallel regions initialized atomically. | Runtime concurrency. | T3 | lifecycle-soundness | E2E |
-| K-037 | LCD S4.3 | Fail-fast `$join` fires only on error final state. | Transition-graph reachability. | T2-xdoc | lifecycle-soundness | — |
+| K-037 | LCD S4.3 | Fail-fast `$join` fires only on error final state. | Transition-graph reachability. | T2-xdoc | lifecycle-soundness | tier2_rules.rs |
 | K-038 | LCD S4.4 | Cancelled region timers MUST be cancelled. | Runtime timer scoping. | T3 | timer | E2E |
 | K-039 | LCD S5.4 | Compensation in reverse of forward completion order. | Runtime ordering. | T3 | compensation | — |
 | K-040 | LCD S5.5 | Pivot step MUST NOT receive compensation. | Runtime identification. | T3 | compensation | — |
@@ -93,7 +93,7 @@
 | K-047 | Kernel S5.5 | Case relationships MUST NOT affect lifecycle evaluation (metadata only). | Semantic constraint on processor behavior. | T3 | lifecycle-soundness | E2E |
 | K-048 | Kernel S5.5 | Case relationship `type` extensibility MUST use `x-` prefix for non-standard values. | Schema enum does not enforce prefix on extension values. | T1 | cross-reference | T1 |
 
-**Kernel:** 48 constraints — 16 T1, 6 T2, 26 T3. **Tested: 29 of 48** (14 T1, 4 AST, 11 E2E).
+**Kernel:** 48 constraints — 16 T1, 6 T2, 26 T3. **Tested: 31 of 48** (14 T1, 4 AST, 2 T2, 11 E2E).
 
 ---
 
@@ -103,12 +103,12 @@
 |---|---|---|---|---|---|---|
 | G-001 | WG S3 / S3.7 | Due process requirements MUST be enforced when kernel declares `impactLevel` of `rights-impacting` or `safety-impacting`. | Cross-document: schema cannot read the kernel's `impactLevel`. | T2-xdoc | due-process-completeness | T2 |
 | G-002 | WG S3.2 | Affected individual MUST receive notice before the adverse decision takes effect. | Runtime execution ordering. | T3 | due-process-completeness | — |
-| G-003 | WG S3.2 | Notice MUST include specific determination, individualized reason codes, and appeal instructions. | Schema validates structure but cannot verify content is individualized. | T2-xdoc | due-process-completeness | — |
+| G-003 | WG S3.2 | Notice MUST include specific determination, individualized reason codes, and appeal instructions. | Schema validates structure but cannot verify content is individualized. | T2-xdoc | due-process-completeness | tier2_rules.rs |
 | G-004 | WG S3.3 | Explanation level MUST be `individualized` when kernel's `impactLevel` is `rights-impacting`. | Cross-document conditional requirement. | T2-xdoc | cross-reference | T2 |
 | G-005 | WG S3.4 | Adverse decisions MUST include positive and negative counterfactuals when `impactLevel` is `rights-impacting`. | Cross-document condition. | T2-xdoc | due-process-completeness | T2 |
 | G-006 | WG S3.5 | Appeal MUST be reviewed by an adjudicator independent of the original determination. | Runtime actor identity verification. | T3 | separation-of-duties | — |
 | G-007 | WG S3.5 | Filing an appeal MUST produce a provenance record. | Runtime requirement. | T3 | pipeline-validity | — |
-| G-008 | WG S3.6 | When `continuationOfServices` is true, workflow topology MUST freeze adverse impacts during appeal. | Cannot verify kernel topology implements continuation. | T2-xdoc | cross-reference | — |
+| G-008 | WG S3.6 | When `continuationOfServices` is true, workflow topology MUST freeze adverse impacts during appeal. | Cannot verify kernel topology implements continuation. | T2-xdoc | cross-reference | tier2_rules.rs |
 | G-009 | WG S3.7 | When a transition tagged `adverse-decision` fires, processor MUST enforce due process policy. | Runtime tag-matching and enforcement. | T2-xdoc | tag-matching | T2 |
 | G-010 | WG S4.2 | `independentFirst` MUST enforce reviewer records independent assessment before any recommendation is accessible. | Runtime UI ordering constraint. | T3 | due-process-completeness | — |
 | G-011 | WG S4.3 | Review protocol tags MUST match tags that actually appear in the target kernel document. | Cross-document tag resolution. | T2-xdoc | tag-matching | T2 |
@@ -123,8 +123,8 @@
 | G-020 | WG S8.2 | Every rejection MUST record: which gate failed, the input, the threshold, what would pass. | Runtime provenance content requirement. | T3 | pipeline-validity | — |
 | G-021 | WG S10.1 | All task state transitions MUST be recorded in provenance. | Runtime execution requirement. | T3 | pipeline-validity | — |
 | G-022 | WG S10.2 | When actor appears in both `potentialOwner` and `excludedOwner`, `excludedOwner` MUST override. | Processor-side semantics. | T2-xdoc | separation-of-duties | T2 |
-| G-023 | WG S10.3 | SLA evaluation MUST use business calendar days when a Business Calendar sidecar is present. | Cross-document runtime dependency. | T2-xdoc | temporal-resolution | — |
-| G-024 | WG S11.4 | When `determination`-tagged transition fires, processor MUST verify acting actor has valid delegation. | Runtime identity check. | T2-xdoc | delegation-validity | — |
+| G-023 | WG S10.3 | SLA evaluation MUST use business calendar days when a Business Calendar sidecar is present. | Cross-document runtime dependency. | T2-xdoc | temporal-resolution | tier2_rules.rs |
+| G-024 | WG S11.4 | When `determination`-tagged transition fires, processor MUST verify acting actor has valid delegation. | Runtime identity check. | T2-xdoc | delegation-validity | tier2_rules.rs |
 | G-025 | WG S11.4 | Determinations without valid delegation are conformance errors. | Runtime actor-identity check. | T3 | delegation-validity | — |
 | G-026 | WG S11.4 | Delegation used MUST be referenced in provenance record. | Runtime content requirement. | T3 | delegation-validity | — |
 | G-027 | WG S11.5 | Sub-delegation MUST respect `maxDelegationDepth`. | Requires traversing delegation chain. | T2-xdoc | delegation-validity | T2 |
@@ -136,7 +136,7 @@
 | G-033 | WG S13.2 / PP S1.4 | When no entry covers the resolution date, behavior is undefined. | Schema allows any ordering; cannot detect coverage gaps. | T2-xdoc | temporal-resolution | T2 |
 | G-034 | WG S14 | `targetWorkflow` MUST match `url` of the target kernel document. | Cross-document URI resolution. | T2-xdoc | cross-reference | T2 |
 | G-035 | DP S1 | `targetGovernance` MUST reference a valid governance document. | Cross-document type resolution. | T2-xdoc | cross-reference | T2 |
-| G-036 | DP S1.3 | `independenceConstraint` MUST encode a mechanism preventing the original decision-maker from reviewing. | Prose constraint on string content. | T2-xdoc | separation-of-duties | — |
+| G-036 | DP S1.3 | `independenceConstraint` MUST encode a mechanism preventing the original decision-maker from reviewing. | Prose constraint on string content. | T2-xdoc | separation-of-duties | tier2_rules.rs |
 | G-037 | AL S1.1 | Assertion `id` values MUST be unique within the library. | Uniqueness on nested property across array. | T1 | assertion-validity | T1 |
 | G-038 | AL S1.2 | When type is `arithmetic`/`range`/`temporal`, `expression` SHOULD be present. | Conditional field presence based on type. | T1 | assertion-validity | T1 |
 | G-039 | AL S1.2 | When type is `source-grounded`/`consistency`, `fields` array SHOULD be present. | Conditional field presence based on type. | T1 | assertion-validity | T1 |
@@ -167,7 +167,7 @@
 | G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | -- |
 | G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | -- |
 
-**Governance:** 65 constraints — 14 T1, 27 T2, 24 T3. **Tested: 32 of 65** (10 T1, 2 AST, 20 T2).
+**Governance:** 65 constraints — 14 T1, 27 T2, 24 T3. **Tested: 37 of 65** (10 T1, 2 AST, 25 T2).
 
 ---
 
@@ -200,12 +200,12 @@
 | AI-023 | AI S5.3 | Every agent invocation MUST have a reachable path to completion without any agent. | Graph reachability analysis over lifecycle. | T2-xdoc | fallback-chain-validity | — |
 | AI-024 | AI S5.4 | Escalation conditions MUST be valid FEL referencing `agent` context. | FEL AST analysis. | T2-ast | expression-validity | AST |
 | AI-025 | AI S5.4 | Human approval required for escalation. | Runtime workflow event. | T3 | autonomy-constraint | — |
-| AI-026 | AI S5.4 | Escalation MUST have `escalationExpiry`; agent reverts when expired. | Runtime temporal constraint. | T2-xdoc | autonomy-constraint | — |
+| AI-026 | AI S5.4 | Escalation MUST have `escalationExpiry`; agent reverts when expired. | Runtime temporal constraint. | T2-xdoc | autonomy-constraint | tier2_rules.rs |
 | AI-027 | AI S5.4 | Escalation does NOT bypass deontic constraints. | Runtime enforcement behavior. | T3 | deontic-validity | — |
 | AI-028 | AI S5.5 | Demotion takes effect for next invocation; in-flight annotated. | Runtime timing rule. | T3 | autonomy-constraint | — |
 | AI-029 | AI S5.5 | `pendingRecalibration` keeps demoted level until escalation conditions met. | Runtime state tracking. | T3 | autonomy-constraint | — |
 | AI-030 | AI S5.6 | Dynamic autonomy MUST NOT exceed effective cap. | Runtime FEL computation. | T3 | autonomy-constraint | — |
-| AI-031 | AI S6.2 | Agent output contract MUST apply same rules as human-facing form. | Cross-form semantic equivalence. | T2-xdoc | agent-consistency | — |
+| AI-031 | AI S6.2 | Agent output contract MUST apply same rules as human-facing form. | Cross-form semantic equivalence. | T2-xdoc | agent-consistency | tier2_rules.rs |
 | AI-032 | AI S6.2 | Validation failures MUST trigger fallback, not silent acceptance. | Runtime enforcement behavior. | T3 | fallback-chain-validity | — |
 | AI-033 | AI S6.2 | Agent-touched fields MUST be annotated with `agentProvenance`. | Runtime output annotation. | T3 | agent-consistency | — |
 | AI-034 | AI S7.1 | Every agent output MUST have a ConfidenceReport. | Runtime output requirement. | T3 | confidence-validity | — |
@@ -258,7 +258,7 @@
 | VR-002 | VerifReport S1 | Proven-unsafe MUST prevent workflow activation until corrected. | Cross-document lifecycle gating. | T3 | smt-compatibility | — |
 | VR-003 | VerifReport S1 | `counterexample` MUST be present when result is `proven-unsafe`. | Conditional field presence based on sibling value. | T2-xdoc | smt-compatibility | T2 |
 
-**AI + Advanced:** 82 constraints — 6 T1, 19 T2, 57 T3. **Tested: 19 of 82** (5 T1, 4 AST, 10 T2).
+**AI + Advanced:** 82 constraints — 6 T1, 19 T2, 57 T3. **Tested: 21 of 82** (5 T1, 4 AST, 12 T2).
 
 ---
 
@@ -266,17 +266,17 @@
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
-| Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 29 | 60% |
-| Governance + Sidecars | 65 | 14 | 28 | 23 | 32 | 49% |
-| AI + Advanced | 76 | 4 | 17 | 55 | 15 | 20% |
-| **Total** | **189** | **34** | **51** | **104** | **76** | **40%** |
+| Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 31 | 65% |
+| Governance + Sidecars | 65 | 14 | 28 | 23 | 37 | 57% |
+| AI + Advanced | 76 | 4 | 17 | 55 | 17 | 22% |
+| **Total** | **189** | **34** | **51** | **104** | **85** | **45%** |
 
 **Test coverage by test type:**
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
 | T1 | `crates/wos-lint/tests/tier1_rules.rs` | 29 (K-001..K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049, DM-001, EQ-001) |
-| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 31 (G-001, G-004, G-005, G-009, G-011, G-014, G-015, G-022, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-042, AI-043, AI-046, AI-056, AG-008, AG-017, DM-002, VR-003) |
+| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 40 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 10 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 12 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047) |
 
@@ -366,11 +366,11 @@ Audit date: 2026-04-09. Cross-referenced against all test files in `crates/wos-l
 | Rules with at least one test | 76 |
 | Rules with **no** test | 105 |
 
-### Tested rule inventory (76 rules)
+### Tested rule inventory (85 rules)
 
 **From `tier1_rules.rs` (27 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-046, AI-049.
 
-**From `tier2_rules.rs` (31 rules):** G-001, G-004, G-005, G-009, G-011, G-014, G-015, G-022, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-017, DM-002, VR-003.
+**From `tier2_rules.rs` (40 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-017, DM-002, VR-003.
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014.
 
@@ -388,21 +388,13 @@ Audit date: 2026-04-09. Cross-referenced against all test files in `crates/wos-l
 | DM-001 | DriftMonitor extension keys `x-` prefixed. Reuses K-030 logic; no DriftMonitor-specific test. |
 | EQ-001 | EquityConfig extension keys `x-` prefixed. Reuses K-030 logic; no EquityConfig-specific test. |
 
-#### T2 gaps (11 rules) -- cross-document / AST, implemented but not tested
+#### T2 gaps (3 rules) -- cross-document / AST, not yet implemented
 
 | ID | Tier | Note |
 |----|------|------|
-| G-003 | T2-xdoc | Notice individualized content for rights-impacting. Implemented, needs test. |
-| G-008 | T2-xdoc | `continuationOfServices` requires hold-tagged kernel state. Implemented, needs test. |
-| G-023 | T2-xdoc | SLA business calendar when sidecar present. Implemented, needs test. |
-| G-024 | T2-xdoc | Delegation verification when kernel has determination. Implemented, needs test. |
-| G-036 | T2-xdoc | `independenceConstraint` encodes prevention mechanism. Implemented, needs test. |
-| K-010 | T2-xdoc | Every action must reference a declared actor. **Not implemented.** |
-| K-037 | T2-xdoc | Fail-fast `$join` fires only on error final state. **Not implemented.** |
 | AG-012 | T2-ast | Quantifiers over finite domains. **Not implemented** (requires type/ontology knowledge). |
 | AI-023 | T2-xdoc | Agent-free completion path reachable. **Not implemented** (graph reachability). |
-| AI-026 | T2-xdoc | Escalation rules should declare `escalationExpiry`. Implemented, needs test. |
-| AI-031 | T2-xdoc | Agent outputContract formUrl matches kernel. Implemented, needs test. |
+| AG-010 | T2-ast | Verifiable constraints MUST satisfy SMT subset restrictions. **Not implemented** (FEL AST analysis). |
 
 #### T3 gaps (89 rules) -- dynamic conformance, fixture-tested at runtime
 
@@ -412,7 +404,7 @@ All 89 remaining untested rules are Tier 3 (dynamic/conformance). These require 
 - **Provenance completeness (3):** K-018, K-028, G-007 -- relationship change provenance, migration provenance, appeal provenance.
 - **Timer behavior (5):** K-038, K-043, K-044, K-045, K-047 -- cancel on region exit, reentry reset, route to creator, tolerance, case-relationship metadata-only.
 - **Compensation (5):** K-027, K-039, K-040, K-041, K-042 -- append-only, reverse order, pivot excluded, nested scope, completion event.
-- **Lifecycle semantics (3):** K-032, K-035, K-037 -- state/case separation, history clearing, fail-fast join.
+- **Lifecycle semantics (2):** K-032, K-035 -- state/case separation, history clearing. (K-037 fail-fast join moved to T2 static check.)
 - **Due process enforcement (7):** G-002, G-006, G-010, G-016, G-017, G-018, G-019 -- notice timing, independent adjudicator, first-impression, random selection, separation of duties, override rationale, immutable overrides.
 - **Pipeline / provenance (5):** G-012, G-013, G-020, G-021, G-025 -- stage provenance, weakest-link risk, rejection records, task transition records, delegation conformance errors.
 - **Delegation / hold (5):** G-026, G-030, G-032, G-049, G-054 -- delegation in provenance, hold timer, temporal resolution algorithm, binding-type neutrality, resume-before-timer.

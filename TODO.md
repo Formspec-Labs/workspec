@@ -1,13 +1,14 @@
 # WOS TODO
 
 **Last audited:** 2026-04-10
-**Counts:** 18 specs, 18 schemas, 24 fixtures, 3 crates, 189 lint rules (76 tested)
+**Counts:** 18 specs, 18 schemas, 26 fixtures (2 T3 red), 3 crates, 189 lint rules (85 tested)
 
 [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) |
 [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs. implementation boundary) |
 [Implementation Plan](../thoughts/reviews/2026-04-09-wos-core-companion-review.md) (phases, success criteria, content recovery) |
 [LINT-MATRIX](LINT-MATRIX.md) |
-[Runtime Companion](specs/companions/runtime.md)
+[Runtime Companion](specs/companions/runtime.md) |
+[Feature Matrix](WOS-FEATURE-MATRIX.md) (competitive comparison, implementation status, audit corrections)
 
 The order below minimizes tech debt. Each phase depends on the one before it. Doing Phase 3 before Phase 2 means building on raw JSON that gets rewritten. Doing Phase 4 before Phase 3 means writing fixtures against an API that changes.
 
@@ -90,7 +91,7 @@ Move the domain model and evaluation algorithm from `wos-conformance` into `wos-
 ### 3.2 Move evaluation logic
 
 - [x] Implement full typed evaluation algorithm in `wos-core/eval.rs`: `process_event`, `try_fire_transition`, `fire_transition`, `enter_state`, guard evaluation via FEL, action execution (setData/startTimer/cancelTimer), parallel region routing, $join generation. Uses typed `State`/`Transition`/`Action` — no `serde_json::Value` walking. Includes `IndexedState` flat index, `ObservedTransition`, and `parse_iso_duration_to_ms`.
-- [ ] Consolidate timer logic: wos-core::Timers is ready; conformance's private Timer has different field names (timer_id vs id). Deferred until conformance is migrated to use wos-core::Evaluator.
+- [x] Consolidate timer logic: conformance engine now delegates to `wos_core::Evaluator`, which uses `wos_core::Timers` and `wos_core::timer::Timer` internally. Conformance's private `Timer` struct (with `timer_id` field name mismatch) is deleted. The `fel-core` direct dependency was also removed from `wos-conformance/Cargo.toml`.
 - [x] Consolidate provenance: wos-core now has all 10 `ProvenanceKind` variants (added OnEntry, OnExit, ActionExecuted, InvalidDuration) and all constructor methods. Conformance now re-exports from wos-core. Field name: `record_kind` (matches conformance convention).
 - [x] Add `EvalContext::from_case_state()` constructor. Also enriched `to_fel_environment()` to produce `caseFile` as both FEL object and dotted paths, plus `event` and `instance` namespaces — matching conformance engine's `build_fel_context` behavior.
 
@@ -108,11 +109,11 @@ Move the domain model and evaluation algorithm from `wos-conformance` into `wos-
 ### 3.5 Adapt wos-conformance
 
 - [x] Add `wos-core` to `wos-conformance/Cargo.toml`. _(done — wos-core now in deps)_
-- [ ] Make `wos-conformance` a thin harness calling `wos-core::Evaluator`. _(wos-core::Evaluator is ready; conformance engine still uses its own Value-walking implementation)_
-- [x] Remove duplicate `ProvenanceRecord`/`ProvenanceKind` from conformance — now re-exports from wos-core. Timer not yet consolidated (field name mismatch).
-- [ ] Implement `StubValidator`, `StubService`, `InMemoryStore`.
-- [ ] Add `contract_outcomes` to fixture format for Formspec coprocessor testing.
-- [x] Verify all 151+ existing tests still pass. _(194 total: 151 original + 20 deser/eval + 8 duration parsing + 15 conformance-engine = all pass. Duration parser consolidated from conformance to wos-core.)_
+- [x] Make `wos-conformance` a thin harness calling `wos-core::Evaluator`. _(engine.rs rewritten: deserializes kernel into `KernelDocument`, creates `Evaluator`, delegates all lifecycle evaluation. No `serde_json::Value` walking in the engine. Removed `fel-core` and `wos-lint` direct dependencies.)_
+- [x] Remove duplicate `ProvenanceRecord`/`ProvenanceKind` from conformance — now re-exports from wos-core. Timer consolidated (conformance's private `Timer` struct deleted).
+- [x] Implement `StubValidator`, `StubService`, `InMemoryStore`. _(stubs.rs: `InMemoryStore` implements `InstanceStore`, `StubValidator` implements `ContractValidator` with configurable pass/fail, `StubService` implements `ExternalService` with configurable response. 6 tests.)_
+- [x] Add `contract_outcomes` to fixture format for Formspec coprocessor testing. _(fixture.rs: `contract_outcomes: HashMap<String, ContractOutcome>` with `ContractOutcome { valid, errors }`. Serde-defaulted so existing fixtures are unaffected.)_
+- [x] Verify all 151+ existing tests still pass. _(208 total: 151 original + 20 deser/eval + 8 duration parsing + 15 conformance-engine + 8 sidecar deser + 6 stub tests = all pass.)_
 
 ---
 
@@ -120,46 +121,89 @@ Move the domain model and evaluation algorithm from `wos-conformance` into `wos-
 
 Write failing fixtures for every untested T3 rule. Each fixture declares expected behavior that the engine can't yet produce. This is the spec-as-executable-tests step.
 
-Each fixture targets a specific engine capability. Write them in capability batches:
+### Fixture strategy
 
-| Batch | Fixtures | Rule IDs | Engine dependency |
-| ----- | -------- | -------- | ----------------- |
-| Deontic enforcement | ~15 | AI-009 — AI-017, AI-027, AI-054, AI-055 | `deontic.rs` |
-| Compensation | ~8 | K-027, K-039 — K-042 | `compensation.rs` |
-| Confidence framework | ~12 | AI-034 — AI-038, AG-004, AG-016, AI-044, AI-045 | `confidence.rs` |
-| DCR marking state | ~8 | AG-001 — AG-003, AG-010, AG-015, AG-016 | `dcr.rs` |
-| Delegation runtime | ~6 | G-024 — G-027, G-053 | `delegation.rs` |
-| Cancel-siblings/fail-fast | ~4 | K-037, K-044, K-045 | `eval.rs` |
-| Autonomy caps | ~15 | AI-005, AI-019, AI-021, AI-022, AI-025, AI-028 — AI-030, AC-001, AC-002, AG-005 — AG-007 | `autonomy.rs` |
-| Agent provenance | ~10 | AI-006, AI-008, AI-033, AI-047, AI-052, AI-053, AG-009, AI-057 | `agent.rs` |
-| Due process runtime | ~8 | G-002, G-006, G-007, G-010, G-016, G-017, G-018 | `due_process.rs` |
-| Pipeline execution | ~8 | G-012, G-013, G-019, G-020, G-021, G-032, G-049 | `pipeline.rs` |
+- One fixture per rule (or small tightly-coupled group).
+- Synthetic minimal kernels, not extensions of benefits-adjudication.
+- Naming: `{rule-id}-{short-description}.json` (fixture), with matching kernel in `fixtures/kernel/`.
+- Test pattern: `#[ignore = "Phase 5: requires {module} -- {rule-id}"]`.
+- `cargo test` skips red tests; `cargo test -- --ignored` shows what remains.
 
-Also write tests for the 12 untested T2 rules: G-003, G-008, G-023, G-024, G-036, K-010, K-037, AG-010, AG-012, AI-023, AI-026, AI-031.
+### Batch table (priority order)
 
-### Phase 4 batch corrections
+| # | Batch | Rules | Rule IDs | Engine dep |
+|---|-------|-------|----------|------------|
+| 1 | Cancel-siblings/fail-fast | 2 | K-044, K-045 | `eval.rs` |
+| 2 | Hold/resume lifecycle | 2 | G-030, G-054 | `eval.rs` |
+| 3 | Deontic enforcement | 20 | AI-009, AI-010, AI-011, AI-012, AI-013, AI-014, AI-015, AI-016, AI-017, AI-027, AI-051, AI-054, AI-055 | `deontic.rs` |
+| 4 | Autonomy caps | 15 | AI-005, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AC-001, AC-002, AG-005, AG-006, AG-007 | `autonomy.rs` |
+| 5 | Confidence framework | 12 | AI-034, AI-035, AI-036, AI-037, AI-038, AG-004, AG-016 | `confidence.rs` |
+| 6 | Due process runtime | 9 | G-002, G-006, G-007, G-010, G-016, G-017, G-018, AI-045 | `due_process.rs` |
+| 7 | Pipeline execution | 8 | G-012, G-013, G-019, G-020, G-021, G-032, G-049 | `pipeline.rs` |
+| 8 | Compensation | 7 | K-027, K-039, K-040, K-041, K-042 | `compensation.rs` |
+| 9 | Delegation runtime | 5 | G-025, G-026 + existing G-rules with runtime delegation semantics | `delegation.rs` |
+| 10 | Agent provenance + fallback | 17 | AI-006, AI-008, AI-033, AI-044, AI-047, AI-052, AI-053, AG-009, AI-057, AI-032, AI-039, AI-040 | `agent.rs`, `fallback.rs` |
+| 11 | Crash recovery / durability | 7 | K-023, K-024, K-026, K-028, K-031, K-032, K-035 | `durability.rs` |
+| 12 | DCR marking state | 5 | AG-001, AG-002, AG-003, AG-015, AG-016 | `dcr.rs` |
+| 13 | Provenance completeness | 3 | K-018, AI-029, AI-048 | `provenance.rs` |
+| 14 | Verification reports | 4 | VR-001, VR-002, AG-002, AG-015 | `verification.rs` |
+| 15 | Processor conformance | 6 | AI-001, AI-002, AI-004, G-051, G-052, AI-050 | meta-rules, deferred |
 
-- **Misplaced T2 rules in T3 batches:** G-024, G-027, G-053, K-037 are T2-xdoc rules placed in T3 fixture batches (Delegation, Cancel-siblings). AG-010 is T2-ast placed in the DCR batch. Handle these separately: either pre-Phase-4 or roll into Phase 6 lint adaptation.
-- **Confidence batch:** AI-044 (drift detection) and AI-045 (oversight trigger) are miscategorized — they belong in agent provenance or a separate drift batch, not confidence.
-- **Autonomy batch:** Missing AI-008 (actor type immutability provenance) and AI-057 (narrative tier labeling).
-- **Orphaned T3 rules:** ~23 T3 rules appear in no Phase 4 batch, including crash recovery, hold/resume lifecycle, fallback chain provenance, verification reports, proxy rules, and agent consistency rules. Add batches or assign to existing ones.
+### Batch corrections applied
+
+- **Removed from T3 batches** (T2-xdoc lint rules, not runtime fixtures): G-024 (already lint-tested), G-027, G-053 (need T2 lint tests, separate agent). K-037 (already T2 lint). AG-010 (T2-ast, deferred -- needs FEL AST analysis).
+- **Moved AI-044** (drift detection) from Confidence to Agent Provenance batch.
+- **Moved AI-045** (independentFirst oversight ordering) from Confidence to Due Process batch.
+- **Added orphaned rules to existing batches:** Deontic (+8: AI-010 through AI-016, AI-051), Compensation (+2: K-040, K-041), Confidence (+3: AI-035, AI-036, AI-037), Delegation (+2: G-025, G-026).
+- **Created new batches:** Fallback chain (AI-032, AI-039, AI-040), Hold/resume lifecycle (G-030, G-054), Crash recovery/durability (7 rules), Provenance completeness (3 rules), Processor conformance (6 meta-rules, deferred), Verification reports (4 rules).
+
+### Batch progress
+
+- [x] **Batch 1: Cancel-siblings/fail-fast** -- 2 fixtures written (K-044, K-045), 2 ignored tests added. Both fail as expected (red). Kernel documents: `parallel-timer-scoping.json`, `timer-tolerance-violation.json`.
+- [ ] Batch 2: Hold/resume lifecycle
+- [ ] Batch 3: Deontic enforcement
+- [ ] Batch 4: Autonomy caps
+- [ ] Batch 5: Confidence framework
+- [ ] Batch 6: Due process runtime
+- [ ] Batch 7: Pipeline execution
+- [ ] Batch 8: Compensation
+- [ ] Batch 9: Delegation runtime
+- [ ] Batch 10: Agent provenance + fallback
+- [ ] Batch 11: Crash recovery / durability
+- [ ] Batch 12: DCR marking state
+- [ ] Batch 13: Provenance completeness
+- [ ] Batch 14: Verification reports
+- [ ] Batch 15: Processor conformance (deferred -- meta-rules)
+
+### T2 rule tests (pre-Phase-4)
+
+- [x] Write lint tests for 7 implemented-but-untested T2 rules: G-003, G-008, G-023, G-024, G-036, AI-026, AI-031. _(22 new tests in tier2_rules.rs: 3 per rule with clean, flagged, and skip-condition variants.)_
+- [x] Implement + test K-010 (action assignTo must reference declared actor) and K-037 (fail-fast parallel must have error-tagged final state). _(New lint rules in tier2.rs + 7 tests.)_
+- [x] Add `BusinessCalendar` and `NotificationTemplate` document kinds to wos-lint's `DocumentKind` enum and MARKERS list. _(Required for G-023 to detect business calendar sidecars.)_
+- [ ] Remaining 3 unimplemented T2 rules: AG-010 (SMT subset restrictions), AG-012 (quantifier finite domains), AI-023 (agent-free completion path). All require complex analysis; deferred.
+- [ ] T2 lint tests for G-027 and G-053 (removed from T3 Delegation batch -- these are cross-document lint rules, not runtime fixtures).
 
 ---
 
 ## Phase 5: Build engine capabilities (green)
 
-Implement each capability in `wos-core` to make its fixture batch pass. Each is a new module:
+Implement each capability in `wos-core` to make its fixture batch pass. Each is a new module. Order matches Phase 4 batch priority.
 
-- [ ] `deontic.rs` — enforcement ordering, null propagation by impact level, constraint composition, bypass. Unlocks 12 rules.
-- [ ] `compensation.rs` — compensation log, reverse execution, pivot step, nested scopes, `$compensation.complete`. Unlocks 5 rules.
-- [ ] `confidence.rs` — ConfidenceReport validation, decay, cumulative tracking, session pause. Unlocks 9 rules.
-- [ ] `dcr.rs` — marking state (included/executed/pending), relation evaluation, zone satisfaction. Unlocks 6 rules.
+- [ ] Timer region scoping + tolerance validation in `eval.rs`. Unlocks 2 rules (K-044, K-045).
+- [ ] Hold/resume lifecycle in `eval.rs`. Unlocks 2 rules (G-030, G-054).
+- [ ] `deontic.rs` — enforcement ordering, null propagation by impact level, constraint composition, bypass. Unlocks 20 rules.
+- [ ] `autonomy.rs` — cross-document cap computation, escalation/demotion state machine, calibration expiry. Unlocks 15 rules.
+- [ ] `confidence.rs` — ConfidenceReport validation, decay, cumulative tracking, session pause. Unlocks 12 rules.
+- [ ] `due_process.rs` — actor identity verification, independentFirst ordering, review sampling, separation of duties. Unlocks 9 rules (now includes AI-045).
+- [ ] `pipeline.rs` — staged execution with gate results, weakest-link risk profile, rejection routing. Unlocks 8 rules.
+- [ ] `compensation.rs` — compensation log, reverse execution, pivot step, nested scopes, `$compensation.complete`. Unlocks 7 rules.
 - [ ] `delegation.rs` — delegation chain verification, provenance recording, sub-delegation depth. Unlocks 5 rules.
-- [ ] `autonomy.rs` — cross-document cap computation, escalation/demotion state machine, calibration expiry. Unlocks 13 rules.
-- [ ] `agent.rs` — provenance field validation, actor type immutability, narrative tier labeling. Unlocks 8 rules.
-- [ ] `due_process.rs` — actor identity verification, independentFirst ordering, review sampling, separation of duties. Unlocks 7 rules.
-- [ ] `pipeline.rs` — staged execution with gate results, weakest-link risk profile, rejection routing. Unlocks 7 rules.
-- [ ] Cancel-siblings + fail-fast in `eval.rs`. Unlocks 3 rules.
+- [ ] `agent.rs` + `fallback.rs` — provenance field validation, actor type immutability, narrative tier labeling, drift detection, fallback chains. Unlocks 17 rules (now includes AI-044, AI-032, AI-039, AI-040).
+- [ ] `durability.rs` — crash recovery, persist-before-advance, idempotency dedup, structured validation. Unlocks 7 rules. Hard to fixture-test; may need process-restart simulation.
+- [ ] `dcr.rs` — marking state (included/executed/pending), relation evaluation, zone satisfaction. Unlocks 5 rules.
+- [ ] `provenance.rs` — relationship change provenance, agent output provenance, provenance completeness checks. Unlocks 3 rules.
+- [ ] `verification.rs` — verification report generation, counterexample rendering. Unlocks 4 rules.
+- [ ] Processor conformance meta-rules (AI-001, AI-002, AI-004, G-051, G-052, AI-050). Deferred — these are meta-level constraints on processor behavior, not fixture-testable.
 - [ ] `eval_mode.rs` — continuous evaluation mode (Runtime S10): timer-driven re-evaluation, convergence cap enforcement, mode switching between `event-driven` and `continuous`.
 - [ ] `explain.rs` — explanation assembly algorithm (Runtime S9). Stubbed in Phase 3.4 but needs: Phase 4 fixtures exercising explanation output, and Phase 5 implementation producing structured explanations with rule-reference citations and authority ranking.
 
@@ -209,6 +253,8 @@ The most significant architectural gap: there is no specified **handoff protocol
 - [ ] Respondent Ledger requirement for rights-impacting workflows.
 
 Best addressed as a "Formspec Coprocessor" section in the Runtime Companion or a new sidecar spec. This is the missing piece that would make WOS + Formspec fully interoperable across implementations.
+
+**Enterprise urgency:** The enterprise implementation roadmap (`enterprise-implementation-roadmap.md`) Phase 1.3 (Case Management Baseline) depends on this handoff protocol. Without it, the SaaS platform must design its own submission-to-case bridge, which risks diverging from WOS semantics. WOS governance specs (review protocols, due process, structured audit, delegation, AI agent governance) cover most of the enterprise roadmap's case management requirements at the spec level -- but the Coprocessor gap is the seam that connects Formspec intake to WOS workflow. Resolving this gap unblocks the enterprise roadmap's ability to leverage WOS specs rather than building governance from scratch.
 
 ---
 
