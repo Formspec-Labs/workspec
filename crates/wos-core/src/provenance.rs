@@ -31,6 +31,119 @@ pub enum ProvenanceKind {
     ActionExecuted,
     /// Duration string could not be parsed; timer deadline set to zero.
     InvalidDuration,
+    /// Timer fired beyond its tolerance window (LCD S6.6, Runtime S7.2).
+    ToleranceViolation,
+
+    // ── Deontic enforcement (AI S4) ────────────────────────────────
+    /// A deontic constraint was violated (AI S4.2–S4.4).
+    DeonticViolation,
+    /// Deontic evaluation order record (AI S4.6).
+    DeonticEvaluation,
+    /// Resolved effective action from multiple violations (AI S4.6).
+    DeonticResolution,
+    /// Deontic constraint bypass with rationale (AI S4.7).
+    DeonticBypass,
+    /// Rights violation not attributed to agent (AI S4.5).
+    RightsViolation,
+    /// Consistency check contradiction (AI S4.7).
+    ConsistencyViolation,
+
+    // ── Autonomy (AI S5) ───────────────────────────────────────────
+    /// Agent attempted to override a human decision (AI S3.7).
+    AutonomyViolation,
+    /// Autonomy level was capped by impact level or calibration (AI S5.3).
+    AutonomyCapped,
+    /// Effective autonomy computed from multiple sources (AI S5.3).
+    AutonomyComputed,
+    /// Assistive agent required human confirmation task (AI S5.3).
+    HumanTaskCreated,
+    /// Tool governance violation (AdvGov S6.1).
+    ToolViolation,
+    /// Escalation pending human approval (AI S5.4).
+    EscalationPending,
+    /// Autonomy demotion applied (AI S5.5).
+    AutonomyDemotion,
+
+    // ── Confidence (AI S7) ─────────────────────────────────────────
+    /// Confidence violation — missing, uncalibrated, or below floor (AI S7).
+    ConfidenceViolation,
+    /// Confidence decay applied (AI S7.5).
+    ConfidenceDecay,
+    /// Cumulative confidence below threshold (AI S7.7).
+    CumulativeConfidenceViolation,
+    /// Session paused due to confidence threshold (AdvGov S5.4).
+    SessionPaused,
+    /// Ground truth label recorded from human review (AdvGov S9.3).
+    GroundTruthLabel,
+
+    // ── Agent lifecycle (AI S3, S6) ────────────────────────────────
+    AgentOutput,
+    ActorTypeViolation,
+    AgentProvenanceAnnotation,
+    AgentVersionChange,
+    NarrativeTierRecorded,
+    ConstraintTamperBlocked,
+    DriftReclassification,
+    AgentStateTransition,
+    ProxyInvocation,
+    DispositiveViolation,
+
+    // ── Fallback (AI S8) ───────────────────────────────────────────
+    FallbackTriggered,
+    FallbackAttempt,
+    FallbackTerminal,
+
+    // ── Due process (WG S4, S6, S7) ────────────────────────────────
+    NoticeSent,
+    SeparationViolation,
+    AppealFiled,
+    ProtocolViolation,
+    IndependentFirstEnforced,
+    SamplingDecision,
+    OverrideViolation,
+    OverrideRecorded,
+
+    // ── Pipeline (WG S8) ───────────────────────────────────────────
+    PipelineStageCompleted,
+    PipelineRiskProfile,
+    PipelineRejection,
+    TaskCreated,
+    ParameterResolved,
+
+    // ── Compensation (Kernel S9.8) ─────────────────────────────────
+    CompensationLogEntry,
+    CompensationExecuted,
+    CompensationScopeBoundary,
+
+    // ── Delegation (WG S9) ─────────────────────────────────────────
+    DelegationViolation,
+
+    // ── Durability (Kernel S10) ────────────────────────────────────
+    InstanceResumed,
+    StepResultPersisted,
+    IdempotencyDedup,
+    InstanceMigrated,
+    ContractValidation,
+    HistoryCleared,
+
+    // ── DCR (Advanced Governance) ──────────────────────────────────
+    DcrActivityExecuted,
+    DcrRelationEvaluated,
+    DcrResolutionError,
+    ZoneSatisfied,
+    EquityAlert,
+
+    // ── Verification (Advanced Governance) ─────────────────────────
+    VerificationReportProduced,
+    ImmutabilityViolation,
+    ActivationBlocked,
+
+    // ── Sidecar (Business Calendar, Notification) ──────────────────
+    CalendarIgnored,
+    NotificationSuppressed,
+
+    // ── Relationship provenance (Kernel S7) ────────────────────────
+    RelationshipChanged,
 }
 
 /// A single provenance record.
@@ -63,12 +176,7 @@ pub struct ProvenanceRecord {
 
 impl ProvenanceRecord {
     /// Create a state transition record.
-    pub fn state_transition(
-        from: &str,
-        to: &str,
-        event: &str,
-        actor_id: Option<&str>,
-    ) -> Self {
+    pub fn state_transition(from: &str, to: &str, event: &str, actor_id: Option<&str>) -> Self {
         Self {
             record_kind: ProvenanceKind::StateTransition,
             actor_id: actor_id.map(String::from),
@@ -191,6 +299,26 @@ impl ProvenanceRecord {
             to_state: Some(state.to_string()),
             event: None,
             data: Some(serde_json::json!({ "actionType": action_type })),
+        }
+    }
+
+    /// Create a timer tolerance violation record (LCD S6.6, Runtime S7.2).
+    pub fn tolerance_violation(
+        timer_id: &str,
+        duration_iso: &str,
+        max_tolerance_iso: &str,
+    ) -> Self {
+        Self {
+            record_kind: ProvenanceKind::ToleranceViolation,
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: None,
+            data: Some(serde_json::json!({
+                "timerId": timer_id,
+                "duration": duration_iso,
+                "maxTolerance": max_tolerance_iso,
+            })),
         }
     }
 

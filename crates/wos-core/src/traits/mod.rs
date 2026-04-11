@@ -34,11 +34,7 @@ pub trait DocumentResolver {
     type Error: std::error::Error;
 
     /// Resolve a Kernel Document by URL and version.
-    fn resolve_kernel(
-        &self,
-        url: &str,
-        version: &str,
-    ) -> Result<KernelDocument, Self::Error>;
+    fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, Self::Error>;
 }
 
 /// Validates data against a Formspec Definition or JSON Schema (Runtime S12.3).
@@ -117,11 +113,7 @@ pub trait EventQueue {
     type Error: std::error::Error;
 
     /// Add an event to the instance's processing queue.
-    fn enqueue(
-        &mut self,
-        instance_id: &str,
-        event: serde_json::Value,
-    ) -> Result<(), Self::Error>;
+    fn enqueue(&mut self, instance_id: &str, event: serde_json::Value) -> Result<(), Self::Error>;
 
     /// Remove and return the next event for processing.
     fn dequeue(&mut self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
@@ -206,11 +198,7 @@ impl AccessControl for DefaultRuntime {
 impl EventQueue for DefaultRuntime {
     type Error = DefaultRuntimeError;
 
-    fn enqueue(
-        &mut self,
-        instance_id: &str,
-        event: serde_json::Value,
-    ) -> Result<(), Self::Error> {
+    fn enqueue(&mut self, instance_id: &str, event: serde_json::Value) -> Result<(), Self::Error> {
         self.queues
             .entry(instance_id.to_string())
             .or_default()
@@ -218,13 +206,13 @@ impl EventQueue for DefaultRuntime {
         Ok(())
     }
 
-    fn dequeue(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Option<serde_json::Value>, Self::Error> {
-        Ok(self
-            .queues
-            .get_mut(instance_id)
-            .and_then(|q| if q.is_empty() { None } else { Some(q.remove(0)) }))
+    fn dequeue(&mut self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
+        Ok(self.queues.get_mut(instance_id).and_then(|q| {
+            if q.is_empty() {
+                None
+            } else {
+                Some(q.remove(0))
+            }
+        }))
     }
 }

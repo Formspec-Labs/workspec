@@ -5,7 +5,7 @@
 use std::fs;
 use wos_core::NotificationTemplateDocument;
 use wos_core::model::notification_template::{
-    TemplateCategory, DeliveryChannel, SectionContentType,
+    DeliveryChannel, SectionContentType, TemplateCategory,
 };
 
 fn load_fixture(name: &str) -> NotificationTemplateDocument {
@@ -13,8 +13,8 @@ fn load_fixture(name: &str) -> NotificationTemplateDocument {
         "{}/fixtures/sidecars/{name}",
         env!("CARGO_MANIFEST_DIR").replace("/crates/wos-core", "")
     );
-    let json = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
+    let json =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
     serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
 }
@@ -36,9 +36,21 @@ fn benefits_notification_templates_round_trips() {
     assert_eq!(adverse.category, TemplateCategory::AdverseDecision);
     assert!(adverse.subject.is_some());
     assert!(!adverse.sections.is_empty());
-    assert!(adverse.required_variables.contains(&"determination".to_string()));
-    assert!(adverse.required_variables.contains(&"reasonCodes".to_string()));
-    assert!(adverse.required_variables.contains(&"appealDeadline".to_string()));
+    assert!(
+        adverse
+            .required_variables
+            .contains(&"determination".to_string())
+    );
+    assert!(
+        adverse
+            .required_variables
+            .contains(&"reasonCodes".to_string())
+    );
+    assert!(
+        adverse
+            .required_variables
+            .contains(&"appealDeadline".to_string())
+    );
 
     // Delivery channels
     assert!(adverse.delivery_channels.contains(&DeliveryChannel::Postal));
@@ -73,7 +85,10 @@ fn hold_notification_template() {
         .expect("hold template present");
     assert_eq!(hold.category, TemplateCategory::HoldNotification);
     assert!(hold.required_variables.contains(&"holdReason".to_string()));
-    assert!(hold.required_variables.contains(&"expectedDuration".to_string()));
+    assert!(
+        hold.required_variables
+            .contains(&"expectedDuration".to_string())
+    );
     assert!(hold.delivery_channels.contains(&DeliveryChannel::Email));
 }
 
@@ -123,8 +138,7 @@ fn notification_template_minimal_document() {
 fn notification_template_serialization_round_trip() {
     let doc = load_fixture("benefits-notification-templates.json");
     let serialized = serde_json::to_string(&doc).unwrap();
-    let deserialized: NotificationTemplateDocument =
-        serde_json::from_str(&serialized).unwrap();
+    let deserialized: NotificationTemplateDocument = serde_json::from_str(&serialized).unwrap();
     assert_eq!(
         doc.wos_notification_template,
         deserialized.wos_notification_template

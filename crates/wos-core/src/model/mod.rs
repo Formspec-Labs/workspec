@@ -2,8 +2,8 @@
 
 //! Typed document models for every WOS document kind.
 
-pub mod kernel;
-pub mod governance;
 pub mod ai;
 pub mod business_calendar;
+pub mod governance;
+pub mod kernel;
 pub mod notification_template;

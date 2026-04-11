@@ -15,8 +15,8 @@ fn load_fixture(name: &str) -> KernelDocument {
         "{}/fixtures/kernel/{name}",
         env!("CARGO_MANIFEST_DIR").replace("/crates/wos-core", "")
     );
-    let json = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
+    let json =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
     serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
 }

@@ -117,10 +117,7 @@ impl EvalContext {
 
         // Parameters as dotted paths.
         for (key, value) in &self.parameters {
-            fields.insert(
-                format!("parameters.{key}"),
-                json_to_fel_value(value),
-            );
+            fields.insert(format!("parameters.{key}"), json_to_fel_value(value));
         }
 
         fel_core::MapEnvironment::with_fields(fields)

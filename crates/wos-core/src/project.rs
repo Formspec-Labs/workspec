@@ -12,7 +12,6 @@ use crate::model::kernel::KernelDocument;
 pub struct Project {
     /// The kernel document, if present.
     kernel: Option<KernelDocument>,
-
     // Governance, AI, and Advanced documents will be added as their
     // typed models are extracted from wos-lint.
 }

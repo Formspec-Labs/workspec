@@ -13,9 +13,7 @@ use std::collections::HashMap;
 use fel_core::{evaluate, parse, types::FelValue};
 
 use crate::context::EvalContext;
-use crate::model::kernel::{
-    Action, ActionKind, KernelDocument, State, StateKind,
-};
+use crate::model::kernel::{Action, ActionKind, KernelDocument, State, StateKind};
 use crate::provenance::{ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
 
@@ -209,13 +207,20 @@ impl Evaluator {
     }
 
     /// Advance simulated time and fire expired timers.
-    pub fn advance_time(
-        &mut self,
-        duration_ms: u64,
-        actor: Option<&str>,
-    ) -> Result<(), EvalError> {
+    pub fn advance_time(&mut self, duration_ms: u64, actor: Option<&str>) -> Result<(), EvalError> {
         self.simulated_time_ms += duration_ms;
         self.fire_expired_timers(actor)
+    }
+
+    /// Try to fire a `$continuous` transition in the current configuration.
+    ///
+    /// Used by continuous evaluation mode (Runtime S10.3). Scans all active
+    /// states for transitions on event `$continuous` whose guards evaluate
+    /// to true. Fires the first match (document order).
+    ///
+    /// Returns `true` if a transition fired, `false` if no guards were satisfied.
+    pub fn try_fire_guardless_transition(&mut self) -> Result<bool, EvalError> {
+        self.try_fire_transition("$continuous", None, None)
     }
 
     // ── Transition dispatch ─────────────────────────────────────
@@ -240,9 +245,10 @@ impl Evaluator {
         // For each active state not inside a parallel we already handled.
         let active_snapshot = self.config.active.clone();
         for active_state in &active_snapshot {
-            if parallel_parents.iter().any(|p| {
-                self.state_is_in_parallel_region(p, active_state)
-            }) {
+            if parallel_parents
+                .iter()
+                .any(|p| self.state_is_in_parallel_region(p, active_state))
+            {
                 continue;
             }
 
@@ -408,9 +414,7 @@ impl Evaluator {
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 let initial = indexed.state.initial_state.as_deref().ok_or_else(|| {
-                    EvalError::Internal(format!(
-                        "compound state '{state_id}' missing initialState"
-                    ))
+                    EvalError::Internal(format!("compound state '{state_id}' missing initialState"))
                 })?;
                 self.enter_state(initial, actor, event_data)?;
             }
@@ -425,11 +429,7 @@ impl Evaluator {
 
                     if let Some(sd) = init_def {
                         if sd.kind != StateKind::Final {
-                            self.execute_on_entry_actions(
-                                region_initial,
-                                actor,
-                                event_data,
-                            )?;
+                            self.execute_on_entry_actions(region_initial, actor, event_data)?;
                         }
                     }
                 }
@@ -469,8 +469,9 @@ impl Evaluator {
         self.exit_state_and_descendants(source);
         self.enter_state(target, actor, event_data)?;
 
-        self.provenance
-            .push(ProvenanceRecord::state_transition(source, target, event, actor));
+        self.provenance.push(ProvenanceRecord::state_transition(
+            source, target, event, actor,
+        ));
         self.transitions.push(ObservedTransition {
             from: source.to_string(),
             to: target.to_string(),
@@ -493,8 +494,7 @@ impl Evaluator {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
                 let value = action.value.clone().unwrap_or(serde_json::Value::Null);
-                let lifecycle_state =
-                    self.config.active.first().cloned().unwrap_or_default();
+                let lifecycle_state = self.config.active.first().cloned().unwrap_or_default();
 
                 let key = path.strip_prefix("caseFile.").unwrap_or(path);
                 self.case_state.insert(key.to_string(), value.clone());
@@ -520,35 +520,38 @@ impl Evaluator {
 
                 // Cancel existing timer with same ID (reentry, Lifecycle Detail S6.4).
                 if self.timers.cancel(timer_id).is_some() {
-                    self.provenance
-                        .push(ProvenanceRecord::timer_cancelled(timer_id, "reentry-cancel"));
+                    self.provenance.push(ProvenanceRecord::timer_cancelled(
+                        timer_id,
+                        "reentry-cancel",
+                    ));
                 }
 
                 self.timers.create(crate::timer::Timer {
                     id: timer_id.to_string(),
                     deadline_ms,
                     fires_event: fires_event.to_string(),
-                    created_in_state: self
-                        .config
-                        .active
-                        .first()
-                        .cloned()
-                        .unwrap_or_default(),
+                    created_in_state: self.config.active.first().cloned().unwrap_or_default(),
+                    duration_iso: duration.to_string(),
+                    duration_ms,
                 });
 
-                self.provenance
-                    .push(ProvenanceRecord::timer_created(timer_id, duration, fires_event));
+                self.provenance.push(ProvenanceRecord::timer_created(
+                    timer_id,
+                    duration,
+                    fires_event,
+                ));
             }
             ActionKind::CancelTimer => {
                 let timer_id = action.timer_id.as_deref().unwrap_or("");
                 if self.timers.cancel(timer_id).is_some() {
-                    self.provenance
-                        .push(ProvenanceRecord::timer_cancelled(timer_id, "explicit-cancel"));
+                    self.provenance.push(ProvenanceRecord::timer_cancelled(
+                        timer_id,
+                        "explicit-cancel",
+                    ));
                 }
             }
             _ => {
-                let current_state =
-                    self.config.active.first().cloned().unwrap_or_default();
+                let current_state = self.config.active.first().cloned().unwrap_or_default();
                 let action_name = format!("{:?}", action.action);
                 let action_name_camel = match action.action {
                     ActionKind::CreateTask => "createTask",
@@ -557,8 +560,10 @@ impl Evaluator {
                     ActionKind::Log => "log",
                     _ => &action_name,
                 };
-                self.provenance
-                    .push(ProvenanceRecord::action_executed(&current_state, action_name_camel));
+                self.provenance.push(ProvenanceRecord::action_executed(
+                    &current_state,
+                    action_name_camel,
+                ));
             }
         }
 
@@ -650,13 +655,28 @@ impl Evaluator {
 
     // ── Timer management ─────────────────────────────────────────
 
-    /// Fire all expired timers.
+    /// Fire all expired timers, checking tolerance (LCD S6.6, Runtime S7.2).
     fn fire_expired_timers(&mut self, actor: Option<&str>) -> Result<(), EvalError> {
-        let expired = self.timers.collect_expired(self.simulated_time_ms);
+        let current_time = self.simulated_time_ms;
+        let expired = self.timers.collect_expired(current_time);
 
         for timer in expired {
             self.provenance
                 .push(ProvenanceRecord::timer_fired(&timer.id, &timer.fires_event));
+
+            // Check tolerance: if the timer fired significantly after its deadline,
+            // emit a toleranceViolation diagnostic (LCD S6.6, Runtime S7.2).
+            let lateness_ms = current_time.saturating_sub(timer.deadline_ms);
+            let max_tolerance = crate::timer::max_tolerance_ms(timer.duration_ms);
+            if lateness_ms > max_tolerance {
+                let tolerance_iso = crate::timer::tolerance_to_iso(max_tolerance);
+                self.provenance.push(ProvenanceRecord::tolerance_violation(
+                    &timer.id,
+                    &timer.duration_iso,
+                    &tolerance_iso,
+                ));
+            }
+
             let event = timer.fires_event.clone();
             self.process_event(&event, actor, None)?;
         }
@@ -720,15 +740,13 @@ impl Evaluator {
 
     /// Check if a state lives in a parallel state's region.
     fn state_is_in_parallel_region(&self, parallel_id: &str, state_id: &str) -> bool {
-        self.state_index
-            .get(parallel_id)
-            .is_some_and(|indexed| {
-                indexed
-                    .state
-                    .regions
-                    .values()
-                    .any(|region| region.states.contains_key(state_id))
-            })
+        self.state_index.get(parallel_id).is_some_and(|indexed| {
+            indexed
+                .state
+                .regions
+                .values()
+                .any(|region| region.states.contains_key(state_id))
+        })
     }
 }
 
@@ -764,21 +782,14 @@ fn index_states_recursive(
 
         if state.kind == StateKind::Parallel {
             for (rname, region) in &state.regions {
-                index_states_recursive(
-                    &region.states,
-                    Some(name),
-                    Some(rname),
-                    index,
-                );
+                index_states_recursive(&region.states, Some(name), Some(rname), index);
             }
         }
     }
 }
 
 /// Build initial case state from field defaults.
-fn build_default_case_state(
-    kernel: &KernelDocument,
-) -> HashMap<String, serde_json::Value> {
+fn build_default_case_state(kernel: &KernelDocument) -> HashMap<String, serde_json::Value> {
     let mut map = HashMap::new();
     if let Some(case_file) = &kernel.case_file {
         for (field_name, field_def) in &case_file.fields {
@@ -809,8 +820,7 @@ pub fn parse_iso_duration_to_ms(duration: &str) -> Result<u64, &str> {
         None => (rest, ""),
     };
 
-    let ms = parse_duration_segment(date_part, false)
-        + parse_duration_segment(time_part, true);
+    let ms = parse_duration_segment(date_part, false) + parse_duration_segment(time_part, true);
 
     Ok(ms)
 }

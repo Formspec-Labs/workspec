@@ -19,26 +19,33 @@
 //! - `wos-conformance` feeds events through the evaluation algorithm.
 //! - A future `wos-runtime` adapts the algorithm to Temporal, Step Functions, etc.
 
-pub mod model;
-pub mod eval;
-pub mod provenance;
+pub mod autonomy;
+pub mod confidence;
 pub mod context;
+pub mod deontic;
+pub mod eval;
+pub mod eval_mode;
+pub mod event_handler;
+pub mod explain;
+pub mod instance;
+pub mod model;
+pub mod project;
+pub mod provenance;
 pub mod timer;
 pub mod traits;
-pub mod instance;
-pub mod explain;
-pub mod project;
 
-pub use model::kernel::{KernelDocument, State, StateKind, Transition, Action, ActionKind};
-pub use model::kernel::{Actor, ActorKind, CaseFile, FieldDefinition, CaseRelationship};
-pub use model::kernel::{Lifecycle, Region, Milestone, ImpactLevel};
-pub use model::kernel::{ContractReference, ExecutionConfig, EvaluationMode};
-pub use model::governance::GovernanceDocument;
+pub use context::EvalContext;
+pub use eval::{
+    Configuration, EvalError, Evaluator, IndexedState, ObservedTransition, parse_iso_duration_to_ms,
+};
 pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
+pub use model::governance::GovernanceDocument;
+pub use model::kernel::{Action, ActionKind, KernelDocument, State, StateKind, Transition};
+pub use model::kernel::{Actor, ActorKind, CaseFile, CaseRelationship, FieldDefinition};
+pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};
+pub use model::kernel::{ImpactLevel, Lifecycle, Milestone, Region};
 pub use model::notification_template::NotificationTemplateDocument;
-pub use eval::{Evaluator, Configuration, EvalError, ObservedTransition, IndexedState, parse_iso_duration_to_ms};
-pub use provenance::{ProvenanceLog, ProvenanceRecord, ProvenanceKind};
-pub use context::EvalContext;
-pub use timer::Timers;
 pub use project::Project;
+pub use provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+pub use timer::Timers;

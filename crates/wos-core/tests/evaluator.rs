@@ -9,15 +9,12 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use wos_core::model::kernel::*;
 use wos_core::Evaluator;
+use wos_core::model::kernel::*;
 use wos_core::provenance::ProvenanceKind;
 
 /// Build a minimal kernel document with the given states and transitions.
-fn minimal_kernel(
-    initial: &str,
-    states: IndexMap<String, State>,
-) -> KernelDocument {
+fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocument {
     KernelDocument {
         wos_kernel: "1.0".to_string(),
         schema: None,
@@ -147,7 +144,11 @@ fn guard_blocks_transition() {
     let mut states = IndexMap::new();
     states.insert(
         "start".into(),
-        atomic(vec![guarded_transition("go", "end", "caseFile.ready = true")]),
+        atomic(vec![guarded_transition(
+            "go",
+            "end",
+            "caseFile.ready = true",
+        )]),
     );
     states.insert("end".into(), final_state());
 
@@ -222,10 +223,8 @@ fn guard_with_nested_object_data() {
     let mut eval = Evaluator::new(kernel).unwrap();
 
     // Insert a nested object — this would have failed before the json_to_fel fix.
-    eval.case_state_mut().insert(
-        "app".to_string(),
-        serde_json::json!({"status": "approved"}),
-    );
+    eval.case_state_mut()
+        .insert("app".to_string(), serde_json::json!({"status": "approved"}));
 
     let fired = eval.process_event("go", None, None).unwrap();
     assert!(fired, "guard with nested object path should pass");
@@ -297,7 +296,10 @@ fn set_data_action_mutates_case_state() {
 #[test]
 fn compound_state_enters_initial_substate() {
     let mut substates = IndexMap::new();
-    substates.insert("inner".into(), atomic(vec![transition("next", "inner_done")]));
+    substates.insert(
+        "inner".into(),
+        atomic(vec![transition("next", "inner_done")]),
+    );
     substates.insert("inner_done".into(), final_state());
 
     let compound = State {
@@ -323,11 +325,17 @@ fn compound_state_enters_initial_substate() {
 fn parallel_join_fires_when_all_regions_final() {
     // Build two regions, each with start -> done.
     let mut region_a_states = IndexMap::new();
-    region_a_states.insert("a_start".into(), atomic(vec![transition("finish_a", "a_done")]));
+    region_a_states.insert(
+        "a_start".into(),
+        atomic(vec![transition("finish_a", "a_done")]),
+    );
     region_a_states.insert("a_done".into(), final_state());
 
     let mut region_b_states = IndexMap::new();
-    region_b_states.insert("b_start".into(), atomic(vec![transition("finish_b", "b_done")]));
+    region_b_states.insert(
+        "b_start".into(),
+        atomic(vec![transition("finish_b", "b_done")]),
+    );
     region_b_states.insert("b_done".into(), final_state());
 
     let mut regions = IndexMap::new();
