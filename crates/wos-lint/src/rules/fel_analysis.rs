@@ -19,7 +19,7 @@
 //! | AI-024 | expression-validity | Escalation conditions are valid FEL + use `@agent` |
 //! | AG-010 | smt-compatibility   | Verifiable constraints satisfy all SMT rules   |
 //! | AG-011 | smt-compatibility   | `let` bindings are not recursive               |
-//! | AG-012 | smt-compatibility   | Quantifiers quantify over finite domains       |
+//! | AG-012 | smt-compatibility   | `every`/`some` with arity ≠ 2 need manual review |
 //! | AG-013 | smt-compatibility   | Arithmetic is linear (no variable × variable)  |
 //! | AG-014 | smt-compatibility   | No extension function calls in verifiable subset|
 //!
@@ -312,7 +312,7 @@ fn check_smt_expression(
     let mut let_names: HashSet<String> = HashSet::new();
     check_no_recursive_let(&expr, &mut let_names, "AG-011", path, diagnostics);
 
-    // AG-012: quantifiers must quantify over finite domains (partial check).
+    // AG-012: non-standard every/some arity (partial check).
     check_finite_quantifiers(&expr, "AG-012", path, diagnostics);
 
     // AG-013: arithmetic must be linear.
@@ -517,13 +517,11 @@ fn let_value_references_name(expr: &Expr, names: &HashSet<String>) -> bool {
     found
 }
 
-/// AG-012: Warn when `every` or `some` function calls appear (partial check).
+/// AG-012: Warn when `every` or `some` are used with arity other than two (partial check).
 ///
-/// FEL does not have dedicated quantifier syntax; if `every` or `some` are used
-/// as function calls they act as quantifiers. The SMT subset requires that
-/// quantified variables range over finite, statically-known domains. At Tier 2
-/// we cannot verify domain finiteness, so we flag their presence as a warning
-/// indicating manual review is required.
+/// Core FEL defines `every(array, predicate)` and `some(array, predicate)` with `$` rebound
+/// per element — iteration is over a concrete array value. Calls with a different arity are
+/// likely extensions or mistakes; Tier 2 cannot verify their domains, so we flag them.
 fn check_finite_quantifiers(
     expr: &Expr,
     rule_id: &'static str,
@@ -531,17 +529,14 @@ fn check_finite_quantifiers(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
-        if let Expr::FunctionCall { name, .. } = e {
-            // `every` and `some` are standard quantifier names in FEL contexts.
-            // They are not in the built-in catalog, so any occurrence is either
-            // an extension or an incorrect usage — both warrant review.
-            if name == "every" || name == "some" {
+        if let Expr::FunctionCall { name, args } = e {
+            if (name == "every" || name == "some") && args.len() != 2 {
                 diagnostics.push(Diagnostic::warning(
                     rule_id,
                     path,
                     format!(
-                        "quantifier '{name}()' detected; the SMT subset requires quantifiers to \
-                         range over finite, statically-known domains — verify this manually"
+                        "'{name}()' expects two arguments (array, predicate); non-standard arity \
+                         may be an extension — verify finite iteration manually"
                     ),
                 ));
             }

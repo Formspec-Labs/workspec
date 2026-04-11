@@ -2049,26 +2049,44 @@ fn k010_on_exit_undeclared_actor_flagged() {
 // AG-012: Quantifiers must quantify over finite domains.
 // ========================================================================
 
-/// AG-012: `every()` in a verifiable constraint produces a warning.
+/// AG-012: `every` with arity other than two produces a warning.
 #[test]
 fn ag012_quantifier_in_verifiable_constraint_flagged() {
     let adv = json!({
         "$wosAdvancedGovernance": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
-            { "expression": "every($items, $item.amount > 0)" }
+            { "expression": "every($items)" }
         ]
     });
     let diags =
         lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
     assert!(
         has_rule(&diags, "AG-012"),
-        "expected AG-012 warning for quantifier: {diags:?}"
+        "expected AG-012 warning for non-standard every(): {diags:?}"
     );
     assert_eq!(
         severity_of(&diags, "AG-012"),
         Some(Severity::Warning),
         "AG-012 should be a warning (manual review needed)"
+    );
+}
+
+/// Built-in two-argument `every` does not trigger AG-012.
+#[test]
+fn ag012_every_two_args_clean() {
+    let adv = json!({
+        "$wosAdvancedGovernance": "1.0",
+        "targetWorkflow": "https://example.com/workflow/test",
+        "verifiableConstraints": [
+            { "expression": "every($items, $ > 0)" }
+        ]
+    });
+    let diags =
+        lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
+    assert!(
+        !has_rule(&diags, "AG-012"),
+        "unexpected AG-012 for standard every(): {diags:?}"
     );
 }
 
@@ -2087,21 +2105,21 @@ fn ag012_no_quantifier_clean() {
     assert!(!has_rule(&diags, "AG-012"), "unexpected AG-012: {diags:?}");
 }
 
-/// AG-012: `some()` also triggers the quantifier warning.
+/// AG-012: `some` with arity other than two produces a warning.
 #[test]
 fn ag012_some_quantifier_flagged() {
     let adv = json!({
         "$wosAdvancedGovernance": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
-            { "expression": "some($items, $item.valid = true)" }
+            { "expression": "some($items)" }
         ]
     });
     let diags =
         lint_project_with_docs(vec![("kernel.json", base_kernel()), ("advanced.json", adv)]);
     assert!(
         has_rule(&diags, "AG-012"),
-        "expected AG-012 warning for 'some' quantifier: {diags:?}"
+        "expected AG-012 warning for non-standard some(): {diags:?}"
     );
 }
 
