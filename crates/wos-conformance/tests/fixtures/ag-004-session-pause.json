@@ -1,0 +1,25 @@
+{
+  "id": "AG-004-session-pause",
+  "rule": "AG-004",
+  "description": "Cumulative confidence below floor MUST pause session at next checkpoint (AdvGov S5.4). Session pauses at the next checkpoint when cumulative confidence drops.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.87, "modelNative": 0.87, "calibrated": true },
+        "sessionState": { "cumulativeConfidence": 0.82, "outputCount": 8, "isCheckpoint": true }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "sessionPaused", "data": { "reason": "cumulative-confidence-below-floor", "checkpoint": true } }
+  ]
+}

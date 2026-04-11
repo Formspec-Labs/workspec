@@ -1,0 +1,60 @@
+{
+  "id": "AG-002-exclude-pending-error",
+  "rule": "AG-002",
+  "description": "Excluding a pending activity MUST raise resolution error (AdvGov S4.4). When an exclude relation targets an activity that is both included and pending, the processor raises a resolution error.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/dcr-zone.json",
+    "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "zoneAction",
+      "actor": "investigator",
+      "data": {
+        "activity": "collectEvidence"
+      }
+    },
+    {
+      "event": "evidenceCollected",
+      "actor": "investigator"
+    },
+    {
+      "event": "zoneAction",
+      "actor": "investigator",
+      "data": {
+        "activity": "performAnalysis"
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "evidenceGathering",
+      "to": "analysisReady",
+      "event": "evidenceCollected"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "dcrActivityExecuted",
+      "data": {
+        "activity": "collectEvidence"
+      }
+    },
+    {
+      "record_kind": "dcrRelationEvaluated",
+      "data": {
+        "relation": "response",
+        "source": "collectEvidence",
+        "target": "interviewWitness"
+      }
+    },
+    {
+      "record_kind": "dcrResolutionError",
+      "data": {
+        "activity": "collectEvidence",
+        "reason": "excluded-while-pending"
+      }
+    }
+  ]
+}

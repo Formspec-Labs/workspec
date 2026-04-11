@@ -1,0 +1,46 @@
+{
+  "id": "G-020-rejection-detail",
+  "rule": "G-020",
+  "description": "Every rejection MUST record: which gate failed, the input, the threshold, what would pass (WG S8.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/pipeline-execution.json",
+    "governance": "../../../../fixtures/governance/pipeline-execution-governance.json"
+  },
+  "initial_case_state": {
+    "income": 50000,
+    "employerVerified": false
+  },
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "caseworker"
+    },
+    {
+      "event": "validationRejected",
+      "actor": "verificationSystem"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "dataEntry",
+      "to": "validation",
+      "event": "submit"
+    },
+    {
+      "from": "validation",
+      "to": "rejected",
+      "event": "validationRejected"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "pipelineRejection",
+      "data": {
+        "recordedGate": true,
+        "recordedInput": true,
+        "recordedThreshold": true,
+        "recordedWouldPass": true
+      }
+    }
+  ]
+}

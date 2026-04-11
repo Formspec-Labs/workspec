@@ -1,0 +1,36 @@
+{
+  "id": "AI-021-impact-level-cap",
+  "rule": "AI-021",
+  "description": "Effective autonomy MUST NOT exceed impact-level cap (AI S5.3). In a rights-impacting workflow, autonomy is capped at assistive regardless of agent declaration.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "benefits"
+        },
+        "requestedAutonomy": "autonomous"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyCapped",
+      "data": {
+        "requested": "autonomous",
+        "effective": "assistive",
+        "reason": "impact-level-cap",
+        "impactLevel": "rights-impacting"
+      }
+    }
+  ]
+}

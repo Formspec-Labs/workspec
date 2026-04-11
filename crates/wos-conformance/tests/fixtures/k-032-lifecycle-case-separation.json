@@ -1,0 +1,19 @@
+{
+  "id": "K-032-lifecycle-case-separation",
+  "rule": "K-032",
+  "description": "Lifecycle state MUST be separated from case state (Kernel S12). Mutating case data does not change lifecycle state, and lifecycle transitions do not implicitly modify case data except through explicit setData actions.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": { "intakeRecorded": false },
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "stateTransition", "data": { "caseStateUnchangedByTransition": true } },
+    { "record_kind": "caseStateMutation", "data": { "path": "caseFile.intakeRecorded", "lifecycleState": "intake", "viaExplicitAction": true } }
+  ]
+}

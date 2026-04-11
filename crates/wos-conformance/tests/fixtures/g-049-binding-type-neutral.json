@@ -1,0 +1,47 @@
+{
+  "id": "G-049-binding-type-neutral",
+  "rule": "G-049",
+  "description": "Processors MUST NOT alter resolution mechanism based on bindingType (PP S1.5.4). A direct binding and a reference binding resolve identically.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/pipeline-execution.json",
+    "governance": "../../../../fixtures/governance/pipeline-execution-governance.json"
+  },
+  "initial_case_state": {
+    "income": 50000,
+    "employerVerified": true
+  },
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "caseworker"
+    },
+    {
+      "event": "validationPassed",
+      "actor": "verificationSystem",
+      "data": {
+        "bindingType": "direct",
+        "resolvedValue": 52000
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "dataEntry",
+      "to": "validation",
+      "event": "submit"
+    },
+    {
+      "from": "validation",
+      "to": "approved",
+      "event": "validationPassed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "parameterResolved",
+      "data": {
+        "bindingTypeNeutral": true
+      }
+    }
+  ]
+}

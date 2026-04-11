@@ -1,0 +1,37 @@
+{
+  "id": "AC-002-max-autonomy-minimum",
+  "rule": "AC-002",
+  "description": "maxAutonomy from agent config participates in cross-document minimum (AgentConfig S1.4). Agent config declares maxAutonomy of autonomous, but impact level caps it lower.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        },
+        "configMaxAutonomy": "autonomous"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyComputed",
+      "data": {
+        "sources": {
+          "configMaxAutonomy": "autonomous",
+          "impactLevelCap": "assistive"
+        },
+        "effective": "assistive"
+      }
+    }
+  ]
+}

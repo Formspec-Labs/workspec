@@ -1,0 +1,44 @@
+{
+  "id": "AI-005-no-override-human",
+  "rule": "AI-005",
+  "description": "Agents MUST NOT override human decisions (AI S3.7). Agent attempts to change a human-made determination; processor rejects.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {
+    "priority": "high",
+    "category": "benefits"
+  },
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "caseworker"
+    },
+    {
+      "event": "approved",
+      "actor": "triageAgent",
+      "data": {
+        "overridePriorDecision": true,
+        "priorDecisionActor": "caseworker"
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "triage",
+      "to": "review",
+      "event": "triaged"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyViolation",
+      "data": {
+        "reason": "agent-cannot-override-human",
+        "agentId": "triageAgent"
+      }
+    }
+  ]
+}

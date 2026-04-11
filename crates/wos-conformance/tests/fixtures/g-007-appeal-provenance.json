@@ -1,0 +1,21 @@
+{
+  "id": "G-007-appeal-provenance",
+  "rule": "G-007",
+  "description": "Filing an appeal MUST produce a provenance record (WG S3.5).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    { "event": "appealFiled", "actor": "appealReviewer" }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "appealFiled", "data": { "actor": "appealReviewer" } }
+  ]
+}

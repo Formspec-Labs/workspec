@@ -1,0 +1,22 @@
+{
+  "id": "K-027-compensation-log-append-only",
+  "rule": "K-027",
+  "description": "Compensation log MUST be append-only (Kernel S9.5, LCD S5.2). Once a compensation entry is written, it cannot be modified or removed.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/compensation.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "advance", "actor": "operator" },
+    { "event": "advance", "actor": "operator" },
+    { "event": "fail", "actor": "system" }
+  ],
+  "expected_transitions": [
+    { "from": "stepA", "to": "stepB", "event": "advance" },
+    { "from": "stepB", "to": "stepC", "event": "advance" },
+    { "from": "stepC", "to": "compensating", "event": "fail" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "compensationLogEntry", "data": { "appendOnly": true } }
+  ]
+}

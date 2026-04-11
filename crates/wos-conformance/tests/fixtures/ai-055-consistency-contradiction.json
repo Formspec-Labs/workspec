@@ -1,0 +1,29 @@
+{
+  "id": "AI-055-consistency-contradiction",
+  "rule": "AI-055",
+  "description": "Consistency constraints MUST detect contradictions between output and case data (AI S4.7). Agent reports income of 200k but case file shows 50k verified income.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000, "dependents": 2 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": {
+          "income": 200000,
+          "determination": "eligible",
+          "confidenceReport": { "overall": 0.88 },
+          "reasonCodes": ["R1"],
+          "evidenceCitations": ["doc1"]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "consistencyViolation", "data": { "field": "income", "agentValue": 200000, "caseValue": 50000 } }
+  ]
+}

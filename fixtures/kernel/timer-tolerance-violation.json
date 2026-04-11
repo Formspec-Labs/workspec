@@ -4,7 +4,7 @@
   "url": "https://test.wos-spec.org/workflows/timer-tolerance-violation",
   "version": "1.0.0",
   "title": "Timer Tolerance Violation",
-  "description": "Minimal workflow with a timer whose tolerance exceeds its duration, which is a conformance violation (LCD S6.6, Runtime S7.2).",
+  "description": "Minimal workflow with a short timer (PT5S). Tests that firing the timer far beyond its tolerance window (Runtime S7.2: under 1h = 1s tolerance) produces a conformance violation diagnostic (LCD S6.6).",
   "status": "active",
   "impactLevel": "operational",
 
@@ -22,7 +22,6 @@
             "action": "startTimer",
             "timerId": "shortTimer",
             "duration": "PT5S",
-            "tolerance": "PT30S",
             "event": "$timeout.state"
           }
         ],

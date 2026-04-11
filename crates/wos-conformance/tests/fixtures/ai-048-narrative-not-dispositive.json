@@ -1,0 +1,26 @@
+{
+  "id": "AI-048-narrative-not-dispositive",
+  "rule": "AI-048",
+  "description": "Narrative tier MUST NOT be treated as dispositive evidence (AI S13.2). Downstream processing that relies on narrative tier records as the sole basis for a determination is a violation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.90, "modelNative": 0.90, "calibrated": true },
+        "narrativeTier": { "summary": "Applicant clearly eligible", "authoritative": false },
+        "determinationBasis": "narrative-only"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "dispositiveViolation", "data": { "reason": "narrative-used-as-dispositive-evidence" } }
+  ]
+}

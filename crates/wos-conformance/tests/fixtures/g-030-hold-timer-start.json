@@ -1,0 +1,22 @@
+{
+  "id": "G-030-hold-timer-start",
+  "rule": "G-030",
+  "description": "Entering a hold-tagged state starts a timer with the hold policy's expectedDuration (WG S12.4). After the timer fires, the timeoutAction (escalate) routes to the escalated state.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/hold-resume-lifecycle.json",
+    "governance": "../../../../fixtures/governance/hold-resume-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "needInfo", "actor": "caseworker" },
+    { "event": "noop", "actor": "system", "delay": "P31D" }
+  ],
+  "expected_transitions": [
+    { "from": "processing", "to": "pendingResponse", "event": "needInfo" },
+    { "from": "pendingResponse", "to": "escalated", "event": "$timeout.state" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "timerCreated", "data": { "timerId": "holdTimer" } },
+    { "record_kind": "timerFired", "data": { "timerId": "holdTimer" } }
+  ]
+}

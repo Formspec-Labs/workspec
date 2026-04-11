@@ -1,0 +1,25 @@
+{
+  "id": "AG-009-agent-state-provenance",
+  "rule": "AG-009",
+  "description": "Agent state transitions MUST produce provenance; suspension pauses in-flight sessions (AdvGov S7.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.90 },
+        "agentStateChange": { "from": "active", "to": "suspended", "reason": "drift-detected" }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "agentStateTransition", "data": { "from": "active", "to": "suspended" } }
+  ]
+}

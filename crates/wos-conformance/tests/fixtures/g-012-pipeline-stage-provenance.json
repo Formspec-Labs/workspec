@@ -1,0 +1,45 @@
+{
+  "id": "G-012-pipeline-stage-provenance",
+  "rule": "G-012",
+  "description": "Each pipeline stage MUST record inputs, outputs, and gate results in provenance (WG S5.5).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/pipeline-execution.json",
+    "governance": "../../../../fixtures/governance/pipeline-execution-governance.json"
+  },
+  "initial_case_state": {
+    "income": 50000,
+    "employerVerified": true
+  },
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "caseworker"
+    },
+    {
+      "event": "validationPassed",
+      "actor": "verificationSystem"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "dataEntry",
+      "to": "validation",
+      "event": "submit"
+    },
+    {
+      "from": "validation",
+      "to": "approved",
+      "event": "validationPassed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "pipelineStageCompleted",
+      "data": {
+        "recordedInputs": true,
+        "recordedOutputs": true,
+        "recordedGateResult": true
+      }
+    }
+  ]
+}

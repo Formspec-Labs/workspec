@@ -1,0 +1,34 @@
+{
+  "id": "AI-019-assistive-creates-human-task",
+  "rule": "AI-019",
+  "description": "Assistive actions MUST create a human task for confirmation (AI S5.3). When an agent at assistive autonomy produces output, a confirmation task must be created.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "medical"
+        },
+        "effectiveAutonomy": "assistive"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "humanTaskCreated",
+      "data": {
+        "reason": "assistive-confirmation-required",
+        "agentId": "triageAgent"
+      }
+    }
+  ]
+}

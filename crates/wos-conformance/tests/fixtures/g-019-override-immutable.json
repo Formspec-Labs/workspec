@@ -1,0 +1,24 @@
+{
+  "id": "G-019-override-immutable",
+  "rule": "G-019",
+  "description": "Override records are immutable provenance entries (WG S7.3). Once recorded, an override cannot be modified.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    {
+      "event": "override",
+      "actor": "supervisor",
+      "data": { "overrideDecision": "approved", "rationale": "Clear eligibility per policy 42-A", "evidence": ["doc-1"] }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "overrideRecorded", "data": { "immutable": true, "actor": "supervisor" } }
+  ]
+}

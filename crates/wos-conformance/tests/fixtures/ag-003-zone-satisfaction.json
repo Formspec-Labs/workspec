@@ -1,0 +1,60 @@
+{
+  "id": "AG-003-zone-satisfaction",
+  "rule": "AG-003",
+  "description": "Zone satisfied when all pending executed and no included activity pending+unexecuted (AdvGov S4.5). After executing all pending activities, the zone raises constraintZone.satisfied.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/dcr-zone.json",
+    "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "zoneAction",
+      "actor": "investigator",
+      "data": {
+        "activity": "collectEvidence"
+      }
+    },
+    {
+      "event": "zoneAction",
+      "actor": "investigator",
+      "data": {
+        "activity": "interviewWitness"
+      }
+    },
+    {
+      "event": "zoneAction",
+      "actor": "investigator",
+      "data": {
+        "activity": "performAnalysis"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "dcrActivityExecuted",
+      "data": {
+        "activity": "collectEvidence"
+      }
+    },
+    {
+      "record_kind": "dcrActivityExecuted",
+      "data": {
+        "activity": "interviewWitness"
+      }
+    },
+    {
+      "record_kind": "dcrActivityExecuted",
+      "data": {
+        "activity": "performAnalysis"
+      }
+    },
+    {
+      "record_kind": "zoneSatisfied",
+      "data": {
+        "zoneId": "investigationZone"
+      }
+    }
+  ]
+}

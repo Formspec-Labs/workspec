@@ -1,0 +1,25 @@
+{
+  "id": "AI-057-processor-enforces-constraints",
+  "rule": "AI-057",
+  "description": "WOS Processor enforces constraints; agent cannot weaken its own constraints (AI S3.5). Agent attempts to modify its own deontic constraint; processor rejects.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.90 },
+        "constraintModification": { "targetConstraint": "perm-income-range", "newCondition": "true" }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "constraintTamperBlocked", "data": { "agentId": "eligibilityAgent", "targetConstraint": "perm-income-range" } }
+  ]
+}

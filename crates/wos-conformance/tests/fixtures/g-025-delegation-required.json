@@ -1,0 +1,21 @@
+{
+  "id": "G-025-delegation-required",
+  "rule": "G-025",
+  "description": "Determinations without valid delegation are conformance errors (WG S11.4). Actor performs determination-tagged transition without a valid delegation on file.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "approved",
+      "actor": "caseworker",
+      "data": { "delegationId": null }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "delegationViolation", "data": { "actor": "caseworker", "reason": "no-valid-delegation" } }
+  ]
+}

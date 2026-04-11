@@ -1,0 +1,37 @@
+{
+  "id": "AI-028-demotion-next-invocation",
+  "rule": "AI-028",
+  "description": "Demotion takes effect for next invocation; in-flight annotated (AI S5.5). Current invocation completes but is annotated as demoted; next invocation uses demoted autonomy.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "benefits"
+        },
+        "triggerDemotion": "humanOverride"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyDemotion",
+      "data": {
+        "agentId": "triageAgent",
+        "from": "autonomous",
+        "to": "assistive",
+        "trigger": "humanOverride",
+        "effectiveAt": "next-invocation"
+      }
+    }
+  ]
+}

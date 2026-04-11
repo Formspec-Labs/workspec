@@ -1,0 +1,29 @@
+{
+  "id": "AI-016-cross-level-most-restrictive",
+  "rule": "AI-016",
+  "description": "Cross-level conflicts resolved by most restrictive action (AI S4.7). An agent-level pass but action-site-level reject produces reject.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "confidenceReport": null,
+          "reasonCodes": ["R1"],
+          "evidenceCitations": ["doc1"]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "deonticResolution", "data": { "effectiveAction": "reject", "reason": "cross-level-most-restrictive" } }
+  ]
+}

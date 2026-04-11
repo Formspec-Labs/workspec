@@ -1,0 +1,59 @@
+{
+  "id": "G-013-weakest-link-risk",
+  "rule": "G-013",
+  "description": "Pipeline risk profile MUST be determined by the weakest validation gate (WG S5.5). If any stage produces a warning-level gate result, the overall pipeline risk is at least warning.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/pipeline-execution.json",
+    "governance": "../../../../fixtures/governance/pipeline-execution-governance.json"
+  },
+  "initial_case_state": {
+    "income": 50000,
+    "employerVerified": false
+  },
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "caseworker"
+    },
+    {
+      "event": "validationPassed",
+      "actor": "verificationSystem",
+      "data": {
+        "stageResults": [
+          {
+            "stage": "income-check",
+            "gate": "pass",
+            "risk": "low"
+          },
+          {
+            "stage": "employer-verify",
+            "gate": "warning",
+            "risk": "medium"
+          }
+        ]
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "dataEntry",
+      "to": "validation",
+      "event": "submit"
+    },
+    {
+      "from": "validation",
+      "to": "approved",
+      "event": "validationPassed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "pipelineRiskProfile",
+      "data": {
+        "overall": "medium",
+        "reason": "weakest-link",
+        "weakestStage": "employer-verify"
+      }
+    }
+  ]
+}

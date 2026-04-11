@@ -1,0 +1,29 @@
+{
+  "id": "AG-001-equity-no-block-individual",
+  "rule": "AG-001",
+  "description": "Equity guardrails MUST NOT block individual actions (AdvGov S3.3). Even when a disparity alert fires, the individual determination proceeds. Suspension affects aggregate agent processing, not individual cases.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/dcr-zone.json",
+    "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
+  },
+  "initial_case_state": { "evidence": ["doc-1"] },
+  "event_sequence": [
+    { "event": "evidenceCollected", "actor": "investigator" },
+    { "event": "analyzed", "actor": "investigator" },
+    { "event": "constraintZone.satisfied", "actor": "system" },
+    {
+      "event": "decided",
+      "actor": "investigator",
+      "data": { "equityAlert": { "active": true, "metric": "approvalRate", "disparity": 0.22 } }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "evidenceGathering", "to": "analysisReady", "event": "evidenceCollected" },
+    { "from": "analysisReady", "to": "investigationDone", "event": "analyzed" },
+    { "from": "investigation", "to": "determination", "event": "constraintZone.satisfied" },
+    { "from": "determination", "to": "complete", "event": "decided" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "equityAlert", "data": { "blockedIndividual": false } }
+  ]
+}

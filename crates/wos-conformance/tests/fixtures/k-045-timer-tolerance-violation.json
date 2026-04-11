@@ -1,20 +1,24 @@
 {
   "id": "K-045-timer-tolerance-violation",
   "rule": "K-045",
-  "description": "A timer whose tolerance (PT30S) exceeds its duration (PT5S) is a conformance violation (LCD S6.6, Runtime S7.2). The processor MUST emit a diagnostic provenance record indicating the violation.",
+  "description": "Timer tolerance > duration is a conformance violation (LCD S6.6, Runtime S7.2). A PT5S timer has a max tolerance of 1s (under-1h tier). Advancing time by PT1M fires the timer 55s late, exceeding tolerance. The processor MUST emit a diagnostic.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/timer-tolerance-violation.json"
   },
   "initial_case_state": {},
-  "event_sequence": [],
-  "expected_transitions": [],
-  "expected_provenance": [
+  "event_sequence": [
     {
-      "record_kind": "timerCreated",
-      "data": { "timerId": "shortTimer" }
+      "event": "noop",
+      "actor": "system",
+      "delay": "PT1M"
     }
   ],
-  "expected_errors": [
-    "tolerance exceeds duration"
+  "expected_transitions": [
+    { "from": "waiting", "to": "done", "event": "$timeout.state" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "timerCreated", "data": { "timerId": "shortTimer" } },
+    { "record_kind": "timerFired", "data": { "timerId": "shortTimer" } },
+    { "record_kind": "toleranceViolation", "data": { "timerId": "shortTimer", "duration": "PT5S", "maxTolerance": "PT1S" } }
   ]
 }

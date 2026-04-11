@@ -1,0 +1,23 @@
+{
+  "id": "AI-011-obligation-requirement",
+  "rule": "AI-011",
+  "description": "Obligation requirement evaluated against live output (AI S4.4). Agent output missing confidence report triggers rejection.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "confidenceReport": null }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "deonticViolation", "data": { "constraintId": "oblig-confidence-report", "action": "reject" } }
+  ]
+}

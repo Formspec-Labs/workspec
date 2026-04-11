@@ -1,0 +1,24 @@
+{
+  "id": "K-031-contract-structured-results",
+  "rule": "K-031",
+  "description": "Contract validation MUST produce structured results (Kernel S11.1). When a contract is validated, the result includes field-level errors, severity, and constraint references.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "contract_outcomes": {
+    "reviewContract": {
+      "valid": false,
+      "errors": ["income: required field missing", "dependents: must be non-negative"]
+    }
+  },
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "contractValidation", "data": { "contractRef": "reviewContract", "structured": true, "valid": false } }
+  ]
+}

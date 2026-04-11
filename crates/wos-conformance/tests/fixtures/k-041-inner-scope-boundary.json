@@ -1,0 +1,22 @@
+{
+  "id": "K-041-inner-scope-boundary",
+  "rule": "K-041",
+  "description": "Inner scope compensation MUST NOT trigger outer (LCD S5.8). Compensation within a nested scope stays within that scope.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/compensation.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "advance", "actor": "operator" },
+    { "event": "advance", "actor": "operator" },
+    { "event": "fail", "actor": "system" }
+  ],
+  "expected_transitions": [
+    { "from": "stepA", "to": "stepB", "event": "advance" },
+    { "from": "stepB", "to": "stepC", "event": "advance" },
+    { "from": "stepC", "to": "compensating", "event": "fail" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "compensationScopeBoundary", "data": { "innerScopeOnly": true } }
+  ]
+}

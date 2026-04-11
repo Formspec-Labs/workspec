@@ -1,0 +1,62 @@
+{
+  "id": "G-032-temporal-resolution",
+  "rule": "G-032",
+  "description": "Resolution MUST select the most recent entry whose effectiveDate is on or before resolution date (WG S13.2). Parameter lookup finds the correct date-effective value.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/pipeline-execution.json",
+    "governance": "../../../../fixtures/governance/pipeline-execution-governance.json"
+  },
+  "initial_case_state": {
+    "income": 50000,
+    "employerVerified": true
+  },
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "caseworker"
+    },
+    {
+      "event": "validationPassed",
+      "actor": "verificationSystem",
+      "data": {
+        "resolutionDate": "2026-06-15",
+        "parameterValues": [
+          {
+            "effectiveDate": "2026-01-01",
+            "value": 48000
+          },
+          {
+            "effectiveDate": "2026-04-01",
+            "value": 52000
+          },
+          {
+            "effectiveDate": "2026-07-01",
+            "value": 55000
+          }
+        ]
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "dataEntry",
+      "to": "validation",
+      "event": "submit"
+    },
+    {
+      "from": "validation",
+      "to": "approved",
+      "event": "validationPassed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "parameterResolved",
+      "data": {
+        "resolvedValue": 52000,
+        "effectiveDate": "2026-04-01",
+        "resolutionDate": "2026-06-15"
+      }
+    }
+  ]
+}

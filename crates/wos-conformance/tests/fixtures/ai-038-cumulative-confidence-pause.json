@@ -1,0 +1,27 @@
+{
+  "id": "AI-038-cumulative-confidence-pause",
+  "rule": "AI-038",
+  "description": "Cumulative confidence below floor MUST pause for human review (AI S7.7). Across a session of multiple outputs, cumulative confidence drops below threshold.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.86, "modelNative": 0.86, "calibrated": true },
+        "sessionState": { "cumulativeConfidence": 0.78, "outputCount": 5 }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "cumulativeConfidenceViolation", "data": { "cumulative": 0.78, "threshold": 0.85, "action": "pause-for-review" } }
+  ]
+}

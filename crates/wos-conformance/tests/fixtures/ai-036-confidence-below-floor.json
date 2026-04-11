@@ -1,0 +1,26 @@
+{
+  "id": "AI-036-confidence-below-floor",
+  "rule": "AI-036",
+  "description": "Confidence below floor MUST invalidate output (AI S7.4). Agent confidence of 0.70 is below the 0.85 floor, triggering escalation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.70, "modelNative": 0.70, "calibrated": true }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "confidenceViolation", "data": { "threshold": 0.85, "actual": 0.70, "action": "escalateToHuman" } }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "G-017-reviewer-separation",
+  "rule": "G-017",
+  "description": "Reviewer MUST NOT be the same actor who made the original decision (WG S7.2). Quality review cannot be performed by the original decision-maker.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "approved", "actor": "caseworker" },
+    {
+      "event": "qualityReview",
+      "actor": "caseworker",
+      "data": { "reviewType": "quality-sample", "decision": "confirmed" }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "separationViolation", "data": { "actor": "caseworker", "reason": "reviewer-is-original-decision-maker" } }
+  ]
+}

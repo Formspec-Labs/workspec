@@ -1,0 +1,27 @@
+{
+  "id": "AG-015-proven-unsafe-blocks-active",
+  "rule": "AG-015",
+  "description": "Proven-unsafe constraint MUST be corrected before workflow reaches active (AdvGov S8.3). A verification report with a proven-unsafe result blocks the workflow from being activated.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/dcr-zone.json",
+    "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "$activate",
+      "actor": "system",
+      "data": {
+        "verificationReport": {
+          "results": [
+            { "constraintId": "perm-income-range", "result": "proven-unsafe", "counterexample": { "income": -1 } }
+          ]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "activationBlocked", "data": { "reason": "proven-unsafe-constraint", "constraintId": "perm-income-range" } }
+  ]
+}

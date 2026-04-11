@@ -1,0 +1,26 @@
+{
+  "id": "AI-010-prohibition-condition",
+  "rule": "AI-010",
+  "description": "Prohibition condition evaluated against live output (AI S4.3). Agent denies without reason codes, triggering escalation to human.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "denied", "reasonCodes": null },
+        "confidenceReport": { "overall": 0.90 }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "deonticViolation", "data": { "constraintId": "prohib-negative-without-reason", "action": "escalateToHuman" } }
+  ]
+}

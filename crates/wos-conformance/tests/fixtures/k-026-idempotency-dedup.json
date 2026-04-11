@@ -1,0 +1,29 @@
+{
+  "id": "K-026-idempotency-dedup",
+  "rule": "K-026",
+  "description": "IdempotencyKey MUST deduplicate invocations (Kernel S9.3). Sending the same event twice with the same idempotency key produces only one invocation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" },
+    {
+      "event": "verified",
+      "actor": "verificationSystem",
+      "data": { "idempotencyKey": "test-dedup-key" }
+    },
+    {
+      "event": "verified",
+      "actor": "verificationSystem",
+      "data": { "idempotencyKey": "test-dedup-key" }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" },
+    { "from": "pendingReview", "to": "reviewComplete", "event": "verified" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "idempotencyDedup", "data": { "key": "test-dedup-key", "duplicateIgnored": true } }
+  ]
+}

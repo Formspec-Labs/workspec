@@ -1,0 +1,30 @@
+{
+  "id": "AI-014-most-restrictive-wins",
+  "rule": "AI-014",
+  "description": "When multiple constraints violated simultaneously, the most restrictive enforcement action applies (AI S4.6). Both a reject and escalateToHuman violation should produce reject (most restrictive).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": {
+          "income": -500,
+          "determination": "denied",
+          "reasonCodes": null,
+          "confidenceReport": null
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "deonticViolation", "data": { "constraintId": "perm-income-range", "action": "reject" } },
+    { "record_kind": "deonticViolation", "data": { "constraintId": "prohib-negative-without-reason", "action": "escalateToHuman" } },
+    { "record_kind": "deonticResolution", "data": { "effectiveAction": "reject", "reason": "most-restrictive" } }
+  ]
+}

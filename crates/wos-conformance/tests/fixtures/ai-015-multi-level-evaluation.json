@@ -1,0 +1,33 @@
+{
+  "id": "AI-015-multi-level-evaluation",
+  "rule": "AI-015",
+  "description": "All constraints at all three composition levels (agent, action-site, workflow) MUST be evaluated (AI S4.7). Provenance must show evaluation at each level.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "confidenceReport": { "overall": 0.90 },
+          "reasonCodes": ["R1"],
+          "evidenceCitations": ["doc1"]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "deonticEvaluation", "data": { "level": "agent" } },
+    { "record_kind": "deonticEvaluation", "data": { "level": "action-site" } },
+    { "record_kind": "deonticEvaluation", "data": { "level": "workflow" } }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "G-018-override-rationale",
+  "rule": "G-018",
+  "description": "Override MUST include structured rationale, authority verification, and supporting evidence (WG S7.3). Missing rationale is a violation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    {
+      "event": "override",
+      "actor": "supervisor",
+      "data": { "overrideDecision": "approved", "rationale": null, "evidence": null }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "overrideViolation", "data": { "reason": "missing-rationale-and-evidence" } }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "G-054-resume-cancels-hold-timer",
+  "rule": "G-054",
+  "description": "When the resumeTrigger event arrives before the hold timer fires, the timer MUST be cancelled (WG S12.4). The case resumes to its next state without escalation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/hold-resume-lifecycle.json",
+    "governance": "../../../../fixtures/governance/hold-resume-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "needInfo", "actor": "caseworker" },
+    { "event": "applicantResponse", "actor": "applicant" }
+  ],
+  "expected_transitions": [
+    { "from": "processing", "to": "pendingResponse", "event": "needInfo" },
+    { "from": "pendingResponse", "to": "processing", "event": "applicantResponse" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "timerCreated", "data": { "timerId": "holdTimer" } },
+    { "record_kind": "timerCancelled", "data": { "timerId": "holdTimer" } }
+  ]
+}

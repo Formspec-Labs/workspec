@@ -1,0 +1,35 @@
+{
+  "id": "AI-030-dynamic-autonomy-cap",
+  "rule": "AI-030",
+  "description": "Dynamic autonomy MUST NOT exceed effective cap (AI S5.6). Even with a FEL expression that computes higher autonomy, the result is capped.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        },
+        "dynamicAutonomy": "supervisory"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyCapped",
+      "data": {
+        "requested": "supervisory",
+        "effective": "assistive",
+        "reason": "dynamic-exceeds-cap"
+      }
+    }
+  ]
+}

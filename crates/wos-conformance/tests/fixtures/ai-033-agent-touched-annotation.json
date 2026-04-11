@@ -1,0 +1,26 @@
+{
+  "id": "AI-033-agent-touched-annotation",
+  "rule": "AI-033",
+  "description": "Agent-touched fields MUST be annotated with agentProvenance (AI S6.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.90, "modelNative": 0.90, "calibrated": true }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "agentProvenanceAnnotation", "data": { "fieldsAnnotated": true } }
+  ]
+}

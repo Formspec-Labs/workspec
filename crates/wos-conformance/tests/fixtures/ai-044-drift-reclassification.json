@@ -1,0 +1,27 @@
+{
+  "id": "AI-044-drift-reclassification",
+  "rule": "AI-044",
+  "description": "Training data contamination triggers reclassification to determination (AI S9.3). When drift detection finds contamination, the action is reclassified.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.95 },
+        "driftAlert": { "type": "training-data-contamination", "severity": "high" }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "driftReclassification", "data": { "originalClassification": "assistive", "reclassifiedTo": "determination" } }
+  ]
+}

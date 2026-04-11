@@ -1,0 +1,26 @@
+{
+  "id": "G-010-independent-first",
+  "rule": "G-010",
+  "description": "independentFirst MUST enforce reviewer records independent assessment before any recommendation is accessible (WG S4.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    { "event": "appealFiled", "actor": "appealReviewer" },
+    {
+      "event": "appealGranted",
+      "actor": "appealReviewer",
+      "data": { "independentAssessmentRecorded": false }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "protocolViolation", "data": { "protocol": "independentFirst", "reason": "independent-assessment-not-recorded" } }
+  ]
+}

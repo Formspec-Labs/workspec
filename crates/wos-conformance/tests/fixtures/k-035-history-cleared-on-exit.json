@@ -1,0 +1,22 @@
+{
+  "id": "K-035-history-cleared-on-exit",
+  "rule": "K-035",
+  "description": "History cleared on parent exit or region cancellation (LCD S3.4). When a compound state with historyState is exited, the recorded history is cleared.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" },
+    { "event": "verified", "actor": "verificationSystem" },
+    { "event": "approved", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" },
+    { "from": "pendingReview", "to": "reviewComplete", "event": "verified" },
+    { "from": "review", "to": "done", "event": "approved" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "historyCleared", "data": { "state": "review", "reason": "parent-exit" } }
+  ]
+}

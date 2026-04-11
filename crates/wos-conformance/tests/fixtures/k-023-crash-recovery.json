@@ -1,0 +1,23 @@
+{
+  "id": "K-023-crash-recovery",
+  "rule": "K-023",
+  "description": "Non-terminal instances MUST resume after crash (Kernel S9.1, G1). Instance processes event, simulates crash (restart), then resumes from last durable state and continues.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" },
+    { "event": "$restart", "actor": "system" },
+    { "event": "verified", "actor": "verificationSystem" },
+    { "event": "approved", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" },
+    { "from": "pendingReview", "to": "reviewComplete", "event": "verified" },
+    { "from": "review", "to": "done", "event": "approved" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "instanceResumed", "data": { "reason": "crash-recovery" } }
+  ]
+}

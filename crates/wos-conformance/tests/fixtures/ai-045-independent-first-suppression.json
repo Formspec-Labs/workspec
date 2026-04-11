@@ -1,0 +1,32 @@
+{
+  "id": "AI-045-independent-first-suppression",
+  "rule": "AI-045",
+  "description": "independentFirst suppression MUST hide agent output until independent assessment recorded (AI S10.2). Human reviewer must not see agent recommendation before recording their own assessment.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    { "event": "appealFiled", "actor": "appealReviewer" },
+    {
+      "event": "appealGranted",
+      "actor": "appealReviewer",
+      "data": {
+        "independentAssessmentRecorded": true,
+        "agentOutputVisible": false,
+        "assessment": "eligible"
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" },
+    { "from": "appealReview", "to": "benefitsActive", "event": "appealGranted" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "independentFirstEnforced", "data": { "protocol": "independentFirst", "agentOutputSuppressed": true } }
+  ]
+}

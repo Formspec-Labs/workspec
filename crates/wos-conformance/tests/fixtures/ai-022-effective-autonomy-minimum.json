@@ -1,0 +1,38 @@
+{
+  "id": "AI-022-effective-autonomy-minimum",
+  "rule": "AI-022",
+  "description": "Effective autonomy = minimum of 4 sources: impact-level cap, workflow default, agent declaration, action-site override (AI S5.3).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyComputed",
+      "data": {
+        "sources": {
+          "impactLevelCap": "assistive",
+          "workflowDefault": "assistive",
+          "agentDeclaration": "autonomous",
+          "actionSiteOverride": "autonomous"
+        },
+        "effective": "assistive"
+      }
+    }
+  ]
+}

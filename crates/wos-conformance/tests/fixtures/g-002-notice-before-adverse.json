@@ -1,0 +1,19 @@
+{
+  "id": "G-002-notice-before-adverse",
+  "rule": "G-002",
+  "description": "Affected individual MUST receive notice before the adverse decision takes effect (WG S3.2). Notice must be sent before denial becomes final.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "noticeSent", "data": { "timing": "beforeEffective", "type": "adverse-decision" } }
+  ]
+}

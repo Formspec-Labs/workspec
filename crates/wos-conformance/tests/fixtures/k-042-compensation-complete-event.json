@@ -1,0 +1,19 @@
+{
+  "id": "K-042-compensation-complete-event",
+  "rule": "K-042",
+  "description": "$compensation.complete processed like any event (LCD S5.9). After compensation finishes, the $compensation.complete event fires and transitions normally.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/compensation.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "advance", "actor": "operator" },
+    { "event": "fail", "actor": "system" },
+    { "event": "$compensation.complete", "actor": "system" }
+  ],
+  "expected_transitions": [
+    { "from": "stepA", "to": "stepB", "event": "advance" },
+    { "from": "stepB", "to": "compensating", "event": "fail" },
+    { "from": "compensating", "to": "compensated", "event": "$compensation.complete" }
+  ]
+}

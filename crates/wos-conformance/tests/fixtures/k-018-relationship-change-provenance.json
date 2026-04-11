@@ -1,0 +1,43 @@
+{
+  "id": "K-018-relationship-change-provenance",
+  "rule": "K-018",
+  "description": "Case relationship changes MUST produce provenance (Kernel S5.5). Adding, removing, or modifying a case relationship emits a provenance record. NOTE: relationshipChanged is a case-level operation, not a lifecycle event -- Phase 5 must handle it as a special event that produces provenance without requiring a matching lifecycle transition.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "submit",
+      "actor": "operator"
+    },
+    {
+      "event": "relationshipChanged",
+      "actor": "operator",
+      "data": {
+        "relationship": {
+          "type": "related",
+          "targetCase": "urn:wos:test:cases:related-001",
+          "relationship": "household-member",
+          "action": "added"
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "to": "review",
+      "event": "submit"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "relationshipChanged",
+      "data": {
+        "targetCase": "urn:wos:test:cases:related-001",
+        "action": "added"
+      }
+    }
+  ]
+}

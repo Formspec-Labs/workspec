@@ -1,0 +1,26 @@
+{
+  "id": "AI-040-terminal-fallback",
+  "rule": "AI-040",
+  "description": "Terminal fallback MUST produce result or human task (AI S8.2). After exhausting retries, the final fallback escalates to human.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": null,
+        "error": "model-timeout"
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "fallbackTerminal", "data": { "action": "escalateToHuman", "taskCreated": true } }
+  ]
+}

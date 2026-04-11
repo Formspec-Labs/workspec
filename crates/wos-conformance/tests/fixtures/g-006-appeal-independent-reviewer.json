@@ -1,0 +1,26 @@
+{
+  "id": "G-006-appeal-independent-reviewer",
+  "rule": "G-006",
+  "description": "Appeal MUST be reviewed by an adjudicator independent of the original determination (WG S3.5). The same caseworker who denied cannot review the appeal.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    { "event": "appealFiled", "actor": "caseworker" },
+    {
+      "event": "appealGranted",
+      "actor": "caseworker",
+      "data": { "note": "Same actor as original denial -- should be rejected" }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "separationViolation", "data": { "actor": "caseworker", "reason": "original-decision-maker-cannot-review-appeal" } }
+  ]
+}

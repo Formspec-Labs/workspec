@@ -1,0 +1,23 @@
+{
+  "id": "G-026-delegation-in-provenance",
+  "rule": "G-026",
+  "description": "Delegation used MUST be referenced in provenance record (WG S11.4). When an actor acts under delegation, the provenance record includes the delegation reference.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "approved",
+      "actor": "caseworker",
+      "data": { "delegationId": "DEL-001", "delegator": "supervisor" }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "stateTransition", "data": { "delegationRef": "DEL-001" } }
+  ]
+}

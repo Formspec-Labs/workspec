@@ -1,0 +1,24 @@
+{
+  "id": "AI-009-permission-bounds",
+  "rule": "AI-009",
+  "description": "Permission bounds evaluated against live agent output (AI S4.2). Agent output with income outside permitted range triggers rejection.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": -1000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.92 }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "deonticViolation", "data": { "constraintId": "perm-income-range", "action": "reject" } }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "AI-034-confidence-report-required",
+  "rule": "AI-034",
+  "description": "Every agent output MUST have a ConfidenceReport (AI S7.1). Agent output missing confidence report is rejected.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible" }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "confidenceViolation", "data": { "reason": "missing-confidence-report" } }
+  ]
+}

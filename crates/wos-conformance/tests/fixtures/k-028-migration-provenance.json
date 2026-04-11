@@ -1,0 +1,23 @@
+{
+  "id": "K-028-migration-provenance",
+  "rule": "K-028",
+  "description": "Instance migration MUST produce provenance (Kernel S9.6). When a workflow version changes and an instance migrates, provenance records the migration.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/durability.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" },
+    {
+      "event": "$migrate",
+      "actor": "system",
+      "data": { "fromVersion": "1.0.0", "toVersion": "1.1.0" }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "intake", "to": "review", "event": "submit" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "instanceMigrated", "data": { "fromVersion": "1.0.0", "toVersion": "1.1.0" } }
+  ]
+}

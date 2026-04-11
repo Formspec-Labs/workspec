@@ -1,0 +1,102 @@
+{
+  "id": "AG-007-tool-rate-limit",
+  "rule": "AG-007",
+  "description": "Tool invocations MUST respect rate limits (AdvGov S6.1). Agent exceeds lookupPrecedent rate limit of 10/minute.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        },
+        "toolInvocations": [
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q1"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q2"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q3"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q4"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q5"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q6"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q7"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q8"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q9"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q10"
+            }
+          },
+          {
+            "tool": "lookupPrecedent",
+            "args": {
+              "query": "q11"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "toolViolation",
+      "data": {
+        "tool": "lookupPrecedent",
+        "reason": "rate-limit-exceeded",
+        "limit": 10
+      }
+    }
+  ]
+}

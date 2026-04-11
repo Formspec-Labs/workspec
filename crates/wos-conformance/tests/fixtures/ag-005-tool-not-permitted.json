@@ -1,0 +1,40 @@
+{
+  "id": "AG-005-tool-not-permitted",
+  "rule": "AG-005",
+  "description": "Agent MUST NOT invoke tools not in permitted list (AdvGov S6.1). Agent tries to use a forbidden tool; processor blocks.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        },
+        "toolInvocations": [
+          {
+            "tool": "sendNotification",
+            "args": {}
+          }
+        ]
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "toolViolation",
+      "data": {
+        "tool": "sendNotification",
+        "reason": "not-in-permitted-list",
+        "agentId": "triageAgent"
+      }
+    }
+  ]
+}

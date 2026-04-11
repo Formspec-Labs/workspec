@@ -1,0 +1,29 @@
+{
+  "id": "VR-002-proven-unsafe-blocks-activation",
+  "rule": "VR-002",
+  "description": "Proven-unsafe MUST prevent workflow activation until corrected (VerifReport S1). A workflow with any proven-unsafe constraint result cannot transition to active status.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/dcr-zone.json",
+    "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "$activate",
+      "actor": "system",
+      "data": {
+        "verificationReport": {
+          "reportId": "VR-2026-002",
+          "results": [
+            { "constraintId": "equity-check", "result": "proven-safe" },
+            { "constraintId": "boundary-check", "result": "proven-unsafe", "counterexample": { "value": -1 } }
+          ]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "activationBlocked", "data": { "reason": "proven-unsafe-constraint", "constraintId": "boundary-check" } }
+  ]
+}

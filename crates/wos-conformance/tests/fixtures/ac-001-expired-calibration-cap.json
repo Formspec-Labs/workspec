@@ -1,0 +1,37 @@
+{
+  "id": "AC-001-expired-calibration-cap",
+  "rule": "AC-001",
+  "description": "Expired calibration caps autonomy at assistive (AgentConfig S1.3). When calibration is expired, agent autonomy is capped regardless of declaration.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
+    "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "routine"
+        },
+        "agentState": {
+          "calibrationExpired": true,
+          "lastCalibrated": "2025-11-01T00:00:00Z"
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "autonomyCapped",
+      "data": {
+        "effective": "assistive",
+        "reason": "calibration-expired"
+      }
+    }
+  ]
+}

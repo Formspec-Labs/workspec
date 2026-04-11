@@ -1,4 +1,4 @@
-// Rust guideline compliant 2026-04-10
+// Rust guideline compliant 2026-02-21
 
 //! Conformance test engine — thin harness over `wos_core::Evaluator`.
 //!
@@ -225,43 +225,63 @@ impl WorkflowEngine {
 
 // ── Module-level helpers ─────────────────────────────────────────
 
-/// Check whether an expected provenance record (a JSON object with arbitrary fields)
-/// is a partial match for an actual `ProvenanceRecord`.
+/// Check whether an expected provenance record partially matches an actual one.
 ///
-/// A partial match requires every field present in `expected` to equal the
-/// corresponding field in the serialized actual record. Fields absent from
-/// `expected` are not checked (wildcard). The `record_type` field in `expected`
-/// matches the camelCase serialization of `actual.record_kind`.
+/// A partial match requires every field present in `expected` to exist in
+/// the actual record with a matching value. Fields absent from `expected`
+/// are not checked (wildcard). When both sides are objects, matching is
+/// recursive — the actual object may contain extra fields beyond what the
+/// fixture asserts.
+///
+/// The legacy alias `record_type` is normalized to `record_kind` at the
+/// top level only, so fixtures may use either field name.
 fn provenance_partial_match(expected: &serde_json::Value, actual: &ProvenanceRecord) -> bool {
+    // Normalize `record_type` -> `record_kind` at the top level only.
+    // Fixtures may use the legacy alias `record_type`; the Rust struct
+    // serializes as `record_kind`.  This normalization must NOT recurse
+    // into nested objects — it is specific to the provenance record root.
+    let normalized = if let serde_json::Value::Object(map) = expected {
+        let mut new_map = map.clone();
+        if let Some(val) = new_map.remove("record_type") {
+            new_map.insert("record_kind".to_string(), val);
+        }
+        serde_json::Value::Object(new_map)
+    } else {
+        expected.clone()
+    };
+
     // Serialize the actual record so field names and values are comparable.
     let actual_json = match serde_json::to_value(actual) {
         Ok(v) => v,
         Err(_) => return false,
     };
 
-    let expected_obj = match expected.as_object() {
-        Some(o) => o,
-        None => return false,
-    };
+    json_partial_match(&normalized, &actual_json)
+}
 
-    for (key, expected_val) in expected_obj {
-        // Support both "record_kind" (Rust field name) and "record_type" (legacy alias)
-        // so fixture authors can use either.
-        let actual_val = if key == "record_type" {
-            actual_json.get("record_kind")
-        } else {
-            actual_json.get(key)
-        };
-
-        match actual_val {
-            None => return false,
-            Some(av) => {
-                if av != expected_val {
-                    return false;
+/// Recursive partial match: every field in `expected` must exist in `actual`
+/// with a matching value. Objects are compared field-by-field (actual may have
+/// extras). Arrays and scalars use exact equality.
+///
+/// This is a generic recursive matcher with no domain-specific aliases.
+/// Any field normalization (e.g., `record_type` -> `record_kind`) must be
+/// performed by the caller before invoking this function.
+fn json_partial_match(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    match (expected, actual) {
+        (serde_json::Value::Object(exp_obj), serde_json::Value::Object(act_obj)) => {
+            for (key, exp_val) in exp_obj {
+                match act_obj.get(key) {
+                    None => return false,
+                    Some(av) => {
+                        if !json_partial_match(exp_val, av) {
+                            return false;
+                        }
+                    }
                 }
             }
+            true
         }
+        // Non-object values use exact equality.
+        _ => expected == actual,
     }
-
-    true
 }

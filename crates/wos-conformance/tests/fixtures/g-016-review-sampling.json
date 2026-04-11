@@ -1,0 +1,19 @@
+{
+  "id": "G-016-review-sampling",
+  "rule": "G-016",
+  "description": "Configurable percentage of decisions MUST be randomly selected for quality review (WG S7.1). With 10% sampling, approximately 1 in 10 decisions triggers review.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "approved", "actor": "caseworker" }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "samplingDecision", "data": { "rate": 0.10, "method": "random" } }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "AG-016-review-ground-truth",
+  "rule": "AG-016",
+  "description": "Every review provides ground-truth label (AdvGov S9.3). When a human reviews agent output, the review record must include a ground-truth label for calibration.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.90, "modelNative": 0.90, "calibrated": true }
+      }
+    },
+    {
+      "event": "reviewComplete",
+      "actor": "supervisor",
+      "data": {
+        "reviewResult": "confirmed",
+        "groundTruthLabel": "eligible"
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "groundTruthLabel", "data": { "label": "eligible", "reviewer": "supervisor" } }
+  ]
+}

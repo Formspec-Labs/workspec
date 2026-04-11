@@ -1,0 +1,25 @@
+{
+  "id": "AI-008-actor-type-immutable",
+  "rule": "AI-008",
+  "description": "Actor type is immutable for a given action (AI S3.7). An agent cannot change its declared type mid-action.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.90 },
+        "actorTypeOverride": "human"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "actorTypeViolation", "data": { "declared": "system", "attempted": "human", "reason": "actor-type-immutable" } }
+  ]
+}

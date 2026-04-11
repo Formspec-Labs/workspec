@@ -1,0 +1,24 @@
+{
+  "id": "G-064-notification-missing-variables",
+  "rule": "G-064",
+  "description": "Processor MUST NOT send notification when requiredVariables are missing from rendering context (NT S5.3). When a template declares required variables that are absent from case state, the notification is suppressed and provenance records the failure.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json",
+    "notificationTemplate": "../../../../fixtures/sidecars/benefits-notification-templates.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "denied",
+      "actor": "caseworker",
+      "data": { "reasonCodes": null, "determination": null }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "notificationSuppressed", "data": { "reason": "missing-required-variables" } }
+  ]
+}

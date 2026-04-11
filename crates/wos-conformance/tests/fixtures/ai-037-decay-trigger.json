@@ -1,0 +1,28 @@
+{
+  "id": "AI-037-decay-trigger",
+  "rule": "AI-037",
+  "description": "DecayTrigger multiplies confidence; below floor triggers escalation (AI S7.5). A decay event reduces confidence from 0.90 by factor 0.7 to 0.63, which is below the 0.85 floor.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.90, "modelNative": 0.90, "calibrated": true },
+        "decayEvent": { "event": "caseFile.documents.added", "decayFactor": 0.7 }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "confidenceDecay", "data": { "original": 0.90, "factor": 0.7, "decayed": 0.63 } },
+    { "record_kind": "confidenceViolation", "data": { "threshold": 0.85, "actual": 0.63, "action": "escalateToHuman" } }
+  ]
+}

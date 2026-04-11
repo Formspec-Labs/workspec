@@ -1,0 +1,26 @@
+{
+  "id": "AI-027-escalation-deontic-not-bypassed",
+  "rule": "AI-027",
+  "description": "Escalation does NOT bypass deontic constraints (AI S5.4). Even when an agent has been escalated to a higher autonomy level, deontic constraints still apply.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": -1000, "determination": "eligible" },
+        "confidenceReport": { "overall": 0.95 },
+        "escalationActive": true,
+        "escalatedAutonomy": "autonomous"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "deonticViolation", "data": { "constraintId": "perm-income-range", "action": "reject", "escalationActive": true } }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "K-040-pivot-no-compensation",
+  "rule": "K-040",
+  "description": "Pivot step MUST NOT receive compensation (LCD S5.5). The step where failure occurred is the pivot and is excluded from compensation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/compensation.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "advance", "actor": "operator" },
+    { "event": "fail", "actor": "system" }
+  ],
+  "expected_transitions": [
+    { "from": "stepA", "to": "stepB", "event": "advance" },
+    { "from": "stepB", "to": "compensating", "event": "fail" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "compensationExecuted", "data": { "pivotStep": "stepB", "compensated": ["stepA"], "excluded": ["stepB"] } }
+  ]
+}

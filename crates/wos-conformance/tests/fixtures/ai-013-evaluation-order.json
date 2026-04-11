@@ -1,0 +1,31 @@
+{
+  "id": "AI-013-evaluation-order",
+  "rule": "AI-013",
+  "description": "Deontic constraints MUST be evaluated in order: Permissions, Prohibitions, Obligations, Confidence, Volume, Sampling (AI S4.6). Provenance must reflect this ordering.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "confidenceReport": { "overall": 0.90 },
+          "reasonCodes": ["R1"],
+          "evidenceCitations": ["doc1"]
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "deonticEvaluation", "data": { "order": ["permissions", "prohibitions", "obligations", "confidence", "volume", "sampling"] } }
+  ]
+}

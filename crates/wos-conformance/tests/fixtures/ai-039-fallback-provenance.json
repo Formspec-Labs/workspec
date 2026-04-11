@@ -1,0 +1,26 @@
+{
+  "id": "AI-039-fallback-provenance",
+  "rule": "AI-039",
+  "description": "Every fallback attempt MUST produce provenance (AI S8.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": null,
+        "confidenceReport": null,
+        "error": "model-timeout"
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "fallbackAttempt", "data": { "level": 0, "action": "retry" } },
+    { "record_kind": "fallbackAttempt", "data": { "level": 1, "action": "escalateToHuman" } }
+  ]
+}

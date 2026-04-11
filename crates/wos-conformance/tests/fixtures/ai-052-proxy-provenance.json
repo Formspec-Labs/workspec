@@ -1,0 +1,27 @@
+{
+  "id": "AI-052-proxy-provenance",
+  "rule": "AI-052",
+  "description": "Proxy MUST produce provenance per governed invocation (AI S14.2).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
+    "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
+  },
+  "initial_case_state": { "income": 50000 },
+  "event_sequence": [
+    {
+      "event": "determined",
+      "actor": "eligibilityAgent",
+      "data": {
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "confidenceReport": { "overall": 0.90 },
+        "invocationSource": "assist-proxy"
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "proxyInvocation", "data": { "source": "assist-proxy", "provenanceRecorded": true } }
+  ]
+}

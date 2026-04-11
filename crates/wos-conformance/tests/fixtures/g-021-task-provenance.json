@@ -1,0 +1,21 @@
+{
+  "id": "G-021-task-provenance",
+  "rule": "G-021",
+  "description": "All task state transitions MUST be recorded in provenance (WG S10.1). When a task is created, assigned, started, completed, each transition produces a record.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "denied", "actor": "caseworker" },
+    { "event": "appealFiled", "actor": "appealReviewer" }
+  ],
+  "expected_transitions": [
+    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "taskCreated", "data": { "taskRef": "reviewAppeal" } }
+  ]
+}
