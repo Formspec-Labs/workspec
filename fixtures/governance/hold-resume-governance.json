@@ -1,0 +1,17 @@
+{
+  "$wosWorkflowGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+  "targetWorkflow": "https://test.wos-spec.org/workflows/hold-resume-lifecycle",
+  "version": "1.0.0",
+  "title": "Hold/Resume Governance Test",
+  "description": "Governance document declaring a hold policy for the pendingResponse state. Tests G-030 (hold timer management) and G-054 (resume trigger cancels timer).",
+  "holdPolicies": [
+    {
+      "holdType": "pending-applicant-response",
+      "expectedDuration": "P30D",
+      "resumeTrigger": "applicantResponse",
+      "timeoutAction": "escalate",
+      "description": "Wait up to 30 days for applicant response"
+    }
+  ]
+}

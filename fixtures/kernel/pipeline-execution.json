@@ -1,0 +1,72 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/pipeline-execution",
+  "version": "1.0.0",
+  "title": "Pipeline Execution Test",
+  "description": "Minimal workflow for testing data validation pipelines with assertion gates, risk profiles, and rejection routing.",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "actors": [
+    { "id": "caseworker", "type": "human", "description": "Caseworker" },
+    { "id": "verificationSystem", "type": "system", "description": "Data verification" }
+  ],
+
+  "lifecycle": {
+    "initialState": "dataEntry",
+    "states": {
+      "dataEntry": {
+        "type": "atomic",
+        "transitions": [
+          { "event": "submit", "target": "validation" }
+        ]
+      },
+      "validation": {
+        "type": "atomic",
+        "tags": ["validation"],
+        "onEntry": [
+          {
+            "action": "invokeService",
+            "serviceRef": "verificationSystem",
+            "idempotencyKey": "${instance.id}-validation",
+            "contractRef": "dataValidationContract"
+          }
+        ],
+        "transitions": [
+          { "event": "validationPassed", "target": "approved" },
+          { "event": "validationFailed", "target": "holdPendingData" },
+          { "event": "validationRejected", "target": "rejected" }
+        ]
+      },
+      "holdPendingData": {
+        "type": "atomic",
+        "tags": ["hold"],
+        "transitions": [
+          { "event": "dataProvided", "target": "validation" }
+        ]
+      },
+      "approved": { "type": "final" },
+      "rejected": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "income": { "type": "number" },
+      "employerVerified": { "type": "boolean" }
+    }
+  },
+
+  "contracts": {
+    "dataValidationContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:test:data-validation:1.0.0"
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P30D",
+    "instanceVersioning": "pinned"
+  }
+}

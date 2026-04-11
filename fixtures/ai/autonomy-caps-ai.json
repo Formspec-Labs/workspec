@@ -1,0 +1,48 @@
+{
+  "$wosAIIntegration": "1.0",
+  "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
+  "targetWorkflow": "https://test.wos-spec.org/workflows/autonomy-caps",
+  "version": "1.0.0",
+  "title": "Autonomy Caps AI Integration",
+  "description": "AI integration for testing autonomy level caps, escalation/demotion, and calibration expiry.",
+  "defaultAutonomy": "assistive",
+  "agents": [
+    {
+      "id": "triageAgent",
+      "type": "agent",
+      "agentType": "generative",
+      "modelIdentifier": "test-model",
+      "modelVersion": "1.0",
+      "description": "Triage agent with escalation and demotion rules",
+      "capabilities": [
+        {
+          "id": "triage",
+          "description": "Categorize and prioritize cases",
+          "outputContractRef": "urn:formspec:test:triage:1.0.0"
+        }
+      ],
+      "deonticConstraints": {
+        "permissions": [
+          {
+            "id": "perm-triage-only",
+            "bounds": "output.action = 'categorize' or output.action = 'prioritize'",
+            "onViolation": "escalateToHuman"
+          }
+        ]
+      },
+      "fallbackChain": [
+        {
+          "action": "retry",
+          "maxRetries": 1,
+          "backoff": "fixed",
+          "initialInterval": "PT1S"
+        },
+        {
+          "action": "escalateToHuman",
+          "taskRef": "manualTriage",
+          "assignTo": "caseworker"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$wosWorkflowGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+  "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+  "version": "1.0.0",
+  "title": "Due Process Governance Test",
+
+  "dueProcess": {
+    "adverseDecisionPolicy": {
+      "noticeRequired": true,
+      "noticeTiming": "beforeEffective",
+      "noticeGracePeriod": "P30D",
+      "explanationLevel": "individualized",
+      "counterfactualRequired": true,
+      "appealMechanism": {
+        "enabled": true,
+        "appealWindow": "P30D",
+        "reviewerConstraint": "independentFromOriginal",
+        "reviewerRoles": ["appealReviewer"],
+        "continuationOfServices": true,
+        "continuationScope": "currentLevel"
+      }
+    }
+  },
+
+  "reviewProtocols": [
+    {
+      "tags": ["appeal"],
+      "protocols": ["independentFirst", "considerOpposite"],
+      "description": "Appeal uses independent-first protocol"
+    }
+  ],
+
+  "qualityControls": {
+    "reviewSampling": {
+      "rate": 0.10,
+      "method": "random",
+      "scope": "workflow"
+    },
+    "separationOfDuties": {
+      "enabled": true,
+      "scope": "case"
+    },
+    "overrideAuthority": {
+      "roles": ["supervisor"],
+      "requiresRationale": true,
+      "requiresEvidence": true,
+      "requiresAuthorityVerification": true
+    }
+  }
+}

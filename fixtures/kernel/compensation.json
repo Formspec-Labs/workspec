@@ -1,0 +1,72 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/compensation",
+  "version": "1.0.0",
+  "title": "Compensation Test",
+  "description": "Minimal workflow for testing compensation semantics: append-only log, reverse ordering, pivot step exclusion, nested scopes, and $compensation.complete event.",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "actors": [
+    { "id": "system", "type": "system", "description": "System" },
+    { "id": "operator", "type": "human", "description": "Operator" }
+  ],
+
+  "lifecycle": {
+    "initialState": "stepA",
+    "states": {
+      "stepA": {
+        "type": "atomic",
+        "onEntry": [
+          { "action": "setData", "path": "caseFile.stepADone", "value": "true" }
+        ],
+        "transitions": [
+          { "event": "advance", "target": "stepB" }
+        ]
+      },
+      "stepB": {
+        "type": "atomic",
+        "onEntry": [
+          { "action": "setData", "path": "caseFile.stepBDone", "value": "true" }
+        ],
+        "transitions": [
+          { "event": "advance", "target": "stepC" },
+          { "event": "fail", "target": "compensating" }
+        ]
+      },
+      "stepC": {
+        "type": "atomic",
+        "onEntry": [
+          { "action": "setData", "path": "caseFile.stepCDone", "value": "true" }
+        ],
+        "transitions": [
+          { "event": "complete", "target": "done" },
+          { "event": "fail", "target": "compensating" }
+        ]
+      },
+      "compensating": {
+        "type": "atomic",
+        "transitions": [
+          { "event": "$compensation.complete", "target": "compensated" }
+        ]
+      },
+      "compensated": { "type": "final" },
+      "done": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "stepADone": { "type": "boolean" },
+      "stepBDone": { "type": "boolean" },
+      "stepCDone": { "type": "boolean" }
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P1D",
+    "compensable": true,
+    "instanceVersioning": "pinned"
+  }
+}

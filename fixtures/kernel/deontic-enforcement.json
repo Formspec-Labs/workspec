@@ -1,0 +1,76 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/deontic-enforcement",
+  "version": "1.0.0",
+  "title": "Deontic Enforcement Test",
+  "description": "Minimal workflow for testing deontic constraint evaluation. Agent performs eligibility determination with governance constraints on permissions, prohibitions, obligations, and confidence.",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+
+  "actors": [
+    { "id": "caseworker", "type": "human", "description": "Human caseworker" },
+    { "id": "eligibilityAgent", "type": "system", "description": "AI eligibility agent" },
+    { "id": "supervisor", "type": "human", "description": "Supervisor for escalations" }
+  ],
+
+  "lifecycle": {
+    "initialState": "pendingDetermination",
+    "states": {
+      "pendingDetermination": {
+        "type": "atomic",
+        "tags": ["determination"],
+        "transitions": [
+          {
+            "event": "determined",
+            "target": "reviewComplete",
+            "tags": ["determination"]
+          },
+          {
+            "event": "escalated",
+            "target": "humanReview"
+          }
+        ]
+      },
+      "humanReview": {
+        "type": "atomic",
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "manualReview",
+            "assignTo": "supervisor"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "reviewComplete",
+            "target": "reviewComplete"
+          }
+        ]
+      },
+      "reviewComplete": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "income": { "type": "number", "description": "Applicant income" },
+      "dependents": { "type": "integer", "description": "Number of dependents" },
+      "determination": { "type": "string", "description": "Eligibility determination" },
+      "confidence": { "type": "number", "description": "Agent confidence score" }
+    }
+  },
+
+  "contracts": {
+    "eligibilityContract": {
+      "binding": "formspec",
+      "ref": "urn:formspec:test:eligibility:1.0.0",
+      "description": "Contract for eligibility determination"
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P30D",
+    "instanceVersioning": "pinned"
+  }
+}

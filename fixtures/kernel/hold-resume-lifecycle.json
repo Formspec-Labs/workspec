@@ -1,0 +1,75 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/hold-resume-lifecycle",
+  "version": "1.0.0",
+  "title": "Hold/Resume Lifecycle Test",
+  "description": "Minimal workflow with a hold-tagged state. Tests that hold timer starts on entry and is cancelled when the resume trigger arrives (G-030, G-054).",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+
+  "actors": [
+    { "id": "caseworker", "type": "human", "description": "Caseworker" },
+    { "id": "applicant", "type": "human", "description": "Applicant" },
+    { "id": "system", "type": "system", "description": "System" }
+  ],
+
+  "lifecycle": {
+    "initialState": "processing",
+    "states": {
+      "processing": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "event": "needInfo",
+            "target": "pendingResponse",
+            "tags": ["hold"]
+          }
+        ]
+      },
+      "pendingResponse": {
+        "type": "atomic",
+        "tags": ["hold"],
+        "onEntry": [
+          {
+            "action": "startTimer",
+            "timerId": "holdTimer",
+            "duration": "P30D",
+            "event": "$timeout.state"
+          }
+        ],
+        "transitions": [
+          {
+            "event": "applicantResponse",
+            "target": "processing",
+            "actions": [
+              { "action": "cancelTimer", "timerId": "holdTimer" }
+            ]
+          },
+          {
+            "event": "$timeout.state",
+            "target": "escalated"
+          }
+        ]
+      },
+      "escalated": {
+        "type": "atomic",
+        "transitions": [
+          { "event": "resolved", "target": "completed" }
+        ]
+      },
+      "completed": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "status": { "type": "string" }
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P365D",
+    "instanceVersioning": "pinned"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$wosAdvancedGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/advanced-governance/1.0",
+  "targetWorkflow": "https://test.wos-spec.org/workflows/dcr-zone",
+  "version": "1.0.0",
+  "title": "DCR Zone Advanced Governance",
+  "constraintZones": [
+    {
+      "id": "investigationZone",
+      "description": "Investigation constraint zone with three activities and DCR relations",
+      "activities": [
+        {
+          "id": "collectEvidence",
+          "initialIncluded": true,
+          "initialPending": true,
+          "description": "Collect Evidence"
+        },
+        {
+          "id": "interviewWitness",
+          "initialIncluded": true,
+          "initialPending": false,
+          "description": "Interview Witness"
+        },
+        {
+          "id": "performAnalysis",
+          "initialIncluded": true,
+          "initialPending": true,
+          "description": "Perform Analysis"
+        }
+      ],
+      "relations": [
+        {
+          "type": "condition",
+          "description": "Evidence must be collected before analysis",
+          "source": "collectEvidence",
+          "target": "performAnalysis"
+        },
+        {
+          "type": "response",
+          "description": "Collecting evidence triggers witness interview requirement",
+          "source": "collectEvidence",
+          "target": "interviewWitness"
+        },
+        {
+          "type": "exclude",
+          "description": "After analysis, no more evidence collection",
+          "source": "performAnalysis",
+          "target": "collectEvidence"
+        }
+      ]
+    }
+  ],
+  "equityGuardrails": [
+    {
+      "id": "determination-disparity",
+      "metric": "approvalRate",
+      "groupBy": "caseFile.applicantDemographic",
+      "maxDisparity": 0.15,
+      "evaluationWindow": "P90D",
+      "minimumSampleSize": 30,
+      "onViolation": "alert",
+      "reason": "Monitor for disparate approval rates across demographics",
+      "monitorTags": [
+        "determination"
+      ]
+    }
+  ]
+}

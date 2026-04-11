@@ -1,0 +1,60 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/autonomy-caps",
+  "version": "1.0.0",
+  "title": "Autonomy Caps Test",
+  "description": "Minimal workflow for testing autonomy level computation, escalation/demotion, tool governance, and impact-level caps.",
+  "status": "active",
+  "impactLevel": "rights-impacting",
+
+  "actors": [
+    { "id": "triageAgent", "type": "system", "description": "AI triage agent" },
+    { "id": "caseworker", "type": "human", "description": "Human caseworker" },
+    { "id": "supervisor", "type": "human", "description": "Supervisor" }
+  ],
+
+  "lifecycle": {
+    "initialState": "triage",
+    "states": {
+      "triage": {
+        "type": "atomic",
+        "tags": ["triage"],
+        "transitions": [
+          { "event": "triaged", "target": "review" },
+          { "event": "escalated", "target": "humanTriage" }
+        ]
+      },
+      "humanTriage": {
+        "type": "atomic",
+        "onEntry": [
+          { "action": "createTask", "taskRef": "manualTriage", "assignTo": "caseworker" }
+        ],
+        "transitions": [
+          { "event": "triageComplete", "target": "review" }
+        ]
+      },
+      "review": {
+        "type": "atomic",
+        "tags": ["determination"],
+        "transitions": [
+          { "event": "approved", "target": "completed" },
+          { "event": "denied", "target": "completed" }
+        ]
+      },
+      "completed": { "type": "final" }
+    }
+  },
+
+  "caseFile": {
+    "fields": {
+      "priority": { "type": "string" },
+      "category": { "type": "string" }
+    }
+  },
+
+  "execution": {
+    "workflowTimeout": "P30D",
+    "instanceVersioning": "pinned"
+  }
+}
