@@ -16,7 +16,7 @@ status: draft
 
 ## Abstract
 
-The WOS Runtime Companion defines the behavioral contract between the WOS evaluation engine and its host environment. A processor that implements this companion can host any WOS workflow at any scale, on any infrastructure. The companion defines WHAT a conformant processor must do -- not HOW. It specifies instance serialization (CaseInstance), event delivery semantics, action execution ordering, durability guarantees, timer management, governance enforcement, explanation assembly, evaluation modes, multi-version coexistence, host interfaces, security boundaries, and relationship-triggered events.
+The WOS Runtime Companion defines the behavioral contract between the WOS evaluation engine and its host environment. A processor that implements this companion can host any WOS workflow at any scale, on any infrastructure. The companion defines WHAT a conformant processor must do -- not HOW. It specifies instance serialization (CaseInstance), event delivery semantics, action execution ordering, durability guarantees, timer management, governance enforcement, explanation assembly, evaluation modes, multi-version coexistence, host interfaces, security boundaries, relationship-triggered events, and Formspec-backed task completion.
 
 This is a companion specification, not a layer. It elaborates kernel runtime semantics defined in the Kernel Specification (S4, S5, S8, S9) and the Lifecycle Detail Companion (S2-S6) without adding new document types, seams, or governance structures. It does not prescribe infrastructure: database technology, message queue implementation, cloud provider, or deployment architecture are host decisions, not engine concerns.
 
@@ -44,7 +44,7 @@ If YES, this companion defines the behavior normatively. If NO, this companion d
 
 ### 1.2 Scope
 
-**Within scope:** CaseInstance serialization format; instance operations; event delivery contract; action execution model; durability checkpoint semantics; timer precision and persistence; governance enforcement ordering; explanation assembly algorithm; evaluation modes; multi-version coexistence; host interfaces (traits); security model; relationship-triggered events.
+**Within scope:** CaseInstance serialization format; instance operations; event delivery contract; action execution model; durability checkpoint semantics; timer precision and persistence; governance enforcement ordering; explanation assembly algorithm; evaluation modes; multi-version coexistence; host interfaces (traits); security model; relationship-triggered events; Formspec task presentation, draft persistence, response validation, and Response-to-case mapping.
 
 **Out of scope:** specific infrastructure choices (database, message queue, cloud provider); deployment architecture (serverless, container, on-premise); host interface implementations; rendered explanation formats (PDF, HTML); network protocols between processor and host.
 
@@ -93,6 +93,7 @@ A **CaseInstance** is the serialization format for a running workflow instance. 
 | `caseState` | object | REQUIRED | Current case file field values. |
 | `provenancePosition` | integer | REQUIRED | Index into the append-only provenance log. Indicates how many provenance records have been durably persisted for this instance. |
 | `timers` | array of TimerState | REQUIRED | Pending timer state. Empty array when no timers are active. |
+| `activeTasks` | array of ActiveTask | REQUIRED | Durable nonterminal task state. Empty array when no tasks are active. Terminal task history lives in provenance. |
 | `historyStore` | object | OPTIONAL | Saved history state configurations, keyed by compound state identifier. Present only when the kernel document uses history states (Kernel S4.14). |
 | `compensationLogs` | object | OPTIONAL | Active compensation logs, keyed by compensable scope identifier. Present only when compensable scopes are active (Lifecycle Detail S5). |
 | `status` | enum | REQUIRED | Instance status: `active`, `suspended`, `migrating`, `completed`, `terminated`. |
@@ -244,6 +245,8 @@ The step result persistence before state advancement is a durability requirement
 
 Contract validation flows through the `contractHook` seam (Kernel S10.2). The processor delegates to the host's ContractValidator (S12.3). Results flow back as a ValidationResult (valid or errors). Validation failures trigger the rejection policy declared in the Governance Document (Governance S8).
 
+Formspec-backed task completion uses the coprocessor protocol in S15. That protocol validates a full Formspec Response envelope before case mutation and MAY then run `contractHook` / Governance S5 checks on the proposed completion bundle. A processor MUST NOT use `contractHook` alone as the per-task completion gate for a Formspec-bound task.
+
 ```
 function executeContractValidation(contractRef, data, context):
     result = host.contractValidator.validate(contractRef, data)
@@ -279,7 +282,7 @@ The Kernel Specification (Kernel S9.1) defines five durable execution guarantees
 
 ### 6.2 Checkpoint Semantics
 
-The unit of durability is the **event**. After each event is fully processed -- all transitions fired, all actions executed, all provenance recorded -- the processor MUST durably persist the CaseInstance. The checkpoint includes the updated configuration, case state, provenance position, timer state, and history store.
+The unit of durability is the **event**. After each event is fully processed -- all transitions fired, all actions executed, all provenance recorded -- the processor MUST durably persist the CaseInstance. The checkpoint includes the updated configuration, case state, provenance position, timer state, active task state, and history store.
 
 ```
 function processEventWithDurability(instance, event):
@@ -666,6 +669,19 @@ The EventQueue is a logical abstraction -- implementations MAY use an in-process
 
 Error conditions: `queueUnavailable`.
 
+### 12.9 TaskPresenter
+
+Presents Formspec-backed tasks to the host user interface.
+
+| Operation | Input | Output | Description |
+|-----------|-------|--------|-------------|
+| `presentTask` | context: FormspecTaskContext | (none) | Render the referenced Formspec Definition for the assigned actor. Presentation alone MUST NOT mutate case state. |
+| `dismissTask` | taskId: string, reason: string | (none) | Record that the host UI was closed without completion. Dismissal MUST NOT complete, fail, or skip the task. |
+
+The TaskPresenter is a host interface. The processor owns task lifecycle and case mutation semantics; the host owns rendering, local draft buffering, and user interaction. A host MAY call `dismissTask` when the actor closes a browser tab or modal. Deliberate abandonment is not dismissal; it uses the S15 draft/abandonment path.
+
+Error conditions: `taskNotFound`, `presentationUnavailable`, `actorUnavailable`.
+
 ---
 
 ## 13. Security Model
@@ -731,6 +747,132 @@ The depth counter resets for each externally-originated event. Only `$related.*`
 
 ---
 
+## 15. Formspec Coprocessor
+
+This section is normative.
+
+The Formspec coprocessor protocol defines how a WOS task bound to a Formspec Definition is presented, saved, submitted, validated, mapped to case state, and recorded in provenance. WOS delegates Formspec processing semantics to a Formspec-conformant processor. WOS defines only the orchestration envelope around that processor.
+
+### 15.1 Applicability
+
+This protocol applies to a kernel `createTask` action whose `contractRef` resolves to a ContractReference with `binding: "formspec"`.
+
+A Formspec task has one completion bundle: one task, one pinned Formspec Definition, and one full Formspec Response. Multi-form packets MUST be modeled as multiple coordinated tasks or as one composite Formspec Definition. A processor MUST NOT treat one WOS task as a collection of independent Formspec contracts unless a later WOS version defines multi-contract task semantics.
+
+### 15.2 Task Context
+
+When a Formspec-backed `createTask` action executes, the processor resolves the ContractReference and creates an ActiveTask entry in CaseInstance `activeTasks`.
+
+The processor then constructs a FormspecTaskContext:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `taskId` | string | REQUIRED | Processor task identifier. Stable for idempotency and provenance. |
+| `instanceId` | string (URI) | REQUIRED | WOS CaseInstance identifier. |
+| `contractRef` | string | REQUIRED | Kernel contract map key used by the task. |
+| `definitionUrl` | string (URI) | REQUIRED | Formspec Definition `url`. MUST match `response.definitionUrl`. |
+| `definitionVersion` | string | REQUIRED | Pinned Formspec Definition version. MUST match `response.definitionVersion`. |
+| `binding` | string | REQUIRED | MUST be `formspec`. |
+| `assignedActor` | string | REQUIRED | Actor assigned by the `createTask` action. |
+| `prefillData` | object | OPTIONAL | Host-provided initial values for rendering. |
+| `prefillMappingRef` | string (URI) | OPTIONAL | Mapping document used to prefill the Response. |
+| `responseMappingRef` | string (URI) | OPTIONAL | Mapping document used to project a completed Response into case state. |
+| `deadline` | string (datetime) | OPTIONAL | Task deadline. |
+| `impactLevel` | string | OPTIONAL | Effective impact level for task-level governance. Defaults to the Kernel `impactLevel`. |
+| `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
+
+The processor calls `TaskPresenter.presentTask(context)`. Presentation MUST produce a `taskPresented` Facts-tier provenance record and MUST NOT mutate case state.
+
+### 15.3 Mapping Profiles
+
+`responseMappingRef` controls Response-to-case mutation. A processor MUST NOT invent a host-defined default projection from Formspec Response data into case state. If `responseMappingRef` is absent, the processor MAY store the Response reference and emit the completion event, but MUST NOT automatically mutate case fields from the Response.
+
+When prefill and response projection use the same transform, `prefillMappingRef` and `responseMappingRef` SHOULD reference the same Mapping document with `direction: "both"` (Mapping S3.1, S3.1.2), and the host MUST claim Mapping Bidirectional conformance. If the host cannot execute reverse or bidirectional Mapping, prefill is a host-local behavior and is not portable WOS semantics. Separate one-way Mapping documents MAY be used when prefill and response projection are intentionally different.
+
+### 15.4 Drafts and Abandonment
+
+`submitTaskResponse` is the completion operation and accepts only a full Formspec Response with `status: "completed"`.
+
+Draft persistence is separate. A processor MAY expose `persistTaskDraft(taskId, response, actorId, timestamp, idempotencyToken)`. That operation accepts a full Formspec Response with `status: "in-progress"`, `status: "amended"`, or `status: "stopped"`. It MUST be idempotent, MUST record `taskDraftPersisted` provenance, and MUST NOT mutate case state, emit `completionEvent`, or advance task lifecycle to `completed`.
+
+Host UI dismissal is not abandonment. `dismissTask` records `taskDismissed` provenance and leaves the task resumable in its current state. Deliberate abandonment uses `persistTaskDraft` with `status: "stopped"` or a deployment-specific `abandonTask` operation. Unless the workflow explicitly maps the rationale to `skipped`, deliberate abandonment transitions the task to `failed`, records `taskFailed` provenance, emits `failureEvent` when configured, and applies Governance S8 remediation when configured. If the workflow maps the abandonment rationale to `skipped`, the task transitions to `skipped`, records `taskSkipped` provenance with the structured rationale required by Governance S10.1, emits no `completionEvent` or `failureEvent`, and is removed from `activeTasks`.
+
+### 15.5 Submission Algorithm
+
+`submitTaskResponse(taskId, response, actorId, timestamp, idempotencyToken)` submits a completed Formspec Response to the processor.
+
+The processor MUST execute the following algorithm:
+
+1. If `idempotencyToken` is present, check a durable replay store before resolving `activeTasks`, using a replay key scoped to `taskId`, `actorId`, and `idempotencyToken`. A duplicate replay key MUST return the same outcome and MUST NOT re-run authorization, validation, mapping, provenance, task completion, or event emission. A token used by a different actor MUST NOT replay another actor's outcome. This replay key covers every later outcome, including `taskResponseRejected`, `taskFailed`, and `taskCompleted`, and MUST outlive removal from `activeTasks` for the host retry window.
+2. Resolve the ActiveTask by `taskId`. If no active task exists, reject with `taskNotFound`.
+3. Authorize `actorId` against the task's `assignedActor`. `actorId` MUST match `assignedActor` unless AccessControl or Governance delegation allows the substitution. If authorization fails, reject with `taskSubmitterUnauthorized`, record `taskResponseRejected` provenance when policy allows, and do not advance lifecycle, emit `completionEvent` or `failureEvent`, record `taskResponseSubmitted` or `taskFailed`, or mutate case state.
+4. If the actor is an agent, the actor MUST be registered through `actorExtension` and provenance MUST record `actorType: "agent"` plus agent identity, model/version, confidence/source metadata when available, and any `principalActorId` or `delegationRef`. Rights-impacting and safety-impacting respondent submissions still require a human or legally delegated authority. If these agent requirements fail, reject with `agentSubmitterUnauthorized`, record `taskResponseRejected` provenance when policy allows, and do not advance lifecycle, emit `completionEvent` or `failureEvent`, record `taskResponseSubmitted` or `taskFailed`, or mutate case state.
+5. If `response.status` is not `completed`, reject with `taskResponseStatusNotCompleted`, record `taskResponseRejected` provenance when policy allows, and do not advance lifecycle, emit `completionEvent` or `failureEvent`, record `taskResponseSubmitted` or `taskFailed`, or mutate case state.
+6. Record `taskResponseSubmitted` provenance for this new completed submission attempt.
+7. Validate the full Response envelope against Formspec `response.schema.json` and Core S2.1.6, including the schema's root additional-property and `data` rules.
+8. Verify the pin: `response.definitionUrl` MUST equal the task `definitionUrl`; `response.definitionVersion` MUST equal the task `definitionVersion`.
+9. Delegate Definition validation over `response.data` to a Formspec-conformant processor (Core S1.4, S2.4, S5-S5.4).
+10. Record `contractValidation` provenance with the envelope, pin, and Definition validation outcome.
+11. If envelope validation, pin validation, or Definition validation fails, record `taskFailed` provenance, transition the task to `failed`, emit `failureEvent` when configured, apply Governance S8 remediation, do not map data, and do not mutate case state.
+12. If Respondent Ledger evidence is required by S15.7 and missing, reject with `ledgerEvidenceMissing`, record `taskFailed` provenance, transition the task to `failed`, emit `failureEvent` when configured, apply Governance S8 remediation, do not map data, and do not mutate case state.
+13. Resolve `responseMappingRef`. If absent, record the accepted Response reference and skip automatic case mutation.
+14. If `responseMappingRef` is present, execute the Formspec Mapping document in the forward direction (Mapping S3.4, S8) to compute a proposed case mutation bundle. The processor MUST NOT commit the mutation yet. The processor MUST record `dataMapping` provenance for the proposed mapping outcome.
+15. Run optional `contractHook` / Governance S5 checks on the completion bundle and record `contractValidation` provenance for each post-pass outcome. These hooks SHOULD validate disjoint case-level concerns and MUST NOT repeat Formspec Definition validation on the same Response.
+16. If an optional hook fails, record `taskFailed` provenance, leave case state unchanged, transition the task to `failed`, emit `failureEvent` when configured, and apply Governance S8 remediation.
+17. Atomically commit case mutation, task completion, `completionEvent` emission when configured, and `taskCompleted` provenance. The case mutation MAY be empty when `responseMappingRef` is absent.
+18. The task transitions to `completed`, is removed from `activeTasks`, and terminal task history remains in provenance.
+
+If the Formspec processor is unavailable, the processor MUST reject with `processorUnavailable` or return a retryable failure without case mutation. Hosts SHOULD retry with the same idempotency token.
+
+### 15.6 ValidationOutcome
+
+The Formspec task validator returns a WOS `ValidationOutcome` wrapper:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `envelopeValid` | boolean | REQUIRED | Whether the Response envelope validated against `response.schema.json`. |
+| `pinMatch` | boolean | REQUIRED | Whether the Response Definition pin matched the task pin. |
+| `definitionValid` | boolean | REQUIRED | Whether Definition validation over `response.data` passed. |
+| `errors` | array | REQUIRED | WOS-level validation errors, including envelope and pin errors. |
+| `validationResults` | array | OPTIONAL | Formspec-shaped ValidationResult entries from Definition validation. |
+
+`ValidationOutcome` is a WOS wrapper. It does not replace Formspec ValidationResult or ValidationReport semantics.
+
+### 15.7 Ledger and Notice
+
+For respondent-facing Formspec tasks in `rights-impacting` or `safety-impacting` workflows, the processor MUST require Respondent Ledger evidence for the submit boundary before accepting completion. If required evidence is missing, the processor MUST follow the `ledgerEvidenceMissing` failure path in S15.5.
+
+For respondent-facing Formspec tasks in `operational` workflows, Respondent Ledger evidence SHOULD be present. For `informational` workflows, it MAY be present.
+
+Respondent Ledger evidence and legal notice delivery are separate. The Respondent Ledger proves respondent-side Response history. WOS Notification Template, Correspondence Metadata, and Facts-tier provenance prove notice generation or delivery. A ledger reference to a notice record does not itself satisfy notice obligations.
+
+### 15.8 Provenance Records
+
+The processor SHOULD use these Facts-tier provenance action names for Formspec task flows:
+
+| Action | When recorded |
+|--------|---------------|
+| `taskPresented` | `presentTask` is called. |
+| `taskDismissed` | `dismissTask` records a UI close without lifecycle advancement. |
+| `taskDraftPersisted` | A draft, amendment draft, or stopped Response is durably recorded. |
+| `taskResponseRejected` | `submitTaskResponse` rejects a non-terminal submission attempt before accepting it for validation. |
+| `taskResponseSubmitted` | `submitTaskResponse` receives a completed Response. |
+| `contractValidation` | Envelope, pin, Definition, or post-pass validation executes. |
+| `dataMapping` | A Mapping document computes proposed or committed case mutations. |
+| `taskCompleted` | The task completes and is removed from `activeTasks`. |
+| `taskFailed` | The task fails validation, ledger gating, abandonment, or a post-pass hook. |
+| `taskSkipped` | The task is deliberately skipped as not applicable and is removed from `activeTasks`. |
+
+Provenance records SHOULD include `taskId`, `responseId` when available, `definitionUrl`, `definitionVersion`, `mappingRef` when used, `respondentLedgerRef` when required or available, and the actor fields required by Kernel S8.2 plus any agent metadata required by AI Integration S3.1.
+
+### 15.9 Amendments
+
+After a Formspec task completes, amendment flows MUST create a new task. A processor MUST NOT reopen a terminal completed task. The amended task or Response SHOULD reference the original through Respondent Ledger `amendmentRef` and WOS provenance fields such as `supersedesResponseId` or `relatedTaskId`.
+
+This preserves immutable completion history while allowing corrected or updated Responses to supersede earlier submissions.
+
+---
+
 ## References
 
 ### Normative References
@@ -740,6 +882,8 @@ The depth counter resets for each externally-originated event. Only `$related.*`
 - [WOS Governance] Formspec Working Group, "WOS Workflow Governance Specification v1.0".
 - [WOS AI Integration] Formspec Working Group, "WOS AI Integration Specification v1.0".
 - [Formspec Core] Formspec Working Group, "Formspec Core Specification v1.0".
+- [Formspec Mapping] Formspec Working Group, "Formspec Mapping DSL v1.0".
+- [Formspec Respondent Ledger] Formspec Working Group, "Respondent Ledger Add-On Specification v0.1".
 - [RFC 2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
 - [RFC 8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC 8259] Bray, T., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.

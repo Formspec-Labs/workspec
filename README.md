@@ -318,7 +318,7 @@ WOS is part of the Formspec project, maintained by Michael Deeb under AGPL-3.0. 
 
 **What exists:** 18 specs, 18 schemas, 24 conformance fixtures covering all four vertical layers, two parallel seam profiles, one companion, one runtime companion, and five governance sidecars. 189 lint rules. 194 passing tests. All schemas pass LLM-authoring validation (an LLM given only the schema and a one-paragraph workflow description produces valid, semantically correct documents). Seven rounds of semi-formal code review have been completed with all findings addressed.
 
-**What does not exist:** Production deployments. Engine bindings. A conformance test suite beyond fixture validation. The Formspec Coprocessor handoff protocol. Formal accessibility or compliance audits (WCAG, FedRAMP, NIST 800-53). An organizational governance body beyond the maintainer. The `every`/`some`/`duration` FEL functions referenced by the specs.
+**What does not exist:** Production deployments. Engine bindings. A conformance test suite beyond fixture validation. The Formspec Coprocessor handoff protocol. Formal accessibility or compliance audits (WCAG, FedRAMP, NIST 800-53). An organizational governance body beyond the maintainer. Normative **FEL-RECORDS** semantics (quantifiers over array-of-record rows with a stable `$` story) and the **Runtime Companion S15** coprocessor handoff — see `TODO.md` Phase 11.
 
 **Sustainability model:** WOS documents are JSON files under your control, validated against published JSON Schemas. The specification is a public document any team can implement independently. If the project stopped today, your workflow documents remain usable by any JSON-capable system -- the spec is the product, not a service.
 

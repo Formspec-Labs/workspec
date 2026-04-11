@@ -313,30 +313,28 @@ The most significant architectural gap: no specified handoff protocol between WO
 
 **Sequencing:** Gap 2 → Gap 3 → Gap 1 (functions first, then calling convention, then coprocessor examples).
 
-- [ ] **FEL-QUANTIFIERS: Add `every`, `some`, `duration` built-in functions to Formspec.**
-  - Preferred path: Add to Formspec Core S3.5 as "Quantifier Functions" (universal applicability, stays in AdvGov S8.2 verifiable subset).
-  - Fallback: Register as WOS extension functions (Core S3.12) — but restriction 5 excludes extensions from verifiable constraints.
-  - `duration` returns ms. Verify consistency with `timeDiff` (returns seconds per spec review).
-  - **Context:** WOS specs reference these functions but they don't exist in Formspec. Required for clinical/equity scenario FEL expressions. Affects `fel-core` (Rust), `src/formspec/fel/` (Python), and `packages/formspec-engine/` (WASM bridge).
+- [x] **FEL-QUANTIFIERS: Add `every`, `some`, `duration` built-in functions to Formspec.**
+  - **Done in Formspec monorepo:** Core §3.5 + `schemas/fel-functions.schema.json`; `fel-core` evaluator + dependency walk; Rust/Python/WASM via `formspec-py` / engine; wos-lint AG-012 narrowed to non–two-arg `every`/`some`. `duration` → ms; `timeDiff` remains signed seconds (schema aligned with Core).
+  - **Samples:** Repo-wide check (`wos-spec/`): no remaining `every`/`some` string-literal predicates. Obligation example uses expression form (`ai-integration.md`). Prefer `every($rows, $.amount > 0)` style per Core §3.5.1.
 
-- [ ] **FEL-RECORDS: Resolve FEL array-of-record evaluation semantics.**
-  - Problem: WOS uses `every(list, 'field != value')` with string predicates, but FEL's `$` is a scalar context variable.
-  - Proposed: Extend `$` semantics — when element is a record, `$.propertyName` resolves to named property.
-  - Unresolved issues: (a) This IS a grammar change (S3.7), not purely semantic. (b) Collision with `constraint` bind `$` (where `$` is already the field value, could be object) not addressed. (c) WOS examples need rewriting from string predicates to FEL expressions.
-  - **Context:** Requires a Formspec Core spec revision. Must be resolved before coprocessor examples can reference quantifiers over case data.
+- [x] **FEL-RECORDS: Align WOS examples and edge cases with Core FEL.**
+  - **Core (§3.5.1, shipped):** Predicate is always a FEL expression; `$` is rebound per element; object elements support `$.property` via normal postfix rules.
+  - **Done:** WOS samples checked; **Formspec ADR-0060** (`formspec` monorepo: `thoughts/adr/0060-fel-constraint-self-dollar-nesting.md`) documents `constraint` `$` (field value) vs predicate `$` (element) nesting—no separate WOS-only doc required for that edge case.
+  - **Context:** Coprocessor examples can reference quantifiers over case-shaped data using Core-aligned FEL.
 
 - [ ] **COPROCESSOR: Author Runtime Companion S15 (Formspec coprocessor protocol).**
-  - Resolve 8 review findings from `thoughts/specs/2026-04-10-formspec-integration-gaps.md` before writing normative prose:
-    1. (Critical) Separate Respondent Ledger from adverse-decision notice delivery — different concerns.
-    2. (Significant) Clarify `ContractValidator` input: `response.data` vs full Response.
-    3. (Significant) Declare rejection policy home for coprocessor validation gate. Failed validation → `failed` state (not `claimed`).
-    4. (Moderate) Add `contractRef` to Kernel S9.2 `createTask` table. Formally define `ContractReference` in prose or cite schema.
-    5. (Moderate) Clarify triggering condition for coprocessor validation (governance-level hook vs per-task).
-    6. (Minor) Use `direction: "both"` for prefill mapping — spec-correct answer, resolve now.
-    7. (Minor) Error handling when Formspec processor unavailable during `submitTaskResponse`.
-    8. (Minor) Authentication of `actorId` against `assignedActor`.
-  - Deliverables: spec prose (S15), schema additions (`FormspecTaskContext`, `submitTaskResponse` operation), `TaskPresenter` host interface (S12.9), `responseMappingRef` on `ContractReference`.
-  - **Context:** Design spec at `thoughts/specs/2026-04-10-formspec-integration-gaps.md`. Depends on FEL-QUANTIFIERS and FEL-RECORDS.
+  - **Design draft (Formspec monorepo):** **`thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md`** — single merged doc (gaps + Phase 11 plan + S15 draft). Detailed §15 paste source: `thoughts/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md`. Original gaps: `thoughts/specs/2026-04-10-formspec-integration-gaps.md`.
+  - **Pre-flight checklist (8 items)** — addressed in design docs; **normative land** in `wos-spec/specs/companions/runtime.md` + schemas still TODO:
+    1. Ledger vs notice — S15 proposal §15.10.
+    2. Validator input — `validateFormspecTaskResponse` + full Response.
+    3. Failed validation → `failed` — §15.6 + integration gaps §1.2.3.
+    4. `contractRef` / `ContractReference` on `createTask` — kernel spec/schema (unchanged scope).
+    5. Triggering — S15 proposal §15.1 (submitTaskResponse vs `contractHook` §5.5).
+    6. Prefill `direction: "both"` — executive table + §15.3.
+    7. Processor unavailable — §15.6 idempotency + host retry.
+    8. `actorId` vs `assignedActor` — executive table + §15.6 step 1.
+  - Deliverables: spec prose in **`wos-spec`**, schema additions (`activeTasks` per §15.8, kernel `ContractReference` extensions), `TaskPresenter` (S12.9).
+  - **Context:** `thoughts/specs/2026-04-10-formspec-integration-gaps.md`. Depends on FEL-QUANTIFIERS and FEL-RECORDS (done).
 
 ---
 

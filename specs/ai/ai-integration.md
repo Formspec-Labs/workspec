@@ -277,8 +277,10 @@ condition: "output.eligible = false and instance.impactLevel = 'rights-impacting
 **Obligation** -- require agent to provide justification for every extracted value:
 
 ```
-requirement: "every(output.extractedFields, 'sourceReference != null')"
+requirement: "every(output.extractedFields, $.sourceReference != null)"
 ```
+
+(Formspec Core §3.5.1: the second argument is a FEL predicate expression; `$` is rebound to each element of `extractedFields`, so `$.sourceReference` reads the property on each record.)
 
 **Cross-layer constraint** -- prohibition referencing kernel case state, Layer 1 temporal parameters, and Layer 2 agent output simultaneously:
 

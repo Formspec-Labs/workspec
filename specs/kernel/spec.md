@@ -437,7 +437,7 @@ The kernel defines the following action types:
 
 | Action Type | Description | Key Properties |
 |-------------|-------------|----------------|
-| `createTask` | Creates a human task instance. | `taskRef`, `assignTo` |
+| `createTask` | Creates a human or Formspec-backed task instance. | `taskRef`, `assignTo`, `contractRef` |
 | `invokeService` | Invokes an external service. | `serviceRef`, `idempotencyKey` |
 | `setData` | Sets a case file value. | `path`, `value` |
 | `emitEvent` | Emits an event. | `eventType`, `data` |
@@ -446,6 +446,8 @@ The kernel defines the following action types:
 | `log` | Writes an entry to provenance. | `message`, `data` |
 
 **Execution ordering.** Actions within a single state's `onEntry` or `onExit` execute sequentially in document order. The processor MUST NOT reorder actions within a state or transition. Actions across parallel regions MAY execute concurrently; provenance MUST record the actual execution order regardless of whether execution was concurrent or sequential.
+
+**Formspec-backed tasks.** A `createTask` action MAY include `contractRef` when the task is backed by a ContractReference. If that ContractReference has `binding: "formspec"`, Runtime Companion S15 defines the presentation, draft, submit, validation, mapping, and provenance behavior. `prefillMappingRef` and `responseMappingRef` MAY appear on either the ContractReference or the action. The action-level value overrides the ContractReference value for that task. `completionEvent` and `failureEvent` MAY name lifecycle events emitted after the task reaches `completed` or `failed`.
 
 ### 9.3 Idempotency Keys
 
@@ -554,6 +556,8 @@ Two conformant bindings are defined:
 ### 11.3 Processing Delegation
 
 WOS processors MUST delegate contract evaluation to a conformant contract processor. For Formspec bindings, this means a Formspec-conformant processor (Core S1.4). The WOS processor provides orchestration context; the contract processor provides Definition evaluation.
+
+For Formspec-backed tasks, a ContractReference MAY also declare `prefillMappingRef` and `responseMappingRef`. `prefillMappingRef` identifies the Mapping document used to populate the task's initial Response. `responseMappingRef` identifies the Mapping document used by Runtime Companion S15 to project a completed Response into case state. When no `responseMappingRef` is supplied, Runtime Companion S15 forbids automatic host-defined Response-to-case projection.
 
 ---
 
