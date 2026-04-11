@@ -18,7 +18,7 @@ pub mod stubs;
 pub use engine::WorkflowEngine;
 pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
-pub use stubs::{InMemoryStore, StubValidator, StubService};
+pub use stubs::{InMemoryStore, StubService, StubValidator};
 
 /// Run a conformance fixture and return the results.
 ///
@@ -41,9 +41,12 @@ pub use stubs::{InMemoryStore, StubValidator, StubService};
 /// Returns `ConformanceError::Parse` if the fixture or documents cannot
 /// be parsed, or `ConformanceError::Engine` if the workflow engine
 /// encounters an internal error.
-pub fn run_fixture(fixture_json: &str, base_dir: &str) -> Result<ConformanceResult, ConformanceError> {
-    let mut fixture: ConformanceFixture = serde_json::from_str(fixture_json)
-        .map_err(|e| ConformanceError::Parse(e.to_string()))?;
+pub fn run_fixture(
+    fixture_json: &str,
+    base_dir: &str,
+) -> Result<ConformanceResult, ConformanceError> {
+    let mut fixture: ConformanceFixture =
+        serde_json::from_str(fixture_json).map_err(|e| ConformanceError::Parse(e.to_string()))?;
 
     // Resolve document paths relative to base_dir.
     for path in fixture.documents.values_mut() {

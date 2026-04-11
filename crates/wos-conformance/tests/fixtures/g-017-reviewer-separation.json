@@ -12,7 +12,7 @@
     {
       "event": "qualityReview",
       "actor": "caseworker",
-      "data": { "reviewType": "quality-sample", "decision": "confirmed" }
+      "data": { "reviewType": "quality-sample", "decision": "confirmed", "sameActorAsOriginal": true }
     }
   ],
   "expected_transitions": [

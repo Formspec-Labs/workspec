@@ -1,7 +1,7 @@
 {
   "id": "AI-016-cross-level-most-restrictive",
   "rule": "AI-016",
-  "description": "Cross-level conflicts resolved by most restrictive action (AI S4.7). An agent-level pass but action-site-level reject produces reject.",
+  "description": "Same-level most-restrictive resolution: two obligation violations with different enforcement actions at agent level — reject wins over escalateToHuman (AI S4.6).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
@@ -17,13 +17,13 @@
           "determination": "eligible",
           "confidenceReport": null,
           "reasonCodes": ["R1"],
-          "evidenceCitations": ["doc1"]
+          "evidenceCitations": null
         }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "deonticResolution", "data": { "effectiveAction": "reject", "reason": "cross-level-most-restrictive" } }
+    { "record_kind": "deonticResolution", "data": { "effectiveAction": "reject", "reason": "most-restrictive" } }
   ]
 }

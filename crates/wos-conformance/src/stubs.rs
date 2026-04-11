@@ -13,9 +13,7 @@
 use std::collections::HashMap;
 
 use wos_core::instance::CaseInstance;
-use wos_core::traits::{
-    ContractValidator, ExternalService, InstanceStore, ValidationResult,
-};
+use wos_core::traits::{ContractValidator, ExternalService, InstanceStore, ValidationResult};
 
 // ── InMemoryStore ───────────────────────────────────────────────
 

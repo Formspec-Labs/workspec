@@ -1,7 +1,7 @@
 {
   "id": "K-026-idempotency-dedup",
   "rule": "K-026",
-  "description": "IdempotencyKey MUST deduplicate invocations (Kernel S9.3). Sending the same event twice with the same idempotency key produces only one invocation.",
+  "description": "IdempotencyKey MUST deduplicate invocations (Kernel S9.3). The first event with a key proceeds normally; sending the same key again produces dedup provenance and the duplicate is ignored.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/durability.json"
   },

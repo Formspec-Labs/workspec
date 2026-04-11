@@ -13,7 +13,7 @@
     {
       "event": "appealGranted",
       "actor": "caseworker",
-      "data": { "note": "Same actor as original denial -- should be rejected" }
+      "data": { "sameActorAsDecisionMaker": true }
     }
   ],
   "expected_transitions": [

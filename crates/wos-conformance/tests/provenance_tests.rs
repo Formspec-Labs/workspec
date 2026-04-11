@@ -295,7 +295,9 @@ fn unmatched_event_produces_provenance_without_state_change() {
     .unwrap();
     // Re-resolve the path (it's already absolute from write_kernel_to_temp).
 
-    let result = engine.execute(&fixture_with_events).expect("execute failed");
+    let result = engine
+        .execute(&fixture_with_events)
+        .expect("execute failed");
 
     // No transitions should have fired.
     assert!(
@@ -481,7 +483,11 @@ fn timer_creation_on_state_entry_produces_provenance() {
         .as_ref()
         .and_then(|d| d.get("timerId"))
         .and_then(|v| v.as_str());
-    assert_eq!(timer_id, Some("deadline-timer"), "timer ID should be 'deadline-timer'");
+    assert_eq!(
+        timer_id,
+        Some("deadline-timer"),
+        "timer ID should be 'deadline-timer'"
+    );
 }
 
 // ========================================================================
@@ -509,14 +515,21 @@ fn timer_fires_after_simulated_delay() {
     let mut engine = WorkflowEngine::new(&fixture).expect("engine init failed");
     let result = engine.execute(&fixture).expect("execute failed");
 
-    assert!(result.passed, "timer should have fired after 31 days: {:?}", result.failures);
+    assert!(
+        result.passed,
+        "timer should have fired after 31 days: {:?}",
+        result.failures
+    );
 
     let timer_fired = result
         .provenance
         .iter()
         .filter(|p| p.record_kind == wos_conformance::ProvenanceKind::TimerFired)
         .count();
-    assert!(timer_fired >= 1, "expected timerFired provenance, got {timer_fired}");
+    assert!(
+        timer_fired >= 1,
+        "expected timerFired provenance, got {timer_fired}"
+    );
 }
 
 // ========================================================================
@@ -627,7 +640,11 @@ fn compound_state_substate_transitions() {
     let mut engine = WorkflowEngine::new(&fixture).expect("engine init failed");
     let result = engine.execute(&fixture).expect("execute failed");
 
-    assert!(result.passed, "compound transitions failed: {:?}", result.failures);
+    assert!(
+        result.passed,
+        "compound transitions failed: {:?}",
+        result.failures
+    );
 }
 
 // ========================================================================
@@ -658,7 +675,11 @@ fn parallel_join_fires_only_when_all_regions_final() {
     let result = engine.execute(&fixture_partial).expect("execute failed");
 
     // There should be exactly 1 transition (region A), no $join.
-    assert!(result.passed, "partial execution failed: {:?}", result.failures);
+    assert!(
+        result.passed,
+        "partial execution failed: {:?}",
+        result.failures
+    );
     let join_transitions = result
         .transitions
         .iter()
@@ -780,10 +801,24 @@ fn determinism_same_events_produce_same_transitions() {
         "determinism violation: different number of transitions"
     );
 
-    for (i, (t1, t2)) in result1.transitions.iter().zip(&result2.transitions).enumerate() {
-        assert_eq!(t1.from, t2.from, "determinism violation at transition {i}: from differs");
-        assert_eq!(t1.to, t2.to, "determinism violation at transition {i}: to differs");
-        assert_eq!(t1.event, t2.event, "determinism violation at transition {i}: event differs");
+    for (i, (t1, t2)) in result1
+        .transitions
+        .iter()
+        .zip(&result2.transitions)
+        .enumerate()
+    {
+        assert_eq!(
+            t1.from, t2.from,
+            "determinism violation at transition {i}: from differs"
+        );
+        assert_eq!(
+            t1.to, t2.to,
+            "determinism violation at transition {i}: to differs"
+        );
+        assert_eq!(
+            t1.event, t2.event,
+            "determinism violation at transition {i}: event differs"
+        );
     }
 }
 

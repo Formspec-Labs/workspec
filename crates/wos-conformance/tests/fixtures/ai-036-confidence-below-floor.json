@@ -12,7 +12,7 @@
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
+        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"], "confidenceReport": { "overall": 0.70 } },
         "confidenceReport": { "overall": 0.70, "modelNative": 0.70, "calibrated": true }
       }
     }
