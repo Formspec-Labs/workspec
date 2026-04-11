@@ -627,17 +627,21 @@ fn check_no_extension_functions(
     });
 }
 
-/// AG-010 (finite enumerations): warn on simple variable-to-variable equality.
+/// AG-010 (finite enumerations): warn on simple variable-to-variable `==` / `!=`.
 ///
 /// Passes silently when either side is a literal (including comparisons such as
 /// `$instance.impactLevel == "rights-impacting"`) or when either side's dotted path is
 /// listed in `finiteDomainDeclarations`.
+///
+/// When both operands resolve to dotted paths, at most one warning is emitted per
+/// unordered path pair (avoids duplicate diagnostics for the same comparison shape).
 fn check_finite_domain_equality(
     expr: &Expr,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     finite_paths: &HashMap<String, ()>,
 ) {
+    let mut warned_path_pairs: HashSet<(String, String)> = HashSet::new();
     walk_expr(expr, &mut |e| {
         if let Expr::BinaryOp {
             op: BinaryOp::Eq | BinaryOp::NotEq,
@@ -649,12 +653,25 @@ fn check_finite_domain_equality(
                 return false;
             }
             if is_simple_access_expr(left.as_ref()) && is_simple_access_expr(right.as_ref()) {
+                let skip_duplicate = match (
+                    simple_access_path_string(left.as_ref()),
+                    simple_access_path_string(right.as_ref()),
+                ) {
+                    (Some(a), Some(b)) => {
+                        let pair = if a <= b { (a, b) } else { (b, a) };
+                        !warned_path_pairs.insert(pair)
+                    }
+                    _ => false,
+                };
+                if skip_duplicate {
+                    return false;
+                }
                 diagnostics.push(Diagnostic::warning(
                     "AG-010",
                     path,
-                    "equality compares two non-literal field or context accesses; use a literal \
-                     on one side, add `finiteDomainDeclarations` for a path, or avoid \
-                     variable-to-variable equality (AdvGov S8.2)"
+                    "`==` or `!=` compares two non-literal field or context accesses; use a \
+                     literal on one side, add `finiteDomainDeclarations` for a path, or avoid \
+                     variable-to-variable comparison (AdvGov S8.2)"
                         .to_string(),
                 ));
             }
@@ -1292,6 +1309,31 @@ mod tests {
                 .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "expected AG-010 warning, got: {diag:?}"
         );
+    }
+
+    #[test]
+    fn ag010_variable_to_variable_inequality_warns() {
+        let expr_str = "$output.status != $copy.status";
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "expected AG-010 warning for !=, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_duplicate_path_pair_emits_single_warning() {
+        let expr_str =
+            "($output.status == $copy.status) and ($copy.status == $output.status)";
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        let n = diag
+            .iter()
+            .filter(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning)
+            .count();
+        assert_eq!(n, 1, "expected one deduped AG-010 warning, got: {diag:?}");
     }
 
     #[test]

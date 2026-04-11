@@ -245,7 +245,7 @@
 | AG-007 | AdvGov S6.1 | Tool invocations MUST respect rate limits. | Runtime invocation counting. | T3 | autonomy-constraint | — |
 | AG-008 | AdvGov S6.1 | Side-effect tools at `autonomous` MUST have `sideEffectPolicy`. | Cross-referencing tool flags, autonomy level, and policy presence. | T2-xdoc | autonomy-constraint | T2 |
 | AG-009 | AdvGov S7.2 | Agent state transitions MUST produce provenance; suspension pauses in-flight sessions. | Runtime processor obligation. | T3 | agent-consistency | — |
-| AG-010 | AdvGov S8.2 | Verifiable constraints MUST satisfy all SMT subset restrictions. | FEL AST analysis (parse, let, linear, extensions, **finite equality**). JSONPath filter expressions are rejected by the FEL parser (S8.2 r6) — no separate lint. | T2-ast | smt-compatibility | AST |
+| AG-010 | AdvGov S8.2 | Verifiable constraints MUST satisfy all SMT subset restrictions. | FEL AST analysis (parse, let, linear, extensions, **finite equality**). JSONPath filter expressions are rejected by the FEL parser (S8.2 r6) — no separate lint. **Severity:** parse failures → **Error**; finite-domain equality heuristic → **Warning** (same rule id — use `severity` in tooling). | T2-ast | smt-compatibility | AST |
 | AG-011 | AdvGov S8.2 | `let` bindings MUST NOT create recursive definitions. | FEL AST cycle detection. | T2-ast | smt-compatibility | AST |
 | AG-012 | AdvGov S8.2 | Quantifiers MUST quantify over finite domains. | Requires type/ontology knowledge. | T2-ast | smt-compatibility | T2 |
 | AG-013 | AdvGov S8.2 | Arithmetic MUST be linear (no variable*variable). | FEL AST analysis. | T2-ast | smt-compatibility | AST |
@@ -322,7 +322,9 @@ Loads a project directory containing kernel + governance + AI + sidecars. Two su
 
 **Cross-document resolution (43 rules):** governance tags match kernel tags (G-011), `targetWorkflow` matches kernel `url` (G-034), `resolutionDateRef` points to kernel case file field (G-031), delegation actors exist in kernel (G-046), hold resumeTrigger is a kernel event (G-029), rights-impacting kernel requires disclosure (AI-046), autonomous actions have deontic constraints (AI-018), agent declarations match across AI doc and agent config sidecar.
 
-**FEL AST analysis (12 rules):** guard expressions parse (K-012, K-013), delegation conditions parse (G-043), assertion expressions parse (G-042), no cross-case variable references (K-017), only built-in + extension functions (K-019), FEL escalation conditions reference agent context (AI-024), SMT subset restrictions — all SMT rules satisfied (AG-010, including variable-to-variable equality warnings + optional `finiteDomainDeclarations`), no recursion (AG-011), linear arithmetic (AG-013), no extension functions (AG-014), finite quantification (AG-012).
+**FEL AST analysis (12 rules):** guard expressions parse (K-012, K-013), delegation conditions parse (G-043), assertion expressions parse (G-042), no cross-case variable references (K-017), only built-in + extension functions (K-019), FEL escalation conditions reference agent context (AI-024), SMT subset restrictions — all SMT rules satisfied (AG-010, including variable-to-variable `==` / `!=` warnings + optional `finiteDomainDeclarations`), no recursion (AG-011), linear arithmetic (AG-013), no extension functions (AG-014), finite quantification (AG-012).
+
+**AG-010 and severity:** The same rule id is used for invalid verifiable FEL (**Error**) and for finite-domain equality heuristics (**Warning**). Downstream tools MUST not assume one severity per rule id for AG-010.
 
 ### Tier 3: `wos-conformance` (105 rules)
 
@@ -380,7 +382,7 @@ Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-l
 
 **From `tier2_rules.rs` (44 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 
-**From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010 (syntax + finite-domain equality + FEL rejects JSONPath `[?]` filters), AG-011, AG-013, AG-014.
+**From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010 (parse **Error** vs finite `==`/`!=` **Warning**, declarations, deduped path pairs, FEL rejects JSONPath `[?]` filters), AG-011, AG-013, AG-014.
 
 **From `provenance_tests.rs` + `kernel_conformance.rs` (12 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047.
 
@@ -402,7 +404,7 @@ Covered by the same implementation and tests as **AI-041** (`tier1_rules.rs`). T
 
 **Resolved (Phase 8):** G-060 (scoped Business Calendar + SLA `calendarType`), G-063 (template ref resolution). Both run whenever a governance document is present **even if the kernel is missing or fails typed deserialization** (they only need `targetWorkflow` + sidecars). When SLA violates BC S6.1, **G-023** (Governance S10 SHOULD) and **G-060** (BC S6.1 MUST) both emit: warning for authoring guidance plus error for the normative obligation.
 
-**Resolved (Phase 10):** AG-010 finite-domain equality heuristics (variable-to-variable equality warning unless a side is literal, `finiteDomainDeclarations`, or a known path such as `instance.impactLevel` compared to a string literal). AdvGov S8.2 restriction 6 (no JSONPath filter predicates in paths): **enforced by the FEL parser** — `PathSegment` has no filter variant and `$items[?(@.x > 1)]` does not parse; no dedicated lint rule.
+**Resolved (Phase 10):** AG-010 finite-domain equality heuristics — **Warning** when both sides of `==` or `!=` are simple non-literal field/context accesses, unless a side is a literal, or either path appears in `finiteDomainDeclarations`. (Comparisons such as `$instance.impactLevel == "x"` are decidable because one side is a literal, not because of a separate enum special-case in the linter.) AdvGov S8.2 restriction 6 (no JSONPath filter predicates in paths): **enforced by the FEL parser** — `PathSegment` has no filter variant and `$items[?(@.x > 1)]` does not parse; no dedicated lint rule.
 
 #### T3 gaps (94 rules) -- dynamic conformance, fixture-tested at runtime
 
