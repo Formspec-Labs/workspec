@@ -143,6 +143,10 @@ pub struct AgentDeclaration {
     #[serde(default)]
     pub cascading_invocations: Vec<String>,
 
+    /// Agent-level deontic constraints (AI Integration S4.7).
+    #[serde(default)]
+    pub deontic_constraints: Option<DeonticConstraints>,
+
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
@@ -392,6 +396,10 @@ pub struct FallbackLevel {
     /// Initial retry interval (ISO 8601).
     #[serde(default)]
     pub initial_interval: Option<String>,
+
+    /// Actor to assign escalated tasks to.
+    #[serde(default)]
+    pub assign_to: Option<String>,
 
     /// Alternate agent reference.
     #[serde(default)]
