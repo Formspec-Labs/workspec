@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-11
-**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 99 green), 3 crates, 189 lint rules (87 tested)
+**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 99 green), 3 crates, 195 lint rules (100 tested, 95 untested)
 
 [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) |
 [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs. implementation boundary) |
@@ -52,7 +52,7 @@ Normative prose changes. No code, no schemas. Get the words right before anythin
 
 ### Housekeeping
 
-- [x] Reconcile LINT-MATRIX rule count: corrected to 181 total (30 T1 + 50 T2 + 101 T3). Header, tier box, summary table, and gap counts now agree.
+- [x] Reconcile LINT-MATRIX rule count: current matrix is 195 total (35 T1 + 55 T2 + 105 T3). Header, tier box, summary table, and gap counts now agree.
 
 ---
 
@@ -208,7 +208,7 @@ Implement each capability in `wos-core` to make its fixture batch pass. Each is 
 After wos-core has typed models for kernel, governance, and AI documents:
 
 - [x] Add `wos-core` to `wos-lint/Cargo.toml` (required to use `Project` methods and typed models). _(already present from prior phase)_
-- [x] Replace `serde_json::Value` walking in `rules/tier1.rs` and `rules/tier2.rs` with typed field access. Tier1 already had typed/fallback pattern; tier2 now deserializes kernel into `KernelDocument` and uses typed access for `KernelCollections` (tags, events, case_fields, actor_ids), K-010 (actor refs), K-037 (fail-fast), G-034 (targetWorkflow match), G-001/G-003/G-004/G-005/G-015 (impact-level checks), G-028 (hold policies), G-046 (delegation actors), AI-046 (disclosure), AG-017 (shadow mode), DM-002 (deployment sequence). All checks retain Value-based fallback paths for partial fixtures.
+- [x] Replace `serde_json::Value` walking in `rules/tier1.rs` and `rules/tier2.rs` with typed field access for the migrated checks. Tier 1 and Tier 2 now dispatch those migrated rules through typed models only: tier2 deserializes the kernel into `KernelDocument` and uses typed access for `KernelCollections` (tags, events, case_fields, actor_ids), K-010 (actor refs), K-037 (fail-fast), G-034 (targetWorkflow match), G-001/G-003/G-004/G-005/G-015 (impact-level checks), G-028 (hold policies), G-046 (delegation actors), AI-046 (cross-document disclosure), AG-017 (shadow mode), and DM-002 (deployment sequence). Remaining `Value` walking is now limited to rules that are intentionally structural or still lack typed model coverage, not as a fallback path for migrated checks.
 - [x] Replace `collect_kernel_tags` with typed state-tree walk in `KernelCollections::from_typed()`. Equivalent to `Project::kernel_tags()` logic operating directly on the deserialized `KernelDocument`.
 - [x] Replace `collect_kernel_events`, `collect_kernel_case_fields` with typed equivalents in `KernelCollections::from_typed()`.
 - [x] Deserialize governance documents into typed models in T2 cross-document checks. Used for G-027 (sub-delegation depth via `GovernanceDocument.delegations` and `max_delegation_depth`). AI document typed deserialization attempted but deferred for most agent checks — the `AgentDeclaration` typed model does not yet include per-agent fields (`autonomy`, `reviewWindow`, `escalationRules`, `modelConfig`, etc.) that AI lint rules require.
@@ -231,17 +231,37 @@ Only after the things being documented are stable.
 
 ## Phase 8: Lint test coverage
 
-Complete test coverage for existing lint rules. No new rules, just tests.
+Represent the current `LINT-MATRIX.md` gap audit accurately in the backlog.
 
-- [ ] **T1-TESTS: Write 21 tests for 7 untested T1 rules** (3 per rule: flagged, clean, skip) in `tier1_rules.rs`.
-  - K-009 (Kernel S3.3): Actor identifiers MUST be unique. Category: `actor-consistency`.
-  - K-021 (Kernel S8.2): Provenance `actorId` MUST reference a declared actor. Category: `actor-consistency`.
+Current matrix snapshot (see `LINT-MATRIX.md`):
+
+- 195 total rules
+- 100 rules with at least one test
+- 95 rules with no test
+- Lint-focused gaps closed in Phase 8; remaining untested work is overwhelmingly T3 runtime fixtures.
+
+- [x] **T1-TESTS: Write 12 tests for 4 test-only T1 gaps** (3 per rule: flagged, clean, skip) in `tier1_rules.rs`.
   - G-058 (BC S3.3): Holiday entry MUST specify exactly one of `date` or `rule`. Category: `calendar-validity`.
   - G-059 (BC S5.2): Operating hours `end` MUST be strictly after `start`. Category: `calendar-validity`.
   - G-062 (NT S4.4): Adverse-decision templates MUST include determination, reason codes, appeal rights, appeal instructions. Category: `notification-validity`.
   - G-065 (NT S4.1): Section `id` values MUST be unique within a template. Category: `notification-validity`.
-  - AI-003 (AI S2.2): Processor MUST validate fallback chains at load time, rejecting cycles or missing terminal actions. Category: `fallback-chain-validity`.
-  - **Context:** All 7 rules are already implemented in `wos-lint/src/rules/tier1.rs`. The task is to add test cases only — no logic changes. Follow the existing test patterns in `tier1_rules.rs`.
+  - **Done:** Rules implemented in `tier1.rs` (they were missing from the codebase; not test-only). Tests added in `tier1_rules.rs`.
+
+- [x] **T1-GAP-DISPOSITION: Resolve the 3 remaining Tier 1 gap entries that are not pure test additions.**
+  - K-009 (Kernel S3.3): Actor identifiers MUST be unique. Matrix note says the implementation is effectively a no-op because JSON object keys are inherently unique; decide whether to leave it as parser-enforced/no-lint-test-needed or add an explicit parser-level coverage note.
+  - K-021 (Kernel S8.2): Provenance `actorId` MUST reference a declared actor. Matrix note says this is not implemented; write the rule code first, then add tests.
+  - AI-003 (AI S2.2): Processor must validate fallback chains at load time. Matrix note says this is semantically covered by AI-041 tests; decide whether to keep that shared-coverage note or add an explicit AI-003 assertion path.
+  - **Done:** K-009 documented as JSON key uniqueness (`LINT-MATRIX.md`). K-021 implemented in `tier1.rs` + tests. AI-003 documented as covered by AI-041 implementation/tests (diagnostic id remains `AI-041`).
+
+- [x] **T2-GAPS: Implement and test the 2 unimplemented Tier 2 cross-document gaps.**
+  - G-060 (T2-xdoc): Business Calendar sidecar presence requires business-day SLA evaluation.
+  - G-063 (T2-xdoc): `notificationTemplateRef` must resolve to a template in a Notification Template sidecar.
+  - **Done:** `tier2.rs` — G-060 error when a calendar’s `targetWorkflow` matches governance and SLA is not `calendarType: business`. G-023 narrowed to the same scope (warning). G-063 resolves refs anywhere under governance JSON. Tests in `tier2_rules.rs`.
+
+- [x] **T3-GAP-TRACKING: Keep the 94 untested Tier 3 rules tracked through the runtime backlog, not as a separate lint-only checklist.**
+  - The remaining T3 gaps are already represented by Phase 4 fixture batches, Phase 5 engine work, deferred Batch 16 meta-rules, and Phase 9 conformance profiles.
+  - Do not duplicate the full 94-rule list here; `LINT-MATRIX.md` remains the authoritative gap inventory.
+  - **Done:** `LINT-MATRIX.md` summary now points to this TODO for T3 backlog instead of expanding the list inline.
 
 ---
 

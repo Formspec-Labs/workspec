@@ -52,7 +52,7 @@
 | K-006 | Kernel S4.5 | Transition `target` MUST reference an existing state. | Cross-path reference resolution. | T1 | cross-reference | T1 |
 | K-007 | Kernel S4.10 / S13.3 | Event names MUST NOT use the `$` prefix (kernel-reserved). | Event name pattern not enforced. | T1 | lifecycle-soundness | T1 |
 | K-008 | Kernel S4.8 | Parallel state outgoing transitions MUST use `$join` as event. | Conditional event constraint by parent type. | T1 | lifecycle-soundness | T1+E2E |
-| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Map key uniqueness + cross-ref. | T1 | actor-consistency | — |
+| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Map key uniqueness + cross-ref. | T1 | actor-consistency | — (JSON object keys; no lint) |
 | K-010 | Kernel S3.3 | createTask `assignTo` MUST reference a declared kernel actor. | Cross-path reference. | T2-xdoc | actor-consistency | tier2_rules.rs |
 | K-011 | Kernel S4.2 / LCD S2.1 | Same document + events MUST produce same transitions (determinism). | Runtime behavioral property. | T3 | determinism | E2E |
 | K-012 | Kernel S4.6 | Guards MUST be valid FEL expressions. | Opaque string in schema. | T2-ast | expression-validity | AST |
@@ -64,7 +64,7 @@
 | K-018 | Kernel S5.5 | Case relationship changes MUST produce provenance. | Runtime obligation. | T3 | provenance | — |
 | K-019 | Kernel S7.4 | FEL MUST use only built-in and extension functions. | FEL function catalog cross-ref. | T2-ast | expression-validity | AST |
 | K-020 | Kernel S8.2 | Every state/case mutation MUST produce Facts tier provenance. | Runtime completeness. | T3 | provenance | E2E |
-| K-021 | Kernel S8.2 | Provenance `actorId` MUST reference a declared actor. | Cross-path reference. | T1 | actor-consistency | — |
+| K-021 | Kernel S8.2 | Provenance `actorId` MUST reference a declared actor. | Cross-path reference. | T1 | actor-consistency | T1 |
 | K-022 | Kernel S8.3 | Digest present implies algorithm recorded in extensions. | Conditional inter-field dependency. | T1 | provenance | T1 |
 | K-023 | Kernel S9.1 (G1) | Non-terminal instances MUST resume after crash. | Runtime durability. | T3 | lifecycle-soundness | — |
 | K-024 | Kernel S9.1 (G3) | Non-deterministic output MUST persist before advancing state. | Runtime execution order. | T3 | determinism | — |
@@ -93,7 +93,7 @@
 | K-047 | Kernel S5.5 | Case relationships MUST NOT affect lifecycle evaluation (metadata only). | Semantic constraint on processor behavior. | T3 | lifecycle-soundness | E2E |
 | K-048 | Kernel S5.5 | Case relationship `type` extensibility MUST use `x-` prefix for non-standard values. | Schema enum does not enforce prefix on extension values. | T1 | cross-reference | T1 |
 
-**Kernel:** 48 constraints — 16 T1, 6 T2, 26 T3. **Tested: 31 of 48** (14 T1, 4 AST, 2 T2, 11 E2E).
+**Kernel:** 48 constraints — 16 T1, 6 T2, 26 T3. **Tested: 32 of 48** (15 T1, 4 AST, 2 T2, 11 E2E).
 
 ---
 
@@ -158,16 +158,16 @@
 | G-055 | WG S12.2 | `expectedDuration` MUST be a valid ISO 8601 duration or the literal string `"indefinite"`. | Union type validation (duration or specific string) not enforced by schema. | T1 | hold-validity | T1 |
 | G-056 | PP S1.5.2 | Binding `resolutionDateRef` MUST reference a field path that exists in the kernel's case state. | Cross-document path resolution (same as G-031 but for bindings). | T2-xdoc | temporal-resolution | T2 |
 | G-057 | PP S1.5.3 | Binding `values` entries MUST be in ascending `effectiveDate` order. | Array ordering constraint (same as G-047 but for bindings). | T1 | temporal-resolution | T1 |
-| G-058 | BC S3.3 / S4.1 | Each Holiday entry MUST specify exactly one of `date` or `rule`. | Mutual exclusivity across two optional fields. | T1 | calendar-validity | -- |
-| G-059 | BC S5.2 | Operating hours `end` MUST be strictly after `start`. | Cross-field temporal ordering within OperatingHours. | T1 | calendar-validity | -- |
-| G-060 | BC S6.1 | When a Business Calendar sidecar targets a workflow, SLA evaluation MUST use business days. | Cross-document sidecar presence check + runtime behavior. | T2-xdoc | temporal-resolution | -- |
+| G-058 | BC S3.3 / S4.1 | Each Holiday entry MUST specify exactly one of `date` or `rule`. | Mutual exclusivity across two optional fields. | T1 | calendar-validity | T1 |
+| G-059 | BC S5.2 | Operating hours `end` MUST be strictly after `start`. | Cross-field temporal ordering within OperatingHours. | T1 | calendar-validity | T1 |
+| G-060 | BC S6.1 | When a Business Calendar sidecar targets a workflow, SLA evaluation MUST use business days. | Cross-document sidecar presence check + runtime behavior. | T2-xdoc | temporal-resolution | tier2_rules.rs |
 | G-061 | BC S8.1 | Processor MUST ignore an expired calendar (`expirationDate` in the past). | Runtime temporal check. | T3 | calendar-validity | -- |
-| G-062 | NT S4.4 | Adverse-decision templates MUST include sections addressing determination, reason codes, appeal rights, and appeal instructions. | Content-level validation of section coverage by category. | T1 | notification-validity | -- |
-| G-063 | NT S5.1 | `notificationTemplateRef` and `noticeTemplateRef` values MUST resolve to a template key in a Notification Template sidecar targeting the same workflow. | Cross-document reference resolution. | T2-xdoc | cross-reference | -- |
+| G-062 | NT S4.4 | Adverse-decision templates MUST include sections addressing determination, reason codes, appeal rights, and appeal instructions. | Content-level validation of section coverage by category; lint uses id / `contentType` heuristics (see `check_adverse_decision_template_sections` in `tier1.rs`). | T1 | notification-validity | T1 |
+| G-063 | NT S5.1 | `notificationTemplateRef` and `noticeTemplateRef` values MUST resolve to a template key in a Notification Template sidecar targeting the same workflow. | Cross-document reference resolution. | T2-xdoc | cross-reference | tier2_rules.rs |
 | G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | -- |
-| G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | -- |
+| G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | T1 |
 
-**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 37 of 65** (10 T1, 2 AST, 25 T2).
+**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 43 of 65** (14 T1, 2 AST, 27 T2).
 
 ---
 
@@ -177,7 +177,7 @@
 |---|---|---|---|---|---|---|
 | AI-001 | AI S2.2 | Processor MUST implement agent registration (S3). | Processor conformance claim. | T3 | agent-consistency | — |
 | AI-002 | AI S2.2 | Processor MUST implement confidence framework (S7). | Processor conformance claim. | T3 | confidence-validity | — |
-| AI-003 | AI S2.2 | Processor MUST validate fallback chains at load time, rejecting cycles or missing terminal actions. | Cycle detection requires graph traversal. | T1 | fallback-chain-validity | — |
+| AI-003 | AI S2.2 | Processor MUST validate fallback chains at load time, rejecting cycles or missing terminal actions. | Cycle detection requires graph traversal. | T1 | fallback-chain-validity | T1 (AI-041) |
 | AI-004 | AI S2.2 / S6.2 | Processor MUST delegate Formspec evaluation to a conformant processor (Core S1.4). | Runtime architectural requirement. | T3 | cross-layer-reference | — |
 | AI-005 | AI S3.7 | Agents MUST NOT override human decisions. | Runtime workflow state knowledge required. | T3 | autonomy-constraint | — |
 | AI-006 | AI S3.7 | Agent provenance MUST include model identifier, version, confidence, input summary. | Runtime output completeness. | T3 | agent-consistency | — |
@@ -266,10 +266,10 @@
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
-| Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 31 | 65% |
-| Governance + Sidecars | 65 | 14 | 29 | 22 | 37 | 57% |
-| AI + Advanced | 82 | 5 | 20 | 57 | 24 | 29% |
-| **Total** | **195** | **35** | **55** | **105** | **92** | **47%** |
+| Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 32 | 67% |
+| Governance + Sidecars | 65 | 14 | 29 | 22 | 43 | 66% |
+| AI + Advanced | 82 | 5 | 20 | 57 | 25 | 30% |
+| **Total** | **195** | **35** | **55** | **105** | **100** | **51%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -277,12 +277,12 @@
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
-| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 28 (K-001..K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-049, DM-001, EQ-001) |
-| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 42 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
+| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 34 (K-001..K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
+| T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 12 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047) |
 
-**T3 rules (105 total, 11 with E2E coverage):** Of 105 Tier 3 rules, 11 are exercised indirectly by conformance engine behavioral tests in `kernel_conformance.rs` and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 94 require dedicated runtime fixtures that are not yet implemented.
+**T3 rules (105 total, 11 with E2E coverage):** Of 105 Tier 3 rules, 11 are exercised indirectly by conformance engine behavioral tests in `kernel_conformance.rs` and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 94 are tracked via the runtime fixture backlog (`wos-spec/TODO.md` Phase 4–5); see that document rather than duplicating the rule list here.
 
 ## Verification Tools
 
@@ -366,44 +366,41 @@ Event-driven test fixtures. Each fixture declares:
 
 ## Test Coverage Gaps
 
-Audit date: 2026-04-09. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
+Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
 
 | Metric | Count |
 |--------|-------|
 | Total rules in matrix | 195 |
-| Rules with at least one test | 92 |
-| Rules with **no** test | 103 |
+| Rules with at least one test | 100 |
+| Rules with **no** test | 95 |
 
-### Tested rule inventory (92 rules)
+### Tested rule inventory (100 rules)
 
-**From `tier1_rules.rs` (28 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, AI-041, AI-049, DM-001, EQ-001.
+**From `tier1_rules.rs` (34 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
 
-**From `tier2_rules.rs` (42 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
+**From `tier2_rules.rs` (44 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014.
 
 **From `provenance_tests.rs` + `kernel_conformance.rs` (12 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047.
 
+**AI-003:** Same static validation as **AI-041** (fallback chain termination and cycle detection). Tests assert `AI-041`; see gap section below.
+
 ### Gap list by tier
 
-#### T1 gaps (7 rules) -- static checks, not yet tested
+#### T1 gaps (1 rule) -- no dedicated lint test by design
 
 | ID | Note |
 |----|------|
-| K-009 | Actor id uniqueness. Implementation is a no-op (JSON keys are inherently unique). Low value. |
-| K-021 | Provenance `actorId` references declared actor. **Not implemented** -- needs rule code first. |
-| AI-003 | Processor must validate fallback chains at load time. Covered semantically by AI-041 tests; rule ID not asserted directly. |
-| G-058 | Holiday entry must specify exactly one of `date` or `rule`. New (Business Calendar sidecar). |
-| G-059 | Operating hours `end` must be strictly after `start`. New (Business Calendar sidecar). |
-| G-062 | Adverse-decision templates must include determination/reason/appeal sections. New (Notification Template sidecar). |
-| G-065 | Template section `id` values must be unique. New (Notification Template sidecar). |
+| K-009 | Actor id uniqueness is enforced by JSON object keys (duplicate keys are invalid JSON). No separate lint rule or test. |
 
-#### T2 gaps (2 rules) -- cross-document / AST, not yet implemented
+#### AI-003 (fallback load-time validation)
 
-| ID | Tier | Note |
-|----|------|------|
-| G-060 | T2-xdoc | Business Calendar sidecar presence requires business-day SLA evaluation. New. |
-| G-063 | T2-xdoc | `notificationTemplateRef` must resolve to a template in a Notification Template sidecar. New. |
+Covered by the same implementation and tests as **AI-041** (`tier1_rules.rs`). The diagnostic uses rule id `AI-041`; AI-003 is the normative S2.2 umbrella for that static validation.
+
+#### T2 calendar / notification gaps
+
+**Resolved (Phase 8):** G-060 (scoped Business Calendar + SLA `calendarType`), G-063 (template ref resolution). Both run whenever a governance document is present **even if the kernel is missing or fails typed deserialization** (they only need `targetWorkflow` + sidecars). When SLA violates BC S6.1, **G-023** (Governance S10 SHOULD) and **G-060** (BC S6.1 MUST) both emit: warning for authoring guidance plus error for the normative obligation.
 
 #### T3 gaps (94 rules) -- dynamic conformance, fixture-tested at runtime
 
