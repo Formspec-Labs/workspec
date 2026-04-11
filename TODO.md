@@ -285,21 +285,21 @@ Formalize the relationship between individual rule tests and processor conforman
 
 Strengthen the lint-time analysis for AdvGov verifiable constraints.
 
-- [ ] **AG010-FINITE: Implement `check_finite_domain_equality` in `fel_analysis.rs`.**
+- [x] **AG010-FINITE: Implement `check_finite_domain_equality` in `fel_analysis.rs`.**
   - Wire into `check_smt_expression` (the existing AG-010 dispatcher).
   - Decidable patterns (pass silently): literal comparisons (`$x.status == "approved"`), boolean comparisons, `in` expressions with array containers (`$x in ["a","b","c"]`), known WOS enum paths (`instance.impactLevel`).
   - Ambiguous pattern (emit warning): variable-to-variable equality (`$x.field == $y.other`).
   - Tests: literal clean, boolean clean, `in` clean, enum path clean, variable-to-variable flagged.
   - **Context:** Implements AG-010 restriction 4 (finite domain enumerations) at lint time using AST-only analysis. No type registry needed for common cases. File: `wos-lint/src/rules/fel_analysis.rs`.
 
-- [ ] **AG010-DECL: Add `finiteDomainDeclarations` to `VerifiableConstraint` schema.**
+- [x] **AG010-DECL: Add `finiteDomainDeclarations` to `VerifiableConstraint` schema.**
   - Add to `wos-advanced.schema.json` under the `VerifiableConstraint` definition.
   - Format: `{ "path": { "domain": ["value1", "value2", ...] } }`.
   - Update `check_finite_domain_equality` to load declarations and suppress variable-to-variable warnings when a declaration covers one side of the equality.
   - Tests: declaration resolves warning, declaration missing still warns, invalid declaration ignored.
   - **Context:** Allows constraint authors to declare finite domains without a full Type Registry. Step 2 of the three-step path.
 
-- [ ] **AG010-FILTER: Verify FEL parser rejects filter expressions (restriction 6).**
+- [x] **AG010-FILTER: Verify FEL parser rejects filter expressions (restriction 6).**
   - Check that `PathSegment` enum has no `Filter` variant and the parser rejects `$path[?(@.x > 1)]` syntax.
   - If confirmed: document in LINT-MATRIX as "enforced by parser — no lint rule needed."
   - If parser accepts them: add `check_no_filter_expressions` to `fel_analysis.rs`.

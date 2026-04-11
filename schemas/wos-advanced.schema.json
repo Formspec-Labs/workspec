@@ -460,6 +460,27 @@
         "notes": {
           "type": "string",
           "description": "Notes on verifiability (e.g., which restrictions apply)."
+        },
+        "expression": {
+          "type": "string",
+          "description": "FEL expression checked by tooling against the AdvGov S8.2 SMT verifiable subset (parse, linear arithmetic, finite-domain equality heuristics, etc.). Optional when the constraint is documented only in notes."
+        },
+        "finiteDomainDeclarations": {
+          "type": "object",
+          "description": "Optional map from dotted field paths (as used in FEL, e.g. `output.status`) to explicit finite value domains. Suppresses variable-to-variable equality warnings in SMT subset linting when at least one side of the equality is a listed path.",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["domain"],
+            "additionalProperties": false,
+            "properties": {
+              "domain": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string" },
+                "description": "Closed set of string values for the path."
+              }
+            }
+          }
         }
       }
     },

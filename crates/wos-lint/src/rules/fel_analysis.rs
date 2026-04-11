@@ -22,8 +22,12 @@
 //! | AG-012 | smt-compatibility   | Quantifiers quantify over finite domains       |
 //! | AG-013 | smt-compatibility   | Arithmetic is linear (no variable × variable)  |
 //! | AG-014 | smt-compatibility   | No extension function calls in verifiable subset|
+//!
+//! **AG-010 (finite equality):** warns when both sides of `==` / `!=` are simple
+//! field/context accesses and neither side is a literal, unless a path is a known
+//! WOS enumeration field or listed in `finiteDomainDeclarations`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use fel_core::{
     ast::{BinaryOp, Expr, PathSegment},
@@ -98,7 +102,8 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagno
         for (i, constraint) in constraints.iter().enumerate() {
             let path = format!("/verifiableConstraints/{i}");
             if let Some(expr_str) = constraint.get("expression").and_then(Value::as_str) {
-                check_smt_expression(expr_str, &path, diagnostics);
+                let decls = parse_finite_domain_declarations(constraint.get("finiteDomainDeclarations"));
+                check_smt_expression(expr_str, &path, diagnostics, &decls);
             }
         }
     }
@@ -260,11 +265,37 @@ fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut
 // AG-010 through AG-014: SMT verifiable subset
 // ---------------------------------------------------------------------------
 
+/// Load `finiteDomainDeclarations` paths from a constraint JSON object.
+///
+/// Shape: `{ "path.to.field": { "domain": ["v1", "v2", ...] }, ... }`.
+/// Entries without a non-empty `domain` array of strings are ignored.
+fn parse_finite_domain_declarations(value: Option<&Value>) -> HashMap<String, ()> {
+    let mut out = HashMap::new();
+    let Some(Value::Object(map)) = value else {
+        return out;
+    };
+    for (key, entry) in map {
+        let Some(domain) = entry.get("domain").and_then(Value::as_array) else {
+            continue;
+        };
+        if domain.is_empty() || !domain.iter().all(|v| v.as_str().is_some()) {
+            continue;
+        }
+        out.insert(key.clone(), ());
+    }
+    out
+}
+
 /// AG-010: Entry point for all SMT subset checks on a single expression.
 ///
-/// Applies AG-011, AG-012, AG-013, AG-014 in sequence. Each violation is
-/// reported with its own rule ID; all applicable diagnostics are emitted.
-fn check_smt_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+/// Applies AG-011, AG-012, AG-013, AG-014, and finite-domain equality (AG-010)
+/// in sequence. Each violation is reported with its own rule ID.
+fn check_smt_expression(
+    expr_str: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    finite_domain_paths: &HashMap<String, ()>,
+) {
     let expr = match parse(expr_str) {
         Ok(e) => e,
         Err(err) => {
@@ -289,6 +320,9 @@ fn check_smt_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diagno
 
     // AG-014: no extension function calls.
     check_no_extension_functions(&expr, "AG-014", path, diagnostics);
+
+    // AG-010 (finite equality): variable-to-variable equality on simple paths.
+    check_finite_domain_equality(&expr, path, diagnostics, finite_domain_paths);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,6 +627,122 @@ fn check_no_extension_functions(
     });
 }
 
+/// AG-010 (finite enumerations): warn on simple variable-to-variable equality.
+///
+/// Passes silently when either side is a literal (including comparisons such as
+/// `$instance.impactLevel == "rights-impacting"`) or when either side's dotted path is
+/// listed in `finiteDomainDeclarations`.
+fn check_finite_domain_equality(
+    expr: &Expr,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    finite_paths: &HashMap<String, ()>,
+) {
+    walk_expr(expr, &mut |e| {
+        if let Expr::BinaryOp {
+            op: BinaryOp::Eq | BinaryOp::NotEq,
+            left,
+            right,
+        } = e
+        {
+            if smt_equality_is_decidable(left, right, finite_paths) {
+                return false;
+            }
+            if is_simple_access_expr(left.as_ref()) && is_simple_access_expr(right.as_ref()) {
+                diagnostics.push(Diagnostic::warning(
+                    "AG-010",
+                    path,
+                    "equality compares two non-literal field or context accesses; use a literal \
+                     on one side, add `finiteDomainDeclarations` for a path, or avoid \
+                     variable-to-variable equality (AdvGov S8.2)"
+                        .to_string(),
+                ));
+            }
+        }
+        false
+    });
+}
+
+/// True when AdvGov S8.2 finite-domain reasoning is obvious from the AST.
+fn smt_equality_is_decidable(
+    left: &Expr,
+    right: &Expr,
+    finite_paths: &HashMap<String, ()>,
+) -> bool {
+    if is_literal_expr(left) || is_literal_expr(right) {
+        return true;
+    }
+    path_declared_finite(left, finite_paths) || path_declared_finite(right, finite_paths)
+}
+
+fn path_declared_finite(expr: &Expr, finite_paths: &HashMap<String, ()>) -> bool {
+    simple_access_path_string(expr).is_some_and(|p| finite_paths.contains_key(&p))
+}
+
+/// Scalar or aggregate of literals only (no `$` / `@`).
+fn is_literal_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Null
+        | Expr::Boolean(_)
+        | Expr::Number(_)
+        | Expr::String(_)
+        | Expr::DateLiteral(_)
+        | Expr::DateTimeLiteral(_) => true,
+        Expr::Array(elements) => elements.iter().all(is_literal_expr),
+        Expr::Object(pairs) => pairs.iter().all(|(_, v)| is_literal_expr(v)),
+        _ => false,
+    }
+}
+
+fn is_simple_access_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::FieldRef { .. } | Expr::ContextRef { .. } => true,
+        Expr::PostfixAccess { expr: inner, .. } => is_simple_access_expr(inner.as_ref()),
+        _ => false,
+    }
+}
+
+/// Dotted path for a simple field or context access (`$a.b` → `a.b`). Indices/wildcards excluded.
+fn simple_access_path_string(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::FieldRef { name, path: segments } => {
+            let root = name.as_deref()?;
+            let mut s = root.to_string();
+            for seg in segments {
+                let PathSegment::Dot(part) = seg else {
+                    return None;
+                };
+                s.push('.');
+                s.push_str(part);
+            }
+            Some(s)
+        }
+        Expr::ContextRef { name, tail, .. } => {
+            let mut s = name.clone();
+            for part in tail {
+                s.push('.');
+                s.push_str(part);
+            }
+            Some(s)
+        }
+        Expr::PostfixAccess {
+            expr: inner,
+            path: segments,
+        } => {
+            let mut s = simple_access_path_string(inner.as_ref())?;
+            for seg in segments {
+                let PathSegment::Dot(part) = seg else {
+                    return None;
+                };
+                s.push('.');
+                s.push_str(part);
+            }
+            Some(s)
+        }
+        _ => None,
+    }
+}
+
 /// AI-024: Return true if `expr` contains any `@agent` context reference.
 fn references_agent_context(expr: &Expr) -> bool {
     let mut found = false;
@@ -711,6 +861,8 @@ fn visit_children(expr: &Expr, f: &mut impl FnMut(&Expr)) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::missing_docs_in_private_items)]
+
+    use std::collections::HashMap;
 
     use super::*;
     use crate::diagnostic::Severity;
@@ -1016,7 +1168,7 @@ mod tests {
     fn ag011_self_recursive_let() {
         let expr_str = "let x = x + 1 in x";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             diag.iter().any(|d| d.rule_id == "AG-011"),
             "expected AG-011 error, got: {diag:?}"
@@ -1027,7 +1179,7 @@ mod tests {
     fn ag011_non_recursive_let_is_clean() {
         let expr_str = "let x = $amount * 2 in x > 100";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-011"),
             "unexpected AG-011: {diag:?}"
@@ -1040,7 +1192,7 @@ mod tests {
     fn ag013_variable_times_variable() {
         let expr_str = "$qty * $price > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
@@ -1052,7 +1204,7 @@ mod tests {
     fn ag013_variable_times_literal_is_linear() {
         let expr_str = "$qty * 2 > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-013"),
             "unexpected AG-013: {diag:?}"
@@ -1065,7 +1217,7 @@ mod tests {
     fn ag014_extension_function_in_verifiable_constraint() {
         let expr_str = "myExtFn($value) > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
@@ -1077,10 +1229,130 @@ mod tests {
     fn ag014_builtin_function_is_allowed() {
         let expr_str = "abs($delta) < 5";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag);
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-014"),
             "unexpected AG-014: {diag:?}"
+        );
+    }
+
+    // --- AG-010: finite-domain equality (variable-to-variable) ---
+
+    #[test]
+    fn ag010_literal_comparison_is_clean() {
+        let expr_str = r#"$output.status == "approved""#;
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_boolean_comparison_is_clean() {
+        let expr_str = "$output.eligible == true";
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_membership_literal_array_is_clean() {
+        let expr_str = r#"$tier in ["gold", "silver", "bronze"]"#;
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_known_enum_to_literal_is_clean() {
+        let expr_str = r#"$instance.impactLevel == "rights-impacting""#;
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_variable_to_variable_equality_warns() {
+        let expr_str = "$output.status == $copy.status";
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "expected AG-010 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_finite_domain_declaration_suppresses_var_var() {
+        let expr_str = "$output.status == $copy.status";
+        let mut decls = HashMap::new();
+        decls.insert("output.status".to_string(), ());
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &decls);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_invalid_declaration_entry_does_not_suppress() {
+        let expr_str = "$output.status == $copy.status";
+        let mut decls = HashMap::new();
+        decls.insert("other.path".to_string(), ());
+        let mut diag = Vec::new();
+        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &decls);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "expected AG-010 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ag010_advanced_doc_parses_finite_domain_declarations() {
+        let doc = make_doc(
+            DocumentKind::Advanced,
+            json!({
+                "$wosAdvancedGovernance": true,
+                "verifiableConstraints": [{
+                    "constraintRef": "c1",
+                    "verifiable": true,
+                    "expression": "$output.status == $copy.status",
+                    "finiteDomainDeclarations": {
+                        "output.status": { "domain": ["a", "b"] },
+                        "bad": { "domain": [] },
+                        "alsoBad": "not-an-object"
+                    }
+                }]
+            }),
+        );
+        let mut diag = Vec::new();
+        check_advanced_governance_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            "unexpected AG-010 warning: {diag:?}"
+        );
+    }
+
+    /// JSONPath-style `[?(...)]` is not FEL; restriction 6 is enforced by the parser.
+    #[test]
+    fn ag010_filter_bracket_syntax_does_not_parse() {
+        assert!(
+            parse("$items[?(@.x > 1)]").is_err(),
+            "JSONPath filter expressions must not parse as FEL"
         );
     }
 }
