@@ -1,10 +1,10 @@
 # WOS Verification Matrix
 
-195 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
+196 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)           35 rules                  │
+│  Tier 1: wos-lint (static)           36 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -34,13 +34,13 @@
   - `T1` — `crates/wos-lint/tests/tier1_rules.rs`
   - `T2` — `crates/wos-lint/tests/tier2_rules.rs`
   - `AST` — `crates/wos-lint/src/rules/fel_analysis.rs` `#[cfg(test)]` module
-  - `E2E` — `crates/wos-conformance/tests/kernel_conformance.rs` or `provenance_tests.rs`
+  - `E2E` — `crates/wos-conformance/tests/kernel_conformance.rs`, `profile_conformance.rs`, or `provenance_tests.rs`
   - `—` — no test yet
   - Multiple types separated by `+` (e.g., `T1+E2E`)
 
 ---
 
-## Kernel + Lifecycle Detail
+## Kernel + Lifecycle Detail + Correspondence Metadata
 
 | ID | Section | Rule | Why schema can't enforce | Tier | Category | Tested? |
 |---|---|---|---|---|---|---|
@@ -52,7 +52,7 @@
 | K-006 | Kernel S4.5 | Transition `target` MUST reference an existing state. | Cross-path reference resolution. | T1 | cross-reference | T1 |
 | K-007 | Kernel S4.10 / S13.3 | Event names MUST NOT use the `$` prefix (kernel-reserved). | Event name pattern not enforced. | T1 | lifecycle-soundness | T1 |
 | K-008 | Kernel S4.8 | Parallel state outgoing transitions MUST use `$join` as event. | Conditional event constraint by parent type. | T1 | lifecycle-soundness | T1+E2E |
-| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Map key uniqueness + cross-ref. | T1 | actor-consistency | — (JSON object keys; no lint) |
+| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Uniqueness of nested `actors[].id` values is not enforced by schema. | T1 | actor-consistency | — |
 | K-010 | Kernel S3.3 | createTask `assignTo` MUST reference a declared kernel actor. | Cross-path reference. | T2-xdoc | actor-consistency | tier2_rules.rs |
 | K-011 | Kernel S4.2 / LCD S2.1 | Same document + events MUST produce same transitions (determinism). | Runtime behavioral property. | T3 | determinism | E2E |
 | K-012 | Kernel S4.6 | Guards MUST be valid FEL expressions. | Opaque string in schema. | T2-ast | expression-validity | AST |
@@ -92,8 +92,9 @@
 | K-046 | LCD S6.7 | Timer lifecycle MUST produce provenance records. | Runtime obligation. | T3 | provenance | E2E |
 | K-047 | Kernel S5.5 | Case relationships MUST NOT affect lifecycle evaluation (metadata only). | Semantic constraint on processor behavior. | T3 | lifecycle-soundness | E2E |
 | K-048 | Kernel S5.5 | Case relationship `type` extensibility MUST use `x-` prefix for non-standard values. | Schema enum does not enforce prefix on extension values. | T1 | cross-reference | T1 |
+| CM-001 | CorrMeta S1.2 | Entry template `id` values MUST be unique within the sidecar. | Uniqueness of nested `entryTemplates[].id` values is not enforced by schema. | T1 | correspondence-validity | — |
 
-**Kernel:** 48 constraints — 16 T1, 6 T2, 26 T3. **Tested: 32 of 48** (15 T1, 4 AST, 2 T2, 11 E2E).
+**Kernel + Correspondence:** 49 constraints — 17 T1, 6 T2, 26 T3. **Tested: 32 of 49** (15 T1, 4 AST, 2 T2, 11 E2E).
 
 ---
 
@@ -151,8 +152,8 @@
 | G-048 | PP S1.5.2 | Binding `id` MUST match the key under which it appears in the `bindings` map. | Object key must equal property value. | T1 | cross-reference | T1 |
 | G-049 | PP S1.5.4 | Processors MUST NOT alter resolution mechanism based on `bindingType`. | Processor behavior rule. | T3 | pipeline-validity | — |
 | G-050 | PP S1.4 | Resolved parameter value MUST be type-consistent with declared `type`. | Type validation across DateValue.value and ParameterDefinition.type. | T1 | assertion-validity | T1 |
-| G-051 | WG S2.1 | Governance Basic processor MUST enforce due process (S3) and review protocols (S4). | Processor conformance claim. | T3 | due-process-completeness | — |
-| G-052 | WG S2.1 | Governance Complete processor MUST enforce all normative sections. | Processor conformance claim. | T3 | pipeline-validity | — |
+| G-051 | WG S2.1 | Governance Basic processor MUST enforce due process (S3) and review protocols (S4). | Processor conformance claim. | T3 | due-process-completeness | E2E |
+| G-052 | WG S2.1 | Governance Complete processor MUST enforce all normative sections. | Processor conformance claim. | T3 | pipeline-validity | E2E |
 | G-053 | WG S11.5 | Sub-delegation MUST only be permitted if the original delegation explicitly allows it. | Requires traversing delegation chain and checking per-delegation permissions. | T2-xdoc | delegation-validity | T2 |
 | G-054 | WG S12.4 | When `resumeTrigger` event arrives before hold timer fires, the timer MUST be cancelled. | Runtime timer management behavior. | T3 | hold-validity | — |
 | G-055 | WG S12.2 | `expectedDuration` MUST be a valid ISO 8601 duration or the literal string `"indefinite"`. | Union type validation (duration or specific string) not enforced by schema. | T1 | hold-validity | T1 |
@@ -167,7 +168,7 @@
 | G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | -- |
 | G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | T1 |
 
-**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 43 of 65** (14 T1, 2 AST, 27 T2).
+**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 45 of 65** (14 T1, 2 AST, 27 T2, 2 E2E).
 
 ---
 
@@ -175,8 +176,8 @@
 
 | ID | Section | Rule | Why schema can't enforce | Tier | Category | Tested? |
 |---|---|---|---|---|---|---|
-| AI-001 | AI S2.2 | Processor MUST implement agent registration (S3). | Processor conformance claim. | T3 | agent-consistency | — |
-| AI-002 | AI S2.2 | Processor MUST implement confidence framework (S7). | Processor conformance claim. | T3 | confidence-validity | — |
+| AI-001 | AI S2.2 | Processor MUST implement agent registration (S3). | Processor conformance claim. | T3 | agent-consistency | E2E |
+| AI-002 | AI S2.2 | Processor MUST implement confidence framework (S7). | Processor conformance claim. | T3 | confidence-validity | E2E |
 | AI-003 | AI S2.2 | Processor MUST validate fallback chains at load time, rejecting cycles or missing terminal actions. | Cycle detection requires graph traversal. | T1 | fallback-chain-validity | T1 (AI-041) |
 | AI-004 | AI S2.2 / S6.2 | Processor MUST delegate Formspec evaluation to a conformant processor (Core S1.4). | Runtime architectural requirement. | T3 | cross-layer-reference | — |
 | AI-005 | AI S3.7 | Agents MUST NOT override human decisions. | Runtime workflow state knowledge required. | T3 | autonomy-constraint | — |
@@ -258,7 +259,7 @@
 | VR-002 | VerifReport S1 | Proven-unsafe MUST prevent workflow activation until corrected. | Cross-document lifecycle gating. | T3 | smt-compatibility | — |
 | VR-003 | VerifReport S1 | `counterexample` MUST be present when result is `proven-unsafe`. | Conditional field presence based on sibling value. | T2-xdoc | smt-compatibility | T2 |
 
-**AI + Advanced:** 82 constraints — 6 T1, 19 T2, 57 T3. **Tested: 24 of 82** (5 T1, 5 AST, 14 T2).
+**AI + Advanced:** 82 constraints — 5 T1, 20 T2, 57 T3. **Tested: 27 of 82** (5 T1 including AI-003 shared coverage, 5 AST, 14 T2, 2 E2E, 1 shared-rule note).
 
 ---
 
@@ -266,10 +267,10 @@
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
-| Kernel + Lifecycle Detail | 48 | 16 | 6 | 26 | 32 | 67% |
-| Governance + Sidecars | 65 | 14 | 29 | 22 | 43 | 66% |
-| AI + Advanced | 82 | 5 | 20 | 57 | 25 | 30% |
-| **Total** | **195** | **35** | **55** | **105** | **100** | **51%** |
+| Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 32 | 65% |
+| Governance + Sidecars | 65 | 14 | 29 | 22 | 45 | 69% |
+| AI + Advanced | 82 | 5 | 20 | 57 | 27 | 33% |
+| **Total** | **196** | **36** | **55** | **105** | **104** | **53%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -280,9 +281,9 @@
 | T1 | `crates/wos-lint/tests/tier1_rules.rs` | 34 (K-001..K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
-| E2E | `crates/wos-conformance/tests/*.rs` | 12 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047) |
+| E2E | `crates/wos-conformance/tests/*.rs` | 16 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047, G-051, G-052, AI-001, AI-002) |
 
-**T3 rules (105 total, 11 with E2E coverage):** Of 105 Tier 3 rules, 11 are exercised indirectly by conformance engine behavioral tests in `kernel_conformance.rs` and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 94 are tracked via the runtime fixture backlog (`wos-spec/TODO.md` Phase 4–5); see that document rather than duplicating the rule list here.
+**T3 rules (105 total, 15 with E2E coverage):** Of 105 Tier 3 rules, 15 are exercised by conformance tests in `kernel_conformance.rs`, `profile_conformance.rs`, and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 90 are tracked via the runtime fixture backlog (`wos-spec/TODO.md` Phase 4–5); see that document rather than duplicating the rule list here.
 
 ## Verification Tools
 
@@ -303,6 +304,8 @@ Single-document structural checks. Input: one JSON document + its `$wos*` type m
 **Timer (1):** K-029 — startTimer has exactly one of duration or deadline.
 
 **Actor (2):** K-009, K-021 — actor ids unique, provenance actorId references declared actor.
+
+**Correspondence validity (1):** CM-001 — correspondence entry template ids unique within the sidecar.
 
 **Provenance (1):** K-022 — digest present implies algorithm in extensions.
 
@@ -372,11 +375,11 @@ Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-l
 
 | Metric | Count |
 |--------|-------|
-| Total rules in matrix | 195 |
-| Rules with at least one test | 100 |
-| Rules with **no** test | 95 |
+| Total rules in matrix | 196 |
+| Rules with at least one test | 104 |
+| Rules with **no** test | 92 |
 
-### Tested rule inventory (100 rules)
+### Tested rule inventory (104 rules)
 
 **From `tier1_rules.rs` (34 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
 
@@ -384,17 +387,18 @@ Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-l
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010 (parse **Error** vs finite `==`/`!=` **Warning**, declarations, deduped path pairs, FEL rejects JSONPath `[?]` filters), AG-011, AG-013, AG-014.
 
-**From `provenance_tests.rs` + `kernel_conformance.rs` (12 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047.
+**From `provenance_tests.rs` + `kernel_conformance.rs` + `profile_conformance.rs` (16 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047, G-051, G-052, AI-001, AI-002.
 
 **AI-003:** Same static validation as **AI-041** (fallback chain termination and cycle detection). Tests assert `AI-041`; see gap section below.
 
 ### Gap list by tier
 
-#### T1 gaps (1 rule) -- no dedicated lint test by design
+#### T1 gaps (2 rules) -- open lint coverage gaps
 
 | ID | Note |
 |----|------|
-| K-009 | Actor id uniqueness is enforced by JSON object keys (duplicate keys are invalid JSON). No separate lint rule or test. |
+| K-009 | Kernel `actors` are modeled as an array in the current schema, so duplicate `actors[].id` values are representable and need an actual lint rule + test. |
+| CM-001 | Correspondence Metadata `entryTemplates[].id` uniqueness is now tracked in the matrix but has no lint rule or test yet. |
 
 #### AI-003 (fallback load-time validation)
 
@@ -406,9 +410,9 @@ Covered by the same implementation and tests as **AI-041** (`tier1_rules.rs`). T
 
 **Resolved (Phase 10):** AG-010 finite-domain equality heuristics — **Warning** when both sides of `==` or `!=` are simple non-literal field/context accesses, unless a side is a literal, or either path appears in `finiteDomainDeclarations`. (Comparisons such as `$instance.impactLevel == "x"` are decidable because one side is a literal, not because of a separate enum special-case in the linter.) AdvGov S8.2 restriction 6 (no JSONPath filter predicates in paths): **enforced by the FEL parser** — `PathSegment` has no filter variant and `$items[?(@.x > 1)]` does not parse; no dedicated lint rule.
 
-#### T3 gaps (94 rules) -- dynamic conformance, fixture-tested at runtime
+#### T3 gaps (90 rules) -- dynamic conformance, fixture-tested at runtime
 
-The remaining 94 untested Tier 3 rules require runtime event-sequence fixtures and are outside the scope of the current static lint and unit-level conformance tests. (11 additional T3 rules are exercised via E2E conformance tests; see the Tested rule inventory above.) They cover:
+The remaining 90 untested Tier 3 rules require runtime event-sequence fixtures and are outside the scope of the current static lint and unit-level conformance tests. (15 additional T3 rules are exercised via E2E conformance tests; see the Tested rule inventory above.) They cover:
 
 - **Determinism / durability (4):** K-023, K-024, K-026, K-031 -- crash recovery, persist-before-advance, idempotency, structured validation.
 - **Provenance completeness (3):** K-018, K-028, G-007 -- relationship change provenance, migration provenance, appeal provenance.
@@ -418,11 +422,10 @@ The remaining 94 untested Tier 3 rules require runtime event-sequence fixtures a
 - **Due process enforcement (7):** G-002, G-006, G-010, G-016, G-017, G-018, G-019 -- notice timing, independent adjudicator, first-impression, random selection, separation of duties, override rationale, immutable overrides.
 - **Pipeline / provenance (5):** G-012, G-013, G-020, G-021, G-025 -- stage provenance, weakest-link risk, rejection records, task transition records, delegation conformance errors.
 - **Delegation / hold (5):** G-026, G-030, G-032, G-049, G-054 -- delegation in provenance, hold timer, temporal resolution algorithm, binding-type neutrality, resume-before-timer.
-- **Processor conformance (2):** G-051, G-052 -- basic/complete processor conformance claims.
 - **Deontic enforcement (12):** AI-009 through AI-017, AI-027, AI-054, AI-055.
 - **Autonomy / escalation (15):** AI-005, AI-008, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AI-057, AC-001, AC-002, AG-005 through AG-007.
 - **Confidence / drift (11):** AI-034 through AI-040, AI-044, AI-045, AG-004, AG-016.
-- **Agent consistency (9):** AI-001, AI-002, AI-004, AI-006, AI-032, AI-033, AI-047, AI-048, AI-053.
+- **Agent consistency (7):** AI-004, AI-006, AI-032, AI-033, AI-047, AI-048, AI-053.
 - **Disclosure / proxy (5):** AI-050, AI-051, AI-052, AG-009, AG-015.
 - **DCR / equity / verification (5):** AG-001, AG-002, AG-003, VR-001, VR-002.
 - **Sidecar runtime (2):** G-061, G-064 -- expired calendar handling, notification variable resolution.

@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-11
-**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 99 green), 3 crates, 195 lint rules (100 tested, 95 untested)
+**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 99 green), 3 crates, 196 lint rules (104 tested, 92 untested)
 
 [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) |
 [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs. implementation boundary) |
@@ -60,16 +60,16 @@ Normative prose changes. No code, no schemas. Get the words right before anythin
 
 JSON Schema updates. These define the structure that typed models deserialize into. Get them right before writing Rust structs.
 
-### `schemas/wos-kernel.schema.json`
+### `schemas/kernel/wos-kernel.schema.json`
 
 - [x] Add `evaluationMode` property (enum: `event-driven`, `continuous`, default: `event-driven`). Also added `maxRelationshipEventDepth` (integer, default: 3).
 
-### `schemas/wos-workflow-governance.schema.json`
+### `schemas/governance/wos-workflow-governance.schema.json`
 
 - [x] Add `scope` property (FEL string) to `ReviewProtocolBinding`, `DueProcess`, `HoldPolicy`. _(backport from Runtime S8.2)_
 - [x] Add `sourceAuthority` enum to `RuleReference` $def (`statute`, `regulation`, `policy`, `guideline`). Also added `ruleId`, `description`, `citation` fields.
 
-### `schemas/wos-case-instance.schema.json`
+### `schemas/companions/wos-case-instance.schema.json`
 
 - [x] Add `pendingEvents` array with `PendingEvent` $def.
 - [x] Add `governanceState` object with `GovernanceState`, `ActiveDelegation`, `ActiveHold` $defs.
@@ -239,9 +239,9 @@ Represent the current `LINT-MATRIX.md` gap audit accurately in the backlog.
 
 Current matrix snapshot (see `LINT-MATRIX.md`):
 
-- 195 total rules
-- 100 rules with at least one test
-- 95 rules with no test
+- 196 total rules
+- 104 rules with at least one test
+- 92 rules with no test
 - Lint-focused gaps closed in Phase 8; remaining untested work is overwhelmingly T3 runtime fixtures.
 
 - [x] **T1-TESTS: Write 12 tests for 4 test-only T1 gaps** (3 per rule: flagged, clean, skip) in `tier1_rules.rs`.
@@ -257,14 +257,24 @@ Current matrix snapshot (see `LINT-MATRIX.md`):
   - AI-003 (AI S2.2): Processor must validate fallback chains at load time. Matrix note says this is semantically covered by AI-041 tests; decide whether to keep that shared-coverage note or add an explicit AI-003 assertion path.
   - **Done:** K-009 documented as JSON key uniqueness (`LINT-MATRIX.md`). K-021 implemented in `tier1.rs` + tests. AI-003 documented as covered by AI-041 implementation/tests (diagnostic id remains `AI-041`).
 
+- [ ] **T1-K009: Reopen K-009 as a real lint rule + test.**
+  - Kernel `actors` are now an array in the schema, so duplicate actor ids are representable and no longer parser-enforced.
+  - Deliverable: Tier 1 lint rule in `tier1.rs` plus `tier1_rules.rs` coverage for duplicate actor ids.
+  - Context: `LINT-MATRIX.md` now tracks K-009 as an open T1 gap instead of a JSON-object no-op.
+
+- [ ] **CORRMETA-INVENTORY: Track and implement Correspondence Metadata non-schema rules.**
+  - `LINT-MATRIX.md` now includes `CM-001`: `entryTemplates[].id` values MUST be unique within the sidecar.
+  - Deliverable: add the corresponding Tier 1 lint rule and test coverage, then audit `specs/kernel/correspondence-metadata.md` for any additional non-schema constraints that should be added to the matrix.
+  - Context: the Correspondence Metadata sidecar was previously omitted from the verification inventory.
+
 - [x] **T2-GAPS: Implement and test the 2 unimplemented Tier 2 cross-document gaps.**
   - G-060 (T2-xdoc): Business Calendar sidecar presence requires business-day SLA evaluation.
   - G-063 (T2-xdoc): `notificationTemplateRef` must resolve to a template in a Notification Template sidecar.
   - **Done:** `tier2.rs` — G-060 error when a calendar’s `targetWorkflow` matches governance and SLA is not `calendarType: business`. G-023 narrowed to the same scope (warning). G-063 resolves refs anywhere under governance JSON. Tests in `tier2_rules.rs`.
 
-- [x] **T3-GAP-TRACKING: Keep the 94 untested Tier 3 rules tracked through the runtime backlog, not as a separate lint-only checklist.**
-  - The remaining T3 gaps are already represented by Phase 4 fixture batches, Phase 5 engine work, deferred Batch 16 meta-rules, and Phase 9 conformance profiles.
-  - Do not duplicate the full 94-rule list here; `LINT-MATRIX.md` remains the authoritative gap inventory.
+- [x] **T3-GAP-TRACKING: Keep the remaining untested Tier 3 rules tracked through the runtime backlog, not as a separate lint-only checklist.**
+  - The remaining 90 T3 gaps are already represented by Phase 4 fixture batches, Phase 5 engine work, deferred Batch 16 meta-rules, and Phase 9 conformance profiles.
+  - Do not duplicate the full 90-rule list here; `LINT-MATRIX.md` remains the authoritative gap inventory.
   - **Done:** `LINT-MATRIX.md` summary now points to this TODO for T3 backlog instead of expanding the list inline.
 
 ---
@@ -273,15 +283,17 @@ Current matrix snapshot (see `LINT-MATRIX.md`):
 
 Formalize the relationship between individual rule tests and processor conformance levels.
 
-- [ ] **PROFILE-GOV: Create Governance conformance profile tests.** New file: `profile_conformance.rs` (or section in `kernel_conformance.rs`).
+- [x] **PROFILE-GOV: Create Governance conformance profile tests.** New file: `profile_conformance.rs` (or section in `kernel_conformance.rs`).
   - G-051 (Governance Basic): Aggregate test collecting all fixtures for G-002, G-006, G-007, G-010, G-016, G-017, G-018. Passes iff all pass.
   - G-052 (Governance Complete): Aggregate test collecting ALL G-* fixtures. Passes iff all pass.
   - **Context:** These rules are profile-level claims, not individual behaviors. The fixture naming convention (`{rule-id}-{short-description}.json`) makes globbing straightforward. Each profile test discovers and runs all matching fixtures.
+  - **Done:** `crates/wos-conformance/tests/profile_conformance.rs` now exercises G-051 and G-052 and the matrix reflects them as E2E-covered.
 
-- [ ] **PROFILE-AI: Create AI conformance profile tests.**
+- [x] **PROFILE-AI: Create AI conformance profile tests.**
   - AI-001 (Agent Registration): Satisfied by all agent-involving fixtures (Batches 3, 4, 5, 10). Aggregate test.
   - AI-002 (Confidence Framework): Satisfied by Batch 5 fixtures (AI-034 through AI-038, AG-004, AG-016). Aggregate test.
   - **Context:** These are evidence-by-aggregation claims. Formalizing them as profile tests ensures they stay satisfied as the fixture set evolves.
+  - **Done:** `crates/wos-conformance/tests/profile_conformance.rs` now exercises AI-001 and AI-002, with the AI profile rule partition kept explicit and audit-visible.
 
 ---
 
@@ -297,7 +309,7 @@ Strengthen the lint-time analysis for AdvGov verifiable constraints.
   - **Context:** Implements AG-010 restriction 4 (finite domain enumerations) at lint time using AST-only analysis. No type registry needed for common cases. File: `wos-lint/src/rules/fel_analysis.rs`.
 
 - [x] **AG010-DECL: Add `finiteDomainDeclarations` to `VerifiableConstraint` schema.**
-  - Add to `wos-advanced.schema.json` under the `VerifiableConstraint` definition.
+  - Add to `schemas/advanced/wos-advanced.schema.json` under the `VerifiableConstraint` definition.
   - Format: `{ "path": { "domain": ["value1", "value2", ...] } }`.
   - Update `check_finite_domain_equality` to load declarations and suppress variable-to-variable warnings when a declaration covers one side of the equality.
   - Tests: declaration resolves warning, declaration missing still warns, invalid declaration ignored.

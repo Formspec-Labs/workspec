@@ -97,26 +97,28 @@ The kernel tags transitions with their nature (`review`, `determination`, `adver
 
 18 specs, 18 schemas. Every document validates against its schema.
 
+Schemas live under `schemas/` grouped like the normative specs: `kernel/`, `governance/`, `sidecars/`, `ai/`, `advanced/`, `profiles/`, and `companions/`. Published `$id` URIs (for example `https://wos-spec.org/schemas/kernel/1.0`) are unchanged.
+
 | Layer | Spec | Schema |
 |-------|------|--------|
-| Kernel | [`spec.md`](specs/kernel/spec.md) | [`wos-kernel`](schemas/wos-kernel.schema.json) |
-| Kernel sidecar | [`correspondence-metadata.md`](specs/kernel/correspondence-metadata.md) | [`wos-correspondence-metadata`](schemas/wos-correspondence-metadata.schema.json) |
-| Governance | [`workflow-governance.md`](specs/governance/workflow-governance.md) | [`wos-workflow-governance`](schemas/wos-workflow-governance.schema.json) |
-| Governance sidecar | [`due-process-config.md`](specs/governance/due-process-config.md) | [`wos-due-process`](schemas/wos-due-process.schema.json) |
-| Governance sidecar | [`assertion-library.md`](specs/governance/assertion-library.md) | [`wos-assertion-gate`](schemas/wos-assertion-gate.schema.json) |
-| Governance sidecar | [`policy-parameters.md`](specs/governance/policy-parameters.md) | [`wos-policy-parameters`](schemas/wos-policy-parameters.schema.json) |
-| Governance sidecar | [`business-calendar.md`](specs/sidecars/business-calendar.md) | [`wos-business-calendar`](schemas/wos-business-calendar.schema.json) |
-| Governance sidecar | [`notification-template.md`](specs/sidecars/notification-template.md) | [`wos-notification-template`](schemas/wos-notification-template.schema.json) |
-| AI Integration | [`ai-integration.md`](specs/ai/ai-integration.md) | [`wos-ai-integration`](schemas/wos-ai-integration.schema.json) |
-| AI sidecar | [`agent-config.md`](specs/ai/agent-config.md) | [`wos-agent-config`](schemas/wos-agent-config.schema.json) |
-| AI sidecar | [`drift-monitor.md`](specs/ai/drift-monitor.md) | [`wos-drift-monitor`](schemas/wos-drift-monitor.schema.json) |
-| Advanced | [`advanced-governance.md`](specs/advanced/advanced-governance.md) | [`wos-advanced`](schemas/wos-advanced.schema.json) |
-| Advanced sidecar | [`equity-config.md`](specs/advanced/equity-config.md) | [`wos-equity`](schemas/wos-equity.schema.json) |
-| Advanced sidecar | [`verification-report.md`](specs/advanced/verification-report.md) | [`wos-verification-report`](schemas/wos-verification-report.schema.json) |
-| Profile | [`integration.md`](specs/profiles/integration.md) | [`wos-integration-profile`](schemas/wos-integration-profile.schema.json) |
-| Profile | [`semantic.md`](specs/profiles/semantic.md) | [`wos-semantic-profile`](schemas/wos-semantic-profile.schema.json) |
-| Companion | [`lifecycle-detail.md`](specs/companions/lifecycle-detail.md) | [`wos-lifecycle-detail`](schemas/wos-lifecycle-detail.schema.json) |
-| Runtime | [`runtime.md`](specs/companions/runtime.md) | [`wos-case-instance`](schemas/wos-case-instance.schema.json) |
+| Kernel | [`spec.md`](specs/kernel/spec.md) | [`wos-kernel`](schemas/kernel/wos-kernel.schema.json) |
+| Kernel sidecar | [`correspondence-metadata.md`](specs/kernel/correspondence-metadata.md) | [`wos-correspondence-metadata`](schemas/kernel/wos-correspondence-metadata.schema.json) |
+| Governance | [`workflow-governance.md`](specs/governance/workflow-governance.md) | [`wos-workflow-governance`](schemas/governance/wos-workflow-governance.schema.json) |
+| Governance sidecar | [`due-process-config.md`](specs/governance/due-process-config.md) | [`wos-due-process`](schemas/governance/wos-due-process.schema.json) |
+| Governance sidecar | [`assertion-library.md`](specs/governance/assertion-library.md) | [`wos-assertion-gate`](schemas/governance/wos-assertion-gate.schema.json) |
+| Governance sidecar | [`policy-parameters.md`](specs/governance/policy-parameters.md) | [`wos-policy-parameters`](schemas/governance/wos-policy-parameters.schema.json) |
+| Governance sidecar | [`business-calendar.md`](specs/sidecars/business-calendar.md) | [`wos-business-calendar`](schemas/sidecars/wos-business-calendar.schema.json) |
+| Governance sidecar | [`notification-template.md`](specs/sidecars/notification-template.md) | [`wos-notification-template`](schemas/sidecars/wos-notification-template.schema.json) |
+| AI Integration | [`ai-integration.md`](specs/ai/ai-integration.md) | [`wos-ai-integration`](schemas/ai/wos-ai-integration.schema.json) |
+| AI sidecar | [`agent-config.md`](specs/ai/agent-config.md) | [`wos-agent-config`](schemas/ai/wos-agent-config.schema.json) |
+| AI sidecar | [`drift-monitor.md`](specs/ai/drift-monitor.md) | [`wos-drift-monitor`](schemas/ai/wos-drift-monitor.schema.json) |
+| Advanced | [`advanced-governance.md`](specs/advanced/advanced-governance.md) | [`wos-advanced`](schemas/advanced/wos-advanced.schema.json) |
+| Advanced sidecar | [`equity-config.md`](specs/advanced/equity-config.md) | [`wos-equity`](schemas/advanced/wos-equity.schema.json) |
+| Advanced sidecar | [`verification-report.md`](specs/advanced/verification-report.md) | [`wos-verification-report`](schemas/advanced/wos-verification-report.schema.json) |
+| Profile | [`integration.md`](specs/profiles/integration.md) | [`wos-integration-profile`](schemas/profiles/wos-integration-profile.schema.json) |
+| Profile | [`semantic.md`](specs/profiles/semantic.md) | [`wos-semantic-profile`](schemas/profiles/wos-semantic-profile.schema.json) |
+| Companion | [`lifecycle-detail.md`](specs/companions/lifecycle-detail.md) | [`wos-lifecycle-detail`](schemas/companions/wos-lifecycle-detail.schema.json) |
+| Runtime | [`runtime.md`](specs/companions/runtime.md) | [`wos-case-instance`](schemas/companions/wos-case-instance.schema.json) |
 
 ## Example
 
@@ -157,7 +159,7 @@ A minimal kernel document -- a purchase order approval with three states and two
 }
 ```
 
-This validates against `wos-kernel.schema.json`. No governance, no AI, no advanced features -- just orchestration. Add layers when the workflow demands them.
+This validates against `schemas/kernel/wos-kernel.schema.json`. No governance, no AI, no advanced features -- just orchestration. Add layers when the workflow demands them.
 
 ## What each layer provides
 
