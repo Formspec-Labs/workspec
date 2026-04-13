@@ -52,7 +52,7 @@
 | K-006 | Kernel S4.5 | Transition `target` MUST reference an existing state. | Cross-path reference resolution. | T1 | cross-reference | T1 |
 | K-007 | Kernel S4.10 / S13.3 | Event names MUST NOT use the `$` prefix (kernel-reserved). | Event name pattern not enforced. | T1 | lifecycle-soundness | T1 |
 | K-008 | Kernel S4.8 | Parallel state outgoing transitions MUST use `$join` as event. | Conditional event constraint by parent type. | T1 | lifecycle-soundness | T1+E2E |
-| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Uniqueness of nested `actors[].id` values is not enforced by schema. | T1 | actor-consistency | — |
+| K-009 | Kernel S3.3 | Actor identifiers MUST be unique. | Uniqueness of nested `actors[].id` values is not enforced by schema. | T1 | actor-consistency | T1 |
 | K-010 | Kernel S3.3 | createTask `assignTo` MUST reference a declared kernel actor. | Cross-path reference. | T2-xdoc | actor-consistency | tier2_rules.rs |
 | K-011 | Kernel S4.2 / LCD S2.1 | Same document + events MUST produce same transitions (determinism). | Runtime behavioral property. | T3 | determinism | E2E |
 | K-012 | Kernel S4.6 | Guards MUST be valid FEL expressions. | Opaque string in schema. | T2-ast | expression-validity | AST |
@@ -92,9 +92,9 @@
 | K-046 | LCD S6.7 | Timer lifecycle MUST produce provenance records. | Runtime obligation. | T3 | provenance | E2E |
 | K-047 | Kernel S5.5 | Case relationships MUST NOT affect lifecycle evaluation (metadata only). | Semantic constraint on processor behavior. | T3 | lifecycle-soundness | E2E |
 | K-048 | Kernel S5.5 | Case relationship `type` extensibility MUST use `x-` prefix for non-standard values. | Schema enum does not enforce prefix on extension values. | T1 | cross-reference | T1 |
-| CM-001 | CorrMeta S1.2 | Entry template `id` values MUST be unique within the sidecar. | Uniqueness of nested `entryTemplates[].id` values is not enforced by schema. | T1 | correspondence-validity | — |
+| CM-001 | CorrMeta S1.2 | Entry template `id` values MUST be unique within the sidecar. | Uniqueness of nested `entryTemplates[].id` values is not enforced by schema. | T1 | correspondence-validity | T1 |
 
-**Kernel + Correspondence:** 49 constraints — 17 T1, 6 T2, 26 T3. **Tested: 32 of 49** (15 T1, 4 AST, 2 T2, 11 E2E).
+**Kernel + Correspondence:** 49 constraints — 17 T1, 6 T2, 26 T3. **Tested: 34 of 49** (17 T1, 4 AST, 2 T2, 11 E2E).
 
 ---
 
@@ -267,10 +267,10 @@
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
-| Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 32 | 65% |
+| Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 34 | 69% |
 | Governance + Sidecars | 65 | 14 | 29 | 22 | 45 | 69% |
 | AI + Advanced | 82 | 5 | 20 | 57 | 27 | 33% |
-| **Total** | **196** | **36** | **55** | **105** | **104** | **53%** |
+| **Total** | **196** | **36** | **55** | **105** | **106** | **54%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -278,7 +278,7 @@
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
-| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 34 (K-001..K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
+| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 36 (K-001..K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 16 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047, G-051, G-052, AI-001, AI-002) |
@@ -287,7 +287,7 @@
 
 ## Verification Tools
 
-### Tier 1: `wos-lint` (35 rules)
+### Tier 1: `wos-lint` (36 rules)
 
 Single-document structural checks. Input: one JSON document + its `$wos*` type marker. Output: diagnostics with severity, path, rule ID. No dependencies beyond the document itself.
 
@@ -371,17 +371,17 @@ Event-driven test fixtures. Each fixture declares:
 
 ## Test Coverage Gaps
 
-Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
+Audit date: 2026-04-12. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
 
 | Metric | Count |
 |--------|-------|
 | Total rules in matrix | 196 |
-| Rules with at least one test | 104 |
-| Rules with **no** test | 92 |
+| Rules with at least one test | 106 |
+| Rules with **no** test | 90 |
 
-### Tested rule inventory (104 rules)
+### Tested rule inventory (106 rules)
 
-**From `tier1_rules.rs` (34 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-014, K-015, K-021, K-022, K-029, K-030, K-048, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
+**From `tier1_rules.rs` (36 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
 
 **From `tier2_rules.rs` (44 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 
@@ -393,12 +393,9 @@ Audit date: 2026-04-11. Cross-referenced against all test files in `crates/wos-l
 
 ### Gap list by tier
 
-#### T1 gaps (2 rules) -- open lint coverage gaps
+#### T1 gaps
 
-| ID | Note |
-|----|------|
-| K-009 | Kernel `actors` are modeled as an array in the current schema, so duplicate `actors[].id` values are representable and need an actual lint rule + test. |
-| CM-001 | Correspondence Metadata `entryTemplates[].id` uniqueness is now tracked in the matrix but has no lint rule or test yet. |
+No open Tier 1 lint coverage gaps. `K-009` and `CM-001` are now implemented in `tier1.rs` and covered in `tier1_rules.rs`.
 
 #### AI-003 (fallback load-time validation)
 

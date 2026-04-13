@@ -131,10 +131,10 @@ A minimal kernel document -- a purchase order approval with three states and two
   "version": "1.0.0",
   "status": "active",
   "impactLevel": "operational",
-  "actors": {
-    "requester": { "type": "human", "description": "Submits purchase requests" },
-    "approver":  { "type": "human", "description": "Reviews and approves requests" }
-  },
+  "actors": [
+    { "id": "requester", "type": "human", "description": "Submits purchase requests" },
+    { "id": "approver", "type": "human", "description": "Reviews and approves requests" }
+  ],
   "lifecycle": {
     "initialState": "submitted",
     "states": {
@@ -293,22 +293,22 @@ Three Rust crates implement WOS:
 
 | Crate | Purpose | Status |
 |-------|---------|--------|
-| `wos-core` | Typed domain models, evaluation algorithm, 9 host interface traits | Phase 3 -- typed models for kernel, governance, AI, and sidecars; evaluation algorithm implemented; migrating conformance engine |
-| `wos-lint` | Static analysis of WOS documents | 189 rules (30 T1 single-doc + 50 T2 cross-doc + 101 T3 dynamic). 76 tested. |
-| `wos-conformance` | Dynamic conformance test runner | 194 tests passing. Migrating to wos-core typed models. |
+| `wos-core` | Typed domain models, evaluation algorithm, CaseInstance, host interface traits | Typed models for kernel, governance, AI, and shipped sidecars; evaluation algorithm and runtime companion seams implemented. |
+| `wos-lint` | Static analysis of WOS documents | `LINT-MATRIX.md` tracks 196 normative constraints; 106 currently have test coverage across T1/T2/AST/E2E. |
+| `wos-conformance` | Dynamic conformance test runner | Thin harness over `wos-core` with kernel/provenance/profile coverage and 95 authored conformance fixtures. |
 
-Engine bindings (Camunda, Temporal, KIE, Flowable) are planned but not started. The current priority is completing the wos-core typed model extraction and writing conformance fixtures for untested governance rules. See [`TODO.md`](TODO.md) for the full implementation roadmap.
+Engine bindings (Camunda, Temporal, KIE, Flowable) are planned but not started. The current priority is implementation/bindings work and keeping the companion docs aligned with the landed runtime/core work. See [`TODO.md`](TODO.md) for the implementation record.
 
 ### Critical gap: Formspec Coprocessor
 
-No specified handoff protocol exists between Formspec forms and WOS workflows. When a Formspec form submission completes, the system must create a WOS case instance, map response data to case file fields, and validate the response before firing the workflow event. This protocol -- the Formspec Coprocessor -- is the missing piece connecting intake to governance. It blocks the enterprise SaaS roadmap and is the highest-priority spec to write next.
+The Formspec coprocessor protocol is now specified in Runtime Companion S15. It defines how a Formspec-backed WOS task is presented, drafted, submitted, validated, mapped into case state, and recorded in provenance. The remaining work is implementation and conformance, not missing normative protocol design.
 
 ## Companion Documents
 
 | Document | Purpose |
 |----------|---------|
-| [`TODO.md`](TODO.md) | Implementation roadmap: 7 phases from spec prose through engine capabilities |
-| [`LINT-MATRIX.md`](LINT-MATRIX.md) | All 189 lint rules with test status and spec citations |
+| [`TODO.md`](TODO.md) | Live implementation roadmap and audit backlog |
+| [`LINT-MATRIX.md`](LINT-MATRIX.md) | 196 normative constraints with test status and spec citations |
 | [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md) | Competitive comparison against 16 platforms with implementation status and audit corrections |
 | [`enterprise-feature-gaps.md`](enterprise-feature-gaps.md) | Formspec SaaS platform gaps vs. enterprise competitors (Adobe, ServiceNow, DocuSign) |
 | [`enterprise-implementation-roadmap.md`](enterprise-implementation-roadmap.md) | 6-phase SaaS build plan with WOS governance dependencies |
@@ -318,9 +318,9 @@ No specified handoff protocol exists between Formspec forms and WOS workflows. W
 
 WOS is part of the Formspec project, maintained by Michael Deeb under AGPL-3.0. The specification is pre-release with no production deployments.
 
-**What exists:** 18 specs, 18 schemas, 24 conformance fixtures covering all four vertical layers, two parallel seam profiles, one companion, one runtime companion, and five governance sidecars. 189 lint rules. 194 passing tests. All schemas pass LLM-authoring validation (an LLM given only the schema and a one-paragraph workflow description produces valid, semantically correct documents). Seven rounds of semi-formal code review have been completed with all findings addressed.
+**What exists:** 18 specs, 18 schemas, 39 document fixtures, 95 conformance fixtures, two companion specs (Lifecycle Detail and Runtime), three Rust crates (`wos-core`, `wos-lint`, `wos-conformance`), and 196 tracked normative constraints with 106 currently covered by tests. Runtime Companion S15 and the CaseInstance schema are landed. All schemas pass LLM-authoring validation (an LLM given only the schema and a one-paragraph workflow description produces valid, semantically correct documents). Seven rounds of semi-formal code review have been completed with all findings addressed.
 
-**What does not exist:** Production deployments. Engine bindings. A conformance test suite beyond fixture validation. The Formspec Coprocessor handoff protocol. Formal accessibility or compliance audits (WCAG, FedRAMP, NIST 800-53). An organizational governance body beyond the maintainer. Normative **FEL-RECORDS** semantics (quantifiers over array-of-record rows with a stable `$` story) and the **Runtime Companion S15** coprocessor handoff — see `TODO.md` Phase 11.
+**What does not exist:** Production deployments. Engine bindings. Full Tier 3 conformance coverage for all dynamic rules. Formal accessibility or compliance audits (WCAG, FedRAMP, NIST 800-53). An organizational governance body beyond the maintainer.
 
 **Sustainability model:** WOS documents are JSON files under your control, validated against published JSON Schemas. The specification is a public document any team can implement independently. If the project stopped today, your workflow documents remain usable by any JSON-capable system -- the spec is the product, not a service.
 

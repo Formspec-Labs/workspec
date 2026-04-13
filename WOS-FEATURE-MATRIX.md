@@ -376,14 +376,14 @@ This is not "BPMN in JSON." It is a governance document that happens to be execu
 | **wos-core crate** | 🟦 | Typed models for kernel/governance/AI/sidecars; evaluation algorithm; 9 traits; default runtime |
 | **wos-lint crate** | 🟦 | 189 rules defined; 76 tested; T1 & T2 mostly covered; T3 needs fixtures |
 | **wos-conformance crate** | 🟦 | Dynamic test runner; 194 tests passing; migrating to wos-core typed models |
-| **Formspec Coprocessor** | ⚪ | Handoff protocol between Formspec forms and WOS workflows not yet specified (see below) |
+| **Formspec Coprocessor** | 📋 | Runtime Companion S15 specifies the handoff protocol between Formspec forms and WOS workflows |
 | **Engine capabilities** | 🟡 | Deontic, compensation, confidence, DCR, delegation, autonomy, due process, pipelines |
 | **Engine bindings** | ⚪ | Camunda, KIE, Flowable, Temporal bindings not yet started |
 | **Documentation** | ⚪ | README updates, architecture docs, API docs |
 
-### Critical Dependency: Formspec Coprocessor
+### Formspec Coprocessor
 
-The most significant architectural gap for SaaS deployment: there is no specified handoff protocol between WOS tasks and Formspec forms. This gap blocks the enterprise implementation roadmap (Phase 1.3). Needs to address:
+Runtime Companion S15 now specifies the handoff protocol between WOS tasks and Formspec forms. The remaining work for SaaS deployment is implementation, conformance, and bindings. The protocol addresses:
 
 - How `createTask` with a Formspec `contractRef` causes a form to be presented to an actor
 - How a completed Response flows back into WOS `caseFile`
@@ -391,7 +391,7 @@ The most significant architectural gap for SaaS deployment: there is no specifie
 - Whether Response is validated before the workflow event fires
 - Respondent Ledger integration for rights-impacting workflows
 
-Best addressed as a "Formspec Coprocessor" section in the Runtime Companion or a new sidecar spec.
+This is now addressed as a Runtime Companion section (S15), not a missing future spec.
 
 ### What's Next (by phase)
 
@@ -400,7 +400,7 @@ Best addressed as a "Formspec Coprocessor" section in the Runtime Companion or a
 3. **Phase 5**: Implement 10 engine capability modules
 4. **Phase 6**: Migrate wos-lint to typed model field access
 5. **Phase 7**: Documentation
-6. **Future**: Formspec Coprocessor spec; engine bindings (Camunda, KIE, Temporal); reference implementation; adoption wedge document
+6. **Future**: engine bindings (Camunda, KIE, Temporal); reference implementation; adoption wedge document
 
 ---
 
