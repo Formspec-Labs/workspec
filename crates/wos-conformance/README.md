@@ -55,7 +55,7 @@ Each conformance test is a JSON fixture declaring documents, an event sequence, 
 use wos_conformance::run_fixture;
 
 let fixture_json = std::fs::read_to_string("fixture.json").unwrap();
-let result = run_fixture(&fixture_json).unwrap();
+let result = run_fixture(&fixture_json, ".").unwrap();
 
 assert!(result.passed, "failures: {:?}", result.failures);
 
@@ -67,6 +67,20 @@ for p in &result.provenance {
     println!("{:?}: {:?}", p.record_kind, p.event);
 }
 ```
+
+## Processor Reports
+
+Batch 16 processor claims can also be emitted as a report artifact:
+
+```bash
+cargo run -p wos-conformance --bin wos-conformance-report -- \
+  --manifest processor-manifest.json \
+  --format text
+```
+
+The report uses `verify_processor_manifest()` under the hood, prints either
+JSON or a readable text summary, and exits nonzero if any claimed meta-rule
+fails verification.
 
 ## Engine
 

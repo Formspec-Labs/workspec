@@ -12,11 +12,18 @@
 
 mod engine;
 mod fixture;
+mod meta;
 mod provenance;
 pub mod stubs;
 
 pub use engine::WorkflowEngine;
 pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
+pub use meta::{
+    AssistGovernanceProxyEvidence, ClaimStatus, ClaimVerification,
+    DelegatedFormspecEvaluationEvidence, ProcessorClaims, ProcessorConformanceReport,
+    ProcessorEvidence, ProcessorManifest, observe_assist_governance_proxy,
+    observe_delegated_formspec_evaluation, verify_processor_manifest,
+};
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{InMemoryStore, StubService, StubValidator};
 
