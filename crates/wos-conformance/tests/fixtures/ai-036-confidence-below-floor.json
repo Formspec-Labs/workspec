@@ -1,6 +1,7 @@
 {
   "id": "AI-036-confidence-below-floor",
   "rule": "AI-036",
+  "batch": 5,
   "description": "Confidence below floor MUST invalidate output (AI S7.4). Agent confidence of 0.70 is below the 0.85 floor, triggering escalation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

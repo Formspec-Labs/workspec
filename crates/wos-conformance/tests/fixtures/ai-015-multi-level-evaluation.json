@@ -1,6 +1,7 @@
 {
   "id": "AI-015-multi-level-evaluation",
   "rule": "AI-015",
+  "batch": 3,
   "description": "All constraints at all three composition levels (agent, action-site, workflow) MUST be evaluated (AI S4.7). Provenance must show evaluation at each level.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

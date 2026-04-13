@@ -1,6 +1,7 @@
 {
   "id": "AI-055-consistency-contradiction",
   "rule": "AI-055",
+  "batch": 3,
   "description": "Consistency constraints MUST detect contradictions between output and case data (AI S4.7). Agent reports income of 200k but case file shows 50k verified income.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

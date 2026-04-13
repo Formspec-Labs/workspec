@@ -1,6 +1,7 @@
 {
   "id": "AI-051-proxy-deontic",
   "rule": "AI-051",
+  "batch": 3,
   "description": "Assist Governance Proxy MUST apply deontic constraints to tool invocations (AI S14.2). Proxy-governed tool calls are subject to the same deontic evaluation as direct agent actions.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

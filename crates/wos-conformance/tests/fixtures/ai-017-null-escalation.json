@@ -1,6 +1,7 @@
 {
   "id": "AI-017-null-escalation",
   "rule": "AI-017",
+  "batch": 3,
   "description": "Null deontic expression in rights/safety workflow MUST escalate to human (AI S4.9). When a deontic condition evaluates to null in a rights-impacting workflow, the processor must escalate.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-030-dynamic-autonomy-cap",
   "rule": "AI-030",
+  "batch": 4,
   "description": "Dynamic autonomy MUST NOT exceed effective cap (AI S5.6). Even with a FEL expression that computes higher autonomy, the result is capped.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

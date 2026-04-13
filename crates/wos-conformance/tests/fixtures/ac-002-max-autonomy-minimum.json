@@ -1,6 +1,7 @@
 {
   "id": "AC-002-max-autonomy-minimum",
   "rule": "AC-002",
+  "batch": 4,
   "description": "maxAutonomy from agent config participates in cross-document minimum (AgentConfig S1.4). Agent config declares maxAutonomy of autonomous, but impact level caps it lower.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

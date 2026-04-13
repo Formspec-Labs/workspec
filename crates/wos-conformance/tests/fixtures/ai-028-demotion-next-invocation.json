@@ -1,6 +1,7 @@
 {
   "id": "AI-028-demotion-next-invocation",
   "rule": "AI-028",
+  "batch": 4,
   "description": "Demotion takes effect for next invocation; in-flight annotated (AI S5.5). Current invocation completes but is annotated as demoted; next invocation uses demoted autonomy.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-006-agent-provenance-fields",
   "rule": "AI-006",
+  "batch": 10,
   "description": "Agent provenance MUST include model identifier, version, confidence, input summary (AI S3.7).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

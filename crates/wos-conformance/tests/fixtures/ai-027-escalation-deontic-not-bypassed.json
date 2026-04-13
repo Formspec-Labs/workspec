@@ -1,6 +1,7 @@
 {
   "id": "AI-027-escalation-deontic-not-bypassed",
   "rule": "AI-027",
+  "batch": 3,
   "description": "Escalation does NOT bypass deontic constraints (AI S5.4). Even when an agent has been escalated to a higher autonomy level, deontic constraints still apply.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

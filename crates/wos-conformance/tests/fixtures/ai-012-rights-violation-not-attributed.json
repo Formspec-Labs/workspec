@@ -1,6 +1,7 @@
 {
   "id": "AI-012-rights-violation-not-attributed",
   "rule": "AI-012",
+  "batch": 3,
   "description": "Rights violation MUST NOT be attributed to the agent (AI S4.5). When agent output violates a right, the provenance record must identify the violation as a system/process issue, not agent fault.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

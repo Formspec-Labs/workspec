@@ -1,6 +1,7 @@
 {
   "id": "AI-032-validation-triggers-fallback",
   "rule": "AI-032",
+  "batch": 10,
   "description": "Validation failures MUST trigger fallback, not silent acceptance (AI S6.2). When contract validation fails, the fallback chain executes.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

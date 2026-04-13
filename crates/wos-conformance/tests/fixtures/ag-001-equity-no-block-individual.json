@@ -1,6 +1,7 @@
 {
   "id": "AG-001-equity-no-block-individual",
   "rule": "AG-001",
+  "batch": 12,
   "description": "Equity guardrails MUST NOT block individual actions (AdvGov S3.3). Even when a disparity alert fires, the individual determination proceeds. Suspension affects aggregate agent processing, not individual cases.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/dcr-zone.json",

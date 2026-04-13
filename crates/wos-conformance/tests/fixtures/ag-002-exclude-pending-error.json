@@ -1,6 +1,7 @@
 {
   "id": "AG-002-exclude-pending-error",
   "rule": "AG-002",
+  "batch": 12,
   "description": "Excluding a pending activity MUST raise resolution error (AdvGov S4.4). When an exclude relation targets an activity that is both included and pending, the processor raises a resolution error.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/dcr-zone.json",

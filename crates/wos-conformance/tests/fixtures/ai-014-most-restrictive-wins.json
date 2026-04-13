@@ -1,6 +1,7 @@
 {
   "id": "AI-014-most-restrictive-wins",
   "rule": "AI-014",
+  "batch": 3,
   "description": "When multiple constraints violated simultaneously, the most restrictive enforcement action applies (AI S4.6). Both a reject and escalateToHuman violation should produce reject (most restrictive).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-057-processor-enforces-constraints",
   "rule": "AI-057",
+  "batch": 10,
   "description": "WOS Processor enforces constraints; agent cannot weaken its own constraints (AI S3.5). Agent attempts to modify its own deontic constraint; processor rejects.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

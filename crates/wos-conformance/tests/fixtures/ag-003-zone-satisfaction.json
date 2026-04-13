@@ -1,6 +1,7 @@
 {
   "id": "AG-003-zone-satisfaction",
   "rule": "AG-003",
+  "batch": 12,
   "description": "Zone satisfied when all pending executed and no included activity pending+unexecuted (AdvGov S4.5). After executing all pending activities, the zone raises constraintZone.satisfied.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/dcr-zone.json",

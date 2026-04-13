@@ -1,6 +1,7 @@
 {
   "id": "AI-038-cumulative-confidence-pause",
   "rule": "AI-038",
+  "batch": 5,
   "description": "Cumulative confidence below floor MUST pause for human review (AI S7.7). Across a session of multiple outputs, cumulative confidence drops below threshold.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-040-terminal-fallback",
   "rule": "AI-040",
+  "batch": 10,
   "description": "Terminal fallback MUST produce result or human task (AI S8.2). After exhausting retries, the final fallback escalates to human.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

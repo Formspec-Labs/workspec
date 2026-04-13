@@ -1,6 +1,7 @@
 {
   "id": "AI-029-pending-recalibration",
   "rule": "AI-029",
+  "batch": 4,
   "description": "pendingRecalibration keeps demoted level until escalation conditions met (AI S5.5). After demotion, agent stays at demoted level even if it performs well, until formal recalibration.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

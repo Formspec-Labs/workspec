@@ -1,6 +1,7 @@
 {
   "id": "AI-019-assistive-creates-human-task",
   "rule": "AI-019",
+  "batch": 4,
   "description": "Assistive actions MUST create a human task for confirmation (AI S5.3). When an agent at assistive autonomy produces output, a confirmation task must be created.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

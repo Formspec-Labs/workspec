@@ -1,6 +1,7 @@
 {
   "id": "AI-009-permission-bounds",
   "rule": "AI-009",
+  "batch": 3,
   "description": "Permission bounds evaluated against live agent output (AI S4.2). Agent output with income outside permitted range triggers rejection.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

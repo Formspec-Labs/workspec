@@ -1,6 +1,7 @@
 {
   "id": "AI-033-agent-touched-annotation",
   "rule": "AI-033",
+  "batch": 10,
   "description": "Agent-touched fields MUST be annotated with agentProvenance (AI S6.2).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

@@ -1,6 +1,7 @@
 {
   "id": "AG-004-session-pause",
   "rule": "AG-004",
+  "batch": 5,
   "description": "Cumulative confidence below floor MUST pause session at next checkpoint (AdvGov S5.4). Session pauses at the next checkpoint when cumulative confidence drops.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

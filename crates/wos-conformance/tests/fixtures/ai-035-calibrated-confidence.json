@@ -1,6 +1,7 @@
 {
   "id": "AI-035-calibrated-confidence",
   "rule": "AI-035",
+  "batch": 5,
   "description": "modelNative confidence MUST be calibrated (AI S7.2). Uncalibrated confidence scores are flagged in provenance.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

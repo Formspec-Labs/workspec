@@ -14,6 +14,13 @@ pub struct ConformanceFixture {
     /// LINT-MATRIX rule this fixture tests.
     pub rule: String,
 
+    /// Backlog batch that introduced this fixture.
+    ///
+    /// Profile aggregation uses batch membership so profile evidence tracks the
+    /// fixture inventory directly instead of duplicating rule lists in tests.
+    #[serde(default)]
+    pub batch: Option<u8>,
+
     /// Human-readable description.
     pub description: String,
 

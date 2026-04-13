@@ -1,6 +1,7 @@
 {
   "id": "AC-001-expired-calibration-cap",
   "rule": "AC-001",
+  "batch": 4,
   "description": "Expired calibration caps autonomy at assistive (AgentConfig S1.3). When calibration is expired, agent autonomy is capped regardless of declaration.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

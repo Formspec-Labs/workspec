@@ -1,6 +1,7 @@
 {
   "id": "AI-013-evaluation-order",
   "rule": "AI-013",
+  "batch": 3,
   "description": "Deontic constraints MUST be evaluated in order: Permissions, Prohibitions, Obligations, Confidence, Volume, Sampling (AI S4.6). Provenance must reflect this ordering.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

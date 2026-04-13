@@ -1,6 +1,7 @@
 {
   "id": "AG-016-review-ground-truth",
   "rule": "AG-016",
+  "batch": 5,
   "description": "Every review provides ground-truth label (AdvGov S9.3). When a human reviews agent output, the review record must include a ground-truth label for calibration.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

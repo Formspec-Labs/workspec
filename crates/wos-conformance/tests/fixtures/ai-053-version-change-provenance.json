@@ -1,6 +1,7 @@
 {
   "id": "AI-053-version-change-provenance",
   "rule": "AI-053",
+  "batch": 10,
   "description": "Version change MUST emit agentVersionChange provenance (AI S3.4).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

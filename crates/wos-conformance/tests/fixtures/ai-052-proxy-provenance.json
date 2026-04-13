@@ -1,6 +1,7 @@
 {
   "id": "AI-052-proxy-provenance",
   "rule": "AI-052",
+  "batch": 10,
   "description": "Proxy MUST produce provenance per governed invocation (AI S14.2).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

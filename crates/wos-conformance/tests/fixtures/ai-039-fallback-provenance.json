@@ -1,6 +1,7 @@
 {
   "id": "AI-039-fallback-provenance",
   "rule": "AI-039",
+  "batch": 10,
   "description": "Every fallback attempt MUST produce provenance (AI S8.2).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

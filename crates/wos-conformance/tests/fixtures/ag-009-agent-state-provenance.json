@@ -1,6 +1,7 @@
 {
   "id": "AG-009-agent-state-provenance",
   "rule": "AG-009",
+  "batch": 10,
   "description": "Agent state transitions MUST produce provenance; suspension pauses in-flight sessions (AdvGov S7.2).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

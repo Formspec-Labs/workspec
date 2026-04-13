@@ -1,6 +1,7 @@
 {
   "id": "AI-011-obligation-requirement",
   "rule": "AI-011",
+  "batch": 3,
   "description": "Obligation requirement evaluated against live output (AI S4.4). Agent output missing confidence report triggers rejection.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

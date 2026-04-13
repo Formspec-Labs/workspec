@@ -1,6 +1,7 @@
 {
   "id": "AI-037-decay-trigger",
   "rule": "AI-037",
+  "batch": 5,
   "description": "DecayTrigger multiplies confidence; below floor triggers escalation (AI S7.5). A decay event reduces confidence from 0.90 by factor 0.7 to 0.63, which is below the 0.85 floor.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

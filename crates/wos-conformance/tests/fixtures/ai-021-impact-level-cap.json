@@ -1,6 +1,7 @@
 {
   "id": "AI-021-impact-level-cap",
   "rule": "AI-021",
+  "batch": 4,
   "description": "Effective autonomy MUST NOT exceed impact-level cap (AI S5.3). In a rights-impacting workflow, autonomy is capped at assistive regardless of agent declaration.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

@@ -168,9 +168,7 @@ fn set_data_produces_case_state_mutation_provenance() {
 
 // ── T3 conformance fixtures (Phase 4) ───────────────────────────
 //
-// These tests are #[ignore]d because they require engine capabilities
-// not yet implemented (Phase 5). Run `cargo test -- --ignored` to see
-// which capabilities are needed.
+// These fixture-backed tests run as part of the normal conformance suite.
 
 // ── Batch 1: Cancel-siblings / fail-fast ────────────────────────
 

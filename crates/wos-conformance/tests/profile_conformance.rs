@@ -13,29 +13,8 @@ use wos_conformance::{ConformanceFixture, run_fixture};
 const GOVERNANCE_BASIC_RULES: &[&str] = &[
     "G-002", "G-006", "G-007", "G-010", "G-016", "G-017", "G-018",
 ];
-
-const AI_REGISTRATION_RULES: &[&str] = &[
-    "AI-005", "AI-006", "AI-008", "AI-009", "AI-010", "AI-011", "AI-012", "AI-013", "AI-014",
-    "AI-015", "AI-016", "AI-017", "AI-019", "AI-021", "AI-022", "AI-025", "AI-027", "AI-028",
-    "AI-029", "AI-030", "AI-032", "AI-033", "AI-034", "AI-035", "AI-036", "AI-037", "AI-038",
-    "AI-039", "AI-040", "AI-044", "AI-047", "AI-051", "AI-052", "AI-053", "AI-054", "AI-055",
-    "AI-057", "AC-001", "AC-002", "AG-004", "AG-005", "AG-006", "AG-007", "AG-009", "AG-016",
-];
-
-const AI_REGISTRATION_EXCLUDED_RULES: &[&str] =
-    &["AG-001", "AG-002", "AG-003", "AG-015", "AI-045", "AI-048"];
-
-const AI_CONFIDENCE_RULES: &[&str] = &[
-    "AI-034", "AI-035", "AI-036", "AI-037", "AI-038", "AG-004", "AG-016",
-];
-
-const AI_CONFIDENCE_EXCLUDED_RULES: &[&str] = &[
-    "AI-005", "AI-006", "AI-008", "AI-009", "AI-010", "AI-011", "AI-012", "AI-013", "AI-014",
-    "AI-015", "AI-016", "AI-017", "AI-019", "AI-021", "AI-022", "AI-025", "AI-027", "AI-028",
-    "AI-029", "AI-030", "AI-032", "AI-033", "AI-039", "AI-040", "AI-044", "AI-047", "AI-051",
-    "AI-052", "AI-053", "AI-054", "AI-055", "AI-057", "AC-001", "AC-002", "AG-005", "AG-006",
-    "AG-007", "AG-009",
-];
+const AI_REGISTRATION_BATCHES: &[u8] = &[3, 4, 5, 10];
+const AI_CONFIDENCE_BATCHES: &[u8] = &[5];
 
 #[derive(Debug)]
 struct FixtureSpec {
@@ -104,62 +83,50 @@ fn assert_required_rules_present(
     );
 }
 
-fn assert_rule_partition(
-    partition_name: &str,
-    universe_rules: &BTreeSet<String>,
-    included_rules: &[&str],
-    excluded_rules: &[&str],
-) {
-    let included: BTreeSet<String> = included_rules
+fn ai_family_specs() -> Vec<FixtureSpec> {
+    load_fixture_specs()
+        .into_iter()
+        .filter(|spec| {
+            ["AI-", "AG-", "AC-"]
+                .iter()
+                .any(|prefix| spec.fixture.rule.starts_with(prefix))
+        })
+        .collect()
+}
+
+fn assert_ai_family_batches_declared(specs: &[FixtureSpec]) {
+    let missing_batches: Vec<&str> = specs
         .iter()
-        .map(|rule| (*rule).to_string())
-        .collect();
-    let excluded: BTreeSet<String> = excluded_rules
-        .iter()
-        .map(|rule| (*rule).to_string())
+        .filter(|spec| spec.fixture.batch.is_none())
+        .map(|spec| spec.file_name.as_str())
         .collect();
 
-    let overlap: Vec<&String> = included.intersection(&excluded).collect();
     assert!(
-        overlap.is_empty(),
-        "partition '{partition_name}' overlaps between include/exclude sets: {}",
-        overlap
-            .into_iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-
-    let covered: BTreeSet<String> = included.union(&excluded).cloned().collect();
-    let missing: Vec<&String> = universe_rules.difference(&covered).collect();
-    let unknown: Vec<&String> = covered.difference(universe_rules).collect();
-
-    assert!(
-        missing.is_empty(),
-        "partition '{partition_name}' is missing rules: {}",
-        missing
-            .into_iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    assert!(
-        unknown.is_empty(),
-        "partition '{partition_name}' references unknown rules: {}",
-        unknown
-            .into_iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
+        missing_batches.is_empty(),
+        "AI-family fixtures missing batch metadata: {}",
+        missing_batches.join(", ")
     );
 }
 
-fn fixture_rules_with_prefixes(prefixes: &[&str]) -> BTreeSet<String> {
-    load_fixture_specs()
-        .into_iter()
-        .map(|spec| spec.fixture.rule)
-        .filter(|rule| prefixes.iter().any(|prefix| rule.starts_with(prefix)))
-        .collect()
+fn assert_profile_batches_present(
+    profile_name: &str,
+    specs: &[FixtureSpec],
+    required_batches: &[u8],
+) {
+    let present_batches: BTreeSet<u8> =
+        specs.iter().filter_map(|spec| spec.fixture.batch).collect();
+    let missing_batches: Vec<String> = required_batches
+        .iter()
+        .copied()
+        .filter(|batch| !present_batches.contains(batch))
+        .map(|batch| batch.to_string())
+        .collect();
+
+    assert!(
+        missing_batches.is_empty(),
+        "profile '{profile_name}' is missing fixture coverage for batches: {}",
+        missing_batches.join(", ")
+    );
 }
 
 fn assert_profile_passes<F>(profile_name: &str, matches_profile: F, required_rules: Option<&[&str]>)
@@ -237,37 +204,34 @@ fn governance_complete_profile_passes() {
 
 #[test]
 fn ai_registration_profile_passes() {
-    let agent_rule_universe = fixture_rules_with_prefixes(&["AI-", "AG-", "AC-"]);
-    assert_rule_partition(
-        "AI Registration",
-        &agent_rule_universe,
-        AI_REGISTRATION_RULES,
-        AI_REGISTRATION_EXCLUDED_RULES,
-    );
+    let ai_specs = ai_family_specs();
+    assert_ai_family_batches_declared(&ai_specs);
+    assert_profile_batches_present("AI Registration", &ai_specs, AI_REGISTRATION_BATCHES);
 
     assert_profile_passes(
         "AI Registration",
-        |spec| AI_REGISTRATION_RULES.contains(&spec.fixture.rule.as_str()),
-        Some(AI_REGISTRATION_RULES),
+        |spec| {
+            spec.fixture
+                .batch
+                .is_some_and(|batch| AI_REGISTRATION_BATCHES.contains(&batch))
+        },
+        None,
     );
 }
 
 #[test]
 fn ai_confidence_framework_profile_passes() {
-    let ai_registration_universe: BTreeSet<String> = AI_REGISTRATION_RULES
-        .iter()
-        .map(|rule| (*rule).to_string())
-        .collect();
-    assert_rule_partition(
-        "AI Confidence Framework",
-        &ai_registration_universe,
-        AI_CONFIDENCE_RULES,
-        AI_CONFIDENCE_EXCLUDED_RULES,
-    );
+    let ai_specs = ai_family_specs();
+    assert_ai_family_batches_declared(&ai_specs);
+    assert_profile_batches_present("AI Confidence Framework", &ai_specs, AI_CONFIDENCE_BATCHES);
 
     assert_profile_passes(
         "AI Confidence Framework",
-        |spec| AI_CONFIDENCE_RULES.contains(&spec.fixture.rule.as_str()),
-        Some(AI_CONFIDENCE_RULES),
+        |spec| {
+            spec.fixture
+                .batch
+                .is_some_and(|batch| AI_CONFIDENCE_BATCHES.contains(&batch))
+        },
+        None,
     );
 }

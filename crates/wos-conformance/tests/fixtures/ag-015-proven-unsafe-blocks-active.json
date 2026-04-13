@@ -1,6 +1,7 @@
 {
   "id": "AG-015-proven-unsafe-blocks-active",
   "rule": "AG-015",
+  "batch": 14,
   "description": "Proven-unsafe constraint MUST be corrected before workflow reaches active (AdvGov S8.3). A verification report with a proven-unsafe result blocks the workflow from being activated.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/dcr-zone.json",

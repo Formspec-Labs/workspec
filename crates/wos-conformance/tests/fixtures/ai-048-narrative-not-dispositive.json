@@ -1,6 +1,7 @@
 {
   "id": "AI-048-narrative-not-dispositive",
   "rule": "AI-048",
+  "batch": 13,
   "description": "Narrative tier MUST NOT be treated as dispositive evidence (AI S13.2). Downstream processing that relies on narrative tier records as the sole basis for a determination is a violation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

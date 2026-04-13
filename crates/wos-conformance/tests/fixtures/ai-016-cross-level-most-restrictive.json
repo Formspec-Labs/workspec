@@ -1,6 +1,7 @@
 {
   "id": "AI-016-cross-level-most-restrictive",
   "rule": "AI-016",
+  "batch": 3,
   "description": "Same-level most-restrictive resolution: two obligation violations with different enforcement actions at agent level — reject wins over escalateToHuman (AI S4.6).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

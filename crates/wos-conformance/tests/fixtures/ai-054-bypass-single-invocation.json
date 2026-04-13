@@ -1,6 +1,7 @@
 {
   "id": "AI-054-bypass-single-invocation",
   "rule": "AI-054",
+  "batch": 3,
   "description": "Deontic bypass applies to single invocation only; MUST produce provenance with rationale (AI S4.7). A bypass on one invocation does not carry to the next — the second invocation without bypass MUST detect the violation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

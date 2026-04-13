@@ -1,6 +1,7 @@
 {
   "id": "AG-007-tool-rate-limit",
   "rule": "AG-007",
+  "batch": 4,
   "description": "Tool invocations MUST respect rate limits (AdvGov S6.1). Agent exceeds lookupPrecedent rate limit of 10/minute.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

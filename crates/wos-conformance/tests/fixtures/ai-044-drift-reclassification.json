@@ -1,6 +1,7 @@
 {
   "id": "AI-044-drift-reclassification",
   "rule": "AI-044",
+  "batch": 10,
   "description": "Training data contamination triggers reclassification to determination (AI S9.3). When drift detection finds contamination, the action is reclassified.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-025-escalation-requires-approval",
   "rule": "AI-025",
+  "batch": 4,
   "description": "Human approval required for escalation (AI S5.4). Agent meets escalation conditions but cannot escalate without explicit human approval event.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

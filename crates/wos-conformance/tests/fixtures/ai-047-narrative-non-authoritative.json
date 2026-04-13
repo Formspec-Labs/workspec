@@ -1,6 +1,7 @@
 {
   "id": "AI-047-narrative-non-authoritative",
   "rule": "AI-047",
+  "batch": 10,
   "description": "Narrative tier provenance MUST be labeled non-authoritative (AI S13.2).",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

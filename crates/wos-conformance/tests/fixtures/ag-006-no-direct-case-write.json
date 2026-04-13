@@ -1,6 +1,7 @@
 {
   "id": "AG-006-no-direct-case-write",
   "rule": "AG-006",
+  "batch": 4,
   "description": "Agent MUST NOT write to case file directly (AdvGov S6.1). Agent attempts direct case file mutation; processor blocks.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",

@@ -1,6 +1,7 @@
 {
   "id": "AI-008-actor-type-immutable",
   "rule": "AI-008",
+  "batch": 10,
   "description": "Actor type is immutable for a given action (AI S3.7). An agent cannot change its declared type mid-action.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",

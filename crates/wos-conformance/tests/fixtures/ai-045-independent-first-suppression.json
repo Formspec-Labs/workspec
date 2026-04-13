@@ -1,6 +1,7 @@
 {
   "id": "AI-045-independent-first-suppression",
   "rule": "AI-045",
+  "batch": 6,
   "description": "independentFirst suppression MUST hide agent output until independent assessment recorded (AI S10.2). Human reviewer must not see agent recommendation before recording their own assessment.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/due-process.json",
