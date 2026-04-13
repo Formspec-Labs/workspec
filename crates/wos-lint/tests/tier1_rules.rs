@@ -99,6 +99,15 @@ fn minimal_ai_integration_document() -> serde_json::Value {
     })
 }
 
+fn minimal_correspondence_metadata() -> serde_json::Value {
+    json!({
+        "$wosCorrespondenceMetadata": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL,
+        "correspondenceField": "caseFile.correspondence",
+        "entryTemplates": []
+    })
+}
+
 // ========================================================================
 // K-001: Final states MUST NOT have outgoing transitions.
 // ========================================================================
@@ -555,6 +564,35 @@ fn k008_parallel_outgoing_join_clean() {
     });
     let diags = lint(doc);
     assert!(!has_rule(&diags, "K-008"), "unexpected K-008: {diags:?}");
+}
+
+// ========================================================================
+// K-009: Actor identifiers MUST be unique.
+// ========================================================================
+
+#[test]
+fn k009_duplicate_actor_ids_flagged() {
+    let mut doc = minimal_kernel();
+    doc["actors"] = json!([
+        { "id": "worker", "type": "human" },
+        { "id": "worker", "type": "system" }
+    ]);
+
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "K-009"), "expected K-009: {diags:?}");
+    assert_eq!(path_of(&diags, "K-009"), Some("/actors/1/id".to_string()));
+}
+
+#[test]
+fn k009_unique_actor_ids_clean() {
+    let mut doc = minimal_kernel();
+    doc["actors"] = json!([
+        { "id": "worker", "type": "human" },
+        { "id": "system-worker", "type": "system" }
+    ]);
+
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "K-009"), "unexpected K-009: {diags:?}");
 }
 
 // ========================================================================
@@ -1467,7 +1505,10 @@ fn g059_operating_hours_invalid_hhmm_flagged() {
         json!({ "start": "08:00", "end": "not-a-time" }),
     );
     let diags = lint(doc);
-    assert!(has_rule(&diags, "G-059"), "expected G-059 for invalid time: {diags:?}");
+    assert!(
+        has_rule(&diags, "G-059"),
+        "expected G-059 for invalid time: {diags:?}"
+    );
     assert!(
         path_of(&diags, "G-059").is_some_and(|p| p == "/operatingHours"),
         "expected path /operatingHours, got: {diags:?}"
@@ -1517,7 +1558,10 @@ fn g062_adverse_template_missing_sections_flagged() {
     });
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-062"), "expected G-062: {diags:?}");
-    assert!(count_rule(&diags, "G-062") >= 2, "expected multiple G-062: {diags:?}");
+    assert!(
+        count_rule(&diags, "G-062") >= 2,
+        "expected multiple G-062: {diags:?}"
+    );
 }
 
 #[test]
@@ -1598,6 +1642,58 @@ fn g065_single_section_skips_uniqueness_violation() {
     });
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-065"), "unexpected G-065: {diags:?}");
+}
+
+// ========================================================================
+// CM-001: Correspondence entry template ids MUST be unique.
+// ========================================================================
+
+#[test]
+fn cm001_duplicate_entry_template_ids_flagged() {
+    let mut doc = minimal_correspondence_metadata();
+    doc["entryTemplates"] = json!([
+        {
+            "id": "inboundMail",
+            "channel": "mail",
+            "direction": "inbound",
+            "actorType": "applicant"
+        },
+        {
+            "id": "inboundMail",
+            "channel": "email",
+            "direction": "inbound",
+            "actorType": "representative"
+        }
+    ]);
+
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "CM-001"), "expected CM-001: {diags:?}");
+    assert_eq!(
+        path_of(&diags, "CM-001"),
+        Some("/entryTemplates/1/id".to_string())
+    );
+}
+
+#[test]
+fn cm001_unique_entry_template_ids_clean() {
+    let mut doc = minimal_correspondence_metadata();
+    doc["entryTemplates"] = json!([
+        {
+            "id": "inboundMail",
+            "channel": "mail",
+            "direction": "inbound",
+            "actorType": "applicant"
+        },
+        {
+            "id": "phoneContact",
+            "channel": "phone",
+            "direction": "inbound",
+            "actorType": "applicant"
+        }
+    ]);
+
+    let diags = lint(doc);
+    assert!(!has_rule(&diags, "CM-001"), "unexpected CM-001: {diags:?}");
 }
 
 // ========================================================================

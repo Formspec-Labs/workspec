@@ -26,6 +26,7 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
         DocumentKind::AiIntegration => check_ai_integration(doc, diagnostics),
         DocumentKind::AssertionLibrary => check_assertion_library(doc, diagnostics),
         DocumentKind::PolicyParameters => check_policy_parameters(doc, diagnostics),
+        DocumentKind::CorrespondenceMetadata => check_correspondence_metadata(doc, diagnostics),
         DocumentKind::BusinessCalendar => check_business_calendar(doc, diagnostics),
         DocumentKind::NotificationTemplate => check_notification_template(doc, diagnostics),
         _ => {} // Other document types: no Tier 1 rules yet.
@@ -50,6 +51,7 @@ fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
         check_milestone_uniqueness_typed(&kernel, diagnostics);
         check_timer_exclusivity_typed(&kernel, diagnostics);
         check_case_relationship_type_prefix_typed(&kernel, diagnostics);
+        check_actor_id_uniqueness_typed(&kernel, diagnostics);
         check_provenance_actor_ids_typed(&kernel, diagnostics);
     }
 
@@ -630,10 +632,7 @@ fn check_case_relationship_type_prefix_typed(
 }
 
 /// K-021: Provenance `actorId` MUST reference a declared kernel actor.
-fn check_provenance_actor_ids_typed(
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_provenance_actor_ids_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
     let actors: std::collections::HashSet<&str> =
         kernel.actors.iter().map(|a| a.id.as_str()).collect();
 
@@ -664,8 +663,48 @@ fn check_provenance_actor_ids_typed(
 }
 
 // ---------------------------------------------------------------------------
-// Business Calendar + Notification Template (sidecars)
+// Correspondence Metadata + Business Calendar + Notification Template (sidecars)
 // ---------------------------------------------------------------------------
+
+/// K-009: Actor identifiers MUST be unique within the kernel actor list.
+fn check_actor_id_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+    let mut seen = std::collections::HashSet::new();
+
+    for (index, actor) in kernel.actors.iter().enumerate() {
+        if !seen.insert(actor.id.as_str()) {
+            diagnostics.push(Diagnostic::error(
+                "K-009",
+                &format!("/actors/{index}/id"),
+                format!("duplicate actor id '{}'", actor.id),
+            ));
+        }
+    }
+}
+
+/// CM-001: Entry template ids MUST be unique within the correspondence sidecar.
+fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+    let root = &doc.value;
+
+    if let Some(entry_templates) = root.get("entryTemplates").and_then(Value::as_array) {
+        let mut seen = std::collections::HashSet::new();
+
+        for (index, template) in entry_templates.iter().enumerate() {
+            let Some(id) = template.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+
+            if !seen.insert(id) {
+                diagnostics.push(Diagnostic::error(
+                    "CM-001",
+                    &format!("/entryTemplates/{index}/id"),
+                    format!("duplicate correspondence entry template id '{id}'"),
+                ));
+            }
+        }
+    }
+
+    check_extension_prefixes(root, "", diagnostics);
+}
 
 /// G-058 / G-059: Business calendar structural validity.
 fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {

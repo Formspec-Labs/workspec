@@ -102,7 +102,8 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagno
         for (i, constraint) in constraints.iter().enumerate() {
             let path = format!("/verifiableConstraints/{i}");
             if let Some(expr_str) = constraint.get("expression").and_then(Value::as_str) {
-                let decls = parse_finite_domain_declarations(constraint.get("finiteDomainDeclarations"));
+                let decls =
+                    parse_finite_domain_declarations(constraint.get("finiteDomainDeclarations"));
                 check_smt_expression(expr_str, &path, diagnostics, &decls);
             }
         }
@@ -717,7 +718,10 @@ fn is_simple_access_expr(expr: &Expr) -> bool {
 /// Dotted path for a simple field or context access (`$a.b` → `a.b`). Indices/wildcards excluded.
 fn simple_access_path_string(expr: &Expr) -> Option<String> {
     match expr {
-        Expr::FieldRef { name, path: segments } => {
+        Expr::FieldRef {
+            name,
+            path: segments,
+        } => {
             let root = name.as_deref()?;
             let mut s = root.to_string();
             for seg in segments {
@@ -1180,7 +1184,12 @@ mod tests {
     fn ag011_self_recursive_let() {
         let expr_str = "let x = x + 1 in x";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             diag.iter().any(|d| d.rule_id == "AG-011"),
             "expected AG-011 error, got: {diag:?}"
@@ -1191,7 +1200,12 @@ mod tests {
     fn ag011_non_recursive_let_is_clean() {
         let expr_str = "let x = $amount * 2 in x > 100";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-011"),
             "unexpected AG-011: {diag:?}"
@@ -1204,7 +1218,12 @@ mod tests {
     fn ag013_variable_times_variable() {
         let expr_str = "$qty * $price > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
@@ -1216,7 +1235,12 @@ mod tests {
     fn ag013_variable_times_literal_is_linear() {
         let expr_str = "$qty * 2 > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-013"),
             "unexpected AG-013: {diag:?}"
@@ -1229,7 +1253,12 @@ mod tests {
     fn ag014_extension_function_in_verifiable_constraint() {
         let expr_str = "myExtFn($value) > 0";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
@@ -1241,7 +1270,12 @@ mod tests {
     fn ag014_builtin_function_is_allowed() {
         let expr_str = "abs($delta) < 5";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             !diag.iter().any(|d| d.rule_id == "AG-014"),
             "unexpected AG-014: {diag:?}"
@@ -1254,9 +1288,16 @@ mod tests {
     fn ag010_literal_comparison_is_clean() {
         let expr_str = r#"$output.status == "approved""#;
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1265,9 +1306,16 @@ mod tests {
     fn ag010_boolean_comparison_is_clean() {
         let expr_str = "$output.eligible == true";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1276,9 +1324,16 @@ mod tests {
     fn ag010_membership_literal_array_is_clean() {
         let expr_str = r#"$tier in ["gold", "silver", "bronze"]"#;
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1287,9 +1342,16 @@ mod tests {
     fn ag010_known_enum_to_literal_is_clean() {
         let expr_str = r#"$instance.impactLevel == "rights-impacting""#;
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1298,7 +1360,12 @@ mod tests {
     fn ag010_variable_to_variable_equality_warns() {
         let expr_str = "$output.status == $copy.status";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
@@ -1310,7 +1377,12 @@ mod tests {
     fn ag010_variable_to_variable_inequality_warns() {
         let expr_str = "$output.status != $copy.status";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
@@ -1320,10 +1392,14 @@ mod tests {
 
     #[test]
     fn ag010_duplicate_path_pair_emits_single_warning() {
-        let expr_str =
-            "($output.status == $copy.status) and ($copy.status == $output.status)";
+        let expr_str = "($output.status == $copy.status) and ($copy.status == $output.status)";
         let mut diag = Vec::new();
-        check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &HashMap::new());
+        check_smt_expression(
+            expr_str,
+            "/verifiableConstraints/0",
+            &mut diag,
+            &HashMap::new(),
+        );
         let n = diag
             .iter()
             .filter(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning)
@@ -1339,7 +1415,9 @@ mod tests {
         let mut diag = Vec::new();
         check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &decls);
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1379,7 +1457,9 @@ mod tests {
         let mut diag = Vec::new();
         check_advanced_governance_fel(&doc, &mut diag);
         assert!(
-            !diag.iter().any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+            !diag
+                .iter()
+                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
