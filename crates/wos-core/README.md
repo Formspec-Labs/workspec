@@ -114,8 +114,8 @@ Two AI-related claims remain architectural rather than fixture-local:
 The current verification strategy is:
 
 1. Prove local engine behavior with fixture-based conformance tests.
-2. Record which external Formspec processor or Assist implementation the host delegates to.
-3. Require a self-declared conformance profile for that delegated processor or proxy boundary.
+2. Exercise the delegated validator seam and proxy differential harness in `wos-conformance` so `AI-004` and `AI-050` are backed by observed behavior rather than prose-only self-declaration.
+3. Record which external Formspec processor or Assist implementation the host delegates to.
 4. Review the adapter layer to confirm it forwards validation or proxy operations without semantic modification.
 
 These rules become fully automatable only when there is either:
@@ -123,7 +123,7 @@ These rules become fully automatable only when there is either:
 - a second processor implementation to run differential tests against, or
 - proxy instrumentation that can compare pre-proxy and post-proxy behavior at the protocol boundary
 
-Until then, the expected evidence is a mix of fixture results, architectural review, and deployment self-declaration.
+Until then, the expected evidence is a mix of fixture results, behavior-level adapter/proxy checks, architectural review, and deployment self-declaration.
 
 ## Testing
 
