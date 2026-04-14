@@ -14,8 +14,8 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent, ValidationOutcome};
@@ -29,9 +29,10 @@ use wos_runtime::{
     CreateInstanceRequest, DrainOnceResult, PreparedTask, ReferenceCompanionPolicy, WosRuntime,
 };
 
-use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
+use crate::formspec_processor::FixtureFormspecProcessor;
 use crate::stubs::{StubService, StubValidator};
+use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
@@ -73,6 +74,9 @@ pub struct WorkflowEngine {
 
     /// Monotonic fixture event token sequence.
     next_fixture_event_token: u64,
+
+    /// Binding discriminator used for this fixture.
+    binding_used: String,
 }
 
 impl WorkflowEngine {
@@ -124,7 +128,20 @@ impl WorkflowEngine {
 
         let clock = SharedClock::new(0);
         let mut bindings = BindingRegistry::new();
-        bindings.register(ConformanceBinding);
+        let binding_used = match fixture.binding.as_deref() {
+            Some("formspec") => {
+                let processor = FixtureFormspecProcessor::new(
+                    definition_url.clone(),
+                    definition_version.clone(),
+                );
+                bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
+                "formspec".to_string()
+            }
+            _ => {
+                bindings.register(ConformanceBinding);
+                "conformance".to_string()
+            }
+        };
         let runtime = WosRuntime::new(
             wos_runtime::InMemoryStore::new(),
             FixtureResolver {
@@ -151,6 +168,7 @@ impl WorkflowEngine {
             definition_url,
             definition_version,
             next_fixture_event_token: 0,
+            binding_used,
         })
     }
 
@@ -298,6 +316,7 @@ impl WorkflowEngine {
             failures,
             transitions: observed_transitions,
             provenance,
+            binding_used: Some(self.binding_used.clone()),
         })
     }
 

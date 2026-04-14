@@ -93,6 +93,9 @@ pub struct ConformanceResult {
 
     /// Actual provenance records produced.
     pub provenance: Vec<ProvenanceRecord>,
+
+    /// Binding discriminator used during execution.
+    pub binding_used: Option<String>,
 }
 
 /// Errors from the conformance runner.
