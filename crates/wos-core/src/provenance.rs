@@ -276,6 +276,18 @@ impl ProvenanceRecord {
         }
     }
 
+    /// Create a state-entry record.
+    pub fn state_entered(state: &str) -> Self {
+        Self {
+            record_kind: ProvenanceKind::OnEntry,
+            actor_id: None,
+            from_state: None,
+            to_state: Some(state.to_string()),
+            event: None,
+            data: Some(serde_json::json!({ "state": state })),
+        }
+    }
+
     /// Create an onEntry action record.
     pub fn on_entry(state: &str, action_type: &str) -> Self {
         Self {

@@ -16,7 +16,9 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
 use crate::instance::CaseInstance;
-use crate::model::kernel::{Action, ActionKind, KernelDocument, State, StateKind};
+use crate::model::kernel::{
+    Action, ActionKind, CancellationPolicy, KernelDocument, Region, State, StateKind,
+};
 use crate::provenance::{ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
 
@@ -177,7 +179,7 @@ impl Evaluator {
             transitions: Vec::new(),
             executed_actions: Vec::new(),
         };
-        eval.enter_state(&initial, None, None)?;
+        let _entered = eval.enter_state(&initial, None, None)?;
         Ok(eval)
     }
 
@@ -402,7 +404,7 @@ impl Evaluator {
         let regions = indexed.state.regions.clone();
         let mut any_fired = false;
 
-        for (_region_name, region_def) in &regions {
+        for (region_name, region_def) in &regions {
             let active_in_region = self
                 .config
                 .active
@@ -443,13 +445,7 @@ impl Evaluator {
 
                 // Update configuration.
                 self.config.exit(&active);
-                let target_def = region_def.states.get(&target);
-                self.config.enter(target.clone());
-                if let Some(td) = target_def {
-                    if td.kind != StateKind::Final {
-                        self.execute_on_entry_actions(&target, actor, event_data)?;
-                    }
-                }
+                let _entered_target = self.enter_state(&target, actor, event_data)?;
 
                 self.transitions.push(ObservedTransition {
                     from: active.clone(),
@@ -460,6 +456,14 @@ impl Evaluator {
                     &active, &target, event, actor,
                 ));
 
+                self.apply_parallel_cancellation_policy(
+                    parallel_id,
+                    &regions,
+                    region_name,
+                    &target,
+                    actor,
+                    event_data,
+                )?;
                 any_fired = true;
                 break;
             }
@@ -495,6 +499,65 @@ impl Evaluator {
         Ok(any_fired)
     }
 
+    fn apply_parallel_cancellation_policy(
+        &mut self,
+        parallel_id: &str,
+        regions: &indexmap::IndexMap<String, Region>,
+        fired_region_name: &str,
+        target: &str,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        let Some(parallel_state) = self
+            .state_index
+            .get(parallel_id)
+            .map(|indexed| &indexed.state)
+        else {
+            return Ok(());
+        };
+        let policy = parallel_state
+            .cancellation_policy
+            .unwrap_or(CancellationPolicy::WaitAll);
+        if policy == CancellationPolicy::WaitAll {
+            return Ok(());
+        }
+
+        let Some(target_state) = self.state_index.get(target).map(|indexed| &indexed.state) else {
+            return Ok(());
+        };
+        let reached_final = target_state.kind == StateKind::Final;
+        let reached_error_final =
+            reached_final && target_state.tags.iter().any(|tag| tag == "error");
+        let should_cancel = match policy {
+            CancellationPolicy::WaitAll => false,
+            CancellationPolicy::CancelSiblings => reached_final,
+            CancellationPolicy::FailFast => reached_error_final,
+        };
+        if !should_cancel {
+            return Ok(());
+        }
+
+        for (region_name, region) in regions {
+            if region_name == fired_region_name {
+                continue;
+            }
+            let active_states: Vec<String> = self
+                .config
+                .active
+                .iter()
+                .filter(|state_id| region.states.contains_key(*state_id))
+                .cloned()
+                .collect();
+            for active_state in active_states {
+                self.execute_on_exit_actions(&active_state, actor, event_data)?;
+                self.cancel_timers_created_in_state_tree(&active_state, "region-cancellation");
+                self.exit_state_and_descendants(&active_state);
+            }
+        }
+
+        Ok(())
+    }
+
     // ── State entry / exit ───────────────────────────────────────
 
     /// Enter a state, handling compound and parallel initialization.
@@ -503,7 +566,7 @@ impl Evaluator {
         state_id: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
-    ) -> Result<(), EvalError> {
+    ) -> Result<String, EvalError> {
         let indexed = self
             .state_index
             .get(state_id)
@@ -513,38 +576,37 @@ impl Evaluator {
         match indexed.state.kind {
             StateKind::Compound => {
                 self.config.enter(state_id.to_string());
+                self.provenance
+                    .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 let initial = indexed.state.initial_state.as_deref().ok_or_else(|| {
                     EvalError::Internal(format!("compound state '{state_id}' missing initialState"))
                 })?;
-                self.enter_state(initial, actor, event_data)?;
+                self.enter_state(initial, actor, event_data)
             }
             StateKind::Parallel => {
                 self.config.enter(state_id.to_string());
+                self.provenance
+                    .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
                 for (_name, region) in &indexed.state.regions {
                     let region_initial = &region.initial_state;
-                    let init_def = region.states.get(region_initial.as_str());
-                    self.config.enter(region_initial.clone());
-
-                    if let Some(sd) = init_def {
-                        if sd.kind != StateKind::Final {
-                            self.execute_on_entry_actions(region_initial, actor, event_data)?;
-                        }
-                    }
+                    let _entered = self.enter_state(region_initial, actor, event_data)?;
                 }
+                Ok(state_id.to_string())
             }
             StateKind::Atomic | StateKind::Final => {
                 self.config.enter(state_id.to_string());
+                self.provenance
+                    .push(ProvenanceRecord::state_entered(state_id));
                 if indexed.state.kind != StateKind::Final {
                     self.execute_on_entry_actions(state_id, actor, event_data)?;
                 }
+                Ok(state_id.to_string())
             }
         }
-
-        Ok(())
     }
 
     // ── Transition firing ────────────────────────────────────────
@@ -569,7 +631,7 @@ impl Evaluator {
         // This handles compound/parallel state exits where substates would
         // otherwise be orphaned.
         self.exit_state_and_descendants(source);
-        self.enter_state(target, actor, event_data)?;
+        let _entered_target = self.enter_state(target, actor, event_data)?;
 
         self.provenance.push(ProvenanceRecord::state_transition(
             source, target, event, actor,
@@ -593,6 +655,15 @@ impl Evaluator {
         _event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
         let lifecycle_state = self.config.active.first().cloned().unwrap_or_default();
+        self.execute_action_in_state(action, actor, &lifecycle_state)
+    }
+
+    fn execute_action_in_state(
+        &mut self,
+        action: &Action,
+        actor: Option<&str>,
+        lifecycle_state: &str,
+    ) -> Result<(), EvalError> {
         match action.action {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
@@ -605,7 +676,7 @@ impl Evaluator {
                     path,
                     &value,
                     actor,
-                    &lifecycle_state,
+                    lifecycle_state,
                 ));
             }
             ActionKind::StartTimer => {
@@ -632,7 +703,7 @@ impl Evaluator {
                     id: timer_id.to_string(),
                     deadline_ms,
                     fires_event: fires_event.to_string(),
-                    created_in_state: self.config.active.first().cloned().unwrap_or_default(),
+                    created_in_state: lifecycle_state.to_string(),
                     duration_iso: duration.to_string(),
                     duration_ms,
                 });
@@ -653,7 +724,6 @@ impl Evaluator {
                 }
             }
             _ => {
-                let current_state = self.config.active.first().cloned().unwrap_or_default();
                 let action_name = format!("{:?}", action.action);
                 let action_name_camel = match action.action {
                     ActionKind::CreateTask => "createTask",
@@ -663,14 +733,14 @@ impl Evaluator {
                     _ => &action_name,
                 };
                 self.provenance.push(ProvenanceRecord::action_executed(
-                    &current_state,
+                    lifecycle_state,
                     action_name_camel,
                 ));
             }
         }
 
         self.executed_actions.push(ObservedAction {
-            lifecycle_state,
+            lifecycle_state: lifecycle_state.to_string(),
             actor_id: actor.map(String::from),
             action: action.clone(),
         });
@@ -703,7 +773,8 @@ impl Evaluator {
             };
             self.provenance
                 .push(ProvenanceRecord::on_entry(state_id, action_name));
-            self.execute_action(action, actor, event_data)?;
+            let _event_data = event_data;
+            self.execute_action_in_state(action, actor, state_id)?;
         }
         Ok(())
     }
@@ -733,7 +804,8 @@ impl Evaluator {
             };
             self.provenance
                 .push(ProvenanceRecord::on_exit(state_id, action_name));
-            self.execute_action(action, actor, event_data)?;
+            let _event_data = event_data;
+            self.execute_action_in_state(action, actor, state_id)?;
         }
         Ok(())
     }
@@ -823,6 +895,36 @@ impl Evaluator {
                     let region_ids: Vec<String> = region.states.keys().cloned().collect();
                     for region_state_id in &region_ids {
                         self.exit_state_and_descendants(region_state_id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn cancel_timers_created_in_state_tree(&mut self, state_id: &str, reason: &str) {
+        for timer in self.timers.cancel_in_state(state_id) {
+            self.provenance
+                .push(ProvenanceRecord::timer_cancelled(&timer.id, reason));
+        }
+
+        let indexed = match self.state_index.get(state_id) {
+            Some(s) => s.clone(),
+            None => return,
+        };
+
+        match indexed.state.kind {
+            StateKind::Compound => {
+                let substate_ids: Vec<String> = indexed.state.states.keys().cloned().collect();
+                for sub_id in &substate_ids {
+                    self.cancel_timers_created_in_state_tree(sub_id, reason);
+                }
+            }
+            StateKind::Parallel => {
+                for region in indexed.state.regions.values() {
+                    let region_ids: Vec<String> = region.states.keys().cloned().collect();
+                    for region_state_id in &region_ids {
+                        self.cancel_timers_created_in_state_tree(region_state_id, reason);
                     }
                 }
             }
