@@ -14,8 +14,8 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent, ValidationOutcome};
@@ -29,9 +29,9 @@ use wos_runtime::{
     CreateInstanceRequest, DrainOnceResult, PreparedTask, ReferenceCompanionPolicy, WosRuntime,
 };
 
-use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
 use crate::stubs::{StubService, StubValidator};
+use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
@@ -470,6 +470,17 @@ impl TaskPresenter for NoopPresenter {
 #[derive(Debug, Clone, Copy)]
 struct ConformanceBinding;
 
+/// Conformance test binding adapter for the "formspec" contract type.
+///
+/// **Intentionally permissive:** always returns valid submissions and no case
+/// mutations. This lets conformance fixtures exercise the runtime task lifecycle
+/// (create → present → submit → complete) without requiring a real Formspec
+/// engine. When a conformance test needs to assert on validation outcomes, it
+/// uses the fixture-level `contract_outcomes` map and the `StubValidator` instead.
+///
+/// `compute_case_mutation` returns `None` because case-state mutations under
+/// task submission are tested via the runtime's `submit_task_response` integration
+/// tests in `wos-runtime`, not through conformance fixtures.
 impl ContractBindingAdapter for ConformanceBinding {
     fn binding(&self) -> &'static str {
         "formspec"

@@ -19,13 +19,15 @@ pub mod stubs;
 pub use engine::WorkflowEngine;
 pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
 pub use meta::{
-    AssistGovernanceProxyEvidence, ClaimStatus, ClaimVerification,
-    DelegatedFormspecEvaluationEvidence, ProcessorClaims, ProcessorConformanceReport,
-    ProcessorEvidence, ProcessorManifest, observe_assist_governance_proxy,
-    observe_delegated_formspec_evaluation, verify_processor_manifest,
+    observe_delegated_formspec_evaluation, run_profile_against_fixtures,
+    validate_ai_family_batch_coverage, verify_processor_manifest, AssistGovernanceProxyEvidence,
+    ClaimStatus, ClaimVerification, DelegatedFormspecEvaluationEvidence, ProcessorClaims,
+    ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest, AI_CONFIDENCE_BATCHES,
+    AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
-pub use stubs::{InMemoryStore, StubService, StubValidator};
+pub use stubs::{StubService, StubValidator};
+pub use wos_core::proxy::observe_assist_governance_proxy;
 
 /// Run a conformance fixture and return the results.
 ///

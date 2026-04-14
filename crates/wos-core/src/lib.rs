@@ -31,6 +31,7 @@ pub mod instance;
 pub mod model;
 pub mod project;
 pub mod provenance;
+pub mod proxy;
 pub mod timer;
 pub mod traits;
 
@@ -49,4 +50,5 @@ pub use model::kernel::{ImpactLevel, Lifecycle, Milestone, Region};
 pub use model::notification_template::NotificationTemplateDocument;
 pub use project::Project;
 pub use provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+pub use proxy::{AssistGovernanceProxyEvidence, observe_assist_governance_proxy};
 pub use timer::Timers;

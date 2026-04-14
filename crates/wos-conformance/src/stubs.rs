@@ -13,8 +13,11 @@
 use std::collections::HashMap;
 
 use crate::fixture::ContractOutcome;
+#[cfg(test)]
 use wos_core::instance::CaseInstance;
-use wos_core::traits::{ContractValidator, ExternalService, InstanceStore, ValidationResult};
+#[cfg(test)]
+use wos_core::traits::InstanceStore;
+use wos_core::traits::{ContractValidator, ExternalService, ValidationResult};
 
 // ── InMemoryStore ───────────────────────────────────────────────
 
@@ -22,36 +25,41 @@ use wos_core::traits::{ContractValidator, ExternalService, InstanceStore, Valida
 ///
 /// Stores `CaseInstance` documents in a `HashMap` keyed by instance ID.
 /// All state is lost when the store is dropped.
+///
+/// **Note:** The runtime engine uses `wos_runtime::InMemoryStore` (which
+/// implements `RuntimeStore` with `RuntimeRecord`). This stub implements
+/// `wos_core::traits::InstanceStore` for legacy inline tests only.
 #[derive(Debug, Default)]
-pub struct InMemoryStore {
+#[cfg(test)]
+struct InMemoryStore {
     instances: HashMap<String, CaseInstance>,
 }
 
+#[cfg(test)]
 impl InMemoryStore {
-    /// Create an empty store.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
-    /// Number of stored instances.
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.instances.len()
     }
 
-    /// Whether the store is empty.
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.instances.is_empty()
     }
 }
 
 /// Error type for in-memory store operations.
 #[derive(Debug, thiserror::Error)]
+#[cfg(test)]
 pub enum StoreError {
     /// Instance not found.
     #[error("instance not found: {0}")]
     NotFound(String),
 }
 
+#[cfg(test)]
 impl InstanceStore for InMemoryStore {
     type Error = StoreError;
 
@@ -197,6 +205,10 @@ impl ExternalService for StubService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // These tests verify the stubs themselves behave correctly, ensuring that
+    // conformance test infrastructure is sound. They are not testing WOS spec
+    // behavior — they are testing the test harness.
 
     #[test]
     fn in_memory_store_save_and_load() {

@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use wos_conformance::{
-    ClaimStatus, ProcessorClaims, ProcessorEvidence, ProcessorManifest,
     observe_assist_governance_proxy, observe_delegated_formspec_evaluation,
-    verify_processor_manifest,
+    verify_processor_manifest, AssistGovernanceProxyEvidence, ClaimStatus, ProcessorClaims,
+    ProcessorEvidence, ProcessorManifest,
 };
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::kernel::ImpactLevel;
@@ -230,4 +230,65 @@ fn ai050_claim_with_proxy_evidence_verifies() {
 
     let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
     assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Verified);
+}
+
+#[test]
+fn ai050_claim_with_false_differential_check_fails() {
+    let evidence = AssistGovernanceProxyEvidence {
+        differential_check_passed: false,
+        strictness_preserved: true,
+        provenance_preserved: true,
+    };
+
+    let manifest = ProcessorManifest {
+        processor_name: "reference-processor".to_string(),
+        claims: ProcessorClaims {
+            assist_governance_proxy_conformant: true,
+            ..ProcessorClaims::default()
+        },
+        evidence: ProcessorEvidence {
+            assist_governance_proxy: Some(evidence),
+            ..ProcessorEvidence::default()
+        },
+    };
+
+    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    assert_eq!(status_for(&report, "AI-050"), ClaimStatus::Failed);
+}
+
+#[test]
+fn ai004_claim_with_invalid_validation_result_fails() {
+    let validator = RecordingValidator::new(ValidationResult {
+        valid: false,
+        errors: vec!["income: required field missing".to_string()],
+    });
+    let response_envelope = serde_json::json!({
+        "taskRef": "intakeReview",
+        "submittedAt": "2026-04-12T12:00:00Z",
+        "response": {}
+    });
+    let evidence = observe_delegated_formspec_evaluation(
+        &validator,
+        "urn:formspec:test:review:1.0",
+        &response_envelope,
+        "formspec-core-s1.4",
+    )
+    .expect("observe delegated validation");
+
+    assert!(!evidence.full_response_envelope_validated);
+
+    let manifest = ProcessorManifest {
+        processor_name: "reference-processor".to_string(),
+        claims: ProcessorClaims {
+            delegates_formspec_evaluation: true,
+            ..ProcessorClaims::default()
+        },
+        evidence: ProcessorEvidence {
+            delegated_formspec_evaluation: Some(evidence),
+            ..ProcessorEvidence::default()
+        },
+    };
+
+    let report = verify_processor_manifest(&manifest, &fixtures_dir()).expect("verify manifest");
+    assert_eq!(status_for(&report, "AI-004"), ClaimStatus::Failed);
 }
