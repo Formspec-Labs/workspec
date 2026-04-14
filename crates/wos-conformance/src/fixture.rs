@@ -76,6 +76,14 @@ pub struct ConformanceFixture {
     /// path where task submissions are validated against Formspec Definitions.
     #[serde(default)]
     pub contract_outcomes: HashMap<String, ContractOutcome>,
+
+    /// Canned definition-validation errors for the `FixtureFormspecProcessor`.
+    ///
+    /// When `binding` is `"formspec"` and this field is non-empty, the
+    /// processor's `validate_definition` method returns these errors instead
+    /// of `None`, simulating a definition that fails validation.
+    #[serde(default)]
+    pub definition_errors: Vec<serde_json::Value>,
 }
 
 /// Expected outcome of a Formspec contract validation.
@@ -106,6 +114,26 @@ pub struct EventEntry {
     /// Delay before this event (ISO 8601 duration, for timer tests).
     #[serde(default)]
     pub delay: Option<String>,
+
+    /// When present, this entry submits a task response instead of dispatching
+    /// a lifecycle event. The `task_ref` is resolved to the active task's
+    /// generated `task_id` at runtime.
+    #[serde(default)]
+    pub task_submission: Option<TaskSubmission>,
+}
+
+/// A task response submission within a fixture event sequence.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaskSubmission {
+    /// Logical task reference (matches `taskRef` in the kernel's createTask action).
+    pub task_ref: String,
+
+    /// Response envelope to submit.
+    pub response: serde_json::Value,
+
+    /// Idempotency token for replay protection.
+    #[serde(default)]
+    pub idempotency_token: Option<String>,
 }
 
 /// An expected state transition.

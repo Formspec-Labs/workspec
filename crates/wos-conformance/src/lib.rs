@@ -18,7 +18,9 @@ mod provenance;
 pub mod stubs;
 
 pub use engine::WorkflowEngine;
-pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
+pub use fixture::{
+    ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition, TaskSubmission,
+};
 pub use meta::{
     observe_delegated_formspec_evaluation, run_profile_against_fixtures,
     validate_ai_family_batch_coverage, verify_processor_manifest, AssistGovernanceProxyEvidence,

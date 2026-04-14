@@ -130,10 +130,18 @@ impl WorkflowEngine {
         let mut bindings = BindingRegistry::new();
         let binding_used = match fixture.binding.as_deref() {
             Some("formspec") => {
-                let processor = FixtureFormspecProcessor::new(
-                    definition_url.clone(),
-                    definition_version.clone(),
-                );
+                let processor = if fixture.definition_errors.is_empty() {
+                    FixtureFormspecProcessor::new(
+                        definition_url.clone(),
+                        definition_version.clone(),
+                    )
+                } else {
+                    FixtureFormspecProcessor::with_definition_errors(
+                        definition_url.clone(),
+                        definition_version.clone(),
+                        fixture.definition_errors.clone(),
+                    )
+                };
                 bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
                 "formspec".to_string()
             }
@@ -226,13 +234,28 @@ impl WorkflowEngine {
                 }
             }
 
-            let results = self.process_runtime_event(
-                &event_entry.event,
-                event_entry.actor.as_deref(),
-                event_entry.data.as_ref(),
-            )?;
-            for result in results {
-                append_runtime_result(result, &mut observed_transitions, &mut lifecycle_provenance);
+            if let Some(submission) = &event_entry.task_submission {
+                let results = self.process_task_submission(submission)?;
+                for result in results {
+                    append_runtime_result(
+                        result,
+                        &mut observed_transitions,
+                        &mut lifecycle_provenance,
+                    );
+                }
+            } else {
+                let results = self.process_runtime_event(
+                    &event_entry.event,
+                    event_entry.actor.as_deref(),
+                    event_entry.data.as_ref(),
+                )?;
+                for result in results {
+                    append_runtime_result(
+                        result,
+                        &mut observed_transitions,
+                        &mut lifecycle_provenance,
+                    );
+                }
             }
         }
 
@@ -358,6 +381,44 @@ impl WorkflowEngine {
         }
 
         Ok(results)
+    }
+
+    fn process_task_submission(
+        &mut self,
+        submission: &crate::fixture::TaskSubmission,
+    ) -> Result<Vec<DrainOnceResult>, ConformanceError> {
+        let instance = self
+            .runtime
+            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        let task = instance
+            .active_tasks
+            .iter()
+            .find(|t| t.task_ref == submission.task_ref)
+            .ok_or_else(|| {
+                ConformanceError::Engine(format!(
+                    "no active task with task_ref '{}'",
+                    submission.task_ref
+                ))
+            })?;
+        let task_id = task.task_id.clone();
+        let actor_id = task
+            .assigned_actor
+            .clone()
+            .ok_or_else(|| ConformanceError::Engine("task has no assigned actor".to_string()))?;
+
+        let _result = self
+            .runtime
+            .submit_task_response(
+                &task_id,
+                submission.response.clone(),
+                &actor_id,
+                submission.idempotency_token.as_deref(),
+            )
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+
+        let drain_results = self.drain_runtime_until_idle()?;
+        Ok(drain_results)
     }
 
     fn drain_runtime_until_idle(&mut self) -> Result<Vec<DrainOnceResult>, ConformanceError> {

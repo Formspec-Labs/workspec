@@ -14,12 +14,14 @@ use wos_runtime::binding::{BindingError, CaseMutationBundle};
 /// Fixture-driven `FormspecProcessor` for conformance test harnesses.
 ///
 /// Envelope validation checks for the presence of required fields.
-/// Definition validation is a no-op. Prefill mirrors case state.
-/// Response mapping extracts `data` into a `field_updates` map.
+/// Definition validation returns canned errors when configured.
+/// Prefill mirrors case state. Response mapping extracts `data`
+/// into a `field_updates` map.
 #[derive(Debug, Clone)]
 pub struct FixtureFormspecProcessor {
     pinned_url: String,
     pinned_version: String,
+    definition_errors: Vec<serde_json::Value>,
 }
 
 impl FixtureFormspecProcessor {
@@ -28,6 +30,20 @@ impl FixtureFormspecProcessor {
         Self {
             pinned_url: pinned_url.into(),
             pinned_version: pinned_version.into(),
+            definition_errors: Vec::new(),
+        }
+    }
+
+    /// Create a processor that returns canned definition-validation errors.
+    pub fn with_definition_errors(
+        pinned_url: impl Into<String>,
+        pinned_version: impl Into<String>,
+        definition_errors: Vec<serde_json::Value>,
+    ) -> Self {
+        Self {
+            pinned_url: pinned_url.into(),
+            pinned_version: pinned_version.into(),
+            definition_errors,
         }
     }
 }
@@ -55,7 +71,11 @@ impl FormspecProcessor for FixtureFormspecProcessor {
         _definition_version: &str,
         _data: &serde_json::Value,
     ) -> Result<Option<Vec<serde_json::Value>>, BindingError> {
-        Ok(None)
+        if self.definition_errors.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.definition_errors.clone()))
+        }
     }
 
     fn compute_prefill(
