@@ -5,9 +5,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_binding() -> Option<String> {
+    Some("conformance".to_string())
+}
+
 /// A conformance test fixture declaring documents, events, and expectations.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConformanceFixture {
+    /// Contract binding to use for this fixture.
+    ///
+    /// `"conformance"` (default) uses the permissive `ConformanceBinding`;
+    /// `"formspec"` routes through the real `FormspecBinding` adapter.
+    #[serde(default = "default_binding")]
+    pub binding: Option<String>,
+
     /// Fixture identifier (e.g., "K-011-determinism").
     pub id: String,
 
