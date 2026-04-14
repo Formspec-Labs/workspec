@@ -34,7 +34,7 @@
   - `T1` — `crates/wos-lint/tests/tier1_rules.rs`
   - `T2` — `crates/wos-lint/tests/tier2_rules.rs`
   - `AST` — `crates/wos-lint/src/rules/fel_analysis.rs` `#[cfg(test)]` module
-  - `E2E` — `crates/wos-conformance/tests/kernel_conformance.rs`, `profile_conformance.rs`, or `provenance_tests.rs`
+  - `E2E` — `crates/wos-conformance/tests/kernel_conformance.rs`, `profile_conformance.rs`, `processor_conformance.rs`, `provenance_tests.rs`, or `stub_integration.rs`
   - `—` — no test yet
   - Multiple types separated by `+` (e.g., `T1+E2E`)
 
@@ -61,40 +61,40 @@
 | K-015 | Kernel S5.2 | `setData` path MUST reference a declared `caseFile.fields` entry. | Cross-path reference. | T1 | cross-reference | T1 |
 | K-016 | Kernel S5.4 | Mutation history MUST be append-only. | Temporal invariant. | T3 | provenance | E2E |
 | K-017 | Kernel S5.5 | FEL guards MUST NOT reference related case state. | FEL AST variable analysis. | T2-ast | expression-validity | AST |
-| K-018 | Kernel S5.5 | Case relationship changes MUST produce provenance. | Runtime obligation. | T3 | provenance | — |
+| K-018 | Kernel S5.5 | Case relationship changes MUST produce provenance. | Runtime obligation. | T3 | provenance | E2E |
 | K-019 | Kernel S7.4 | FEL MUST use only built-in and extension functions. | FEL function catalog cross-ref. | T2-ast | expression-validity | AST |
 | K-020 | Kernel S8.2 | Every state/case mutation MUST produce Facts tier provenance. | Runtime completeness. | T3 | provenance | E2E |
 | K-021 | Kernel S8.2 | Provenance `actorId` MUST reference a declared actor. | Cross-path reference. | T1 | actor-consistency | T1 |
 | K-022 | Kernel S8.3 | Digest present implies algorithm recorded in extensions. | Conditional inter-field dependency. | T1 | provenance | T1 |
-| K-023 | Kernel S9.1 (G1) | Non-terminal instances MUST resume after crash. | Runtime durability. | T3 | lifecycle-soundness | — |
-| K-024 | Kernel S9.1 (G3) | Non-deterministic output MUST persist before advancing state. | Runtime execution order. | T3 | determinism | — |
+| K-023 | Kernel S9.1 (G1) | Non-terminal instances MUST resume after crash. | Runtime durability. | T3 | lifecycle-soundness | E2E |
+| K-024 | Kernel S9.1 (G3) | Non-deterministic output MUST persist before advancing state. | Runtime execution order. | T3 | determinism | E2E |
 | K-025 | Kernel S9.1 (G4) | Timers MUST survive restarts; tolerance > duration is violation. | Runtime timing. | T3 | timer | E2E |
-| K-026 | Kernel S9.3 | IdempotencyKey MUST deduplicate invocations. | Runtime deduplication. | T3 | determinism | — |
-| K-027 | Kernel S9.5 / LCD S5.2 | Compensation log MUST be append-only. | Runtime data structure. | T3 | compensation | — |
-| K-028 | Kernel S9.6 | Instance migration MUST produce provenance. | Runtime obligation. | T3 | provenance | — |
+| K-026 | Kernel S9.3 | IdempotencyKey MUST deduplicate invocations. | Runtime deduplication. | T3 | determinism | E2E |
+| K-027 | Kernel S9.5 / LCD S5.2 | Compensation log MUST be append-only. | Runtime data structure. | T3 | compensation | E2E |
+| K-028 | Kernel S9.6 | Instance migration MUST produce provenance. | Runtime obligation. | T3 | provenance | E2E |
 | K-029 | Kernel S9.7 / LCD S6.2 | `startTimer` MUST specify exactly one of `duration` or `deadline`. | Mutual exclusivity not enforced. | T1 | timer | T1 |
 | K-030 | Kernel S10.5 | Extension keys MUST be `x-` prefixed. | Pattern enforcement. | T1 | cross-reference | T1 |
-| K-031 | Kernel S11.1 | Contract validation MUST produce structured results. | Runtime integration contract. | T3 | lifecycle-soundness | — |
-| K-032 | Kernel S12 | Lifecycle state MUST be separated from case state. | Architectural invariant. | T3 | state-type-semantics | — |
+| K-031 | Kernel S11.1 | Contract validation MUST produce structured results. | Runtime integration contract. | T3 | lifecycle-soundness | E2E |
+| K-032 | Kernel S12 | Lifecycle state MUST be separated from case state. | Architectural invariant. | T3 | state-type-semantics | E2E |
 | K-033 | LCD S2.1 | Guard evaluation: document order, first match wins. | Runtime evaluation rule. | T3 | determinism | E2E |
 | K-034 | LCD S2.4 | Compound entry: initialState if target, skip if descendant. | Runtime entry-path computation. | T3 | lifecycle-soundness | E2E |
-| K-035 | LCD S3.4 | History cleared on parent exit or region cancellation. | Runtime clearing rule. | T3 | lifecycle-soundness | — |
+| K-035 | LCD S3.4 | History cleared on parent exit or region cancellation. | Runtime clearing rule. | T3 | lifecycle-soundness | E2E |
 | K-036 | LCD S4.1 | All parallel regions initialized atomically. | Runtime concurrency. | T3 | lifecycle-soundness | E2E |
 | K-037 | LCD S4.3 | Fail-fast `$join` fires only on error final state. | Transition-graph reachability. | T2-xdoc | lifecycle-soundness | tier2_rules.rs |
 | K-038 | LCD S4.4 | Cancelled region timers MUST be cancelled. | Runtime timer scoping. | T3 | timer | E2E |
-| K-039 | LCD S5.4 | Compensation in reverse of forward completion order. | Runtime ordering. | T3 | compensation | — |
-| K-040 | LCD S5.5 | Pivot step MUST NOT receive compensation. | Runtime identification. | T3 | compensation | — |
-| K-041 | LCD S5.8 | Inner scope compensation MUST NOT trigger outer. | Runtime scope boundary. | T3 | compensation | — |
-| K-042 | LCD S5.9 | `$compensation.complete` processed like any event. | Runtime dispatch. | T3 | compensation | — |
+| K-039 | LCD S5.4 | Compensation in reverse of forward completion order. | Runtime ordering. | T3 | compensation | E2E |
+| K-040 | LCD S5.5 | Pivot step MUST NOT receive compensation. | Runtime identification. | T3 | compensation | E2E |
+| K-041 | LCD S5.8 | Inner scope compensation MUST NOT trigger outer. | Runtime scope boundary. | T3 | compensation | E2E |
+| K-042 | LCD S5.9 | `$compensation.complete` processed like any event. | Runtime dispatch. | T3 | compensation | E2E |
 | K-043 | LCD S6.4 | Re-entered state timers: cancel and recreate. | Runtime reset rule. | T3 | timer | E2E |
-| K-044 | LCD S6.5 | Timer events routed to creating region only. | Runtime scoping. | T3 | timer | — |
-| K-045 | LCD S6.6 | Timer tolerance > duration is violation. | Runtime timing. | T3 | timer | — |
+| K-044 | LCD S6.5 | Timer events routed to creating region only. | Runtime scoping. | T3 | timer | E2E |
+| K-045 | LCD S6.6 | Timer tolerance > duration is violation. | Runtime timing. | T3 | timer | E2E |
 | K-046 | LCD S6.7 | Timer lifecycle MUST produce provenance records. | Runtime obligation. | T3 | provenance | E2E |
 | K-047 | Kernel S5.5 | Case relationships MUST NOT affect lifecycle evaluation (metadata only). | Semantic constraint on processor behavior. | T3 | lifecycle-soundness | E2E |
 | K-048 | Kernel S5.5 | Case relationship `type` extensibility MUST use `x-` prefix for non-standard values. | Schema enum does not enforce prefix on extension values. | T1 | cross-reference | T1 |
 | CM-001 | CorrMeta S1.2 | Entry template `id` values MUST be unique within the sidecar. | Uniqueness of nested `entryTemplates[].id` values is not enforced by schema. | T1 | correspondence-validity | T1 |
 
-**Kernel + Correspondence:** 49 constraints — 17 T1, 6 T2, 26 T3. **Tested: 34 of 49** (17 T1, 4 AST, 2 T2, 11 E2E).
+**Kernel + Correspondence:** 49 constraints — 17 T1, 6 T2, 26 T3. **Tested: 49 of 49** (17 T1, 4 AST, 2 T2, 26 E2E).
 
 ---
 
@@ -103,37 +103,37 @@
 | ID | Section | Rule | Why schema can't enforce | Tier | Category | Tested? |
 |---|---|---|---|---|---|---|
 | G-001 | WG S3 / S3.7 | Due process requirements MUST be enforced when kernel declares `impactLevel` of `rights-impacting` or `safety-impacting`. | Cross-document: schema cannot read the kernel's `impactLevel`. | T2-xdoc | due-process-completeness | T2 |
-| G-002 | WG S3.2 | Affected individual MUST receive notice before the adverse decision takes effect. | Runtime execution ordering. | T3 | due-process-completeness | — |
+| G-002 | WG S3.2 | Affected individual MUST receive notice before the adverse decision takes effect. | Runtime execution ordering. | T3 | due-process-completeness | E2E |
 | G-003 | WG S3.2 | Notice MUST include specific determination, individualized reason codes, and appeal instructions. | Schema validates structure but cannot verify content is individualized. | T2-xdoc | due-process-completeness | tier2_rules.rs |
 | G-004 | WG S3.3 | Explanation level MUST be `individualized` when kernel's `impactLevel` is `rights-impacting`. | Cross-document conditional requirement. | T2-xdoc | cross-reference | T2 |
 | G-005 | WG S3.4 | Adverse decisions MUST include positive and negative counterfactuals when `impactLevel` is `rights-impacting`. | Cross-document condition. | T2-xdoc | due-process-completeness | T2 |
-| G-006 | WG S3.5 | Appeal MUST be reviewed by an adjudicator independent of the original determination. | Runtime actor identity verification. | T3 | separation-of-duties | — |
-| G-007 | WG S3.5 | Filing an appeal MUST produce a provenance record. | Runtime requirement. | T3 | pipeline-validity | — |
+| G-006 | WG S3.5 | Appeal MUST be reviewed by an adjudicator independent of the original determination. | Runtime actor identity verification. | T3 | separation-of-duties | E2E |
+| G-007 | WG S3.5 | Filing an appeal MUST produce a provenance record. | Runtime requirement. | T3 | pipeline-validity | E2E |
 | G-008 | WG S3.6 | When `continuationOfServices` is true, workflow topology MUST freeze adverse impacts during appeal. | Cannot verify kernel topology implements continuation. | T2-xdoc | cross-reference | tier2_rules.rs |
 | G-009 | WG S3.7 | When a transition tagged `adverse-decision` fires, processor MUST enforce due process policy. | Runtime tag-matching and enforcement. | T2-xdoc | tag-matching | T2 |
-| G-010 | WG S4.2 | `independentFirst` MUST enforce reviewer records independent assessment before any recommendation is accessible. | Runtime UI ordering constraint. | T3 | due-process-completeness | — |
+| G-010 | WG S4.2 | `independentFirst` MUST enforce reviewer records independent assessment before any recommendation is accessible. | Runtime UI ordering constraint. | T3 | due-process-completeness | E2E |
 | G-011 | WG S4.3 | Review protocol tags MUST match tags that actually appear in the target kernel document. | Cross-document tag resolution. | T2-xdoc | tag-matching | T2 |
-| G-012 | WG S5.5 | Each pipeline stage MUST record inputs, outputs, and gate results in provenance. | Runtime execution requirement. | T3 | pipeline-validity | — |
-| G-013 | WG S5.5 | Pipeline risk profile MUST be determined by the weakest validation gate. | Semantic computation over gate types. | T3 | pipeline-validity | — |
+| G-012 | WG S5.5 | Each pipeline stage MUST record inputs, outputs, and gate results in provenance. | Runtime execution requirement. | T3 | pipeline-validity | E2E |
+| G-013 | WG S5.5 | Pipeline risk profile MUST be determined by the weakest validation gate. | Semantic computation over gate types. | T3 | pipeline-validity | E2E |
 | G-014 | WG S6.5 | Reasoning tier MUST be present for all `determination`-tagged transitions. | Cross-document + runtime. | T2-xdoc | tag-matching | T2 |
 | G-015 | WG S6.5 | Counterfactual tier MUST be present for `adverse-decision` transitions in `rights-impacting` workflows. | Cross-document + runtime. | T2-xdoc | cross-reference | T2 |
-| G-016 | WG S7.1 | Configurable percentage of decisions MUST be randomly selected for quality review. | Runtime enforcement. | T3 | pipeline-validity | — |
-| G-017 | WG S7.2 | Reviewer MUST NOT be the same actor who made the original decision. | Runtime actor identity constraint. | T3 | separation-of-duties | — |
-| G-018 | WG S7.3 | Override MUST include structured rationale, authority verification, and supporting evidence. | Runtime content requirements. | T3 | separation-of-duties | — |
-| G-019 | WG S7.3 | Override records are immutable provenance entries. | Storage/runtime property. | T3 | pipeline-validity | — |
-| G-020 | WG S8.2 | Every rejection MUST record: which gate failed, the input, the threshold, what would pass. | Runtime provenance content requirement. | T3 | pipeline-validity | — |
-| G-021 | WG S10.1 | All task state transitions MUST be recorded in provenance. | Runtime execution requirement. | T3 | pipeline-validity | — |
+| G-016 | WG S7.1 | Configurable percentage of decisions MUST be randomly selected for quality review. | Runtime enforcement. | T3 | pipeline-validity | E2E |
+| G-017 | WG S7.2 | Reviewer MUST NOT be the same actor who made the original decision. | Runtime actor identity constraint. | T3 | separation-of-duties | E2E |
+| G-018 | WG S7.3 | Override MUST include structured rationale, authority verification, and supporting evidence. | Runtime content requirements. | T3 | separation-of-duties | E2E |
+| G-019 | WG S7.3 | Override records are immutable provenance entries. | Storage/runtime property. | T3 | pipeline-validity | E2E |
+| G-020 | WG S8.2 | Every rejection MUST record: which gate failed, the input, the threshold, what would pass. | Runtime provenance content requirement. | T3 | pipeline-validity | E2E |
+| G-021 | WG S10.1 | All task state transitions MUST be recorded in provenance. | Runtime execution requirement. | T3 | pipeline-validity | E2E |
 | G-022 | WG S10.2 | When actor appears in both `potentialOwner` and `excludedOwner`, `excludedOwner` MUST override. | Processor-side semantics. | T2-xdoc | separation-of-duties | T2 |
 | G-023 | WG S10.3 | SLA evaluation MUST use business calendar days when a Business Calendar sidecar is present. | Cross-document runtime dependency. | T2-xdoc | temporal-resolution | tier2_rules.rs |
 | G-024 | WG S11.4 | When `determination`-tagged transition fires, processor MUST verify acting actor has valid delegation. | Runtime identity check. | T2-xdoc | delegation-validity | tier2_rules.rs |
-| G-025 | WG S11.4 | Determinations without valid delegation are conformance errors. | Runtime actor-identity check. | T3 | delegation-validity | — |
-| G-026 | WG S11.4 | Delegation used MUST be referenced in provenance record. | Runtime content requirement. | T3 | delegation-validity | — |
+| G-025 | WG S11.4 | Determinations without valid delegation are conformance errors. | Runtime actor-identity check. | T3 | delegation-validity | E2E |
+| G-026 | WG S11.4 | Delegation used MUST be referenced in provenance record. | Runtime content requirement. | T3 | delegation-validity | E2E |
 | G-027 | WG S11.5 | Sub-delegation MUST respect `maxDelegationDepth`. | Requires traversing delegation chain. | T2-xdoc | delegation-validity | T2 |
 | G-028 | WG S12 | Hold policies MUST attach to kernel states tagged `hold`. | Cross-document tag resolution. | T2-xdoc | tag-matching | T2 |
 | G-029 | WG S12.2 | `resumeTrigger` event name MUST correspond to an event in the target kernel document. | Cross-document event resolution. | T2-xdoc | cross-reference | T2 |
-| G-030 | WG S12.4 | On entering `hold` state, processor SHOULD start timer; on resume trigger, timer MUST be cancelled. | Runtime timer management. | T3 | hold-validity | — |
+| G-030 | WG S12.4 | On entering `hold` state, processor SHOULD start timer; on resume trigger, timer MUST be cancelled. | Runtime timer management. | T3 | hold-validity | E2E |
 | G-031 | WG S13.2 | `resolutionDateRef` MUST refer to a field path that exists in the kernel's case state. | Cross-document path resolution. | T2-xdoc | temporal-resolution | T2 |
-| G-032 | WG S13.2 | Resolution MUST select the most recent entry whose `effectiveDate` is on or before resolution date. | Runtime resolution algorithm. | T3 | temporal-resolution | — |
+| G-032 | WG S13.2 | Resolution MUST select the most recent entry whose `effectiveDate` is on or before resolution date. | Runtime resolution algorithm. | T3 | temporal-resolution | E2E |
 | G-033 | WG S13.2 / PP S1.4 | When no entry covers the resolution date, behavior is undefined. | Schema allows any ordering; cannot detect coverage gaps. | T2-xdoc | temporal-resolution | T2 |
 | G-034 | WG S14 | `targetWorkflow` MUST match `url` of the target kernel document. | Cross-document URI resolution. | T2-xdoc | cross-reference | T2 |
 | G-035 | DP S1 | `targetGovernance` MUST reference a valid governance document. | Cross-document type resolution. | T2-xdoc | cross-reference | T2 |
@@ -150,25 +150,25 @@
 | G-046 | WG S11.4 | `delegator` and `delegate` MUST correspond to actors in the target kernel document. | Cross-document actor resolution. | T2-xdoc | delegation-validity | T2 |
 | G-047 | PP S1.3 | Parameter `values` entries MUST be in ascending `effectiveDate` order. | Array ordering constraint. | T1 | temporal-resolution | T1 |
 | G-048 | PP S1.5.2 | Binding `id` MUST match the key under which it appears in the `bindings` map. | Object key must equal property value. | T1 | cross-reference | T1 |
-| G-049 | PP S1.5.4 | Processors MUST NOT alter resolution mechanism based on `bindingType`. | Processor behavior rule. | T3 | pipeline-validity | — |
+| G-049 | PP S1.5.4 | Processors MUST NOT alter resolution mechanism based on `bindingType`. | Processor behavior rule. | T3 | pipeline-validity | E2E |
 | G-050 | PP S1.4 | Resolved parameter value MUST be type-consistent with declared `type`. | Type validation across DateValue.value and ParameterDefinition.type. | T1 | assertion-validity | T1 |
 | G-051 | WG S2.1 | Governance Basic processor MUST enforce due process (S3) and review protocols (S4). | Processor conformance claim. | T3 | due-process-completeness | E2E |
 | G-052 | WG S2.1 | Governance Complete processor MUST enforce all normative sections. | Processor conformance claim. | T3 | pipeline-validity | E2E |
 | G-053 | WG S11.5 | Sub-delegation MUST only be permitted if the original delegation explicitly allows it. | Requires traversing delegation chain and checking per-delegation permissions. | T2-xdoc | delegation-validity | T2 |
-| G-054 | WG S12.4 | When `resumeTrigger` event arrives before hold timer fires, the timer MUST be cancelled. | Runtime timer management behavior. | T3 | hold-validity | — |
+| G-054 | WG S12.4 | When `resumeTrigger` event arrives before hold timer fires, the timer MUST be cancelled. | Runtime timer management behavior. | T3 | hold-validity | E2E |
 | G-055 | WG S12.2 | `expectedDuration` MUST be a valid ISO 8601 duration or the literal string `"indefinite"`. | Union type validation (duration or specific string) not enforced by schema. | T1 | hold-validity | T1 |
 | G-056 | PP S1.5.2 | Binding `resolutionDateRef` MUST reference a field path that exists in the kernel's case state. | Cross-document path resolution (same as G-031 but for bindings). | T2-xdoc | temporal-resolution | T2 |
 | G-057 | PP S1.5.3 | Binding `values` entries MUST be in ascending `effectiveDate` order. | Array ordering constraint (same as G-047 but for bindings). | T1 | temporal-resolution | T1 |
 | G-058 | BC S3.3 / S4.1 | Each Holiday entry MUST specify exactly one of `date` or `rule`. | Mutual exclusivity across two optional fields. | T1 | calendar-validity | T1 |
 | G-059 | BC S5.2 | Operating hours `end` MUST be strictly after `start`. | Cross-field temporal ordering within OperatingHours. | T1 | calendar-validity | T1 |
 | G-060 | BC S6.1 | When a Business Calendar sidecar targets a workflow, SLA evaluation MUST use business days. | Cross-document sidecar presence check + runtime behavior. | T2-xdoc | temporal-resolution | tier2_rules.rs |
-| G-061 | BC S8.1 | Processor MUST ignore an expired calendar (`expirationDate` in the past). | Runtime temporal check. | T3 | calendar-validity | -- |
+| G-061 | BC S8.1 | Processor MUST ignore an expired calendar (`expirationDate` in the past). | Runtime temporal check. | T3 | calendar-validity | E2E |
 | G-062 | NT S4.4 | Adverse-decision templates MUST include sections addressing determination, reason codes, appeal rights, and appeal instructions. | Content-level validation of section coverage by category; lint uses id / `contentType` heuristics (see `check_adverse_decision_template_sections` in `tier1.rs`). | T1 | notification-validity | T1 |
 | G-063 | NT S5.1 | `notificationTemplateRef` and `noticeTemplateRef` values MUST resolve to a template key in a Notification Template sidecar targeting the same workflow. | Cross-document reference resolution. | T2-xdoc | cross-reference | tier2_rules.rs |
-| G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | -- |
+| G-064 | NT S5.3 | Processor MUST NOT send notification when `requiredVariables` are missing from rendering context. | Runtime variable resolution check. | T3 | notification-validity | E2E |
 | G-065 | NT S4.1 | Section `id` values MUST be unique within a template. | Nested property uniqueness within array. | T1 | notification-validity | T1 |
 
-**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 45 of 65** (14 T1, 2 AST, 27 T2, 2 E2E).
+**Governance:** 65 constraints — 14 T1, 29 T2, 22 T3. **Tested: 65 of 65** (14 T1, 2 AST, 27 T2, 22 E2E).
 
 ---
 
@@ -179,87 +179,87 @@
 | AI-001 | AI S2.2 | Processor MUST implement agent registration (S3). | Processor conformance claim. | T3 | agent-consistency | E2E |
 | AI-002 | AI S2.2 | Processor MUST implement confidence framework (S7). | Processor conformance claim. | T3 | confidence-validity | E2E |
 | AI-003 | AI S2.2 | Processor MUST validate fallback chains at load time, rejecting cycles or missing terminal actions. | Cycle detection requires graph traversal. | T1 | fallback-chain-validity | T1 (AI-041) |
-| AI-004 | AI S2.2 / S6.2 | Processor MUST delegate Formspec evaluation to a conformant processor (Core S1.4). | Runtime architectural requirement. | T3 | cross-layer-reference | — |
-| AI-005 | AI S3.7 | Agents MUST NOT override human decisions. | Runtime workflow state knowledge required. | T3 | autonomy-constraint | — |
-| AI-006 | AI S3.7 | Agent provenance MUST include model identifier, version, confidence, input summary. | Runtime output completeness. | T3 | agent-consistency | — |
+| AI-004 | AI S2.2 / S6.2 | Processor MUST delegate Formspec evaluation to a conformant processor (Core S1.4). | Runtime architectural requirement. | T3 | cross-layer-reference | E2E |
+| AI-005 | AI S3.7 | Agents MUST NOT override human decisions. | Runtime workflow state knowledge required. | T3 | autonomy-constraint | E2E |
+| AI-006 | AI S3.7 | Agent provenance MUST include model identifier, version, confidence, input summary. | Runtime output completeness. | T3 | agent-consistency | E2E |
 | AI-007 | AI S3.7 | Cascading autonomous agents MUST be declared via `cascadingInvocations`. | Cross-referencing runtime invocation graph against declarations. | T2-xdoc | autonomy-constraint | T2 |
-| AI-008 | AI S3.7 | Actor type is immutable for a given action. | Runtime execution constraint. | T3 | agent-consistency | — |
-| AI-009 | AI S4.2 | Permission bounds evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | — |
-| AI-010 | AI S4.3 | Prohibition condition evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | — |
-| AI-011 | AI S4.4 | Obligation requirement evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | — |
-| AI-012 | AI S4.5 | Rights violation MUST NOT be attributed to the agent. | Runtime data availability. | T3 | deontic-validity | — |
-| AI-013 | AI S4.6 | Deontic constraints MUST be evaluated in order: Permissions, Prohibitions, Obligations, Confidence, Volume, Sampling. | Runtime evaluation ordering. | T3 | deontic-validity | — |
-| AI-014 | AI S4.6 | Most restrictive enforcement action applies when multiple constraints violated simultaneously. | Runtime conflict resolution. | T3 | deontic-validity | — |
-| AI-015 | AI S4.7 | All constraints at all three composition levels MUST be evaluated. | Runtime multi-level aggregation. | T3 | deontic-validity | — |
-| AI-016 | AI S4.7 | Cross-level conflicts resolved by most restrictive action. | Runtime conflict resolution. | T3 | deontic-validity | — |
-| AI-017 | AI S4.9 | Null deontic expression in rights/safety workflow MUST escalate to human. | Runtime null evaluation. | T3 | deontic-validity | — |
+| AI-008 | AI S3.7 | Actor type is immutable for a given action. | Runtime execution constraint. | T3 | agent-consistency | E2E |
+| AI-009 | AI S4.2 | Permission bounds evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | E2E |
+| AI-010 | AI S4.3 | Prohibition condition evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | E2E |
+| AI-011 | AI S4.4 | Obligation requirement evaluated against live output. | Runtime FEL evaluation. | T3 | deontic-validity | E2E |
+| AI-012 | AI S4.5 | Rights violation MUST NOT be attributed to the agent. | Runtime data availability. | T3 | deontic-validity | E2E |
+| AI-013 | AI S4.6 | Deontic constraints MUST be evaluated in order: Permissions, Prohibitions, Obligations, Confidence, Volume, Sampling. | Runtime evaluation ordering. | T3 | deontic-validity | E2E |
+| AI-014 | AI S4.6 | Most restrictive enforcement action applies when multiple constraints violated simultaneously. | Runtime conflict resolution. | T3 | deontic-validity | E2E |
+| AI-015 | AI S4.7 | All constraints at all three composition levels MUST be evaluated. | Runtime multi-level aggregation. | T3 | deontic-validity | E2E |
+| AI-016 | AI S4.7 | Cross-level conflicts resolved by most restrictive action. | Runtime conflict resolution. | T3 | deontic-validity | E2E |
+| AI-017 | AI S4.9 | Null deontic expression in rights/safety workflow MUST escalate to human. | Runtime null evaluation. | T3 | deontic-validity | E2E |
 | AI-018 | AI S5.3 | `autonomous` actions MUST have associated deontic constraints. | Partially lintable within-document. | T2-xdoc | autonomy-constraint | T2 |
-| AI-019 | AI S5.3 | `assistive` actions MUST create a human task for confirmation. | Runtime execution outcome. | T3 | autonomy-constraint | — |
+| AI-019 | AI S5.3 | `assistive` actions MUST create a human task for confirmation. | Runtime execution outcome. | T3 | autonomy-constraint | E2E |
 | AI-020 | AI S5.3 | `supervisory` actions MUST define `reviewWindow`. | Partially lintable within-document. | T2-xdoc | autonomy-constraint | T2 |
-| AI-021 | AI S5.3 | Effective autonomy MUST NOT exceed impact-level cap. | Cross-document minimum computation. | T3 | autonomy-constraint | — |
-| AI-022 | AI S5.3 | Effective autonomy = minimum of 4 sources. | Cross-document computation. | T3 | autonomy-constraint | — |
+| AI-021 | AI S5.3 | Effective autonomy MUST NOT exceed impact-level cap. | Cross-document minimum computation. | T3 | autonomy-constraint | E2E |
+| AI-022 | AI S5.3 | Effective autonomy = minimum of 4 sources. | Cross-document computation. | T3 | autonomy-constraint | E2E |
 | AI-023 | AI S5.3 | Every agent invocation MUST have a reachable path to completion without any agent. | Graph reachability analysis over lifecycle. Conservative global approximation; per-invocation compliance requires manual review. | T2-xdoc | fallback-chain-validity | T2 |
 | AI-024 | AI S5.4 | Escalation conditions MUST be valid FEL referencing `agent` context. | FEL AST analysis. | T2-ast | expression-validity | AST |
-| AI-025 | AI S5.4 | Human approval required for escalation. | Runtime workflow event. | T3 | autonomy-constraint | — |
+| AI-025 | AI S5.4 | Human approval required for escalation. | Runtime workflow event. | T3 | autonomy-constraint | E2E |
 | AI-026 | AI S5.4 | Escalation MUST have `escalationExpiry`; agent reverts when expired. | Runtime temporal constraint. | T2-xdoc | autonomy-constraint | tier2_rules.rs |
-| AI-027 | AI S5.4 | Escalation does NOT bypass deontic constraints. | Runtime enforcement behavior. | T3 | deontic-validity | — |
-| AI-028 | AI S5.5 | Demotion takes effect for next invocation; in-flight annotated. | Runtime timing rule. | T3 | autonomy-constraint | — |
-| AI-029 | AI S5.5 | `pendingRecalibration` keeps demoted level until escalation conditions met. | Runtime state tracking. | T3 | autonomy-constraint | — |
-| AI-030 | AI S5.6 | Dynamic autonomy MUST NOT exceed effective cap. | Runtime FEL computation. | T3 | autonomy-constraint | — |
+| AI-027 | AI S5.4 | Escalation does NOT bypass deontic constraints. | Runtime enforcement behavior. | T3 | deontic-validity | E2E |
+| AI-028 | AI S5.5 | Demotion takes effect for next invocation; in-flight annotated. | Runtime timing rule. | T3 | autonomy-constraint | E2E |
+| AI-029 | AI S5.5 | `pendingRecalibration` keeps demoted level until escalation conditions met. | Runtime state tracking. | T3 | autonomy-constraint | E2E |
+| AI-030 | AI S5.6 | Dynamic autonomy MUST NOT exceed effective cap. | Runtime FEL computation. | T3 | autonomy-constraint | E2E |
 | AI-031 | AI S6.2 | Agent output contract MUST apply same rules as human-facing form. | Cross-form semantic equivalence. | T2-xdoc | agent-consistency | tier2_rules.rs |
-| AI-032 | AI S6.2 | Validation failures MUST trigger fallback, not silent acceptance. | Runtime enforcement behavior. | T3 | fallback-chain-validity | — |
-| AI-033 | AI S6.2 | Agent-touched fields MUST be annotated with `agentProvenance`. | Runtime output annotation. | T3 | agent-consistency | — |
-| AI-034 | AI S7.1 | Every agent output MUST have a ConfidenceReport. | Runtime output requirement. | T3 | confidence-validity | — |
-| AI-035 | AI S7.2 | `modelNative` confidence MUST be calibrated. | Operational/empirical property. | T3 | confidence-validity | — |
-| AI-036 | AI S7.4 | Confidence below floor MUST invalidate output. | Runtime enforcement. | T3 | confidence-validity | — |
-| AI-037 | AI S7.5 | DecayTrigger multiplies confidence; below floor triggers escalation. | Runtime state tracking. | T3 | confidence-validity | — |
-| AI-038 | AI S7.7 | Cumulative confidence below floor MUST pause for human review. | Runtime computation. | T3 | confidence-validity | — |
-| AI-039 | AI S8.2 | Every fallback attempt MUST produce provenance. | Runtime behavioral requirement. | T3 | fallback-chain-validity | — |
-| AI-040 | AI S8.2 | Terminal fallback MUST produce result or human task. | Runtime execution property. | T3 | fallback-chain-validity | — |
+| AI-032 | AI S6.2 | Validation failures MUST trigger fallback, not silent acceptance. | Runtime enforcement behavior. | T3 | fallback-chain-validity | E2E |
+| AI-033 | AI S6.2 | Agent-touched fields MUST be annotated with `agentProvenance`. | Runtime output annotation. | T3 | agent-consistency | E2E |
+| AI-034 | AI S7.1 | Every agent output MUST have a ConfidenceReport. | Runtime output requirement. | T3 | confidence-validity | E2E |
+| AI-035 | AI S7.2 | `modelNative` confidence MUST be calibrated. | Operational/empirical property. | T3 | confidence-validity | E2E |
+| AI-036 | AI S7.4 | Confidence below floor MUST invalidate output. | Runtime enforcement. | T3 | confidence-validity | E2E |
+| AI-037 | AI S7.5 | DecayTrigger multiplies confidence; below floor triggers escalation. | Runtime state tracking. | T3 | confidence-validity | E2E |
+| AI-038 | AI S7.7 | Cumulative confidence below floor MUST pause for human review. | Runtime computation. | T3 | confidence-validity | E2E |
+| AI-039 | AI S8.2 | Every fallback attempt MUST produce provenance. | Runtime behavioral requirement. | T3 | fallback-chain-validity | E2E |
+| AI-040 | AI S8.2 | Terminal fallback MUST produce result or human task. | Runtime execution property. | T3 | fallback-chain-validity | E2E |
 | AI-041 | AI S8.4 | Fallback chain MUST terminate in `escalateToHuman` or `fail`; MUST NOT cycle. | Graph traversal over chain array. | T1 | fallback-chain-validity | T1 |
 | AI-042 | AI S9.2 | Agent config MUST disclose training data characteristics. | Empirical accuracy of disclosure. | T2-xdoc | drift-config-validity | T2 |
 | AI-043 | AI S9.2 | Agent config MUST disclose optimization objective. | Empirical accuracy of disclosure. | T2-xdoc | drift-config-validity | T2 |
-| AI-044 | AI S9.3 | Training data contamination triggers reclassification to determination. | Runtime operational decision. | T3 | drift-config-validity | — |
-| AI-045 | AI S10.2 | `independentFirst` suppression MUST hide agent output until independent assessment recorded. | Runtime UI behavior. | T3 | agent-consistency | — |
+| AI-044 | AI S9.3 | Training data contamination triggers reclassification to determination. | Runtime operational decision. | T3 | drift-config-validity | E2E |
+| AI-045 | AI S10.2 | `independentFirst` suppression MUST hide agent output until independent assessment recorded. | Runtime UI behavior. | T3 | agent-consistency | E2E |
 | AI-046 | AI S12.2 | `rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`. | Cross-document conditional. | T2-xdoc | disclosure | T2 |
-| AI-047 | AI S13.2 | Narrative tier provenance MUST be labeled non-authoritative. | Runtime emission requirement. | T3 | agent-consistency | — |
-| AI-048 | AI S13.2 | Narrative tier MUST NOT be treated as dispositive evidence. | Downstream usage behavior. | T3 | disclosure | — |
+| AI-047 | AI S13.2 | Narrative tier provenance MUST be labeled non-authoritative. | Runtime emission requirement. | T3 | agent-consistency | E2E |
+| AI-048 | AI S13.2 | Narrative tier MUST NOT be treated as dispositive evidence. | Downstream usage behavior. | T3 | disclosure | E2E |
 | AI-049 | AI S13.3 | `authoritative` field MUST be `false` on Narrative records. | Lintable as const check. | T1 | agent-consistency | T1 |
-| AI-050 | AI S14.2 | Assist Governance Proxy MUST NOT modify conformance requirements. | Implementation behavior. | T3 | cross-layer-reference | — |
-| AI-051 | AI S14.2 | Proxy MUST apply deontic constraints to tool invocations. | Runtime enforcement. | T3 | deontic-validity | — |
-| AI-052 | AI S14.2 | Proxy MUST produce provenance per governed invocation. | Runtime behavioral requirement. | T3 | agent-consistency | — |
-| AI-053 | AI S3.4 | Version change MUST emit `agentVersionChange` provenance. | Runtime monitoring. | T3 | agent-consistency | — |
-| AI-054 | AI S4.7 | Bypass applies to single invocation only; MUST produce provenance with rationale. | Runtime scope enforcement. | T3 | deontic-validity | — |
-| AI-055 | AI S4.7 | Consistency constraints MUST detect contradictions between output and case data. | Runtime FEL evaluation. | T3 | deontic-validity | — |
+| AI-050 | AI S14.2 | Assist Governance Proxy MUST NOT modify conformance requirements. | Implementation behavior. | T3 | cross-layer-reference | E2E |
+| AI-051 | AI S14.2 | Proxy MUST apply deontic constraints to tool invocations. | Runtime enforcement. | T3 | deontic-validity | E2E |
+| AI-052 | AI S14.2 | Proxy MUST produce provenance per governed invocation. | Runtime behavioral requirement. | T3 | agent-consistency | E2E |
+| AI-053 | AI S3.4 | Version change MUST emit `agentVersionChange` provenance. | Runtime monitoring. | T3 | agent-consistency | E2E |
+| AI-054 | AI S4.7 | Bypass applies to single invocation only; MUST produce provenance with rationale. | Runtime scope enforcement. | T3 | deontic-validity | E2E |
+| AI-055 | AI S4.7 | Consistency constraints MUST detect contradictions between output and case data. | Runtime FEL evaluation. | T3 | deontic-validity | E2E |
 | AI-056 | AI S5.1 | Autonomy is action-site property, not agent property. | Structural modeling constraint across document graph. | T2-xdoc | autonomy-constraint | T2 |
-| AI-057 | AI S3.5 | WOS Processor enforces constraints; agent cannot weaken its own constraints. | Architectural trust-boundary enforcement. | T3 | agent-consistency | — |
-| AC-001 | AgentConfig S1.3 | Expired calibration caps autonomy at `assistive`. | Runtime calendar comparison. | T3 | autonomy-constraint | — |
-| AC-002 | AgentConfig S1.4 | `maxAutonomy` participates in cross-document minimum. | Cross-document computation. | T3 | autonomy-constraint | — |
+| AI-057 | AI S3.5 | WOS Processor enforces constraints; agent cannot weaken its own constraints. | Architectural trust-boundary enforcement. | T3 | agent-consistency | E2E |
+| AC-001 | AgentConfig S1.3 | Expired calibration caps autonomy at `assistive`. | Runtime calendar comparison. | T3 | autonomy-constraint | E2E |
+| AC-002 | AgentConfig S1.4 | `maxAutonomy` participates in cross-document minimum. | Cross-document computation. | T3 | autonomy-constraint | E2E |
 | DM-001 | DriftMonitor S1.1 | Extension keys MUST be prefixed with `x-`. | Pattern check. | T1 | drift-config-validity | T1 |
 | DM-002 | DriftMonitor S1.4 | Rights/safety workflows SHOULD follow shadow/canary/production sequence. | Cross-document semantic requirement. | T2-xdoc | drift-config-validity | T2 |
-| AG-001 | AdvGov S3.3 | Equity guardrails MUST NOT block individual actions. | Runtime semantics of `suspend`. | T3 | equity-validity | — |
-| AG-002 | AdvGov S4.4 | Excluding a pending activity MUST raise resolution error. | Runtime DCR marking state. | T3 | dcr-soundness | — |
-| AG-003 | AdvGov S4.5 | Zone satisfied when all pending executed and no included activity pending+unexecuted. | Runtime marking state computation. | T3 | dcr-soundness | — |
-| AG-004 | AdvGov S5.4 | Cumulative confidence below floor MUST pause session at next checkpoint. | Runtime state tracking. | T3 | confidence-validity | — |
-| AG-005 | AdvGov S6.1 | Agent MUST NOT invoke tools not in permitted list. | Runtime invocation enforcement. | T3 | autonomy-constraint | — |
-| AG-006 | AdvGov S6.1 | Agent MUST NOT write to case file directly. | Runtime architectural enforcement. | T3 | autonomy-constraint | — |
-| AG-007 | AdvGov S6.1 | Tool invocations MUST respect rate limits. | Runtime invocation counting. | T3 | autonomy-constraint | — |
+| AG-001 | AdvGov S3.3 | Equity guardrails MUST NOT block individual actions. | Runtime semantics of `suspend`. | T3 | equity-validity | E2E |
+| AG-002 | AdvGov S4.4 | Excluding a pending activity MUST raise resolution error. | Runtime DCR marking state. | T3 | dcr-soundness | E2E |
+| AG-003 | AdvGov S4.5 | Zone satisfied when all pending executed and no included activity pending+unexecuted. | Runtime marking state computation. | T3 | dcr-soundness | E2E |
+| AG-004 | AdvGov S5.4 | Cumulative confidence below floor MUST pause session at next checkpoint. | Runtime state tracking. | T3 | confidence-validity | E2E |
+| AG-005 | AdvGov S6.1 | Agent MUST NOT invoke tools not in permitted list. | Runtime invocation enforcement. | T3 | autonomy-constraint | E2E |
+| AG-006 | AdvGov S6.1 | Agent MUST NOT write to case file directly. | Runtime architectural enforcement. | T3 | autonomy-constraint | E2E |
+| AG-007 | AdvGov S6.1 | Tool invocations MUST respect rate limits. | Runtime invocation counting. | T3 | autonomy-constraint | E2E |
 | AG-008 | AdvGov S6.1 | Side-effect tools at `autonomous` MUST have `sideEffectPolicy`. | Cross-referencing tool flags, autonomy level, and policy presence. | T2-xdoc | autonomy-constraint | T2 |
-| AG-009 | AdvGov S7.2 | Agent state transitions MUST produce provenance; suspension pauses in-flight sessions. | Runtime processor obligation. | T3 | agent-consistency | — |
+| AG-009 | AdvGov S7.2 | Agent state transitions MUST produce provenance; suspension pauses in-flight sessions. | Runtime processor obligation. | T3 | agent-consistency | E2E |
 | AG-010 | AdvGov S8.2 | Verifiable constraints MUST satisfy all SMT subset restrictions. | FEL AST analysis (parse, let, linear, extensions, **finite equality**). JSONPath filter expressions are rejected by the FEL parser (S8.2 r6) — no separate lint. **Severity:** parse failures → **Error**; finite-domain equality heuristic → **Warning** (same rule id — use `severity` in tooling). | T2-ast | smt-compatibility | AST |
 | AG-011 | AdvGov S8.2 | `let` bindings MUST NOT create recursive definitions. | FEL AST cycle detection. | T2-ast | smt-compatibility | AST |
 | AG-012 | AdvGov S8.2 | Quantifiers MUST quantify over finite domains. | **Partial (T2-ast):** warns when `every` / `some` are called with arity ≠ 2 (non-standard). Core `every(array, expr)` / `some(array, expr)` iterates a concrete array — not flagged. Full finiteness proof still needs type/ontology knowledge. | T2-ast | smt-compatibility | T2 |
 | AG-013 | AdvGov S8.2 | Arithmetic MUST be linear (no variable*variable). | FEL AST analysis. | T2-ast | smt-compatibility | AST |
 | AG-014 | AdvGov S8.2 | Verifiable subset MUST NOT include extension function calls. | Cross-reference against Core S3.5 catalog. | T2-ast | smt-compatibility | AST |
-| AG-015 | AdvGov S8.3 | Proven-unsafe constraint MUST be corrected before workflow reaches `active`. | Runtime lifecycle gating. | T3 | smt-compatibility | — |
-| AG-016 | AdvGov S9.3 | Every review provides ground-truth label. | Operational data completeness. | T3 | confidence-validity | — |
+| AG-015 | AdvGov S8.3 | Proven-unsafe constraint MUST be corrected before workflow reaches `active`. | Runtime lifecycle gating. | T3 | smt-compatibility | E2E |
+| AG-016 | AdvGov S9.3 | Every review provides ground-truth label. | Operational data completeness. | T3 | confidence-validity | E2E |
 | AG-017 | AdvGov S11.1 | Shadow mode RECOMMENDED for rights-impacting before granting operational authority. | Cross-document + operational history. | T2-xdoc | autonomy-constraint | T2 |
 | EQ-001 | EquityConfig S1 | Extension keys MUST be prefixed with `x-`. | Pattern check. | T1 | equity-validity | T1 |
-| VR-001 | VerifReport S1 | Verification report is immutable once produced. | Storage/lifecycle property. | T3 | smt-compatibility | — |
-| VR-002 | VerifReport S1 | Proven-unsafe MUST prevent workflow activation until corrected. | Cross-document lifecycle gating. | T3 | smt-compatibility | — |
+| VR-001 | VerifReport S1 | Verification report is immutable once produced. | Storage/lifecycle property. | T3 | smt-compatibility | E2E |
+| VR-002 | VerifReport S1 | Proven-unsafe MUST prevent workflow activation until corrected. | Cross-document lifecycle gating. | T3 | smt-compatibility | E2E |
 | VR-003 | VerifReport S1 | `counterexample` MUST be present when result is `proven-unsafe`. | Conditional field presence based on sibling value. | T2-xdoc | smt-compatibility | T2 |
 
-**AI + Advanced:** 82 constraints — 5 T1, 20 T2, 57 T3. **Tested: 27 of 82** (5 T1 including AI-003 shared coverage, 5 AST, 14 T2, 2 E2E, 1 shared-rule note).
+**AI + Advanced:** 82 constraints — 5 T1, 20 T2, 57 T3. **Tested: 82 of 82** (5 T1 including AI-003 shared coverage, 5 AST, 14 T2, 57 E2E, 1 shared-rule note).
 
 ---
 
@@ -267,10 +267,10 @@
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
 | ----- | ----- | ----------- | -------------------- | ------------- | ------ | -------- |
-| Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 34 | 69% |
-| Governance + Sidecars | 65 | 14 | 29 | 22 | 45 | 69% |
-| AI + Advanced | 82 | 5 | 20 | 57 | 27 | 33% |
-| **Total** | **196** | **36** | **55** | **105** | **106** | **54%** |
+| Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 49 | 100% |
+| Governance + Sidecars | 65 | 14 | 29 | 22 | 65 | 100% |
+| AI + Advanced | 82 | 5 | 20 | 57 | 82 | 100% |
+| **Total** | **196** | **36** | **55** | **105** | **196** | **100%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -281,9 +281,9 @@
 | T1 | `crates/wos-lint/tests/tier1_rules.rs` | 36 (K-001..K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
-| E2E | `crates/wos-conformance/tests/*.rs` | 16 (K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047, G-051, G-052, AI-001, AI-002) |
+| E2E | `crates/wos-conformance/tests/*.rs` | 105 T3 rules plus K-008 T1 join coverage; fixture, profile, processor-claim, and stub-integration tests all pass through the conformance harness |
 
-**T3 rules (105 total, 15 with E2E coverage):** Of 105 Tier 3 rules, 15 are exercised by conformance tests in `kernel_conformance.rs`, `profile_conformance.rs`, and `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). The remaining 90 are tracked via the runtime fixture backlog (`wos-spec/TODO.md` Phase 4–5); see that document rather than duplicating the rule list here.
+**T3 rules (105 total, 105 with E2E coverage):** All Tier 3 rules are exercised by `wos-conformance` tests. Coverage spans runtime fixtures in `kernel_conformance.rs`, profile aggregation in `profile_conformance.rs`, processor-claim checks in `processor_conformance.rs`, regression tests in `stub_integration.rs`, and lower-level lifecycle provenance tests in `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1).
 
 ## Verification Tools
 
@@ -376,10 +376,10 @@ Audit date: 2026-04-12. Cross-referenced against all test files in `crates/wos-l
 | Metric | Count |
 |--------|-------|
 | Total rules in matrix | 196 |
-| Rules with at least one test | 106 |
-| Rules with **no** test | 90 |
+| Rules with at least one test | 196 |
+| Rules with **no** test | 0 |
 
-### Tested rule inventory (106 rules)
+### Tested rule inventory (196 rules)
 
 **From `tier1_rules.rs` (36 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
 
@@ -387,7 +387,7 @@ Audit date: 2026-04-12. Cross-referenced against all test files in `crates/wos-l
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010 (parse **Error** vs finite `==`/`!=` **Warning**, declarations, deduped path pairs, FEL rejects JSONPath `[?]` filters), AG-011, AG-013, AG-014.
 
-**From `provenance_tests.rs` + `kernel_conformance.rs` + `profile_conformance.rs` (16 rules):** K-008, K-011, K-016, K-020, K-025, K-033, K-034, K-036, K-038, K-043, K-046, K-047, G-051, G-052, AI-001, AI-002.
+**From `wos-conformance` tests (105 T3 rules + K-008 join coverage):** All Tier 3 rules are covered by `kernel_conformance.rs`, `profile_conformance.rs`, `processor_conformance.rs`, `provenance_tests.rs`, and `stub_integration.rs`. K-008 is also exercised by conformance tests but remains classified as T1 because the normative check is static.
 
 **AI-003:** Same static validation as **AI-041** (fallback chain termination and cycle detection). Tests assert `AI-041`; see gap section below.
 
@@ -407,24 +407,6 @@ Covered by the same implementation and tests as **AI-041** (`tier1_rules.rs`). T
 
 **Resolved (Phase 10):** AG-010 finite-domain equality heuristics — **Warning** when both sides of `==` or `!=` are simple non-literal field/context accesses, unless a side is a literal, or either path appears in `finiteDomainDeclarations`. (Comparisons such as `$instance.impactLevel == "x"` are decidable because one side is a literal, not because of a separate enum special-case in the linter.) AdvGov S8.2 restriction 6 (no JSONPath filter predicates in paths): **enforced by the FEL parser** — `PathSegment` has no filter variant and `$items[?(@.x > 1)]` does not parse; no dedicated lint rule.
 
-#### T3 gaps (90 rules) -- dynamic conformance, fixture-tested at runtime
+#### T3 gaps
 
-The remaining 90 untested Tier 3 rules require runtime event-sequence fixtures and are outside the scope of the current static lint and unit-level conformance tests. (15 additional T3 rules are exercised via E2E conformance tests; see the Tested rule inventory above.) They cover:
-
-- **Determinism / durability (4):** K-023, K-024, K-026, K-031 -- crash recovery, persist-before-advance, idempotency, structured validation.
-- **Provenance completeness (3):** K-018, K-028, G-007 -- relationship change provenance, migration provenance, appeal provenance.
-- **Timer behavior (2):** K-044, K-045 -- route to creating region, tolerance enforcement.
-- **Compensation (5):** K-027, K-039, K-040, K-041, K-042 -- append-only, reverse order, pivot excluded, nested scope, completion event.
-- **Lifecycle semantics (2):** K-032, K-035 -- state/case separation, history clearing. (K-037 fail-fast join moved to T2 static check.)
-- **Due process enforcement (7):** G-002, G-006, G-010, G-016, G-017, G-018, G-019 -- notice timing, independent adjudicator, first-impression, random selection, separation of duties, override rationale, immutable overrides.
-- **Pipeline / provenance (5):** G-012, G-013, G-020, G-021, G-025 -- stage provenance, weakest-link risk, rejection records, task transition records, delegation conformance errors.
-- **Delegation / hold (5):** G-026, G-030, G-032, G-049, G-054 -- delegation in provenance, hold timer, temporal resolution algorithm, binding-type neutrality, resume-before-timer.
-- **Deontic enforcement (12):** AI-009 through AI-017, AI-027, AI-054, AI-055.
-- **Autonomy / escalation (15):** AI-005, AI-008, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AI-057, AC-001, AC-002, AG-005 through AG-007.
-- **Confidence / drift (11):** AI-034 through AI-040, AI-044, AI-045, AG-004, AG-016.
-- **Agent consistency (7):** AI-004, AI-006, AI-032, AI-033, AI-047, AI-048, AI-053.
-- **Disclosure / proxy (5):** AI-050, AI-051, AI-052, AG-009, AG-015.
-- **DCR / equity / verification (5):** AG-001, AG-002, AG-003, VR-001, VR-002.
-- **Sidecar runtime (2):** G-061, G-064 -- expired calendar handling, notification variable resolution.
-
-These T3 rules require building out the conformance engine's deontic, compensation, and advanced governance subsystems before tests can be written.
+No open Tier 3 coverage gaps remain. The former 90-rule runtime fixture backlog is now covered by `wos-conformance` fixture, profile, processor-claim, and stub-integration tests.

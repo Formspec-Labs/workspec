@@ -1,7 +1,7 @@
 # Implementation Plan: Extract wos-core from wos-conformance
 
 **Date:** 2026-04-10
-**Status:** Proposed
+**Status:** Completed
 **Author:** Formspec project
 
 ---

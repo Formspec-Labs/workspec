@@ -1,16 +1,18 @@
 # WOS TODO
 
-**Last audited:** 2026-04-12
-**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 99 green), 3 crates, 196 lint rules (106 tested, 90 untested)
+**Last audited:** 2026-04-13
+**Counts:** 18 specs, 18 schemas, 39 document fixtures + 95 conformance fixtures (0 T3 red, 95 green), 5 crates, 196 lint rules (186 tested, 10 untested)
 
 [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) |
 [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs. implementation boundary) |
-[Implementation Plan](../thoughts/archive/reviews/2026-04-09-wos-core-companion-review.md) (phases, success criteria, content recovery) |
+[Implementation Plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (core extraction - COMPLETE) |
+[Implementation Plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (runtime crate - COMPLETE) |
 [LINT-MATRIX](LINT-MATRIX.md) |
 [Runtime Companion](specs/companions/runtime.md) |
-[Feature Matrix](WOS-FEATURE-MATRIX.md) (competitive comparison, implementation status, audit corrections)
+[Feature Matrix](WOS-FEATURE-MATRIX.md) |
+[Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
 
-The order below minimizes tech debt. Each phase depends on the one before it. Doing Phase 3 before Phase 2 means building on raw JSON that gets rewritten. Doing Phase 4 before Phase 3 means writing fixtures against an API that changes.
+The reference implementation is now operational. Current focus has shifted from spec extraction to engine bindings and production readiness.
 
 ```text
 Phase 1          Phase 2          Phase 3          Phase 4          Phase 5
@@ -18,433 +20,138 @@ Settle specs ──→ Settle schemas ──→ Extract core ──→ Write fix
 (prose)          (structure)       (typed models)   (red)              (green)
                                        │
                                        └──→ Phase 6: Adapt wos-lint ──→ Phase 7: Documentation
+                                                                           │
+                                                                           └──→ Phase 13: Engine Bindings
 ```
 
 ---
 
 ## Phase 1: Settle the specs
 
-Normative prose changes. No code, no schemas. Get the words right before anything depends on them.
-
-### Kernel spec (`specs/kernel/spec.md`)
-
-- [x] **S4.2** — add concurrency statement: "Events MUST be processed serially per instance. Concurrent event delivery MUST be serialized. Multiple actors MAY append to case state concurrently (S5.4), but lifecycle transitions MUST be serialized." _(backport from Runtime S4.1)_
-- [x] **S4.10** — add `$related.stateChanged`, `$related.resolved`, `$related.holdReleased` to kernel-generated event catalog _(backport from Runtime S14)_. Add `maxRelationshipEventDepth` (default 3) with cascade prevention _(novel addition — Runtime S14 defines the three `$related.*` events but not the depth cap; author as new content)_.
-- [x] **S9.2** — add async action semantics: "Actions within a single state execute sequentially in document order. Actions across parallel regions MAY execute concurrently; provenance MUST record actual execution order." _(backport from Runtime S5)_
-
-### Governance spec (`specs/governance/workflow-governance.md`)
-
-- [x] **S6.2** — add `sourceAuthority` enum (`statute`, `regulation`, `policy`, `guideline`) to `RuleReference`. Named `sourceAuthority` to avoid collision with Delegation's `authority` field.
-
-### Runtime companion (`specs/companions/runtime.md`)
-
-- [x] **S5.3** — resolve parallel provenance ordering: mandate document-order-of-regions, or state implementation-defined. _(already done — implementation-defined with must-record constraint)_
-- [x] **S10** — clarify convergence cap: transitions fired during the cycle are committed (they already emitted provenance). State that timer-driven mutations trigger re-evaluation in continuous mode.
-- [x] **S12** — add `EventQueue` host interface (S12.8). `listByState`/`listByDefinition` marked OPTIONAL. Provenance log storage clarified as separate append-only store with cursor.
-- [x] **S14** — add `maxRelationshipEventDepth` cascade prevention (S14.5).
-
-### Formspec integration gaps
-
-- [x] Add Respondent Ledger SHOULD-to-MUST elevation reference in governance spec S3.2. _(plan Section 3.2)_
-- [x] Add VP-01/VP-02 version pinning citations in kernel S9.6. _(plan Section 3.2)_
-- [x] Add Changelog S4 reference in Runtime S11 for version migration. _(plan Section 3.2)_
-- [x] Add Ontology S3 reference in AI Integration S3.5 for semantic agent contracts. _(plan Section 3.2)_
-
-### Housekeeping
-
-- [x] Reconcile LINT-MATRIX rule count: current matrix is 195 total (35 T1 + 55 T2 + 105 T3). Header, tier box, summary table, and gap counts now agree.
+- [x] **Kernel spec (S4.2, S4.10, S9.2)** — concurrency, cascade depth, async actions.
+- [x] **Governance spec (S6.2)** — source authority ranking.
+- [x] **Runtime companion (S5.3, S10, S12, S14)** — parallel provenance, convergence cap, EventQueue interface.
+- [x] **Formspec integration gaps** — version pinning, changelog migration, semantic contracts.
+- [x] **Housekeeping** — reconcile LINT-MATRIX rule count (196 total).
 
 ---
 
 ## Phase 2: Settle the schemas
 
-JSON Schema updates. These define the structure that typed models deserialize into. Get them right before writing Rust structs.
-
-### `schemas/kernel/wos-kernel.schema.json`
-
-- [x] Add `evaluationMode` property (enum: `event-driven`, `continuous`, default: `event-driven`). Also added `maxRelationshipEventDepth` (integer, default: 3).
-
-### `schemas/governance/wos-workflow-governance.schema.json`
-
-- [x] Add `scope` property (FEL string) to `ReviewProtocolBinding`, `DueProcess`, `HoldPolicy`. _(backport from Runtime S8.2)_
-- [x] Add `sourceAuthority` enum to `RuleReference` $def (`statute`, `regulation`, `policy`, `guideline`). Also added `ruleId`, `description`, `citation` fields.
-
-### `schemas/companions/wos-case-instance.schema.json`
-
-- [x] Add `pendingEvents` array with `PendingEvent` $def.
-- [x] Add `governanceState` object with `GovernanceState`, `ActiveDelegation`, `ActiveHold` $defs.
-- [x] Add `volumeCounters` object with `VolumeCounters`, `VolumeCounter` $defs.
+- [x] **Kernel Schema** — `evaluationMode`, `maxRelationshipEventDepth`.
+- [x] **Governance Schema** — `scope`, `sourceAuthority`, `ruleId`.
+- [x] **Case Instance Schema** — `pendingEvents`, `governanceState`, `volumeCounters`.
 
 ---
 
 ## Phase 3: Extract wos-core
 
-Move the domain model and evaluation algorithm from `wos-conformance` into `wos-core` using typed models. After this phase, no `serde_json::Value` walking in the evaluation hot path.
-
-### 3.1 Typed deserialization
-
-- [x] Verify `KernelDocument` deserializes all 4 valid kernel fixtures (benefits-adjudication, case-relationship-appeal, medicaid-redetermination, purchase-order-approval). Note: benefits-correspondence-metadata is a sidecar, purchase-order-provenance is a test artifact, invalid-documents is a test harness — none are kernel documents.
-- [x] Add unit tests for typed model deserialization — 8 tests in `tests/kernel_deser.rs` (4 fixture round-trips + 1 negative test + 3 inline coverage for Phase 2 fields), 2 in `tests/governance_deser.rs`, 1 in `tests/ai_deser.rs`. Fixed `Milestone.id` (was required, now keyed by map like fixtures). Spec S4.13 updated to match.
-- [x] Type remaining `Value` fields: `contracts` is now `HashMap<String, ContractReference>`, `execution` is now `Option<ExecutionConfig>` (with `compensable: bool`). Added `evaluationMode`, `maxRelationshipEventDepth`, `title`, `description`, `schema`, `extensions`. Added `extensions` to `State`, `Actor`, `Action`, `ExecutionConfig`. `Action.value` and `Action.data` remain as `serde_json::Value` (intentionally dynamic — these carry arbitrary payloads). Schema: added `ref` to `ContractReference` required array.
-- [x] Add typed models for governance (`GovernanceDocument`) and AI (`AIIntegrationDocument`) in `model/governance.rs` and `model/ai.rs`. Full type hierarchies: Governance has 24 types (DueProcess, Pipeline, Delegation, HoldPolicy, etc.), AI has 28 types (AgentDeclaration, DeonticConstraints, FallbackLevel, etc.). Both round-trip against fixtures.
-
-### 3.2 Move evaluation logic
-
-- [x] Implement full typed evaluation algorithm in `wos-core/eval.rs`: `process_event`, `try_fire_transition`, `fire_transition`, `enter_state`, guard evaluation via FEL, action execution (setData/startTimer/cancelTimer), parallel region routing, $join generation. Uses typed `State`/`Transition`/`Action` — no `serde_json::Value` walking. Includes `IndexedState` flat index, `ObservedTransition`, and `parse_iso_duration_to_ms`.
-- [x] Consolidate timer logic: conformance engine now delegates to `wos_core::Evaluator`, which uses `wos_core::Timers` and `wos_core::timer::Timer` internally. Conformance's private `Timer` struct (with `timer_id` field name mismatch) is deleted. The `fel-core` direct dependency was also removed from `wos-conformance/Cargo.toml`.
-- [x] Consolidate provenance: wos-core now has all 10 `ProvenanceKind` variants (added OnEntry, OnExit, ActionExecuted, InvalidDuration) and all constructor methods. Conformance now re-exports from wos-core. Field name: `record_kind` (matches conformance convention).
-- [x] Add `EvalContext::from_case_state()` constructor. Also enriched `to_fel_environment()` to produce `caseFile` as both FEL object and dotted paths, plus `event` and `instance` namespaces — matching conformance engine's `build_fel_context` behavior.
-
-### 3.3 Add trait interfaces
-
-- [x] `traits/mod.rs` — 9 traits: `InstanceStore`, `DocumentResolver`, `ContractValidator`, `ExternalService`, `AccessControl`, `ProvenanceSigner`, `ReportRenderer`, `EventQueue`, `ActionExecutor`. Plus `ValidationResult` struct.
-- [x] `DefaultRuntime` struct — bundles in-memory `InstanceStore`, `AccessControl` (permissive), and `EventQueue` implementations.
-- [x] Verify `Evaluator::process_event` uses `&mut self` (ADR-0057 requires type-system-enforced serialization). _(confirmed in wos-core/eval.rs)_
-
-### 3.4 New modules
-
-- [x] `instance.rs` — `CaseInstance` struct with `InstanceStatus`, `TimerState`, `PendingEvent`, `GovernanceState`, `ActiveDelegation`, `ActiveHold`, `VolumeCounters`, `CompensationLog`.
-- [x] `explain.rs` — `Explanation`, `ReasoningRecord`, `CounterfactualRecord` types + `assemble_explanation()`. Full assembly implemented in Phase 5.
-
-### 3.5 Adapt wos-conformance
-
-- [x] Add `wos-core` to `wos-conformance/Cargo.toml`. _(done — wos-core now in deps)_
-- [x] Make `wos-conformance` a thin harness calling `wos-core::Evaluator`. _(engine.rs rewritten: deserializes kernel into `KernelDocument`, creates `Evaluator`, delegates all lifecycle evaluation. No `serde_json::Value` walking in the engine. Removed `fel-core` and `wos-lint` direct dependencies.)_
-- [x] Remove duplicate `ProvenanceRecord`/`ProvenanceKind` from conformance — now re-exports from wos-core. Timer consolidated (conformance's private `Timer` struct deleted).
-- [x] Implement `StubValidator`, `StubService`, `InMemoryStore`. _(stubs.rs: `InMemoryStore` implements `InstanceStore`, `StubValidator` implements `ContractValidator` with configurable pass/fail, `StubService` implements `ExternalService` with configurable response. 6 tests.)_
-- [x] Add `contract_outcomes` to fixture format for Formspec coprocessor testing. _(fixture.rs: `contract_outcomes: HashMap<String, ContractOutcome>` with `ContractOutcome { valid, errors }`. Serde-defaulted so existing fixtures are unaffected.)_
-- [x] Verify all 151+ existing tests still pass. _(208 total: 151 original + 20 deser/eval + 8 duration parsing + 15 conformance-engine + 8 sidecar deser + 6 stub tests = all pass.)_
+- [x] **3.1 Typed deserialization** — Kernel, Governance, and AI fixtures round-trip successfully.
+- [x] **3.2 Move evaluation logic** — `Evaluator` implements deterministic algorithm from S2.
+- [x] **3.3 Add trait interfaces** — 9 host interfaces defined in `traits/mod.rs`.
+- [x] **3.4 New modules** — `instance.rs` (serialization) and `explain.rs` (explanation assembly).
+- [x] **3.5 Adapt wos-conformance** — Thin harness delegating to `wos-core::Evaluator`.
 
 ---
 
 ## Phase 4: Write T3 conformance fixtures
 
-Author conformance fixtures for the runtime-rule backlog. This phase started as a red-fixture plan; all fixture batches below are now implemented, active in `cargo test`, and passing.
-
-### Fixture strategy
-
-- One fixture per rule (or small tightly-coupled group).
-- Synthetic minimal kernels, not extensions of benefits-adjudication.
-- Naming: `{rule-id}-{short-description}.json` (fixture), with matching kernel in `fixtures/kernel/`.
-- Current pattern: plain `#[test]` wrappers in `crates/wos-conformance/tests/kernel_conformance.rs` that execute the authored fixture inventory directly.
-- `cargo test` runs the shipped fixture batches, and `wos-conformance-report` covers the processor-claim layer for Batch 16.
-- **Timer testing:** Use the "noop-with-delay" pattern: `{ "event": "noop", "delay": "PT11S" }` advances simulated time without triggering a real event. The conformance engine calls `advance_time(ms)` which fires any timers whose deadlines have passed.
-
-### Batch table (priority order)
-
-| # | Batch | Rules | Rule IDs | Engine dep |
-|---|-------|-------|----------|------------|
-| 1 | Cancel-siblings/fail-fast | 2 | K-044, K-045 | `eval.rs` |
-| 2 | Hold/resume lifecycle | 2 | G-030, G-054 | `eval.rs` |
-| 3 | Deontic enforcement | 13 | AI-009, AI-010, AI-011, AI-012, AI-013, AI-014, AI-015, AI-016, AI-017, AI-027, AI-051, AI-054, AI-055 | `deontic.rs` |
-| 4 | Autonomy caps | 13 | AI-005, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AC-001, AC-002, AG-005, AG-006, AG-007 | `autonomy.rs` |
-| 5 | Confidence framework | 7 | AI-034, AI-035, AI-036, AI-037, AI-038, AG-004, AG-016 | `confidence.rs` |
-| 6 | Due process runtime | 8 | G-002, G-006, G-007, G-010, G-016, G-017, G-018, AI-045 | `due_process.rs` |
-| 7 | Pipeline execution | 7 | G-012, G-013, G-019, G-020, G-021, G-032, G-049 | `pipeline.rs` |
-| 8 | Compensation | 5 | K-027, K-039, K-040, K-041, K-042 | `compensation.rs` |
-| 9 | Delegation runtime | 2 | G-025, G-026 | `delegation.rs` |
-| 10 | Agent provenance + fallback | 12 | AI-006, AI-008, AI-033, AI-044, AI-047, AI-052, AI-053, AG-009, AI-057, AI-032, AI-039, AI-040 | `agent.rs`, `fallback.rs` |
-| 11 | Crash recovery / durability | 7 | K-023, K-024, K-026, K-028, K-031, K-032, K-035 | `durability.rs` |
-| 12 | DCR marking state | 3 | AG-001, AG-002, AG-003 | `dcr.rs` |
-| 13 | Provenance completeness | 2 | K-018, AI-048 | `provenance.rs` |
-| 14 | Verification reports | 3 | VR-001, VR-002, AG-015 | `verification.rs` |
-| 15 | Sidecar runtime | 2 | G-061, G-064 | `sidecar.rs` |
-| 16 | Processor conformance | 6 | AI-001, AI-002, AI-004, G-051, G-052, AI-050 | meta-rules, report-backed |
-
-**Deduplication notes:** AG-002 (DCR only), AG-015 (Verification only), AG-016 (Confidence only), AI-029 (Autonomy only). Each rule appears in exactly one batch.
-
-### Batch progress
-
-- [x] **Batch 1: Cancel-siblings/fail-fast** -- 2 fixtures (K-044, K-045), 2 active fixture tests. Kernels: `parallel-timer-scoping.json`, `timer-tolerance-violation.json`.
-- [x] **Batch 2: Hold/resume lifecycle** -- 2 fixtures (G-030, G-054), 2 active fixture tests. Kernels: `hold-resume-lifecycle.json`. Governance: `hold-resume-governance.json`.
-- [x] **Batch 3: Deontic enforcement** -- 13 fixtures (AI-009 through AI-017, AI-027, AI-051, AI-054, AI-055), 13 active fixture tests. Kernels: `deontic-enforcement.json`. AI: `deontic-enforcement-ai.json`.
-- [x] **Batch 4: Autonomy caps** -- 13 fixtures (AI-005, AI-019, AI-021, AI-022, AI-025, AI-028, AI-029, AI-030, AC-001, AC-002, AG-005, AG-006, AG-007), 13 active fixture tests. Kernels: `autonomy-caps.json`. AI: `autonomy-caps-ai.json`.
-- [x] **Batch 5: Confidence framework** -- 7 fixtures (AI-034 through AI-038, AG-004, AG-016), 7 active fixture tests. Reuses deontic kernel/AI documents.
-- [x] **Batch 6: Due process runtime** -- 8 fixtures (G-002, G-006, G-007, G-010, G-016, G-017, G-018, AI-045), 8 active fixture tests. Kernels: `due-process.json`. Governance: `due-process-governance.json`.
-- [x] **Batch 7: Pipeline execution** -- 7 fixtures (G-012, G-013, G-019, G-020, G-021, G-032, G-049), 7 active fixture tests. Kernels: `pipeline-execution.json`.
-- [x] **Batch 8: Compensation** -- 5 fixtures (K-027, K-039, K-040, K-041, K-042), 5 active fixture tests. Kernels: `compensation.json`.
-- [x] **Batch 9: Delegation runtime** -- 2 fixtures (G-025, G-026), 2 active fixture tests. Reuses due-process kernel/governance.
-- [x] **Batch 10: Agent provenance + fallback** -- 12 fixtures (AI-006, AI-008, AI-033, AI-044, AI-047, AI-052, AI-053, AG-009, AI-057, AI-032, AI-039, AI-040), 12 active fixture tests. Reuses deontic kernel/AI documents.
-- [x] **Batch 11: Crash recovery / durability** -- 7 fixtures (K-023, K-024, K-026, K-028, K-031, K-032, K-035), 7 active fixture tests. Kernels: `durability.json`. Uses `$restart` and `$migrate` synthetic events for crash/migration simulation. K-023 (crash recovery) and K-024 (persist-before-advance) test closest observable behavior; true architectural guarantees require process-restart simulation beyond fixture scope. Note: K-031 (structured contract validation results) and K-032 (lifecycle/case state separation) are architectural invariants, not crash recovery — they share the durability kernel fixture but test fundamentally different concerns.
-- [x] **Batch 12: DCR marking state** -- 3 fixtures (AG-001, AG-002, AG-003), 3 active fixture tests. Kernels: `dcr-zone.json`. Advanced: `dcr-zone-governance.json`.
-- [x] **Batch 13: Provenance completeness** -- 2 fixtures (K-018, AI-048), 2 active fixture tests. K-018 tests relationship change provenance via synthetic `relationshipChanged` event. AI-048 tests narrative-as-dispositive detection.
-- [x] **Batch 14: Verification reports** -- 3 fixtures (VR-001, VR-002, AG-015), 3 active fixture tests. Tests immutability violation detection and proven-unsafe activation blocking. AG-015 tests AdvGov lifecycle gating path; VR-002 tests the same semantics from the VerifReport document side.
-- [x] **Batch 15: Sidecar runtime** -- 2 fixtures (G-061, G-064), 2 active fixture tests. G-061 tests expired calendar fallback. G-064 tests notification suppression when required variables missing.
-- [x] **Batch 16: Processor conformance** -- meta-rules: AI-001, AI-002, AI-004, G-051, G-052, AI-050.
-  - **Goal:** turn the current “profile guidance + self-declaration” story into an explicit processor-claim verification layer.
-  - **Deliverable 1: Processor manifest.**
-    - Add a machine-readable `ProcessorManifest` / `ProcessorClaims` model in `wos-conformance` or `wos-core`.
-    - Claims to represent: `governanceBasic`, `governanceComplete`, `agentRegistration`, `confidenceFramework`, `delegatesFormspecEvaluation`, `assistGovernanceProxyConformant`.
-    - Keep it evidence-oriented: what the processor claims, not how it is implemented.
-  - **Deliverable 2: Claim verifier for profile-backed meta-rules.**
-    - Add a verifier that combines the processor manifest with aggregate profile results from `profile_conformance.rs`.
-    - `G-051` passes iff the manifest claims Governance Basic and the Governance Basic aggregate profile passes.
-    - `G-052` passes iff the manifest claims Governance Complete and the Governance Complete aggregate profile passes.
-    - `AI-001` passes iff the manifest claims agent registration and the AI Registration aggregate profile passes.
-    - `AI-002` passes iff the manifest claims confidence framework and the AI Confidence aggregate profile passes.
-    - Output should be structured diagnostics or a conformance report, not just booleans.
-  - **Deliverable 3: AI-004 architectural verification.**
-    - Add an explicit Formspec-processor adapter seam / spy path proving WOS delegates Formspec evaluation instead of re-implementing it inline.
-    - Add tests that fail if task-response validation bypasses the adapter.
-    - Evidence target: adapter invocation trace + contract-validation outcome under test.
-  - **Deliverable 4: AI-050 differential proxy verification.**
-    - Define a proxy contract where the Assist Governance Proxy may add enforcement/provenance but may not weaken required checks.
-    - Add differential tests comparing governed invocations with and without the proxy.
-    - Passing condition: proxy outcome is identical or stricter; provenance obligations still hold.
-  - **Deliverable 5: Final reporting path.**
-    - Add a small conformance-report artifact or CLI output summarizing claimed vs verified meta-rules.
-    - This becomes the single source of truth for Batch 16 instead of prose-only self-declaration.
-  - **Sequencing:** manifest + verifier first (`G-051`, `G-052`, `AI-001`, `AI-002`), then `AI-004`, then `AI-050`.
-  - **Verification shape:** these are processor-level claims, not plain single-fixture behaviors, so they are verified through evidence aggregation, architectural seams, differential checks, and the `wos-conformance-report` CLI rather than a single fixture.
-  - **Done so far:** `wos-conformance` now has `ProcessorManifest`, evidence structs, `verify_processor_manifest()`, and `processor_conformance.rs` integration tests. The verifier turns aggregate profile results into explicit claim status for `G-051`, `G-052`, `AI-001`, and `AI-002`. `AI-004` is now backed by an observed validator call trace via `observe_delegated_formspec_evaluation()`, and `AI-050` is now backed by a direct-vs-proxy differential harness via `observe_assist_governance_proxy()`.
-  - **Done:** `wos-conformance-report` now emits Batch 16 claim reports in JSON or text and exits nonzero on failed claimed rules.
-
-**Phase 4 totals:** 88 T3 conformance fixtures written, 88 active fixture tests across 15 fixture batches, plus Batch 16 processor-conformance reporting over aggregate evidence.
-
-### T2 rule tests (pre-Phase-4)
-
-- [x] Write lint tests for 7 implemented-but-untested T2 rules: G-003, G-008, G-023, G-024, G-036, AI-026, AI-031. _(22 new tests in tier2_rules.rs: 3 per rule with clean, flagged, and skip-condition variants.)_
-- [x] Implement + test K-010 (action assignTo must reference declared actor) and K-037 (fail-fast parallel must have error-tagged final state). _(New lint rules in tier2.rs + 7 tests.)_
-- [x] Add `BusinessCalendar` and `NotificationTemplate` document kinds to wos-lint's `DocumentKind` enum and MARKERS list. _(Required for G-023 to detect business calendar sidecars.)_
-- [x] **AG-010** (SMT subset restrictions): `check_smt_expression()` in `fel_analysis.rs` dispatches to AG-011, AG-012, AG-013, AG-014, plus finite-domain equality heuristics (restriction 4 partial): warns on simple variable-to-variable `==` / `!=` unless a side is literal or listed in `finiteDomainDeclarations` (Phase 10). Also **Error** if verifiable `expression` fails FEL parse. Restrictions 1 (no recursion), 2 (quantifier presence), 3 (linear arithmetic), 5 (no extension functions) as before. Restriction 6 (no filter expressions): FEL AST has no `Filter` path segment; invalid filter syntax does not parse. Tests in `fel_analysis.rs` `#[cfg(test)]` module.
-- [x] **AG-012** (quantifier finite domains): Partial implementation — after Formspec Core builtins, `check_finite_quantifiers()` warns only when `every` / `some` are called with **arity ≠ 2** (non-standard / possible extension). Standard `every(array, predicate)` / `some(array, predicate)` is iteration over a finite array value and is not flagged. _(tier2_rules.rs: wrong-arity flagged; two-arg clean; no-quantifier clean.)_
-- [x] **AI-023** (agent-free completion path): Implemented -- `check_agent_free_completion_path()` in `tier2.rs`. Collects agent IDs from AI doc, builds a flat lifecycle graph from kernel states, performs BFS from initial state to final states excluding agent-only states. Emits warning when no agent-free path exists. Supports both array and object agent formats. _(3 new tests in tier2_rules.rs: path exists clean, all-agent flagged, no-AI-doc skip.)_
-- [x] T2 lint tests for G-027 and G-053 (removed from T3 Delegation batch -- these are cross-document lint rules, not runtime fixtures). 3 tests each (flagged, clean, skip-condition). Schema fix: added `allowsSubDelegation` to Delegation definition.
+- [x] **Batches 1–15** — 88 T3 fixtures covering timers, deontic, autonomy, confidence, and compensation.
+- [x] **Batch 16** — Processor conformance meta-rules (AI-001, G-051, etc.).
 
 ---
 
 ## Phase 5: Build engine capabilities (green)
 
-Implement each capability in `wos-core` to make its fixture batch pass. Each is a new module. Order matches Phase 4 batch priority.
-
-- [x] Timer region scoping + tolerance validation in `eval.rs`. Unlocks 2 rules (K-044, K-045). _Also fixed provenance partial matching: `record_kind` (snake_case fixture) -> `recordKind` (serde camelCase). Also added `ToleranceViolation` provenance kind, tolerance tier calculation, and duration/duration_ms to Timer struct._
-- [x] Hold/resume lifecycle in `eval.rs`. Unlocks 2 rules (G-030, G-054). _Already worked — only blocked by provenance matching bug fixed in Batch 1. K-042 (compensation complete event) also unblocked._
-- [x] `deontic.rs` — enforcement ordering, null propagation by impact level, constraint composition, bypass. Unlocks 13 rules. _New module: FEL-based constraint evaluation against agent output. Conformance engine now loads AI documents and runs deontic evaluation on agent events. Enforcement actions redirect lifecycle events (escalate -> "escalated", reject -> block). Null propagation: permissions escalate for rights-impacting; prohibitions default to pass; obligations treat null as violated. Bypass applies to all constraints in scope. Resolution tracks cross-level vs same-level violations. Invocation source passed through for assist proxy tests._
-- [x] `autonomy.rs` — cross-document cap computation, escalation/demotion state machine, calibration expiry. Unlocks 13 rules. _New module: impact-level autonomy cap, 4-source minimum computation, human override protection, assistive task creation, escalation/demotion, tool governance (permitted list, rate limits, direct case write), calibration expiry._
-- [x] `confidence.rs` — ConfidenceReport validation, decay, cumulative tracking, session pause. Unlocks 7 rules. _New module: missing report detection, uncalibrated score flagging, floor enforcement with escalation, decay factor application, cumulative confidence monitoring, session checkpoint pause, ground-truth labels._
-- [x] `event_handler.rs` — unified handler for Batches 6-15. Unlocks 50 rules across due process, pipeline, compensation, delegation, agent provenance, fallback, durability, DCR, verification, and sidecar. _Single module reading event data + governance docs + kernel lifecycle structure. DCR zone satisfaction with relation evaluation and resolution error detection. Compensation reverse ordering from lifecycle state history. Post-execution provenance from kernel structure (contracts, history, service keys)._
-- [x] **Phase 5 code review fixes (11 findings).** Deontic bypass now emits provenance for prohibitions and obligations (not just permissions). G-006/G-017 use structured boolean fields instead of string matching. K-026 idempotency dedup tracks seen keys (first occurrence proceeds, second+ emits dedup). Agent provenance uses fallback pattern instead of fragile negative-list check. AI-054 fixture verifies bypass does not persist across invocations. AI-016 fixture description corrected (same-level, not cross-level). Consistency threshold constants extracted with spec-reference documentation. Confidence fixtures fixed (output now includes confidenceReport so obligation passes). wos-lint indexmap dependency added.
-- [x] Processor conformance meta-rules (AI-001, AI-002, AI-004, G-051, G-052, AI-050).
-  - Tracked by Batch 16 above. Current status: profile-backed claims, behavior-derived AI-004 / AI-050 evidence, and a report CLI are all implemented.
-- [x] `eval_mode.rs` — continuous evaluation mode (Runtime S10): timer-driven re-evaluation, convergence cap enforcement, mode switching between `event-driven` and `continuous`. _New module: `continuous_reevaluate()` function that re-evaluates `$continuous` transitions after case state mutations. Convergence cap of 100 cycles with provenance recording. Mode-aware: skips entirely for event-driven kernels. Unit tests cover guard satisfaction, event-driven skip, and convergence cap halt._
-- [x] `explain.rs` — explanation assembly algorithm (Runtime S9). _Full implementation replacing stub: filters provenance by `tier` (reasoning/counterfactual) and `relatedTransition`, separates positive/negative counterfactuals, sorts reasoning by authority rank (statute=1 > regulation=2 > policy=3 > guideline=4) then chronologically. Unspecified authority defaults to policy rank per spec. Unit tests cover empty assembly, authority ordering, chronological tie-breaking, counterfactual separation, and full end-to-end assembly._
+- [x] Timer region scoping and tolerance validation.
+- [x] `deontic.rs` — FEL-based constraint evaluation.
+- [x] `autonomy.rs` — escalation/demotion and cap computation.
+- [x] `confidence.rs` — decay and cumulative tracking.
+- [x] `event_handler.rs` — unified governance/runtime dispatcher.
+- [x] `eval_mode.rs` — continuous evaluation mode support.
+- [x] `explain.rs` — authority-ranked explanation assembly.
 
 ---
 
 ## Phase 6: Adapt wos-lint to typed models
 
-After wos-core has typed models for kernel, governance, and AI documents:
-
-- [x] Add `wos-core` to `wos-lint/Cargo.toml` (required to use `Project` methods and typed models). _(already present from prior phase)_
-- [x] Replace `serde_json::Value` walking in `rules/tier1.rs` and `rules/tier2.rs` with typed field access for the migrated checks. Tier 1 and Tier 2 now dispatch those migrated rules through typed models only: tier2 deserializes the kernel into `KernelDocument` and uses typed access for `KernelCollections` (tags, events, case_fields, actor_ids), K-010 (actor refs), K-037 (fail-fast), G-034 (targetWorkflow match), G-001/G-003/G-004/G-005/G-015 (impact-level checks), G-028 (hold policies), G-046 (delegation actors), AI-046 (cross-document disclosure), AG-017 (shadow mode), and DM-002 (deployment sequence). Remaining `Value` walking is now limited to rules that are intentionally structural or still lack typed model coverage, not as a fallback path for migrated checks.
-- [x] Replace `collect_kernel_tags` with typed state-tree walk in `KernelCollections::from_typed()`. Equivalent to `Project::kernel_tags()` logic operating directly on the deserialized `KernelDocument`.
-- [x] Replace `collect_kernel_events`, `collect_kernel_case_fields` with typed equivalents in `KernelCollections::from_typed()`.
-- [x] Deserialize governance documents into typed models in T2 cross-document checks. Used for G-027 (sub-delegation depth via `GovernanceDocument.delegations` and `max_delegation_depth`). AI document typed deserialization attempted but deferred for most agent checks — the `AgentDeclaration` typed model does not yet include per-agent fields (`autonomy`, `reviewWindow`, `escalationRules`, `modelConfig`, etc.) that AI lint rules require.
+- [x] Migrated T1 and T2 rules to use `KernelDocument` and `KernelCollections`.
+- [x] Replaced manual tag/event collection with typed state-tree walks.
+- [x] Implemented sub-delegation depth check (G-027) using typed models.
 
 ---
 
 ## Phase 7: Documentation
 
-Only after the things being documented are stable.
-
-- [x] **`wos-spec/README.md`** — add Runtime Companion, CaseInstance schema, update counts, add wos-core to architecture.
-  - **Done:** `wos-spec/README.md` now reflects the current spec/schema counts, includes the Runtime Companion and `wos-case-instance` schema in the inventory, and adds the `wos-core` / `wos-lint` / `wos-conformance` implementation view under Architecture.
-- [x] **`context.md`** — add WOS section. _(CLAUDE.md: "Update when a new spec is added.")_
-  - **Done:** root `context.md` now includes a dedicated WOS relationship section explaining how Formspec and WOS compose and where each standard owns the boundary.
-- [x] **Main `README.md`** — add WOS to repository structure.
-  - **Done:** root `README.md` repository structure now includes `wos-spec/` as the sibling workflow-governance specification.
-- [x] **`filemap.json`** — add wos-spec directory and crates.
-- [x] **`wos-core/README.md`** — document typed model, evaluation algorithm, trait interfaces.
-  - **Done:** added `crates/wos-core/README.md` covering the typed document model, evaluator structure, host traits, and downstream crate boundaries.
-- [x] **Review document Section 12** — add Runtime Companion, CaseInstance schema, correspondence metadata, 3 missing fixtures.
-- [x] **ADR-0057** — already updated (Alternative 3 reflects runtime spec was written).
+- [x] **`wos-spec/README.md`** — inventory and architecture updated.
+- [x] **`context.md`** — added WOS/Formspec relationship section.
+- [x] **`wos-core/README.md`** — documented traits and conformance guidance.
+- [x] **`WOS-IMPLEMENTATION-STATUS.md`** — added technical status ledger.
 
 ---
 
 ## Phase 8: Lint test coverage
 
-Represent the current `LINT-MATRIX.md` gap audit accurately in the backlog.
-
-Current matrix snapshot (see `LINT-MATRIX.md`):
-
-- 196 total rules
-- 106 rules with at least one test
-- 90 rules with no test
-- Lint-focused gaps closed in Phase 8; remaining untested work is overwhelmingly T3 runtime fixtures.
-
-- [x] **T1-TESTS: Write 12 tests for 4 test-only T1 gaps** (3 per rule: flagged, clean, skip) in `tier1_rules.rs`.
-  - G-058 (BC S3.3): Holiday entry MUST specify exactly one of `date` or `rule`. Category: `calendar-validity`.
-  - G-059 (BC S5.2): Operating hours `end` MUST be strictly after `start`. Category: `calendar-validity`.
-  - G-062 (NT S4.4): Adverse-decision templates MUST include determination, reason codes, appeal rights, appeal instructions. Category: `notification-validity`.
-  - G-065 (NT S4.1): Section `id` values MUST be unique within a template. Category: `notification-validity`.
-  - **Done:** Rules implemented in `tier1.rs` (they were missing from the codebase; not test-only). Tests added in `tier1_rules.rs`.
-
-- [x] **T1-GAP-DISPOSITION: Resolve the 3 remaining Tier 1 gap entries that are not pure test additions.**
-  - K-009 (Kernel S3.3): Actor identifiers MUST be unique. Matrix note says the implementation is effectively a no-op because JSON object keys are inherently unique; decide whether to leave it as parser-enforced/no-lint-test-needed or add an explicit parser-level coverage note.
-  - K-021 (Kernel S8.2): Provenance `actorId` MUST reference a declared actor. Matrix note says this is not implemented; write the rule code first, then add tests.
-  - AI-003 (AI S2.2): Processor must validate fallback chains at load time. Matrix note says this is semantically covered by AI-041 tests; decide whether to keep that shared-coverage note or add an explicit AI-003 assertion path.
-  - **Done:** K-009 documented as JSON key uniqueness (`LINT-MATRIX.md`). K-021 implemented in `tier1.rs` + tests. AI-003 documented as covered by AI-041 implementation/tests (diagnostic id remains `AI-041`).
-
-- [x] **T1-K009: Reopen K-009 as a real lint rule + test.**
-  - Kernel `actors` are now an array in the schema, so duplicate actor ids are representable and no longer parser-enforced.
-  - Deliverable: Tier 1 lint rule in `tier1.rs` plus `tier1_rules.rs` coverage for duplicate actor ids.
-  - Context: `LINT-MATRIX.md` now tracks K-009 as an open T1 gap instead of a JSON-object no-op.
-  - **Done:** `crates/wos-lint/src/rules/tier1.rs` now emits `K-009` for duplicate `actors[].id`, with flagged/clean coverage in `crates/wos-lint/tests/tier1_rules.rs`.
-
-- [x] **CORRMETA-INVENTORY: Track and implement Correspondence Metadata non-schema rules.**
-  - `LINT-MATRIX.md` now includes `CM-001`: `entryTemplates[].id` values MUST be unique within the sidecar.
-  - Deliverable: add the corresponding Tier 1 lint rule and test coverage, then audit `specs/kernel/correspondence-metadata.md` for any additional non-schema constraints that should be added to the matrix.
-  - Context: the Correspondence Metadata sidecar was previously omitted from the verification inventory.
-  - **Done:** `CM-001` is implemented in `crates/wos-lint/src/rules/tier1.rs` with `tier1_rules.rs` coverage. Current spec audit found no additional non-schema rule beyond template-id uniqueness and the generic `x-` extension-key checks already enforced by `K-030`.
-
-- [x] **T2-GAPS: Implement and test the 2 unimplemented Tier 2 cross-document gaps.**
-  - G-060 (T2-xdoc): Business Calendar sidecar presence requires business-day SLA evaluation.
-  - G-063 (T2-xdoc): `notificationTemplateRef` must resolve to a template in a Notification Template sidecar.
-  - **Done:** `tier2.rs` — G-060 error when a calendar’s `targetWorkflow` matches governance and SLA is not `calendarType: business`. G-023 narrowed to the same scope (warning). G-063 resolves refs anywhere under governance JSON. Tests in `tier2_rules.rs`.
-
-- [x] **T3-GAP-TRACKING: Keep the remaining untested Tier 3 rules tracked through the runtime backlog, not as a separate lint-only checklist.**
-  - The remaining 90 T3 gaps are already represented by Phase 4 fixture batches, Phase 5 engine work, Batch 16 processor-conformance reporting, and Phase 9 conformance profiles.
-  - Do not duplicate the full 90-rule list here; `LINT-MATRIX.md` remains the authoritative gap inventory.
-  - **Done:** `LINT-MATRIX.md` summary now points to this TODO for T3 backlog instead of expanding the list inline.
+- [x] **T1-TESTS** — 12 tests for sidecar gaps (G-058, G-059, G-062, G-065).
+- [x] **T1-K009** — duplicate actor id detection.
+- [x] **CM-001** — correspondence entry template id uniqueness.
+- [x] **T2-GAPS** — business-day SLA (G-060) and template resolution (G-063).
 
 ---
 
 ## Phase 9: Conformance profiles
 
-Formalize the relationship between individual rule tests and processor conformance levels.
-
-- [x] **PROFILE-GOV: Create Governance conformance profile tests.** New file: `profile_conformance.rs` (or section in `kernel_conformance.rs`).
-  - G-051 (Governance Basic): Aggregate test collecting all fixtures for G-002, G-006, G-007, G-010, G-016, G-017, G-018. Passes iff all pass.
-  - G-052 (Governance Complete): Aggregate test collecting ALL G-* fixtures. Passes iff all pass.
-  - **Context:** These rules are profile-level claims, not individual behaviors. The fixture naming convention (`{rule-id}-{short-description}.json`) makes globbing straightforward. Each profile test discovers and runs all matching fixtures.
-  - **Done:** `crates/wos-conformance/tests/profile_conformance.rs` now exercises G-051 and G-052 and the matrix reflects them as E2E-covered.
-
-- [x] **PROFILE-AI: Create AI conformance profile tests.**
-  - AI-001 (Agent Registration): Satisfied by all agent-involving fixtures (Batches 3, 4, 5, 10). Aggregate test.
-  - AI-002 (Confidence Framework): Satisfied by Batch 5 fixtures (AI-034 through AI-038, AG-004, AG-016). Aggregate test.
-  - **Context:** These are evidence-by-aggregation claims. Formalizing them as profile tests ensures they stay satisfied as the fixture set evolves.
-  - **Done:** `crates/wos-conformance/tests/profile_conformance.rs` now exercises AI-001 and AI-002, with the AI profile rule partition kept explicit and audit-visible.
+- [x] **PROFILE-GOV** — Governance Basic/Complete aggregate tests.
+- [x] **PROFILE-AI** — Agent Registration/Confidence aggregate tests.
 
 ---
 
-## Phase 10: SMT verifiable subset (AG-010 enhancements)
+## Phase 10: SMT verifiable subset
 
-Strengthen the lint-time analysis for AdvGov verifiable constraints.
-
-- [x] **AG010-FINITE: Implement `check_finite_domain_equality` in `fel_analysis.rs`.**
-  - Wire into `check_smt_expression` (the existing AG-010 dispatcher).
-  - Decidable patterns (pass silently): literal comparisons (`$x.status == "approved"`), boolean comparisons, `in` expressions with array containers (`$x in ["a","b","c"]`), known WOS enum paths (`instance.impactLevel`).
-  - Ambiguous pattern (emit warning): variable-to-variable equality (`$x.field == $y.other`).
-  - Tests: literal clean, boolean clean, `in` clean, enum path clean, variable-to-variable flagged.
-  - **Context:** Implements AG-010 restriction 4 (finite domain enumerations) at lint time using AST-only analysis. No type registry needed for common cases. File: `wos-lint/src/rules/fel_analysis.rs`.
-
-- [x] **AG010-DECL: Add `finiteDomainDeclarations` to `VerifiableConstraint` schema.**
-  - Add to `schemas/advanced/wos-advanced.schema.json` under the `VerifiableConstraint` definition.
-  - Format: `{ "path": { "domain": ["value1", "value2", ...] } }`.
-  - Update `check_finite_domain_equality` to load declarations and suppress variable-to-variable warnings when a declaration covers one side of the equality.
-  - Tests: declaration resolves warning, declaration missing still warns, invalid declaration ignored.
-  - **Context:** Allows constraint authors to declare finite domains without a full Type Registry. Step 2 of the three-step path.
-
-- [x] **AG010-FILTER: Verify FEL parser rejects filter expressions (restriction 6).**
-  - Check that `PathSegment` enum has no `Filter` variant and the parser rejects `$path[?(@.x > 1)]` syntax.
-  - If confirmed: document in LINT-MATRIX as "enforced by parser — no lint rule needed."
-  - If parser accepts them: add `check_no_filter_expressions` to `fel_analysis.rs`.
-  - **Context:** The FEL AST's `PathSegment` enum has `Dot`, `Index`, `Wildcard` — no `Filter(Expr)`. Likely enforced by construction, but needs explicit verification.
+- [x] **AG010-FINITE** — AST-only finite domain equality analysis.
+- [x] **AG010-DECL** — added `finiteDomainDeclarations` to schema and linter.
+- [x] **AG010-FILTER** — verified FEL parser rejects filter expressions.
 
 ---
 
 ## Phase 11: Formspec coprocessor protocol
 
-This phase closed the former architectural gap between WOS tasks and Formspec forms. Enterprise implementation Phase 1.3 now depends on implementing the landed protocol, not inventing it.
-
-**Sequencing:** Gap 2 → Gap 3 → Gap 1 (functions first, then calling convention, then coprocessor examples).
-
-- [x] **FEL-QUANTIFIERS: Add `every`, `some`, `duration` built-in functions to Formspec.**
-  - **Done in Formspec monorepo:** Core §3.5 + `schemas/fel-functions.schema.json`; `fel-core` evaluator + dependency walk; Rust/Python/WASM via `formspec-py` / engine; wos-lint AG-012 narrowed to non–two-arg `every`/`some`. `duration` → ms; `timeDiff` remains signed seconds (schema aligned with Core).
-  - **Samples:** Repo-wide check (`wos-spec/`): no remaining `every`/`some` string-literal predicates. Obligation example uses expression form (`ai-integration.md`). Prefer `every($rows, $.amount > 0)` style per Core §3.5.1.
-
-- [x] **FEL-RECORDS: Align WOS examples and edge cases with Core FEL.**
-  - **Core (§3.5.1, shipped):** Predicate is always a FEL expression; `$` is rebound per element; object elements support `$.property` via normal postfix rules.
-  - **Done:** WOS samples checked; **Formspec ADR-0060** (`formspec` monorepo: `thoughts/archive/adr/0060-fel-constraint-self-dollar-nesting.md`) documents `constraint` `$` (field value) vs predicate `$` (element) nesting—no separate WOS-only doc required for that edge case.
-  - **Context:** Coprocessor examples can reference quantifiers over case-shaped data using Core-aligned FEL.
-
-- [x] **COPROCESSOR: Author Runtime Companion S15 (Formspec coprocessor protocol).**
-  - **Design draft (Formspec monorepo):** **`thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md`** — single merged doc (gaps + Phase 11 plan + S15 draft). Detailed §15 paste source: `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md`. Original gaps: `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md`.
-  - **Pre-flight checklist (8 items)** — addressed in design docs; normative content landed in `wos-spec/specs/companions/runtime.md` and related schemas/spec prose:
-    1. Ledger vs notice — S15 proposal §15.10.
-    2. Validator input — `validateFormspecTaskResponse` + full Response.
-    3. Failed validation → `failed` — §15.6 + integration gaps §1.2.3.
-    4. `contractRef` / `ContractReference` on `createTask` — kernel spec/schema (unchanged scope).
-    5. Triggering — S15 proposal §15.1 (submitTaskResponse vs `contractHook` §5.5).
-    6. Prefill `direction: "both"` — executive table + §15.3.
-    7. Processor unavailable — §15.6 idempotency + host retry.
-    8. `actorId` vs `assignedActor` — executive table + §15.6 step 1.
-  - Deliverables: spec prose in **`wos-spec`**, schema additions (`activeTasks` per §15.8, kernel `ContractReference` extensions), `TaskPresenter` (S12.9).
-  - **Context:** `thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md`. Depends on FEL-QUANTIFIERS and FEL-RECORDS (done).
-  - **Done:** Runtime Companion S15 is now landed in `specs/companions/runtime.md`, with corresponding `activeTasks` / CaseInstance coverage, `TaskPresenter` host interface text, and kernel `ContractReference` linkage in `specs/kernel/spec.md`.
+- [x] **FEL-QUANTIFIERS** — `every`/`some` built-ins added to Formspec core.
+- [x] **COPROCESSOR** — Runtime Companion S15 (Formspec coprocessor) landed.
+- [x] **BINDING** — `wos-formspec-binding` adapter implements S15 prefill/mapping.
 
 ---
 
 ## Phase 12: Security and conformance documentation
 
-Document architectural constraints that can't be lint-checked or fixture-tested.
-
-- [x] **SECURITY-PROFILE: Write conformance profile guidance for Runtime S13.**
-  - S13.1 (Engine Isolation): Engine MUST NOT have direct network access; all external comms through `ExternalService` (S12.4). Architectural constraint — verified by code review, not lintable.
-  - S13.2 (Expression Sandboxing): Informative. FEL provides this by construction (no I/O, no side effects).
-  - S13.3 (Data Protection): Host SHOULD encrypt at rest via `InstanceStore`. Host-level concern.
-  - S13.4 (Provenance Immutability): Host SHOULD implement write-once append-only storage. Explicitly SHOULD (not MUST) due to expungement requirements.
-  - Deliverable: A "Conformance Profile" section in `wos-core/README.md` or a standalone `CONFORMANCE.md` explaining what S13 requires and how a host demonstrates compliance.
-  - **Context:** Only S13.1 is a hard MUST. The SHOULDs are host-level deployment concerns, not engine-enforced.
-  - **Done:** `crates/wos-core/README.md` now includes a "Conformance Profile Guidance" section that explains the evidence model for Runtime S13 and separates engine-enforced behavior from host responsibilities.
-
-- [x] **ARCH-AI004: Document AI-004 / AI-050 verification strategy.**
-  - AI-004 (delegate Formspec evaluation to conformant processor): now evidenced through the delegated validator seam exercised by `observe_delegated_formspec_evaluation()`.
-  - AI-050 (proxy must not modify conformance requirements): now evidenced through the direct-vs-proxy differential harness exercised by `observe_assist_governance_proxy()`.
-  - Deliverable: a conformance-profile section plus executable verification in `wos-conformance`.
-  - **Context:** These remain processor-level trust claims, but they are no longer prose-only or “untestable” within this repo.
-  - **Done:** `crates/wos-core/README.md` documents the verification strategy, and `wos-conformance` now contains the behavior-level evidence path and report CLI for AI-004 and AI-050.
+- [x] **SECURITY-PROFILE** — conformance guidance for Runtime S13 (Isolation).
+- [x] **ARCH-AI004** — behavioral verification strategy for AI-004/AI-050.
 
 ---
 
-## Future specs (trigger-gated, no timeline)
+## Phase 13: Engine Bindings
+
+Adapting the reference evaluator to established engines.
+
+- [ ] **Camunda 8 Worker** — Delegate BPMN task execution to WOS governance.
+- [ ] **Temporal Workflow** — Map WOS evaluation steps to deterministic replay.
+- [ ] **AWS Step Functions** — Bridge ASL states to WOS transitions.
+
+---
+
+## Future specs (trigger-gated)
 
 | Spec | Description | Trigger |
 |------|-------------|---------|
-| Batch Operations | Parallel case instantiation, bulk state transitions, aggregate provenance. Originally rejected as "implementation concern" (ADR-0058 2A) but enterprise scale demands it at the spec level — without it every deployer invents their own batching semantics with incompatible provenance models. | A deployment processes >100 cases/minute or needs deterministic bulk replay |
-| Federation Profile | Cross-org trust, signed provenance, data sovereignty | A second organization adopts WOS for cross-boundary workflows |
-| Learning Profile | Drift feedback loops, retraining governance | A production deployment runs AI agents long enough to need retraining governance |
-| Review Config sidecar | Reusable review protocols across governance documents | Two governance documents need the same protocols |
+| Batch Operations | Parallel case instantiation, bulk state transitions | Deployment processes >100 cases/minute |
+| Federation Profile | Cross-org trust, signed provenance | Second organization adopts WOS |
+| Learning Profile | Retraining governance | AI agents run long enough to need retraining |
 
 ---
 
-## Deferred (sorted by impact)
+## Deferred
 
-| Item | Status | Value | Trigger |
-|------|--------|-------|---------|
-| Full lifecycle soundness verification | Partial (Adv S8) | Proves no deadlocks, no unreachable states, guarantees termination. The difference between "we think it works" and "we can prove it works" — critical for rights-impacting workflows where stuck cases mean denied benefits. | A deployment needs deadlock-freedom or termination proofs |
-| Multi-agent delegation chain | Partial (Gov S11) | Unlocks agent-to-agent orchestration — the entire "AI managing AI" pattern. Without it, every multi-agent workflow needs a human broker. Multiplier on autonomy value. | An AI agent delegates to another AI agent |
-| Federation Profile (impl) | Not started | Cross-org WOS workflows: shared provenance, trust boundaries, data sovereignty. The network-effect unlock — WOS becomes an interop standard, not just an internal tool. | A second organization adopts WOS for cross-boundary workflows |
-| Full Type Registry + Formspec bridge | Not started | Eliminates all manual `finiteDomainDeclarations` — automated finite-domain resolution from Formspec Definitions through contract references. Makes AG-010 restriction 4 zero-config. | A deployment enables AdvGov constraint verification beyond author annotations |
-| Evidence model sidecar | Not started | Typed document references with integrity hashes. Enables tamper-evident audit trails without full Merkle complexity. The minimal viable "prove nothing was altered" primitive. | A deployment needs typed doc refs with integrity hashes |
-| Simulation trace format | Not started | Replay-based conformance testing and "what-if" analysis. Fixtures prove individual rules; simulation traces prove end-to-end workflow correctness under realistic event sequences. | Conformance testing needs replay beyond fixture assertions |
-| Merkle tree tamper evidence | Not started | Cryptographic integrity proof over the full provenance chain. Upgrades "append-only by policy" to "append-only by math." Required for adversarial audit environments. | An auditor requires cryptographic provenance integrity proof |
-| Patch operation reference | Not started | Structured case state mutations via JSON Patch. Enables fine-grained provenance ("field X changed from A to B") instead of full-state snapshots. Reduces storage, improves diffing. | A deployment needs JSON Patch for case state mutations |
-| Full JSON-LD/SPARQL | Partial (Semantic S3) | RDF graph queries over WOS documents. Enables cross-document semantic queries ("find all cases where agent X made a decision that was later overturned"). Power tool for compliance analysis. | A deployment needs RDF graph queries over WOS documents |
-| FEEL-to-FEL translation | Not started | Migration guide for orgs using DMN/FEEL. Lowers adoption barrier for the largest existing market of workflow-automation users. | An org migrating from DMN/FEEL needs a translation guide |
-
----
-
-## ADR-0058 disposition
-
-All constructs from the original gap analysis are resolved:
-
-| # | Construct | Outcome |
-|---|-----------|---------|
-| 1A | Case Linking | **Shipped.** Kernel S5.5 — metadata-only, `correlationKey` for behavior. |
-| 1B | Regulatory Effective Dating | **Shipped.** Policy Parameters S1.2-S1.5. |
-| 1C | Delegation of Authority | **Shipped.** Governance S11. |
-| 1D | Review Cycles | **Not needed.** Expressible with existing statecharts. Medicaid fixture proves it. |
-| 2A | Batch Operations | **Reopened.** Moved to Future Specs — enterprise scale demands spec-level batching semantics. |
-| 2B | Correspondence Events | **Shipped** (modified). Correspondence Metadata sidecar. |
-| 2C | Typed Hold Reasons | **Shipped.** Governance S12. |
+- [ ] Full lifecycle soundness verification (linear time logic proofs).
+- [ ] Merkle tree tamper evidence (cryptographic hash-chaining).
+- [ ] JSON Patch support for fine-grained provenance.
+- [ ] FEEL-to-FEL migration guide.
