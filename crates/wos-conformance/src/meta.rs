@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use wos_core::traits::ContractValidator;
 
-use crate::{ConformanceError, ConformanceFixture, run_fixture};
+use crate::{run_fixture, ConformanceError, ConformanceFixture};
 
 pub const GOVERNANCE_BASIC_RULES: &[&str] = &[
     "G-002", "G-006", "G-007", "G-010", "G-016", "G-017", "G-018",

@@ -387,6 +387,8 @@ impl WorkflowEngine {
         &mut self,
         submission: &crate::fixture::TaskSubmission,
     ) -> Result<Vec<DrainOnceResult>, ConformanceError> {
+        let provenance_before = self.load_runtime_provenance_window(0, usize::MAX)?.len();
+
         let instance = self
             .runtime
             .load_instance(CONFORMANCE_INSTANCE_ID)
@@ -417,8 +419,32 @@ impl WorkflowEngine {
             )
             .map_err(|error| ConformanceError::Engine(error.to_string()))?;
 
-        let drain_results = self.drain_runtime_until_idle()?;
-        Ok(drain_results)
+        // submit_task_response writes provenance directly to the store,
+        // not through the drain mechanism. Capture the submission provenance
+        // delta before draining any triggered events.
+        let provenance_after_submit = self.load_runtime_provenance_window(0, usize::MAX)?;
+        let submission_provenance: Vec<ProvenanceRecord> = provenance_after_submit
+            .into_iter()
+            .skip(provenance_before)
+            .collect();
+
+        let mut results = Vec::new();
+
+        if !submission_provenance.is_empty() {
+            results.push(DrainOnceResult {
+                processed_event: None,
+                processed_event_token: None,
+                transitions: Vec::new(),
+                provenance: submission_provenance,
+                created_task_ids: Vec::new(),
+                emitted_events: Vec::new(),
+            });
+        }
+
+        let mut drain_results = self.drain_runtime_until_idle()?;
+        results.append(&mut drain_results);
+
+        Ok(results)
     }
 
     fn drain_runtime_until_idle(&mut self) -> Result<Vec<DrainOnceResult>, ConformanceError> {

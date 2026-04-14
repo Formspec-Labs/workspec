@@ -850,3 +850,41 @@ fn all_fixtures_parse_and_resolve() {
         }
     }
 }
+
+// ── S15: FormspecBinding task lifecycle ──────────────────────────
+
+/// S15-001: Task creation through real FormspecBinding produces provenance.
+#[test]
+fn s15_001_task_draft_prefill() {
+    assert_fixture_passes("S15-001-task-draft-prefill.json");
+}
+
+/// S15-002: Happy-path submit through real FormspecBinding.
+#[test]
+fn s15_002_submit_valid() {
+    assert_fixture_passes("S15-002-submit-valid.json");
+}
+
+/// S15-003: Missing envelope field causes validation failure.
+#[test]
+fn s15_003_submit_missing_envelope_field() {
+    assert_fixture_passes("S15-003-submit-missing-envelope-field.json");
+}
+
+/// S15-004: Pin mismatch causes validation failure.
+#[test]
+fn s15_004_pin_mismatch() {
+    assert_fixture_passes("S15-004-pin-mismatch.json");
+}
+
+/// S15-005: Definition validation failure via canned errors.
+#[test]
+fn s15_005_submit_definition_invalid() {
+    assert_fixture_passes("S15-005-submit-definition-invalid.json");
+}
+
+/// S15-006: Response mapping applies field_updates to case state.
+#[test]
+fn s15_006_response_mapping() {
+    assert_fixture_passes("S15-006-response-mapping.json");
+}
