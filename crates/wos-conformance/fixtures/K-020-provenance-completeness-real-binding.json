@@ -1,0 +1,63 @@
+{
+  "binding": "formspec",
+  "id": "K-020-provenance-completeness-real-binding",
+  "rule": "K-020",
+  "description": "Same as K-020-provenance-completeness but routed through the real FormspecBinding adapter instead of ConformanceBinding. Exercises the binding swap path: FormspecBinding + FixtureFormspecProcessor.",
+  "documents": {
+    "kernel": "fixtures/kernel/purchase-order-approval.json"
+  },
+  "event_sequence": [
+    {
+      "event": "approve",
+      "actor": "approver",
+      "data": {
+        "amount": 3000,
+        "orderId": "PO-2026-042",
+        "vendor": "Office Supplies Inc",
+        "actorId": "approver"
+      }
+    },
+    {
+      "event": "orderProcessed",
+      "actor": "procurementSystem",
+      "data": {
+        "processingRef": "PROC-2026-042"
+      }
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "submitted",
+      "to": "approved",
+      "event": "approve"
+    },
+    {
+      "from": "approved",
+      "to": "completed",
+      "event": "orderProcessed"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "type": "stateTransition",
+      "from": "submitted",
+      "to": "approved",
+      "actorId": "approver"
+    },
+    {
+      "type": "dataMutation",
+      "path": "caseFile.approvedBy"
+    },
+    {
+      "type": "dataMutation",
+      "path": "caseFile.approvedAt"
+    },
+    {
+      "type": "stateTransition",
+      "from": "approved",
+      "to": "completed",
+      "actorId": "procurementSystem"
+    }
+  ],
+  "expected_errors": []
+}
