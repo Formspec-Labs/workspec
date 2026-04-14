@@ -1,0 +1,85 @@
+{
+  "id": "K-038-cancelled-region-timers",
+  "rule": "K-038",
+  "description": "When a region is cancelled (by a sibling fail-fast or parent exit), all timers created within that region MUST be cancelled (LCD S6.5). Region A starts a long timer; Region B fails fast. Region A is exited, and its timer must be cancelled.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/fail-fast-region-cancellation",
+      "version": "1.0.0",
+      "actors": [{ "id": "reviewerB", "type": "human" }],
+      "lifecycle": {
+        "initialState": "processing",
+        "states": {
+          "processing": {
+            "type": "parallel",
+            "cancellationPolicy": "fail-fast",
+            "regions": {
+              "regionA": {
+                "initialState": "waitingA",
+                "states": {
+                  "waitingA": {
+                    "type": "atomic",
+                    "onEntry": [
+                      {
+                        "action": "startTimer",
+                        "timerId": "timerA",
+                        "duration": "PT30S",
+                        "event": "timeoutA"
+                      }
+                    ]
+                  }
+                }
+              },
+              "regionB": {
+                "initialState": "reviewB",
+                "states": {
+                  "reviewB": {
+                    "type": "atomic",
+                    "transitions": [
+                      {
+                        "event": "failB",
+                        "target": "errorB"
+                      }
+                    ]
+                  },
+                  "errorB": {
+                    "type": "final",
+                    "tags": ["error"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "caseFile": { "fields": {} }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "failB",
+      "actor": "reviewerB"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "reviewB",
+      "to": "errorB",
+      "event": "failB"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "timerCancelled",
+      "data": {
+        "timerId": "timerA",
+        "reason": "region-cancellation"
+      }
+    }
+  ]
+}

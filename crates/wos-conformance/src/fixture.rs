@@ -27,6 +27,13 @@ pub struct ConformanceFixture {
     /// Document paths keyed by role (kernel, governance, ai, etc.).
     pub documents: HashMap<String, String>,
 
+    /// Inline document contents keyed by role.
+    ///
+    /// When a document path in `documents` is `"inline"`, the engine
+    /// reads the content from this map instead of the filesystem.
+    #[serde(default)]
+    pub inline_documents: HashMap<String, serde_json::Value>,
+
     /// Optional initial case state to pre-seed before the event sequence.
     ///
     /// Keys are case field names (without the "caseFile." prefix).

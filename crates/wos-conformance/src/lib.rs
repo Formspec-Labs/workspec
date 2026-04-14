@@ -19,11 +19,11 @@ pub mod stubs;
 pub use engine::WorkflowEngine;
 pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
 pub use meta::{
+    AI_CONFIDENCE_BATCHES, AI_REGISTRATION_BATCHES, AssistGovernanceProxyEvidence, ClaimStatus,
+    ClaimVerification, DelegatedFormspecEvaluationEvidence, GOVERNANCE_BASIC_RULES,
+    ProcessorClaims, ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest,
     observe_delegated_formspec_evaluation, run_profile_against_fixtures,
-    validate_ai_family_batch_coverage, verify_processor_manifest, AssistGovernanceProxyEvidence,
-    ClaimStatus, ClaimVerification, DelegatedFormspecEvaluationEvidence, ProcessorClaims,
-    ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest, AI_CONFIDENCE_BATCHES,
-    AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
+    validate_ai_family_batch_coverage, verify_processor_manifest,
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{StubService, StubValidator};
@@ -57,8 +57,12 @@ pub fn run_fixture(
     let mut fixture: ConformanceFixture =
         serde_json::from_str(fixture_json).map_err(|e| ConformanceError::Parse(e.to_string()))?;
 
-    // Resolve document paths relative to base_dir.
+    // Resolve file-backed document paths relative to base_dir. The sentinel
+    // value "inline" is resolved by `WorkflowEngine` from `inline_documents`.
     for path in fixture.documents.values_mut() {
+        if path == "inline" {
+            continue;
+        }
         if !std::path::Path::new(path).is_absolute() {
             let resolved = std::path::Path::new(base_dir).join(&*path);
             *path = resolved

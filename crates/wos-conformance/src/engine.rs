@@ -14,8 +14,8 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent, ValidationOutcome};
@@ -29,9 +29,9 @@ use wos_runtime::{
     CreateInstanceRequest, DrainOnceResult, PreparedTask, ReferenceCompanionPolicy, WosRuntime,
 };
 
+use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
 use crate::stubs::{StubService, StubValidator};
-use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
@@ -86,14 +86,8 @@ impl WorkflowEngine {
     /// Returns `ConformanceError::DocumentNotFound` if a referenced document
     /// cannot be read, or `ConformanceError::Parse` if the JSON is invalid.
     pub fn new(fixture: &ConformanceFixture) -> Result<Self, ConformanceError> {
-        let kernel_path = fixture.documents.get("kernel").ok_or_else(|| {
-            ConformanceError::Parse("fixture must declare a 'kernel' document".into())
-        })?;
-
-        let kernel_json = std::fs::read_to_string(kernel_path)
-            .map_err(|_| ConformanceError::DocumentNotFound(kernel_path.clone()))?;
-
-        let kernel: KernelDocument = serde_json::from_str(&kernel_json)
+        let kernel_json = fixture_document_json(fixture, "kernel")?;
+        let kernel: KernelDocument = serde_json::from_value(kernel_json)
             .map_err(|e| ConformanceError::Parse(format!("kernel parse error: {e}")))?;
         let definition_url = kernel
             .url
@@ -102,10 +96,9 @@ impl WorkflowEngine {
         let definition_version = kernel.version.clone().unwrap_or_default();
 
         // Load AI integration document if present.
-        let ai_doc = if let Some(ai_path) = fixture.documents.get("ai") {
-            let ai_json = std::fs::read_to_string(ai_path)
-                .map_err(|_| ConformanceError::DocumentNotFound(ai_path.clone()))?;
-            let doc: AIIntegrationDocument = serde_json::from_str(&ai_json)
+        let ai_doc = if fixture.documents.contains_key("ai") {
+            let ai_json = fixture_document_json(fixture, "ai")?;
+            let doc: AIIntegrationDocument = serde_json::from_value(ai_json)
                 .map_err(|e| ConformanceError::Parse(format!("AI doc parse error: {e}")))?;
             Some(doc)
         } else {
@@ -113,27 +106,19 @@ impl WorkflowEngine {
         };
 
         // Load governance document if present.
-        let governance_json = if let Some(gov_path) = fixture.documents.get("governance") {
-            let gov_str = std::fs::read_to_string(gov_path)
-                .map_err(|_| ConformanceError::DocumentNotFound(gov_path.clone()))?;
-            Some(
-                serde_json::from_str(&gov_str)
-                    .map_err(|e| ConformanceError::Parse(format!("governance parse error: {e}")))?,
-            )
+        let governance_json = if fixture.documents.contains_key("governance") {
+            Some(fixture_document_json(fixture, "governance")?)
         } else {
             None
         };
 
         // Load any remaining companion documents as raw JSON.
         let mut companion_docs = std::collections::HashMap::new();
-        for (key, path) in &fixture.documents {
+        for key in fixture.documents.keys() {
             if key == "kernel" || key == "ai" || key == "governance" {
                 continue;
             }
-            let doc_str = std::fs::read_to_string(path)
-                .map_err(|_| ConformanceError::DocumentNotFound(path.clone()))?;
-            let doc_json: serde_json::Value = serde_json::from_str(&doc_str)
-                .map_err(|e| ConformanceError::Parse(format!("{key} parse error: {e}")))?;
+            let doc_json = fixture_document_json(fixture, key)?;
             companion_docs.insert(key.clone(), doc_json);
         }
 
@@ -396,6 +381,28 @@ impl Clock for SharedClock {
     fn now_ms(&self) -> u64 {
         self.now_ms.load(Ordering::SeqCst)
     }
+}
+
+fn fixture_document_json(
+    fixture: &ConformanceFixture,
+    role: &str,
+) -> Result<serde_json::Value, ConformanceError> {
+    let document_ref = fixture.documents.get(role).ok_or_else(|| {
+        ConformanceError::Parse(format!("fixture must declare a '{role}' document"))
+    })?;
+
+    if document_ref == "inline" {
+        return fixture.inline_documents.get(role).cloned().ok_or_else(|| {
+            ConformanceError::Parse(format!(
+                "fixture declares inline '{role}' document but omits inline_documents.{role}"
+            ))
+        });
+    }
+
+    let document_text = std::fs::read_to_string(document_ref)
+        .map_err(|_| ConformanceError::DocumentNotFound(document_ref.clone()))?;
+    serde_json::from_str(&document_text)
+        .map_err(|e| ConformanceError::Parse(format!("{role} parse error: {e}")))
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,40 @@
+{
+  "id": "K-036-parallel-initialization",
+  "rule": "K-036",
+  "description": "Parallel state entry MUST initialize all regions atomically (LCD S4.1). Both region A and region B must be entered before any events are processed.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/parallel-init",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "parallel",
+        "states": {
+          "parallel": {
+            "type": "parallel",
+            "regions": {
+              "A": {
+                "initialState": "stateA",
+                "states": { "stateA": { "type": "atomic" } }
+              },
+              "B": {
+                "initialState": "stateB",
+                "states": { "stateB": { "type": "atomic" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "onEntry", "data": { "state": "parallel" } },
+    { "record_kind": "onEntry", "data": { "state": "stateA" } },
+    { "record_kind": "onEntry", "data": { "state": "stateB" } }
+  ]
+}

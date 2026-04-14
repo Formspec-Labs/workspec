@@ -1,0 +1,43 @@
+{
+  "id": "K-047-relationship-isolation",
+  "rule": "K-047",
+  "description": "Case relationships MUST NOT affect lifecycle evaluation (Kernel S5.5). Adding a relationship is a metadata-only operation; it produces provenance but does not trigger state transitions or guard changes.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/rel-isolation",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "idle",
+        "states": {
+          "idle": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "go", "target": "done", "guard": "count(caseFile.relationships) > 0" }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": { "fields": {} }
+    }
+  },
+  "event_sequence": [
+    {
+      "event": "relationshipChanged",
+      "actor": "user",
+      "data": {
+        "relationship": { "type": "related", "targetCase": "urn:wos:other", "action": "added" }
+      }
+    },
+    { "event": "go", "actor": "user" }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    { "record_kind": "relationshipChanged" },
+    { "record_kind": "unmatchedEvent", "event": "go" }
+  ]
+}

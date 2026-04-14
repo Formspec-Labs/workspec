@@ -1,0 +1,41 @@
+{
+  "id": "K-043-reentered-timer-reset",
+  "rule": "K-043",
+  "description": "When a state is re-entered (e.g., via a self-transition or external loop), any existing timer created in that state MUST be cancelled and recreated (LCD S6.4).",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/reentry-timer",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "waiting",
+        "states": {
+          "waiting": {
+            "type": "atomic",
+            "onEntry": [
+              { "action": "startTimer", "timerId": "reentry-timer", "duration": "PT30S", "event": "timeout" }
+            ],
+            "transitions": [
+              { "event": "reset", "target": "waiting" }
+            ]
+          }
+        }
+      },
+      "caseFile": { "fields": {} }
+    }
+  },
+  "event_sequence": [
+    { "event": "reset", "actor": "user" }
+  ],
+  "expected_transitions": [
+    { "from": "waiting", "to": "waiting", "event": "reset" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "timerCreated", "data": { "timerId": "reentry-timer" } },
+    { "record_kind": "timerCancelled", "data": { "timerId": "reentry-timer", "reason": "reentry-cancel" } },
+    { "record_kind": "timerCreated", "data": { "timerId": "reentry-timer" } }
+  ]
+}

@@ -8,8 +8,8 @@
 use std::path::{Path, PathBuf};
 
 use wos_conformance::{
-    run_profile_against_fixtures, validate_ai_family_batch_coverage, AI_CONFIDENCE_BATCHES,
-    AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
+    AI_CONFIDENCE_BATCHES, AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
+    run_profile_against_fixtures, validate_ai_family_batch_coverage,
 };
 
 fn fixtures_dir() -> PathBuf {

@@ -767,6 +767,50 @@ fn timer_created_provenance_on_entry() {
     );
 }
 
+// ── Batch 17: Edge case behavioral rules ────────────────────────
+
+/// K-016: Every field mutation MUST produce a CaseStateMutation record.
+#[test]
+fn k016_mutation_history() {
+    assert_fixture_passes("k-016-mutation-history.json");
+}
+
+/// K-025: Timers MUST preserve original duration and deadline metadata.
+#[test]
+fn k025_timer_metadata_preservation() {
+    assert_fixture_passes("k-025-timer-metadata-preservation.json");
+}
+
+/// K-034: Compound state entry MUST enter initialState recursively.
+#[test]
+fn k034_compound_entry_logic() {
+    assert_fixture_passes("k-034-compound-entry-logic.json");
+}
+
+/// K-036: Parallel state entry MUST initialize all regions atomically.
+#[test]
+fn k036_parallel_initialization() {
+    assert_fixture_passes("k-036-parallel-initialization.json");
+}
+
+/// K-038: When a region is cancelled, all timers created within that region MUST be cancelled.
+#[test]
+fn k038_cancelled_region_timers() {
+    assert_fixture_passes("k-038-cancelled-region-timers.json");
+}
+
+/// K-043: When a state is re-entered, existing timer MUST be cancelled and recreated.
+#[test]
+fn k043_reentered_timer_reset() {
+    assert_fixture_passes("k-043-reentered-timer-reset.json");
+}
+
+/// K-047: Case relationships MUST NOT affect lifecycle evaluation.
+#[test]
+fn k047_relationship_isolation() {
+    assert_fixture_passes("k-047-relationship-isolation.json");
+}
+
 // ── Fixture parse validation ────────────────────────────────────
 
 /// Validate that all fixture JSON files parse as `ConformanceFixture` and that
@@ -788,6 +832,14 @@ fn all_fixtures_parse_and_resolve() {
             // Verify document paths resolve relative to the fixture directory.
             let base = path.parent().unwrap().to_str().unwrap();
             for (role, doc_path) in &fixture.documents {
+                if doc_path == "inline" {
+                    assert!(
+                        fixture.inline_documents.contains_key(role),
+                        "fixture {} declares inline {role} document but omits inline_documents.{role}",
+                        path.display()
+                    );
+                    continue;
+                }
                 let full = format!("{base}/{doc_path}");
                 assert!(
                     std::path::Path::new(&full).exists(),

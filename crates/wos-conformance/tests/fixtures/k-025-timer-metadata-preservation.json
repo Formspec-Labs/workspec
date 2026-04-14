@@ -1,0 +1,38 @@
+{
+  "id": "K-025-timer-metadata-preservation",
+  "rule": "K-025",
+  "description": "Timers MUST preserve original duration and deadline metadata (Runtime S3.3). When a timer is created, its ISO 8601 duration and absolute deadline must be recorded in the timer state.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/timer-metadata",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "waiting",
+        "states": {
+          "waiting": {
+            "type": "atomic",
+            "onEntry": [
+              { "action": "startTimer", "timerId": "meta-timer", "duration": "PT1H", "event": "timeout" }
+            ]
+          }
+        }
+      },
+      "caseFile": { "fields": {} }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "meta-timer",
+        "duration": "PT1H"
+      }
+    }
+  ]
+}

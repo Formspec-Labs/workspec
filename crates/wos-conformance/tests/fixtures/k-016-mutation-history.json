@@ -1,0 +1,44 @@
+{
+  "id": "K-016-mutation-history",
+  "rule": "K-016",
+  "description": "Every field mutation MUST produce a CaseStateMutation record (Kernel S5.4).",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/mutation-history",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "idle",
+        "states": {
+          "idle": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "update", "target": "idle", "actions": [{ "action": "setData", "path": "caseFile.value", "value": 42 }] }
+            ]
+          }
+        }
+      },
+      "caseFile": {
+        "fields": { "value": { "type": "number" } }
+      }
+    }
+  },
+  "event_sequence": [
+    { "event": "update", "actor": "user" }
+  ],
+  "expected_transitions": [
+    { "from": "idle", "to": "idle", "event": "update" }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "caseStateMutation",
+      "data": {
+        "path": "caseFile.value",
+        "newValue": 42
+      }
+    }
+  ]
+}

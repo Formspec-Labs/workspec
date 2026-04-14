@@ -1,0 +1,46 @@
+{
+  "id": "K-034-compound-entry-logic",
+  "rule": "K-034",
+  "description": "Compound state entry MUST enter initialState recursively (LCD S3.1). If the target is a descendant, initialization skips intermediate steps and enters the target directly.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "https://test.example/compound-entry",
+      "actors": [{ "id": "user", "type": "human" }],
+      "lifecycle": {
+        "initialState": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "go", "target": "nested" },
+              { "event": "jump", "target": "step2" }
+            ]
+          },
+          "nested": {
+            "type": "compound",
+            "initialState": "step1",
+            "states": {
+              "step1": { "type": "atomic" },
+              "step2": { "type": "atomic" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "event_sequence": [
+    { "event": "go", "actor": "user" }
+  ],
+  "expected_transitions": [
+    { "from": "start", "to": "nested", "event": "go" }
+  ],
+  "expected_provenance": [
+    { "record_kind": "stateTransition", "fromState": "start", "toState": "nested" },
+    { "record_kind": "onEntry", "data": { "state": "nested" } },
+    { "record_kind": "onEntry", "data": { "state": "step1" } }
+  ]
+}

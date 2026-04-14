@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use wos_conformance::{
-    observe_assist_governance_proxy, observe_delegated_formspec_evaluation,
-    verify_processor_manifest, AssistGovernanceProxyEvidence, ClaimStatus, ProcessorClaims,
-    ProcessorEvidence, ProcessorManifest,
+    AssistGovernanceProxyEvidence, ClaimStatus, ProcessorClaims, ProcessorEvidence,
+    ProcessorManifest, observe_assist_governance_proxy, observe_delegated_formspec_evaluation,
+    verify_processor_manifest,
 };
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::kernel::ImpactLevel;
