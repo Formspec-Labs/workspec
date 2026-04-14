@@ -2057,6 +2057,65 @@ mod tests {
     }
 
     #[test]
+    fn reference_companion_policy_scopes_idempotency_by_instance() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:companion-idempotency",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic"
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel)
+            .with_companion_policy(crate::ReferenceCompanionPolicy::default());
+        for instance_id in ["case-a", "case-b"] {
+            runtime
+                .create_instance(CreateInstanceRequest {
+                    instance_id: instance_id.to_string(),
+                    definition_url: "urn:test:companion-idempotency".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: None,
+                })
+                .unwrap();
+            runtime
+                .enqueue_event(
+                    instance_id,
+                    PendingEvent {
+                        event: "submit".to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: Some(serde_json::json!({ "idempotencyKey": "shared-key" })),
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+        }
+
+        let first = runtime.drain_once("case-a").unwrap();
+        let second = runtime.drain_once("case-b").unwrap();
+
+        assert!(
+            !first
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+    }
+
+    #[test]
     fn create_instance_does_not_present_tasks_if_initial_commit_fails() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
             "$wosKernel": "1.0",

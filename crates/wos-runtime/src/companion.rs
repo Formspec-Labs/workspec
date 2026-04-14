@@ -22,7 +22,7 @@ pub struct ReferenceCompanionPolicy {
     governance_json: Option<serde_json::Value>,
     companion_docs: HashMap<String, serde_json::Value>,
     dcr_executed_activities: Vec<String>,
-    seen_idempotency_keys: HashSet<String>,
+    seen_idempotency_keys_by_instance: HashMap<String, HashSet<String>>,
 }
 
 impl ReferenceCompanionPolicy {
@@ -37,7 +37,7 @@ impl ReferenceCompanionPolicy {
             governance_json,
             companion_docs,
             dcr_executed_activities: Vec::new(),
-            seen_idempotency_keys: HashSet::new(),
+            seen_idempotency_keys_by_instance: HashMap::new(),
         }
     }
 }
@@ -52,6 +52,7 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
         let mut effective_event = Some(event.event.clone());
         let event_data = event.data.clone();
         let actor_id = event.actor_id.as_deref().unwrap_or("");
+        let instance_id = context.instance.instance_id.clone();
 
         if let (Some(ai_doc), Some(data)) = (&self.ai_doc, &event_data) {
             if let Some(output) = data.get("output") {
@@ -146,7 +147,9 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
             is_agent,
             self.governance_json.as_ref(),
             &self.companion_docs,
-            &mut self.seen_idempotency_keys,
+            self.seen_idempotency_keys_by_instance
+                .entry(instance_id)
+                .or_default(),
         );
         if handler_result.requires_escalation {
             effective_event = Some("escalated".to_string());
