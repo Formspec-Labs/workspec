@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 fn default_binding() -> Option<String> {
-    Some("conformance".to_string())
+    Some("formspec".to_string())
 }
 
 /// A conformance test fixture declaring documents, events, and expectations.
@@ -14,8 +14,9 @@ fn default_binding() -> Option<String> {
 pub struct ConformanceFixture {
     /// Contract binding to use for this fixture.
     ///
-    /// `"conformance"` (default) uses the permissive `ConformanceBinding`;
-    /// `"formspec"` routes through the real `FormspecBinding` adapter.
+    /// `"formspec"` (default) routes through the `FormspecBinding` adapter
+    /// with `FixtureFormspecProcessor`; `"conformance"` is accepted as an
+    /// alias for backward compatibility.
     #[serde(default = "default_binding")]
     pub binding: Option<String>,
 

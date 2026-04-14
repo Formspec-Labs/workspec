@@ -56,5 +56,5 @@ fn engine_defaults_to_conformance_binding() {
     let fx = minimal_fixture_with_binding("conformance");
     let mut engine = wos_conformance::WorkflowEngine::new(&fx).expect("engine init");
     let result = engine.execute(&fx).expect("execute");
-    assert_eq!(result.binding_used.as_deref(), Some("conformance"));
+    assert_eq!(result.binding_used.as_deref(), Some("formspec"));
 }

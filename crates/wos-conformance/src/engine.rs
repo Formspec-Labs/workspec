@@ -18,15 +18,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use wos_core::eval::parse_iso_duration_to_ms;
-use wos_core::instance::{FormspecTaskContext, PendingEvent, ValidationOutcome};
+use wos_core::instance::{FormspecTaskContext, PendingEvent};
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    BindingError, BindingRegistry, CaseMutationBundle, Clock, ContractBindingAdapter,
-    CreateInstanceRequest, DrainOnceResult, PreparedTask, ReferenceCompanionPolicy, WosRuntime,
+    BindingRegistry, Clock, CreateInstanceRequest, DrainOnceResult, ReferenceCompanionPolicy,
+    WosRuntime,
 };
 
 use crate::fixture::ConformanceFixture;
@@ -129,7 +129,7 @@ impl WorkflowEngine {
         let clock = SharedClock::new(0);
         let mut bindings = BindingRegistry::new();
         let binding_used = match fixture.binding.as_deref() {
-            Some("formspec") => {
+            Some("formspec") | Some("conformance") | _ => {
                 let processor = if fixture.definition_errors.is_empty() {
                     FixtureFormspecProcessor::new(
                         definition_url.clone(),
@@ -144,10 +144,6 @@ impl WorkflowEngine {
                 };
                 bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
                 "formspec".to_string()
-            }
-            _ => {
-                bindings.register(ConformanceBinding);
-                "conformance".to_string()
             }
         };
         let runtime = WosRuntime::new(
@@ -577,58 +573,6 @@ impl TaskPresenter for NoopPresenter {
 
     fn dismiss_task(&mut self, _task_id: &str, _reason: &str) -> Result<(), Self::Error> {
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ConformanceBinding;
-
-/// Conformance test binding adapter for the "formspec" contract type.
-///
-/// **Intentionally permissive:** always returns valid submissions and no case
-/// mutations. This lets conformance fixtures exercise the runtime task lifecycle
-/// (create → present → submit → complete) without requiring a real Formspec
-/// engine. When a conformance test needs to assert on validation outcomes, it
-/// uses the fixture-level `contract_outcomes` map and the `StubValidator` instead.
-///
-/// `compute_case_mutation` returns `None` because case-state mutations under
-/// task submission are tested via the runtime's `submit_task_response` integration
-/// tests in `wos-runtime`, not through conformance fixtures.
-impl ContractBindingAdapter for ConformanceBinding {
-    fn binding(&self) -> &'static str {
-        "formspec"
-    }
-
-    fn prepare_task(
-        &self,
-        _task: &wos_core::instance::ActiveTask,
-        _case_state: &serde_json::Value,
-    ) -> Result<PreparedTask, BindingError> {
-        Ok(PreparedTask::default())
-    }
-
-    fn validate_submission(
-        &self,
-        _task: &wos_core::instance::ActiveTask,
-        _response: &serde_json::Value,
-    ) -> Result<wos_runtime::SubmissionValidation, BindingError> {
-        Ok(wos_runtime::SubmissionValidation {
-            validation_outcome: ValidationOutcome {
-                envelope_valid: true,
-                pin_match: true,
-                definition_valid: true,
-                errors: Vec::new(),
-                validation_results: None,
-            },
-        })
-    }
-
-    fn compute_case_mutation(
-        &self,
-        _task: &wos_core::instance::ActiveTask,
-        _response: &serde_json::Value,
-    ) -> Result<Option<CaseMutationBundle>, BindingError> {
-        Ok(None)
     }
 }
 

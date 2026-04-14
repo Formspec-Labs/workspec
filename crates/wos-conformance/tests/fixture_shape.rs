@@ -17,7 +17,7 @@ fn fixture_defaults_binding_to_conformance() {
         "expected_provenance": [],
     });
     let fx: ConformanceFixture = serde_json::from_value(json).unwrap();
-    assert_eq!(fx.binding.as_deref(), Some("conformance"));
+    assert_eq!(fx.binding.as_deref(), Some("formspec"));
 }
 
 #[test]
