@@ -1,6 +1,6 @@
 # WOS Feature & Requirements Matrix
 
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 **Spec version:** 1.0.0-draft.1
 **Purpose:** Non-technical reference for evaluating WOS capabilities against competing platforms.
 
@@ -16,6 +16,8 @@
 | 🟦 | Specified and partially implemented |
 | 🟡 | Specified in prose and schema; implementation pending |
 | ⚪ | Referenced or planned; specification pending |
+
+**Current implementation caveat:** `wos-runtime` now owns reference companion policy, event identity, and runtime/core provenance emission; `wos-conformance` observes those behaviors. The Formspec binding crate exists and has adapter-level tests, but full binding-backed S15 conformance fixtures remain pending.
 
 **Competitor Support:**
 
@@ -140,12 +142,14 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 5.14 | **Agent lifecycle state machine** | Governs agent states (active, degraded, suspended, retired) via performance transitions | ✅ | ~ | ✘ | ✘ | ✘ | ✘ |
 | 5.15 | **Model version pinning and policy** | Pins versions or uses approved lists; emits provenance for version changes | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
 | 5.16 | **Tool use governance** | Restricts tool invocation, rate limits, and data mutation for agents | ✅ | ~ | ~ | ✘ | ✘ | ✘ |
-| 5.17 | **Formspec-as-Validator** | Validates agent output against the same form contract as human data | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 5.17 | **Formspec-as-Validator** | Validates agent output against the same form contract as human data | 🟦 ^6 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.18 | **Agent disclosure** | Discloses AI participation to affected individuals; mandatory for rights-impacting cases | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.19 | **Assist Governance Proxy** | Wraps assistant tools with deontic constraints and provenance | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.20 | **CaMeL-compatible trust boundary** | Employs a trust boundary model compatible with dual-LLM security architectures | 🟡 ^4 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.21 | **Equity guardrails (bias monitoring)** | Monitors fairness statistically for human and AI decisions by demographic group | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
 | 5.22 | **Shadow / canary deployment** | Executes model versions in shadow then canary modes before production | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+
+> ^6 **Formspec binding status:** `wos-formspec-binding` implements the runtime adapter and adapter-level prefill, validation, and mapping tests. Binding-backed S15 task-submission conformance fixtures remain pending, so this is partial rather than fully implemented.
 
 ---
 
@@ -214,7 +218,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 9.5 | **Structured validation results** | Provides severity, field path, message, and constraint kind for every error | ✅ | ~ | ~ | ~ | ✘ |
 | 9.6 | **Mapping DSL for bidirectional data flow** | Transforms data between case files and external formats via versioned, auditable mappings | ✅ | ✘ | ✘ | ✘ | ✘ |
 | 9.7 | **Ontology-driven semantic field identity** | Identifies fields by semantic meaning rather than name | 🟡 | ✘ | ✘ | ✘ | ✘ |
-| 9.8 | **Version-pinned responses** | Binds contracts immutably at submission time | 🟡 | ✘ | ~ | ✘ | ✘ |
+| 9.8 | **Version-pinned responses** | Binds contracts immutably at submission time | 🟦 ^6 | ✘ | ~ | ✘ | ✘ |
 | 9.9 | **Changelog with impact classification** | Provides structured change records with migration guidance and severity levels | ✅ | ✘ | ✘ | ✘ | ✘ |
 
 ---
@@ -240,8 +244,8 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 11.2 | **Immutable mutation history** | Records every change: who, what, from, to, when, and in what state | ✅ | ~ | ~ | ✘ | ~ |
 | 11.3 | **Case relationships** | Typed links (parent/child, sibling, related, supersedes) with full provenance | ✅ | ✘ | ✘ | ✘ | ✘ |
 | 11.4 | **Cross-case isolation** | Related cases react to status changes but cannot access each other's data | ✅ | ✘ | ✘ | ✘ | ✘ |
-| 11.5 | **Claim check pattern** | References evidence documents via content hash and URI (not stored in case state) | 🟡 | ✘ | ✘ | ✘ | ~ |
-| 11.6 | **Role-based field-level visibility** | Enforces access control per field based on actor roles | 🟡 | ✔ | ✔ | ✘ | ✔ |
+| 11.5 | **Claim check pattern** | References evidence documents via content hash and URI (not stored in case state) | ⚪ | ✘ | ✘ | ✘ | ~ |
+| 11.6 | **Role-based field-level visibility** | Enforces access control per field based on actor roles | ⚪ | ✔ | ✔ | ✘ | ✔ |
 
 ---
 

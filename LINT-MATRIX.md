@@ -15,8 +15,8 @@
 │  (42 cross-doc + 12 AST)                                       │
 ├─────────────────────────────────────────────────────────────────┤
 │  Tier 3: wos-conformance (dynamic)   105 rules                 │
-│  Event-driven test fixtures. Feeds event sequences through the  │
-│  lifecycle algorithm, asserts on state transitions, provenance  │
+│  Event-driven test fixtures. Feeds event sequences through      │
+│  WosRuntime, asserts on observed state transitions, provenance  │
 │  records, timer behavior, compensation ordering, deontic        │
 │  enforcement, and autonomy caps.                                │
 └─────────────────────────────────────────────────────────────────┘
@@ -281,9 +281,9 @@
 | T1 | `crates/wos-lint/tests/tier1_rules.rs` | 36 (K-001..K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
-| E2E | `crates/wos-conformance/tests/*.rs` | 105 T3 rules plus K-008 T1 join coverage; fixture, profile, processor-claim, and stub-integration tests all pass through the conformance harness |
+| E2E | `crates/wos-conformance/tests/*.rs` | 105 T3 rules plus K-008 T1 join coverage; fixture, profile, processor-claim, and stub-integration tests pass through the runtime-backed conformance harness |
 
-**T3 rules (105 total, 105 with E2E coverage):** All Tier 3 rules are exercised by `wos-conformance` tests. Coverage spans runtime fixtures in `kernel_conformance.rs`, profile aggregation in `profile_conformance.rs`, processor-claim checks in `processor_conformance.rs`, regression tests in `stub_integration.rs`, and lower-level lifecycle provenance tests in `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1).
+**T3 rules (105 total, 105 with E2E coverage):** All Tier 3 rules are exercised by `wos-conformance` tests. Coverage spans runtime fixtures in `kernel_conformance.rs`, profile aggregation in `profile_conformance.rs`, processor-claim checks in `processor_conformance.rs`, regression tests in `stub_integration.rs`, and lower-level lifecycle provenance tests in `provenance_tests.rs` (K-008 also has E2E coverage but is classified as T1). Runtime governance policy and provenance semantics live in `wos-runtime` / `wos-core`; conformance configures the reference policy and asserts observed results.
 
 ## Verification Tools
 
@@ -331,7 +331,7 @@ Loads a project directory containing kernel + governance + AI + sidecars. Two su
 
 ### Tier 3: `wos-conformance` (105 rules)
 
-Event-driven test fixtures. Each fixture declares:
+Event-driven test fixtures create a runtime instance, enqueue fixture events with event tokens, drain `WosRuntime`, and assert observed state and provenance. Each fixture declares:
 
 ```json
 {
@@ -367,11 +367,13 @@ Event-driven test fixtures. Each fixture declares:
 - **Lifecycle (10):** K-023, K-031, K-032, K-034, K-035, K-036, G-010, G-012, G-013, G-017 — crash recovery, separation principle, compound entry, history clearing, atomic region init, independent-first ordering, pipeline provenance, weakest-link risk, separation of duties
 - **Remaining (44):** processor conformance claims, architectural invariants, operational data completeness, downstream usage constraints
 
+Binding-specific note: lifecycle fixtures use a permissive `ConformanceBinding` where the fixture is about WOS lifecycle behavior rather than Formspec validation. Binding-backed S15 task-submission fixtures for `wos-formspec-binding` are tracked in `TODO.md` as product hardening, not as an uncovered rule in this matrix.
+
 ---
 
 ## Test Coverage Gaps
 
-Audit date: 2026-04-12. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
+Audit date: 2026-04-14. Cross-referenced against all test files in `crates/wos-lint/tests/` and `crates/wos-conformance/tests/`.
 
 | Metric | Count |
 |--------|-------|
@@ -387,7 +389,7 @@ Audit date: 2026-04-12. Cross-referenced against all test files in `crates/wos-l
 
 **From `fel_analysis.rs` inline tests (11 rules):** K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010 (parse **Error** vs finite `==`/`!=` **Warning**, declarations, deduped path pairs, FEL rejects JSONPath `[?]` filters), AG-011, AG-013, AG-014.
 
-**From `wos-conformance` tests (105 T3 rules + K-008 join coverage):** All Tier 3 rules are covered by `kernel_conformance.rs`, `profile_conformance.rs`, `processor_conformance.rs`, `provenance_tests.rs`, and `stub_integration.rs`. K-008 is also exercised by conformance tests but remains classified as T1 because the normative check is static.
+**From `wos-conformance` tests (105 T3 rules + K-008 join coverage):** All Tier 3 rules are covered by `kernel_conformance.rs`, `profile_conformance.rs`, `processor_conformance.rs`, `provenance_tests.rs`, and `stub_integration.rs`. K-008 is also exercised by conformance tests but remains classified as T1 because the normative check is static. Runtime-backed fixture assertions observe provenance emitted by `wos-runtime` / `wos-core`; conformance no longer synthesizes compensation, lifecycle/case separation, or history-cleared provenance records.
 
 **AI-003:** Same static validation as **AI-041** (fallback chain termination and cycle detection). Tests assert `AI-041`; see gap section below.
 
@@ -409,4 +411,4 @@ Covered by the same implementation and tests as **AI-041** (`tier1_rules.rs`). T
 
 #### T3 gaps
 
-No open Tier 3 coverage gaps remain. The former 90-rule runtime fixture backlog is now covered by `wos-conformance` fixture, profile, processor-claim, and stub-integration tests.
+No open Tier 3 rule-coverage gaps remain. The former 90-rule runtime fixture backlog is now covered by `wos-conformance` fixture, profile, processor-claim, and stub-integration tests. Binding-backed S15 conformance is tracked in `TODO.md` as a runtime/product hardening item rather than a separate matrix rule gap.

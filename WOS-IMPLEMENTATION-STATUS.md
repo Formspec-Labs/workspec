@@ -1,6 +1,6 @@
 # WOS Implementation Status & Roadmap
 
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 **Status:** Certified Reference Implementation (Draft 1)
 
 This document tracks crate maturity, test coverage, and the technical roadmap. For a high-level feature comparison, see `WOS-FEATURE-MATRIX.md`.
@@ -27,8 +27,8 @@ WOS verifies 196 normative constraints across three tiers.
 |------|------|-------|----------|-----|
 | **Tier 1** | Single-Doc | 36 | 36 | 0 |
 | **Tier 2** | Cross-Doc / AST | 55 | 55 | 0 |
-| **Tier 3** | Runtime | 105 | 95 | 10 |
-| **Total** | | **196** | **186** | **10** |
+| **Tier 3** | Runtime | 105 | 105 | 0 |
+| **Total** | | **196** | **196** | **0** |
 
 ---
 
@@ -77,9 +77,14 @@ Adapts the reference evaluator to established engines.
 *   [ ] **Camunda 8 Worker:** Delegates BPMN task execution to WOS governance.
 *   [ ] **Temporal Workflow:** Maps WOS evaluation steps to deterministic replay.
 *   [ ] **AWS Step Functions:** Bridges ASL states to WOS transitions.
+*   [ ] **Integration Profile Processor:** Implements CloudEvents 1.0 native bindings, Arazzo multi-step API orchestration, and policy engine bridges (XACML, OPA, Cedar). Schema and fixture exist (`wos-integration-profile.schema.json`, `integration-benefits-adjudication.json`); runtime consumption is the gap.
+*   [ ] **Business Calendar SLA Evaluation:** Consumes `wos-business-calendar` sidecar for SLA deadline computation in Governance S10.3. Schema is complete with workWeek, holidays, operatingHours, and timezone; runtime integration pending.
 
 ### Phase 2: Advanced Provenance (Future)
+*   [ ] **History State Semantics:** Implements DeepHistory (full state snapshot) vs ShallowHistory (exit point only) for hierarchical state resumption. Kernel schema specifies `historyState` property; fixture `k-035-history-cleared-on-exit.json` defines clear-on-exit behavior.
+*   [ ] **Milestone Firing:** Verifies data-driven checkpoint firing independent of workflow state. Schema defines milestones with FEL conditions; lint rule K-013 validates expressions and ID uniqueness.
 *   [ ] **Merkle Provenance Chains:** Adds cryptographic hash-chaining for tamper-proof logs.
+*   [ ] **Provenance Export Formats:** Serializes internal provenance to W3C PROV-O, OCEL 2.0, and IEEE 1849 XES for external tooling. `provenance.rs` implements 30+ provenance kinds; export serialization is the gap.
 *   [ ] **Simulation Trace Format:** Standardizes formats for replaying simulation runs.
 *   [ ] **Federation Profile:** Enables cross-processor migration and signal routing.
 
@@ -102,6 +107,13 @@ Adapts the reference evaluator to established engines.
 | CaMeL dual-LLM | ■ | 🟡 (informative) | Specified as optional guidance in S3.6. |
 | Capability routing | ■ | ⚪ | Remains implementation-defined in the kernel. |
 | Defeasible rules | ■ | ✅ | Implemented via authority-ranked assembly. |
+| Business calendar SLA | 🟡 | 🟡 (schema) | Schema complete; runtime SLA consumption pending. |
+| CloudEvents binding | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
+| Arazzo orchestration | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
+| Policy engine bridge | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
+| History states | 🟡 | 🟡 (partial) | Schema property exists; DeepHistory vs ShallowHistory semantics not implemented. |
+| Milestone firing | 🟡 | 🟡 (partial) | Schema and lint complete; conformance testing gap. |
+| PROV-O / OCEL / XES export | 🟡 | 🟡 (internal) | Internal provenance complete; export serialization not implemented. |
 
 ---
 
