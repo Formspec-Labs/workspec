@@ -102,6 +102,7 @@
           "type": "string",
           "enum": ["proven-safe", "proven-unsafe", "inconclusive"],
           "description": "Verification result. 'proven-safe': constraint holds for all possible inputs within declared domains. 'proven-unsafe': a counterexample exists. 'inconclusive': solver timed out or construct outside verifiable subset.",
+          "examples": ["proven-safe", "proven-unsafe", "inconclusive"],
           "x-lm": {
             "critical": true,
             "intent": "The formal verification outcome for this constraint"

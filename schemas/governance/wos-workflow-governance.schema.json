@@ -144,6 +144,21 @@
         "$ref": "#/$defs/Delegation"
       },
       "description": "Delegation of authority declarations (Governance S11). Defines who is authorized to make specific types of determinations. Attaches via lifecycleHook on determination-tagged transitions.",
+      "examples": [
+        [
+          {
+            "id": "directorToCaseworker",
+            "delegator": "divisionDirector",
+            "delegate": "seniorCaseworker",
+            "scope": {
+              "impactLevels": [
+                "operational"
+              ]
+            },
+            "authority": "determination"
+          }
+        ]
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Establishes the chain of authority for determinations -- who can sign what"
@@ -161,6 +176,16 @@
         "$ref": "#/$defs/HoldPolicy"
       },
       "description": "Typed hold policies for case suspension (Governance S12). Attach via lifecycleHook on hold-tagged states.",
+      "examples": [
+        [
+          {
+            "holdType": "pending-applicant-response",
+            "expectedDuration": "P30D",
+            "resumeTrigger": "applicantResponse",
+            "timeoutAction": "escalate"
+          }
+        ]
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Declares the semantics for each type of case hold -- expected duration, resume trigger, timeout behavior"

@@ -424,6 +424,17 @@
         }
       },
       "description": "Presentation context for a Formspec-backed task.",
+      "examples": [
+        {
+          "taskId": "task-1",
+          "instanceId": "urn:wos:instance:123",
+          "contractRef": "intake",
+          "definitionUrl": "https://gov.agency/forms/intake",
+          "definitionVersion": "1.0.0",
+          "binding": "formspec",
+          "assignedActor": "applicant-456"
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Stable handoff shape between WOS task creation and Formspec rendering"
@@ -458,6 +469,16 @@
         }
       },
       "description": "WOS wrapper for Formspec task validation outcomes.",
+      "examples": [
+        {
+          "envelopeValid": true,
+          "pinMatch": true,
+          "definitionValid": false,
+          "errors": [
+            { "message": "Definition validation failed" }
+          ]
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Stable validation outcome shape for Formspec-backed task submission"

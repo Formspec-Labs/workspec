@@ -125,6 +125,12 @@
           },
           "minItems": 1,
           "description": "Ordered content sections composing the notification body. For 'adverse-decision' templates, sections MUST address: specific determination, individualized reason codes, appeal rights and filing deadline, and appeal instructions (Notification Template S4.4).",
+          "examples": [
+            [
+              { "id": "determination", "contentType": "structured", "content": "Your application has been {{determination}}." },
+              { "id": "reasons", "contentType": "structured", "content": "Reason(s): {{reasonCodes}}" }
+            ]
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Ordered sections that compose the notification -- adverse-decision templates must include due process required sections"

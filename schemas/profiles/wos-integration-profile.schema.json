@@ -29,6 +29,12 @@
     "targetWorkflow": {
       "$ref": "#/$defs/TargetWorkflow",
       "description": "The WOS Kernel Document this profile targets. Specifies URL and compatible version range.",
+      "examples": [
+        {
+          "url": "https://agency.gov/workflows/benefits-adjudication",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Binds this integration profile to a specific kernel workflow and version range"
@@ -58,6 +64,15 @@
         "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
       },
       "description": "Named integration bindings. Keys are binding identifiers referenced by invokeService serviceRef (Kernel S9.2). Values are typed binding declarations.",
+      "examples": [
+        {
+          "backgroundCheck": {
+            "type": "request-response",
+            "interface": { "$ref": "https://api.example.gov/background-checks/openapi.yaml" },
+            "operation": "performCheck"
+          }
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "The map of named integration bindings that the workflow can invoke"
