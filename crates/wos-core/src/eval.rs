@@ -11,13 +11,13 @@
 use std::collections::HashMap;
 
 use fel_core::{evaluate, parse, types::FelValue};
-use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::context::EvalContext;
 use crate::instance::CaseInstance;
 use crate::model::kernel::{
-    Action, ActionKind, CancellationPolicy, KernelDocument, Region, State, StateKind,
+    Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
 };
 use crate::provenance::{ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
@@ -94,6 +94,13 @@ pub struct Evaluator {
 
     /// All actions executed during this evaluator lifetime.
     executed_actions: Vec<ObservedAction>,
+
+    /// Saved history configurations keyed by compound state ID.
+    ///
+    /// When a compound state with `historyState` is exited, the active
+    /// substate configuration is saved here. On re-entry, the saved
+    /// configuration is restored instead of using `initialState`.
+    history_store: HashMap<String, Vec<String>>,
 }
 
 /// An observed state transition.
@@ -175,11 +182,12 @@ impl Evaluator {
             case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
-            simulated_time_ms: current_time_ms,
+            simulated_time_ms: 0,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            history_store: HashMap::new(),
         };
-        let _entered = eval.enter_state(&initial, None, None)?;
+        eval.enter_state(&initial, None, None)?;
         Ok(eval)
     }
 
@@ -219,6 +227,7 @@ impl Evaluator {
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            history_store: instance.history_store.clone().unwrap_or_default(),
         })
     }
 
@@ -274,6 +283,11 @@ impl Evaluator {
     /// The kernel document.
     pub fn kernel(&self) -> &KernelDocument {
         &self.kernel
+    }
+
+    /// The history store (saved configurations keyed by compound state ID).
+    pub fn history_store(&self) -> &HashMap<String, Vec<String>> {
+        &self.history_store
     }
 
     /// Serialize case state into a JSON object.
@@ -440,12 +454,12 @@ impl Evaluator {
 
                 // Execute transition actions.
                 for action in &transition.actions {
-                    self.execute_action(action, actor, event_data)?;
+                    self.execute_action_in_state(action, actor, &active)?;
                 }
 
                 // Update configuration.
                 self.config.exit(&active);
-                let _entered_target = self.enter_state(&target, actor, event_data)?;
+                self.enter_state(&target, actor, event_data)?;
 
                 self.transitions.push(ObservedTransition {
                     from: active.clone(),
@@ -566,7 +580,7 @@ impl Evaluator {
         state_id: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
-    ) -> Result<String, EvalError> {
+    ) -> Result<(), EvalError> {
         let indexed = self
             .state_index
             .get(state_id)
@@ -580,10 +594,17 @@ impl Evaluator {
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
-                let initial = indexed.state.initial_state.as_deref().ok_or_else(|| {
-                    EvalError::Internal(format!("compound state '{state_id}' missing initialState"))
-                })?;
-                self.enter_state(initial, actor, event_data)
+                if let Some(saved) = self.history_store.get(state_id).cloned() {
+                    self.restore_history(state_id, &saved, actor, event_data)?;
+                } else {
+                    let initial = indexed.state.initial_state.as_deref().ok_or_else(|| {
+                        EvalError::Internal(format!(
+                            "compound state '{state_id}' missing initialState"
+                        ))
+                    })?;
+                    self.enter_state(initial, actor, event_data)?;
+                }
+                Ok(())
             }
             StateKind::Parallel => {
                 self.config.enter(state_id.to_string());
@@ -593,9 +614,9 @@ impl Evaluator {
 
                 for (_name, region) in &indexed.state.regions {
                     let region_initial = &region.initial_state;
-                    let _entered = self.enter_state(region_initial, actor, event_data)?;
+                    self.enter_state(region_initial, actor, event_data)?;
                 }
-                Ok(state_id.to_string())
+                Ok(())
             }
             StateKind::Atomic | StateKind::Final => {
                 self.config.enter(state_id.to_string());
@@ -604,7 +625,7 @@ impl Evaluator {
                 if indexed.state.kind != StateKind::Final {
                     self.execute_on_entry_actions(state_id, actor, event_data)?;
                 }
-                Ok(state_id.to_string())
+                Ok(())
             }
         }
     }
@@ -624,14 +645,14 @@ impl Evaluator {
         self.execute_on_exit_actions(source, actor, event_data)?;
 
         for action in actions {
-            self.execute_action(action, actor, event_data)?;
+            self.execute_action_in_state(action, actor, source)?;
         }
 
         // Remove source and all its descendant states from the configuration.
         // This handles compound/parallel state exits where substates would
         // otherwise be orphaned.
         self.exit_state_and_descendants(source);
-        let _entered_target = self.enter_state(target, actor, event_data)?;
+        self.enter_state(target, actor, event_data)?;
 
         self.provenance.push(ProvenanceRecord::state_transition(
             source, target, event, actor,
@@ -646,17 +667,6 @@ impl Evaluator {
     }
 
     // ── Action execution ─────────────────────────────────────────
-
-    /// Execute a single kernel action (Kernel S9.2).
-    fn execute_action(
-        &mut self,
-        action: &Action,
-        actor: Option<&str>,
-        _event_data: Option<&serde_json::Value>,
-    ) -> Result<(), EvalError> {
-        let lifecycle_state = self.config.active.first().cloned().unwrap_or_default();
-        self.execute_action_in_state(action, actor, &lifecycle_state)
-    }
 
     fn execute_action_in_state(
         &mut self,
@@ -881,7 +891,8 @@ impl Evaluator {
 
         match indexed.state.kind {
             StateKind::Compound => {
-                if indexed.state.history_state.is_some() {
+                if let Some(history_mode) = &indexed.state.history_state {
+                    self.capture_history(state_id, *history_mode);
                     self.provenance
                         .push(ProvenanceRecord::history_cleared(state_id, "parent-exit"));
                 }
@@ -900,6 +911,103 @@ impl Evaluator {
             }
             _ => {}
         }
+    }
+
+    /// Capture the active substate configuration of a compound state.
+    ///
+    /// **Shallow:** record only the direct active substates.
+    /// **Deep:** record all active leaf states within the compound subtree.
+    fn capture_history(&mut self, compound_id: &str, mode: HistoryMode) {
+        let indexed = match self.state_index.get(compound_id) {
+            Some(s) => s,
+            None => return,
+        };
+
+        let direct_substates: Vec<String> = indexed
+            .state
+            .states
+            .keys()
+            .filter(|id| self.config.contains(*id))
+            .cloned()
+            .collect();
+
+        let saved = match mode {
+            HistoryMode::Shallow => direct_substates,
+            HistoryMode::Deep => {
+                let mut leaves = Vec::new();
+                for sub_id in &direct_substates {
+                    self.collect_deep_leaves(sub_id, &mut leaves);
+                }
+                leaves
+            }
+        };
+
+        if !saved.is_empty() {
+            self.history_store.insert(compound_id.to_string(), saved);
+        }
+    }
+
+    /// Collect all active leaf states within a subtree.
+    fn collect_deep_leaves(&self, state_id: &str, leaves: &mut Vec<String>) {
+        if let Some(indexed) = self.state_index.get(state_id) {
+            match indexed.state.kind {
+                StateKind::Compound => {
+                    let has_active_child = indexed
+                        .state
+                        .states
+                        .keys()
+                        .any(|id| self.config.contains(id));
+                    if has_active_child {
+                        for sub_id in indexed.state.states.keys() {
+                            if self.config.contains(sub_id) {
+                                self.collect_deep_leaves(sub_id, leaves);
+                            }
+                        }
+                    } else if self.config.contains(state_id) {
+                        leaves.push(state_id.to_string());
+                    }
+                }
+                StateKind::Parallel => {
+                    if self.config.contains(state_id) {
+                        for region in indexed.state.regions.values() {
+                            for region_state_id in region.states.keys() {
+                                if self.config.contains(region_state_id) {
+                                    self.collect_deep_leaves(region_state_id, leaves);
+                                }
+                            }
+                        }
+                    }
+                }
+                StateKind::Atomic | StateKind::Final => {
+                    if self.config.contains(state_id) {
+                        leaves.push(state_id.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Restore a previously saved history configuration.
+    ///
+    /// Enters each saved state path. For Deep history, the saved states are
+    /// leaf states so they are entered directly. For Shallow history, only
+    /// the direct substate is saved and entered, which then recurses normally.
+    fn restore_history(
+        &mut self,
+        compound_id: &str,
+        saved: &[String],
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        for state_id in saved {
+            if self.config.contains(state_id) {
+                continue;
+            }
+            self.enter_state(state_id, actor, event_data)?;
+        }
+
+        self.history_store.remove(compound_id);
+        Ok(())
     }
 
     fn cancel_timers_created_in_state_tree(&mut self, state_id: &str, reason: &str) {

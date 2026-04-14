@@ -888,3 +888,17 @@ fn s15_005_submit_definition_invalid() {
 fn s15_006_response_mapping() {
     assert_fixture_passes("S15-006-response-mapping.json");
 }
+
+// ── History state (KS.1) ────────────────────────────────────────
+
+/// K-H-D1: Shallow history re-entry at depth 1.
+#[test]
+fn kh_d1_shallow_normal_reentry() {
+    assert_fixture_passes("K-H-D1-shallow-normal-reentry.json");
+}
+
+/// K-H-D1: Deep history re-entry at depth 1.
+#[test]
+fn kh_d1_deep_normal_reentry() {
+    assert_fixture_passes("K-H-D1-deep-normal-reentry.json");
+}
