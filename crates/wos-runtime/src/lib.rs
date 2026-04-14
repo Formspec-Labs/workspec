@@ -8,6 +8,7 @@
 
 pub mod binding;
 pub mod companion;
+pub mod integration;
 pub mod runtime;
 pub mod store;
 
@@ -16,6 +17,9 @@ pub use binding::{
     SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
+pub use integration::{
+    IntegrationBinding, IntegrationContractRef, IntegrationProfileDocument, TargetWorkflow,
+};
 pub use runtime::{
     Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
     RuntimeError, RuntimeEventContext, RuntimeEventDecision, SystemClock, TaskSubmissionResult,

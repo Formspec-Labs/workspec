@@ -1302,6 +1302,8 @@ name = "wos-runtime"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "fel-core",
+ "semver",
  "serde",
  "serde_json",
  "thiserror",

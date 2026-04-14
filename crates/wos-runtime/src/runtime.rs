@@ -2,12 +2,16 @@
 
 //! Runtime command surface for WOS processors.
 
+use std::collections::HashMap;
 use std::error::Error as StdError;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
+use semver::{Version, VersionReq};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use wos_core::EvalContext;
 use wos_core::eval::{Evaluator, ObservedAction, ObservedTransition};
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
@@ -21,6 +25,7 @@ use wos_core::traits::{
 };
 
 use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
+use crate::integration::{IntegrationBinding, IntegrationContractRef, IntegrationProfileDocument};
 use crate::store::{
     ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StepResultRecord,
     StoreError, TaskArtifact, TaskArtifactKind,
@@ -181,6 +186,10 @@ pub enum RuntimeError {
     #[error("external service failed: {0}")]
     Service(String),
 
+    /// Integration profile processing failed.
+    #[error("integration failed: {0}")]
+    Integration(String),
+
     /// Contract validation failed.
     #[error("contract validation failed: {0}")]
     ContractValidation(String),
@@ -320,6 +329,7 @@ pub struct WosRuntime {
     validator: Box<dyn ValidateContractsDyn>,
     clock: Box<dyn Clock>,
     companion_policy: Box<dyn CompanionPolicy>,
+    integration_profile: Option<IntegrationProfileDocument>,
     bindings: BindingRegistry,
 }
 
@@ -357,6 +367,7 @@ impl WosRuntime {
             validator: Box::new(validator),
             clock: Box::new(clock),
             companion_policy: Box::new(NoopCompanionPolicy),
+            integration_profile: None,
             bindings,
         }
     }
@@ -367,6 +378,12 @@ impl WosRuntime {
         P: CompanionPolicy + 'static,
     {
         self.companion_policy = Box::new(companion_policy);
+        self
+    }
+
+    /// Attach an Integration Profile document for `invokeService` bindings.
+    pub fn with_integration_profile(mut self, profile: IntegrationProfileDocument) -> Self {
+        self.integration_profile = Some(profile);
         self
     }
 
@@ -930,6 +947,23 @@ impl WosRuntime {
                             "invokeService missing serviceRef".to_string(),
                         )
                     })?;
+                    let integration_binding = self
+                        .integration_profile
+                        .as_ref()
+                        .and_then(|profile| profile.bindings.get(&service_ref))
+                        .cloned();
+                    if let Some(binding) = integration_binding {
+                        provenance.extend(self.invoke_integration_binding(
+                            record,
+                            kernel,
+                            observed,
+                            &service_ref,
+                            &binding,
+                            now_iso,
+                        )?);
+                        continue;
+                    }
+
                     let input = observed
                         .action
                         .data
@@ -1000,6 +1034,226 @@ impl WosRuntime {
         }
 
         Ok((created_task_ids, emitted_events, provenance))
+    }
+
+    fn invoke_integration_binding(
+        &mut self,
+        record: &mut RuntimeRecord,
+        kernel: &KernelDocument,
+        observed: &ObservedAction,
+        service_ref: &str,
+        binding: &IntegrationBinding,
+        now_iso: &str,
+    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        self.validate_integration_profile_target(kernel, &record.instance)?;
+        match binding.kind.as_str() {
+            "request-response" => self.invoke_request_response_binding(
+                record,
+                kernel,
+                observed,
+                service_ref,
+                binding,
+                now_iso,
+            ),
+            other => Err(RuntimeError::UnsupportedBinding(format!(
+                "invokeService binding '{service_ref}' has unsupported type '{other}'"
+            ))),
+        }
+    }
+
+    fn validate_integration_contract(
+        &self,
+        service_ref: &str,
+        phase: &str,
+        contract: Option<&IntegrationContractRef>,
+        data: &serde_json::Value,
+        actor_id: Option<&str>,
+    ) -> Result<Option<ProvenanceRecord>, RuntimeError> {
+        let Some(contract) = contract else {
+            return Ok(None);
+        };
+        let validation_result = self.validator.validate(&contract.definition_ref, data)?;
+        if !validation_result.valid {
+            return Err(RuntimeError::ContractValidation(format!(
+                "{phase} contract '{}' failed for integration binding '{service_ref}'",
+                contract.definition_ref
+            )));
+        }
+
+        Ok(Some(ProvenanceRecord {
+            record_kind: ProvenanceKind::ContractValidation,
+            actor_id: actor_id.map(str::to_string),
+            from_state: None,
+            to_state: None,
+            event: None,
+            data: Some(serde_json::json!({
+                "serviceRef": service_ref,
+                "phase": phase,
+                "contractRef": contract.definition_ref,
+                "structured": true,
+                "valid": validation_result.valid,
+                "errors": validation_result.errors,
+            })),
+        }))
+    }
+
+    fn validate_integration_profile_target(
+        &self,
+        kernel: &KernelDocument,
+        instance: &CaseInstance,
+    ) -> Result<(), RuntimeError> {
+        let Some(profile) = self.integration_profile.as_ref() else {
+            return Ok(());
+        };
+
+        if profile.target_workflow.url != instance.definition_url {
+            return Err(RuntimeError::Integration(format!(
+                "integration profile targets '{}' but instance uses '{}'",
+                profile.target_workflow.url, instance.definition_url
+            )));
+        }
+
+        if let Some(compatible_versions) = profile.target_workflow.compatible_versions.as_deref() {
+            let requested_version =
+                Version::parse(&instance.definition_version).map_err(|error| {
+                    RuntimeError::Integration(format!(
+                        "instance definition version '{}' is not valid semver: {error}",
+                        instance.definition_version
+                    ))
+                })?;
+            let normalized_versions = normalize_semver_range_expression(compatible_versions);
+            let version_req = VersionReq::parse(&normalized_versions).map_err(|error| {
+                RuntimeError::Integration(format!(
+                    "integration profile compatibleVersions '{}' is not valid semver: {error}",
+                    compatible_versions
+                ))
+            })?;
+            if !version_req.matches(&requested_version) {
+                return Err(RuntimeError::Integration(format!(
+                    "integration profile compatibleVersions '{}' do not include instance version '{}'",
+                    compatible_versions, instance.definition_version
+                )));
+            }
+        }
+
+        if kernel.url.as_deref() != Some(instance.definition_url.as_str()) {
+            return Err(RuntimeError::Integration(format!(
+                "kernel document url '{}' does not match instance definition url '{}'",
+                kernel.url.as_deref().unwrap_or_default(),
+                instance.definition_url
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn invoke_request_response_binding(
+        &mut self,
+        record: &mut RuntimeRecord,
+        kernel: &KernelDocument,
+        observed: &ObservedAction,
+        service_ref: &str,
+        binding: &IntegrationBinding,
+        now_iso: &str,
+    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
+        let mut provenance = Vec::new();
+        let input = build_integration_input(binding, kernel, observed, &record.instance)?;
+        if let Some(record) = self.validate_integration_contract(
+            service_ref,
+            "request",
+            binding.request_contract.as_ref(),
+            &input,
+            observed.actor_id.as_deref(),
+        )? {
+            provenance.push(record);
+        }
+
+        let idempotency_key = match observed.action.idempotency_key.clone() {
+            Some(key) => Some(key),
+            None => match binding.idempotency_key_expression.as_deref() {
+                Some(expression) => {
+                    Some(value_to_idempotency_key(evaluate_integration_expression(
+                        expression,
+                        kernel,
+                        &record.instance,
+                        observed,
+                    )?)?)
+                }
+                None => None,
+            },
+        };
+        let (step_result, reused_persisted_result) = load_or_invoke_service_result(
+            self.service.as_ref(),
+            record,
+            service_ref,
+            &input,
+            idempotency_key.as_deref(),
+            now_iso,
+        )?;
+
+        if reused_persisted_result {
+            provenance.push(ProvenanceRecord {
+                record_kind: ProvenanceKind::IdempotencyDedup,
+                actor_id: observed.actor_id.clone(),
+                from_state: None,
+                to_state: None,
+                event: None,
+                data: Some(serde_json::json!({
+                    "serviceRef": service_ref,
+                    "integrationType": binding.kind,
+                    "idempotencyKey": idempotency_key,
+                    "stepResultRecordedAt": step_result.recorded_at,
+                })),
+            });
+        } else {
+            provenance.push(ProvenanceRecord {
+                record_kind: ProvenanceKind::StepResultPersisted,
+                actor_id: observed.actor_id.clone(),
+                from_state: None,
+                to_state: None,
+                event: None,
+                data: Some(serde_json::json!({
+                    "serviceRef": service_ref,
+                    "integrationType": binding.kind,
+                    "idempotencyKey": idempotency_key,
+                    "input": input,
+                    "output": step_result.output,
+                    "persistedBeforeAdvance": true,
+                })),
+            });
+        }
+
+        if let Some(record) = self.validate_integration_contract(
+            service_ref,
+            "response",
+            binding.response_contract.as_ref(),
+            &step_result.output,
+            observed.actor_id.as_deref(),
+        )? {
+            provenance.push(record);
+        }
+
+        let updates = apply_output_binding(
+            &mut record.instance.case_state,
+            &binding.output_binding,
+            &step_result.output,
+        )?;
+        if !updates.is_empty() {
+            provenance.push(ProvenanceRecord {
+                record_kind: ProvenanceKind::DataMapping,
+                actor_id: observed.actor_id.clone(),
+                from_state: None,
+                to_state: None,
+                event: None,
+                data: Some(serde_json::json!({
+                    "serviceRef": service_ref,
+                    "integrationType": binding.kind,
+                    "updatedPaths": updates,
+                })),
+            });
+        }
+
+        Ok(provenance)
     }
 
     fn stage_pending_tasks_for_presentation(
@@ -1272,6 +1526,351 @@ fn merge_case_state(target: &mut serde_json::Value, updates: &serde_json::Value)
             target_object.insert(key.clone(), value.clone());
         }
     }
+}
+
+fn build_integration_input(
+    binding: &IntegrationBinding,
+    kernel: &KernelDocument,
+    observed: &ObservedAction,
+    instance: &CaseInstance,
+) -> Result<serde_json::Value, RuntimeError> {
+    let mapping = integration_input_mapping(binding);
+    if mapping.is_empty() {
+        return Ok(observed
+            .action
+            .data
+            .clone()
+            .unwrap_or_else(|| serde_json::json!({})));
+    }
+
+    let mut input = serde_json::Map::new();
+    for (key, expression) in mapping {
+        let value = evaluate_integration_expression(expression, kernel, instance, observed)?;
+        input.insert(key.clone(), value);
+    }
+    Ok(serde_json::Value::Object(input))
+}
+
+fn integration_input_mapping(
+    binding: &IntegrationBinding,
+) -> &std::collections::HashMap<String, String> {
+    if binding.kind == "policy-engine" && !binding.context_mapping.is_empty() {
+        &binding.context_mapping
+    } else if binding.kind == "event-emit" && !binding.data_mapping.is_empty() {
+        &binding.data_mapping
+    } else {
+        &binding.input_mapping
+    }
+}
+
+fn evaluate_integration_expression(
+    expression: &str,
+    kernel: &KernelDocument,
+    instance: &CaseInstance,
+    observed: &ObservedAction,
+) -> Result<serde_json::Value, RuntimeError> {
+    let case_state = case_state_map(&instance.case_state)?;
+    let event = integration_event_context(kernel, observed);
+    let mut context = EvalContext::from_case_state(&case_state, event.as_ref());
+    context.instance.insert(
+        "id".to_string(),
+        serde_json::Value::String(instance.instance_id.clone()),
+    );
+    context.instance.insert(
+        "definitionUrl".to_string(),
+        serde_json::Value::String(instance.definition_url.clone()),
+    );
+    context.instance.insert(
+        "definitionVersion".to_string(),
+        serde_json::Value::String(instance.definition_version.clone()),
+    );
+
+    let parsed = parse(expression).map_err(|error| {
+        RuntimeError::Integration(format!(
+            "integration expression '{expression}' failed to parse: {error}"
+        ))
+    })?;
+    let result = evaluate(&parsed, &context.to_fel_environment());
+    if has_error_diagnostics(&result.diagnostics) {
+        return Err(RuntimeError::Integration(format!(
+            "integration expression '{expression}' produced evaluation errors"
+        )));
+    }
+
+    let value = fel_to_json(&result.value);
+    if value.is_null() {
+        return Err(RuntimeError::Integration(format!(
+            "integration expression '{expression}' resolved to no value"
+        )));
+    }
+
+    Ok(value)
+}
+
+fn integration_event_context(
+    kernel: &KernelDocument,
+    observed: &ObservedAction,
+) -> Option<serde_json::Value> {
+    let mut event = serde_json::Map::new();
+    if let Some(actor_id) = observed.actor_id.as_deref() {
+        event.insert(
+            "actorId".to_string(),
+            serde_json::Value::String(actor_id.to_string()),
+        );
+        if let Some(actor_kind) = kernel
+            .actors
+            .iter()
+            .find(|actor| actor.id == actor_id)
+            .map(|actor| actor.kind)
+        {
+            event.insert(
+                "actorType".to_string(),
+                serde_json::Value::String(actor_kind_to_string(actor_kind).to_string()),
+            );
+        }
+    }
+    if let Some(data) = &observed.action.data {
+        event.insert("data".to_string(), data.clone());
+    }
+
+    if event.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(event))
+    }
+}
+
+fn actor_kind_to_string(kind: wos_core::model::kernel::ActorKind) -> &'static str {
+    match kind {
+        wos_core::model::kernel::ActorKind::Human => "human",
+        wos_core::model::kernel::ActorKind::System => "system",
+    }
+}
+
+fn case_state_map(
+    case_state: &serde_json::Value,
+) -> Result<HashMap<String, serde_json::Value>, RuntimeError> {
+    case_state
+        .as_object()
+        .cloned()
+        .map(|object| object.into_iter().collect())
+        .ok_or_else(|| RuntimeError::Integration("case state is not an object".to_string()))
+}
+
+fn value_to_idempotency_key(value: serde_json::Value) -> Result<String, RuntimeError> {
+    match value {
+        serde_json::Value::Null => Err(RuntimeError::Integration(
+            "idempotency expression resolved to no value".to_string(),
+        )),
+        serde_json::Value::String(value) => Ok(value),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => Ok(value.to_string()),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Ok(value.to_string()),
+    }
+}
+
+fn normalize_semver_range_expression(expression: &str) -> String {
+    expression
+        .split("||")
+        .map(|clause| {
+            let clause = clause.trim();
+            if clause.contains(',') {
+                clause.to_string()
+            } else {
+                clause.split_whitespace().collect::<Vec<_>>().join(", ")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" || ")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum JsonPathSegment {
+    Key(String),
+    Index(usize),
+}
+
+fn apply_output_binding(
+    case_state: &mut serde_json::Value,
+    output_binding: &std::collections::HashMap<String, String>,
+    output: &serde_json::Value,
+) -> Result<Vec<String>, RuntimeError> {
+    let mut updated_paths = Vec::new();
+    let mut bindings: Vec<_> = output_binding.iter().collect();
+    bindings.sort_by(|(left, _), (right, _)| left.cmp(right));
+
+    for (case_path, output_path) in bindings {
+        let value = resolve_json_path(output, output_path)?;
+        set_case_state_path(case_state, case_path, value.clone())?;
+        updated_paths.push((*case_path).clone());
+    }
+    Ok(updated_paths)
+}
+
+fn resolve_json_path<'a>(
+    value: &'a serde_json::Value,
+    json_path: &str,
+) -> Result<&'a serde_json::Value, RuntimeError> {
+    let segments = parse_json_path(json_path)?;
+    let mut current = value;
+    for segment in segments {
+        current = match segment {
+            JsonPathSegment::Key(key) => current.get(&key).ok_or_else(|| {
+                RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' resolved to no value"
+                ))
+            })?,
+            JsonPathSegment::Index(index) => current
+                .as_array()
+                .and_then(|items| items.get(index))
+                .ok_or_else(|| {
+                    RuntimeError::Integration(format!(
+                        "output binding path '{json_path}' resolved to no value"
+                    ))
+                })?,
+        };
+    }
+    Ok(current)
+}
+
+fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError> {
+    let json_path = json_path.trim();
+    if json_path == "$" {
+        return Ok(Vec::new());
+    }
+    let Some(rest) = json_path.strip_prefix('$') else {
+        return Err(RuntimeError::Integration(format!(
+            "output binding path '{json_path}' must start with '$'"
+        )));
+    };
+
+    let mut segments = Vec::new();
+    let mut cursor = rest;
+    while !cursor.is_empty() {
+        if let Some(next) = cursor.strip_prefix('.') {
+            cursor = next;
+            if cursor.is_empty() {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' has a trailing '.'"
+                )));
+            }
+            let split_at = cursor
+                .char_indices()
+                .find(|(_, ch)| *ch == '.' || *ch == '[')
+                .map(|(index, _)| index)
+                .unwrap_or(cursor.len());
+            let key = &cursor[..split_at];
+            if key.is_empty() {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' contains an empty field name"
+                )));
+            }
+            segments.push(JsonPathSegment::Key(key.to_string()));
+            cursor = &cursor[split_at..];
+            continue;
+        }
+
+        if let Some(next) = cursor.strip_prefix('[') {
+            cursor = next;
+            let Some(end) = cursor.find(']') else {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' is missing a closing ']'"
+                )));
+            };
+            let token = &cursor[..end];
+            if token.is_empty() {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' contains an empty bracket segment"
+                )));
+            }
+            let segment = if let Some(quoted) = token
+                .strip_prefix('\'')
+                .and_then(|inner| inner.strip_suffix('\''))
+                .or_else(|| {
+                    token
+                        .strip_prefix('"')
+                        .and_then(|inner| inner.strip_suffix('"'))
+                }) {
+                JsonPathSegment::Key(unescape_json_path_key(quoted))
+            } else {
+                let index = token.parse::<usize>().map_err(|error| {
+                    RuntimeError::Integration(format!(
+                        "output binding path '{json_path}' contains invalid array index '{token}': {error}"
+                    ))
+                })?;
+                JsonPathSegment::Index(index)
+            };
+            segments.push(segment);
+            cursor = &cursor[end + 1..];
+            continue;
+        }
+
+        return Err(RuntimeError::Integration(format!(
+            "output binding path '{json_path}' has invalid syntax near '{cursor}'"
+        )));
+    }
+
+    Ok(segments)
+}
+
+fn unescape_json_path_key(key: &str) -> String {
+    let mut unescaped = String::with_capacity(key.len());
+    let mut chars = key.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(next) = chars.next() {
+                unescaped.push(next);
+            }
+        } else {
+            unescaped.push(ch);
+        }
+    }
+    unescaped
+}
+
+fn set_case_state_path(
+    case_state: &mut serde_json::Value,
+    case_path: &str,
+    value: serde_json::Value,
+) -> Result<(), RuntimeError> {
+    let path = case_path.strip_prefix("caseFile.").unwrap_or(case_path);
+    if path.is_empty() {
+        return Err(RuntimeError::Integration(
+            "output binding target path is empty".to_string(),
+        ));
+    }
+
+    let segments: Vec<&str> = path.split('.').collect();
+    let Some((leaf, parents)) = segments.split_last() else {
+        return Err(RuntimeError::Integration(
+            "output binding target path is empty".to_string(),
+        ));
+    };
+
+    let mut current = case_state;
+    for segment in parents {
+        if !current.is_object() {
+            *current = serde_json::json!({});
+        }
+        let object = current.as_object_mut().ok_or_else(|| {
+            RuntimeError::Integration(format!(
+                "output binding target path '{case_path}' cannot be represented as an object"
+            ))
+        })?;
+        current = object
+            .entry((*segment).to_string())
+            .or_insert_with(|| serde_json::json!({}));
+    }
+
+    if !current.is_object() {
+        *current = serde_json::json!({});
+    }
+    let object = current.as_object_mut().ok_or_else(|| {
+        RuntimeError::Integration(format!(
+            "output binding target path '{case_path}' cannot be represented as an object"
+        ))
+    })?;
+    object.insert((*leaf).to_string(), value);
+    Ok(())
 }
 
 fn impact_level_label(level: ImpactLevel) -> String {
@@ -1630,6 +2229,14 @@ mod tests {
     struct RecordingService {
         response: serde_json::Value,
         calls: Arc<AtomicUsize>,
+        invocations: Arc<Mutex<Vec<RecordedInvocation>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct RecordedInvocation {
+        service_ref: String,
+        input: serde_json::Value,
+        idempotency_key: Option<String>,
     }
 
     impl RecordingService {
@@ -1637,6 +2244,7 @@ mod tests {
             Self {
                 response,
                 calls: Arc::new(AtomicUsize::new(0)),
+                invocations: Arc::new(Mutex::new(Vec::new())),
             }
         }
     }
@@ -1650,11 +2258,16 @@ mod tests {
 
         fn invoke(
             &self,
-            _service_ref: &str,
-            _input: &serde_json::Value,
-            _idempotency_key: Option<&str>,
+            service_ref: &str,
+            input: &serde_json::Value,
+            idempotency_key: Option<&str>,
         ) -> Result<serde_json::Value, Self::Error> {
             self.calls.fetch_add(1, Ordering::SeqCst);
+            self.invocations.lock().unwrap().push(RecordedInvocation {
+                service_ref: service_ref.to_string(),
+                input: input.clone(),
+                idempotency_key: idempotency_key.map(str::to_string),
+            });
             Ok(self.response.clone())
         }
     }
@@ -2788,6 +3401,8 @@ mod tests {
                 },
             )
             .unwrap();
+        let provenance_position_before_failure =
+            runtime.load_instance("case-9").unwrap().provenance_position;
 
         let error = runtime.drain_once("case-9").unwrap_err();
         assert!(matches!(error, RuntimeError::Store(StoreError::Failed(_))));
@@ -2795,7 +3410,10 @@ mod tests {
         let instance = runtime.load_instance("case-9").unwrap();
         assert_eq!(instance.pending_events.len(), 1);
         assert!(instance.active_tasks.is_empty());
-        assert_eq!(instance.provenance_position, 0);
+        assert_eq!(
+            instance.provenance_position,
+            provenance_position_before_failure
+        );
     }
 
     #[test]
@@ -2835,6 +3453,7 @@ mod tests {
             .unwrap();
 
         let mut record = runtime.store.load_record("case-10").unwrap();
+        let provenance_len_before_failure = record.provenance_log.len();
         let task = manual_formspec_task("case-10", 1, Some("urn:mapping:response"));
         let task_id = task.task_id.clone();
         record.instance.active_tasks.push(task);
@@ -2860,7 +3479,7 @@ mod tests {
 
         let record = runtime.store.load_record("case-10").unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record.provenance_log.is_empty());
+        assert_eq!(record.provenance_log.len(), provenance_len_before_failure);
     }
 
     #[test]
@@ -2952,5 +3571,492 @@ mod tests {
                 && record.data.as_ref().and_then(|data| data.get("valid"))
                     == Some(&serde_json::json!(true))
         }));
+    }
+
+    #[test]
+    fn drain_once_consumes_integration_profile_binding_and_replays_persisted_result() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:integration-profile-kernel",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "verify",
+                            "target": "open",
+                            "actions": [{
+                                "action": "invokeService",
+                                "serviceRef": "eligibilityCheck"
+                            }]
+                        }]
+                    }
+                }
+            }
+        }))
+        .unwrap();
+        let profile: crate::IntegrationProfileDocument =
+            serde_json::from_value(serde_json::json!({
+                "$wosIntegrationProfile": "1.0",
+                "targetWorkflow": {
+                    "url": "urn:test:integration-profile-kernel",
+                    "compatibleVersions": ">=1.0.0 <2.0.0"
+                },
+                "bindings": {
+                    "eligibilityCheck": {
+                        "type": "request-response",
+                        "interface": { "$ref": "urn:openapi:eligibility" },
+                        "operation": "checkEligibility",
+                        "requestContract": {
+                            "definitionRef": "urn:contracts:eligibility-request"
+                        },
+                        "responseContract": {
+                            "definitionRef": "urn:contracts:eligibility-response"
+                        },
+                        "inputMapping": {
+                            "applicantSSN": "caseFile.application.ssn",
+                            "householdSize": "caseFile.application.householdSize",
+                            "checkType": "if caseFile.application.householdSize > 2 then 'large' else 'small'",
+                            "submittedBy": "event.actorId"
+                        },
+                        "outputBinding": {
+                            "caseFile.eligibility.result": "$.decisions[0].result",
+                            "caseFile.eligibility.checkedAt": "$.decisions[0].checkedAt"
+                        },
+                        "idempotencyKeyExpression": "caseFile.application.id & '-' & event.actorId"
+                    }
+                }
+            }))
+            .unwrap();
+
+        let service = RecordingService::with_response(serde_json::json!({
+            "decisions": [{
+                "result": "eligible",
+                "checkedAt": "2026-04-14T10:00:00Z"
+            }]
+        }));
+        let calls = service.calls.clone();
+        let invocations = service.invocations.clone();
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            service,
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        )
+        .with_integration_profile(profile);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-integration".to_string(),
+                definition_url: "urn:test:integration-profile-kernel".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({
+                    "application": {
+                        "id": "app-123",
+                        "ssn": "123-45-6789",
+                        "householdSize": 3
+                    }
+                })),
+            })
+            .unwrap();
+
+        runtime
+            .enqueue_event(
+                "case-integration",
+                PendingEvent {
+                    event: "verify".to_string(),
+                    actor_id: Some("system".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let first_result = runtime.drain_once("case-integration").unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        {
+            let invocations = invocations.lock().unwrap();
+            assert_eq!(invocations.len(), 1);
+            assert_eq!(invocations[0].service_ref, "eligibilityCheck");
+            assert_eq!(
+                invocations[0].input,
+                serde_json::json!({
+                    "applicantSSN": "123-45-6789",
+                    "householdSize": 3,
+                    "checkType": "large",
+                    "submittedBy": "system"
+                })
+            );
+            assert_eq!(
+                invocations[0].idempotency_key.as_deref(),
+                Some("app-123-system")
+            );
+        }
+
+        let instance = runtime.load_instance("case-integration").unwrap();
+        assert_eq!(
+            instance.case_state["eligibility"]["result"],
+            serde_json::json!("eligible")
+        );
+        assert_eq!(
+            instance.case_state["eligibility"]["checkedAt"],
+            serde_json::json!("2026-04-14T10:00:00Z")
+        );
+        assert!(first_result.provenance.iter().any(|record| {
+            record.record_kind == ProvenanceKind::ContractValidation
+                && record
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("contractRef"))
+                    == Some(&serde_json::json!("urn:contracts:eligibility-request"))
+        }));
+        assert!(first_result.provenance.iter().any(|record| {
+            record.record_kind == ProvenanceKind::ContractValidation
+                && record
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("contractRef"))
+                    == Some(&serde_json::json!("urn:contracts:eligibility-response"))
+        }));
+        assert!(first_result.provenance.iter().any(|record| {
+            record.record_kind == ProvenanceKind::DataMapping
+                && record.data.as_ref().and_then(|data| data.get("serviceRef"))
+                    == Some(&serde_json::json!("eligibilityCheck"))
+        }));
+
+        runtime
+            .enqueue_event(
+                "case-integration",
+                PendingEvent {
+                    event: "verify".to_string(),
+                    actor_id: Some("system".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let second_result = runtime.drain_once("case-integration").unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        {
+            let invocations = invocations.lock().unwrap();
+            assert_eq!(invocations.len(), 1);
+        }
+        assert!(
+            second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted)
+        );
+    }
+
+    #[test]
+    fn drain_once_rejects_integration_profile_target_mismatch() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:integration-profile-kernel",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "verify",
+                            "target": "open",
+                            "actions": [{
+                                "action": "invokeService",
+                                "serviceRef": "eligibilityCheck"
+                            }]
+                        }]
+                    }
+                }
+            }
+        }))
+        .unwrap();
+        let profile: crate::IntegrationProfileDocument =
+            serde_json::from_value(serde_json::json!({
+                "$wosIntegrationProfile": "1.0",
+                "targetWorkflow": {
+                    "url": "urn:test:different-kernel",
+                    "compatibleVersions": ">=1.0.0 <2.0.0"
+                },
+                "bindings": {
+                    "eligibilityCheck": {
+                        "type": "request-response",
+                        "interface": { "$ref": "urn:openapi:eligibility" },
+                        "operation": "checkEligibility",
+                        "inputMapping": {
+                            "applicantSSN": "caseFile.application.ssn"
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let service = RecordingService::with_response(serde_json::json!({
+            "result": "eligible"
+        }));
+        let calls = service.calls.clone();
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            service,
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        )
+        .with_integration_profile(profile);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-target-mismatch".to_string(),
+                definition_url: "urn:test:integration-profile-kernel".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({
+                    "application": {
+                        "id": "app-123",
+                        "ssn": "123-45-6789"
+                    }
+                })),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-target-mismatch",
+                PendingEvent {
+                    event: "verify".to_string(),
+                    actor_id: Some("system".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let error = runtime.drain_once("case-target-mismatch").unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::Integration(ref message) if message.contains("targets")
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn drain_once_rejects_unsupported_integration_profile_binding_kind() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:unsupported-integration-binding",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "verify",
+                            "target": "open",
+                            "actions": [{
+                                "action": "invokeService",
+                                "serviceRef": "legacyTool"
+                            }]
+                        }]
+                    }
+                }
+            }
+        }))
+        .unwrap();
+        let profile: crate::IntegrationProfileDocument =
+            serde_json::from_value(serde_json::json!({
+                "$wosIntegrationProfile": "1.0",
+                "targetWorkflow": {
+                    "url": "urn:test:unsupported-integration-binding",
+                    "compatibleVersions": ">=1.0.0 <2.0.0"
+                },
+                "bindings": {
+                    "legacyTool": {
+                        "type": "tool",
+                        "invocation": {
+                            "method": "command-line",
+                            "command": "/usr/bin/legacy-tool"
+                        },
+                        "inputMapping": {
+                            "payload": "caseFile.application.id"
+                        }
+                    }
+                }
+            }))
+            .unwrap();
+
+        let service = RecordingService::with_response(serde_json::json!({
+            "result": "unused"
+        }));
+        let calls = service.calls.clone();
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            service,
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        )
+        .with_integration_profile(profile);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-unsupported-integration-binding".to_string(),
+                definition_url: "urn:test:unsupported-integration-binding".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({
+                    "application": {
+                        "id": "app-123"
+                    }
+                })),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-unsupported-integration-binding",
+                PendingEvent {
+                    event: "verify".to_string(),
+                    actor_id: Some("system".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let error = runtime
+            .drain_once("case-unsupported-integration-binding")
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::UnsupportedBinding(ref binding)
+                if binding.contains("unsupported type 'tool'")
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn drain_once_rejects_invalid_integration_profile_idempotency_expression() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:invalid-idempotency-expression",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "verify",
+                            "target": "open",
+                            "actions": [{
+                                "action": "invokeService",
+                                "serviceRef": "eligibilityCheck"
+                            }]
+                        }]
+                    }
+                }
+            }
+        }))
+        .unwrap();
+        let profile: crate::IntegrationProfileDocument =
+            serde_json::from_value(serde_json::json!({
+                "$wosIntegrationProfile": "1.0",
+                "targetWorkflow": {
+                    "url": "urn:test:invalid-idempotency-expression",
+                    "compatibleVersions": ">=1.0.0 <2.0.0"
+                },
+                "bindings": {
+                    "eligibilityCheck": {
+                        "type": "request-response",
+                        "interface": { "$ref": "urn:openapi:eligibility" },
+                        "operation": "checkEligibility",
+                        "inputMapping": {
+                            "applicantSSN": "caseFile.application.ssn"
+                        },
+                        "idempotencyKeyExpression": "caseFile.application.missing"
+                    }
+                }
+            }))
+            .unwrap();
+
+        let service = RecordingService::with_response(serde_json::json!({
+            "result": "eligible"
+        }));
+        let calls = service.calls.clone();
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            service,
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        )
+        .with_integration_profile(profile);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-invalid-idempotency".to_string(),
+                definition_url: "urn:test:invalid-idempotency-expression".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({
+                    "application": {
+                        "id": "app-123",
+                        "ssn": "123-45-6789"
+                    }
+                })),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-invalid-idempotency",
+                PendingEvent {
+                    event: "verify".to_string(),
+                    actor_id: Some("system".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let error = runtime.drain_once("case-invalid-idempotency").unwrap_err();
+        assert!(matches!(
+            error,
+            RuntimeError::Integration(ref message)
+                if message.contains("resolved to no value")
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
