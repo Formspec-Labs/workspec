@@ -3,5 +3,7 @@ members = [
     "crates/wos-core",
     "crates/wos-lint",
     "crates/wos-conformance",
+    "crates/wos-runtime",
+    "crates/wos-formspec-binding",
 ]
 resolver = "3"

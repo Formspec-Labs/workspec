@@ -89,6 +89,11 @@ impl Timers {
     pub fn is_empty(&self) -> bool {
         self.pending.is_empty()
     }
+
+    /// Iterate over pending timers in arbitrary order.
+    pub fn iter(&self) -> impl Iterator<Item = &Timer> {
+        self.pending.values()
+    }
 }
 
 /// Maximum tolerance for a timer based on its duration tier (Runtime S7.2).

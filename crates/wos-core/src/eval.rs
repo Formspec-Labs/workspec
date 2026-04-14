@@ -11,8 +11,11 @@
 use std::collections::HashMap;
 
 use fel_core::{evaluate, parse, types::FelValue};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
+use crate::instance::CaseInstance;
 use crate::model::kernel::{Action, ActionKind, KernelDocument, State, StateKind};
 use crate::provenance::{ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
@@ -86,6 +89,9 @@ pub struct Evaluator {
 
     /// All transitions that fired during execution.
     transitions: Vec<ObservedTransition>,
+
+    /// All actions executed during this evaluator lifetime.
+    executed_actions: Vec<ObservedAction>,
 }
 
 /// An observed state transition.
@@ -97,6 +103,17 @@ pub struct ObservedTransition {
     pub to: String,
     /// Triggering event.
     pub event: String,
+}
+
+/// An action executed by the evaluator during a single event step.
+#[derive(Debug, Clone)]
+pub struct ObservedAction {
+    /// Lifecycle state active when the action executed.
+    pub lifecycle_state: String,
+    /// Actor associated with the triggering event, if any.
+    pub actor_id: Option<String>,
+    /// The concrete action definition.
+    pub action: Action,
 }
 
 /// Errors from the evaluation algorithm.
@@ -120,22 +137,87 @@ impl Evaluator {
     ///
     /// Enters the initial state and executes its onEntry actions.
     pub fn new(kernel: KernelDocument) -> Result<Self, EvalError> {
+        Self::with_time(kernel, 0)
+    }
+
+    /// Create an evaluator using the provided millisecond clock.
+    pub fn with_time(kernel: KernelDocument, current_time_ms: u64) -> Result<Self, EvalError> {
+        Self::with_time_and_case_state(kernel, current_time_ms, None)
+    }
+
+    /// Create an evaluator using the provided millisecond clock and seeded case state.
+    pub fn with_time_and_case_state(
+        kernel: KernelDocument,
+        current_time_ms: u64,
+        initial_case_state: Option<&serde_json::Value>,
+    ) -> Result<Self, EvalError> {
         let initial = kernel.lifecycle.initial_state.clone();
         let state_index = build_state_index(&kernel);
         let case_state = build_default_case_state(&kernel);
+        let mut seeded_case_state = case_state;
+
+        if let Some(initial_case_state) = initial_case_state {
+            if let Some(initial_object) = initial_case_state.as_object() {
+                seeded_case_state.extend(
+                    initial_object
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone())),
+                );
+            }
+        }
 
         let mut eval = Self {
             kernel,
             state_index,
             config: Configuration::default(),
-            case_state,
+            case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
-            simulated_time_ms: 0,
+            simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
+            executed_actions: Vec::new(),
         };
         eval.enter_state(&initial, None, None)?;
         Ok(eval)
+    }
+
+    /// Restore an evaluator from a serialized case instance.
+    pub fn from_instance(
+        kernel: KernelDocument,
+        instance: &CaseInstance,
+        current_time_ms: u64,
+    ) -> Result<Self, EvalError> {
+        let state_index = build_state_index(&kernel);
+        let mut timers = Timers::default();
+
+        for timer in &instance.timers {
+            let deadline_ms = parse_rfc3339_to_ms(&timer.deadline)?;
+            timers.create(crate::timer::Timer {
+                id: timer.timer_id.clone(),
+                deadline_ms,
+                fires_event: timer.event.clone(),
+                created_in_state: timer.scope_state.clone().unwrap_or_default(),
+                duration_iso: timer
+                    .duration_iso
+                    .clone()
+                    .unwrap_or_else(|| "P0D".to_string()),
+                duration_ms: timer.duration_ms.unwrap_or(0),
+            });
+        }
+
+        Ok(Self {
+            kernel,
+            state_index,
+            config: Configuration {
+                active: instance.configuration.clone(),
+            },
+            case_state: case_state_from_value(&instance.case_state),
+            timers,
+            provenance: ProvenanceLog::default(),
+            simulated_time_ms: current_time_ms,
+            transitions: Vec::new(),
+            executed_actions: Vec::new(),
+        })
     }
 
     /// The current active state configuration.
@@ -177,9 +259,29 @@ impl Evaluator {
         &self.transitions
     }
 
+    /// All actions executed during this evaluator lifetime.
+    pub fn executed_actions(&self) -> &[ObservedAction] {
+        &self.executed_actions
+    }
+
+    /// Consume the executed-action log.
+    pub fn take_executed_actions(&mut self) -> Vec<ObservedAction> {
+        std::mem::take(&mut self.executed_actions)
+    }
+
     /// The kernel document.
     pub fn kernel(&self) -> &KernelDocument {
         &self.kernel
+    }
+
+    /// Serialize case state into a JSON object.
+    pub fn case_state_json(&self) -> serde_json::Value {
+        let object = self
+            .case_state
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        serde_json::Value::Object(object)
     }
 
     // ── Event processing ────────────────────────────────────────
@@ -490,11 +592,11 @@ impl Evaluator {
         actor: Option<&str>,
         _event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        let lifecycle_state = self.config.active.first().cloned().unwrap_or_default();
         match action.action {
             ActionKind::SetData => {
                 let path = action.path.as_deref().unwrap_or("");
                 let value = action.value.clone().unwrap_or(serde_json::Value::Null);
-                let lifecycle_state = self.config.active.first().cloned().unwrap_or_default();
 
                 let key = path.strip_prefix("caseFile.").unwrap_or(path);
                 self.case_state.insert(key.to_string(), value.clone());
@@ -566,6 +668,12 @@ impl Evaluator {
                 ));
             }
         }
+
+        self.executed_actions.push(ObservedAction {
+            lifecycle_state,
+            actor_id: actor.map(String::from),
+            action: action.clone(),
+        });
 
         Ok(())
     }
@@ -701,6 +809,10 @@ impl Evaluator {
 
         match indexed.state.kind {
             StateKind::Compound => {
+                if indexed.state.history_state.is_some() {
+                    self.provenance
+                        .push(ProvenanceRecord::history_cleared(state_id, "parent-exit"));
+                }
                 let substate_ids: Vec<String> = indexed.state.states.keys().cloned().collect();
                 for sub_id in &substate_ids {
                     self.exit_state_and_descendants(sub_id);
@@ -799,6 +911,30 @@ fn build_default_case_state(kernel: &KernelDocument) -> HashMap<String, serde_js
         }
     }
     map
+}
+
+fn case_state_from_value(value: &serde_json::Value) -> HashMap<String, serde_json::Value> {
+    value
+        .as_object()
+        .map(|object| {
+            object
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_rfc3339_to_ms(value: &str) -> Result<u64, EvalError> {
+    let parsed = OffsetDateTime::parse(value, &Rfc3339).map_err(|error| {
+        EvalError::Internal(format!("invalid timer deadline '{value}': {error}"))
+    })?;
+    let millis = parsed.unix_timestamp_nanos() / 1_000_000;
+    u64::try_from(millis).map_err(|_| {
+        EvalError::Internal(format!(
+            "timer deadline '{value}' predates Unix epoch and cannot be restored"
+        ))
+    })
 }
 
 /// Parse an ISO 8601 duration to milliseconds.

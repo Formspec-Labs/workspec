@@ -12,6 +12,7 @@
 
 use std::collections::HashMap;
 
+use crate::fixture::ContractOutcome;
 use wos_core::instance::CaseInstance;
 use wos_core::traits::{ContractValidator, ExternalService, InstanceStore, ValidationResult};
 
@@ -75,19 +76,46 @@ impl InstanceStore for InMemoryStore {
 /// Returns a configurable pass/fail result for all validations.
 #[derive(Debug)]
 pub struct StubValidator {
-    /// If `true`, all validations pass. If `false`, all fail.
-    pass_all: bool,
+    /// Default result for contracts without an explicit fixture override.
+    default_valid: bool,
+    /// Per-contract validation outcomes declared by the fixture.
+    contract_outcomes: HashMap<String, ValidationResult>,
 }
 
 impl StubValidator {
     /// Create a validator that passes all validations.
     pub fn passing() -> Self {
-        Self { pass_all: true }
+        Self {
+            default_valid: true,
+            contract_outcomes: HashMap::new(),
+        }
     }
 
     /// Create a validator that fails all validations.
     pub fn failing() -> Self {
-        Self { pass_all: false }
+        Self {
+            default_valid: false,
+            contract_outcomes: HashMap::new(),
+        }
+    }
+
+    /// Create a validator with per-contract fixture outcomes.
+    pub fn from_contract_outcomes(contract_outcomes: &HashMap<String, ContractOutcome>) -> Self {
+        Self {
+            default_valid: true,
+            contract_outcomes: contract_outcomes
+                .iter()
+                .map(|(contract_ref, outcome)| {
+                    (
+                        contract_ref.clone(),
+                        ValidationResult {
+                            valid: outcome.valid,
+                            errors: outcome.errors.clone(),
+                        },
+                    )
+                })
+                .collect(),
+        }
     }
 }
 
@@ -107,9 +135,13 @@ impl ContractValidator for StubValidator {
         contract_ref: &str,
         _data: &serde_json::Value,
     ) -> Result<ValidationResult, Self::Error> {
+        if let Some(result) = self.contract_outcomes.get(contract_ref) {
+            return Ok(result.clone());
+        }
+
         Ok(ValidationResult {
-            valid: self.pass_all,
-            errors: if self.pass_all {
+            valid: self.default_valid,
+            errors: if self.default_valid {
                 Vec::new()
             } else {
                 vec![format!("stub rejection for contract '{contract_ref}'")]
@@ -178,6 +210,7 @@ mod tests {
             configuration: vec!["open".to_string()],
             case_state: serde_json::json!({}),
             provenance_position: 0,
+            next_task_sequence: 0,
             timers: Vec::new(),
             active_tasks: Vec::new(),
             history_store: None,
@@ -224,6 +257,26 @@ mod tests {
             .unwrap();
         assert!(!result.valid);
         assert!(!result.errors.is_empty());
+    }
+
+    #[test]
+    fn stub_validator_uses_per_contract_outcomes() {
+        let mut contract_outcomes = HashMap::new();
+        contract_outcomes.insert(
+            "reviewContract".to_string(),
+            ContractOutcome {
+                valid: false,
+                errors: vec!["missing field".to_string()],
+            },
+        );
+
+        let validator = StubValidator::from_contract_outcomes(&contract_outcomes);
+        let result = validator
+            .validate("reviewContract", &serde_json::json!({"field": "value"}))
+            .unwrap();
+
+        assert!(!result.valid);
+        assert_eq!(result.errors, vec!["missing field"]);
     }
 
     #[test]

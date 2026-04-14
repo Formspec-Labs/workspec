@@ -1,29 +1,39 @@
 // Rust guideline compliant 2026-04-11
 
-//! Conformance test engine — thin harness over `wos_core::Evaluator`.
+//! Conformance test engine — runtime-backed fixture harness.
 //!
 //! Reads kernel, governance, and AI integration documents from a conformance
 //! fixture, deserializes them into typed models, and delegates lifecycle
-//! evaluation to `wos_core::Evaluator`. The engine handles fixture-level
+//! evaluation to `wos_runtime::WosRuntime`. The engine handles fixture-level
 //! concerns: initial case state seeding, event sequence dispatching,
-//! delay-based timer advancement, deontic constraint evaluation, and
-//! assertion checking against expected transitions and provenance records.
+//! delay-based timer advancement, companion-policy configuration, and assertion
+//! checking against expected transitions and provenance records.
 //!
 //! All lifecycle semantics (guard evaluation, state entry/exit, timer
 //! management, provenance recording, parallel regions, compound states)
-//! are implemented in `wos_core::eval`.
+//! are exercised through the runtime boundary.
 
-use wos_core::autonomy;
-use wos_core::confidence;
-use wos_core::deontic;
-use wos_core::eval::{Evaluator, parse_iso_duration_to_ms};
-use wos_core::event_handler;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use wos_core::eval::parse_iso_duration_to_ms;
+use wos_core::instance::{FormspecTaskContext, PendingEvent, ValidationOutcome};
 use wos_core::model::ai::AIIntegrationDocument;
+use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::traits::{DocumentResolver, TaskPresenter};
+use wos_runtime::{
+    BindingError, BindingRegistry, CaseMutationBundle, Clock, ContractBindingAdapter,
+    CreateInstanceRequest, DrainOnceResult, PreparedTask, ReferenceCompanionPolicy, WosRuntime,
+};
 
 use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
+use crate::stubs::{StubService, StubValidator};
+
+const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
 // ── Public types ─────────────────────────────────────────────────
 
@@ -42,27 +52,27 @@ pub struct Transition {
 
 // ── Engine ───────────────────────────────────────────────────────
 
-/// Conformance test engine wrapping `wos_core::Evaluator`.
+/// Conformance test engine wrapping `wos_runtime::WosRuntime`.
 ///
 /// The engine is a thin harness: it reads documents, seeds initial case state,
-/// dispatches events (with simulated delays), runs deontic evaluation on agent
-/// events, and checks the evaluator's transitions and provenance against
+/// dispatches events (with simulated delays), runs companion policies on
+/// runtime events, and checks runtime transitions and provenance against
 /// fixture expectations.
 pub struct WorkflowEngine {
-    /// The typed lifecycle evaluator from wos-core.
-    evaluator: Evaluator,
+    /// Runtime under conformance.
+    runtime: WosRuntime,
 
-    /// AI integration document (Layer 2), if present.
-    ai_doc: Option<AIIntegrationDocument>,
+    /// Mutable simulated runtime clock.
+    clock: SharedClock,
 
-    /// Raw governance document JSON, if present.
-    governance_json: Option<serde_json::Value>,
+    /// Runtime definition URL.
+    definition_url: String,
 
-    /// All raw companion document JSONs (agent-config, advanced, etc.).
-    companion_docs: std::collections::HashMap<String, serde_json::Value>,
+    /// Runtime definition version.
+    definition_version: String,
 
-    /// DCR activity execution history for zone satisfaction tracking.
-    dcr_executed_activities: Vec<String>,
+    /// Monotonic fixture event token sequence.
+    next_fixture_event_token: u64,
 }
 
 impl WorkflowEngine {
@@ -85,9 +95,11 @@ impl WorkflowEngine {
 
         let kernel: KernelDocument = serde_json::from_str(&kernel_json)
             .map_err(|e| ConformanceError::Parse(format!("kernel parse error: {e}")))?;
-
-        let evaluator =
-            Evaluator::new(kernel).map_err(|e| ConformanceError::Engine(e.to_string()))?;
+        let definition_url = kernel
+            .url
+            .clone()
+            .unwrap_or_else(|| "urn:wos-conformance:kernel".to_string());
+        let definition_version = kernel.version.clone().unwrap_or_default();
 
         // Load AI integration document if present.
         let ai_doc = if let Some(ai_path) = fixture.documents.get("ai") {
@@ -125,12 +137,35 @@ impl WorkflowEngine {
             companion_docs.insert(key.clone(), doc_json);
         }
 
+        let clock = SharedClock::new(0);
+        let mut bindings = BindingRegistry::new();
+        bindings.register(ConformanceBinding);
+        let runtime = WosRuntime::new(
+            wos_runtime::InMemoryStore::new(),
+            FixtureResolver {
+                kernel: kernel.clone(),
+                governance_json: governance_json.clone(),
+                sidecars: companion_docs.clone(),
+            },
+            NoopPresenter,
+            wos_core::traits::DefaultRuntime::new(),
+            StubService::null_response(),
+            StubValidator::from_contract_outcomes(&fixture.contract_outcomes),
+            clock.clone(),
+            bindings,
+        )
+        .with_companion_policy(ReferenceCompanionPolicy::new(
+            ai_doc.clone(),
+            governance_json.clone(),
+            companion_docs.clone(),
+        ));
+
         Ok(Self {
-            evaluator,
-            ai_doc,
-            governance_json,
-            companion_docs,
-            dcr_executed_activities: Vec::new(),
+            runtime,
+            clock,
+            definition_url,
+            definition_version,
+            next_fixture_event_token: 0,
         })
     }
 
@@ -147,19 +182,25 @@ impl WorkflowEngine {
         &mut self,
         fixture: &ConformanceFixture,
     ) -> Result<crate::ConformanceResult, ConformanceError> {
-        // Pre-seed case state from fixture declarations.
-        for (key, value) in &fixture.initial_case_state {
-            self.evaluator
-                .case_state_mut()
-                .insert(key.clone(), value.clone());
-        }
+        self.runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: CONFORMANCE_INSTANCE_ID.to_string(),
+                definition_url: self.definition_url.clone(),
+                definition_version: self.definition_version.clone(),
+                initial_case_state: Some(
+                    serde_json::to_value(&fixture.initial_case_state)
+                        .map_err(|error| ConformanceError::Parse(error.to_string()))?,
+                ),
+            })
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
 
-        // Collect auxiliary provenance (from deontic, autonomy, etc.)
-        // separate from lifecycle provenance, then merge for assertions.
+        let mut lifecycle_provenance = self.load_runtime_provenance_window(0, usize::MAX)?;
+
+        // Fixture-level provenance is limited to harness concerns, such as
+        // invalid fixture delay strings. Runtime behavior must be observed
+        // from the runtime provenance log.
         let mut auxiliary_provenance: Vec<ProvenanceRecord> = Vec::new();
-
-        // Track idempotency keys across the event sequence for K-026 dedup.
-        let mut seen_idempotency_keys = std::collections::HashSet::new();
+        let mut observed_transitions: Vec<Transition> = Vec::new();
 
         for event_entry in &fixture.event_sequence {
             // Advance simulated clock if the fixture declares a delay.
@@ -167,465 +208,33 @@ impl WorkflowEngine {
                 let ms = match parse_iso_duration_to_ms(delay) {
                     Ok(ms) => ms,
                     Err(raw) => {
-                        self.evaluator
-                            .record_provenance(ProvenanceRecord::invalid_duration(raw, "delay"));
+                        auxiliary_provenance.push(ProvenanceRecord::invalid_duration(raw, "delay"));
                         0
                     }
                 };
-                self.evaluator
-                    .advance_time(ms, event_entry.actor.as_deref())
-                    .map_err(|e| ConformanceError::Engine(e.to_string()))?;
-            }
-
-            // Run deontic evaluation if this is an agent event with output data.
-            // Deontic actions can redirect the lifecycle event (e.g., escalate
-            // replaces the original event with "escalated", reject blocks it).
-            let mut effective_event = if let (Some(ai_doc), Some(data)) =
-                (&self.ai_doc, &event_entry.data)
-            {
-                if let Some(output) = data.get("output") {
-                    let actor_id = event_entry.actor.as_deref().unwrap_or("");
-                    let impact_level = self
-                        .evaluator
-                        .kernel()
-                        .impact_level
-                        .unwrap_or(wos_core::model::kernel::ImpactLevel::Operational);
-
-                    let bypass = data
-                        .get("deonticBypass")
-                        .or_else(|| data.get("bypass"))
-                        .and_then(|b| b.get("rationale"))
-                        .and_then(|r| r.as_str());
-
-                    let escalation_active = data
-                        .get("escalationActive")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-
-                    let invocation_source = data.get("invocationSource").and_then(|v| v.as_str());
-
-                    let deontic_result = deontic::evaluate_deontic_constraints(
-                        ai_doc,
-                        actor_id,
-                        output,
-                        self.evaluator.case_state(),
-                        &impact_level,
-                        bypass,
-                        escalation_active,
-                        invocation_source,
+                self.clock.advance(ms);
+                let due_results = self.drain_runtime_until_idle()?;
+                for result in due_results {
+                    append_runtime_result(
+                        result,
+                        &mut observed_transitions,
+                        &mut lifecycle_provenance,
                     );
-
-                    auxiliary_provenance.extend(deontic_result.provenance);
-
-                    // Enforcement actions redirect the lifecycle event.
-                    match deontic_result.effective_action {
-                        Some(wos_core::model::ai::ViolationAction::EscalateToHuman) => {
-                            Some("escalated".to_string())
-                        }
-                        Some(wos_core::model::ai::ViolationAction::Reject) => {
-                            // Reject blocks the event entirely — no lifecycle transition.
-                            None
-                        }
-                        _ => Some(event_entry.event.clone()),
-                    }
-                } else {
-                    Some(event_entry.event.clone())
-                }
-            } else {
-                Some(event_entry.event.clone())
-            };
-
-            // Run autonomy evaluation for agent events with an AI document.
-            // Autonomy violations (e.g., agent-cannot-override-human) block the event.
-            let mut autonomy_blocked = false;
-            if let (Some(ai_doc), Some(data)) = (&self.ai_doc, &event_entry.data) {
-                let actor_id = event_entry.actor.as_deref().unwrap_or("");
-                let is_agent_event = ai_doc.agents.iter().any(|a| a.id == actor_id);
-
-                if is_agent_event {
-                    let impact_level = self
-                        .evaluator
-                        .kernel()
-                        .impact_level
-                        .unwrap_or(wos_core::model::kernel::ImpactLevel::Operational);
-
-                    let autonomy_result =
-                        autonomy::evaluate_autonomy(ai_doc, actor_id, data, &impact_level);
-
-                    autonomy_blocked = autonomy_result.provenance.iter().any(|p| {
-                        matches!(
-                            p.record_kind,
-                            ProvenanceKind::AutonomyViolation | ProvenanceKind::ToolViolation
-                        )
-                    });
-                    auxiliary_provenance.extend(autonomy_result.provenance);
-
-                    // Confidence evaluation (AI S7).
-                    let confidence_result = confidence::evaluate_confidence(ai_doc, actor_id, data);
-                    if confidence_result.requires_escalation && effective_event.is_some() {
-                        // Only escalate if deontic did not already reject (AI S4.6:
-                        // "reject" is the most restrictive action and cannot be
-                        // overridden by confidence escalation).
-                        effective_event = Some("escalated".to_string());
-                    }
-                    auxiliary_provenance.extend(confidence_result.provenance);
-                }
-
-                // Ground-truth label from human review events (AG-016).
-                if !ai_doc.agents.iter().any(|a| a.id == actor_id) {
-                    let review_prov = confidence::evaluate_review_ground_truth(data, actor_id);
-                    auxiliary_provenance.extend(review_prov);
                 }
             }
 
-            // Run unified event handler for Batches 6-15.
-            {
-                let data = event_entry
-                    .data
-                    .as_ref()
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                let actor_id = event_entry.actor.as_deref().unwrap_or("");
-                let is_agent = self
-                    .ai_doc
-                    .as_ref()
-                    .is_some_and(|ai| ai.agents.iter().any(|a| a.id == actor_id));
-                let handler_result = event_handler::evaluate_event(
-                    &event_entry.event,
-                    actor_id,
-                    &data,
-                    is_agent,
-                    self.governance_json.as_ref(),
-                    &self.companion_docs,
-                    &mut seen_idempotency_keys,
-                );
-                if handler_result.requires_escalation {
-                    effective_event = Some("escalated".to_string());
-                }
-                if handler_result.blocked {
-                    effective_event = None;
-                }
-                auxiliary_provenance.extend(handler_result.provenance);
-
-                // Track DCR activity execution for zone satisfaction.
-                if event_entry.event == "zoneAction" {
-                    if let Some(activity) = data.get("activity").and_then(|v| v.as_str()) {
-                        self.dcr_executed_activities.push(activity.to_string());
-
-                        // Check for DCR resolution errors and zone satisfaction.
-                        if let Some(advanced) = self.companion_docs.get("advanced") {
-                            if let Some(zones) =
-                                advanced.get("constraintZones").and_then(|v| v.as_array())
-                            {
-                                for zone in zones {
-                                    // Check if executing this activity triggers an exclude on a pending activity.
-                                    if let Some(relations) =
-                                        zone.get("relations").and_then(|v| v.as_array())
-                                    {
-                                        for rel in relations {
-                                            if rel.get("type").and_then(|v| v.as_str())
-                                                == Some("exclude")
-                                                && rel.get("source").and_then(|v| v.as_str())
-                                                    == Some(activity)
-                                            {
-                                                let target = rel
-                                                    .get("target")
-                                                    .and_then(|v| v.as_str())
-                                                    .unwrap_or("");
-                                                // Check if target has pending response obligations.
-                                                let target_has_pending_response =
-                                                    relations.iter().any(|r| {
-                                                        r.get("type").and_then(|v| v.as_str())
-                                                            == Some("response")
-                                                            && r.get("source")
-                                                                .and_then(|v| v.as_str())
-                                                                == Some(target)
-                                                            && !self
-                                                                .dcr_executed_activities
-                                                                .iter()
-                                                                .any(|a| {
-                                                                    r.get("target")
-                                                                        .and_then(|v| v.as_str())
-                                                                        .is_some_and(|t| t == a)
-                                                                })
-                                                    });
-                                                if target_has_pending_response {
-                                                    auxiliary_provenance.push(ProvenanceRecord {
-                                                        record_kind:
-                                                            ProvenanceKind::DcrResolutionError,
-                                                        actor_id: None,
-                                                        from_state: None,
-                                                        to_state: None,
-                                                        event: None,
-                                                        data: Some(serde_json::json!({
-                                                            "activity": target,
-                                                            "reason": "excluded-while-pending",
-                                                        })),
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Check zone satisfaction: all pending activities executed.
-                                    if let Some(activities) =
-                                        zone.get("activities").and_then(|v| v.as_array())
-                                    {
-                                        let pending: Vec<&str> = activities
-                                            .iter()
-                                            .filter(|a| {
-                                                a.get("initialPending").and_then(|v| v.as_bool())
-                                                    == Some(true)
-                                            })
-                                            .filter_map(|a| a.get("id").and_then(|v| v.as_str()))
-                                            .collect();
-                                        let all_pending_done = pending.iter().all(|p| {
-                                            self.dcr_executed_activities.iter().any(|e| e == *p)
-                                        });
-                                        if all_pending_done && !pending.is_empty() {
-                                            let zone_id = zone
-                                                .get("id")
-                                                .and_then(|v| v.as_str())
-                                                .unwrap_or("");
-                                            // Only emit once.
-                                            if !auxiliary_provenance.iter().any(|p| {
-                                                p.record_kind == ProvenanceKind::ZoneSatisfied
-                                            }) {
-                                                auxiliary_provenance.push(ProvenanceRecord {
-                                                    record_kind: ProvenanceKind::ZoneSatisfied,
-                                                    actor_id: None,
-                                                    from_state: None,
-                                                    to_state: None,
-                                                    event: None,
-                                                    data: Some(
-                                                        serde_json::json!({ "zoneId": zone_id }),
-                                                    ),
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Process the effective event (may be redirected by deontic or autonomy enforcement).
-            if autonomy_blocked {
-                // Autonomy violation blocks the event entirely.
-            } else if let Some(event_name) = effective_event {
-                self.evaluator
-                    .process_event(
-                        &event_name,
-                        event_entry.actor.as_deref(),
-                        event_entry.data.as_ref(),
-                    )
-                    .map_err(|e| ConformanceError::Engine(e.to_string()))?;
+            let results = self.process_runtime_event(
+                &event_entry.event,
+                event_entry.actor.as_deref(),
+                event_entry.data.as_ref(),
+            )?;
+            for result in results {
+                append_runtime_result(result, &mut observed_transitions, &mut lifecycle_provenance);
             }
         }
-
-        // Post-execution provenance: generate provenance from lifecycle history.
-        let observed_transitions = self.evaluator.transitions();
-
-        // Compensation provenance: if we transitioned to a "compensating" state,
-        // emit compensation execution records based on states visited.
-        let kernel = self.evaluator.kernel();
-        if observed_transitions.iter().any(|t| t.to == "compensating") {
-            // Build the ordered list of visited compensable states (including initial).
-            let initial = kernel.lifecycle.initial_state.as_str();
-            let mut visited: Vec<&str> = vec![initial];
-            for t in observed_transitions.iter() {
-                if t.to != "compensating" && t.to != "compensated" && t.to != "done" {
-                    visited.push(t.to.as_str());
-                }
-            }
-
-            let fail_transition = observed_transitions.iter().find(|t| t.to == "compensating");
-
-            if visited.len() >= 3 {
-                // K-039: Reverse order compensation (3+ visited states).
-                let mut reversed: Vec<&str> = visited.clone();
-                reversed.reverse();
-                auxiliary_provenance.push(ProvenanceRecord {
-                    record_kind: ProvenanceKind::CompensationExecuted,
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(serde_json::json!({ "order": reversed })),
-                });
-                // K-041: Inner scope boundary.
-                auxiliary_provenance.push(ProvenanceRecord {
-                    record_kind: ProvenanceKind::CompensationScopeBoundary,
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(serde_json::json!({ "innerScopeOnly": true })),
-                });
-            } else if visited.len() == 2 {
-                // K-040: Pivot step (fail at second step).
-                if let Some(ft) = fail_transition {
-                    let compensated: Vec<&str> =
-                        visited.iter().filter(|&&s| s != ft.from).copied().collect();
-                    auxiliary_provenance.push(ProvenanceRecord {
-                        record_kind: ProvenanceKind::CompensationExecuted,
-                        actor_id: None,
-                        from_state: None,
-                        to_state: None,
-                        event: None,
-                        data: Some(serde_json::json!({
-                            "pivotStep": ft.from,
-                            "compensated": compensated,
-                            "excluded": [ft.from.as_str()],
-                        })),
-                    });
-                }
-            }
-        }
-
-        // Durability provenance from kernel lifecycle behavior.
-
-        // K-032: Lifecycle/case separation — transitions don't change case state.
-        if kernel.execution.as_ref().is_some() && !observed_transitions.is_empty() {
-            let has_set_data_on_entry = kernel.lifecycle.states.values().any(|s| {
-                s.on_entry
-                    .iter()
-                    .any(|a| a.action == wos_core::ActionKind::SetData)
-            });
-            if has_set_data_on_entry {
-                // Emit separation proof: transition alone doesn't mutate case.
-                auxiliary_provenance.push(ProvenanceRecord {
-                    record_kind: ProvenanceKind::StateTransition,
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
-                });
-                // Case mutations happen via explicit setData actions.
-                for state in kernel.lifecycle.states.values() {
-                    for action in &state.on_entry {
-                        if action.action == wos_core::ActionKind::SetData {
-                            if let Some(path) = &action.path {
-                                let state_name = kernel
-                                    .lifecycle
-                                    .states
-                                    .iter()
-                                    .find(|(_, s)| std::ptr::eq(*s, state))
-                                    .map(|(n, _)| n.as_str())
-                                    .unwrap_or("");
-                                auxiliary_provenance.push(ProvenanceRecord {
-                                    record_kind: ProvenanceKind::CaseStateMutation,
-                                    actor_id: None,
-                                    from_state: None,
-                                    to_state: None,
-                                    event: None,
-                                    data: Some(serde_json::json!({
-                                        "path": path,
-                                        "lifecycleState": state_name,
-                                        "viaExplicitAction": true,
-                                    })),
-                                });
-                                break; // One example is enough.
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // K-031: Contract validation when kernel has contracts.
-        {
-            let contracts = &kernel.contracts;
-            if !contracts.is_empty() {
-                let (contract_name, _) = contracts.iter().next().unwrap();
-                auxiliary_provenance.push(ProvenanceRecord {
-                    record_kind: ProvenanceKind::ContractValidation,
-                    actor_id: None,
-                    from_state: None,
-                    to_state: None,
-                    event: None,
-                    data: Some(serde_json::json!({
-                        "contractRef": contract_name,
-                        "structured": true,
-                        "valid": false,
-                    })),
-                });
-            }
-        }
-
-        // K-035: History cleared when exiting a compound state with history.
-        for t in observed_transitions.iter() {
-            let from_state = kernel.lifecycle.states.get(&t.from);
-            if let Some(state) = from_state {
-                if state.kind == wos_core::StateKind::Compound && state.history_state.is_some() {
-                    auxiliary_provenance.push(ProvenanceRecord {
-                        record_kind: ProvenanceKind::HistoryCleared,
-                        actor_id: None,
-                        from_state: None,
-                        to_state: None,
-                        event: None,
-                        data: Some(serde_json::json!({
-                            "state": t.from,
-                            "reason": "parent-exit",
-                        })),
-                    });
-                }
-            }
-        }
-
-        // K-024: Persist before advance (service invocations in kernel).
-        // Walk all states including compound substates to find invokeService actions.
-        // Walk all states (including compound substates) to find invokeService keys.
-        let mut service_keys = Vec::new();
-        for state in kernel.lifecycle.states.values() {
-            for action in &state.on_entry {
-                if action.action == wos_core::ActionKind::InvokeService {
-                    if let Some(ref key) = action.idempotency_key {
-                        service_keys.push(key.clone());
-                    }
-                }
-            }
-            if state.kind == wos_core::StateKind::Compound {
-                for sub_state in state.states.values() {
-                    for action in &sub_state.on_entry {
-                        if action.action == wos_core::ActionKind::InvokeService {
-                            if let Some(ref key) = action.idempotency_key {
-                                service_keys.push(key.clone());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        for key in &service_keys {
-            auxiliary_provenance.push(ProvenanceRecord {
-                record_kind: ProvenanceKind::StepResultPersisted,
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "idempotencyKey": key,
-                    "persistedBeforeAdvance": true,
-                })),
-            });
-        }
-
-        // Collect results from the evaluator.
-        let transitions: Vec<Transition> = observed_transitions
-            .iter()
-            .map(|t| Transition {
-                from: t.from.clone(),
-                to: t.to.clone(),
-                event: t.event.clone(),
-            })
-            .collect();
 
         // Merge lifecycle provenance with auxiliary provenance.
-        let mut provenance: Vec<ProvenanceRecord> = self.evaluator.provenance().records().to_vec();
+        let mut provenance = lifecycle_provenance;
         provenance.extend(auxiliary_provenance);
 
         // Check assertions.
@@ -633,7 +242,7 @@ impl WorkflowEngine {
 
         // Transition assertions.
         for (i, expected) in fixture.expected_transitions.iter().enumerate() {
-            match transitions.get(i) {
+            match observed_transitions.get(i) {
                 Some(actual) => {
                     if actual.from != expected.from
                         || actual.to != expected.to
@@ -660,10 +269,10 @@ impl WorkflowEngine {
         }
 
         // Report extra (unexpected) transitions.
-        if transitions.len() > fixture.expected_transitions.len()
+        if observed_transitions.len() > fixture.expected_transitions.len()
             && !fixture.expected_transitions.is_empty()
         {
-            let extra = transitions.len() - fixture.expected_transitions.len();
+            let extra = observed_transitions.len() - fixture.expected_transitions.len();
             failures.push(format!(
                 "{extra} unexpected extra transition(s) fired after the expected sequence"
             ));
@@ -702,13 +311,215 @@ impl WorkflowEngine {
         Ok(crate::ConformanceResult {
             passed: failures.is_empty(),
             failures,
-            transitions,
+            transitions: observed_transitions,
             provenance,
         })
+    }
+
+    fn process_runtime_event(
+        &mut self,
+        event_name: &str,
+        actor_id: Option<&str>,
+        data: Option<&serde_json::Value>,
+    ) -> Result<Vec<DrainOnceResult>, ConformanceError> {
+        self.next_fixture_event_token += 1;
+        let fixture_event_token = format!("fixture-event-{}", self.next_fixture_event_token);
+        self.runtime
+            .enqueue_event(
+                CONFORMANCE_INSTANCE_ID,
+                PendingEvent {
+                    event: event_name.to_string(),
+                    actor_id: actor_id.map(str::to_string),
+                    data: data.cloned(),
+                    timestamp: String::new(),
+                    idempotency_token: Some(fixture_event_token.clone()),
+                },
+            )
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+
+        let mut results = Vec::new();
+        loop {
+            let result = self
+                .runtime
+                .drain_once(CONFORMANCE_INSTANCE_ID)
+                .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+            let processed_event = result.processed_event.clone();
+            let processed_event_token = result.processed_event_token.clone();
+            results.push(result);
+            if processed_event_token.as_deref() == Some(fixture_event_token.as_str())
+                || processed_event.is_none()
+            {
+                break;
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn drain_runtime_until_idle(&mut self) -> Result<Vec<DrainOnceResult>, ConformanceError> {
+        self.runtime
+            .drain_until_idle(CONFORMANCE_INSTANCE_ID)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))
+    }
+
+    fn load_runtime_provenance_window(
+        &self,
+        cursor: usize,
+        limit: usize,
+    ) -> Result<Vec<ProvenanceRecord>, ConformanceError> {
+        self.runtime
+            .load_provenance_window(CONFORMANCE_INSTANCE_ID, cursor, limit)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))
     }
 }
 
 // ── Module-level helpers ─────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct SharedClock {
+    now_ms: Arc<AtomicU64>,
+}
+
+impl SharedClock {
+    fn new(now_ms: u64) -> Self {
+        Self {
+            now_ms: Arc::new(AtomicU64::new(now_ms)),
+        }
+    }
+
+    fn advance(&self, delta_ms: u64) {
+        self.now_ms.fetch_add(delta_ms, Ordering::SeqCst);
+    }
+}
+
+impl Clock for SharedClock {
+    fn now_ms(&self) -> u64 {
+        self.now_ms.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct FixtureResolver {
+    kernel: KernelDocument,
+    governance_json: Option<serde_json::Value>,
+    sidecars: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum FixtureResolverError {
+    #[error("governance document unavailable")]
+    GovernanceUnavailable,
+
+    #[error("sidecar document unavailable: {0}")]
+    SidecarUnavailable(String),
+}
+
+impl DocumentResolver for FixtureResolver {
+    type Error = FixtureResolverError;
+
+    fn resolve_kernel(&self, _url: &str, _version: &str) -> Result<KernelDocument, Self::Error> {
+        Ok(self.kernel.clone())
+    }
+
+    fn resolve_governance(
+        &self,
+        _url: &str,
+        _version: &str,
+    ) -> Result<GovernanceDocument, Self::Error> {
+        self.governance_json
+            .as_ref()
+            .cloned()
+            .ok_or(FixtureResolverError::GovernanceUnavailable)
+            .and_then(|governance_json| {
+                serde_json::from_value(governance_json)
+                    .map_err(|_| FixtureResolverError::GovernanceUnavailable)
+            })
+    }
+
+    fn resolve_sidecar(
+        &self,
+        url: &str,
+        _anchor_date: Option<&str>,
+    ) -> Result<serde_json::Value, Self::Error> {
+        self.sidecars
+            .get(url)
+            .cloned()
+            .ok_or_else(|| FixtureResolverError::SidecarUnavailable(url.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NoopPresenter;
+
+#[derive(Debug, thiserror::Error)]
+#[error("presentation unavailable")]
+struct NoopPresenterError;
+
+impl TaskPresenter for NoopPresenter {
+    type Error = NoopPresenterError;
+
+    fn present_task(&mut self, _context: &FormspecTaskContext) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn dismiss_task(&mut self, _task_id: &str, _reason: &str) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ConformanceBinding;
+
+impl ContractBindingAdapter for ConformanceBinding {
+    fn binding(&self) -> &'static str {
+        "formspec"
+    }
+
+    fn prepare_task(
+        &self,
+        _task: &wos_core::instance::ActiveTask,
+        _case_state: &serde_json::Value,
+    ) -> Result<PreparedTask, BindingError> {
+        Ok(PreparedTask::default())
+    }
+
+    fn validate_submission(
+        &self,
+        _task: &wos_core::instance::ActiveTask,
+        _response: &serde_json::Value,
+    ) -> Result<wos_runtime::SubmissionValidation, BindingError> {
+        Ok(wos_runtime::SubmissionValidation {
+            validation_outcome: ValidationOutcome {
+                envelope_valid: true,
+                pin_match: true,
+                definition_valid: true,
+                errors: Vec::new(),
+                validation_results: None,
+            },
+        })
+    }
+
+    fn compute_case_mutation(
+        &self,
+        _task: &wos_core::instance::ActiveTask,
+        _response: &serde_json::Value,
+    ) -> Result<Option<CaseMutationBundle>, BindingError> {
+        Ok(None)
+    }
+}
+
+fn append_runtime_result(
+    result: DrainOnceResult,
+    transitions: &mut Vec<Transition>,
+    provenance: &mut Vec<ProvenanceRecord>,
+) {
+    transitions.extend(result.transitions.into_iter().map(|transition| Transition {
+        from: transition.from,
+        to: transition.to,
+        event: transition.event,
+    }));
+    provenance.extend(result.provenance);
+}
 
 /// Check whether an expected provenance record partially matches an actual one.
 ///

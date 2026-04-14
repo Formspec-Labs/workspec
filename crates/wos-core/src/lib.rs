@@ -36,7 +36,8 @@ pub mod traits;
 
 pub use context::EvalContext;
 pub use eval::{
-    Configuration, EvalError, Evaluator, IndexedState, ObservedTransition, parse_iso_duration_to_ms,
+    Configuration, EvalError, Evaluator, IndexedState, ObservedAction, ObservedTransition,
+    parse_iso_duration_to_ms,
 };
 pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;

@@ -7,7 +7,7 @@
 //! action-site override. Handles escalation/demotion state machine,
 //! calibration expiry, tool governance, and assistive task creation.
 
-use crate::model::ai::{AIIntegrationDocument, AutonomyLevel};
+use crate::model::ai::{AIIntegrationDocument, AgentDeclaration, AutonomyLevel};
 use crate::model::kernel::ImpactLevel;
 use crate::provenance::{ProvenanceKind, ProvenanceRecord};
 
@@ -28,6 +28,7 @@ pub fn evaluate_autonomy(
     agent_id: &str,
     data: &serde_json::Value,
     impact_level: &ImpactLevel,
+    advanced_governance: Option<&serde_json::Value>,
 ) -> AutonomyResult {
     let mut provenance = Vec::new();
 
@@ -223,42 +224,15 @@ pub fn evaluate_autonomy(
     }
 
     // AG-005 / AG-007: Tool invocation checks.
-    //
-    // Permitted tools and rate limits should be read from the agent's
-    // tool governance declaration in the AI integration document or
-    // agent-config companion. When no tool governance is declared,
-    // all tools are permitted (open policy). The hardcoded defaults
-    // below are conservative fallbacks for agents that declare tool
-    // invocations but lack explicit governance configuration.
-    //
-    // TODO: Read permitted tools and rate limits from
-    // `agent.toolGovernance.permittedTools` and
-    // `agent.toolGovernance.rateLimits` in the AI integration document
-    // once the schema supports tool governance declarations (AdvGov S6.1).
     if let Some(tools) = data.get("toolInvocations").and_then(|v| v.as_array()) {
-        // Extract permitted tools from agent declaration if available,
-        // otherwise fall back to permit-all (empty = no restriction).
-        let agent_permitted: Option<Vec<&str>> = _agent
-            .and_then(|a| a.extensions.get("x-toolGovernance"))
-            .and_then(|tg| tg.get("permittedTools"))
-            .and_then(|pt| pt.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect());
-
-        // Default permitted tools when no governance config exists and
-        // the fixture signals tool restrictions via the data payload.
-        let default_permitted: Vec<&str> = vec!["lookupPrecedent", "searchDocuments"];
-        let permitted_tools = agent_permitted.as_deref().unwrap_or(&default_permitted);
-
-        // Extract rate limits from agent declaration if available.
-        let default_rate_limits: Vec<(&str, u32)> = vec![("lookupPrecedent", 10)];
-        let rate_limits = &default_rate_limits;
+        let tool_governance = ToolGovernancePolicy::from_documents(_agent, advanced_governance);
 
         for tool_entry in tools {
             let tool_name = tool_entry
                 .get("tool")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if !permitted_tools.is_empty() && !permitted_tools.contains(&tool_name) {
+            if !tool_governance.permits(tool_name) {
                 provenance.push(prov(
                     ProvenanceKind::ToolViolation,
                     serde_json::json!({
@@ -271,16 +245,16 @@ pub fn evaluate_autonomy(
             }
         }
 
-        for &(tool_name, limit) in rate_limits {
+        for (tool_name, limit) in &tool_governance.rate_limits {
             let count = tools
                 .iter()
                 .filter(|t| {
                     t.get("tool")
                         .and_then(|v| v.as_str())
-                        .is_some_and(|n| n == tool_name)
+                        .is_some_and(|n| n == tool_name.as_str())
                 })
                 .count();
-            if count as u32 > limit {
+            if count as u32 > *limit {
                 provenance.push(prov(
                     ProvenanceKind::ToolViolation,
                     serde_json::json!({
@@ -297,6 +271,109 @@ pub fn evaluate_autonomy(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct ToolGovernancePolicy {
+    permitted_tools: Vec<String>,
+    rate_limits: Vec<(String, u32)>,
+}
+
+impl ToolGovernancePolicy {
+    fn from_documents(
+        agent: Option<&AgentDeclaration>,
+        advanced_governance: Option<&serde_json::Value>,
+    ) -> Self {
+        if let Some(policy) = Self::from_advanced_governance(advanced_governance) {
+            return policy;
+        }
+        if let Some(policy) = Self::from_agent_extension(agent) {
+            return policy;
+        }
+
+        Self {
+            permitted_tools: vec!["lookupPrecedent".to_string(), "searchDocuments".to_string()],
+            rate_limits: vec![("lookupPrecedent".to_string(), 10)],
+        }
+    }
+
+    fn from_advanced_governance(advanced_governance: Option<&serde_json::Value>) -> Option<Self> {
+        let registry = advanced_governance?
+            .get("toolGovernance")?
+            .get("toolRegistry")?
+            .as_array()?;
+        let mut permitted_tools = Vec::new();
+        let mut rate_limits = Vec::new();
+
+        for tool in registry {
+            let Some(tool_id) = tool.get("id").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            permitted_tools.push(tool_id.to_string());
+            if let Some(limit) = tool
+                .get("rateLimit")
+                .and_then(|rate_limit| {
+                    rate_limit
+                        .get("maxPerMinute")
+                        .or_else(|| rate_limit.get("maxPerHour"))
+                })
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|limit| u32::try_from(limit).ok())
+            {
+                rate_limits.push((tool_id.to_string(), limit));
+            }
+        }
+
+        Some(Self {
+            permitted_tools,
+            rate_limits,
+        })
+    }
+
+    fn from_agent_extension(agent: Option<&AgentDeclaration>) -> Option<Self> {
+        let governance = agent?.extensions.get("x-toolGovernance")?;
+        let permitted_tools = governance
+            .get("permittedTools")
+            .and_then(serde_json::Value::as_array)
+            .map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let rate_limits = governance
+            .get("rateLimits")
+            .and_then(serde_json::Value::as_object)
+            .map(|limits| {
+                limits
+                    .iter()
+                    .filter_map(|(tool_id, limit)| {
+                        limit
+                            .get("maxPerMinute")
+                            .or_else(|| limit.get("maxPerHour"))
+                            .and_then(serde_json::Value::as_u64)
+                            .and_then(|limit| u32::try_from(limit).ok())
+                            .map(|limit| (tool_id.clone(), limit))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        Some(Self {
+            permitted_tools,
+            rate_limits,
+        })
+    }
+
+    fn permits(&self, tool_name: &str) -> bool {
+        self.permitted_tools.is_empty()
+            || self
+                .permitted_tools
+                .iter()
+                .any(|permitted_tool| permitted_tool == tool_name)
+    }
+}
 
 fn impact_level_autonomy_cap(level: &ImpactLevel) -> AutonomyLevel {
     match level {
@@ -360,5 +437,94 @@ fn prov(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
         to_state: None,
         event: None,
         data: Some(data),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn advanced_governance_tool_registry_permits_custom_tool() {
+        let ai_doc = test_ai_doc();
+        let advanced_governance = serde_json::json!({
+            "toolGovernance": {
+                "toolRegistry": [{
+                    "id": "databaseLookup",
+                    "category": "dataRetrieval",
+                    "sideEffects": false
+                }]
+            }
+        });
+        let data = serde_json::json!({
+            "toolInvocations": [{ "tool": "databaseLookup", "args": {} }]
+        });
+
+        let result = evaluate_autonomy(
+            &ai_doc,
+            "triageAgent",
+            &data,
+            &ImpactLevel::Operational,
+            Some(&advanced_governance),
+        );
+
+        assert!(!result.provenance.iter().any(|record| {
+            record.record_kind == ProvenanceKind::ToolViolation
+                && record.data.as_ref().and_then(|data| data.get("reason"))
+                    == Some(&serde_json::json!("not-in-permitted-list"))
+        }));
+    }
+
+    #[test]
+    fn advanced_governance_tool_registry_sets_rate_limit() {
+        let ai_doc = test_ai_doc();
+        let advanced_governance = serde_json::json!({
+            "toolGovernance": {
+                "toolRegistry": [{
+                    "id": "databaseLookup",
+                    "category": "dataRetrieval",
+                    "sideEffects": false,
+                    "rateLimit": { "maxPerMinute": 1 }
+                }]
+            }
+        });
+        let data = serde_json::json!({
+            "toolInvocations": [
+                { "tool": "databaseLookup", "args": { "query": "q1" } },
+                { "tool": "databaseLookup", "args": { "query": "q2" } }
+            ]
+        });
+
+        let result = evaluate_autonomy(
+            &ai_doc,
+            "triageAgent",
+            &data,
+            &ImpactLevel::Operational,
+            Some(&advanced_governance),
+        );
+
+        assert!(result.provenance.iter().any(|record| {
+            record.record_kind == ProvenanceKind::ToolViolation
+                && record.data.as_ref().and_then(|data| data.get("reason"))
+                    == Some(&serde_json::json!("rate-limit-exceeded"))
+                && record.data.as_ref().and_then(|data| data.get("limit"))
+                    == Some(&serde_json::json!(1))
+        }));
+    }
+
+    fn test_ai_doc() -> AIIntegrationDocument {
+        serde_json::from_value(serde_json::json!({
+            "$wosAIIntegration": "1.0",
+            "targetWorkflow": "urn:test:workflow",
+            "defaultAutonomy": "assistive",
+            "agents": [{
+                "id": "triageAgent",
+                "type": "agent",
+                "agentType": "generative",
+                "modelIdentifier": "test-model",
+                "modelVersion": "1.0"
+            }]
+        }))
+        .unwrap()
     }
 }

@@ -12,7 +12,8 @@
 
 use std::collections::HashMap;
 
-use crate::instance::CaseInstance;
+use crate::instance::{CaseInstance, FormspecTaskContext};
+use crate::model::governance::{DelegationScope, GovernanceDocument};
 use crate::model::kernel::KernelDocument;
 use crate::provenance::ProvenanceRecord;
 
@@ -26,6 +27,20 @@ pub trait InstanceStore {
 
     /// Durably persist an instance. Must be atomic.
     fn save(&mut self, instance: &CaseInstance) -> Result<(), Self::Error>;
+
+    /// List instances that currently include the requested state.
+    fn list_by_state(&self, _state_id: &str) -> Result<Vec<String>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    /// List instances for a pinned definition version.
+    fn list_by_definition(
+        &self,
+        _definition_url: &str,
+        _definition_version: &str,
+    ) -> Result<Vec<String>, Self::Error> {
+        Ok(Vec::new())
+    }
 }
 
 /// Loads WOS documents from storage (Runtime S12.2).
@@ -35,6 +50,20 @@ pub trait DocumentResolver {
 
     /// Resolve a Kernel Document by URL and version.
     fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, Self::Error>;
+
+    /// Resolve a Governance Document by URL and version.
+    fn resolve_governance(
+        &self,
+        url: &str,
+        version: &str,
+    ) -> Result<GovernanceDocument, Self::Error>;
+
+    /// Resolve a sidecar document. The returned JSON stays opaque at this seam.
+    fn resolve_sidecar(
+        &self,
+        url: &str,
+        anchor_date: Option<&str>,
+    ) -> Result<serde_json::Value, Self::Error>;
 }
 
 /// Validates data against a Formspec Definition or JSON Schema (Runtime S12.3).
@@ -80,6 +109,9 @@ pub trait AccessControl {
 
     /// Whether the actor can read the specified case state field.
     fn can_read(&self, actor_id: &str, field_path: &str) -> bool;
+
+    /// Whether the delegator can delegate work to the delegate within scope.
+    fn can_delegate(&self, delegator_id: &str, delegate_id: &str, scope: &DelegationScope) -> bool;
 }
 
 /// Signs and verifies provenance records (Runtime S12.6).
@@ -105,6 +137,13 @@ pub trait ReportRenderer {
         explanation: &serde_json::Value,
         template: &str,
     ) -> Result<String, Self::Error>;
+
+    /// Render an audit trail into an implementation-defined format.
+    fn render_audit(
+        &self,
+        provenance_log: &[ProvenanceRecord],
+        format: &str,
+    ) -> Result<String, Self::Error>;
 }
 
 /// Manages the per-instance event queue (Runtime S12.8).
@@ -117,6 +156,21 @@ pub trait EventQueue {
 
     /// Remove and return the next event for processing.
     fn dequeue(&mut self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
+
+    /// Return the next event without removing it.
+    fn peek(&self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error>;
+}
+
+/// Presents Formspec-backed tasks to a host user interface.
+pub trait TaskPresenter {
+    /// Error type for presentation operations.
+    type Error: std::error::Error;
+
+    /// Present a task to the assigned actor.
+    fn present_task(&mut self, context: &FormspecTaskContext) -> Result<(), Self::Error>;
+
+    /// Dismiss a task without advancing lifecycle state.
+    fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), Self::Error>;
 }
 
 /// Executes actions that the engine delegates to the host.
@@ -193,6 +247,30 @@ impl AccessControl for DefaultRuntime {
     fn can_read(&self, _actor_id: &str, _field_path: &str) -> bool {
         true // Permissive default.
     }
+
+    fn can_delegate(
+        &self,
+        _delegator_id: &str,
+        _delegate_id: &str,
+        _scope: &DelegationScope,
+    ) -> bool {
+        true // Permissive default.
+    }
+}
+
+impl ContractValidator for DefaultRuntime {
+    type Error = DefaultRuntimeError;
+
+    fn validate(
+        &self,
+        _contract_ref: &str,
+        _data: &serde_json::Value,
+    ) -> Result<ValidationResult, Self::Error> {
+        Ok(ValidationResult {
+            valid: true,
+            errors: Vec::new(),
+        })
+    }
 }
 
 impl EventQueue for DefaultRuntime {
@@ -214,5 +292,24 @@ impl EventQueue for DefaultRuntime {
                 Some(q.remove(0))
             }
         }))
+    }
+
+    fn peek(&self, instance_id: &str) -> Result<Option<serde_json::Value>, Self::Error> {
+        Ok(self
+            .queues
+            .get(instance_id)
+            .and_then(|queue| queue.first().cloned()))
+    }
+}
+
+impl TaskPresenter for DefaultRuntime {
+    type Error = DefaultRuntimeError;
+
+    fn present_task(&mut self, _context: &FormspecTaskContext) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn dismiss_task(&mut self, _task_id: &str, _reason: &str) -> Result<(), Self::Error> {
+        Ok(())
     }
 }

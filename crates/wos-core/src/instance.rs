@@ -31,6 +31,10 @@ pub struct CaseInstance {
     /// Provenance log cursor.
     pub provenance_position: u64,
 
+    /// Next task sequence number for stable task identifiers.
+    #[serde(default)]
+    pub next_task_sequence: u64,
+
     /// Pending timer state.
     pub timers: Vec<TimerState>,
 
@@ -95,6 +99,14 @@ pub struct TimerState {
     /// State that scoped this timer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope_state: Option<String>,
+
+    /// Original ISO 8601 duration string, if preserved by the runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_iso: Option<String>,
+
+    /// Original duration in milliseconds, if preserved by the runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
 }
 
 /// Active nonterminal task state.

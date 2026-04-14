@@ -108,6 +108,15 @@ pub enum ProvenanceKind {
     PipelineRiskProfile,
     PipelineRejection,
     TaskCreated,
+    TaskPresented,
+    TaskDismissed,
+    TaskDraftPersisted,
+    TaskResponseSubmitted,
+    TaskResponseRejected,
+    DataMapping,
+    TaskCompleted,
+    TaskFailed,
+    TaskSkipped,
     ParameterResolved,
 
     // ── Compensation (Kernel S9.8) ─────────────────────────────────
@@ -216,6 +225,7 @@ impl ProvenanceRecord {
                 "path": path,
                 "newValue": new_value,
                 "lifecycleState": lifecycle_state,
+                "viaExplicitAction": true,
             })),
         }
     }
@@ -322,6 +332,21 @@ impl ProvenanceRecord {
         }
     }
 
+    /// Create a history-cleared record.
+    pub fn history_cleared(state: &str, reason: &str) -> Self {
+        Self {
+            record_kind: ProvenanceKind::HistoryCleared,
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: None,
+            data: Some(serde_json::json!({
+                "state": state,
+                "reason": reason,
+            })),
+        }
+    }
+
     /// Create an invalid-duration warning record.
     pub fn invalid_duration(raw_duration: &str, timer_id: &str) -> Self {
         Self {
@@ -334,6 +359,53 @@ impl ProvenanceRecord {
                 "rawDuration": raw_duration,
                 "timerId": timer_id,
                 "note": "unrecognized ISO 8601 duration; deadline set to zero (fires immediately)",
+            })),
+        }
+    }
+
+    /// Create a task lifecycle record emitted by the runtime layer.
+    pub fn task_lifecycle(
+        record_kind: ProvenanceKind,
+        task_id: &str,
+        actor_id: Option<&str>,
+        data: Option<serde_json::Value>,
+    ) -> Self {
+        Self {
+            record_kind,
+            actor_id: actor_id.map(String::from),
+            from_state: None,
+            to_state: None,
+            event: None,
+            data: Some(match data {
+                Some(extra) => {
+                    let mut object = serde_json::Map::new();
+                    object.insert(
+                        "taskId".to_string(),
+                        serde_json::Value::String(task_id.to_string()),
+                    );
+                    object.insert("details".to_string(), extra);
+                    serde_json::Value::Object(object)
+                }
+                None => serde_json::json!({ "taskId": task_id }),
+            }),
+        }
+    }
+
+    /// Create a contract validation record emitted by runtime task flows.
+    pub fn contract_validation(
+        task_id: &str,
+        actor_id: Option<&str>,
+        data: serde_json::Value,
+    ) -> Self {
+        Self {
+            record_kind: ProvenanceKind::ContractValidation,
+            actor_id: actor_id.map(String::from),
+            from_state: None,
+            to_state: None,
+            event: None,
+            data: Some(serde_json::json!({
+                "taskId": task_id,
+                "details": data,
             })),
         }
     }
