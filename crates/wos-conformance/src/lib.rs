@@ -12,6 +12,7 @@
 
 mod engine;
 mod fixture;
+pub mod formspec_processor;
 mod meta;
 mod provenance;
 pub mod stubs;
@@ -19,11 +20,11 @@ pub mod stubs;
 pub use engine::WorkflowEngine;
 pub use fixture::{ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition};
 pub use meta::{
-    AI_CONFIDENCE_BATCHES, AI_REGISTRATION_BATCHES, AssistGovernanceProxyEvidence, ClaimStatus,
-    ClaimVerification, DelegatedFormspecEvaluationEvidence, GOVERNANCE_BASIC_RULES,
-    ProcessorClaims, ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest,
     observe_delegated_formspec_evaluation, run_profile_against_fixtures,
-    validate_ai_family_batch_coverage, verify_processor_manifest,
+    validate_ai_family_batch_coverage, verify_processor_manifest, AssistGovernanceProxyEvidence,
+    ClaimStatus, ClaimVerification, DelegatedFormspecEvaluationEvidence, ProcessorClaims,
+    ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest, AI_CONFIDENCE_BATCHES,
+    AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{StubService, StubValidator};
