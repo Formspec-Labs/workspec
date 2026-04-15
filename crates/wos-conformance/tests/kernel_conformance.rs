@@ -934,15 +934,73 @@ fn kh_d3_deep_normal_reentry() {
 }
 
 /// K-H-D2: Deep history across-boundary — history cleared after restore; fresh entry uses initialState.
+///
+/// Two interrupt-resume cycles each clear history on exit, so two `HistoryCleared`
+/// records must be present (one per cycle).  The any-match assertion in the fixture
+/// only asserts at least one exists; this test enforces the exact count.
 #[test]
 fn kh_d2_deep_across_boundary() {
-    assert_fixture_passes("K-H-D2-deep-across-boundary.json");
+    let path = fixture_path("K-H-D2-deep-across-boundary.json");
+    let fixture_json = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("could not read fixture '{path}': {e}"));
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!("K-H-D2-deep-across-boundary FAILED:\n{}", result.failures.join("\n"));
+    }
+
+    let cleared_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == wos_conformance::ProvenanceKind::HistoryCleared)
+        .count();
+
+    assert_eq!(
+        cleared_count, 2,
+        "two interrupt-resume cycles must each produce a HistoryCleared record (got {cleared_count})"
+    );
 }
 
 /// K-H-D2: Shallow history across-boundary — history cleared after restore; fresh entry uses initialState.
+///
+/// Two interrupt-resume cycles each clear history on exit, so two `HistoryCleared`
+/// records must be present (one per cycle).  The any-match assertion in the fixture
+/// only asserts at least one exists; this test enforces the exact count.
 #[test]
 fn kh_d2_shallow_across_boundary() {
-    assert_fixture_passes("K-H-D2-shallow-across-boundary.json");
+    let path = fixture_path("K-H-D2-shallow-across-boundary.json");
+    let fixture_json = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("could not read fixture '{path}': {e}"));
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!("K-H-D2-shallow-across-boundary FAILED:\n{}", result.failures.join("\n"));
+    }
+
+    let cleared_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == wos_conformance::ProvenanceKind::HistoryCleared)
+        .count();
+
+    assert_eq!(
+        cleared_count, 2,
+        "two interrupt-resume cycles must each produce a HistoryCleared record (got {cleared_count})"
+    );
 }
 
 // ── Milestones (KS.2) ────────────────────────────────────────────
@@ -1074,6 +1132,18 @@ fn gs10_003_timezone_boundary() {
 #[test]
 fn gs10_004_calendar_update_shifts_future_deadline() {
     assert_fixture_passes("G-S10-004-calendar-update-shifts-future-deadline.json");
+}
+
+/// G-S10-005: Business-calendar deadline does not drift across multiple drains.
+///
+/// A P1D delay forces a first drain that persists the snapped deadline.  A second
+/// drain then fires the timer at the same snapped deadline computed from the original
+/// `created_at_ms`, not from the previously-snapped `deadline_ms`.  Without the fix
+/// the second drain recomputes from `snapped_1 - duration`, producing a drifted start
+/// and a different (wrong) snapped deadline (BC S10).
+#[test]
+fn gs10_005_no_deadline_drift_across_drains() {
+    assert_fixture_passes("G-S10-005-no-deadline-drift-across-drains.json");
 }
 
 /// K-M-002: A milestone that fired on the first data write does not re-fire on subsequent events

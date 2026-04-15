@@ -1,0 +1,95 @@
+{
+  "id": "G-S10-005-no-deadline-drift-across-drains",
+  "rule": "G-S10",
+  "description": "Deadline stability across drains: a calendar-snapped deadline must be identical whether computed on drain 1 or drain 2. Timer duration P3D from epoch has a naive deadline Sunday 1970-01-04; with a Monday holiday the calendar snaps it to Tuesday 1970-01-06 09:00 UTC (464,400,000 ms). A P1D delay forces a first drain that persists the snapped deadline. A second delay (P4DT9H) advances the clock to exactly 464,400,000 ms and the timer fires. With the pre-fix subtraction trick the second drain would recompute start as snapped_deadline - duration = 205,200,000 ms, shifting the business deadline forward and either missing the fire or placing it at the wrong time. With the fix (created_at_ms = 0) the recomputed deadline is identical across both drains.",
+  "documents": {
+    "kernel": "inline",
+    "businessCalendar": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:bc-no-drift",
+      "version": "1.0.0",
+      "title": "BC S10-005 No Deadline Drift Across Drains",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "system", "type": "system", "description": "System actor" }
+      ],
+      "lifecycle": {
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "startTimer",
+                "timerId": "slaTimer",
+                "duration": "P3D",
+                "event": "$timeout.slaTimer"
+              }
+            ],
+            "transitions": [
+              { "event": "$timeout.slaTimer", "target": "done" }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "businessCalendar": {
+      "$wosBusinessCalendar": "1.0",
+      "targetWorkflow": "urn:test:bc-no-drift",
+      "version": "test-v1.0",
+      "title": "Calendar v1 — holiday on 1970-01-05 (Monday)",
+      "timezone": "UTC",
+      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "holidays": [
+        {
+          "name": "Test Holiday Monday",
+          "date": "1970-01-05"
+        }
+      ],
+      "operatingHours": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P1D"
+    },
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P4DT9H"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "slaTimer",
+        "calendarVersion": "test-v1.0"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": { "timerId": "slaTimer" }
+    }
+  ]
+}
