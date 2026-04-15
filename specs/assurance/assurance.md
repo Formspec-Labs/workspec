@@ -53,3 +53,26 @@ A subject's assurance level MAY be upgraded (but not silently downgraded) by rec
 - MUST be canonical facts admitted through the normal Kernel Facts tier.
 - MUST NOT rewrite prior facts. Upgrades apply forward only.
 - MUST preserve disclosure posture independently from assurance level (see §4).
+
+## 3. Subject Continuity
+
+### 3.1 Definition
+
+A **subject continuity reference** is a stable identifier linking related activity, records, or attestations across time without, by itself, requiring full legal-identity disclosure.
+
+Subject continuity is a provenance primitive, not an identity claim. Two facts sharing a subject continuity reference assert that they concern the same subject; they do NOT assert what that subject's legal identity is.
+
+### 3.2 Requirements
+
+Implementations that record identity facts MUST:
+
+- Support at least one subject continuity reference mechanism.
+- Declare the scope within which a continuity reference is stable (instance, case, tenant, deployment).
+- Preserve continuity references across workflow instance migration (Kernel S9.6).
+- Allow distinct continuity references to be held by the same legal subject (pseudonymous separation).
+
+Implementations MUST NOT:
+
+- Assume that a continuity reference implies any particular assurance level.
+- Assume that distinct continuity references imply distinct legal subjects.
+- Merge continuity references implicitly. Explicit merge MUST be recorded as a canonical fact.
