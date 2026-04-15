@@ -816,6 +816,9 @@
         "authority"
       ],
       "additionalProperties": false,
+      "dependentRequired": {
+        "quorumCount": ["quorumPool"]
+      },
       "properties": {
         "id": {
           "type": "string",
@@ -898,6 +901,16 @@
           "type": "boolean",
           "default": false,
           "description": "Whether this delegation permits the delegate to further sub-delegate authority (Governance S11.5). Default: false."
+        },
+        "quorumCount": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Minimum distinct authorities required for delegation to take effect (S4.9). Omit for single-authority delegation."
+        },
+        "quorumPool": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Eligible authority principal IDs (S4.9). Required when quorumCount is set."
         }
       }
     },

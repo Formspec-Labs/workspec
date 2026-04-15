@@ -490,6 +490,23 @@ The delegation used for a determination MUST be referenced in the provenance rec
 
 A delegate MAY further delegate authority (sub-delegation) only if the original delegation permits it. The `maxDelegationDepth` property on the governance document controls the maximum chain length. Default: `1` (no sub-delegation). This prevents unbounded delegation chains that obscure accountability.
 
+### 4.9 Quorum-Based Delegation
+
+A delegation chain MAY require a quorum — that is, authorization by N of M distinct authorities — rather than a single delegated authority. Quorum-based delegation is a governance capability applicable to any high-stakes operation (adverse decision, irreversible lifecycle fact, exceptional access grant).
+
+A quorum-based delegation MUST declare:
+
+- `quorumCount`: the minimum number of distinct authorities required (N).
+- `quorumPool`: the set of eligible authorities (M).
+- The requirement that each counted authority be a distinct principal (not the same principal exercising multiple roles).
+
+A quorum-based delegation MUST NOT:
+
+- Count the same principal more than once toward quorum.
+- Silently reduce the quorum count. Reductions MUST be recorded as explicit policy transitions.
+
+The cryptographic mechanism for proving quorum participation (threshold signatures, multi-party computation, manual countersigning) is implementation-defined and binding-specific. A monolithic implementation MAY satisfy quorum purely through database-recorded approvals.
+
 ### 11.6 Governance Attachment
 
 Delegation enforcement attaches via `lifecycleHook` on `determination`-tagged transitions.
