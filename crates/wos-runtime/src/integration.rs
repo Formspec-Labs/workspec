@@ -6,6 +6,26 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// Discriminator for integration binding kinds defined by the Integration Profile spec (S3.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IntegrationBindingKind {
+    /// Synchronous request/response HTTP-style invocation.
+    RequestResponse,
+    /// Emit a CloudEvent to an external broker.
+    EventEmit,
+    /// Consume an inbound CloudEvent from an external source.
+    EventConsume,
+    /// Bidirectional callback pattern (webhook / async reply).
+    Callback,
+    /// Multi-step API orchestration via an Arazzo sequence.
+    ArazzoSequence,
+    /// Non-HTTP tool invocation (CWL-informed descriptor).
+    Tool,
+    /// External policy engine evaluation (XACML, OPA, Cedar).
+    PolicyEngine,
+}
+
 /// WOS Integration Profile Document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,7 +79,7 @@ pub struct TargetWorkflow {
 pub struct IntegrationBinding {
     /// Binding type discriminator.
     #[serde(rename = "type")]
-    pub kind: String,
+    pub kind: IntegrationBindingKind,
 
     /// Human-readable description.
     #[serde(default)]

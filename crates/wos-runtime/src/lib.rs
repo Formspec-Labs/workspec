@@ -9,6 +9,7 @@
 pub mod binding;
 pub mod companion;
 pub mod integration;
+pub mod integration_handlers;
 pub mod milestones;
 pub mod runtime;
 pub mod store;
@@ -19,7 +20,8 @@ pub use binding::{
 };
 pub use companion::ReferenceCompanionPolicy;
 pub use integration::{
-    IntegrationBinding, IntegrationContractRef, IntegrationProfileDocument, TargetWorkflow,
+    IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
+    TargetWorkflow,
 };
 pub use runtime::{
     Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
