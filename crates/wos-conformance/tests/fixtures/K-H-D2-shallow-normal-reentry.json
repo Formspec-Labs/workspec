@@ -2,7 +2,7 @@
   "binding": "formspec",
   "id": "K-H-D2-shallow-normal-reentry",
   "rule": "K-H",
-  "description": "Shallow history at depth 2: compound state 'review' has historyState=shallow. After progressing into the nested compound 'inProgress' (which contains 'subPhase'), an interruption exits to 'interrupted'. Re-entering 'review' via resume should restore only the depth-1 direct substate 'inProgress', then enter 'inProgress' using its own initialState ('subPhase').",
+  "description": "Shallow history at depth 2: compound state 'review' has historyState=shallow. After progressing into 'inProgress.advancedPhase', an interruption exits to 'interrupted'. Re-entering 'review' via resume must shallow-restore only the depth-1 substate 'inProgress', which then re-enters its own initialState 'subPhase' — NOT 'advancedPhase'. A subsequent 'nextPhase' event succeeds from 'subPhase', proving shallow restore. Under deep restore, the machine would already be at 'advancedPhase' and 'nextPhase' would be unmatched.",
   "documents": { "kernel": "inline" },
   "inline_documents": {
     "kernel": {
@@ -24,27 +24,26 @@
           "review": {
             "type": "compound",
             "historyState": "shallow",
-            "initialState": "pending",
+            "initialState": "inProgress",
             "states": {
-              "pending": {
-                "type": "atomic",
-                "transitions": [{ "event": "begin", "target": "inProgress" }]
-              },
               "inProgress": {
                 "type": "compound",
                 "initialState": "subPhase",
                 "states": {
                   "subPhase": {
                     "type": "atomic",
-                    "transitions": [{ "event": "advance", "target": "subDone" }]
+                    "transitions": [{ "event": "nextPhase", "target": "advancedPhase" }]
                   },
-                  "subDone": { "type": "final" }
+                  "advancedPhase": {
+                    "type": "atomic",
+                    "transitions": [{ "event": "complete", "target": "done" }]
+                  }
                 }
-              }
+              },
+              "done": { "type": "final" }
             },
             "transitions": [
-              { "event": "interrupt", "target": "interrupted" },
-              { "event": "resume", "target": "review" }
+              { "event": "interrupt", "target": "interrupted" }
             ]
           },
           "interrupted": {
@@ -60,15 +59,17 @@
   "initial_case_state": {},
   "event_sequence": [
     { "event": "start", "actor": "worker" },
-    { "event": "begin", "actor": "worker" },
+    { "event": "nextPhase", "actor": "worker" },
     { "event": "interrupt", "actor": "worker" },
-    { "event": "resume", "actor": "worker" }
+    { "event": "resume", "actor": "worker" },
+    { "event": "nextPhase", "actor": "worker" }
   ],
   "expected_transitions": [
     { "from": "open", "to": "review", "event": "start" },
-    { "from": "pending", "to": "inProgress", "event": "begin" },
+    { "from": "subPhase", "to": "advancedPhase", "event": "nextPhase" },
     { "from": "review", "to": "interrupted", "event": "interrupt" },
-    { "from": "interrupted", "to": "review", "event": "resume" }
+    { "from": "interrupted", "to": "review", "event": "resume" },
+    { "from": "subPhase", "to": "advancedPhase", "event": "nextPhase" }
   ],
   "expected_provenance": [
     { "recordKind": "historyCleared", "data": { "state": "review" } }
