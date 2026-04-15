@@ -17,7 +17,7 @@
 | 🟡 | Specified in prose and schema; implementation pending |
 | ⚪ | Referenced or planned; specification pending |
 
-**Current implementation caveat:** `wos-runtime` owns reference companion policy, event identity, and runtime/core provenance emission; `wos-conformance` observes those behaviors. `wos-formspec-binding` implements the full S15 protocol with binding-backed conformance fixtures; `ConformanceBinding` and `StubValidator` have been deleted (S15.3 complete).
+**Current implementation caveat:** `wos-runtime` owns reference companion policy, event identity, and runtime/core provenance emission; `wos-conformance` observes those behaviors. `wos-formspec-binding` implements the full S15 protocol with binding-backed conformance fixtures; `ConformanceBinding` has been deleted (S15.3 complete); `StubValidator` is retained for service-invocation contract validation.
 
 **Competitor Support:**
 
