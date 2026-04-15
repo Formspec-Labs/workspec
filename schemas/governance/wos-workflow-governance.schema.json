@@ -981,11 +981,12 @@
       "properties": {
         "holdType": {
           "type": "string",
-          "description": "Reason for the hold. Standard values: pending-applicant-response, pending-external-verification, pending-legal-review, pending-legislation, pending-related-case, voluntary-hold. Extensible via x- prefixed values.",
+          "description": "Reason for the hold. Standard values: pending-applicant-response, pending-external-verification, pending-legal-review, pending-legislation, pending-related-case, voluntary-hold, legal-hold. Extensible via x- prefixed values. Note: legal-hold has distinct semantics per S7.15 -- it has no event-based resumeTrigger, survives terminal workflow states, and blocks data destruction/retention expiry regardless of ordinary workflow state.",
           "examples": [
             "pending-applicant-response",
             "pending-external-verification",
-            "pending-legislation"
+            "pending-legislation",
+            "legal-hold"
           ],
           "x-lm": {
             "critical": true,

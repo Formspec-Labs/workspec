@@ -553,6 +553,23 @@ Hold policies compose with the kernel's timer mechanism (Kernel S9.7). When a ca
 
 Hold policies attach via `lifecycleHook` on `hold`-tagged transitions and states.
 
+### 7.15 Legal Hold (Distinct from Workflow Hold)
+
+A **legal hold** is a distinct hold type with statutory-override semantics. Unlike workflow holds (S7.10), which suspend a workflow pending an event or condition and expect eventual resumption, a legal hold:
+
+- Blocks data destruction, retention expiry, and scheduled lifecycle operations regardless of ordinary workflow state.
+- Survives terminal workflow states. A case under legal hold MUST NOT be purged, archived, or cryptographically erased even if the workflow has otherwise concluded.
+- Does NOT have an event-based resume trigger. Release requires an explicit legal-hold-release fact, typically tied to external legal authority.
+- Takes precedence over retention policies when both apply.
+
+Implementations MUST:
+
+- Record legal-hold placement and release as canonical facts with the authority (court order, agency directive, statutory trigger) recorded in the fact.
+- Propagate legal-hold state to derived artifacts (exports, projections) so that downstream systems honor the hold.
+- Log any attempt to destroy, archive, or export data under legal hold as a rejected operation with the hold reference in the rejection provenance.
+
+Legal hold is an ORTHOGONAL dimension to workflow lifecycle state. A case MAY simultaneously be in a terminal workflow state and under an active legal hold.
+
 ---
 
 ## 13. Temporal Parameter Resolution
