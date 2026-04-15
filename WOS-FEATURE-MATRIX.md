@@ -81,6 +81,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 2.6 | **Statutory deadline chains** | Automates legal consequences when interdependent government deadlines pass | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 2.7 | **Instance migration across versions** | Validates state and maps fields when moving cases to new workflow versions | ✅ | ~ | ~ | ✔ | ✔ | ✘ | ~ | ~ |
 | 2.8 | **Idempotent execution** | Prevents duplicate service calls using deduplication keys | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ✘ | ✘ |
+| 2.9 | **Schema upgrade as named lifecycle operation** | Records explicit migrations with version provenance and migration mechanism; preserves historical verifiability | ✅ | ~ | ~ | ~ | ~ | ✘ | ~ | ~ |
 
 ---
 
@@ -117,6 +118,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 4.6 | **Escalation (time + condition based)** | Escalates tasks automatically when deadlines pass or conditions are met | ✅ | ✔ | ✔ | ~ | ✔ | ✔ | ✘ | ✔ |
 | 4.7 | **SLA tracking with deadline actions** | Executes auto-actions (escalate, reassign, notify, extend) on SLA breach | ✅ | ✔ | ✔ | ~ | ~ | ~ | ~ | ✔ |
 | 4.8 | **Override with structured rationale** | Requires mandatory rationale, authority verification, and immutable audit for decision overrides | ✅ | ~ | ~ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 4.9 | **Quorum-based delegation (N-of-M authorization)** | Requires authorization from N of M distinct authorities for high-stakes operations | ✅ | ~ | ~ | ✘ | ✘ | ✘ | ✘ | ~ |
 
 > ^3 **Capability-based routing:** WOS defines assignment roles; capability-specific routing remains implementation-defined.
 
@@ -184,6 +186,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 7.12 | **Scoped governance rules** | Applies rules only when FEL conditions are met (e.g., "claims over $10,000") | ✅ | ✘ | ✘ | ✘ |
 | 7.13 | **EU AI Act high-risk alignment** | Aligning specification with EU AI Act Art. 13-14 requirements | 🟡 | ~ | ~ | ✘ |
 | 7.14 | **OMB M-24-10 compliance support** | Consistent with federal AI guidance on agent disclosure and governance structures | 🟡 | ✘ | ✘ | ~ |
+| 7.15 | **Legal hold (distinct from workflow hold)** | Statutory-override hold that survives terminal state and blocks destruction with explicit release semantics | ✅ | ~ | ~ | ✘ |
 
 ---
 
@@ -201,6 +204,8 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 8.8 | **W3C PROV-O export** | Exports provenance records to the standard W3C PROV Ontology format | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 8.9 | **OCEL 2.0 event logging** | Records events in the object-centric event log format for process mining | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 8.10 | **XES process mining export** | Exports provenance to IEEE 1849 XES format for process mining tools | 🟡 | ~ | ~ | ✔ | ✘ | ~ |
+| 8.11 | **Custody seam (custodyHook)** | Named extension seam for custody posture declaration; enables both trust-the-host monolith and distributed-trust bindings | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 8.12 | **Invariant 6 (disclosure ≠ assurance)** | Structurally prevents conflation of identity-revelation level with identity-binding strength | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 
 > ^5 **Tamper detection:** The reference implementation provides per-record digests. Full Merkle tree hash-chaining is a future roadmap item.
 
@@ -272,7 +277,19 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 
 ---
 
-## 14. Strategic Position
+## 14. Identity & Assurance
+
+| # | Requirement | Description | WOS | SNow | Pega | Palnt |
+|---|------------|-------------|-----|------|------|-------|
+| 14.1 | **Assurance-level taxonomy** | Four-level ordered declaration of identity-binding strength (L1–L4), independent of disclosure posture | ✅ | ✘ | ✘ | ~ |
+| 14.2 | **Subject continuity primitive** | Links related activity across time without requiring full legal-identity disclosure | ✅ | ✘ | ✘ | ✘ |
+| 14.3 | **Provider-neutral attestation representation** | Attestation meaning representable independently of identity-provider bindings | ✅ | ✘ | ✘ | ✘ |
+| 14.4 | **Assurance-upgrade facts** | Forward-only, non-rewriting facts for strengthening identity bindings over time | ✅ | ✘ | ✘ | ✘ |
+| 14.5 | **Legal-sufficiency disclaimer (normative)** | Implementations MUST NOT imply cryptographic controls alone guarantee legal admissibility | ✅ | ✘ | ✘ | ✘ |
+
+---
+
+## 15. Strategic Position
 
 ### WOS Governs Existing Engines
 
