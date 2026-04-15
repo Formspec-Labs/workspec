@@ -1280,6 +1280,14 @@ impl WosRuntime {
             });
         }
 
+        // Milestone firing: evaluate after durable case-state write from output
+        // binding, before any reactive transitions drain (Kernel S4.13).  Records
+        // follow any DataMapping record so the provenance stream reads:
+        // data changed → milestone fired.
+        let post_state = record.instance.case_state.clone();
+        let milestone_records = evaluate_milestones(kernel, &mut record.instance, &post_state);
+        provenance.extend(milestone_records);
+
         Ok(provenance)
     }
 

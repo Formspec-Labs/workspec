@@ -25,8 +25,8 @@ use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    BindingRegistry, Clock, CreateInstanceRequest, DrainOnceResult, ReferenceCompanionPolicy,
-    WosRuntime,
+    BindingRegistry, Clock, CreateInstanceRequest, DrainOnceResult, IntegrationProfileDocument,
+    ReferenceCompanionPolicy, WosRuntime,
 };
 
 use crate::fixture::ConformanceFixture;
@@ -116,15 +116,30 @@ impl WorkflowEngine {
             None
         };
 
+        // Load integration profile if present.
+        let integration_profile = if fixture.documents.contains_key("integration") {
+            let ip_json = fixture_document_json(fixture, "integration")?;
+            let profile: IntegrationProfileDocument = serde_json::from_value(ip_json)
+                .map_err(|e| ConformanceError::Parse(format!("integration profile parse error: {e}")))?;
+            Some(profile)
+        } else {
+            None
+        };
+
         // Load any remaining companion documents as raw JSON.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
-            if key == "kernel" || key == "ai" || key == "governance" {
+            if matches!(key.as_str(), "kernel" | "ai" | "governance" | "integration") {
                 continue;
             }
             let doc_json = fixture_document_json(fixture, key)?;
             companion_docs.insert(key.clone(), doc_json);
         }
+
+        let stub_service = match &fixture.service_response {
+            Some(response) => StubService::with_response(response.clone()),
+            None => StubService::null_response(),
+        };
 
         let clock = SharedClock::new(0);
         let mut bindings = BindingRegistry::new();
@@ -146,7 +161,7 @@ impl WorkflowEngine {
                 "formspec".to_string()
             }
         };
-        let runtime = WosRuntime::new(
+        let mut runtime = WosRuntime::new(
             wos_runtime::InMemoryStore::new(),
             FixtureResolver {
                 kernel: kernel.clone(),
@@ -155,7 +170,7 @@ impl WorkflowEngine {
             },
             NoopPresenter,
             wos_core::traits::DefaultRuntime::new(),
-            StubService::null_response(),
+            stub_service,
             StubValidator::from_contract_outcomes(&fixture.contract_outcomes),
             clock.clone(),
             bindings,
@@ -165,6 +180,9 @@ impl WorkflowEngine {
             governance_json.clone(),
             companion_docs.clone(),
         ));
+        if let Some(profile) = integration_profile {
+            runtime = runtime.with_integration_profile(profile);
+        }
 
         Ok(Self {
             runtime,

@@ -1039,6 +1039,13 @@ fn km_004_ordering_with_transition() {
     );
 }
 
+/// K-M-005: A milestone whose condition depends on a case-state field populated by an integration
+/// output binding fires after the output binding applies (Kernel S4.13).
+#[test]
+fn km_005_milestone_fires_on_integration_response() {
+    assert_fixture_passes("K-M-005-milestone-fires-on-integration-response.json");
+}
+
 /// K-M-002: A milestone that fired on the first data write does not re-fire on subsequent events
 /// even when the condition remains true.  Exactly one MilestoneFired appears across the full sequence.
 #[test]

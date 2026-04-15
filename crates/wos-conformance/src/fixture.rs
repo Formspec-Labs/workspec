@@ -85,6 +85,15 @@ pub struct ConformanceFixture {
     /// of `None`, simulating a definition that fails validation.
     #[serde(default)]
     pub definition_errors: Vec<serde_json::Value>,
+
+    /// Canned response body returned by the stub external service for all
+    /// `invokeService` calls.
+    ///
+    /// When absent the stub returns `null`.  Use this field when a fixture
+    /// needs an integration output binding to populate case-state fields
+    /// (e.g. to trigger a milestone whose condition depends on the response).
+    #[serde(default)]
+    pub service_response: Option<serde_json::Value>,
 }
 
 /// Expected outcome of a Formspec contract validation.
