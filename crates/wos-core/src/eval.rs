@@ -60,6 +60,11 @@ pub struct IndexedState {
     pub parallel_parent: Option<String>,
     /// Region name, if this state lives in a parallel region.
     pub region_name: Option<String>,
+    /// Immediate parent state ID (compound or parallel), if any.
+    ///
+    /// Used by deep history restore to reconstruct the full ancestor
+    /// chain from a leaf state up to the history-bearing compound.
+    pub direct_parent: Option<String>,
 }
 
 /// The lifecycle evaluator.
@@ -989,9 +994,16 @@ impl Evaluator {
 
     /// Restore a previously saved history configuration.
     ///
-    /// Enters each saved state path. For Deep history, the saved states are
-    /// leaf states so they are entered directly. For Shallow history, only
-    /// the direct substate is saved and entered, which then recurses normally.
+    /// For Shallow history: the saved state is a direct child of the history
+    /// compound. `enter_state` recurses normally into its `initialState`.
+    ///
+    /// For Deep history: the saved states are leaf states. Each leaf may be
+    /// nested inside intermediate compound states that were also active. We
+    /// reconstruct those intermediate ancestors by walking the `compound_parent`
+    /// chain up to (but not including) the history compound, then enter each
+    /// ancestor top-down before entering the leaf. Intermediate compound states
+    /// are entered without re-invoking their child-init logic (since the leaf
+    /// entry handles that).
     fn restore_history(
         &mut self,
         compound_id: &str,
@@ -999,14 +1011,86 @@ impl Evaluator {
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
-        for state_id in saved {
-            if self.config.contains(state_id) {
-                continue;
+        for leaf_id in saved {
+            // Collect the chain of compound ancestors between the history
+            // compound and the saved leaf (exclusive of both endpoints).
+            let ancestors = self.compound_ancestors_within(compound_id, leaf_id);
+
+            // Enter each ancestor compound top-down (outermost first).
+            // Use direct entry (config + onEntry only) to avoid triggering
+            // their normal child-init logic — the leaf entry below handles that.
+            for ancestor_id in &ancestors {
+                if !self.config.contains(ancestor_id) {
+                    self.enter_state_direct(ancestor_id, actor, event_data)?;
+                }
             }
-            self.enter_state(state_id, actor, event_data)?;
+
+            // Enter the saved leaf state itself.
+            if !self.config.contains(leaf_id) {
+                self.enter_state(leaf_id, actor, event_data)?;
+            }
         }
 
         self.history_store.remove(compound_id);
+        Ok(())
+    }
+
+    /// Collect all state ancestors of `leaf_id` that sit strictly between
+    /// `boundary_id` and the leaf. Returns ancestors in outermost-first order
+    /// (closest to `boundary_id` first).
+    ///
+    /// Walks the `direct_parent` chain, which includes both compound and
+    /// parallel parents, so intermediate parallel states are included.
+    fn compound_ancestors_within(&self, boundary_id: &str, leaf_id: &str) -> Vec<String> {
+        let mut ancestors = Vec::new();
+        let mut current = leaf_id;
+
+        loop {
+            let parent = match self.state_index.get(current) {
+                Some(indexed) => indexed.direct_parent.as_deref(),
+                None => break,
+            };
+
+            match parent {
+                None => break,
+                Some(p) if p == boundary_id => break,
+                Some(p) => {
+                    ancestors.push(p.to_string());
+                    current = p;
+                }
+            }
+        }
+
+        ancestors.reverse();
+        ancestors
+    }
+
+    /// Enter a state into the active configuration and run its `onEntry` actions,
+    /// but do NOT recurse into children.
+    ///
+    /// Used during deep history restore to activate intermediate compound states
+    /// without triggering their normal `initialState` or history-restore logic.
+    fn enter_state_direct(
+        &mut self,
+        state_id: &str,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        if self
+            .state_index
+            .get(state_id)
+            .ok_or_else(|| EvalError::StateNotFound(state_id.to_string()))?
+            .state
+            .kind
+            == StateKind::Final
+        {
+            return Ok(());
+        }
+
+        self.config.enter(state_id.to_string());
+        self.provenance
+            .push(ProvenanceRecord::state_entered(state_id));
+        self.execute_on_entry_actions(state_id, actor, event_data)?;
         Ok(())
     }
 
@@ -1077,7 +1161,7 @@ impl Evaluator {
 /// Build a flat state index from the typed kernel document.
 fn build_state_index(kernel: &KernelDocument) -> HashMap<String, IndexedState> {
     let mut index = HashMap::new();
-    index_states_recursive(&kernel.lifecycle.states, None, None, &mut index);
+    index_states_recursive(&kernel.lifecycle.states, None, None, None, &mut index);
     index
 }
 
@@ -1086,6 +1170,7 @@ fn index_states_recursive(
     states: &indexmap::IndexMap<String, State>,
     parallel_parent: Option<&str>,
     region_name: Option<&str>,
+    direct_parent: Option<&str>,
     index: &mut HashMap<String, IndexedState>,
 ) {
     for (name, state) in states {
@@ -1095,16 +1180,29 @@ fn index_states_recursive(
                 state: state.clone(),
                 parallel_parent: parallel_parent.map(String::from),
                 region_name: region_name.map(String::from),
+                direct_parent: direct_parent.map(String::from),
             },
         );
 
         if state.kind == StateKind::Compound {
-            index_states_recursive(&state.states, parallel_parent, region_name, index);
+            index_states_recursive(
+                &state.states,
+                parallel_parent,
+                region_name,
+                Some(name),
+                index,
+            );
         }
 
         if state.kind == StateKind::Parallel {
             for (rname, region) in &state.regions {
-                index_states_recursive(&region.states, Some(name), Some(rname), index);
+                index_states_recursive(
+                    &region.states,
+                    Some(name),
+                    Some(rname),
+                    Some(name),
+                    index,
+                );
             }
         }
     }

@@ -1,0 +1,84 @@
+{
+  "binding": "formspec",
+  "id": "K-H-D3-deep-normal-reentry",
+  "rule": "K-H",
+  "description": "Deep history at depth 3: compound state 'review' has historyState=deep. The active state at interrupt time is 'review.inProgress.subTask.detailPhase' — three levels of nesting. Re-entry via resume should restore the complete ancestor chain: 'inProgress', 'subTask', and 'detailPhase' must all be active.",
+  "documents": { "kernel": "inline" },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:history-deep-d3",
+      "version": "1.0.0",
+      "title": "History Deep Depth-3 Test",
+      "description": "Kernel for testing deep history state re-entry at depth 3",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [{ "id": "worker", "type": "human", "description": "Test actor" }],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [{ "event": "start", "target": "review" }]
+          },
+          "review": {
+            "type": "compound",
+            "historyState": "deep",
+            "initialState": "pending",
+            "states": {
+              "pending": {
+                "type": "atomic",
+                "transitions": [{ "event": "begin", "target": "inProgress" }]
+              },
+              "inProgress": {
+                "type": "compound",
+                "initialState": "subTask",
+                "states": {
+                  "subTask": {
+                    "type": "compound",
+                    "initialState": "detailPhase",
+                    "states": {
+                      "detailPhase": {
+                        "type": "atomic",
+                        "transitions": [{ "event": "finish", "target": "detailDone" }]
+                      },
+                      "detailDone": { "type": "final" }
+                    }
+                  }
+                }
+              }
+            },
+            "transitions": [
+              { "event": "interrupt", "target": "interrupted" },
+              { "event": "resume", "target": "review" }
+            ]
+          },
+          "interrupted": {
+            "type": "atomic",
+            "transitions": [{ "event": "resume", "target": "review" }]
+          }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": { "workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned" }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "start", "actor": "worker" },
+    { "event": "begin", "actor": "worker" },
+    { "event": "interrupt", "actor": "worker" },
+    { "event": "resume", "actor": "worker" },
+    { "event": "finish", "actor": "worker" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "review", "event": "start" },
+    { "from": "pending", "to": "inProgress", "event": "begin" },
+    { "from": "review", "to": "interrupted", "event": "interrupt" },
+    { "from": "interrupted", "to": "review", "event": "resume" },
+    { "from": "detailPhase", "to": "detailDone", "event": "finish" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "historyCleared", "data": { "state": "review" } }
+  ]
+}

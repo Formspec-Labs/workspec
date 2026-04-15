@@ -902,3 +902,45 @@ fn kh_d1_shallow_normal_reentry() {
 fn kh_d1_deep_normal_reentry() {
     assert_fixture_passes("K-H-D1-deep-normal-reentry.json");
 }
+
+/// K-H-D2: Shallow history re-entry at depth 2 — only direct substate restored.
+#[test]
+fn kh_d2_shallow_normal_reentry() {
+    assert_fixture_passes("K-H-D2-shallow-normal-reentry.json");
+}
+
+/// K-H-D2: Deep history re-entry at depth 2 — full nested config restored.
+#[test]
+fn kh_d2_deep_normal_reentry() {
+    assert_fixture_passes("K-H-D2-deep-normal-reentry.json");
+}
+
+/// K-H-D2: Deep history capture after parallel-region exit.
+#[test]
+fn kh_d2_deep_after_parallel_exit() {
+    assert_fixture_passes("K-H-D2-deep-after-parallel-exit.json");
+}
+
+/// K-H-D2: Shallow history capture after parallel-region exit.
+#[test]
+fn kh_d2_shallow_after_parallel_exit() {
+    assert_fixture_passes("K-H-D2-shallow-after-parallel-exit.json");
+}
+
+/// K-H-D3: Deep history re-entry at depth 3 — three levels of nesting restored.
+#[test]
+fn kh_d3_deep_normal_reentry() {
+    assert_fixture_passes("K-H-D3-deep-normal-reentry.json");
+}
+
+/// K-H-D2: Deep history across-boundary — history cleared after restore; fresh entry uses initialState.
+#[test]
+fn kh_d2_deep_across_boundary() {
+    assert_fixture_passes("K-H-D2-deep-across-boundary.json");
+}
+
+/// K-H-D2: Shallow history across-boundary — history cleared after restore; fresh entry uses initialState.
+#[test]
+fn kh_d2_shallow_across_boundary() {
+    assert_fixture_passes("K-H-D2-shallow-across-boundary.json");
+}

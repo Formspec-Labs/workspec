@@ -1,0 +1,76 @@
+{
+  "binding": "formspec",
+  "id": "K-H-D2-shallow-normal-reentry",
+  "rule": "K-H",
+  "description": "Shallow history at depth 2: compound state 'review' has historyState=shallow. After progressing into the nested compound 'inProgress' (which contains 'subPhase'), an interruption exits to 'interrupted'. Re-entering 'review' via resume should restore only the depth-1 direct substate 'inProgress', then enter 'inProgress' using its own initialState ('subPhase').",
+  "documents": { "kernel": "inline" },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:history-shallow-d2",
+      "version": "1.0.0",
+      "title": "History Shallow Depth-2 Test",
+      "description": "Kernel for testing shallow history state re-entry at depth 2",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [{ "id": "worker", "type": "human", "description": "Test actor" }],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [{ "event": "start", "target": "review" }]
+          },
+          "review": {
+            "type": "compound",
+            "historyState": "shallow",
+            "initialState": "pending",
+            "states": {
+              "pending": {
+                "type": "atomic",
+                "transitions": [{ "event": "begin", "target": "inProgress" }]
+              },
+              "inProgress": {
+                "type": "compound",
+                "initialState": "subPhase",
+                "states": {
+                  "subPhase": {
+                    "type": "atomic",
+                    "transitions": [{ "event": "advance", "target": "subDone" }]
+                  },
+                  "subDone": { "type": "final" }
+                }
+              }
+            },
+            "transitions": [
+              { "event": "interrupt", "target": "interrupted" },
+              { "event": "resume", "target": "review" }
+            ]
+          },
+          "interrupted": {
+            "type": "atomic",
+            "transitions": [{ "event": "resume", "target": "review" }]
+          }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": { "workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned" }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "start", "actor": "worker" },
+    { "event": "begin", "actor": "worker" },
+    { "event": "interrupt", "actor": "worker" },
+    { "event": "resume", "actor": "worker" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "review", "event": "start" },
+    { "from": "pending", "to": "inProgress", "event": "begin" },
+    { "from": "review", "to": "interrupted", "event": "interrupt" },
+    { "from": "interrupted", "to": "review", "event": "resume" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "historyCleared", "data": { "state": "review" } }
+  ]
+}
