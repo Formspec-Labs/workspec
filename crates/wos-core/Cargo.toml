@@ -7,6 +7,8 @@ license = "AGPL-3.0"
 repository = "https://github.com/formspec/formspec"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 fel-core = { path = "../../../crates/fel-core" }
 indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }

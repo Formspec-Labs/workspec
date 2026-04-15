@@ -11,6 +11,8 @@ use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use semver::{Version, VersionReq};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use chrono::DateTime;
+use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument};
 use wos_core::eval::{Evaluator, ObservedAction, ObservedTransition};
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
@@ -331,6 +333,8 @@ pub struct WosRuntime {
     clock: Box<dyn Clock>,
     companion_policy: Box<dyn CompanionPolicy>,
     integration_profile: Option<IntegrationProfileDocument>,
+    /// Attached business calendar for SLA deadline computation (BC.1).
+    business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
 }
 
@@ -369,6 +373,7 @@ impl WosRuntime {
             clock: Box::new(clock),
             companion_policy: Box::new(NoopCompanionPolicy),
             integration_profile: None,
+            business_calendar: None,
             bindings,
         }
     }
@@ -385,6 +390,18 @@ impl WosRuntime {
     /// Attach an Integration Profile document for `invokeService` bindings.
     pub fn with_integration_profile(mut self, profile: IntegrationProfileDocument) -> Self {
         self.integration_profile = Some(profile);
+        self
+    }
+
+    /// Attach a Business Calendar document for SLA deadline computation (BC.1).
+    ///
+    /// When a calendar is attached, timer deadlines are computed by advancing
+    /// through business time rather than wall-clock time. Deadlines are
+    /// computed lazily on each `drain_once` call, not at timer creation time.
+    /// Replacing the calendar between events shifts future (not yet fired)
+    /// timer deadlines on the next drain.
+    pub fn with_business_calendar(mut self, calendar: BusinessCalendarDocument) -> Self {
+        self.business_calendar = Some(calendar);
         self
     }
 
@@ -419,7 +436,7 @@ impl WosRuntime {
             case_state: evaluator.case_state_json(),
             provenance_position: 0,
             next_task_sequence: 0,
-            timers: timers_to_state(evaluator.timers(), now_ms)?,
+            timers: timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?,
             active_tasks: Vec::new(),
             history_store: None,
             compensation_logs: None,
@@ -435,6 +452,10 @@ impl WosRuntime {
 
         let mut record = RuntimeRecord::new(instance);
         let mut appended_provenance = evaluator.provenance().records().to_vec();
+        // Annotate any timers created during instance initialization with calendarVersion.
+        if let Some(cal) = &self.business_calendar {
+            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
+        }
         let actions = evaluator.take_executed_actions();
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
@@ -529,6 +550,11 @@ impl WosRuntime {
         runtime_result.transitions = evaluator.transitions().to_vec();
 
         appended_provenance.extend(evaluator.provenance().records().to_vec());
+        // Annotate any newly created timers with calendarVersion when a calendar
+        // is attached (provenance approach a — augment data field, no new variant).
+        if let Some(cal) = &self.business_calendar {
+            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
+        }
         appended_provenance.extend(compensation_provenance(
             &kernel,
             &record.provenance_log,
@@ -536,7 +562,8 @@ impl WosRuntime {
         ));
         record.instance.configuration = evaluator.configuration().active_states().to_vec();
         record.instance.case_state = evaluator.case_state_json();
-        record.instance.timers = timers_to_state(evaluator.timers(), now_ms)?;
+        record.instance.timers =
+            timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?;
         let history = evaluator.history_store().clone();
         record.instance.history_store = if history.is_empty() {
             None
@@ -1516,14 +1543,33 @@ fn materialize_due_timers(
 fn timers_to_state(
     timers: &wos_core::timer::Timers,
     _now_ms: u64,
+    calendar: Option<&BusinessCalendarDocument>,
 ) -> Result<Vec<wos_core::instance::TimerState>, RuntimeError> {
-    timers.iter().map(|timer| timer_to_state(timer)).collect()
+    timers
+        .iter()
+        .map(|timer| timer_to_state(timer, calendar))
+        .collect()
 }
 
-fn timer_to_state(timer: &Timer) -> Result<wos_core::instance::TimerState, RuntimeError> {
+/// Convert a `Timer` to a `TimerState`, computing the deadline lazily.
+///
+/// When a business calendar is attached, the deadline is re-computed using
+/// [`next_business_moment`] each time this function is called (lazy evaluation).
+/// This means calendar updates between events shift future deadlines on the
+/// next drain.  When no calendar is attached, the raw wall-clock deadline is
+/// used unchanged.
+fn timer_to_state(
+    timer: &Timer,
+    calendar: Option<&BusinessCalendarDocument>,
+) -> Result<wos_core::instance::TimerState, RuntimeError> {
+    let deadline_ms = match calendar {
+        Some(cal) => business_deadline_ms(timer, cal)?,
+        None => timer.deadline_ms,
+    };
+
     Ok(wos_core::instance::TimerState {
         timer_id: timer.id.clone(),
-        deadline: format_timestamp(timer.deadline_ms)?,
+        deadline: format_timestamp(deadline_ms)?,
         event: timer.fires_event.clone(),
         scope_state: if timer.created_in_state.is_empty() {
             None
@@ -1533,6 +1579,65 @@ fn timer_to_state(timer: &Timer) -> Result<wos_core::instance::TimerState, Runti
         duration_iso: Some(timer.duration_iso.clone()),
         duration_ms: Some(timer.duration_ms),
     })
+}
+
+/// Compute a business-calendar–adjusted deadline for `timer`.
+///
+/// Reconstructs the start time as `deadline_ms - duration_ms`, then advances
+/// through business time using the attached calendar.
+fn business_deadline_ms(timer: &Timer, calendar: &BusinessCalendarDocument) -> Result<u64, RuntimeError> {
+    let start_ms = timer.deadline_ms.saturating_sub(timer.duration_ms);
+    let start_secs = i64::try_from(start_ms / 1000)
+        .map_err(|_| RuntimeError::Clock("timer start timestamp out of range".to_string()))?;
+    let start_utc = DateTime::from_timestamp(start_secs, 0)
+        .ok_or_else(|| RuntimeError::Clock("invalid timer start timestamp".to_string()))?;
+
+    let duration = chrono::Duration::milliseconds(
+        i64::try_from(timer.duration_ms)
+            .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
+    );
+
+    let result = next_business_moment(start_utc, duration, calendar);
+    let result_ms = u64::try_from(result.timestamp_millis())
+        .map_err(|_| RuntimeError::Clock("business deadline out of range".to_string()))?;
+    Ok(result_ms)
+}
+
+/// Inject `calendarVersion` into every `TimerCreated` provenance record in `records`.
+///
+/// Uses provenance approach (a): extends the existing `data` JSON object with a
+/// `calendarVersion` field — no new provenance variant required.  When the calendar
+/// has no `version` field, the field is set to `null`.
+fn annotate_timer_created_with_calendar_version(
+    records: &mut [ProvenanceRecord],
+    calendar: &BusinessCalendarDocument,
+) {
+    let version = calendar
+        .version
+        .as_deref()
+        .map(serde_json::Value::from)
+        .unwrap_or(serde_json::Value::Null);
+
+    for record in records.iter_mut() {
+        if record.record_kind != ProvenanceKind::TimerCreated {
+            continue;
+        }
+        match &mut record.data {
+            Some(serde_json::Value::Object(map)) => {
+                map.insert("calendarVersion".to_string(), version.clone());
+            }
+            other => {
+                let mut map = serde_json::Map::new();
+                if let Some(existing) = other.take() {
+                    if let serde_json::Value::Object(existing_map) = existing {
+                        map.extend(existing_map);
+                    }
+                }
+                map.insert("calendarVersion".to_string(), version.clone());
+                *other = Some(serde_json::Value::Object(map));
+            }
+        }
+    }
 }
 
 fn format_timestamp(timestamp_ms: u64) -> Result<String, RuntimeError> {

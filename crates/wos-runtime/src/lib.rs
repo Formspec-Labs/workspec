@@ -26,6 +26,7 @@ pub use runtime::{
     RuntimeError, RuntimeEventContext, RuntimeEventDecision, SystemClock, TaskSubmissionResult,
     WosRuntime,
 };
+pub use wos_core::business_calendar::BusinessCalendarDocument;
 pub use store::{
     InMemoryStore, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
     StoreError, TaskArtifact, TaskArtifactKind,

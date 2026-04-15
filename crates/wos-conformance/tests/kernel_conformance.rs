@@ -1046,6 +1046,36 @@ fn km_005_milestone_fires_on_integration_response() {
     assert_fixture_passes("K-M-005-milestone-fires-on-integration-response.json");
 }
 
+// ── Business Calendar SLA runtime (BC.1) ─────────────────────────
+
+/// G-S10-001: Fixed holiday on the naive deadline day causes the deadline to
+/// skip to the next non-holiday work day (BC S10).
+#[test]
+fn gs10_001_holiday_shift() {
+    assert_fixture_passes("G-S10-001-holiday-shift.json");
+}
+
+/// G-S10-002: Naive deadline past operating-hours end carries excess time to the
+/// next business day's operating-hours start (BC S10).
+#[test]
+fn gs10_002_operating_hours_cutoff() {
+    assert_fixture_passes("G-S10-002-operating-hours-cutoff.json");
+}
+
+/// G-S10-003: Calendar timezone is used when computing the deadline — naive
+/// deadline on a weekend in the configured TZ snaps to Monday local time (BC S10).
+#[test]
+fn gs10_003_timezone_boundary() {
+    assert_fixture_passes("G-S10-003-timezone-boundary.json");
+}
+
+/// G-S10-004: Deadlines are computed lazily at drain time; attaching calendar v2
+/// (with a new holiday) shifts the deadline compared to v1 (BC S10).
+#[test]
+fn gs10_004_calendar_update_shifts_future_deadline() {
+    assert_fixture_passes("G-S10-004-calendar-update-shifts-future-deadline.json");
+}
+
 /// K-M-002: A milestone that fired on the first data write does not re-fire on subsequent events
 /// even when the condition remains true.  Exactly one MilestoneFired appears across the full sequence.
 #[test]

@@ -1,0 +1,80 @@
+{
+  "id": "G-S10-003-timezone-boundary",
+  "rule": "G-S10",
+  "description": "Business calendar uses the configured timezone when snapping deadlines. Calendar TZ is Etc/GMT-12 (UTC+12). Epoch (1970-01-01T00:00:00Z) is Thursday 12:00 local. Timer duration P2D: naive UTC = 1970-01-03T00:00:00Z = Saturday 12:00 local. Saturday is not a work day; time advances day by day: Sunday 12:00, then Monday 12:00 local = 1970-01-05T00:00:00Z UTC. No operating hours are configured so Monday 12:00 is valid. Business deadline = P4D from epoch = 345,600,000 ms. Clock advances P4D, timer fires.",
+  "documents": {
+    "kernel": "inline",
+    "businessCalendar": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:bc-timezone",
+      "version": "1.0.0",
+      "title": "BC S10-003 Timezone Boundary",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "system", "type": "system", "description": "System actor" }
+      ],
+      "lifecycle": {
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "startTimer",
+                "timerId": "slaTimer",
+                "duration": "P2D",
+                "event": "$timeout.slaTimer"
+              }
+            ],
+            "transitions": [
+              { "event": "$timeout.slaTimer", "target": "done" }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "businessCalendar": {
+      "$wosBusinessCalendar": "1.0",
+      "targetWorkflow": "urn:test:bc-timezone",
+      "version": "test-v1.0",
+      "timezone": "Etc/GMT-12",
+      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "holidays": []
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P4D"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "slaTimer",
+        "calendarVersion": "test-v1.0"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": { "timerId": "slaTimer" }
+    }
+  ]
+}

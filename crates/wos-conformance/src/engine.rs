@@ -25,8 +25,8 @@ use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    BindingRegistry, Clock, CreateInstanceRequest, DrainOnceResult, IntegrationProfileDocument,
-    ReferenceCompanionPolicy, WosRuntime,
+    BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
+    IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime,
 };
 
 use crate::fixture::ConformanceFixture;
@@ -126,10 +126,20 @@ impl WorkflowEngine {
             None
         };
 
+        // Load business calendar if present.
+        let business_calendar = if fixture.documents.contains_key("businessCalendar") {
+            let cal_json = fixture_document_json(fixture, "businessCalendar")?;
+            let cal: BusinessCalendarDocument = serde_json::from_value(cal_json)
+                .map_err(|e| ConformanceError::Parse(format!("business calendar parse error: {e}")))?;
+            Some(cal)
+        } else {
+            None
+        };
+
         // Load any remaining companion documents as raw JSON.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
-            if matches!(key.as_str(), "kernel" | "ai" | "governance" | "integration") {
+            if matches!(key.as_str(), "kernel" | "ai" | "governance" | "integration" | "businessCalendar") {
                 continue;
             }
             let doc_json = fixture_document_json(fixture, key)?;
@@ -182,6 +192,9 @@ impl WorkflowEngine {
         ));
         if let Some(profile) = integration_profile {
             runtime = runtime.with_integration_profile(profile);
+        }
+        if let Some(calendar) = business_calendar {
+            runtime = runtime.with_business_calendar(calendar);
         }
 
         Ok(Self {

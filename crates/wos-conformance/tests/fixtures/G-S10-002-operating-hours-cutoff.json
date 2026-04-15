@@ -1,0 +1,84 @@
+{
+  "id": "G-S10-002-operating-hours-cutoff",
+  "rule": "G-S10",
+  "description": "Business calendar carries excess time past operating hours into the next work day. Timer duration PT20H from epoch (1970-01-01T00:00:00Z, Thursday). Naive deadline: Thursday 20:00 UTC, which is past the 17:00 operating-hours end. Excess: 3h. Next work day (Friday) op_start (09:00) + 3h = Friday 12:00 UTC = 129,600,000 ms from epoch. Clock advances P1DT12H (36h) to reach that moment, firing the timer.",
+  "documents": {
+    "kernel": "inline",
+    "businessCalendar": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:bc-operating-hours",
+      "version": "1.0.0",
+      "title": "BC S10-002 Operating Hours Cutoff",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "system", "type": "system", "description": "System actor" }
+      ],
+      "lifecycle": {
+        "initialState": "pending",
+        "states": {
+          "pending": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "startTimer",
+                "timerId": "slaTimer",
+                "duration": "PT20H",
+                "event": "$timeout.slaTimer"
+              }
+            ],
+            "transitions": [
+              { "event": "$timeout.slaTimer", "target": "done" }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "businessCalendar": {
+      "$wosBusinessCalendar": "1.0",
+      "targetWorkflow": "urn:test:bc-operating-hours",
+      "version": "test-v1.0",
+      "timezone": "UTC",
+      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      "holidays": [],
+      "operatingHours": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P1DT12H"
+    }
+  ],
+  "expected_transitions": [
+    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "slaTimer",
+        "calendarVersion": "test-v1.0"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": { "timerId": "slaTimer" }
+    }
+  ]
+}
