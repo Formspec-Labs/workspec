@@ -161,3 +161,71 @@ fn revalidate_url_mismatch_reports_pin_mismatch() {
         result.validation_outcome.errors
     );
 }
+
+/// (d) Stored `pin_match: true` must NOT be trusted on re-validation.
+///
+/// A task whose `last_validation_outcome` records `pin_match: true` against an
+/// old pin must still produce `pin_match: false` when the live task definition
+/// URL or version disagrees with the envelope. Pin equality is always recomputed
+/// fresh; the stored outcome is completely ignored.
+#[test]
+fn revalidate_ignores_stored_pin_match_true() {
+    use wos_core::instance::ValidationOutcome;
+
+    // Task currently pinned to form-v2, but the stored last_validation_outcome
+    // claims pin_match: true from a previous (now-stale) pass against form-v1.
+    let task = ActiveTask {
+        task_id: "task-replay-stale".to_string(),
+        task_ref: "review".to_string(),
+        status: wos_core::instance::ActiveTaskStatus::Assigned,
+        assigned_actor: Some("auditor".to_string()),
+        contract_ref: Some("reviewForm".to_string()),
+        binding: Some("formspec".to_string()),
+        definition_url: Some("urn:test:form-v2".to_string()),
+        definition_version: Some("2.0.0".to_string()),
+        prefill_mapping_ref: None,
+        response_mapping_ref: None,
+        deadline: None,
+        impact_level: None,
+        context: None,
+        last_validation_outcome: Some(ValidationOutcome {
+            pin_match: true, // STALE — must not be trusted
+            envelope_valid: true,
+            definition_valid: true,
+            errors: Vec::new(),
+            validation_results: None,
+        }),
+        created_at: "2024-03-09T00:00:00Z".to_string(),
+        updated_at: "2024-03-09T00:00:00Z".to_string(),
+        extensions: Default::default(),
+    };
+
+    // Envelope was originally submitted against form-v1 — does not match the
+    // task's current pin (form-v2).
+    let stale_envelope = serde_json::json!({
+        "status": "complete",
+        "definitionUrl": "urn:test:form-v1",
+        "definitionVersion": "1.0.0",
+        "data": {}
+    });
+
+    let binding = FormspecBinding::new(StubProcessor);
+    let result: SubmissionValidation = binding
+        .revalidate_submission(&task, &stale_envelope)
+        .expect("revalidate_submission must not error on well-formed input");
+
+    assert!(
+        !result.validation_outcome.pin_match,
+        "pin_match must be recomputed fresh, ignoring stored outcome"
+    );
+    let has_pin_mismatch_error = result
+        .validation_outcome
+        .errors
+        .iter()
+        .any(|e| e.get("code") == Some(&serde_json::json!("pinMismatch")));
+    assert!(
+        has_pin_mismatch_error,
+        "pinMismatch error must be raised: {:#?}",
+        result.validation_outcome.errors
+    );
+}

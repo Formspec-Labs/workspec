@@ -106,6 +106,11 @@ where
                 .as_ref()
                 .is_none_or(std::vec::Vec::is_empty)
         } else {
+            // When pin_match is false, we deliberately skip definition validation
+            // — the stored definition at the submitted pin may differ from the current pin,
+            // so validating against the current pin would produce misleading diagnostics.
+            // definition_valid is marked false to signal "not validated at this pin" rather
+            // than "validated and failed"; validation_results stays None.
             false
         };
 
