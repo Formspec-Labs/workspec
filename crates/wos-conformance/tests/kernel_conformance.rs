@@ -1106,3 +1106,49 @@ fn km_002_no_refire() {
         "applicationApproved milestone must fire exactly once across all three events, got {fire_count}"
     );
 }
+
+// ── NB.2: RFC 9535 outputBinding profile ─────────────────────────
+
+/// I-002: Wildcard (`[*]`) plus member access (`.name`) fans out over all array
+/// elements and writes the extracted array to the case state (RFC 9535 profile).
+#[test]
+fn i002_outputbinding_wildcard_extracts_array() {
+    let path = fixture_path("I-002-outputbinding-wildcard-extracts-array.json");
+    let fixture_json = std::fs::read_to_string(&path).unwrap();
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!(
+            "I-002 FAILED:\n{}",
+            result.failures.join("\n")
+        );
+    }
+
+    // Verify the dataMapping provenance record carries the correct updatedPaths.
+    let data_mapping = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == wos_conformance::ProvenanceKind::DataMapping)
+        .expect("expected a dataMapping provenance record");
+
+    let updated_paths = data_mapping
+        .data
+        .as_ref()
+        .and_then(|d| d.get("updatedPaths"))
+        .and_then(serde_json::Value::as_array)
+        .expect("dataMapping provenance must carry updatedPaths");
+
+    assert!(
+        updated_paths
+            .iter()
+            .any(|p| p.as_str() == Some("caseFile.items")),
+        "updatedPaths must include 'caseFile.items', got: {updated_paths:?}"
+    );
+}

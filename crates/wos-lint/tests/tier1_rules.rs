@@ -1907,3 +1907,89 @@ fn multiple_violations_reported_together() {
     assert!(has_rule(&diags, "K-030"), "expected K-030");
     assert!(count_rule(&diags, "K-001") >= 1);
 }
+
+// ========================================================================
+// I-001: outputBinding JSONPath MUST NOT use unsupported RFC 9535 features.
+// ========================================================================
+
+fn minimal_integration_profile(output_binding: serde_json::Value) -> serde_json::Value {
+    json!({
+        "$wosIntegrationProfile": "1.0",
+        "targetWorkflow": {
+            "url": "https://example.com/wf"
+        },
+        "bindings": {
+            "myService": {
+                "type": "request-response",
+                "outputBinding": output_binding
+            }
+        }
+    })
+}
+
+#[test]
+fn i001_filter_expression_in_output_binding_flagged() {
+    let doc = minimal_integration_profile(json!({
+        "caseFile.result": "$[?(@.ok)]"
+    }));
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "I-001"), "expected I-001: {diags:?}");
+    assert_eq!(
+        severity_of(&diags, "I-001"),
+        Some(Severity::Error),
+        "I-001 must be Error: {diags:?}"
+    );
+}
+
+#[test]
+fn i001_recursive_descent_in_output_binding_flagged() {
+    let doc = minimal_integration_profile(json!({
+        "caseFile.deep": "$..value"
+    }));
+    let diags = lint(doc);
+    assert!(has_rule(&diags, "I-001"), "expected I-001: {diags:?}");
+    assert_eq!(severity_of(&diags, "I-001"), Some(Severity::Error));
+}
+
+#[test]
+fn i001_simple_member_access_clean() {
+    let doc = minimal_integration_profile(json!({
+        "caseFile.result": "$.result",
+        "caseFile.items": "$.data.items"
+    }));
+    let diags = lint(doc);
+    assert!(
+        !has_rule(&diags, "I-001"),
+        "unexpected I-001 on plain paths: {diags:?}"
+    );
+}
+
+#[test]
+fn i001_wildcard_and_slice_clean() {
+    let doc = minimal_integration_profile(json!({
+        "caseFile.names": "$.items[*].name",
+        "caseFile.first_two": "$.items[0:2]"
+    }));
+    let diags = lint(doc);
+    assert!(
+        !has_rule(&diags, "I-001"),
+        "unexpected I-001 on wildcard/slice: {diags:?}"
+    );
+}
+
+#[test]
+fn i001_path_in_lint_diagnostic_points_to_binding_key() {
+    let doc = minimal_integration_profile(json!({
+        "caseFile.x": "$[?(@.bad)]"
+    }));
+    let diags = lint(doc);
+    let path = path_of(&diags, "I-001").expect("expected I-001");
+    assert!(
+        path.contains("myService"),
+        "diagnostic path should name the binding key 'myService', got: {path}"
+    );
+    assert!(
+        path.contains("outputBinding"),
+        "diagnostic path should contain 'outputBinding', got: {path}"
+    );
+}

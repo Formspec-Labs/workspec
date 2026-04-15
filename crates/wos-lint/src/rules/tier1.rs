@@ -29,6 +29,7 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
         DocumentKind::CorrespondenceMetadata => check_correspondence_metadata(doc, diagnostics),
         DocumentKind::BusinessCalendar => check_business_calendar(doc, diagnostics),
         DocumentKind::NotificationTemplate => check_notification_template(doc, diagnostics),
+        DocumentKind::IntegrationProfile => check_integration_profile(doc, diagnostics),
         _ => {} // Other document types: no Tier 1 rules yet.
     }
 }
@@ -1003,6 +1004,64 @@ fn visit_state_actions_typed(
             visit_state_actions_typed(rstate, &format!("{path}/regions/{rname}/states/{name}"), f);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Integration Profile rules
+// ---------------------------------------------------------------------------
+
+/// I-001: `outputBinding` JSONPath expressions MUST NOT use unsupported RFC 9535 features.
+///
+/// The outputBinding profile supports member access, index, wildcard, and slice only.
+/// Filter expressions (`[?(...)]`) and recursive descent (`..`) are rejected at
+/// definition load time so they never become a runtime surprise.
+fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+    let root = &doc.value;
+
+    let Some(bindings) = root.get("bindings").and_then(Value::as_object) else {
+        return;
+    };
+
+    for (binding_key, binding) in bindings {
+        let Some(output_binding) = binding.get("outputBinding").and_then(Value::as_object) else {
+            continue;
+        };
+        for (case_path, json_path_value) in output_binding {
+            let Some(json_path) = json_path_value.as_str() else {
+                continue;
+            };
+            if contains_unsupported_jsonpath_feature(json_path) {
+                let path =
+                    format!("/bindings/{binding_key}/outputBinding/{case_path}");
+                diagnostics.push(Diagnostic::error(
+                    "I-001",
+                    path,
+                    format!(
+                        "outputBinding JSONPath '{json_path}' uses a feature not supported in \
+                         the RFC 9535 output-binding profile: filter expressions ([?(...)]) and \
+                         recursive descent (..) are excluded for predictability and static \
+                         analysability. Extend the profile via ADR if a future binding requires \
+                         these features."
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+/// Return `true` if the JSONPath string contains a filter expression or recursive descent.
+///
+/// This is a syntactic check only — it does not need to parse the full path.
+fn contains_unsupported_jsonpath_feature(json_path: &str) -> bool {
+    // Recursive descent: `..` anywhere in the path.
+    if json_path.contains("..") {
+        return true;
+    }
+    // Filter expression: `[?` anywhere in the path.
+    if json_path.contains("[?") {
+        return true;
+    }
+    false
 }
 
 /// Recursively visit every JSON object node.

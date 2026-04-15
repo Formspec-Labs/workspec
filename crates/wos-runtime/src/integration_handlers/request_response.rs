@@ -372,45 +372,171 @@ fn apply_output_binding(
 
     for (case_path, output_path) in bindings {
         let value = resolve_json_path(output, output_path)?;
-        set_case_state_path(case_state, case_path, value.clone())?;
+        set_case_state_path(case_state, case_path, value)?;
         updated_paths.push((*case_path).clone());
     }
     Ok(updated_paths)
 }
 
-fn resolve_json_path<'a>(
-    value: &'a serde_json::Value,
+/// Resolve a JSONPath expression against a JSON value using the RFC 9535 output-binding profile.
+///
+/// The profile supports: root (`$`), member access (`.key`, `['key']`, `["key"]`),
+/// index (`[n]`), wildcard (`[*]`), and slice (`[start:end]`, `[start:end:step]`).
+/// Filter expressions (`[?(...)]`) and recursive descent (`..`) are rejected at parse
+/// time; calling this function only fails at runtime for missing paths.
+fn resolve_json_path(
+    value: &serde_json::Value,
     json_path: &str,
-) -> Result<&'a serde_json::Value, RuntimeError> {
+) -> Result<serde_json::Value, RuntimeError> {
     let segments = parse_json_path(json_path)?;
-    let mut current = value;
-    for segment in segments {
-        current = match segment {
-            JsonPathSegment::Key(key) => current.get(&key).ok_or_else(|| {
+    resolve_segments(value, &segments, json_path)
+}
+
+/// Walk `segments` against `root`, fanning out on Wildcard and Slice.
+fn resolve_segments(
+    root: &serde_json::Value,
+    segments: &[JsonPathSegment],
+    json_path: &str,
+) -> Result<serde_json::Value, RuntimeError> {
+    if segments.is_empty() {
+        return Ok(root.clone());
+    }
+
+    let (head, tail) = segments.split_first().expect("checked non-empty above");
+    match head {
+        JsonPathSegment::Key(key) => {
+            let next = root.get(key.as_str()).ok_or_else(|| {
                 RuntimeError::Integration(format!(
                     "output binding path '{json_path}' resolved to no value"
                 ))
-            })?,
-            JsonPathSegment::Index(index) => current
+            })?;
+            resolve_segments(next, tail, json_path)
+        }
+        JsonPathSegment::Index(index) => {
+            let next = root
                 .as_array()
-                .and_then(|items| items.get(index))
+                .and_then(|items| items.get(*index))
                 .ok_or_else(|| {
                     RuntimeError::Integration(format!(
                         "output binding path '{json_path}' resolved to no value"
                     ))
-                })?,
-        };
+                })?;
+            resolve_segments(next, tail, json_path)
+        }
+        JsonPathSegment::Wildcard => {
+            // Fan out over all elements (array) or values (object).
+            let items: Vec<&serde_json::Value> = match root {
+                serde_json::Value::Array(arr) => arr.iter().collect(),
+                serde_json::Value::Object(obj) => obj.values().collect(),
+                _ => {
+                    return Err(RuntimeError::Integration(format!(
+                        "output binding path '{json_path}': wildcard applied to non-array/object"
+                    )));
+                }
+            };
+            if tail.is_empty() {
+                Ok(serde_json::Value::Array(
+                    items.into_iter().cloned().collect(),
+                ))
+            } else {
+                let results: Result<Vec<serde_json::Value>, _> = items
+                    .into_iter()
+                    .map(|item| resolve_segments(item, tail, json_path))
+                    .collect();
+                Ok(serde_json::Value::Array(results?))
+            }
+        }
+        JsonPathSegment::Slice { start, end, step } => {
+            let arr = root.as_array().ok_or_else(|| {
+                RuntimeError::Integration(format!(
+                    "output binding path '{json_path}': slice applied to non-array"
+                ))
+            })?;
+            let len = arr.len() as i64;
+            let step = step.unwrap_or(1);
+            if step == 0 {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}': slice step must not be zero"
+                )));
+            }
+            // Resolve negative/open bounds using Python-style semantics.
+            let (start_idx, end_idx) = if step > 0 {
+                let s = resolve_slice_bound(*start, len, 0);
+                let e = resolve_slice_bound(*end, len, len);
+                (s, e)
+            } else {
+                let s = resolve_slice_bound(*start, len, len - 1);
+                let e = resolve_slice_bound(*end, len, -1);
+                (s, e)
+            };
+
+            let selected: Vec<&serde_json::Value> = if step > 0 {
+                (start_idx..end_idx)
+                    .step_by(step as usize)
+                    .filter_map(|i| arr.get(i as usize))
+                    .collect()
+            } else {
+                let mut result = Vec::new();
+                let mut i = start_idx;
+                while i > end_idx {
+                    if let Some(item) = arr.get(i as usize) {
+                        result.push(item);
+                    }
+                    i += step; // step is negative here
+                }
+                result
+            };
+
+            if tail.is_empty() {
+                Ok(serde_json::Value::Array(
+                    selected.into_iter().cloned().collect(),
+                ))
+            } else {
+                let results: Result<Vec<serde_json::Value>, _> = selected
+                    .into_iter()
+                    .map(|item| resolve_segments(item, tail, json_path))
+                    .collect();
+                Ok(serde_json::Value::Array(results?))
+            }
+        }
     }
-    Ok(current)
+}
+
+/// Normalize a slice bound following RFC 9535 / Python conventions.
+///
+/// - `None` → `default_value`
+/// - Negative → `len + value` (clamped to `[0, len]`)
+/// - Non-negative → clamped to `[0, len]`
+fn resolve_slice_bound(bound: Option<i64>, len: i64, default_value: i64) -> i64 {
+    let raw = match bound {
+        None => return default_value,
+        Some(v) => v,
+    };
+    let absolute = if raw < 0 { len + raw } else { raw };
+    absolute.clamp(0, len)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum JsonPathSegment {
     Key(String),
     Index(usize),
+    Wildcard,
+    Slice {
+        start: Option<i64>,
+        end: Option<i64>,
+        step: Option<i64>,
+    },
 }
 
-fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError> {
+/// Parse a JSONPath string into segments using the RFC 9535 output-binding profile.
+///
+/// Supported: root (`$`), `.key`, `['key']`, `["key"]`, `[n]`, `[*]`,
+/// `[start:end]`, `[start:end:step]`.
+///
+/// Rejected at parse time (returns `RuntimeError::Integration`):
+/// - Recursive descent: `..`
+/// - Filter expressions: `[?(...)]`
+pub(crate) fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError> {
     let json_path = json_path.trim();
     if json_path == "$" {
         return Ok(Vec::new());
@@ -424,6 +550,14 @@ fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError
     let mut segments = Vec::new();
     let mut cursor = rest;
     while !cursor.is_empty() {
+        // Reject recursive descent at the top of the loop so `$..foo` is caught.
+        if cursor.starts_with("..") {
+            return Err(RuntimeError::Integration(format!(
+                "output binding path '{json_path}': recursive descent (..) is not supported \
+                 in the outputBinding profile (RFC 9535 §2.5 feature; use explicit paths instead)"
+            )));
+        }
+
         if let Some(next) = cursor.strip_prefix('.') {
             cursor = next;
             if cursor.is_empty() {
@@ -460,7 +594,20 @@ fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError
                     "output binding path '{json_path}' contains an empty bracket segment"
                 )));
             }
-            let segment = if let Some(quoted) = token
+
+            // Reject filter expressions.
+            if token.starts_with('?') {
+                return Err(RuntimeError::Integration(format!(
+                    "output binding path '{json_path}': filter expressions ([?(...)]) are not \
+                     supported in the outputBinding profile (RFC 9535 §2.6 feature; \
+                     use a dedicated binding or post-process the response)"
+                )));
+            }
+
+            let segment = if token == "*" {
+                // Wildcard: [*]
+                JsonPathSegment::Wildcard
+            } else if let Some(quoted) = token
                 .strip_prefix('\'')
                 .and_then(|inner| inner.strip_suffix('\''))
                 .or_else(|| {
@@ -468,11 +615,17 @@ fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError
                         .strip_prefix('"')
                         .and_then(|inner| inner.strip_suffix('"'))
                 }) {
+                // Quoted key: ['key'] or ["key"]
                 JsonPathSegment::Key(unescape_json_path_key(quoted))
+            } else if token.contains(':') {
+                // Slice: [start:end] or [start:end:step]
+                parse_slice_token(token, json_path)?
             } else {
-                let index = token.parse::<usize>().map_err(|error| {
+                // Plain integer index: [n]
+                let index = token.parse::<usize>().map_err(|_| {
                     RuntimeError::Integration(format!(
-                        "output binding path '{json_path}' contains invalid array index '{token}': {error}"
+                        "output binding path '{json_path}' contains invalid bracket segment \
+                         '{token}': expected an integer index, a quoted key, '*', or a slice"
                     ))
                 })?;
                 JsonPathSegment::Index(index)
@@ -488,6 +641,31 @@ fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, RuntimeError
     }
 
     Ok(segments)
+}
+
+/// Parse a slice token of the form `start:end` or `start:end:step`.
+fn parse_slice_token(token: &str, json_path: &str) -> Result<JsonPathSegment, RuntimeError> {
+    let parts: Vec<&str> = token.splitn(3, ':').collect();
+    let parse_opt = |s: &str| -> Result<Option<i64>, RuntimeError> {
+        if s.is_empty() {
+            Ok(None)
+        } else {
+            s.parse::<i64>().map(Some).map_err(|_| {
+                RuntimeError::Integration(format!(
+                    "output binding path '{json_path}' contains invalid slice bound '{s}': \
+                     expected an integer or empty"
+                ))
+            })
+        }
+    };
+    let start = parse_opt(parts[0])?;
+    let end = parse_opt(parts[1])?;
+    let step = if parts.len() == 3 {
+        parse_opt(parts[2])?
+    } else {
+        None
+    };
+    Ok(JsonPathSegment::Slice { start, end, step })
 }
 
 fn unescape_json_path_key(key: &str) -> String {
@@ -549,4 +727,190 @@ fn set_case_state_path(
     })?;
     object.insert((*leaf).to_string(), value);
     Ok(())
+}
+
+#[cfg(test)]
+mod jsonpath_tests {
+    use super::{JsonPathSegment, parse_json_path, resolve_json_path};
+    use serde_json::json;
+
+    // --- Parser tests ---
+
+    #[test]
+    fn parse_root_only() {
+        assert_eq!(parse_json_path("$").unwrap(), vec![]);
+    }
+
+    #[test]
+    fn parse_member_dot() {
+        assert_eq!(
+            parse_json_path("$.foo").unwrap(),
+            vec![JsonPathSegment::Key("foo".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_member_bracket_single_quote() {
+        assert_eq!(
+            parse_json_path("$['foo']").unwrap(),
+            vec![JsonPathSegment::Key("foo".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_member_bracket_double_quote() {
+        assert_eq!(
+            parse_json_path("$[\"foo\"]").unwrap(),
+            vec![JsonPathSegment::Key("foo".to_string())]
+        );
+    }
+
+    #[test]
+    fn parse_integer_index() {
+        assert_eq!(
+            parse_json_path("$.items[0]").unwrap(),
+            vec![
+                JsonPathSegment::Key("items".to_string()),
+                JsonPathSegment::Index(0)
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_wildcard() {
+        assert_eq!(
+            parse_json_path("$.items[*]").unwrap(),
+            vec![
+                JsonPathSegment::Key("items".to_string()),
+                JsonPathSegment::Wildcard
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_slice_start_end() {
+        assert_eq!(
+            parse_json_path("$.items[0:2]").unwrap(),
+            vec![
+                JsonPathSegment::Key("items".to_string()),
+                JsonPathSegment::Slice {
+                    start: Some(0),
+                    end: Some(2),
+                    step: None
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_slice_open_start() {
+        assert_eq!(
+            parse_json_path("$.items[-2:]").unwrap(),
+            vec![
+                JsonPathSegment::Key("items".to_string()),
+                JsonPathSegment::Slice {
+                    start: Some(-2),
+                    end: None,
+                    step: None
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_slice_with_step() {
+        assert_eq!(
+            parse_json_path("$.items[::2]").unwrap(),
+            vec![
+                JsonPathSegment::Key("items".to_string()),
+                JsonPathSegment::Slice {
+                    start: None,
+                    end: None,
+                    step: Some(2)
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_rejects_recursive_descent() {
+        let err = parse_json_path("$..deep").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("recursive descent"),
+            "expected recursive descent error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_rejects_filter_expression() {
+        let err = parse_json_path("$[?(@.x>0)]").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("filter expressions"),
+            "expected filter expression error, got: {msg}"
+        );
+    }
+
+    // --- Resolver tests ---
+
+    #[test]
+    fn wildcard_last_segment_returns_array_elements() {
+        let data = json!({ "items": [1, 2, 3] });
+        let result = resolve_json_path(&data, "$.items[*]").unwrap();
+        assert_eq!(result, json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn wildcard_then_key_fans_out() {
+        let data = json!({
+            "items": [
+                { "name": "a" },
+                { "name": "b" }
+            ]
+        });
+        let result = resolve_json_path(&data, "$.items[*].name").unwrap();
+        assert_eq!(result, json!(["a", "b"]));
+    }
+
+    #[test]
+    fn slice_start_end() {
+        let data = json!({ "items": [10, 20, 30, 40] });
+        let result = resolve_json_path(&data, "$.items[0:2]").unwrap();
+        assert_eq!(result, json!([10, 20]));
+    }
+
+    #[test]
+    fn slice_negative_start_open_end() {
+        let data = json!({ "items": [10, 20, 30, 40] });
+        let result = resolve_json_path(&data, "$.items[-2:]").unwrap();
+        assert_eq!(result, json!([30, 40]));
+    }
+
+    #[test]
+    fn slice_step_two() {
+        let data = json!({ "items": [10, 20, 30, 40] });
+        let result = resolve_json_path(&data, "$.items[::2]").unwrap();
+        assert_eq!(result, json!([10, 30]));
+    }
+
+    #[test]
+    fn resolver_rejects_recursive_descent_at_parse() {
+        let data = json!({ "deep": { "value": 1 } });
+        let err = resolve_json_path(&data, "$..deep").unwrap_err();
+        assert!(
+            err.to_string().contains("recursive descent"),
+            "expected recursive descent error"
+        );
+    }
+
+    #[test]
+    fn resolver_rejects_filter_expression_at_parse() {
+        let data = json!([{ "x": 1 }]);
+        let err = resolve_json_path(&data, "$[?(@.x>0)]").unwrap_err();
+        assert!(
+            err.to_string().contains("filter expressions"),
+            "expected filter expressions error"
+        );
+    }
 }

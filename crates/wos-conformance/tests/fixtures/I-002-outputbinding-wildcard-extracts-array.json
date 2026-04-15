@@ -1,0 +1,95 @@
+{
+  "id": "I-002-outputbinding-wildcard-extracts-array",
+  "rule": "I-002",
+  "description": "An outputBinding JSONPath using a wildcard ([*]) followed by a member access (.name) fans out over all array elements and collects the results into a new array. When the service returns { \"items\": [{\"name\": \"a\"}, {\"name\": \"b\"}, {\"name\": \"c\"}] }, the binding '$.items[*].name' extracts [\"a\", \"b\", \"c\"] and writes it to the case state. This validates that the RFC 9535 wildcard profile is correctly implemented in the runtime resolver.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:I-002-wildcard-binding",
+      "version": "1.0.0",
+      "title": "I-002 Wildcard Binding Extraction",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "fetch",
+                "target": "loaded",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "nameService"
+                  }
+                ]
+              }
+            ]
+          },
+          "loaded": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "done", "target": "complete" }
+            ]
+          },
+          "complete": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "items": { "type": "array" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:I-002-wildcard-binding",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "nameService": {
+          "type": "request-response",
+          "description": "Returns an array of named items; wildcarded outputBinding extracts names",
+          "outputBinding": {
+            "caseFile.items": "$.items[*].name"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "service_response": {
+    "items": [
+      { "name": "a" },
+      { "name": "b" },
+      { "name": "c" }
+    ]
+  },
+  "event_sequence": [
+    { "event": "fetch", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "loaded", "event": "fetch" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "dataMapping",
+      "data": { "serviceRef": "nameService", "updatedPaths": ["caseFile.items"] }
+    }
+  ]
+}
