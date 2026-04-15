@@ -113,8 +113,14 @@ pub struct IntegrationBinding {
     #[serde(default)]
     pub idempotency_key_expression: Option<String>,
 
-    /// Extension data.
-    #[serde(default)]
+    /// Extension data — collects all unrecognized JSON fields.
+    ///
+    /// CloudEvents binding handlers read metadata from this map:
+    /// - `"source"` — CE `source` attribute for outbound events
+    /// - `"eventType"` — CE `type` attribute for outbound events
+    /// - `"subject"` — explicit CE `subject` override (default: `{instanceId}:{bindingId}:{invocationId}`)
+    /// - `"expectedUntil"` — ISO 8601 deadline for callback resolution
+    #[serde(flatten)]
     pub extensions: HashMap<String, serde_json::Value>,
 }
 

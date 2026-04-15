@@ -451,6 +451,7 @@ impl WosRuntime {
             governance_state: None,
             volume_counters: None,
             fired_milestones: Default::default(),
+            pending_callbacks: Default::default(),
             created_at: now_iso.clone(),
             updated_at: now_iso.clone(),
             extensions: Default::default(),

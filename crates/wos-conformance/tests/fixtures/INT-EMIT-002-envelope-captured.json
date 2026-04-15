@@ -1,0 +1,81 @@
+{
+  "id": "INT-EMIT-002-envelope-captured",
+  "rule": "INT-EMIT",
+  "description": "The EventEmitted provenance record MUST contain the full CloudEvents 1.0 envelope in its data field. This fixture asserts that id, source, specversion, type, and subject are all present in the provenance data, proving that the handler captures the complete envelope rather than only the data payload.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-EMIT-002",
+      "version": "1.0.0",
+      "title": "INT-EMIT-002 Full Envelope Captured",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "publish",
+                "target": "published",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "eventBus"
+                  }
+                ]
+              }
+            ]
+          },
+          "published": { "type": "final" }
+        }
+      },
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-EMIT-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "eventBus": {
+          "type": "event-emit",
+          "description": "Emit an envelope-rich CloudEvent",
+          "source": "https://example.com/orders",
+          "eventType": "com.example.order.placed"
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "publish", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "published", "event": "publish" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "eventEmitted",
+      "data": {
+        "specversion": "1.0",
+        "source": "https://example.com/orders",
+        "type": "com.example.order.placed"
+      }
+    }
+  ]
+}

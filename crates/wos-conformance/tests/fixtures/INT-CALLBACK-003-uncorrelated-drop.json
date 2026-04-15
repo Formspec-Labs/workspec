@@ -1,0 +1,112 @@
+{
+  "id": "INT-CALLBACK-003-uncorrelated-drop",
+  "rule": "INT-CALLBACK",
+  "description": "An inbound CloudEvent whose subject does not match any pending callback is silently dropped. The handler detects no match in pending_callbacks and returns an empty provenance list. No case-state change occurs. This verifies that unmatched inbound events do not corrupt case state.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-CALLBACK-003",
+      "version": "1.0.0",
+      "title": "INT-CALLBACK-003 Uncorrelated Drop",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" },
+        { "id": "system", "type": "system", "description": "External system" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "fire",
+                "target": "pending",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "callbackSvc"
+                  }
+                ]
+              }
+            ]
+          },
+          "pending": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "unrelatedInbound",
+                "target": "nochange",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "callbackSvc"
+                  }
+                ]
+              }
+            ]
+          },
+          "nochange": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "result": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-CALLBACK-003",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "callbackSvc": {
+          "type": "callback",
+          "description": "Callback binding for uncorrelated-drop test",
+          "source": "urn:wos:runtime",
+          "eventType": "com.example.callback.request",
+          "outputBinding": {
+            "caseFile.result": "$.result"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "fire", "actor": "operator" },
+    {
+      "event": "unrelatedInbound",
+      "actor": "system",
+      "data": {
+        "id": "unrelated-001",
+        "source": "https://unknown.example.com",
+        "specversion": "1.0",
+        "type": "com.example.callback.response",
+        "subject": "some-other-instance:unknownBinding:unknown-cb-99",
+        "data": { "result": "should-not-apply" }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "pending", "event": "fire" },
+    { "from": "pending", "to": "nochange", "event": "unrelatedInbound" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "callbackPending"
+    }
+  ]
+}

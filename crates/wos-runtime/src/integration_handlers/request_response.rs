@@ -231,7 +231,39 @@ pub(crate) fn load_or_invoke_service_result(
 
 // --- Input construction from case state + observed action ---
 
-fn build_integration_input(
+/// Build the CloudEvent `data` payload from a binding's `data_mapping` expressions.
+///
+/// Uses the same FEL evaluation pipeline as `build_integration_input` but reads
+/// from `binding.data_mapping` rather than `binding.input_mapping`. When
+/// `data_mapping` is empty the action's own `data` field is used as-is.
+pub(crate) fn build_event_data_from_binding(
+    binding: &IntegrationBinding,
+    kernel: &KernelDocument,
+    observed: &ObservedAction,
+    instance: &CaseInstance,
+) -> Result<serde_json::Value, RuntimeError> {
+    let mapping = &binding.data_mapping;
+    if mapping.is_empty() {
+        return Ok(observed
+            .action
+            .data
+            .clone()
+            .unwrap_or_else(|| serde_json::json!({})));
+    }
+
+    let mut data = serde_json::Map::new();
+    for (key, expression) in mapping {
+        let value = evaluate_integration_expression(expression, kernel, instance, observed)?;
+        data.insert(key.clone(), value);
+    }
+    Ok(serde_json::Value::Object(data))
+}
+
+/// Build the request body from a binding's `input_mapping` expressions.
+///
+/// Exposed for reuse by event-style handlers that need the same FEL evaluation
+/// pipeline but read from `data_mapping` instead of `input_mapping`.
+pub(crate) fn build_integration_input(
     binding: &IntegrationBinding,
     kernel: &KernelDocument,
     observed: &ObservedAction,
@@ -254,7 +286,7 @@ fn build_integration_input(
     Ok(serde_json::Value::Object(input))
 }
 
-fn evaluate_integration_expression(
+pub(crate) fn evaluate_integration_expression(
     expression: &str,
     kernel: &KernelDocument,
     instance: &CaseInstance,
@@ -338,7 +370,7 @@ fn actor_kind_to_string(kind: wos_core::model::kernel::ActorKind) -> &'static st
     }
 }
 
-fn case_state_map(
+pub(crate) fn case_state_map(
     case_state: &serde_json::Value,
 ) -> Result<HashMap<String, serde_json::Value>, RuntimeError> {
     case_state
@@ -361,7 +393,11 @@ fn value_to_idempotency_key(value: serde_json::Value) -> Result<String, RuntimeE
 
 // --- Output binding: apply service response back to case state ---
 
-fn apply_output_binding(
+/// Apply an output binding map: for each `(case_path, json_path)` entry, resolve
+/// the `json_path` against `output` and write the value into `case_state`.
+///
+/// Exposed for reuse by event-consume and callback handlers.
+pub(crate) fn apply_output_binding(
     case_state: &mut serde_json::Value,
     output_binding: &HashMap<String, String>,
     output: &serde_json::Value,

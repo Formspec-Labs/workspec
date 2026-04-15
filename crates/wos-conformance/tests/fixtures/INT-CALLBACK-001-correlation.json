@@ -1,0 +1,117 @@
+{
+  "id": "INT-CALLBACK-001-correlation",
+  "rule": "INT-CALLBACK",
+  "description": "A callback binding fires outbound, registers a PendingCallback with the computed subject, and then an inbound CloudEvent carrying that exact subject resolves it. This fixture verifies the full correlation lifecycle: CallbackPending provenance is emitted on outbound fire, CallbackReceived provenance is emitted on inbound resolution, and the outputBinding maps the inbound data into case state.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-CALLBACK-001",
+      "version": "1.0.0",
+      "title": "INT-CALLBACK-001 Callback Correlation",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" },
+        { "id": "system", "type": "system", "description": "External system" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "request",
+                "target": "waitingCallback",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "callbackService"
+                  }
+                ]
+              }
+            ]
+          },
+          "waitingCallback": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "callbackReceived",
+                "target": "resolved",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "callbackService"
+                  }
+                ]
+              }
+            ]
+          },
+          "resolved": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "result": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-CALLBACK-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "callbackService": {
+          "type": "callback",
+          "description": "Bidirectional callback binding",
+          "source": "urn:wos:runtime",
+          "eventType": "com.example.callback.request",
+          "outputBinding": {
+            "caseFile.result": "$.result"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "request", "actor": "operator" },
+    {
+      "event": "callbackReceived",
+      "actor": "system",
+      "data": {
+        "id": "resp-001",
+        "source": "https://external.example.com/callback",
+        "specversion": "1.0",
+        "type": "com.example.callback.response",
+        "subject": "conformance-instance:callbackService:callbackService-cb-0",
+        "data": { "result": "success" }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "waitingCallback", "event": "request" },
+    { "from": "waitingCallback", "to": "resolved", "event": "callbackReceived" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "callbackPending",
+      "data": { "subject": "conformance-instance:callbackService:callbackService-cb-0" }
+    },
+    {
+      "recordKind": "callbackReceived",
+      "data": { "correlationSubject": "conformance-instance:callbackService:callbackService-cb-0" }
+    }
+  ]
+}

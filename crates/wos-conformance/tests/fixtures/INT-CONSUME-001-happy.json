@@ -1,0 +1,104 @@
+{
+  "id": "INT-CONSUME-001-happy",
+  "rule": "INT-CONSUME",
+  "description": "An inbound CloudEvent 1.0 envelope arrives via the event data field. The event-consume handler validates ingress, applies the output binding to map the envelope data payload into case state, and emits EventConsumed provenance with the full envelope. This verifies the basic happy path for inbound CloudEvent consumption.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-CONSUME-001",
+      "version": "1.0.0",
+      "title": "INT-CONSUME-001 Event Consume Happy Path",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "system", "type": "system", "description": "External system" }
+      ],
+      "lifecycle": {
+        "initialState": "waiting",
+        "states": {
+          "waiting": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "externalUpdate",
+                "target": "updated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "inboundChannel"
+                  }
+                ]
+              }
+            ]
+          },
+          "updated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "status": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-CONSUME-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "inboundChannel": {
+          "type": "event-consume",
+          "description": "Consume an inbound CloudEvent and map its data into case state",
+          "outputBinding": {
+            "caseFile.status": "$.status"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "externalUpdate",
+      "actor": "system",
+      "data": {
+        "id": "evt-external-001",
+        "source": "https://external.example.com/service",
+        "specversion": "1.0",
+        "type": "com.external.status.updated",
+        "subject": "order/42",
+        "data": {
+          "status": "approved"
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "waiting", "to": "updated", "event": "externalUpdate" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "dataMapping",
+      "data": { "serviceRef": "inboundChannel", "updatedPaths": ["caseFile.status"] }
+    },
+    {
+      "recordKind": "eventConsumed",
+      "data": {
+        "id": "evt-external-001",
+        "specversion": "1.0",
+        "source": "https://external.example.com/service",
+        "type": "com.external.status.updated"
+      }
+    }
+  ]
+}

@@ -1,11 +1,18 @@
-// Rust guideline compliant 2026-02-21
+// Rust guideline compliant 2026-04-14
 
 //! Integration binding kind handlers.
 //!
 //! Each variant of `IntegrationBindingKind` has a corresponding handler that
 //! implements `IntegrationBindingHandler`. The runtime dispatches to the correct
 //! handler via `dispatch_integration_binding`.
+//!
+//! NB.3 adds three CloudEvents handlers: `event_emit`, `event_consume`, and
+//! `callback`. All three use the CloudEvents 1.0 envelope types from
+//! `crate::cloudevents`.
 
+pub(crate) mod callback;
+pub(crate) mod event_consume;
+pub(crate) mod event_emit;
 pub(crate) mod request_response;
 
 use wos_core::eval::ObservedAction;
@@ -46,9 +53,9 @@ pub(crate) trait IntegrationBindingHandler {
 
 /// Dispatch an integration binding to the correct handler by kind.
 ///
-/// Today only `RequestResponse` is implemented. Unsupported kinds return
-/// `RuntimeError::UnsupportedBindingKind` so callers get a structured error
-/// with the enum variant rather than a free-form string.
+/// `RequestResponse`, `EventEmit`, `EventConsume`, and `Callback` are
+/// implemented. Remaining kinds (`ArazzoSequence`, `Tool`, `PolicyEngine`)
+/// return `RuntimeError::UnsupportedBindingKind` (NB.4 work).
 pub(crate) fn dispatch_integration_binding(
     ctx: &InvocationContext<'_>,
     record: &mut RuntimeRecord,
@@ -64,6 +71,15 @@ pub(crate) fn dispatch_integration_binding(
                 ctx, record, kernel, observed, service_ref, binding, now_iso,
             )
         }
+        IntegrationBindingKind::EventEmit => event_emit::EventEmitHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
+        IntegrationBindingKind::EventConsume => event_consume::EventConsumeHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
+        IntegrationBindingKind::Callback => callback::CallbackHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
         other => Err(RuntimeError::UnsupportedBindingKind(other)),
     }
 }

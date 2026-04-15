@@ -128,6 +128,13 @@ pub struct ObservedAction {
     pub actor_id: Option<String>,
     /// The concrete action definition.
     pub action: Action,
+    /// Runtime event payload that triggered this action, if any.
+    ///
+    /// For transition actions this is the triggering event's `data` field.
+    /// For onEntry / onExit actions this is the event data that caused the
+    /// state to be entered or exited. Integration handlers (event-consume,
+    /// callback inbound) read the CloudEvent envelope from this field.
+    pub event_data: Option<serde_json::Value>,
 }
 
 /// Errors from the evaluation algorithm.
@@ -459,7 +466,7 @@ impl Evaluator {
 
                 // Execute transition actions.
                 for action in &transition.actions {
-                    self.execute_action_in_state(action, actor, &active)?;
+                    self.execute_action_in_state(action, actor, &active, event_data)?;
                 }
 
                 // Update configuration.
@@ -650,7 +657,7 @@ impl Evaluator {
         self.execute_on_exit_actions(source, actor, event_data)?;
 
         for action in actions {
-            self.execute_action_in_state(action, actor, source)?;
+            self.execute_action_in_state(action, actor, source, event_data)?;
         }
 
         // Remove source and all its descendant states from the configuration.
@@ -678,6 +685,7 @@ impl Evaluator {
         action: &Action,
         actor: Option<&str>,
         lifecycle_state: &str,
+        event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
         match action.action {
             ActionKind::SetData => {
@@ -758,6 +766,7 @@ impl Evaluator {
             lifecycle_state: lifecycle_state.to_string(),
             actor_id: actor.map(String::from),
             action: action.clone(),
+            event_data: event_data.cloned(),
         });
 
         Ok(())
@@ -788,8 +797,7 @@ impl Evaluator {
             };
             self.provenance
                 .push(ProvenanceRecord::on_entry(state_id, action_name));
-            let _event_data = event_data;
-            self.execute_action_in_state(action, actor, state_id)?;
+            self.execute_action_in_state(action, actor, state_id, event_data)?;
         }
         Ok(())
     }
@@ -819,8 +827,7 @@ impl Evaluator {
             };
             self.provenance
                 .push(ProvenanceRecord::on_exit(state_id, action_name));
-            let _event_data = event_data;
-            self.execute_action_in_state(action, actor, state_id)?;
+            self.execute_action_in_state(action, actor, state_id, event_data)?;
         }
         Ok(())
     }

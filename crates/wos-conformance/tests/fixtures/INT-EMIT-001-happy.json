@@ -1,0 +1,86 @@
+{
+  "id": "INT-EMIT-001-happy",
+  "rule": "INT-EMIT",
+  "description": "An event-emit binding fires when the transition action executes. The handler builds a CloudEvents 1.0 envelope and emits EventEmitted provenance with the full envelope in data. This verifies the basic happy path: binding dispatches, service stub is called, and EventEmitted provenance is present.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-EMIT-001",
+      "version": "1.0.0",
+      "title": "INT-EMIT-001 Event Emit Happy Path",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "processing",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "notificationBus"
+                  }
+                ]
+              }
+            ]
+          },
+          "processing": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "done", "target": "complete" }
+            ]
+          },
+          "complete": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "submitted": { "type": "boolean" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-EMIT-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "notificationBus": {
+          "type": "event-emit",
+          "description": "Emit a CloudEvent to the notification bus",
+          "source": "urn:wos:runtime",
+          "eventType": "com.example.workflow.submitted"
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "submit", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "processing", "event": "submit" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "eventEmitted"
+    }
+  ]
+}

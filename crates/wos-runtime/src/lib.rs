@@ -7,6 +7,7 @@
 //! lives in separate adapter crates.
 
 pub mod binding;
+pub mod cloudevents;
 pub mod companion;
 pub mod integration;
 pub mod integration_handlers;

@@ -77,9 +77,33 @@ pub struct CaseInstance {
     #[serde(default, skip_serializing_if = "std::collections::HashSet::is_empty")]
     pub fired_milestones: std::collections::HashSet<String>,
 
+    /// Pending callback registrations awaiting inbound CloudEvents (NB.3).
+    ///
+    /// Keyed by the CloudEvents `subject` string used for correlation:
+    /// `{instanceId}:{bindingId}:{invocationId}`. When a matching inbound
+    /// event arrives its entry is removed and a `CallbackReceived` provenance
+    /// record is emitted.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub pending_callbacks: HashMap<String, PendingCallback>,
+
     /// Extension data (keys prefixed with `x-`).
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extensions: HashMap<String, serde_json::Value>,
+}
+
+/// A callback registration that is waiting for a matching inbound CloudEvent (NB.3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingCallback {
+    /// Stable invocation identifier for this callback firing.
+    pub invocation_id: String,
+
+    /// Binding identifier that registered this callback.
+    pub binding_id: String,
+
+    /// ISO 8601 deadline after which this callback is considered expired, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_until: Option<String>,
 }
 
 /// Instance status (Runtime Companion S3.4).

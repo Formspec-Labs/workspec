@@ -1,0 +1,121 @@
+{
+  "id": "INT-CALLBACK-002-pending-to-received",
+  "rule": "INT-CALLBACK",
+  "description": "Full callback lifecycle: outbound firing emits CallbackPending with the correlation subject; inbound event with the same subject triggers CallbackReceived; after resolution the pending_callbacks map is empty. Also verifies that the DataMapping record is emitted when the output binding applies the inbound data to case state.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-CALLBACK-002",
+      "version": "1.0.0",
+      "title": "INT-CALLBACK-002 Pending to Received Lifecycle",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" },
+        { "id": "system", "type": "system", "description": "External system" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "fire",
+                "target": "pending",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "webhookBridge"
+                  }
+                ]
+              }
+            ]
+          },
+          "pending": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "webhookInbound",
+                "target": "done",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "webhookBridge"
+                  }
+                ]
+              }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "confirmed": { "type": "boolean" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-CALLBACK-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "webhookBridge": {
+          "type": "callback",
+          "description": "Webhook callback binding for outbound request / inbound response",
+          "source": "urn:wos:runtime",
+          "eventType": "com.example.webhook.request",
+          "outputBinding": {
+            "caseFile.confirmed": "$.confirmed"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "fire", "actor": "operator" },
+    {
+      "event": "webhookInbound",
+      "actor": "system",
+      "data": {
+        "id": "wh-resp-001",
+        "source": "https://webhook.example.com",
+        "specversion": "1.0",
+        "type": "com.example.webhook.response",
+        "subject": "conformance-instance:webhookBridge:webhookBridge-cb-0",
+        "data": { "confirmed": true }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "pending", "event": "fire" },
+    { "from": "pending", "to": "done", "event": "webhookInbound" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "callbackPending",
+      "data": { "bindingId": "webhookBridge" }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": { "integrationType": "callback", "updatedPaths": ["caseFile.confirmed"] }
+    },
+    {
+      "recordKind": "callbackReceived",
+      "data": { "correlationSubject": "conformance-instance:webhookBridge:webhookBridge-cb-0" }
+    }
+  ]
+}

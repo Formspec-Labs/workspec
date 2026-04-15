@@ -1,0 +1,85 @@
+{
+  "id": "INT-CONSUME-002-missing-id-rejected",
+  "rule": "INT-CONSUME",
+  "description": "An inbound CloudEvent with an empty id field MUST be rejected at the binding boundary with an EventIngressInvalid error. The runtime propagates this as an Integration error. No case-state update occurs. This fixture is exercised via a Rust unit test (int_consume_002_empty_id_rejected) that asserts run_fixture returns ConformanceError::Engine containing 'EventIngressInvalid'.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-CONSUME-002",
+      "version": "1.0.0",
+      "title": "INT-CONSUME-002 Empty ID Rejected",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "system", "type": "system", "description": "External system" }
+      ],
+      "lifecycle": {
+        "initialState": "waiting",
+        "states": {
+          "waiting": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "externalUpdate",
+                "target": "updated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "inboundChannel"
+                  }
+                ]
+              }
+            ]
+          },
+          "updated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "status": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-CONSUME-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "inboundChannel": {
+          "type": "event-consume",
+          "description": "Consume an inbound CloudEvent",
+          "outputBinding": {
+            "caseFile.status": "$.status"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "externalUpdate",
+      "actor": "system",
+      "data": {
+        "id": "",
+        "source": "https://external.example.com/service",
+        "specversion": "1.0",
+        "type": "com.external.status.updated",
+        "data": { "status": "approved" }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": []
+}

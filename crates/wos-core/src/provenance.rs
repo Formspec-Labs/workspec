@@ -159,6 +159,27 @@ pub enum ProvenanceKind {
     ///
     /// `data` carries `{"milestoneId": "<id>"}`.
     MilestoneFired,
+
+    // ── CloudEvents bindings (Integration Profile NB.3) ───────────
+    /// An outbound CloudEvent was emitted by an `event-emit` binding.
+    ///
+    /// `data` carries the full CloudEvent envelope (all CE attributes + `data`).
+    EventEmitted,
+
+    /// An inbound CloudEvent was successfully consumed by an `event-consume` binding.
+    ///
+    /// `data` carries the full CloudEvent envelope (all CE attributes + `data`).
+    EventConsumed,
+
+    /// An inbound CloudEvent resolved a pending callback registered by a `callback` binding.
+    ///
+    /// `data` carries the full CloudEvent envelope and the `subject` used for correlation.
+    CallbackReceived,
+
+    /// A `callback` binding fired and is waiting for a matching inbound CloudEvent.
+    ///
+    /// `data` carries `{"subject": "<subject>", "bindingId": "<id>", "expectedUntil": "<iso>"}`.
+    CallbackPending,
 }
 
 /// A single provenance record.
