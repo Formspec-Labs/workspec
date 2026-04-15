@@ -1,10 +1,10 @@
 # WOS Verification Matrix
 
-196 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
+197 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)           36 rules                  │
+│  Tier 1: wos-lint (static)           37 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -263,6 +263,16 @@
 
 ---
 
+## Integration Profile
+
+| ID | Section | Rule | Why schema can't enforce | Tier | Category | Tested? |
+|---|---|---|---|---|---|---|
+| I-001 | Integration §3.3.1 | `outputBinding` JSONPath expressions MUST NOT use filter expressions (`[?(...)]`) or recursive descent (`..`). | JSONPath is an opaque string in the schema; only a parser can detect unsupported constructs. | T1 | integration-profile | T1 |
+
+**Integration Profile:** 1 constraint — 1 T1, 0 T2, 0 T3. **Tested: 1 of 1** (1 T1).
+
+---
+
 ## Summary
 
 | Layer | Total | T1 (static) | T2 (cross-doc + AST) | T3 (dynamic) | Tested | Coverage |
@@ -270,7 +280,8 @@
 | Kernel + Lifecycle Detail + Correspondence Metadata | 49 | 17 | 6 | 26 | 49 | 100% |
 | Governance + Sidecars | 65 | 14 | 29 | 22 | 65 | 100% |
 | AI + Advanced | 82 | 5 | 20 | 57 | 82 | 100% |
-| **Total** | **196** | **36** | **55** | **105** | **196** | **100%** |
+| Integration Profile | 1 | 1 | 0 | 0 | 1 | 100% |
+| **Total** | **197** | **37** | **55** | **105** | **197** | **100%** |
 
 > **Note on AI-023 coverage:** The T2 test for AI-023 is a conservative global approximation (BFS reachability from initial to final state excluding agent-only states). Per-invocation compliance — verifying that each individual agent state has an alternative non-agent path — requires manual review of the lifecycle topology.
 
@@ -278,7 +289,7 @@
 
 | Test type | File | Rules covered |
 | --------- | ---- | ------------- |
-| T1 | `crates/wos-lint/tests/tier1_rules.rs` | 36 (K-001..K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001) |
+| T1 | `crates/wos-lint/tests/tier1_rules.rs` + `crates/wos-lint/tests/I_001.rs` | 37 (K-001..K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037..G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001, I-001) |
 | T2 | `crates/wos-lint/tests/tier2_rules.rs` | 44 (K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046, AI-056, AG-008, AG-012, AG-017, DM-002, VR-003) |
 | AST | `crates/wos-lint/src/rules/fel_analysis.rs` | 11 (K-012, K-013, K-017, K-019, G-042, G-043, AI-024, AG-010, AG-011, AG-013, AG-014) |
 | E2E | `crates/wos-conformance/tests/*.rs` | 105 T3 rules plus K-008 T1 join coverage; fixture, profile, processor-claim, and stub-integration tests pass through the runtime-backed conformance harness |
@@ -287,7 +298,7 @@
 
 ## Verification Tools
 
-### Tier 1: `wos-lint` (36 rules)
+### Tier 1: `wos-lint` (37 rules)
 
 Single-document structural checks. Input: one JSON document + its `$wos*` type marker. Output: diagnostics with severity, path, rule ID. No dependencies beyond the document itself.
 
@@ -318,6 +329,8 @@ Single-document structural checks. Input: one JSON document + its `$wos*` type m
 **Calendar validity (2):** G-058, G-059 — holiday entry has exactly one of date/rule, operating hours end strictly after start.
 
 **Notification validity (2):** G-062, G-065 — adverse-decision templates cover required sections, section ids unique within template.
+
+**Integration profile (1):** I-001 — outputBinding JSONPath must not use filter expressions or recursive descent (parsed at definition load).
 
 ### Tier 2: `wos-lint --project` (55 rules)
 
@@ -377,13 +390,13 @@ Audit date: 2026-04-14. Cross-referenced against all test files in `crates/wos-l
 
 | Metric | Count |
 |--------|-------|
-| Total rules in matrix | 196 |
-| Rules with at least one test | 196 |
+| Total rules in matrix | 197 |
+| Rules with at least one test | 197 |
 | Rules with **no** test | 0 |
 
-### Tested rule inventory (196 rules)
+### Tested rule inventory (197 rules)
 
-**From `tier1_rules.rs` (36 rules):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001.
+**From `tier1_rules.rs` (36 rules) + `I_001.rs` (1 rule):** K-001, K-002, K-003, K-004, K-005, K-006, K-007, K-008, K-009, K-014, K-015, K-021, K-022, K-029, K-030, K-048, CM-001, G-037, G-038, G-039, G-044, G-045, G-047, G-048, G-050, G-055, G-057, G-058, G-059, G-062, G-065, AI-041, AI-049, DM-001, EQ-001, I-001.
 
 **From `tier2_rules.rs` (44 rules):** K-010, K-037, G-001, G-003, G-004, G-005, G-008, G-009, G-011, G-014, G-015, G-022, G-023, G-024, G-027, G-028, G-029, G-031, G-033, G-034, G-035, G-036, G-040, G-041, G-046, G-053, G-056, G-060, G-063, AI-007, AI-018, AI-020, AI-023, AI-026, AI-031, AI-042, AI-043, AI-046 (cross-doc), AI-056, AG-008, AG-012, AG-017, DM-002, VR-003.
 

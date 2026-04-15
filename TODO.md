@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-14
-**Counts:** 18 specs, 18 schemas, 41 document fixtures + 102 conformance fixtures (0 T3 red, 102 green), 5 crates, 196 lint rules (196 tested, 0 untested)
+**Counts:** 18 specs, 18 schemas, 41 document fixtures + 103 conformance fixtures (0 T3 red, 103 green), 5 crates, 197 lint rules (197 tested, 0 untested)
 
 **Links:** [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) · [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs implementation) · [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
 
@@ -23,7 +23,7 @@ Finish these before binding WOS to an external execution engine or calling a dem
   - `arazzo-sequence` — model each step as its own `invokeService` invocation with step-level provenance, not one monolithic record. Cross-step state lives in WOS (not the Arazzo runner) so pause/resume across the sequence survives restart.
   - `tool` — reuse the `invokeService` request/response contract and version-pinning discipline; no parallel contract. Tool calls feed the same deontic / autonomy / confidence pipeline as other service invocations.
   - `policy-engine` — normalize every engine's output to `{decision: allow|deny|indeterminate, reasons: [...], obligations: [...]}` at the binding boundary before it enters provenance. Pin `indeterminate` semantics now so downstream audit tools do not learn engine-specific shapes.
-- [ ] **Integration Profile output binding** — Pin an explicit **RFC 9535 profile** for `outputBinding`: member access, index, wildcard, slices only. Exclude filter expressions (`[?()]`) and recursive descent (`..`) until a concrete binding justifies them. Lint at definition load; grow the profile backwards-compatibly when needed. Rationale: predictability and static analysability over power; full JSONPath would introduce a second expression language inside binding documents and complicate replay/provenance.
+- [x] **Integration Profile output binding** — RFC 9535 profile pinned: member access, index, wildcard, slices supported; filter expressions and recursive descent rejected at lint time (I-001) and rejected at parse time in resolver. Spec text in Integration Profile §3.3.1. (NB.2 complete)
 - [ ] **Business Calendar SLA** — Consume `wos-business-calendar` for Governance S10.3 SLA deadlines; schema done; **runtime integration** pending. Compute deadlines **lazily at check time**, not eagerly at case creation, so calendar updates (holidays, business-day changes) shift future deadlines. Snapshot `calendarVersion` at each evaluation; do not cache computed deadlines across calendar-version changes.
 
 **Coprocessor version discipline** — Validate that the Formspec path matches pinned-definition semantics.

@@ -158,6 +158,26 @@ All integration binding types share the following properties:
 | `idempotencyKeyExpression` | string (FEL) | OPTIONAL | FEL expression evaluated against the case state to produce an idempotency key. Maps to the kernel's `idempotencyKey` (Kernel S9.3). |
 | `extensions` | object | OPTIONAL | Extension data. Property names MUST begin with `x-`. |
 
+### 3.3.1 outputBinding JSONPath Profile
+
+`outputBinding` values are JSON Path expressions into the service response. This specification pins an explicit **RFC 9535 subset** for all `outputBinding` path expressions.
+
+**Supported constructs:**
+
+- **Member access** — `.key`, `['key']`, `["key"]` (including quoted keys with backslash-escape)
+- **Index** — `[n]` (zero-based non-negative integer)
+- **Wildcard** — `[*]` (fans out over all array elements or object values; subsequent segments apply to each element and results are collected into an array)
+- **Slice** — `[start:end]` and `[start:end:step]` (Python-style; negative indices count from the end; open bounds are allowed via `[start:]`, `[:end]`, `[::step]`)
+
+**Excluded constructs:**
+
+- **Recursive descent** — `..` (RFC 9535 §2.5) is NOT supported. Rationale: recursive descent can match nodes at unpredictable depths, making provenance records non-deterministic and complicating replay verification.
+- **Filter expressions** — `[?(...)]` (RFC 9535 §2.6) are NOT supported. Rationale: filter expressions introduce a second expression language (distinct from FEL) inside binding documents, making static analysis and lint-time validation significantly harder.
+
+**Enforcement:** A WOS processor MUST reject any Integration Profile Document whose `outputBinding` values use unsupported constructs at definition load time. This is a lint-time error (rule I-001 in the verification matrix), not a runtime surprise. If a future binding genuinely requires filter expressions or recursive descent, the outputBinding profile MUST be extended via a dedicated ADR rather than silently tolerating the feature.
+
+**Forward compatibility note:** The profile is designed to grow backwards-compatibly. Adding new supported constructs does not require existing profiles to change. Removing a supported construct is a breaking change and requires a new major version of this specification.
+
 ### 3.4 Request-Response Bindings
 
 A `request-response` binding defines a synchronous HTTP service invocation.
