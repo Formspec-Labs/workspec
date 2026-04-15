@@ -191,6 +191,17 @@
         "intent": "Declares the semantics for each type of case hold -- expected duration, resume trigger, timeout behavior"
       }
     },
+    "schemaUpgrade": {
+      "type": "object",
+      "description": "Schema upgrade lifecycle operation (S2.9).",
+      "properties": {
+        "priorVersion": { "type": "string" },
+        "newVersion": { "type": "string" },
+        "migrationMechanism": { "type": "string", "enum": ["formspec-changelog", "custom-map", "declared-equivalence"] },
+        "scope": { "type": "string", "enum": ["instance", "workflow", "tenant"] }
+      },
+      "required": ["priorVersion", "newVersion", "migrationMechanism", "scope"]
+    },
     "extensions": {
       "type": "object",
       "propertyNames": {

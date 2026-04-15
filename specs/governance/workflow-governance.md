@@ -79,6 +79,20 @@ Two profiles are defined:
 
 **Workflow Governance Complete.** Basic conformance plus: data validation pipelines (S5), structured audit (S6), quality controls (S7), rejection and remediation policies (S8), task management (S10), delegation of authority (S11), typed hold policies (S12), and temporal parameter resolution (S13).
 
+### 2.9 Schema Upgrade as Named Lifecycle Operation
+
+A **schema upgrade** is an explicit migration of a workflow instance (or of referenced Formspec Definitions) to a newer definition version. Schema upgrades are named lifecycle operations distinct from ordinary instance migration.
+
+A schema upgrade MUST:
+
+- Be recorded as a canonical fact in the Facts tier.
+- Declare the prior definition version and the new definition version.
+- Declare the migration mechanism (Formspec Changelog reference, custom migration map, or declared equivalence).
+- Preserve enough interpretation material to verify historical records under the definition version in effect when they were produced (cf. Kernel S9.6).
+- NOT silently reinterpret historical records under newer rules.
+
+Schema upgrades MAY apply to an individual instance, to all instances of a workflow, or to all instances within a tenant scope. The scope MUST be declared.
+
 ---
 
 ## 3. Due Process
