@@ -636,6 +636,76 @@ fn int_policy_004_opa_adapter_normalizes_result_true_to_allow() {
     assert_eq!(data.get("reasonsCount").and_then(|v| v.as_u64()), Some(1));
 }
 
+/// INT-POLICY-005: unknown engineType is rejected — the permissive wildcard fallback is gone.
+#[test]
+fn int_policy_005_unknown_engine_type_is_rejected() {
+    let fixture_json = include_str!("fixtures/INT-POLICY-005-unknown-engine-type-rejected.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir);
+
+    match result {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("unknown engineType") || msg.contains("xacml"),
+                "expected 'unknown engineType' or engine name in error, got: {msg}"
+            );
+        }
+        Ok(ok) => {
+            // If run_fixture did not propagate the engine error, the fixture must
+            // have produced no PolicyDecision provenance — the binding must have failed.
+            let policy_count = ok
+                .provenance
+                .iter()
+                .filter(|p| p.record_kind == ProvenanceKind::PolicyDecision)
+                .count();
+            assert_eq!(
+                policy_count, 0,
+                "unknown engineType must not produce a PolicyDecision record"
+            );
+        }
+    }
+}
+
+/// INT-CALLBACK-003 (tightened): verify the exact provenance counts after an uncorrelated drop.
+///
+/// The fixture fires outbound (→ 1 CallbackPending) then delivers an uncorrelated inbound.
+/// After both events: CallbackPending count == 1 and CallbackReceived count == 0.
+#[test]
+fn int_callback_003_provenance_counts_after_uncorrelated_drop() {
+    let fixture_json = include_str!("fixtures/INT-CALLBACK-003-uncorrelated-drop.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-CALLBACK-003 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let pending_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == ProvenanceKind::CallbackPending)
+        .count();
+    assert_eq!(
+        pending_count, 1,
+        "exactly one CallbackPending expected (from the outbound fire only, not from the uncorrelated inbound)"
+    );
+
+    let received_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == ProvenanceKind::CallbackReceived)
+        .count();
+    assert_eq!(
+        received_count, 0,
+        "uncorrelated inbound must not produce CallbackReceived provenance"
+    );
+}
+
 #[test]
 fn k024_step_result_persistence_comes_from_executed_service_invocation() {
     let fixture_json = include_str!("fixtures/k-024-persist-before-advance.json");

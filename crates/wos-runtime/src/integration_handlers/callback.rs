@@ -22,9 +22,17 @@
 //!
 //! Fixture event-sequence entries that represent inbound callback responses
 //! place the full CloudEvent JSON in the `data` field of the event entry,
-//! exactly as event-consume does. The handler distinguishes outbound vs.
-//! inbound by checking whether `pending_callbacks` already contains the
-//! event's subject.
+//! exactly as event-consume does. The handler uses a three-way classification:
+//!
+//! - **Outbound** — `observed.event_data` contains no CloudEvent envelope
+//!   (i.e., the `id` field is absent or not a CloudEvent). The binding fires
+//!   outbound and registers a `PendingCallback`.
+//! - **InboundCorrelated** — `observed.event_data` contains a CloudEvent
+//!   whose `subject` matches a key in `pending_callbacks`. The pending entry
+//!   is resolved and `CallbackReceived` is emitted.
+//! - **InboundUncorrelated** — `observed.event_data` contains a CloudEvent
+//!   whose `subject` does NOT match any pending entry. The event is silently
+//!   dropped: no service invocation, no new `PendingCallback`, no provenance.
 
 use wos_core::eval::ObservedAction;
 use wos_core::instance::PendingCallback;
@@ -36,10 +44,20 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::IntegrationBindingHandler;
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 use super::request_response::{
     InvocationContext, apply_output_binding, build_event_data_from_binding,
 };
+
+/// Three-way classification of a callback binding invocation.
+enum CallbackInvocationKind {
+    /// No CloudEvent in the action data — fire an outbound request.
+    Outbound,
+    /// CloudEvent whose subject matches a pending-callback entry — resolve it.
+    InboundCorrelated,
+    /// CloudEvent whose subject does NOT match any pending entry — silent drop.
+    InboundUncorrelated,
+}
 
 /// Handler for bidirectional CloudEvents callback bindings.
 pub(crate) struct CallbackHandler;
@@ -59,36 +77,47 @@ impl IntegrationBindingHandler for CallbackHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        // Determine whether this invocation is an outbound fire or an inbound resolution.
-        // If the action data looks like a CloudEvent with a subject that matches a
-        // pending entry, treat it as an inbound resolution; otherwise treat as outbound.
-        let is_inbound = is_inbound_resolution(observed, &record.instance.pending_callbacks);
-
-        if is_inbound {
-            handle_inbound(record, observed, service_ref, binding)
-        } else {
-            handle_outbound(ctx, record, kernel, observed, service_ref, binding, now_iso)
+        match classify_invocation(observed, &record.instance.pending_callbacks) {
+            CallbackInvocationKind::Outbound => {
+                handle_outbound(ctx, record, kernel, observed, service_ref, binding, now_iso)
+            }
+            CallbackInvocationKind::InboundCorrelated => {
+                handle_inbound(record, observed, service_ref, binding)
+            }
+            CallbackInvocationKind::InboundUncorrelated => {
+                // Silently drop — no service invocation, no pending registration, no provenance.
+                Ok(Vec::new())
+            }
         }
     }
 }
 
-/// Returns `true` when the event data payload is a CloudEvent whose `subject`
-/// matches a registered pending-callback key.
+/// Classify a callback invocation into one of three kinds.
 ///
-/// The event data (from the triggering `EventEntry.data`) is carried in
-/// `observed.event_data`. The presence of a matching subject in
-/// `pending_callbacks` distinguishes inbound resolutions from outbound fires.
-fn is_inbound_resolution(
+/// An invocation is *inbound* if `observed.event_data` contains a JSON object
+/// with an `id` field (the minimal indicator of a CloudEvents envelope). Inbound
+/// is *correlated* if the envelope's `subject` matches a key in `pending_callbacks`.
+fn classify_invocation(
     observed: &ObservedAction,
     pending: &std::collections::HashMap<String, PendingCallback>,
-) -> bool {
+) -> CallbackInvocationKind {
     let Some(data) = &observed.event_data else {
-        return false;
+        return CallbackInvocationKind::Outbound;
     };
-    let Some(subject) = data.get("subject").and_then(|v| v.as_str()) else {
-        return false;
-    };
-    pending.contains_key(subject)
+    // A CloudEvent envelope must have `id`, `source`, and `specversion`.
+    // Presence of `id` as a string is the minimal guard against non-event payloads.
+    if data.get("id").and_then(|v| v.as_str()).is_none() {
+        return CallbackInvocationKind::Outbound;
+    }
+    let subject = data
+        .get("subject")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if pending.contains_key(subject) {
+        CallbackInvocationKind::InboundCorrelated
+    } else {
+        CallbackInvocationKind::InboundUncorrelated
+    }
 }
 
 /// Outbound phase: emit a CloudEvent, register `PendingCallback`, emit `CallbackPending`.
@@ -101,19 +130,21 @@ fn handle_outbound(
     binding: &IntegrationBinding,
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-    let invocation_id = next_invocation_id(record, service_ref);
+    // `outbound_event_id` is the CloudEvent `id` for this emission — a unique
+    // event identifier, not an idempotency key. Each callback fire is a new event.
+    let outbound_event_id = next_outbound_event_id(record, service_ref, "cb");
     let subject = compute_subject(
         binding,
         &record.instance.instance_id,
         service_ref,
-        &invocation_id,
+        &outbound_event_id,
     );
 
     let event_data =
         build_event_data_from_binding(binding, kernel, observed, &record.instance)?;
 
     let envelope = CloudEvent {
-        id: invocation_id.clone(),
+        id: outbound_event_id.clone(),
         source: binding
             .extensions
             .get("source")
@@ -131,16 +162,22 @@ fn handle_outbound(
         time: Some(
             now_iso
                 .parse::<chrono::DateTime<chrono::Utc>>()
-                .unwrap_or_else(|_| chrono::Utc::now()),
+                .map_err(|e| {
+                    RuntimeError::Integration(format!(
+                        "invalid ISO timestamp in event context: {e}"
+                    ))
+                })?,
         ),
         data_content_type: Some("application/json".to_string()),
         data: Some(event_data),
     };
 
     // Dispatch the outbound envelope.
+    // The event ID is a CloudEvent `id`, not an idempotency key — each callback
+    // fire is a distinct event. Pass None for idempotency.
     let envelope_json = envelope.to_provenance_data();
     ctx.service
-        .invoke(service_ref, &envelope_json, Some(&invocation_id))
+        .invoke(service_ref, &envelope_json, None)
         .map_err(|e| RuntimeError::Service(e.to_string()))?;
 
     // Read deadline from binding extensions if present.
@@ -154,7 +191,7 @@ fn handle_outbound(
     record.instance.pending_callbacks.insert(
         subject.clone(),
         PendingCallback {
-            invocation_id: invocation_id.clone(),
+            invocation_id: outbound_event_id.clone(),
             binding_id: service_ref.to_string(),
             expected_until: expected_until.clone(),
         },
@@ -169,7 +206,7 @@ fn handle_outbound(
         data: Some(serde_json::json!({
             "subject": subject,
             "bindingId": service_ref,
-            "invocationId": invocation_id,
+            "invocationId": outbound_event_id,
             "expectedUntil": expected_until,
         })),
     };
@@ -263,7 +300,7 @@ fn compute_subject(
     binding: &IntegrationBinding,
     instance_id: &str,
     binding_id: &str,
-    invocation_id: &str,
+    outbound_event_id: &str,
 ) -> String {
     if let Some(template) = binding
         .extensions
@@ -272,11 +309,6 @@ fn compute_subject(
     {
         return template.to_string();
     }
-    format!("{instance_id}:{binding_id}:{invocation_id}")
+    format!("{instance_id}:{binding_id}:{outbound_event_id}")
 }
 
-/// Generate a stable invocation identifier for this callback firing.
-fn next_invocation_id(record: &RuntimeRecord, service_ref: &str) -> String {
-    let seq = record.step_results.len();
-    format!("{service_ref}-cb-{seq}")
-}
