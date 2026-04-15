@@ -16,6 +16,7 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 | **wos-conformance** | ✅ | Manages 144 fixtures and handles Batch 16 processor reporting. |
 | **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, and event queues. |
 | **wos-formspec-binding** | ✅ | Implements the S15 protocol, task prefill, and response validation. |
+| **wos-assurance** | 🟡 | Spec complete; reference implementation pending. Attaches via provenanceLayer and custodyHook seams. |
 
 ---
 
@@ -29,6 +30,8 @@ WOS verifies 197 normative constraints across three tiers.
 | **Tier 2** | Cross-Doc / AST | 55 | 55 | 0 |
 | **Tier 3** | Runtime | 105 | 105 | 0 |
 | **Total** | | **197** | **197** | **0** |
+
+**NB:** Tier counts above reflect the baseline kernel+governance+AI rule set. Assurance layer rules (S2.9, S4.9, S7.15, §14.x) add approximately 9 Tier 1/2 rules, to be authored alongside the reference implementation.
 
 ---
 
