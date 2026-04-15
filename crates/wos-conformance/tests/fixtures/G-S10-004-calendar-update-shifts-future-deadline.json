@@ -1,7 +1,7 @@
 {
   "id": "G-S10-004-calendar-update-shifts-future-deadline",
   "rule": "G-S10",
-  "description": "Calendar deadlines are computed lazily at drain time, not at timer-creation time, so a calendar change between scheduling and firing shifts the deadline. The fixture uses calendar v2, which adds a holiday on 1970-01-05 (Monday). The timer duration P3D from epoch has a naive deadline of Sunday 1970-01-04; v2 skips the weekend and the Monday holiday, landing at Tuesday 1970-01-06 09:00 UTC (464,400,000 ms). Without the holiday (v1), the deadline would be Monday 09:00 (291,600,000 ms). The calendarVersion in timerCreated provenance confirms which calendar was in effect at drain time.",
+  "description": "Lazy deadline evaluation: calendar v2 (with holiday added) is attached at case creation; timer scheduled earlier is recomputed at drain time against v2 rather than v1. The fixture attaches calendar v2 statically — it adds a holiday on 1970-01-05 (Monday). The timer duration P3D from epoch has a naive deadline of Sunday 1970-01-04; v2 skips the weekend and the Monday holiday, landing at Tuesday 1970-01-06 09:00 UTC (464,400,000 ms). Without the holiday (v1), the deadline would be Monday 09:00 (291,600,000 ms). The calendarVersion in timerCreated provenance confirms which calendar was in effect at drain time.",
   "documents": {
     "kernel": "inline",
     "businessCalendar": "inline"

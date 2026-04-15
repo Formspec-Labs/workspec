@@ -12,7 +12,7 @@ use semver::{Version, VersionReq};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use chrono::DateTime;
-use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument};
+use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument, BusinessCalendarError};
 use wos_core::eval::{Evaluator, ObservedAction, ObservedTransition};
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
@@ -428,6 +428,8 @@ impl WosRuntime {
         )
         .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
 
+        let (timer_states, convergence_error_ids) =
+            timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?;
         let instance = CaseInstance {
             instance_id,
             definition_url,
@@ -436,7 +438,7 @@ impl WosRuntime {
             case_state: evaluator.case_state_json(),
             provenance_position: 0,
             next_task_sequence: 0,
-            timers: timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?,
+            timers: timer_states,
             active_tasks: Vec::new(),
             history_store: None,
             compensation_logs: None,
@@ -456,6 +458,8 @@ impl WosRuntime {
         if let Some(cal) = &self.business_calendar {
             annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
         }
+        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
+        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
         let actions = evaluator.take_executed_actions();
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
@@ -562,8 +566,11 @@ impl WosRuntime {
         ));
         record.instance.configuration = evaluator.configuration().active_states().to_vec();
         record.instance.case_state = evaluator.case_state_json();
-        record.instance.timers =
+        let (timer_states, convergence_error_ids) =
             timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?;
+        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
+        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
+        record.instance.timers = timer_states;
         let history = evaluator.history_store().clone();
         record.instance.history_store = if history.is_empty() {
             None
@@ -1540,15 +1547,28 @@ fn materialize_due_timers(
     Ok(provenance)
 }
 
+/// Convert all timers to `TimerState`, computing calendar-adjusted deadlines lazily.
+///
+/// Returns `(states, convergence_error_timer_ids)`.  The second element lists
+/// timer IDs whose deadline fell back to naive wall-clock time because the
+/// business calendar evaluator did not converge (degenerate calendar).
+/// Callers MUST annotate the corresponding `TimerCreated` provenance records
+/// with `calendarVersionConvergenceError: true`.
 fn timers_to_state(
     timers: &wos_core::timer::Timers,
     _now_ms: u64,
     calendar: Option<&BusinessCalendarDocument>,
-) -> Result<Vec<wos_core::instance::TimerState>, RuntimeError> {
-    timers
-        .iter()
-        .map(|timer| timer_to_state(timer, calendar))
-        .collect()
+) -> Result<(Vec<wos_core::instance::TimerState>, Vec<String>), RuntimeError> {
+    let mut states = Vec::with_capacity(timers.len());
+    let mut convergence_error_ids = Vec::new();
+    for timer in timers.iter() {
+        let (state, had_error) = timer_to_state(timer, calendar)?;
+        if had_error {
+            convergence_error_ids.push(state.timer_id.clone());
+        }
+        states.push(state);
+    }
+    Ok((states, convergence_error_ids))
 }
 
 /// Convert a `Timer` to a `TimerState`, computing the deadline lazily.
@@ -1558,16 +1578,20 @@ fn timers_to_state(
 /// This means calendar updates between events shift future deadlines on the
 /// next drain.  When no calendar is attached, the raw wall-clock deadline is
 /// used unchanged.
+///
+/// Returns `(TimerState, had_convergence_error)`.  The second field is `true`
+/// when a degenerate calendar caused snap-forward to fall back to the naive
+/// deadline; callers should annotate the `TimerCreated` provenance record.
 fn timer_to_state(
     timer: &Timer,
     calendar: Option<&BusinessCalendarDocument>,
-) -> Result<wos_core::instance::TimerState, RuntimeError> {
-    let deadline_ms = match calendar {
+) -> Result<(wos_core::instance::TimerState, bool), RuntimeError> {
+    let (deadline_ms, had_convergence_error) = match calendar {
         Some(cal) => business_deadline_ms(timer, cal)?,
-        None => timer.deadline_ms,
+        None => (timer.deadline_ms, false),
     };
 
-    Ok(wos_core::instance::TimerState {
+    let state = wos_core::instance::TimerState {
         timer_id: timer.id.clone(),
         deadline: format_timestamp(deadline_ms)?,
         event: timer.fires_event.clone(),
@@ -1578,14 +1602,28 @@ fn timer_to_state(
         },
         duration_iso: Some(timer.duration_iso.clone()),
         duration_ms: Some(timer.duration_ms),
-    })
+    };
+    Ok((state, had_convergence_error))
 }
 
 /// Compute a business-calendar–adjusted deadline for `timer`.
 ///
 /// Reconstructs the start time as `deadline_ms - duration_ms`, then advances
 /// through business time using the attached calendar.
-fn business_deadline_ms(timer: &Timer, calendar: &BusinessCalendarDocument) -> Result<u64, RuntimeError> {
+///
+/// Returns `(deadline_ms, had_convergence_error)`.  When the calendar evaluator
+/// does not converge (degenerate calendar), falls back to the naive wall-clock
+/// deadline and sets the flag to `true` so the caller can annotate provenance.
+///
+/// # Invariant
+///
+/// `Timer.duration_ms` is authoritative for reconstructing the start time —
+/// it is stored at timer-creation time and never mutated.
+fn business_deadline_ms(
+    timer: &Timer,
+    calendar: &BusinessCalendarDocument,
+) -> Result<(u64, bool), RuntimeError> {
+    // Invariant: Timer.duration_ms is authoritative; reconstruct start from it.
     let start_ms = timer.deadline_ms.saturating_sub(timer.duration_ms);
     let start_secs = i64::try_from(start_ms / 1000)
         .map_err(|_| RuntimeError::Clock("timer start timestamp out of range".to_string()))?;
@@ -1597,10 +1635,18 @@ fn business_deadline_ms(timer: &Timer, calendar: &BusinessCalendarDocument) -> R
             .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
     );
 
-    let result = next_business_moment(start_utc, duration, calendar);
-    let result_ms = u64::try_from(result.timestamp_millis())
-        .map_err(|_| RuntimeError::Clock("business deadline out of range".to_string()))?;
-    Ok(result_ms)
+    match next_business_moment(start_utc, duration, calendar) {
+        Ok(result) => {
+            let result_ms = u64::try_from(result.timestamp_millis())
+                .map_err(|_| RuntimeError::Clock("business deadline out of range".to_string()))?;
+            Ok((result_ms, false))
+        }
+        Err(BusinessCalendarError::DidNotConverge { .. }) => {
+            // Degenerate calendar: fall back to naive wall-clock deadline so the
+            // timer is not lost, and signal the caller to annotate provenance.
+            Ok((timer.deadline_ms, true))
+        }
+    }
 }
 
 /// Inject `calendarVersion` into every `TimerCreated` provenance record in `records`.
@@ -1634,6 +1680,58 @@ fn annotate_timer_created_with_calendar_version(
                     }
                 }
                 map.insert("calendarVersion".to_string(), version.clone());
+                *other = Some(serde_json::Value::Object(map));
+            }
+        }
+    }
+}
+
+/// Extend `TimerCreated` records for the given timer IDs with
+/// `calendarVersionConvergenceError: true`.
+///
+/// Uses the same payload-extension pattern as
+/// `annotate_timer_created_with_calendar_version` — no new `ProvenanceKind`
+/// variant is needed.
+fn annotate_timer_created_with_convergence_error(
+    records: &mut [ProvenanceRecord],
+    timer_ids: &[String],
+) {
+    if timer_ids.is_empty() {
+        return;
+    }
+    for record in records.iter_mut() {
+        if record.record_kind != ProvenanceKind::TimerCreated {
+            continue;
+        }
+        // Check whether this record's timerId is in the convergence-error set.
+        let record_timer_id = record
+            .data
+            .as_ref()
+            .and_then(|d| d.get("timerId"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !timer_ids.contains(&record_timer_id) {
+            continue;
+        }
+        match &mut record.data {
+            Some(serde_json::Value::Object(map)) => {
+                map.insert(
+                    "calendarVersionConvergenceError".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+            }
+            other => {
+                let mut map = serde_json::Map::new();
+                if let Some(existing) = other.take() {
+                    if let serde_json::Value::Object(existing_map) = existing {
+                        map.extend(existing_map);
+                    }
+                }
+                map.insert(
+                    "calendarVersionConvergenceError".to_string(),
+                    serde_json::Value::Bool(true),
+                );
                 *other = Some(serde_json::Value::Object(map));
             }
         }

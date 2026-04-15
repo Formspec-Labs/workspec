@@ -25,19 +25,59 @@ use chrono_tz::Tz;
 
 use super::{BusinessCalendarDocument, Holiday, OperatingHours, Weekday};
 
+// ── Error type ────────────────────────────────────────────────────
+
+/// Errors returned by the business calendar evaluator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BusinessCalendarError {
+    /// Snap-forward did not converge within the iteration limit.
+    ///
+    /// Indicates a degenerate calendar (e.g. empty `work_week` or a holiday
+    /// cluster longer than one year).  Callers MUST fall back to the naive
+    /// (non-calendar) deadline rather than hanging or panicking.
+    DidNotConverge {
+        /// The cursor position at exhaustion (UTC).
+        cursor: DateTime<Utc>,
+        /// Number of iterations attempted before giving up.
+        iterations: u32,
+    },
+}
+
+impl std::fmt::Display for BusinessCalendarError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BusinessCalendarError::DidNotConverge { cursor, iterations } => write!(
+                f,
+                "business calendar snap-forward did not converge after {iterations} iterations \
+                 (cursor at {cursor})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for BusinessCalendarError {}
+
 // ── Public API ────────────────────────────────────────────────────
 
 /// Compute the SLA deadline for `start + duration` adjusted for business time.
 ///
 /// Uses the snap-forward model described in the module documentation.
 /// The result is always in UTC.
+///
+/// # Errors
+///
+/// Returns [`BusinessCalendarError::DidNotConverge`] when the snap-forward
+/// algorithm exhausts its iteration budget (366 days).  This only occurs with
+/// degenerate calendars — e.g. an empty `work_week` or a holiday cluster that
+/// spans more than one year.  Callers should fall back to the naive deadline
+/// and surface the failure to operators.
 pub fn next_business_moment(
     start: DateTime<Utc>,
     duration: Duration,
     calendar: &BusinessCalendarDocument,
-) -> DateTime<Utc> {
+) -> Result<DateTime<Utc>, BusinessCalendarError> {
     if duration <= Duration::zero() {
-        return start;
+        return Ok(start);
     }
 
     let tz: Tz = calendar.timezone.parse().unwrap_or(chrono_tz::UTC);
@@ -50,10 +90,10 @@ pub fn next_business_moment(
     let naive_local = naive_utc.with_timezone(&tz);
 
     // Step 3: snap forward to a valid business moment.
-    let result = snap_forward(naive_local, &calendar.work_week, &calendar.holidays, op_start, op_end, &tz);
+    let result = snap_forward(naive_local, &calendar.work_week, &calendar.holidays, op_start, op_end, &tz)?;
 
     // Step 4: return in UTC.
-    result.with_timezone(&Utc)
+    Ok(result.with_timezone(&Utc))
 }
 
 // ── Implementation ────────────────────────────────────────────────
@@ -65,8 +105,12 @@ pub fn next_business_moment(
 /// - At or after `op_start` and strictly before `op_end`.
 ///
 /// When the candidate overshoots `op_end`, the excess time carries over to
-/// the next business day.  This function is tail-recursive (bounded by 14
-/// iterations to guard against degenerate calendars).
+/// the next business day.  The loop is bounded by 366 iterations — one full
+/// year — which covers any realistic statutory holiday cluster or emergency
+/// closure.  A degenerate calendar (e.g. empty `work_week`) exhausts the
+/// budget and returns [`BusinessCalendarError::DidNotConverge`].
+const MAX_SNAP_ITERATIONS: u32 = 366;
+
 fn snap_forward(
     candidate: DateTime<Tz>,
     work_week: &[Weekday],
@@ -74,11 +118,10 @@ fn snap_forward(
     op_start: NaiveTime,
     op_end: NaiveTime,
     tz: &Tz,
-) -> DateTime<Tz> {
+) -> Result<DateTime<Tz>, BusinessCalendarError> {
     let mut cursor = candidate;
 
-    // Allow up to 14 snap iterations (e.g. two full weeks of holidays).
-    for _ in 0..14 {
+    for _ in 0..MAX_SNAP_ITERATIONS {
         let date = cursor.date_naive();
         let weekday = chrono_to_wos_weekday(cursor.weekday());
 
@@ -95,7 +138,7 @@ fn snap_forward(
         // Before operating hours → snap to op_start of the same day.
         if current_time < op_start {
             cursor = build_local_datetime(tz, date, op_start);
-            return cursor;
+            return Ok(cursor);
         }
 
         // After operating hours → carry excess to next business day.
@@ -109,10 +152,13 @@ fn snap_forward(
         }
 
         // Within operating hours on a work day — valid.
-        return cursor;
+        return Ok(cursor);
     }
 
-    cursor
+    Err(BusinessCalendarError::DidNotConverge {
+        cursor: cursor.with_timezone(&Utc),
+        iterations: MAX_SNAP_ITERATIONS,
+    })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -148,12 +194,14 @@ fn parse_hhmm(s: &str) -> Option<NaiveTime> {
 ///
 /// Prefers the earliest representation for ambiguous local times (DST
 /// fall-back), and the latest for invalid times (DST spring-forward gap).
+/// Both arms together are exhaustive for all `chrono-tz` local results, so
+/// the final `expect` should never trigger in practice.
 fn build_local_datetime(tz: &Tz, date: NaiveDate, time: NaiveTime) -> DateTime<Tz> {
     let naive = date.and_time(time);
     tz.from_local_datetime(&naive)
         .earliest()
         .or_else(|| tz.from_local_datetime(&naive).latest())
-        .unwrap_or_else(|| chrono::Utc::now().with_timezone(tz))
+        .expect("chrono-tz invariant: LocalResult should produce at least one valid time")
 }
 
 /// Convert a `chrono::Weekday` to the WOS `Weekday` enum.
@@ -226,7 +274,7 @@ mod tests {
     fn within_single_business_day() {
         let cal = standard_calendar("UTC");
         let start = utc_hms(2026, 3, 2, 10, 0); // Monday
-        let result = next_business_moment(start, Duration::hours(2), &cal);
+        let result = next_business_moment(start, Duration::hours(2), &cal).unwrap();
         assert_eq!(result, utc_hms(2026, 3, 2, 12, 0));
     }
 
@@ -239,7 +287,7 @@ mod tests {
     fn weekend_snaps_to_monday_preserving_time() {
         let cal = standard_calendar("UTC");
         let start = utc_hms(2026, 3, 2, 10, 0); // Monday
-        let result = next_business_moment(start, Duration::days(5), &cal);
+        let result = next_business_moment(start, Duration::days(5), &cal).unwrap();
         assert_eq!(result, utc_hms(2026, 3, 9, 10, 0)); // Next Monday 10:00
     }
 
@@ -253,7 +301,7 @@ mod tests {
     fn operating_hours_cutoff_carries_excess() {
         let cal = standard_calendar("UTC");
         let start = utc_hms(2026, 3, 6, 16, 0); // Friday
-        let result = next_business_moment(start, Duration::hours(4), &cal);
+        let result = next_business_moment(start, Duration::hours(4), &cal).unwrap();
         assert_eq!(result, utc_hms(2026, 3, 9, 12, 0)); // Monday 12:00
     }
 
@@ -272,7 +320,7 @@ mod tests {
             observed: false,
         }];
         let start = utc_hms(2026, 3, 6, 9, 0); // Friday 09:00
-        let result = next_business_moment(start, Duration::days(3), &cal);
+        let result = next_business_moment(start, Duration::days(3), &cal).unwrap();
         assert_eq!(result, utc_hms(2026, 3, 10, 9, 0)); // Tuesday 09:00
     }
 
@@ -286,7 +334,7 @@ mod tests {
     fn timezone_new_york_edt() {
         let cal = standard_calendar("America/New_York");
         let start = utc_hms(2026, 4, 4, 14, 0); // Saturday 10:00 EDT
-        let result = next_business_moment(start, Duration::days(1), &cal);
+        let result = next_business_moment(start, Duration::days(1), &cal).unwrap();
         // Sunday 10:00 EDT → Monday 10:00 EDT = Monday 14:00 UTC.
         assert_eq!(result, utc_hms(2026, 4, 6, 14, 0));
     }
@@ -299,7 +347,26 @@ mod tests {
         let mut cal = standard_calendar("UTC");
         cal.operating_hours = None;
         let start = utc_hms(2026, 3, 2, 10, 0); // Monday
-        let result = next_business_moment(start, Duration::hours(2), &cal);
+        let result = next_business_moment(start, Duration::hours(2), &cal).unwrap();
         assert_eq!(result, utc_hms(2026, 3, 2, 12, 0));
+    }
+
+    /// A calendar with an empty work_week can never find a valid business day.
+    ///
+    /// Every day is a non-work day, so snap_forward exhausts the 366-iteration
+    /// budget and returns `Err(DidNotConverge { .. })`.
+    #[test]
+    fn empty_work_week_returns_did_not_converge() {
+        let mut cal = standard_calendar("UTC");
+        cal.work_week = vec![]; // no valid work days
+        let start = utc_hms(2026, 3, 2, 10, 0);
+        let result = next_business_moment(start, Duration::hours(2), &cal);
+        assert!(
+            matches!(
+                result,
+                Err(BusinessCalendarError::DidNotConverge { iterations: 366, .. })
+            ),
+            "expected DidNotConverge, got {result:?}"
+        );
     }
 }
