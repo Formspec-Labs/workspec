@@ -17,7 +17,7 @@
 | 🟡 | Specified in prose and schema; implementation pending |
 | ⚪ | Referenced or planned; specification pending |
 
-**Current implementation caveat:** `wos-runtime` now owns reference companion policy, event identity, and runtime/core provenance emission; `wos-conformance` observes those behaviors. The Formspec binding crate exists and has adapter-level tests, but full binding-backed S15 conformance fixtures remain pending.
+**Current implementation caveat:** `wos-runtime` owns reference companion policy, event identity, and runtime/core provenance emission; `wos-conformance` observes those behaviors. `wos-formspec-binding` implements the full S15 protocol with binding-backed conformance fixtures; `ConformanceBinding` and `StubValidator` have been deleted (S15.3 complete).
 
 **Competitor Support:**
 
@@ -58,12 +58,12 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 |---|------------|-------------|-----|------|------|-----|-----|------|------|-------|-------|
 | 1.1 | **Sequential/parallel/choice composition** | Defines workflows as sequences, branches, and parallel tracks | ✅ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ~ |
 | 1.2 | **Hierarchical states (nested, compound)** | Nests sub-states within phases (e.g., internal steps for a "Review" phase) | ✅ | ~ | ~ | ~ | ✔ | ~ | ~ | ✘ | ✘ |
-| 1.3 | **History states** | Resumes previously exited phases at their exact exit point | 🟡 | ~ | ~ | ✘ | ~ | ~ | ✔ | ✘ | ✘ |
+| 1.3 | **History states** | Resumes previously exited phases at their exact exit point | ✅ | ~ | ~ | ✘ | ~ | ~ | ✔ | ✘ | ✘ |
 | 1.4 | **Parallel regions (orthogonal)** | Progresses concurrent, independent state aspects simultaneously | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ~ | ✘ | ✘ |
 | 1.5 | **Parallel completion policies** | Enforces wait-all, cancel-siblings, or fail-fast policies upon track completion | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 1.6 | **Declarative constraint zones (DCR-style)** | Manages adaptive cases via condition/response/include/exclude relations | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 1.7 | **CMMN case management** | Executes discretionary items, sentries, and ad-hoc work within stages | ✅ | ~ | ✔ | ✘ | ✘ | ✔ | ✘ | ~ | ✘ |
-| 1.8 | **Milestones (data-driven checkpoints)** | Fires named conditions when data reaches thresholds, independent of workflow state | 🟦 | ~ | ✔ | ✘ | ~ | ~ | ✘ | ~ | ✘ |
+| 1.8 | **Milestones (data-driven checkpoints)** | Fires named conditions when data reaches thresholds, independent of workflow state | ✅ | ~ | ✔ | ✘ | ~ | ~ | ✘ | ~ | ✘ |
 | 1.9 | **Cancellation regions** | Cancels activity sets upon specific completion or failure events | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ~ | ✘ | ✘ |
 | 1.10 | **Process definition as declarative data** | Stores workflow as a JSON document rather than imperative code | ✅ | ✘ | ~ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ |
 
@@ -77,7 +77,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 2.2 | **Deterministic replay** | Produces identical outcomes during replay by caching external service results | ✅ | ✘ | ✘ | ✘ | ✔ | ✘ | ✘ | ✘ |
 | 2.3 | **Saga/compensation transactions** | Reverses previously completed steps upon task failure | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ~ | ~ |
 | 2.4 | **Timer management** | Guarantees absolute, relative, and recurring timers with precision tolerances | ✅ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| 2.5 | **Business-calendar-aware deadlines** | Computes SLA deadlines in business days, excluding holidays and non-working hours | 🟦 | ✔ | ✔ | ~ | ✘ | ✘ | ~ | ~ |
+| 2.5 | **Business-calendar-aware deadlines** | Computes SLA deadlines in business days, excluding holidays and non-working hours | ✅ | ✔ | ✔ | ~ | ✘ | ✘ | ~ | ~ |
 | 2.6 | **Statutory deadline chains** | Automates legal consequences when interdependent government deadlines pass | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 2.7 | **Instance migration across versions** | Validates state and maps fields when moving cases to new workflow versions | ✅ | ~ | ~ | ✔ | ✔ | ✘ | ~ | ~ |
 | 2.8 | **Idempotent execution** | Prevents duplicate service calls using deduplication keys | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ✘ | ✘ |
@@ -142,14 +142,13 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 5.14 | **Agent lifecycle state machine** | Governs agent states (active, degraded, suspended, retired) via performance transitions | ✅ | ~ | ✘ | ✘ | ✘ | ✘ |
 | 5.15 | **Model version pinning and policy** | Pins versions or uses approved lists; emits provenance for version changes | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
 | 5.16 | **Tool use governance** | Restricts tool invocation, rate limits, and data mutation for agents | ✅ | ~ | ~ | ✘ | ✘ | ✘ |
-| 5.17 | **Formspec-as-Validator** | Validates agent output against the same form contract as human data | 🟦 ^6 | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 5.17 | **Formspec-as-Validator** | Validates agent output against the same form contract as human data | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.18 | **Agent disclosure** | Discloses AI participation to affected individuals; mandatory for rights-impacting cases | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.19 | **Assist Governance Proxy** | Wraps assistant tools with deontic constraints and provenance | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.20 | **CaMeL-compatible trust boundary** | Employs a trust boundary model compatible with dual-LLM security architectures | 🟡 ^4 | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 5.21 | **Equity guardrails (bias monitoring)** | Monitors fairness statistically for human and AI decisions by demographic group | ✅ | ~ | ✘ | ✘ | ~ | ✘ |
 | 5.22 | **Shadow / canary deployment** | Executes model versions in shadow then canary modes before production | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ |
 
-> ^6 **Formspec binding status:** `wos-formspec-binding` implements the runtime adapter and adapter-level prefill, validation, and mapping tests. Binding-backed S15 task-submission conformance fixtures remain pending, so this is partial rather than fully implemented.
 
 ---
 
@@ -218,7 +217,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 9.5 | **Structured validation results** | Provides severity, field path, message, and constraint kind for every error | ✅ | ~ | ~ | ~ | ✘ |
 | 9.6 | **Mapping DSL for bidirectional data flow** | Transforms data between case files and external formats via versioned, auditable mappings | ✅ | ✘ | ✘ | ✘ | ✘ |
 | 9.7 | **Ontology-driven semantic field identity** | Identifies fields by semantic meaning rather than name | 🟡 | ✘ | ✘ | ✘ | ✘ |
-| 9.8 | **Version-pinned responses** | Binds contracts immutably at submission time | 🟦 ^6 | ✘ | ~ | ✘ | ✘ |
+| 9.8 | **Version-pinned responses** | Binds contracts immutably at submission time | ✅ | ✘ | ~ | ✘ | ✘ |
 | 9.9 | **Changelog with impact classification** | Provides structured change records with migration guidance and severity levels | ✅ | ✘ | ✘ | ✘ | ✘ |
 
 ---
@@ -254,10 +253,10 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | # | Requirement | Description | WOS | SNow | Pega | Cam | KIE | Temp | StepFn | LGrph |
 |---|------------|-------------|-----|------|------|-----|-----|------|--------|-------|
 | 12.1 | **HTTP/REST (OpenAPI)** | Invokes services synchronously via OpenAPI bindings | ✅ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| 12.2 | **CloudEvents 1.0 native** | Uses standard event envelopes with extensions for routing and causal chains | 🟡 | ~ | ~ | ✔ | ✔ | ✔ | ✔ | ✘ |
-| 12.3 | **Multi-step API orchestration (Arazzo)** | Orchestrates multi-step API sequences via Arazzo document references | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 12.2 | **CloudEvents 1.0 native** | Uses standard event envelopes with extensions for routing and causal chains | ✅ | ~ | ~ | ✔ | ✔ | ✔ | ✔ | ✘ |
+| 12.3 | **Multi-step API orchestration (Arazzo)** | Orchestrates multi-step API sequences via Arazzo document references | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 12.4 | **Non-HTTP tool invocation** | Invokes CLI, batch, database, or graph query tools | ✅ | ✘ | ✘ | ✘ | ✘ | ✔ | ✔ | ✔ |
-| 12.5 | **Policy engine bridge** | Integrates directly with XACML, OPA, and Cedar authorization engines | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 12.5 | **Policy engine bridge** | Integrates directly with XACML, OPA, and Cedar authorization engines | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 12.6 | **Form-level agent interaction (Assist)** | Governs AI assistant tool invocations at the form interaction level | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 12.7 | **SCXML interoperability mapping** | Translates between WOS and W3C SCXML documents bidirectionally | 🟡 | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 
