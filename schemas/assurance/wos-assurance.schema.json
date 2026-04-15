@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/assurance/1.0",
+  "title": "WOS Assurance Declaration",
+  "description": "Assurance-level and subject-continuity declarations (WOS Assurance Layer).",
+  "type": "object",
+  "properties": {
+    "assuranceLevel": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3", "L4"],
+      "description": "Assurance level taxonomy (S2.1). Implementations MAY define additional levels; additional levels MUST be declared against the base four."
+    },
+    "subjectContinuity": {
+      "type": "object",
+      "description": "Subject continuity reference (S3).",
+      "properties": {
+        "reference": { "type": "string" },
+        "scope": { "type": "string", "enum": ["instance", "case", "tenant", "deployment"] }
+      },
+      "required": ["reference", "scope"]
+    },
+    "disclosurePosture": {
+      "type": "string",
+      "enum": ["anonymous", "pseudonymous", "identified", "public"],
+      "description": "Disclosure posture — independent of assuranceLevel per Invariant 6 (S4)."
+    },
+    "attestation": {
+      "type": "object",
+      "description": "Provider-neutral attestation (S5).",
+      "properties": {
+        "subject": { "type": "string" },
+        "predicate": { "type": "string" },
+        "basis": { "type": "string" },
+        "validityScope": { "type": "string" }
+      },
+      "required": ["subject", "predicate", "basis"]
+    }
+  },
+  "additionalProperties": false
+}
