@@ -32,6 +32,39 @@ use crate::store::RuntimeRecord;
 
 pub(crate) use request_response::{InvocationContext, load_or_invoke_service_result};
 
+/// Generate a unique outbound CloudEvent `id` for a given binding invocation.
+///
+/// Incorporates the current step-result count for uniqueness within an instance
+/// lifetime. The `suffix` distinguishes handler types (e.g., `"emit"`, `"cb"`).
+/// This is a CloudEvent identifier, NOT an idempotency key.
+pub(crate) fn next_outbound_event_id(
+    record: &crate::store::RuntimeRecord,
+    service_ref: &str,
+    suffix: &str,
+) -> String {
+    let seq = record.step_results.len();
+    format!("{service_ref}-{suffix}-{seq}")
+}
+
+/// Convert a FEL-evaluated value to a string idempotency key.
+///
+/// Shared by `request_response` and `tool` handlers. Both handlers evaluate a
+/// FEL expression to produce the key and then call this function to coerce the
+/// result into a string. `Null` is an error because an absent key produces
+/// non-deterministic deduplication behaviour.
+pub(crate) fn value_to_idempotency_key(
+    value: serde_json::Value,
+) -> Result<String, crate::runtime::RuntimeError> {
+    match value {
+        serde_json::Value::Null => Err(crate::runtime::RuntimeError::Integration(
+            "idempotency expression resolved to no value".to_string(),
+        )),
+        serde_json::Value::String(s) => Ok(s),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => Ok(value.to_string()),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Ok(value.to_string()),
+    }
+}
+
 /// Trait implemented by each integration binding kind handler.
 pub(crate) trait IntegrationBindingHandler {
     /// The binding kind this handler services.

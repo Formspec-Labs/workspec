@@ -20,7 +20,7 @@ use crate::milestones::evaluate_milestones;
 use crate::runtime::{RuntimeError, InvokeServicesDyn, ValidateContractsDyn};
 use crate::store::{RuntimeRecord, StepResultRecord};
 
-use super::IntegrationBindingHandler;
+use super::{IntegrationBindingHandler, value_to_idempotency_key};
 
 /// Handler for synchronous request/response HTTP-style bindings.
 pub(crate) struct RequestResponseHandler;
@@ -378,17 +378,6 @@ pub(crate) fn case_state_map(
         .cloned()
         .map(|object| object.into_iter().collect())
         .ok_or_else(|| RuntimeError::Integration("case state is not an object".to_string()))
-}
-
-fn value_to_idempotency_key(value: serde_json::Value) -> Result<String, RuntimeError> {
-    match value {
-        serde_json::Value::Null => Err(RuntimeError::Integration(
-            "idempotency expression resolved to no value".to_string(),
-        )),
-        serde_json::Value::String(value) => Ok(value),
-        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => Ok(value.to_string()),
-        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Ok(value.to_string()),
-    }
 }
 
 // --- Output binding: apply service response back to case state ---

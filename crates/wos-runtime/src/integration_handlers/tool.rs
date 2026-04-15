@@ -21,7 +21,7 @@ use crate::milestones::evaluate_milestones;
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::IntegrationBindingHandler;
+use super::{IntegrationBindingHandler, value_to_idempotency_key};
 use super::request_response::{
     InvocationContext, apply_output_binding, build_integration_input,
     evaluate_integration_expression, load_or_invoke_service_result, validate_integration_contract,
@@ -164,13 +164,3 @@ impl IntegrationBindingHandler for ToolHandler {
     }
 }
 
-fn value_to_idempotency_key(value: serde_json::Value) -> Result<String, RuntimeError> {
-    match value {
-        serde_json::Value::Null => Err(RuntimeError::Integration(
-            "idempotency expression resolved to no value".to_string(),
-        )),
-        serde_json::Value::String(s) => Ok(s),
-        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => Ok(value.to_string()),
-        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Ok(value.to_string()),
-    }
-}
