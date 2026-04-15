@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-14
-**Counts:** 18 specs, 18 schemas, 41 document fixtures + 103 conformance fixtures (0 T3 red, 103 green), 5 crates, 197 lint rules (197 tested, 0 untested)
+**Counts:** 18 specs, 18 schemas, 41 document fixtures + 144 conformance fixtures (0 T3 red, 144 green), 5 crates, 197 lint rules (197 tested, 0 untested)
 
 **Links:** [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) · [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs implementation) · [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
 
@@ -11,30 +11,7 @@
 
 ## 1 — Reference implementation blockers
 
-Finish these before binding WOS to an external execution engine or calling a demo implementation representative.
-
-**Sub-sequencing within §1:** (a) Binding-backed S15 + version-pin — exercises the existing path and unblocks honest claims. (b) History + Milestone — settles kernel semantics before engines encode assumptions. (c) Business Calendar runtime integration — schema done, smallest remaining item. (d) CloudEvents / Arazzo / tool / policy-engine bindings — largest chunk, benefits from (a) landing first so the provenance shape is pinned before new binding kinds extend it.
-
-**Runtime schema consumption** — Finish execution paths for artifacts that already exist. This unblocks honest “supported in reference runtime” claims before engine bindings.
-
-- [ ] **Integration Profile Processor** — Initial `invokeService` request-response binding consumption is implemented in `wos-runtime` (typed profile model, FEL input mapping, request/response contract validation, idempotency expression, output binding, provenance). Remaining: CloudEvents 1.0 envelopes, Arazzo-specific execution metadata, and policy-engine decision mapping.
-- [ ] **Integration Profile binding coverage** — Finish the remaining binding kinds that the profile already names:
-  - `event-emit`, `event-consume`, `callback` — CloudEvents 1.0 envelope handling. Correlate callbacks via `subject = {instanceId}:{bindingId}:{invocationId}`. Capture the full envelope in provenance (headers, `id`, `time`, `source`, `specversion`), not only `data`. Reject events missing `id` or `source` at ingress; no silent default-filling.
-  - `arazzo-sequence` — model each step as its own `invokeService` invocation with step-level provenance, not one monolithic record. Cross-step state lives in WOS (not the Arazzo runner) so pause/resume across the sequence survives restart.
-  - `tool` — reuse the `invokeService` request/response contract and version-pinning discipline; no parallel contract. Tool calls feed the same deontic / autonomy / confidence pipeline as other service invocations.
-  - `policy-engine` — normalize every engine's output to `{decision: allow|deny|indeterminate, reasons: [...], obligations: [...]}` at the binding boundary before it enters provenance. Pin `indeterminate` semantics now so downstream audit tools do not learn engine-specific shapes.
-- [x] **Integration Profile output binding** — RFC 9535 profile pinned: member access, index, wildcard, slices supported; filter expressions and recursive descent rejected at lint time (I-001) and rejected at parse time in resolver. Spec text in Integration Profile §3.3.1. (NB.2 complete)
-- [ ] **Business Calendar SLA** — Consume `wos-business-calendar` for Governance S10.3 SLA deadlines; schema done; **runtime integration** pending. Compute deadlines **lazily at check time**, not eagerly at case creation, so calendar updates (holidays, business-day changes) shift future deadlines. Snapshot `calendarVersion` at each evaluation; do not cache computed deadlines across calendar-version changes.
-
-**Coprocessor version discipline** — Validate that the Formspec path matches pinned-definition semantics.
-
-- [ ] **Binding-backed S15 conformance** — Run task draft, submit, validation, pin-check, and mapping fixtures through `wos-runtime` + `wos-formspec-binding`, not the permissive `ConformanceBinding` / `StubValidator` path. Once the real path is green, **delete `ConformanceBinding` and `StubValidator` entirely** — no dual-path fallback. If a fixture cannot pass the real path, fix the fixture or the binding, do not route around it.
-- [ ] **Version-pinned response validation** — Confirm runtime behavior matches definition URL + version pinning in spec. Pin URL is **mandatory** in every S15 request; runtime fails loudly on absence. No "default to latest" fallback. Assert pin equality on re-validation paths (review, audit replay), not only at initial submit.
-
-**Kernel/runtime semantics** — Settle these before external engines encode assumptions about resumption and checkpoints.
-
-- [ ] **History state semantics** — DeepHistory (full snapshot) vs ShallowHistory (exit point) for hierarchical resumption; schema field exists, behavior does not. Implement **DeepHistory first** — safer default; ShallowHistory is a performance optimization for deep hierarchies that isn't needed yet. Write conformance fixtures **before** implementation; at minimum one fixture per nesting depth (1, 2, 3) covering normal re-entry, re-entry after parallel-region exit, and re-entry after a transition crosses the history boundary.
-- [ ] **Milestone firing** — Data-driven checkpoints independent of workflow state; schema + lint K-013 exist; add **conformance** coverage. Pin ordering: **data write durable → milestone emitted → reactive transitions evaluated**. Keeps provenance narratable ("X changed, milestone Y fired, which enabled transition Z") and prevents milestone and transition from appearing in the same logical instant.
+> §1 closed 2026-04-14 — see Completed.
 
 ---
 
@@ -104,7 +81,7 @@ Stable field identity supports AI and documentation; companion specs follow when
 - [x] Governance spec (S6.2) — source authority ranking.
 - [x] Runtime companion (S5.3, S10, S12, S14) — parallel provenance, convergence cap, EventQueue interface.
 - [x] Formspec integration gaps — version pinning, changelog migration, semantic contracts.
-- [x] LINT-MATRIX rule count reconciled (196 total).
+- [x] LINT-MATRIX rule count reconciled (197 total; I-001 added in NB.2).
 - [x] Kernel schema — `evaluationMode`, `maxRelationshipEventDepth`.
 - [x] Governance schema — `scope`, `sourceAuthority`, `ruleId`.
 - [x] Case Instance schema — `pendingEvents`, `governanceState`, `volumeCounters`.
@@ -127,7 +104,7 @@ Stable field identity supports AI and documentation; companion specs follow when
 - [x] Typed state-tree walks (replaced manual tag/event collection).
 - [x] G-027 sub-delegation depth via typed models.
 - [x] T1-TESTS (G-058, G-059, G-062, G-065), T1-K009, CM-001, T2-GAPS (G-060, G-063).
-- [x] LINT-COVERAGE — 196 of 196 rules covered (see LINT-MATRIX.md).
+- [x] LINT-COVERAGE — 197 of 197 rules covered (see LINT-MATRIX.md; I-001 added in NB.2).
 
 **Conformance harness hygiene**
 
@@ -162,6 +139,28 @@ Stable field identity supports AI and documentation; companion specs follow when
 - [x] Runtime Companion S15 interface and reference in-memory runtime path.
 - [x] `wos-formspec-binding` — adapter surface plus prefill, validation, and mapping tests.
 - [x] S15.3 pin re-validation on replay paths — `wos-formspec-binding::FormspecBinding::revalidate_submission` recomputes pin equality fresh on every replay/audit/review call.
+
+**Coprocessor version discipline (S15)**
+
+- [x] S15.1 — register `FormspecBinding` alongside `ConformanceBinding`; real binding path exercised in conformance (61132c1).
+- [x] S15.2 — author S15 validation fixtures through real `wos-formspec-binding` path; all 6 fixtures green (b0f3306).
+- [x] S15.3 — delete `ConformanceBinding` / `StubValidator`; pin re-validation enforced on replay paths (0283740 + 0a3c369).
+
+**Kernel/runtime semantics (KS)**
+
+- [x] KS.1 — DeepHistory + ShallowHistory state semantics with conformance fixtures (D1 depth-1, D2 depth-2 + parallel-exit, D3 depth-3); `wos-core` capture/restore (c78848c).
+- [x] KS.2 — Milestone firing with pinned ordering (data write durable → `MilestoneFired` → reactive transitions evaluated); 5 conformance fixtures K-M-001 through K-M-005 (521bd54).
+
+**Business calendar (BC)**
+
+- [x] BC.1 — Business Calendar SLA runtime integration: lazy deadline evaluation at check time, `calendarVersion` snapshot, `DidNotConverge` error on convergence failure; 4 fixtures G-S10-001 through G-S10-004 green (c93052f).
+
+**Integration Profile binding kinds (NB)**
+
+- [x] NB.1 — typed `IntegrationBindingKind` enum + `IntegrationBindingHandler` trait; replaced stringly-typed dispatch (f017910).
+- [x] NB.2 — outputBinding RFC 9535 profile pinned (wildcard + slice; filter/recursive-descent rejected); lint rule I-001; spec §3.3.1 (e6e916d).
+- [x] NB.3 — CloudEvents bindings (`event-emit`, `event-consume`, `callback`) with subject correlation `{instanceId}:{bindingId}:{invocationId}`; full envelope captured in provenance; 6 fixtures INT-EMIT/CONSUME/CALLBACK-001–003 (75c8b21).
+- [x] NB.4 — Arazzo, tool, and policy-engine bindings; `PolicyDecision` normalized to `{decision, reasons, obligations}`; 7 fixtures INT-ARAZZO/TOOL/POLICY-001–004 (d79c02b).
 
 **Security / architecture docs**
 
