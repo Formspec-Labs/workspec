@@ -76,3 +76,26 @@ Implementations MUST NOT:
 - Assume that a continuity reference implies any particular assurance level.
 - Assume that distinct continuity references imply distinct legal subjects.
 - Merge continuity references implicitly. Explicit merge MUST be recorded as a canonical fact.
+
+## 4. Invariant 6: Disclosure Posture Is Not Assurance Level
+
+### 4.1 Statement
+
+**Invariant 6 (normative, constitutional):** Disclosure posture and assurance level are independent properties of a fact. Implementations MUST NOT conflate them, MUST NOT derive one from the other, and MUST NOT couple their transitions.
+
+### 4.2 Background
+
+**Disclosure posture** declares how much of a subject's identity is revealed in a given context (anonymous, pseudonymous, identified, public). **Assurance level** declares how strongly a fact is bound to its subject (§2).
+
+A fact MAY be highly assured and pseudonymously disclosed (a verified-L3 claim disclosed under a pseudonym). A fact MAY be weakly assured and fully identified (a self-asserted L1 claim tied to a legal name). All four combinations are valid. Implementations that force these to co-vary violate this invariant.
+
+### 4.3 Behavioral Consequences
+
+- Profiles MAY constrain disclosure posture or assurance level independently. A profile that constrains both MUST constrain them as independent predicates, not a joint predicate.
+- Assurance-upgrade facts (§2.3) MUST NOT implicitly change disclosure posture.
+- Disclosure re-scoping (e.g., a pseudonymous record being identified later) MUST NOT imply an assurance upgrade.
+- Verifiers MUST be able to check assurance claims independently of disclosure claims.
+
+### 4.4 Normative Home
+
+This invariant is stated normatively here. Other specifications in the WOS family, and bindings such as Trellis, MUST reference this section rather than restating the invariant.
