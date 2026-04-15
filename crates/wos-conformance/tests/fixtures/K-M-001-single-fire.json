@@ -1,0 +1,74 @@
+{
+  "binding": "formspec",
+  "id": "K-M-001-single-fire",
+  "rule": "K-M",
+  "description": "A setData onEntry action in 'approved' sets 'approved=true'. The 'applicationApproved' milestone fires exactly once when the workflow transitions into 'approved'. A second transition to 'done' does not produce a second MilestoneFired record.",
+  "documents": { "kernel": "inline" },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:milestone-single-fire",
+      "version": "1.0.0",
+      "title": "Milestone Single Fire",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "worker", "type": "human", "description": "Worker actor" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "approve", "target": "approved" }
+            ]
+          },
+          "approved": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "setData",
+                "path": "caseFile.approved",
+                "value": true
+              }
+            ],
+            "transitions": [
+              { "event": "close", "target": "done" }
+            ]
+          },
+          "done": { "type": "final" }
+        },
+        "milestones": {
+          "applicationApproved": {
+            "condition": "caseFile.approved == true",
+            "description": "Application has been approved"
+          }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "approved": { "type": "boolean" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "initial_case_state": {
+    "approved": false
+  },
+  "event_sequence": [
+    { "event": "approve", "actor": "worker" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "approved", "event": "approve" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "caseStateMutation" },
+    { "recordKind": "milestoneFired", "data": { "milestoneId": "applicationApproved" } }
+  ]
+}

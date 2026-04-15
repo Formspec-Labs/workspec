@@ -944,3 +944,128 @@ fn kh_d2_deep_across_boundary() {
 fn kh_d2_shallow_across_boundary() {
     assert_fixture_passes("K-H-D2-shallow-across-boundary.json");
 }
+
+// ── Milestones (KS.2) ────────────────────────────────────────────
+
+/// K-M-001: A setData action makes a milestone condition true; exactly one MilestoneFired is emitted.
+#[test]
+fn km_001_single_fire() {
+    assert_fixture_passes("K-M-001-single-fire.json");
+}
+
+/// K-M-003: Milestone-inside-repeat is not supported by the kernel model; fixture verifies a
+/// lifecycle-level milestone evaluating a scalar aggregate condition (reviewCount >= 2) that fires
+/// after the second setData write but not the first.
+#[test]
+fn km_003_aggregate_condition() {
+    let path = fixture_path("K-M-003-aggregate-condition.json");
+    let fixture_json = std::fs::read_to_string(&path).unwrap();
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!("K-M-003 FAILED:\n{}", result.failures.join("\n"));
+    }
+
+    let fire_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == wos_conformance::ProvenanceKind::MilestoneFired)
+        .count();
+
+    // Must fire exactly once — after the second write sets reviewCount=2.
+    assert_eq!(
+        fire_count, 1,
+        "dualReviewComplete milestone must fire exactly once (after reviewCount reaches 2), got {fire_count}"
+    );
+}
+
+/// K-M-004: Provenance ordering — CaseStateMutation precedes MilestoneFired, which precedes
+/// StateTransition from the reactive completion event.  The expected_provenance any-match field
+/// cannot enforce ordering, so this test checks absolute index positions.
+#[test]
+fn km_004_ordering_with_transition() {
+    let path = fixture_path("K-M-004-ordering-with-transition.json");
+    let fixture_json = std::fs::read_to_string(&path).unwrap();
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!("K-M-004 FAILED:\n{}", result.failures.join("\n"));
+    }
+
+    let provenance = &result.provenance;
+
+    // Locate the key records.
+    let mutation_idx = provenance
+        .iter()
+        .position(|p| p.record_kind == wos_conformance::ProvenanceKind::CaseStateMutation)
+        .expect("CaseStateMutation record must be present");
+
+    let milestone_idx = provenance
+        .iter()
+        .position(|p| p.record_kind == wos_conformance::ProvenanceKind::MilestoneFired)
+        .expect("MilestoneFired record must be present");
+
+    // The StateTransition from review→approved fires after the task completion event drains.
+    let transition_idx = provenance
+        .iter()
+        .rposition(|p| {
+            p.record_kind == wos_conformance::ProvenanceKind::StateTransition
+                && p.from_state.as_deref() == Some("review")
+                && p.to_state.as_deref() == Some("approved")
+        })
+        .expect("StateTransition review→approved must be present");
+
+    assert!(
+        mutation_idx < milestone_idx,
+        "CaseStateMutation (idx={mutation_idx}) must precede MilestoneFired (idx={milestone_idx})"
+    );
+    assert!(
+        milestone_idx < transition_idx,
+        "MilestoneFired (idx={milestone_idx}) must precede StateTransition review→approved (idx={transition_idx})"
+    );
+}
+
+/// K-M-002: A milestone that fired on the first data write does not re-fire on subsequent events
+/// even when the condition remains true.  Exactly one MilestoneFired appears across the full sequence.
+#[test]
+fn km_002_no_refire() {
+    let path = fixture_path("K-M-002-no-refire.json");
+    let fixture_json = std::fs::read_to_string(&path).unwrap();
+    let base_dir = std::path::Path::new(&path)
+        .parent()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
+
+    if !result.passed {
+        panic!("K-M-002 FAILED:\n{}", result.failures.join("\n"));
+    }
+
+    let fire_count = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == wos_conformance::ProvenanceKind::MilestoneFired)
+        .count();
+
+    assert_eq!(
+        fire_count, 1,
+        "applicationApproved milestone must fire exactly once across all three events, got {fire_count}"
+    );
+}

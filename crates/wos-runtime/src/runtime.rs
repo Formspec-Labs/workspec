@@ -26,6 +26,7 @@ use wos_core::EvalContext;
 
 use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
 use crate::integration::{IntegrationBinding, IntegrationContractRef, IntegrationProfileDocument};
+use crate::milestones::evaluate_milestones;
 use crate::store::{
     ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StepResultRecord,
     StoreError, TaskArtifact, TaskArtifactKind,
@@ -426,6 +427,7 @@ impl WosRuntime {
             pending_events: Vec::new(),
             governance_state: None,
             volume_counters: None,
+            fired_milestones: Default::default(),
             created_at: now_iso.clone(),
             updated_at: now_iso.clone(),
             extensions: Default::default(),
@@ -558,6 +560,14 @@ impl WosRuntime {
                 data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
             });
         }
+
+        // Milestone firing: evaluate after durable case-state write, before reactive
+        // transitions drain (Kernel S4.13).  Records are appended in lexicographic
+        // milestone-id order so the provenance stream is deterministic.
+        let post_state = record.instance.case_state.clone();
+        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
+        appended_provenance.extend(milestone_records);
+
         let actions = evaluator.take_executed_actions();
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
@@ -844,6 +854,17 @@ impl WosRuntime {
                 ));
             }
         }
+
+        // Milestone firing: evaluate after durable case-state write, before reactive
+        // transitions drain (Kernel S4.13).  Records follow any DataMapping record so
+        // the provenance stream reads: data changed → milestone fired.
+        let kernel = self.resolver.resolve_kernel(
+            &record.instance.definition_url,
+            &record.instance.definition_version,
+        )?;
+        let post_state = record.instance.case_state.clone();
+        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
+        provenance.extend(milestone_records);
 
         let emitted_event = remove_task_with_event(
             &mut record.instance,

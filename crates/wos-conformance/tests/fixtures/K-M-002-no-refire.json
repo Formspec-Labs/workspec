@@ -1,0 +1,83 @@
+{
+  "binding": "formspec",
+  "id": "K-M-002-no-refire",
+  "rule": "K-M",
+  "description": "A milestone fires when 'approved=true' is first set. A subsequent transition to 'done' does not re-fire the milestone even though the condition remains true. Only one MilestoneFired record appears across both events.",
+  "documents": { "kernel": "inline" },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:milestone-no-refire",
+      "version": "1.0.0",
+      "title": "Milestone No Refire",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "worker", "type": "human", "description": "Worker actor" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "approve", "target": "approved" }
+            ]
+          },
+          "approved": {
+            "type": "atomic",
+            "onEntry": [
+              {
+                "action": "setData",
+                "path": "caseFile.approved",
+                "value": true
+              }
+            ],
+            "transitions": [
+              { "event": "close", "target": "closed" }
+            ]
+          },
+          "closed": {
+            "type": "atomic",
+            "transitions": [
+              { "event": "archive", "target": "done" }
+            ]
+          },
+          "done": { "type": "final" }
+        },
+        "milestones": {
+          "applicationApproved": {
+            "condition": "caseFile.approved == true",
+            "description": "Application has been approved"
+          }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "approved": { "type": "boolean" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "initial_case_state": {
+    "approved": false
+  },
+  "event_sequence": [
+    { "event": "approve", "actor": "worker" },
+    { "event": "close", "actor": "worker" },
+    { "event": "archive", "actor": "worker" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "approved", "event": "approve" },
+    { "from": "approved", "to": "closed", "event": "close" },
+    { "from": "closed", "to": "done", "event": "archive" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "milestoneFired", "data": { "milestoneId": "applicationApproved" } }
+  ]
+}

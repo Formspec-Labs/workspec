@@ -9,6 +9,7 @@
 pub mod binding;
 pub mod companion;
 pub mod integration;
+pub mod milestones;
 pub mod runtime;
 pub mod store;
 

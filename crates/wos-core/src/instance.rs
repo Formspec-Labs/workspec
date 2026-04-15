@@ -70,6 +70,13 @@ pub struct CaseInstance {
     /// ISO 8601 last-modified timestamp.
     pub updated_at: String,
 
+    /// Milestone identifiers that have already fired for this instance.
+    ///
+    /// Once a milestone condition first becomes true its id is recorded here,
+    /// preventing it from firing again (Kernel S4.13 — once fired, stays fired).
+    #[serde(default, skip_serializing_if = "std::collections::HashSet::is_empty")]
+    pub fired_milestones: std::collections::HashSet<String>,
+
     /// Extension data (keys prefixed with `x-`).
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extensions: HashMap<String, serde_json::Value>,

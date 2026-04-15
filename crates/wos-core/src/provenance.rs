@@ -153,6 +153,12 @@ pub enum ProvenanceKind {
 
     // ── Relationship provenance (Kernel S7) ────────────────────────
     RelationshipChanged,
+
+    // ── Milestones (Kernel S4.13) ──────────────────────────────────
+    /// A milestone condition became true for the first time (Kernel S4.13).
+    ///
+    /// `data` carries `{"milestoneId": "<id>"}`.
+    MilestoneFired,
 }
 
 /// A single provenance record.
