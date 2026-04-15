@@ -21,16 +21,22 @@ fn inline_fixture(binding: Option<&str>) -> String {
             "documents": {{"kernel": "inline"}},
             "inline_documents": {{
                 "kernel": {{
-                    "wos": "1.0",
+                    "$wosKernel": "1.0",
                     "url": "urn:test:dispatch",
                     "version": "1.0.0",
-                    "states": {{
-                        "initial": {{
-                            "type": "final"
+                    "title": "Binding Dispatch Test",
+                    "description": "Minimal kernel for binding dispatch tests",
+                    "status": "active",
+                    "impactLevel": "operational",
+                    "actors": [{{"id": "worker", "type": "human", "description": "Test actor"}}],
+                    "lifecycle": {{
+                        "initialState": "initial",
+                        "states": {{
+                            "initial": {{"type": "final"}}
                         }}
                     }},
-                    "initialState": "initial",
-                    "tasks": []
+                    "caseFile": {{"fields": {{}}}},
+                    "execution": {{"workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned"}}
                 }}
             }},
             "event_sequence": [],
