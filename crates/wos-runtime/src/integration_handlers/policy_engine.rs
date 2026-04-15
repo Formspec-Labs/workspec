@@ -145,7 +145,13 @@ fn normalize_decision(
     let decision = match engine_type {
         "opa" => PolicyDecision::from_opa(raw_response),
         "cedar" => PolicyDecision::from_cedar(raw_response),
-        "canonical" | _ => PolicyDecision::from_canonical(raw_response),
+        "canonical" => PolicyDecision::from_canonical(raw_response),
+        other => {
+            return Err(RuntimeError::Integration(format!(
+                "policy-engine '{service_ref}': unknown engineType '{other}' \
+                 (expected opa|cedar|canonical)"
+            )));
+        }
     };
 
     decision.ok_or_else(|| {

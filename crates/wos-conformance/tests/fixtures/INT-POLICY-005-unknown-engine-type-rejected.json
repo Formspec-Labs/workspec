@@ -1,0 +1,81 @@
+{
+  "id": "INT-POLICY-005-unknown-engine-type-rejected",
+  "rule": "INT-POLICY",
+  "description": "A policy-engine binding with an unrecognised engineType (not 'opa', 'cedar', or 'canonical') MUST be rejected with a RuntimeError. The error message must identify the unknown engine type. This verifies that the permissive wildcard fallback is gone and unknown engines fail fast.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-POLICY-005",
+      "version": "1.0.0",
+      "title": "INT-POLICY-005 Unknown Engine Type Rejected",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "evaluate",
+                "target": "evaluated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "policyEngine"
+                  }
+                ]
+              }
+            ]
+          },
+          "evaluated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "policyAllowed": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-POLICY-005",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "policyEngine": {
+          "type": "policy-engine",
+          "description": "Policy engine with unknown engineType — must be rejected",
+          "engineType": "xacml",
+          "outputBinding": {
+            "caseFile.policyAllowed": "$.decision"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "decision": "allow",
+    "reasons": [],
+    "obligations": []
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "evaluate", "actor": "operator" }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": []
+}
