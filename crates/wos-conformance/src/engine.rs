@@ -36,6 +36,19 @@ use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
+/// Document roles that the engine handles explicitly.
+///
+/// Any key NOT in this list is passed through as a raw companion document.
+/// When adding a new first-class role, add it here once — the filter loop in
+/// `WorkflowEngine::new` will pick it up automatically.
+const RESERVED_DOCUMENT_ROLES: &[&str] = &[
+    "kernel",
+    "ai",
+    "governance",
+    "integration",
+    "businessCalendar",
+];
+
 // ── Public types ─────────────────────────────────────────────────
 
 /// Observed state transition during execution.
@@ -139,7 +152,7 @@ impl WorkflowEngine {
         // Load any remaining companion documents as raw JSON.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
-            if matches!(key.as_str(), "kernel" | "ai" | "governance" | "integration" | "businessCalendar") {
+            if RESERVED_DOCUMENT_ROLES.contains(&key.as_str()) {
                 continue;
             }
             let doc_json = fixture_document_json(fixture, key)?;
@@ -154,7 +167,7 @@ impl WorkflowEngine {
         let clock = SharedClock::new(0);
         let mut bindings = BindingRegistry::new();
         let binding_used = match fixture.binding.as_deref() {
-            Some("formspec") | Some("conformance") | _ => {
+            Some("formspec") | Some("conformance") | None => {
                 let processor = if fixture.definition_errors.is_empty() {
                     FixtureFormspecProcessor::new(
                         definition_url.clone(),
@@ -169,6 +182,11 @@ impl WorkflowEngine {
                 };
                 bindings.register(wos_formspec_binding::FormspecBinding::new(processor));
                 "formspec".to_string()
+            }
+            Some(other) => {
+                return Err(ConformanceError::Parse(format!(
+                    "unknown binding selector '{other}' — expected 'formspec', 'conformance', or omitted"
+                )));
             }
         };
         let mut runtime = WosRuntime::new(
