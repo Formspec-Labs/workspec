@@ -12,8 +12,8 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 | Component | Status | Detail |
 |-----------|--------|--------|
 | **wos-core** | ✅ | Implements the typed evaluation kernel, deontic/autonomy modules, and explanation assembly. |
-| **wos-lint** | ✅ | Executes 196 rules (36 T1 + 55 T2 + 105 T3) against typed models. |
-| **wos-conformance** | ✅ | Manages 134 fixtures and handles Batch 16 processor reporting. |
+| **wos-lint** | ✅ | Executes 197 rules (36 T1 + 55 T2 + 105 T3 + I-001) against typed models. |
+| **wos-conformance** | ✅ | Manages 144 fixtures and handles Batch 16 processor reporting. |
 | **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, and event queues. |
 | **wos-formspec-binding** | ✅ | Implements the S15 protocol, task prefill, and response validation. |
 
@@ -21,14 +21,14 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 
 ## 2. Verification Progress (LINT-MATRIX)
 
-WOS verifies 196 normative constraints across three tiers.
+WOS verifies 197 normative constraints across three tiers.
 
 | Tier | Type | Rules | Verified | Gap |
 |------|------|-------|----------|-----|
-| **Tier 1** | Single-Doc | 36 | 36 | 0 |
+| **Tier 1** | Single-Doc | 37 | 37 | 0 |
 | **Tier 2** | Cross-Doc / AST | 55 | 55 | 0 |
 | **Tier 3** | Runtime | 105 | 105 | 0 |
-| **Total** | | **196** | **196** | **0** |
+| **Total** | | **197** | **197** | **0** |
 
 ---
 
@@ -72,17 +72,17 @@ WOS employs a linked-data architecture to ensure interoperability and AI-safety.
 
 ## 5. Engineering Roadmap
 
-### Phase 1: Engine Bindings (In Progress)
-Adapts the reference evaluator to established engines.
+### Phase 1: Engine Bindings (§1 Reference Blockers Complete)
+§1 reference implementation blockers are complete as of 2026-04-14. Remaining Phase 1 work is engine adapter bindings:
 *   [ ] **Camunda 8 Worker:** Delegates BPMN task execution to WOS governance.
 *   [ ] **Temporal Workflow:** Maps WOS evaluation steps to deterministic replay.
 *   [ ] **AWS Step Functions:** Bridges ASL states to WOS transitions.
-*   [ ] **Integration Profile Processor:** Implements CloudEvents 1.0 native bindings, Arazzo multi-step API orchestration, and policy engine bridges (XACML, OPA, Cedar). Schema and fixture exist (`wos-integration-profile.schema.json`, `integration-benefits-adjudication.json`); runtime consumption is the gap.
-*   [ ] **Business Calendar SLA Evaluation:** Consumes `wos-business-calendar` sidecar for SLA deadline computation in Governance S10.3. Schema is complete with workWeek, holidays, operatingHours, and timezone; runtime integration pending.
+*   [x] **Integration Profile Processor:** CloudEvents 1.0 (`event-emit`, `event-consume`, `callback`), Arazzo multi-step sequences, tool invocations, and policy engine bridges all implemented in `wos-runtime`. 13 INT-* conformance fixtures green. (NB.3 + NB.4 complete)
+*   [x] **Business Calendar SLA Evaluation:** `wos-business-calendar` sidecar consumed for Governance S10.3 SLA deadline computation; lazy evaluation at check time; `calendarVersion` snapshot; 4 G-S10-* fixtures green. (BC.1 complete)
 
 ### Phase 2: Advanced Provenance (Future)
-*   [ ] **History State Semantics:** Implements DeepHistory (full state snapshot) vs ShallowHistory (exit point only) for hierarchical state resumption. Kernel schema specifies `historyState` property; fixture `k-035-history-cleared-on-exit.json` defines clear-on-exit behavior.
-*   [ ] **Milestone Firing:** Verifies data-driven checkpoint firing independent of workflow state. Schema defines milestones with FEL conditions; lint rule K-013 validates expressions and ID uniqueness.
+*   [x] **History State Semantics:** DeepHistory (full state snapshot) and ShallowHistory (exit point only) implemented in `wos-core`. 9 K-H-* conformance fixtures covering depth-1, depth-2, depth-3, and parallel-exit re-entry. (KS.1 complete)
+*   [x] **Milestone Firing:** Data-driven milestone firing independent of workflow state implemented in `wos-runtime`. Ordering pinned: data write durable → `MilestoneFired` → reactive transitions evaluated. 5 K-M-* conformance fixtures. (KS.2 complete)
 *   [ ] **Merkle Provenance Chains:** Adds cryptographic hash-chaining for tamper-proof logs.
 *   [ ] **Provenance Export Formats:** Serializes internal provenance to W3C PROV-O, OCEL 2.0, and IEEE 1849 XES for external tooling. `provenance.rs` implements 30+ provenance kinds; export serialization is the gap.
 *   [ ] **Simulation Trace Format:** Standardizes formats for replaying simulation runs.
@@ -107,12 +107,12 @@ Adapts the reference evaluator to established engines.
 | CaMeL dual-LLM | ■ | 🟡 (informative) | Specified as optional guidance in S3.6. |
 | Capability routing | ■ | ⚪ | Remains implementation-defined in the kernel. |
 | Defeasible rules | ■ | ✅ | Implemented via authority-ranked assembly. |
-| Business calendar SLA | 🟡 | 🟡 (schema) | Schema complete; runtime SLA consumption pending. |
-| CloudEvents binding | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
-| Arazzo orchestration | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
-| Policy engine bridge | 🟡 | 🟡 (schema) | Integration profile fixture exists; processor not implemented. |
-| History states | 🟡 | 🟡 (partial) | Schema property exists; DeepHistory vs ShallowHistory semantics not implemented. |
-| Milestone firing | 🟡 | 🟡 (partial) | Schema and lint complete; conformance testing gap. |
+| Business calendar SLA | 🟡 | ✅ | Lazy evaluation at check time; `calendarVersion` snapshot; 4 G-S10-* fixtures. (BC.1) |
+| CloudEvents binding | 🟡 | ✅ | `event-emit`, `event-consume`, `callback` with subject correlation and full envelope provenance; 6 INT-* fixtures. (NB.3) |
+| Arazzo orchestration | 🟡 | ✅ | Per-step `invokeService` invocations with step-level provenance; pause/resume across sequence; 3 INT-ARAZZO-* fixtures. (NB.4) |
+| Policy engine bridge | 🟡 | ✅ | `PolicyDecision` normalized to `{decision, reasons, obligations}` at binding boundary; OPA adapter; 4 INT-POLICY-* fixtures. (NB.4) |
+| History states | 🟡 | ✅ | DeepHistory + ShallowHistory implemented; 9 K-H-* fixtures covering depth-1, depth-2, parallel-exit, depth-3. (KS.1) |
+| Milestone firing | 🟡 | ✅ | Milestone firing with pinned ordering (write → MilestoneFired → transitions); 5 K-M-* fixtures. (KS.2) |
 | PROV-O / OCEL / XES export | 🟡 | 🟡 (internal) | Internal provenance complete; export serialization not implemented. |
 
 ---
