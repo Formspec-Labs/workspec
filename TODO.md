@@ -1,11 +1,11 @@
 # WOS TODO
 
-**Last audited:** 2026-04-14
-**Counts:** 18 specs, 18 schemas, 41 document fixtures + 144 conformance fixtures (0 T3 red, 144 green), 5 crates, 197 lint rules (197 tested, 0 untested)
+**Last audited:** 2026-04-15
+**Counts:** 18 specs, 18 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 5 crates, 197 lint rules (197 tested, 0 untested)
 
-**Links:** [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) · [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs implementation) · [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
+**Links:** [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) · [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs implementation) · [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
 
-**Sequencing logic:** (1) Measure honestly before optimizing—verification and conformance first. (2) Finish what the specs already promise (runtime consumption of existing schema/fixtures). (3) Tighten the Formspec coprocessor contract in runtime. (4) Complete hierarchical state semantics so external engines bind to stable behavior. (5) Ship adapters. (6) Build audit and narrative products on top of stable provenance. (7) Ontology then regulatory companion specs. (8) Interop and speculative work last.
+**Sequencing logic:** (1) Land zero-dependency foundation work first — provenance export and ontology field identity — before deeper layers lock in. (2) Ship engine adapters to validate the runtime against real commercial workflow engines. (3) Build audit and narrative products on the now-stable provenance export surface. (4) Regulatory companion specs follow once ontology is landed. (5) Interoperability and speculative research last.
 
 ---
 
@@ -15,43 +15,52 @@
 
 ---
 
-## 2 — Engine bindings
+## 2 — Foundational (zero external dependencies)
 
-Snap commercial/workflow engines onto the reference runtime once §1 is trustworthy.
+Highest leverage-per-effort: both items unlock downstream tiers and have no external blocker.
 
-- [ ] **Camunda 8 Worker** — Delegate BPMN task execution under WOS governance.
-- [ ] **Temporal Workflow** — Map WOS evaluation steps to deterministic replay.
-- [ ] **AWS Step Functions** — Bridge ASL states to WOS transitions.
+- [ ] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. 30+ record kinds already stable; export path missing. Ships industry-standard audit-tool interop without waiting on engine bindings.
+- [ ] **Ontology field identity** — Implement ontology-driven semantic field identity (`ontology-spec.md`). Grounds AI integration, cross-document alignment, and the regulatory specs in §5. Cheaper to land now than to retrofit after regulatory specs are drafted.
 
 ---
 
-## 3 — Auditability and evidence products
+## 3 — Engine adapters
 
-Formats and integrity layers assume a stable provenance stream from the runtime.
+Validate the runtime against real commercial workflow engines. Shakes out bugs in the reference implementation under production-shape workloads.
 
-- [ ] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES (30+ record kinds exist; export path missing).
-- [ ] **Dual-readability narrative** — Machine-readable + human prose from the same provenance; specify and implement generation.
-- [ ] **Merkle provenance chains** — Cryptographic hash-chaining for tamper-evident logs (builds on stable export/stream semantics).
+- [ ] **Camunda 8 Worker** — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
+- [ ] **Temporal Workflow** — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
+- [ ] **AWS Step Functions** — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
+
+---
+
+## 4 — Audit and evidence products
+
+Build on the stable provenance export surface from §2. Each item depends on export semantics being locked.
+
+- [ ] **Dual-readability narrative** — Machine-readable + human prose from the same provenance; specify and implement generation. The governance/regulatory story lives here.
+- [ ] **Merkle provenance chains** — Cryptographic hash-chaining for tamper-evident logs. Requires stable export format.
 - [ ] **Simulation trace format** — Standardize replay of simulation runs for validation and tooling.
 
 ---
 
-## 4 — Ontology and regulatory companion specs
+## 5 — Regulatory alignment
 
-Stable field identity supports AI and documentation; companion specs follow when semantics are implementable.
+External-deadline-driven; benefits from ontology (§2) landing first so field identity is stable before regulatory text cites it.
 
-- [ ] **Ontology field identity** — Implement ontology-driven semantic field identity (`ontology-spec.md`); grounds AI and cross-document alignment.
 - [ ] **EU AI Act alignment** — Art. 13–14 alignment spec: draft → 1.0.0.
 - [ ] **OMB M-24-10 compliance** — Compliance support spec: draft → 1.0.0.
 
 ---
 
-## 5 — Interoperability and long-horizon research
+## 6 — Interoperability and speculative research
 
+Pick up when §§2–5 stabilize. Ordered cheap-to-expensive.
+
+- [ ] **Claim check pattern** — Evidence by content hash + URI; not specified in WOS. Conceptually small; valuable once large-evidence use cases appear.
+- [ ] **Role-based field visibility** — Specify at WOS vs keep Formspec-only. Decision first, spec second (if WOS wins the boundary).
 - [ ] **SCXML interoperability** — Bidirectional WOS ↔ SCXML mapping (currently informative only).
-- [ ] **Statutory deadline chains** — Interdependent government deadlines and automated legal consequences; not specified.
-- [ ] **Role-based field visibility** — Specify at WOS vs keep Formspec-only.
-- [ ] **Claim check pattern** — Evidence by content hash + URI; not specified in WOS.
+- [ ] **Statutory deadline chains** — Interdependent government deadlines and automated legal consequences; not specified. Largest item in this tier.
 
 ---
 
@@ -144,7 +153,7 @@ Stable field identity supports AI and documentation; companion specs follow when
 
 - [x] S15.1 — register `FormspecBinding` alongside `ConformanceBinding`; real binding path exercised in conformance (61132c1).
 - [x] S15.2 — author S15 validation fixtures through real `wos-formspec-binding` path; all 6 fixtures green (b0f3306).
-- [x] S15.3 — delete `ConformanceBinding` / `StubValidator`; pin re-validation enforced on replay paths (0283740 + 0a3c369).
+- [x] S15.3 — delete `ConformanceBinding`; pin re-validation enforced on replay paths (0283740 + 0a3c369). `StubValidator` retained for service-invocation contract validation (`contract_outcomes` fixture field), which is a separate code path from the task-binding adapter.
 
 **Kernel/runtime semantics (KS)**
 
