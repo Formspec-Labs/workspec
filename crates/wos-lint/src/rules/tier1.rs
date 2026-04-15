@@ -1051,17 +1051,77 @@ fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic
 
 /// Return `true` if the JSONPath string contains a filter expression or recursive descent.
 ///
-/// This is a syntactic check only — it does not need to parse the full path.
+/// Uses a minimal state machine that skips characters inside quoted key segments
+/// (`'...'` or `"..."`), so quoted key names like `$['a..b']` do not produce
+/// false positives. The only known false-positive pattern with the previous
+/// substring search was `$['a..b']` — this implementation eliminates it.
 fn contains_unsupported_jsonpath_feature(json_path: &str) -> bool {
-    // Recursive descent: `..` anywhere in the path.
-    if json_path.contains("..") {
-        return true;
+    let mut chars = json_path.chars().peekable();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut prev = '\0';
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            // Toggle single-quote state (not inside a double-quoted section).
+            '\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+            }
+            // Toggle double-quote state (not inside a single-quoted section).
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+            }
+            // Outside quotes: check for unsupported features.
+            '.' if !in_single_quote && !in_double_quote => {
+                if prev == '.' {
+                    // Found `..` — recursive descent.
+                    return true;
+                }
+            }
+            '[' if !in_single_quote && !in_double_quote => {
+                if chars.peek() == Some(&'?') {
+                    // Found `[?` — filter expression.
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        prev = ch;
     }
-    // Filter expression: `[?` anywhere in the path.
-    if json_path.contains("[?") {
-        return true;
-    }
+
     false
+}
+
+#[cfg(test)]
+mod jsonpath_feature_tests {
+    use super::contains_unsupported_jsonpath_feature;
+
+    #[test]
+    fn recursive_descent_is_flagged() {
+        assert!(contains_unsupported_jsonpath_feature("$..field"));
+        assert!(contains_unsupported_jsonpath_feature("$.foo..bar"));
+    }
+
+    #[test]
+    fn filter_expression_is_flagged() {
+        assert!(contains_unsupported_jsonpath_feature("$[?(@.x > 1)]"));
+        assert!(contains_unsupported_jsonpath_feature("$.items[?(@ > 0)]"));
+    }
+
+    #[test]
+    fn normal_paths_are_not_flagged() {
+        assert!(!contains_unsupported_jsonpath_feature("$.foo.bar"));
+        assert!(!contains_unsupported_jsonpath_feature("$.items[0]"));
+        assert!(!contains_unsupported_jsonpath_feature("$['a']"));
+        assert!(!contains_unsupported_jsonpath_feature("$.items[*].value"));
+    }
+
+    #[test]
+    fn quoted_key_with_dots_is_not_flagged() {
+        // $['a..b'] is the known false-positive pattern — must NOT be flagged.
+        assert!(!contains_unsupported_jsonpath_feature("$['a..b']"));
+        assert!(!contains_unsupported_jsonpath_feature("$[\"a..b\"]"));
+    }
 }
 
 /// Recursively visit every JSON object node.

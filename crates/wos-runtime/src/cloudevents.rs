@@ -95,7 +95,10 @@ impl CloudEvent {
     /// All CE attributes are included; `None` fields are omitted (via
     /// `skip_serializing_if`).
     pub fn to_provenance_data(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or_else(|_| serde_json::json!({}))
+        // CloudEvent fields are all primitives or Option<primitive> — serialization
+        // is infallible by construction. The expect communicates that invariant.
+        serde_json::to_value(self)
+            .expect("CloudEvent serialization is infallible: all fields are primitive or Option<Value>")
     }
 }
 
