@@ -252,6 +252,7 @@ mod tests {
     ) -> ProvenanceRecord {
         ProvenanceRecord {
             record_kind: ProvenanceKind::ActionExecuted,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,
@@ -275,6 +276,7 @@ mod tests {
     ) -> ProvenanceRecord {
         ProvenanceRecord {
             record_kind: ProvenanceKind::ActionExecuted,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,

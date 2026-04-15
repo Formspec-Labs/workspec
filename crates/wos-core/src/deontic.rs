@@ -55,6 +55,7 @@ pub fn evaluate_deontic_constraints(
     // Record evaluation order (AI S4.6).
     provenance.push(ProvenanceRecord {
         record_kind: ProvenanceKind::DeonticEvaluation,
+        timestamp: String::new(),
         actor_id: None,
         from_state: None,
         to_state: None,
@@ -112,6 +113,7 @@ pub fn evaluate_deontic_constraints(
     for level in &["agent", "action-site", "workflow"] {
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::DeonticEvaluation,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,
@@ -133,6 +135,7 @@ pub fn evaluate_deontic_constraints(
                 if matches!(result, FelResult::False | FelResult::Null) {
                     provenance.push(ProvenanceRecord {
                         record_kind: ProvenanceKind::RightsViolation,
+                        timestamp: String::new(),
                         actor_id: None,
                         from_state: None,
                         to_state: None,
@@ -164,6 +167,7 @@ pub fn evaluate_deontic_constraints(
             };
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticResolution,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -206,6 +210,7 @@ fn evaluate_constraint_set(
         for perm in &constraints.permissions {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticBypass,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -220,6 +225,7 @@ fn evaluate_constraint_set(
         for prohib in &constraints.prohibitions {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticBypass,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -234,6 +240,7 @@ fn evaluate_constraint_set(
         for oblig in &constraints.obligations {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticBypass,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -288,6 +295,7 @@ fn evaluate_constraint_set(
                 }
                 provenance.push(ProvenanceRecord {
                     record_kind: ProvenanceKind::DeonticViolation,
+                    timestamp: String::new(),
                     actor_id: None,
                     from_state: None,
                     to_state: None,
@@ -321,6 +329,7 @@ fn evaluate_constraint_set(
         if violated {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticViolation,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -348,6 +357,7 @@ fn evaluate_constraint_set(
         if violated {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticViolation,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -380,6 +390,7 @@ fn handle_null_propagation(
             NullBehavior::Escalate => {
                 provenance.push(ProvenanceRecord {
                     record_kind: ProvenanceKind::DeonticViolation,
+                    timestamp: String::new(),
                     actor_id: None,
                     from_state: None,
                     to_state: None,
@@ -400,6 +411,7 @@ fn handle_null_propagation(
         ImpactLevel::RightsImpacting | ImpactLevel::SafetyImpacting => {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DeonticViolation,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -446,6 +458,7 @@ fn check_consistency(
                     if diff > threshold && diff > CONSISTENCY_ABSOLUTE_THRESHOLD {
                         provenance.push(ProvenanceRecord {
                             record_kind: ProvenanceKind::ConsistencyViolation,
+                            timestamp: String::new(),
                             actor_id: None,
                             from_state: None,
                             to_state: None,

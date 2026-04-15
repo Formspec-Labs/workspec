@@ -94,6 +94,7 @@ impl IntegrationBindingHandler for ToolHandler {
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::IdempotencyDedup,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -109,6 +110,7 @@ impl IntegrationBindingHandler for ToolHandler {
         } else {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::ToolInvoked,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -143,6 +145,7 @@ impl IntegrationBindingHandler for ToolHandler {
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DataMapping,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,

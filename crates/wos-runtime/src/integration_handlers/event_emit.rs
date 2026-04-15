@@ -89,6 +89,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
 
         let provenance = ProvenanceRecord {
             record_kind: ProvenanceKind::EventEmitted,
+            timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
             from_state: None,
             to_state: None,

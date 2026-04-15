@@ -56,6 +56,7 @@ pub fn evaluate_milestones(
             instance.fired_milestones.insert(id.clone());
             records.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::MilestoneFired,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,

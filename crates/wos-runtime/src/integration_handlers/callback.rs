@@ -199,6 +199,7 @@ fn handle_outbound(
 
     let pending_provenance = ProvenanceRecord {
         record_kind: ProvenanceKind::CallbackPending,
+        timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
         from_state: None,
         to_state: None,
@@ -262,6 +263,7 @@ fn handle_inbound(
     if !updates.is_empty() {
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::DataMapping,
+            timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
             from_state: None,
             to_state: None,
@@ -282,6 +284,7 @@ fn handle_inbound(
 
     provenance.push(ProvenanceRecord {
         record_kind: ProvenanceKind::CallbackReceived,
+        timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
         from_state: None,
         to_state: None,

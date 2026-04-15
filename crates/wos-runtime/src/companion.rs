@@ -234,6 +234,7 @@ impl ReferenceCompanionPolicy {
             if target_has_pending_response {
                 provenance.push(ProvenanceRecord {
                     record_kind: ProvenanceKind::DcrResolutionError,
+                    timestamp: String::new(),
                     actor_id: None,
                     from_state: None,
                     to_state: None,
@@ -283,6 +284,7 @@ impl ReferenceCompanionPolicy {
             .unwrap_or("");
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::ZoneSatisfied,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,

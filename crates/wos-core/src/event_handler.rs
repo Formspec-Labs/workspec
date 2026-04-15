@@ -346,6 +346,7 @@ fn evaluate_delegation(
     if let Some(del_id) = data.get("delegationId").and_then(|v| v.as_str()) {
         prov.push(ProvenanceRecord {
             record_kind: ProvenanceKind::StateTransition,
+            timestamp: String::new(),
             actor_id: Some(actor.to_string()),
             from_state: None,
             to_state: None,
@@ -792,6 +793,7 @@ fn evaluate_sidecar(
 fn mk(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
     ProvenanceRecord {
         record_kind: kind,
+        timestamp: String::new(),
         actor_id: None,
         from_state: None,
         to_state: None,

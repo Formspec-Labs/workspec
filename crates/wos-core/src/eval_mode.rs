@@ -77,6 +77,7 @@ pub fn continuous_reevaluate(
             // Record convergence cap provenance (Runtime S10.3).
             evaluator.record_provenance(ProvenanceRecord {
                 record_kind: ProvenanceKind::CaseStateMutation,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,

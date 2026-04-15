@@ -155,6 +155,7 @@ pub fn evaluate_review_ground_truth(
 fn prov(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
     ProvenanceRecord {
         record_kind: kind,
+        timestamp: String::new(),
         actor_id: None,
         from_state: None,
         to_state: None,

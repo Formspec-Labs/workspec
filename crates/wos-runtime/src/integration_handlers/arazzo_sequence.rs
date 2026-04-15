@@ -122,6 +122,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                         if !updates.is_empty() {
                             provenance.push(ProvenanceRecord {
                                 record_kind: ProvenanceKind::DataMapping,
+                                timestamp: String::new(),
                                 actor_id: observed.actor_id.clone(),
                                 from_state: None,
                                 to_state: None,
@@ -164,6 +165,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
             if !updates.is_empty() {
                 provenance.push(ProvenanceRecord {
                     record_kind: ProvenanceKind::DataMapping,
+                    timestamp: String::new(),
                     actor_id: observed.actor_id.clone(),
                     from_state: None,
                     to_state: None,
@@ -301,6 +303,7 @@ fn execute_step(
     let duration_ms = start.elapsed().as_millis() as u64;
     step_provenance.push(ProvenanceRecord {
         record_kind: ProvenanceKind::ArazzoStep,
+        timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
         from_state: None,
         to_state: None,
@@ -381,6 +384,7 @@ fn arazzo_step_record(
 ) -> ProvenanceRecord {
     ProvenanceRecord {
         record_kind: ProvenanceKind::ArazzoStep,
+        timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
         from_state: None,
         to_state: None,

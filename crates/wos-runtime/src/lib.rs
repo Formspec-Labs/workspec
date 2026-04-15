@@ -26,9 +26,9 @@ pub use integration::{
     TargetWorkflow,
 };
 pub use runtime::{
-    Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
-    RuntimeError, RuntimeEventContext, RuntimeEventDecision, SystemClock, TaskSubmissionResult,
-    WosRuntime,
+    stamp_provenance, Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult,
+    PersistDraftResult, RuntimeError, RuntimeEventContext, RuntimeEventDecision, SystemClock,
+    TaskSubmissionResult, WosRuntime,
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;
 pub use store::{

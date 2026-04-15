@@ -79,6 +79,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::IdempotencyDedup,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -93,6 +94,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         } else {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::StepResultPersisted,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -127,6 +129,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::DataMapping,
+                timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -185,6 +188,7 @@ pub(crate) fn validate_integration_contract(
 
     Ok(Some(ProvenanceRecord {
         record_kind: ProvenanceKind::ContractValidation,
+        timestamp: String::new(),
         actor_id: actor_id.map(str::to_string),
         from_state: None,
         to_state: None,

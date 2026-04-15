@@ -472,6 +472,7 @@ impl WosRuntime {
         let (pending_presentations, presentation_provenance) =
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
+        stamp_provenance(&mut appended_provenance, &now_iso);
         record.instance.provenance_position = appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance);
         self.store.create_record(record.clone())?;
@@ -513,6 +514,7 @@ impl WosRuntime {
 
         let Some(event) = record.instance.pending_events.first().cloned() else {
             if !appended_provenance.is_empty() {
+                stamp_provenance(&mut appended_provenance, &now_iso);
                 record.instance.updated_at = now_iso;
                 record.instance.provenance_position += appended_provenance.len() as u64;
                 record.provenance_log.extend(appended_provenance);
@@ -543,6 +545,7 @@ impl WosRuntime {
         appended_provenance.extend(decision.provenance);
 
         let Some(event) = decision.event else {
+            stamp_provenance(&mut appended_provenance, &now_iso);
             record.instance.updated_at = now_iso;
             record.instance.provenance_position += appended_provenance.len() as u64;
             record.provenance_log.extend(appended_provenance.clone());
@@ -587,6 +590,7 @@ impl WosRuntime {
         if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
             appended_provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::StateTransition,
+                timestamp: String::new(),
                 actor_id: event.actor_id.clone(),
                 from_state: None,
                 to_state: None,
@@ -613,6 +617,7 @@ impl WosRuntime {
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
 
+        stamp_provenance(&mut appended_provenance, &now_iso);
         record.instance.provenance_position += appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance.clone());
         self.store.save_record(record.clone())?;
@@ -694,7 +699,7 @@ impl WosRuntime {
         record
             .artifacts
             .insert(artifact.artifact_id.clone(), artifact.clone());
-        let provenance = ProvenanceRecord::task_lifecycle(
+        let mut provenance = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskDraftPersisted,
             task_id,
             Some(actor_id),
@@ -703,6 +708,7 @@ impl WosRuntime {
                 "status": status,
             })),
         );
+        provenance.timestamp = now_iso.clone();
         record.instance.provenance_position += 1;
         record.provenance_log.push(provenance);
         record.instance.updated_at = now_iso;
@@ -735,12 +741,14 @@ impl WosRuntime {
         }
 
         record.instance.provenance_position += 1;
-        record.provenance_log.push(ProvenanceRecord::task_lifecycle(
+        let mut dismissal = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskDismissed,
             task_id,
             task.assigned_actor.as_deref(),
             Some(serde_json::json!({ "reason": reason })),
-        ));
+        );
+        dismissal.timestamp = now_iso.clone();
+        record.provenance_log.push(dismissal);
         record.instance.updated_at = now_iso;
         self.store.save_record(record)?;
         Ok(())
@@ -835,6 +843,7 @@ impl WosRuntime {
                     "validationOutcome": validation.validation_outcome,
                 })),
             ));
+            stamp_provenance(&mut provenance, &now_iso);
             record.instance.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
             record.instance.updated_at = now_iso;
@@ -918,6 +927,7 @@ impl WosRuntime {
                 "caseMutated": case_mutated,
             })),
         ));
+        stamp_provenance(&mut provenance, &now_iso);
         record.instance.provenance_position += provenance.len() as u64;
         record.provenance_log.extend(provenance);
         record.instance.updated_at = now_iso;
@@ -1045,6 +1055,7 @@ impl WosRuntime {
                     if reused_persisted_result {
                         provenance.push(ProvenanceRecord {
                             record_kind: ProvenanceKind::IdempotencyDedup,
+                            timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
                             from_state: None,
                             to_state: None,
@@ -1058,6 +1069,7 @@ impl WosRuntime {
                     } else {
                         provenance.push(ProvenanceRecord {
                             record_kind: ProvenanceKind::StepResultPersisted,
+                            timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
                             from_state: None,
                             to_state: None,
@@ -1076,6 +1088,7 @@ impl WosRuntime {
                             self.validator.validate(contract_ref, &step_result.output)?;
                         provenance.push(ProvenanceRecord {
                             record_kind: ProvenanceKind::ContractValidation,
+                            timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
                             from_state: None,
                             to_state: None,
@@ -1322,12 +1335,14 @@ impl WosRuntime {
         result: TaskSubmissionResult,
     ) -> Result<(), RuntimeError> {
         record.instance.provenance_position += 1;
-        record.provenance_log.push(ProvenanceRecord::task_lifecycle(
+        let mut rejection = ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskResponseRejected,
             task_id,
             Some(actor_id),
             Some(serde_json::json!({ "code": code })),
-        ));
+        );
+        rejection.timestamp = updated_at.to_string();
+        record.provenance_log.push(rejection);
         record.instance.updated_at = updated_at.to_string();
         if let Some(token) = idempotency_token {
             record.replay_entries.insert(
@@ -1574,6 +1589,21 @@ fn format_timestamp(timestamp_ms: u64) -> Result<String, RuntimeError> {
         .map_err(|error| RuntimeError::Clock(error.to_string()))
 }
 
+/// Stamp every record whose `timestamp` is empty with `now_iso`.
+///
+/// Records that already carry a timestamp (e.g. stamped earlier in the pipeline
+/// or restored from persistence) are left untouched. This is the single
+/// authoritative point where an empty `ProvenanceRecord::timestamp` is filled
+/// in on the append path; exporters (PROV-O, XES, OCEL) downstream can treat
+/// any record surfaced from the runtime as having a non-empty timestamp.
+pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
+    for record in records {
+        if record.timestamp.is_empty() {
+            record.timestamp = now_iso.to_string();
+        }
+    }
+}
+
 fn parse_timestamp(timestamp: &str) -> Result<u64, RuntimeError> {
     let parsed = OffsetDateTime::parse(timestamp, &Rfc3339)
         .map_err(|error| RuntimeError::Clock(error.to_string()))?;
@@ -1762,6 +1792,7 @@ fn compensation_provenance(
         reversed.reverse();
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::CompensationExecuted,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,
@@ -1770,6 +1801,7 @@ fn compensation_provenance(
         });
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::CompensationScopeBoundary,
+            timestamp: String::new(),
             actor_id: None,
             from_state: None,
             to_state: None,
@@ -1785,6 +1817,7 @@ fn compensation_provenance(
                 .collect();
             provenance.push(ProvenanceRecord {
                 record_kind: ProvenanceKind::CompensationExecuted,
+                timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
@@ -1829,6 +1862,27 @@ mod tests {
     use crate::store::{InMemoryStore, RuntimeStore, StoreError};
     use wos_core::instance::ValidationOutcome;
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
+
+    #[test]
+    fn stamp_provenance_fills_empty_timestamps_only() {
+        let mut records = vec![
+            ProvenanceRecord::state_transition("a", "b", "ev", None),
+            ProvenanceRecord::state_transition("b", "c", "ev", None),
+        ];
+        records[0].timestamp = "2020-01-01T00:00:00Z".to_string();
+
+        stamp_provenance(&mut records, "2026-04-15T12:00:00Z");
+
+        assert_eq!(records[0].timestamp, "2020-01-01T00:00:00Z");
+        assert_eq!(records[1].timestamp, "2026-04-15T12:00:00Z");
+    }
+
+    #[test]
+    fn stamp_provenance_noop_on_empty_slice() {
+        let mut records: Vec<ProvenanceRecord> = Vec::new();
+        stamp_provenance(&mut records, "2026-04-15T12:00:00Z");
+        assert!(records.is_empty());
+    }
 
     #[derive(Debug, Clone)]
     struct FixedClock {
