@@ -161,6 +161,7 @@ Stable field identity supports AI and documentation; companion specs follow when
 - [x] FEL `every`/`some` in Formspec core.
 - [x] Runtime Companion S15 interface and reference in-memory runtime path.
 - [x] `wos-formspec-binding` — adapter surface plus prefill, validation, and mapping tests.
+- [x] S15.3 pin re-validation on replay paths — `wos-formspec-binding::FormspecBinding::revalidate_submission` recomputes pin equality fresh on every replay/audit/review call.
 
 **Security / architecture docs**
 

@@ -51,27 +51,31 @@ impl<P> FormspecBinding<P> {
     }
 }
 
-impl<P> ContractBindingAdapter for FormspecBinding<P>
+impl<P> FormspecBinding<P>
 where
-    P: FormspecProcessor + Send + Sync,
+    P: FormspecProcessor,
 {
-    fn binding(&self) -> &'static str {
-        "formspec"
-    }
-
-    fn prepare_task(
+    /// Re-validate a previously submitted response envelope against the current
+    /// task pin (definition URL + version).
+    ///
+    /// This method performs the same envelope structure checks, pin equality
+    /// assertion, and definition validation as `validate_submission`. It does
+    /// **not** trust any stored `pin_match` record — pin equality is recomputed
+    /// fresh from `task.definition_url` and `task.definition_version` every
+    /// time this is called.  Use this on replay, audit, and review paths where
+    /// an already-stored response must be re-examined.
+    pub fn revalidate_submission(
         &self,
         task: &ActiveTask,
-        case_state: &serde_json::Value,
-    ) -> Result<PreparedTask, BindingError> {
-        Ok(PreparedTask {
-            prefill_data: self
-                .processor
-                .compute_prefill(task.prefill_mapping_ref.as_deref(), case_state)?,
-        })
+        previously_submitted_response: &serde_json::Value,
+    ) -> Result<SubmissionValidation, BindingError> {
+        self.run_validation(task, previously_submitted_response)
     }
 
-    fn validate_submission(
+    /// Shared validation logic used by both `validate_submission` and
+    /// `revalidate_submission`.  Keeps pin enforcement in one place so both
+    /// paths are guaranteed to behave identically.
+    fn run_validation(
         &self,
         task: &ActiveTask,
         response: &serde_json::Value,
@@ -123,6 +127,35 @@ where
                 validation_results,
             },
         })
+    }
+}
+
+impl<P> ContractBindingAdapter for FormspecBinding<P>
+where
+    P: FormspecProcessor + Send + Sync,
+{
+    fn binding(&self) -> &'static str {
+        "formspec"
+    }
+
+    fn prepare_task(
+        &self,
+        task: &ActiveTask,
+        case_state: &serde_json::Value,
+    ) -> Result<PreparedTask, BindingError> {
+        Ok(PreparedTask {
+            prefill_data: self
+                .processor
+                .compute_prefill(task.prefill_mapping_ref.as_deref(), case_state)?,
+        })
+    }
+
+    fn validate_submission(
+        &self,
+        task: &ActiveTask,
+        response: &serde_json::Value,
+    ) -> Result<SubmissionValidation, BindingError> {
+        self.run_validation(task, response)
     }
 
     fn compute_case_mutation(
