@@ -16,7 +16,7 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::IntegrationBindingHandler;
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 use super::request_response::{InvocationContext, build_event_data_from_binding};
 
 /// Handler for outbound CloudEvent emission bindings.
@@ -37,19 +37,21 @@ impl IntegrationBindingHandler for EventEmitHandler {
         binding: &IntegrationBinding,
         now_iso: &str,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        let invocation_id = next_invocation_id(record, service_ref);
+        // `outbound_event_id` is the CloudEvent `id` for this emission — a unique
+        // event identifier, not an idempotency key.
+        let outbound_event_id = next_outbound_event_id(record, service_ref, "emit");
         let subject = compute_subject(
             binding,
             &record.instance.instance_id,
             service_ref,
-            &invocation_id,
+            &outbound_event_id,
         );
 
         let event_data =
             build_event_data_from_binding(binding, kernel, observed, &record.instance)?;
 
         let envelope = CloudEvent {
-            id: invocation_id.clone(),
+            id: outbound_event_id.clone(),
             source: binding
                 .extensions
                 .get("source")
@@ -67,17 +69,22 @@ impl IntegrationBindingHandler for EventEmitHandler {
             time: Some(
                 now_iso
                     .parse::<chrono::DateTime<chrono::Utc>>()
-                    .unwrap_or_else(|_| chrono::Utc::now()),
+                    .map_err(|e| {
+                        RuntimeError::Integration(format!(
+                            "invalid ISO timestamp in event context: {e}"
+                        ))
+                    })?,
             ),
             data_content_type: Some("application/json".to_string()),
             data: Some(event_data),
         };
 
         // Dispatch the envelope to the outbound service channel.
-        // For emit-only bindings the service response is not mapped back to case state.
+        // The outbound_event_id is the CloudEvent `id`, not an idempotency key — each
+        // event emission is a new event. Pass None for idempotency.
         let envelope_json = envelope.to_provenance_data();
         ctx.service
-            .invoke(service_ref, &envelope_json, Some(&invocation_id))
+            .invoke(service_ref, &envelope_json, None)
             .map_err(|e| RuntimeError::Service(e.to_string()))?;
 
         let provenance = ProvenanceRecord {
@@ -98,12 +105,12 @@ impl IntegrationBindingHandler for EventEmitHandler {
 /// If the binding declares an explicit `subject` extension field, that value is
 /// used verbatim, enabling custom routing keys or override templates.
 /// Otherwise the canonical WOS correlation format is used:
-/// `{instanceId}:{bindingId}:{invocationId}`.
+/// `{instanceId}:{bindingId}:{outbound_event_id}`.
 fn compute_subject(
     binding: &IntegrationBinding,
     instance_id: &str,
     binding_id: &str,
-    invocation_id: &str,
+    outbound_event_id: &str,
 ) -> String {
     if let Some(template) = binding
         .extensions
@@ -112,14 +119,5 @@ fn compute_subject(
     {
         return template.to_string();
     }
-    format!("{instance_id}:{binding_id}:{invocation_id}")
-}
-
-/// Generate a stable invocation identifier for this binding execution.
-///
-/// Incorporates the current step-result count so it is unique per invocation
-/// within an instance's lifetime without requiring an external UUID source.
-fn next_invocation_id(record: &RuntimeRecord, service_ref: &str) -> String {
-    let seq = record.step_results.len();
-    format!("{service_ref}-emit-{seq}")
+    format!("{instance_id}:{binding_id}:{outbound_event_id}")
 }
