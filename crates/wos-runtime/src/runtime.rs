@@ -3571,11 +3571,15 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 
+    // NB.4: all seven binding kinds are now dispatched to handlers.
+    // The old "unsupported tool binding kind" test is superseded — `tool` bindings
+    // now succeed. This test verifies the tool handler executes and emits ToolInvoked
+    // provenance (replacing the prior UnsupportedBindingKind assertion).
     #[test]
-    fn drain_once_rejects_unsupported_integration_profile_binding_kind() {
+    fn drain_once_dispatches_tool_integration_profile_binding() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
             "$wosKernel": "1.0",
-            "url": "urn:test:unsupported-integration-binding",
+            "url": "urn:test:tool-integration-binding",
             "version": "1.0.0",
             "lifecycle": {
                 "initialState": "open",
@@ -3599,16 +3603,13 @@ mod tests {
             serde_json::from_value(serde_json::json!({
                 "$wosIntegrationProfile": "1.0",
                 "targetWorkflow": {
-                    "url": "urn:test:unsupported-integration-binding",
+                    "url": "urn:test:tool-integration-binding",
                     "compatibleVersions": ">=1.0.0 <2.0.0"
                 },
                 "bindings": {
                     "legacyTool": {
                         "type": "tool",
-                        "invocation": {
-                            "method": "command-line",
-                            "command": "/usr/bin/legacy-tool"
-                        },
+                        "toolId": "legacy-analysis-tool",
                         "inputMapping": {
                             "payload": "caseFile.application.id"
                         }
@@ -3618,7 +3619,7 @@ mod tests {
             .unwrap();
 
         let service = RecordingService::with_response(serde_json::json!({
-            "result": "unused"
+            "result": "ok"
         }));
         let calls = service.calls.clone();
         let mut runtime = WosRuntime::new(
@@ -3637,8 +3638,8 @@ mod tests {
 
         runtime
             .create_instance(CreateInstanceRequest {
-                instance_id: "case-unsupported-integration-binding".to_string(),
-                definition_url: "urn:test:unsupported-integration-binding".to_string(),
+                instance_id: "case-tool-integration-binding".to_string(),
+                definition_url: "urn:test:tool-integration-binding".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({
                     "application": {
@@ -3649,7 +3650,7 @@ mod tests {
             .unwrap();
         runtime
             .enqueue_event(
-                "case-unsupported-integration-binding",
+                "case-tool-integration-binding",
                 PendingEvent {
                     event: "verify".to_string(),
                     actor_id: Some("system".to_string()),
@@ -3660,14 +3661,29 @@ mod tests {
             )
             .unwrap();
 
-        let error = runtime
-            .drain_once("case-unsupported-integration-binding")
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            RuntimeError::UnsupportedBindingKind(crate::integration::IntegrationBindingKind::Tool)
-        ));
-        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        // Tool bindings now succeed — expect Ok, not Err.
+        let result = runtime
+            .drain_once("case-tool-integration-binding")
+            .expect("tool binding dispatch must succeed (NB.4)");
+
+        // The service must have been called exactly once.
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        // ToolInvoked provenance must be present.
+        use wos_core::provenance::ProvenanceKind;
+        let tool_invoked = result
+            .provenance
+            .iter()
+            .find(|p| p.record_kind == ProvenanceKind::ToolInvoked)
+            .expect("ToolInvoked provenance must be emitted by the tool handler");
+        assert_eq!(
+            tool_invoked
+                .data
+                .as_ref()
+                .and_then(|d| d.get("toolId"))
+                .and_then(|v| v.as_str()),
+            Some("legacy-analysis-tool")
+        );
     }
 
     #[test]

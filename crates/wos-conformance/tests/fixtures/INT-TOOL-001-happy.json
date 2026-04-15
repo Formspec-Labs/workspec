@@ -1,0 +1,99 @@
+{
+  "id": "INT-TOOL-001-happy",
+  "rule": "INT-TOOL",
+  "description": "A tool binding invokes a non-HTTP service, maps the response into case state via outputBinding, and emits ToolInvoked provenance. This verifies the happy path: binding dispatches to the tool handler, service stub is called, ToolInvoked provenance is present with outcome='ok', and case state is updated.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-TOOL-001",
+      "version": "1.0.0",
+      "title": "INT-TOOL-001 Tool Invocation Happy Path",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "analyze",
+                "target": "analyzed",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "analysisToolkit"
+                  }
+                ]
+              }
+            ]
+          },
+          "analyzed": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "riskScore": { "type": "number" },
+          "toolInvoked": { "type": "boolean" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-TOOL-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "analysisToolkit": {
+          "type": "tool",
+          "description": "Non-HTTP analysis tool invocation",
+          "toolId": "risk-analysis-v2",
+          "outputBinding": {
+            "caseFile.riskScore": "$.riskScore"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "riskScore": 42,
+    "confidence": 0.95
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "analyze", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "analyzed", "event": "analyze" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "toolInvoked",
+      "data": {
+        "toolId": "risk-analysis-v2",
+        "serviceRef": "analysisToolkit",
+        "outcome": "ok"
+      }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "analysisToolkit",
+        "updatedPaths": ["caseFile.riskScore"]
+      }
+    }
+  ]
+}

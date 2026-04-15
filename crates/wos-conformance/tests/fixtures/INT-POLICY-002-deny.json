@@ -1,0 +1,102 @@
+{
+  "id": "INT-POLICY-002-deny",
+  "rule": "INT-POLICY",
+  "description": "A policy-engine binding returns a Deny decision with reasons. The canonical decision is emitted in PolicyDecision provenance with decision='deny' and reasonsCount=2. The outputBinding maps the decision string to case state. This discriminates deny from allow in the canonical adapter.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-POLICY-002",
+      "version": "1.0.0",
+      "title": "INT-POLICY-002 Policy Deny Decision",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "evaluate",
+                "target": "evaluated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "policyEngine"
+                  }
+                ]
+              }
+            ]
+          },
+          "evaluated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "accessDecision": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-POLICY-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "policyEngine": {
+          "type": "policy-engine",
+          "description": "Policy engine evaluation with deny reasons",
+          "engineType": "canonical",
+          "outputBinding": {
+            "caseFile.accessDecision": "$.decision"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "decision": "deny",
+    "reasons": [
+      { "code": "rule-001", "message": "actor lacks required role" },
+      { "code": "rule-002", "message": "data classification mismatch" }
+    ],
+    "obligations": []
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "evaluate", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "evaluated", "event": "evaluate" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "policyDecision",
+      "data": {
+        "serviceRef": "policyEngine",
+        "decision": "deny",
+        "reasonsCount": 2
+      }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "policyEngine",
+        "updatedPaths": ["caseFile.accessDecision"]
+      }
+    }
+  ]
+}

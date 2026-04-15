@@ -1,0 +1,101 @@
+{
+  "id": "INT-POLICY-001-allow",
+  "rule": "INT-POLICY",
+  "description": "A policy-engine binding returns an Allow decision. The handler normalizes the canonical response, emits PolicyDecision provenance with decision='allow', and applies the outputBinding to set caseFile.policyAllowed = 'allow'. This verifies the happy path for allow decisions.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-POLICY-001",
+      "version": "1.0.0",
+      "title": "INT-POLICY-001 Policy Allow Decision",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "evaluate",
+                "target": "evaluated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "policyEngine"
+                  }
+                ]
+              }
+            ]
+          },
+          "evaluated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "policyAllowed": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-POLICY-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "policyEngine": {
+          "type": "policy-engine",
+          "description": "Policy engine evaluation — canonical format",
+          "engineType": "canonical",
+          "outputBinding": {
+            "caseFile.policyAllowed": "$.decision"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "decision": "allow",
+    "reasons": [],
+    "obligations": []
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "evaluate", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "evaluated", "event": "evaluate" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "policyDecision",
+      "data": {
+        "serviceRef": "policyEngine",
+        "engineType": "canonical",
+        "decision": "allow",
+        "reasonsCount": 0,
+        "obligationsCount": 0
+      }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "policyEngine",
+        "updatedPaths": ["caseFile.policyAllowed"]
+      }
+    }
+  ]
+}

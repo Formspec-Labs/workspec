@@ -1,0 +1,101 @@
+{
+  "id": "INT-POLICY-004-opa-adapter",
+  "rule": "INT-POLICY",
+  "description": "A policy-engine binding declares engineType='opa'. The stub service returns an OPA-format response {result: true, reasons: [...]}. The handler normalizes it via PolicyDecision::from_opa and emits PolicyDecision provenance with decision='allow'. This discriminates the OPA adapter from the canonical pass-through in INT-POLICY-001.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-POLICY-004",
+      "version": "1.0.0",
+      "title": "INT-POLICY-004 OPA Adapter",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "evaluate",
+                "target": "evaluated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "opaEngine"
+                  }
+                ]
+              }
+            ]
+          },
+          "evaluated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "opaDecision": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-POLICY-004",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "opaEngine": {
+          "type": "policy-engine",
+          "description": "OPA-format policy evaluation",
+          "engineType": "opa",
+          "outputBinding": {
+            "caseFile.opaDecision": "$.decision"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "result": true,
+    "reasons": [
+      { "code": "authz.read_allowed", "message": "read access granted by policy" }
+    ]
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "evaluate", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "evaluated", "event": "evaluate" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "policyDecision",
+      "data": {
+        "serviceRef": "opaEngine",
+        "engineType": "opa",
+        "decision": "allow",
+        "reasonsCount": 1
+      }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "opaEngine",
+        "updatedPaths": ["caseFile.opaDecision"]
+      }
+    }
+  ]
+}

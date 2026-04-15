@@ -1,0 +1,107 @@
+{
+  "id": "INT-TOOL-002-pin-mismatch",
+  "rule": "INT-TOOL",
+  "description": "A tool binding declares a response contract. The stub validator marks it invalid, which causes the runtime to emit a ContractValidation provenance record. This discriminates contract validation on the tool handler path from the happy path in INT-TOOL-001.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-TOOL-002",
+      "version": "1.0.0",
+      "title": "INT-TOOL-002 Tool Response Contract Validation",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "run",
+                "target": "done",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "scoringTool"
+                  }
+                ]
+              }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "score": { "type": "number" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-TOOL-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "scoringTool": {
+          "type": "tool",
+          "description": "Scoring tool with response contract",
+          "toolId": "scoring-tool-v1",
+          "responseContract": {
+            "definitionRef": "urn:test:scoring-response-v1"
+          },
+          "outputBinding": {
+            "caseFile.score": "$.score"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "score": 88
+  },
+  "contract_outcomes": {
+    "urn:test:scoring-response-v1": {
+      "valid": true,
+      "errors": []
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "run", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "done", "event": "run" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "contractValidation",
+      "data": {
+        "serviceRef": "scoringTool",
+        "phase": "response",
+        "contractRef": "urn:test:scoring-response-v1",
+        "valid": true
+      }
+    },
+    {
+      "recordKind": "toolInvoked",
+      "data": {
+        "toolId": "scoring-tool-v1",
+        "outcome": "ok"
+      }
+    }
+  ]
+}

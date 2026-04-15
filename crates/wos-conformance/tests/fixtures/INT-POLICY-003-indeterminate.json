@@ -1,0 +1,96 @@
+{
+  "id": "INT-POLICY-003-indeterminate",
+  "rule": "INT-POLICY",
+  "description": "A policy-engine binding returns an Indeterminate decision. The handler MUST NOT coerce it to Allow or Deny — it emits PolicyDecision provenance with decision='indeterminate'. The outputBinding maps the raw decision string to case state, which will be 'indeterminate'. This verifies the non-coercion constraint.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-POLICY-003",
+      "version": "1.0.0",
+      "title": "INT-POLICY-003 Policy Indeterminate Decision",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "evaluate",
+                "target": "evaluated",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "policyEngine"
+                  }
+                ]
+              }
+            ]
+          },
+          "evaluated": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "policyOutcome": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-POLICY-003",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "policyEngine": {
+          "type": "policy-engine",
+          "description": "Policy engine that returns indeterminate",
+          "engineType": "canonical",
+          "outputBinding": {
+            "caseFile.policyOutcome": "$.decision"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "decision": "indeterminate"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "evaluate", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "evaluated", "event": "evaluate" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "policyDecision",
+      "data": {
+        "serviceRef": "policyEngine",
+        "decision": "indeterminate"
+      }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "policyEngine",
+        "updatedPaths": ["caseFile.policyOutcome"]
+      }
+    }
+  ]
+}

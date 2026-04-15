@@ -1,0 +1,112 @@
+{
+  "id": "INT-ARAZZO-003-step-provenance-ordering",
+  "rule": "INT-ARAZZO",
+  "description": "An Arazzo sequence asserts that ArazzoStep provenance records appear in step declaration order (step-a, step-b, step-c) and before the binding-level DataMapping record. This discriminates ordering from the happy-path fixture INT-ARAZZO-001 by explicitly testing the provenance sequence constraint.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-ARAZZO-003",
+      "version": "1.0.0",
+      "title": "INT-ARAZZO-003 Step Provenance Ordering",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "run",
+                "target": "complete",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "orderedSequence"
+                  }
+                ]
+              }
+            ]
+          },
+          "complete": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "finalOutput": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-ARAZZO-003",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "orderedSequence": {
+          "type": "arazzo-sequence",
+          "description": "Sequence with distinct step IDs to verify provenance ordering",
+          "steps": [
+            {
+              "stepId": "step-a",
+              "serviceRef": "sequenceService"
+            },
+            {
+              "stepId": "step-b",
+              "serviceRef": "sequenceService"
+            },
+            {
+              "stepId": "step-c",
+              "serviceRef": "sequenceService"
+            }
+          ],
+          "outputBinding": {
+            "caseFile.finalOutput": "$.step-c.label"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "label": "done",
+    "seq": 1
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "run", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "complete", "event": "run" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "step-a", "outcome": "ok" }
+    },
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "step-b", "outcome": "ok" }
+    },
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "step-c", "outcome": "ok" }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": { "serviceRef": "orderedSequence", "phase": "binding-level" }
+    }
+  ]
+}

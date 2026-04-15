@@ -9,11 +9,18 @@
 //! NB.3 adds three CloudEvents handlers: `event_emit`, `event_consume`, and
 //! `callback`. All three use the CloudEvents 1.0 envelope types from
 //! `crate::cloudevents`.
+//!
+//! NB.4 adds three more handlers: `tool` (non-HTTP tool invocations),
+//! `arazzo_sequence` (multi-step Arazzo orchestration), and `policy_engine`
+//! (external policy evaluation with vendor-neutral normalization).
 
+pub(crate) mod arazzo_sequence;
 pub(crate) mod callback;
 pub(crate) mod event_consume;
 pub(crate) mod event_emit;
+pub(crate) mod policy_engine;
 pub(crate) mod request_response;
+pub(crate) mod tool;
 
 use wos_core::eval::ObservedAction;
 use wos_core::model::kernel::KernelDocument;
@@ -53,9 +60,14 @@ pub(crate) trait IntegrationBindingHandler {
 
 /// Dispatch an integration binding to the correct handler by kind.
 ///
-/// `RequestResponse`, `EventEmit`, `EventConsume`, and `Callback` are
-/// implemented. Remaining kinds (`ArazzoSequence`, `Tool`, `PolicyEngine`)
-/// return `RuntimeError::UnsupportedBindingKind` (NB.4 work).
+/// All seven `IntegrationBindingKind` variants have handlers:
+/// - `RequestResponse` — synchronous HTTP-style invocation
+/// - `EventEmit` — outbound CloudEvent emission
+/// - `EventConsume` — inbound CloudEvent consumption
+/// - `Callback` — bidirectional CloudEvent callback
+/// - `Tool` — non-HTTP tool invocation (NB.4)
+/// - `ArazzoSequence` — multi-step Arazzo orchestration (NB.4)
+/// - `PolicyEngine` — external policy evaluation (NB.4)
 pub(crate) fn dispatch_integration_binding(
     ctx: &InvocationContext<'_>,
     record: &mut RuntimeRecord,
@@ -80,6 +92,14 @@ pub(crate) fn dispatch_integration_binding(
         IntegrationBindingKind::Callback => callback::CallbackHandler.execute(
             ctx, record, kernel, observed, service_ref, binding, now_iso,
         ),
-        other => Err(RuntimeError::UnsupportedBindingKind(other)),
+        IntegrationBindingKind::Tool => tool::ToolHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
+        IntegrationBindingKind::ArazzoSequence => arazzo_sequence::ArazzoHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
+        IntegrationBindingKind::PolicyEngine => policy_engine::PolicyEngineHandler.execute(
+            ctx, record, kernel, observed, service_ref, binding, now_iso,
+        ),
     }
 }

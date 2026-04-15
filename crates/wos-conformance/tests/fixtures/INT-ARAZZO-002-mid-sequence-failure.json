@@ -1,0 +1,107 @@
+{
+  "id": "INT-ARAZZO-002-mid-sequence-failure",
+  "rule": "INT-ARAZZO",
+  "description": "An Arazzo sequence where the second step fails due to a response contract violation. ArazzoStep provenance is emitted for step 1 (ok) and step 2 (failed). Step 3 is never attempted. The fixture asserts that the transition does not complete (engine returns error) and that the failed step's provenance is present while step 3's is absent.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-ARAZZO-002",
+      "version": "1.0.0",
+      "title": "INT-ARAZZO-002 Mid-Sequence Failure",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "process",
+                "target": "done",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "threeStepPipeline"
+                  }
+                ]
+              }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "result": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-ARAZZO-002",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "threeStepPipeline": {
+          "type": "arazzo-sequence",
+          "description": "3-step pipeline where step 2 fails contract validation",
+          "steps": [
+            {
+              "stepId": "step-one",
+              "serviceRef": "pipelineService"
+            },
+            {
+              "stepId": "step-two",
+              "serviceRef": "pipelineService",
+              "responseContract": {
+                "definitionRef": "urn:test:step-two-response"
+              }
+            },
+            {
+              "stepId": "step-three",
+              "serviceRef": "pipelineService"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "service_response": {
+    "status": "partial"
+  },
+  "contract_outcomes": {
+    "urn:test:step-two-response": {
+      "valid": false,
+      "errors": ["missing required field: outputHash"]
+    }
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "process", "actor": "operator" }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "step-one", "outcome": "ok" }
+    },
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "step-two", "outcome": "failed" }
+    }
+  ]
+}

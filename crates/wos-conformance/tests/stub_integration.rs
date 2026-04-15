@@ -283,6 +283,359 @@ fn int_callback_003_uncorrelated_inbound_is_dropped() {
     );
 }
 
+// ── NB.4 Tool binding tests ──────────────────────────────────────
+
+/// INT-TOOL-001: tool binding fires, emits ToolInvoked provenance, maps output to case state.
+#[test]
+fn int_tool_001_tool_invoked_provenance_present() {
+    let fixture_json = include_str!("fixtures/INT-TOOL-001-happy.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-TOOL-001 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let invoked = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::ToolInvoked)
+        .expect("ToolInvoked provenance must be present");
+
+    let data = invoked.data.as_ref().expect("ToolInvoked must carry data");
+    assert_eq!(
+        data.get("toolId").and_then(|v| v.as_str()),
+        Some("risk-analysis-v2")
+    );
+    assert_eq!(
+        data.get("outcome").and_then(|v| v.as_str()),
+        Some("ok")
+    );
+}
+
+/// INT-TOOL-002: tool binding with response contract — ContractValidation provenance present.
+#[test]
+fn int_tool_002_contract_validation_on_tool_response() {
+    let fixture_json = include_str!("fixtures/INT-TOOL-002-pin-mismatch.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-TOOL-002 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let contract_record = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::ContractValidation)
+        .expect("ContractValidation provenance must be present");
+
+    let data = contract_record.data.as_ref().expect("must carry data");
+    assert_eq!(data.get("phase").and_then(|v| v.as_str()), Some("response"));
+    assert_eq!(
+        data.get("contractRef").and_then(|v| v.as_str()),
+        Some("urn:test:scoring-response-v1")
+    );
+}
+
+// ── NB.4 Arazzo sequence tests ───────────────────────────────────
+
+/// INT-ARAZZO-001: 3-step sequence — all steps succeed, ArazzoStep records in order.
+#[test]
+fn int_arazzo_001_all_steps_succeed_in_order() {
+    let fixture_json = include_str!("fixtures/INT-ARAZZO-001-happy.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-ARAZZO-001 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let arazzo_steps: Vec<_> = result
+        .provenance
+        .iter()
+        .filter(|p| p.record_kind == ProvenanceKind::ArazzoStep)
+        .collect();
+
+    assert_eq!(arazzo_steps.len(), 3, "expected 3 ArazzoStep records");
+
+    let step_ids: Vec<&str> = arazzo_steps
+        .iter()
+        .map(|p| {
+            p.data
+                .as_ref()
+                .and_then(|d| d.get("stepId"))
+                .and_then(|v| v.as_str())
+                .expect("ArazzoStep must carry stepId")
+        })
+        .collect();
+
+    assert_eq!(step_ids, vec!["validate", "transform", "persist"]);
+}
+
+/// INT-ARAZZO-002: mid-sequence failure — step 1 ok, step 2 failed, step 3 absent.
+#[test]
+fn int_arazzo_002_mid_sequence_failure_halts_sequence() {
+    let fixture_json = include_str!("fixtures/INT-ARAZZO-002-mid-sequence-failure.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    // The fixture expects the transition to fail (no expected_transitions), so
+    // run_fixture may return Ok with no transitions, or Err from the engine.
+    let result = run_fixture(fixture_json, &base_dir);
+
+    let provenance = match result {
+        Ok(result) => result.provenance,
+        Err(err) => {
+            // Engine error is acceptable — the sequence halted.
+            let msg = err.to_string();
+            assert!(
+                msg.contains("failed") || msg.contains("contract"),
+                "unexpected error: {msg}"
+            );
+            return;
+        }
+    };
+
+    // When the engine does not error out, verify the provenance stream.
+    let step_records: Vec<_> = provenance
+        .iter()
+        .filter(|p| p.record_kind == ProvenanceKind::ArazzoStep)
+        .collect();
+
+    // step-one must be ok.
+    let step_one = step_records
+        .iter()
+        .find(|p| {
+            p.data
+                .as_ref()
+                .and_then(|d| d.get("stepId"))
+                .and_then(|v| v.as_str())
+                == Some("step-one")
+        })
+        .expect("step-one ArazzoStep must be present");
+    assert_eq!(
+        step_one.data.as_ref().and_then(|d| d.get("outcome")).and_then(|v| v.as_str()),
+        Some("ok")
+    );
+
+    // step-two must be failed.
+    let step_two = step_records
+        .iter()
+        .find(|p| {
+            p.data
+                .as_ref()
+                .and_then(|d| d.get("stepId"))
+                .and_then(|v| v.as_str())
+                == Some("step-two")
+        })
+        .expect("step-two ArazzoStep must be present");
+    assert_eq!(
+        step_two.data.as_ref().and_then(|d| d.get("outcome")).and_then(|v| v.as_str()),
+        Some("failed")
+    );
+
+    // step-three must be absent.
+    let step_three_count = step_records
+        .iter()
+        .filter(|p| {
+            p.data
+                .as_ref()
+                .and_then(|d| d.get("stepId"))
+                .and_then(|v| v.as_str())
+                == Some("step-three")
+        })
+        .count();
+    assert_eq!(
+        step_three_count, 0,
+        "step-three must not be attempted after step-two failure"
+    );
+}
+
+/// INT-ARAZZO-003: ArazzoStep records appear in step order, before binding-level DataMapping.
+#[test]
+fn int_arazzo_003_step_provenance_precedes_binding_level_data_mapping() {
+    let fixture_json = include_str!("fixtures/INT-ARAZZO-003-step-provenance-ordering.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-ARAZZO-003 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    // Find the last ArazzoStep position.
+    let last_arazzo_pos = result
+        .provenance
+        .iter()
+        .rposition(|p| p.record_kind == ProvenanceKind::ArazzoStep)
+        .expect("ArazzoStep records must be present");
+
+    // Find the binding-level DataMapping position.
+    let binding_mapping_pos = result
+        .provenance
+        .iter()
+        .position(|p| {
+            p.record_kind == ProvenanceKind::DataMapping
+                && p.data
+                    .as_ref()
+                    .and_then(|d| d.get("phase"))
+                    .and_then(|v| v.as_str())
+                    == Some("binding-level")
+        })
+        .expect("binding-level DataMapping must be present");
+
+    assert!(
+        last_arazzo_pos < binding_mapping_pos,
+        "all ArazzoStep records must appear before the binding-level DataMapping record"
+    );
+
+    // Also verify step-a appears before step-b appears before step-c.
+    let step_positions: Vec<(&str, usize)> = ["step-a", "step-b", "step-c"]
+        .iter()
+        .map(|&id| {
+            let pos = result
+                .provenance
+                .iter()
+                .position(|p| {
+                    p.record_kind == ProvenanceKind::ArazzoStep
+                        && p.data
+                            .as_ref()
+                            .and_then(|d| d.get("stepId"))
+                            .and_then(|v| v.as_str())
+                            == Some(id)
+                })
+                .unwrap_or_else(|| panic!("ArazzoStep for {id} must be present"));
+            (id, pos)
+        })
+        .collect();
+
+    assert!(
+        step_positions[0].1 < step_positions[1].1,
+        "step-a must appear before step-b"
+    );
+    assert!(
+        step_positions[1].1 < step_positions[2].1,
+        "step-b must appear before step-c"
+    );
+}
+
+// ── NB.4 Policy-engine tests ─────────────────────────────────────
+
+/// INT-POLICY-001: allow decision — PolicyDecision provenance with decision='allow'.
+#[test]
+fn int_policy_001_allow_decision_emits_provenance() {
+    let fixture_json = include_str!("fixtures/INT-POLICY-001-allow.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-POLICY-001 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let policy_record = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::PolicyDecision)
+        .expect("PolicyDecision provenance must be present");
+
+    let data = policy_record.data.as_ref().expect("must carry data");
+    assert_eq!(data.get("decision").and_then(|v| v.as_str()), Some("allow"));
+    assert_eq!(data.get("reasonsCount").and_then(|v| v.as_u64()), Some(0));
+}
+
+/// INT-POLICY-002: deny decision with reasons — reasonsCount reflects the payload.
+#[test]
+fn int_policy_002_deny_decision_with_reasons() {
+    let fixture_json = include_str!("fixtures/INT-POLICY-002-deny.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-POLICY-002 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let policy_record = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::PolicyDecision)
+        .expect("PolicyDecision provenance must be present");
+
+    let data = policy_record.data.as_ref().expect("must carry data");
+    assert_eq!(data.get("decision").and_then(|v| v.as_str()), Some("deny"));
+    assert_eq!(data.get("reasonsCount").and_then(|v| v.as_u64()), Some(2));
+}
+
+/// INT-POLICY-003: indeterminate — decision='indeterminate', not coerced to allow or deny.
+#[test]
+fn int_policy_003_indeterminate_not_coerced() {
+    let fixture_json = include_str!("fixtures/INT-POLICY-003-indeterminate.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-POLICY-003 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let policy_record = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::PolicyDecision)
+        .expect("PolicyDecision provenance must be present");
+
+    let data = policy_record.data.as_ref().expect("must carry data");
+    let decision = data.get("decision").and_then(|v| v.as_str());
+    assert_eq!(decision, Some("indeterminate"));
+    // Explicitly verify it was NOT coerced.
+    assert_ne!(decision, Some("allow"), "indeterminate must not be coerced to allow");
+    assert_ne!(decision, Some("deny"), "indeterminate must not be coerced to deny");
+}
+
+/// INT-POLICY-004: OPA adapter — engineType='opa', result:true normalizes to decision='allow'.
+#[test]
+fn int_policy_004_opa_adapter_normalizes_result_true_to_allow() {
+    let fixture_json = include_str!("fixtures/INT-POLICY-004-opa-adapter.json");
+    let base_dir = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+
+    let result = run_fixture(fixture_json, &base_dir).expect("run_fixture failed");
+
+    assert!(
+        result.passed,
+        "INT-POLICY-004 failed:\n{}",
+        result.failures.join("\n")
+    );
+
+    let policy_record = result
+        .provenance
+        .iter()
+        .find(|p| p.record_kind == ProvenanceKind::PolicyDecision)
+        .expect("PolicyDecision provenance must be present");
+
+    let data = policy_record.data.as_ref().expect("must carry data");
+    assert_eq!(data.get("engineType").and_then(|v| v.as_str()), Some("opa"));
+    assert_eq!(data.get("decision").and_then(|v| v.as_str()), Some("allow"));
+    assert_eq!(data.get("reasonsCount").and_then(|v| v.as_u64()), Some(1));
+}
+
 #[test]
 fn k024_step_result_persistence_comes_from_executed_service_invocation() {
     let fixture_json = include_str!("fixtures/k-024-persist-before-advance.json");

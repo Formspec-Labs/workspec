@@ -1,0 +1,112 @@
+{
+  "id": "INT-ARAZZO-001-happy",
+  "rule": "INT-ARAZZO",
+  "description": "A 3-step Arazzo sequence executes all steps successfully. Each step emits ArazzoStep provenance with outcome='ok'. The binding-level outputBinding composes the final case-state value from the accumulated step context. This verifies the happy path: all steps fire in order, step context is threaded through, and case state is updated.",
+  "documents": {
+    "kernel": "inline",
+    "integration": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosKernel": "1.0",
+      "url": "urn:test:INT-ARAZZO-001",
+      "version": "1.0.0",
+      "title": "INT-ARAZZO-001 Arazzo Sequence Happy Path",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        { "id": "operator", "type": "human", "description": "Workflow operator" }
+      ],
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "process",
+                "target": "done",
+                "actions": [
+                  {
+                    "action": "invokeService",
+                    "serviceRef": "multiStepPipeline"
+                  }
+                ]
+              }
+            ]
+          },
+          "done": { "type": "final" }
+        }
+      },
+      "caseFile": {
+        "fields": {
+          "pipelineResult": { "type": "string" }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    },
+    "integration": {
+      "$wosIntegrationProfile": "1.0",
+      "targetWorkflow": {
+        "url": "urn:test:INT-ARAZZO-001",
+        "compatibleVersions": ">=1.0.0 <2.0.0"
+      },
+      "bindings": {
+        "multiStepPipeline": {
+          "type": "arazzo-sequence",
+          "description": "3-step pipeline: validate → transform → persist",
+          "steps": [
+            {
+              "stepId": "validate",
+              "serviceRef": "pipelineService"
+            },
+            {
+              "stepId": "transform",
+              "serviceRef": "pipelineService"
+            },
+            {
+              "stepId": "persist",
+              "serviceRef": "pipelineService"
+            }
+          ],
+          "outputBinding": {
+            "caseFile.pipelineResult": "$.persist.status"
+          }
+        }
+      }
+    }
+  },
+  "service_response": {
+    "status": "complete",
+    "value": 100
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    { "event": "process", "actor": "operator" }
+  ],
+  "expected_transitions": [
+    { "from": "open", "to": "done", "event": "process" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "validate", "outcome": "ok" }
+    },
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "transform", "outcome": "ok" }
+    },
+    {
+      "recordKind": "arazzoStep",
+      "data": { "stepId": "persist", "outcome": "ok" }
+    },
+    {
+      "recordKind": "dataMapping",
+      "data": { "serviceRef": "multiStepPipeline", "phase": "binding-level" }
+    }
+  ]
+}

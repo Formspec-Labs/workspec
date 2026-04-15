@@ -180,6 +180,23 @@ pub enum ProvenanceKind {
     ///
     /// `data` carries `{"subject": "<subject>", "bindingId": "<id>", "expectedUntil": "<iso>"}`.
     CallbackPending,
+
+    // ── Arazzo / Tool / Policy-engine bindings (Integration Profile NB.4) ─
+    /// A single step of an Arazzo multi-step sequence completed (or failed).
+    ///
+    /// `data` carries `{"stepId": "<id>", "outcome": "ok"|"failed", "durationMs": <n>, ...}`.
+    ArazzoStep,
+
+    /// A non-HTTP tool binding was invoked and produced a result.
+    ///
+    /// `data` carries `{"toolId": "<id>", "outcome": "ok"|"failed", ...}`.
+    ToolInvoked,
+
+    /// An external policy engine evaluated a request and returned a decision.
+    ///
+    /// `data` carries `{"decision": "allow"|"deny"|"indeterminate",
+    /// "reasonsCount": <n>, "obligationsCount": <n>, ...}`.
+    PolicyDecision,
 }
 
 /// A single provenance record.

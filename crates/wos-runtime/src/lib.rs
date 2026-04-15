@@ -12,6 +12,7 @@ pub mod companion;
 pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
+pub mod policy_decision;
 pub mod runtime;
 pub mod store;
 
