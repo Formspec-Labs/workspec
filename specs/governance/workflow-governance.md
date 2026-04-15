@@ -43,6 +43,8 @@ Government agencies, regulated industries, and organizations handling high-stake
 
 These are human governance requirements. This specification defines them independently of AI. Layer 2 (AI Integration) extends these structures for AI-specific concerns.
 
+**Legal sufficiency.** Governance rules defined in this specification contribute to, but do not guarantee, legal admissibility. Implementations MUST comply with the legal-sufficiency disclosure obligations in the WOS Assurance Layer §6. In particular, implementations MUST NOT imply that structured governance alone guarantees evidentiary sufficiency in any particular jurisdiction.
+
 ### 1.2 Design Goals
 
 1. **Human-first governance.** Every structure in this layer serves pure-human workflows. AI plugs in later.
