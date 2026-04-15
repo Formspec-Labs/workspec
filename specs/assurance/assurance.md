@@ -21,3 +21,35 @@ Out of scope: cryptographic signing algorithms; key lifecycle mechanics; custody
 ### 1.2 Notational Conventions
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174].
+
+## 2. Assurance Levels
+
+### 2.1 Taxonomy
+
+An **assurance level** is an ordered declaration of the binding strength between a recorded fact and the subject or actor it identifies. Assurance levels are declared per fact; they are not properties of the subject or actor.
+
+Implementations MUST support at minimum the following four-level taxonomy:
+
+| Level | Label | Meaning |
+|---|---|---|
+| `L1` | Self-asserted | Subject or actor asserted the identity binding; no external corroboration. |
+| `L2` | Corroborated | Binding corroborated by at least one external source (e.g., emailed magic link, phone verification). |
+| `L3` | Verified | Binding verified against an authoritative source (e.g., government ID match, credential issuer). |
+| `L4` | In-person or equivalent | Binding verified under conditions equivalent to in-person government-issued identity check. |
+
+Implementations MAY define additional levels; additional levels MUST be declared against the base four.
+
+### 2.2 Assurance Level Is Not Authorization
+
+Assurance level describes how strongly a fact is bound to its subject or actor. It does NOT describe what that subject or actor is authorized to do. Authorization decisions MAY use assurance level as an input but MUST NOT collapse authorization into assurance.
+
+### 2.3 Assurance-Upgrade Facts
+
+A subject's assurance level MAY be upgraded (but not silently downgraded) by recording an assurance-upgrade fact. Assurance-upgrade facts:
+
+- MUST reference the existing subject continuity reference (§3).
+- MUST declare the prior assurance level and the new assurance level.
+- MUST declare the basis for the upgrade (document inspection, biometric match, etc.).
+- MUST be canonical facts admitted through the normal Kernel Facts tier.
+- MUST NOT rewrite prior facts. Upgrades apply forward only.
+- MUST preserve disclosure posture independently from assurance level (see §4).
