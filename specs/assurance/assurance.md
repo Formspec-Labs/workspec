@@ -99,3 +99,29 @@ A fact MAY be highly assured and pseudonymously disclosed (a verified-L3 claim d
 ### 4.4 Normative Home
 
 This invariant is stated normatively here. Other specifications in the WOS family, and bindings such as Trellis, MUST reference this section rather than restating the invariant.
+
+## 5. Provider-Neutral Attestation
+
+### 5.1 Requirement
+
+An **attestation** is a fact asserting that some predicate about a subject is true under a declared assurance level. Attestations MUST be representable provider-neutrally — that is, without requiring a verifier to bind to a specific identity provider, issuer, or adapter in order to interpret the attestation's meaning.
+
+Implementations MAY use provider-specific bindings for operational convenience (e.g., OIDC claims, SAML assertions, verifiable credentials). The semantic meaning of an attestation — subject, predicate, assurance level, validity scope — MUST be representable independently of any particular binding.
+
+### 5.2 Attestation vs. Signing
+
+User-originated signing (the act of a subject cryptographically binding themselves to a submitted fact) is **not** defined in this layer. Signing semantics belong in the Formspec Response specification, because they are a property of the submitted data contract, not of the workflow substrate.
+
+An implementation MAY record that a fact was signed; the signing mechanism itself is defined by Formspec or by a distribution binding (Trellis).
+
+## 6. Legal-Sufficiency Disclosure Obligations
+
+### 6.1 Disclaimer Requirement
+
+Implementations MUST NOT imply, either in user-facing surfaces or in specifications they publish, that cryptographic controls alone guarantee legal admissibility or evidentiary sufficiency in any particular jurisdiction.
+
+Implementations MAY make stronger evidentiary claims only to the extent supported by declared process, signature semantics, canonical append attestations, records-management practice, and applicable law — and MUST disclose which of those conditions they rely on when making such claims.
+
+### 6.2 Rationale
+
+Cryptographic controls establish integrity and provenance. Legal admissibility additionally requires process, chain-of-custody, records-management, statutory authorization, and judicial acceptance. These are jurisdiction-specific and cannot be guaranteed by a specification. Implementations that elide this distinction mislead users and create liability for adopters.
