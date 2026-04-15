@@ -433,7 +433,7 @@ impl WosRuntime {
         .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
 
         let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?;
+            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         let instance = CaseInstance {
             instance_id,
             definition_url,
@@ -444,8 +444,8 @@ impl WosRuntime {
             next_task_sequence: 0,
             timers: timer_states,
             active_tasks: Vec::new(),
-            history_store: None,
-            compensation_logs: None,
+            history_store: Default::default(),
+            compensation_logs: Default::default(),
             status: InstanceStatus::Active,
             pending_events: Vec::new(),
             governance_state: None,
@@ -572,16 +572,11 @@ impl WosRuntime {
         record.instance.configuration = evaluator.configuration().active_states().to_vec();
         record.instance.case_state = evaluator.case_state_json();
         let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), now_ms, self.business_calendar.as_ref())?;
+            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
         annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
         record.instance.timers = timer_states;
-        let history = evaluator.history_store().clone();
-        record.instance.history_store = if history.is_empty() {
-            None
-        } else {
-            Some(history)
-        };
+        record.instance.history_store = evaluator.history_store().clone();
         record.instance.updated_at = now_iso.clone();
 
         let case_state_can_mutate_explicitly = record
@@ -600,9 +595,11 @@ impl WosRuntime {
             });
         }
 
-        // Milestone firing: evaluate after durable case-state write, before reactive
-        // transitions drain (Kernel S4.13).  Records are appended in lexicographic
-        // milestone-id order so the provenance stream is deterministic.
+        // Milestone firing: evaluate after the event's transition tree completes
+        // (including all onEntry/onExit setData), before side-effect realization
+        // (createTask/emitEvent) that would enqueue follow-on events (Kernel S4.13).
+        // Records are appended in lexicographic milestone-id order so the provenance
+        // stream is deterministic.
         let post_state = record.instance.case_state.clone();
         let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
         appended_provenance.extend(milestone_records);
@@ -1400,7 +1397,6 @@ fn materialize_due_timers(
 /// with `calendarVersionConvergenceError: true`.
 fn timers_to_state(
     timers: &wos_core::timer::Timers,
-    _now_ms: u64,
     calendar: Option<&BusinessCalendarDocument>,
 ) -> Result<(Vec<wos_core::instance::TimerState>, Vec<String>), RuntimeError> {
     let mut states = Vec::with_capacity(timers.len());
@@ -1446,14 +1442,15 @@ fn timer_to_state(
         },
         duration_iso: Some(timer.duration_iso.clone()),
         duration_ms: Some(timer.duration_ms),
+        created_at_ms: Some(timer.created_at_ms),
     };
     Ok((state, had_convergence_error))
 }
 
 /// Compute a business-calendar–adjusted deadline for `timer`.
 ///
-/// Reconstructs the start time as `deadline_ms - duration_ms`, then advances
-/// through business time using the attached calendar.
+/// Uses `timer.created_at_ms` as the authoritative start time, then advances
+/// through business time by `timer.duration_ms` using the attached calendar.
 ///
 /// Returns `(deadline_ms, had_convergence_error)`.  When the calendar evaluator
 /// does not converge (degenerate calendar), falls back to the naive wall-clock
@@ -1461,14 +1458,15 @@ fn timer_to_state(
 ///
 /// # Invariant
 ///
-/// `Timer.duration_ms` is authoritative for reconstructing the start time —
-/// it is stored at timer-creation time and never mutated.
+/// `Timer.created_at_ms` is the fixed origin, stamped once at timer-creation
+/// time.  Using it here ensures that repeated recomputations across drains —
+/// even after a calendar-snapped `deadline_ms` has been persisted — always
+/// produce the same result.
 fn business_deadline_ms(
     timer: &Timer,
     calendar: &BusinessCalendarDocument,
 ) -> Result<(u64, bool), RuntimeError> {
-    // Invariant: Timer.duration_ms is authoritative; reconstruct start from it.
-    let start_ms = timer.deadline_ms.saturating_sub(timer.duration_ms);
+    let start_ms = timer.created_at_ms;
     let start_secs = i64::try_from(start_ms / 1000)
         .map_err(|_| RuntimeError::Clock("timer start timestamp out of range".to_string()))?;
     let start_utc = DateTime::from_timestamp(start_secs, 0)
@@ -1517,14 +1515,7 @@ fn annotate_timer_created_with_calendar_version(
                 map.insert("calendarVersion".to_string(), version.clone());
             }
             other => {
-                let mut map = serde_json::Map::new();
-                if let Some(existing) = other.take() {
-                    if let serde_json::Value::Object(existing_map) = existing {
-                        map.extend(existing_map);
-                    }
-                }
-                map.insert("calendarVersion".to_string(), version.clone());
-                *other = Some(serde_json::Value::Object(map));
+                panic!("TimerCreated.data must be an Object; got {other:?}");
             }
         }
     }
@@ -1566,17 +1557,7 @@ fn annotate_timer_created_with_convergence_error(
                 );
             }
             other => {
-                let mut map = serde_json::Map::new();
-                if let Some(existing) = other.take() {
-                    if let serde_json::Value::Object(existing_map) = existing {
-                        map.extend(existing_map);
-                    }
-                }
-                map.insert(
-                    "calendarVersionConvergenceError".to_string(),
-                    serde_json::Value::Bool(true),
-                );
-                *other = Some(serde_json::Value::Object(map));
+                panic!("TimerCreated.data must be an Object; got {other:?}");
             }
         }
     }

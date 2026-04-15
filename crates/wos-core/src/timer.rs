@@ -13,6 +13,14 @@ pub struct Timer {
     /// Timer identifier.
     pub id: String,
 
+    /// Simulated time in milliseconds when this timer was created.
+    ///
+    /// Authoritative start time for business-calendar deadline recomputation.
+    /// Must never be mutated after creation — `business_deadline_ms` uses this
+    /// as the fixed origin so repeated recomputations across drains yield the
+    /// same result regardless of any previously snapped `deadline_ms`.
+    pub created_at_ms: u64,
+
     /// Absolute deadline in simulated milliseconds.
     pub deadline_ms: u64,
 

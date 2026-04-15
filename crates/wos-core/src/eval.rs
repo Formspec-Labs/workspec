@@ -214,8 +214,14 @@ impl Evaluator {
 
         for timer in &instance.timers {
             let deadline_ms = parse_rfc3339_to_ms(&timer.deadline)?;
+            // Fall back to reconstructing start from deadline-duration for
+            // instances persisted before created_at_ms was introduced.
+            let created_at_ms = timer
+                .created_at_ms
+                .unwrap_or_else(|| deadline_ms.saturating_sub(timer.duration_ms.unwrap_or(0)));
             timers.create(crate::timer::Timer {
                 id: timer.timer_id.clone(),
+                created_at_ms,
                 deadline_ms,
                 fires_event: timer.event.clone(),
                 created_in_state: timer.scope_state.clone().unwrap_or_default(),
@@ -239,7 +245,7 @@ impl Evaluator {
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
-            history_store: instance.history_store.clone().unwrap_or_default(),
+            history_store: instance.history_store.clone(),
         })
     }
 
@@ -724,6 +730,7 @@ impl Evaluator {
 
                 self.timers.create(crate::timer::Timer {
                     id: timer_id.to_string(),
+                    created_at_ms: self.simulated_time_ms,
                     deadline_ms,
                     fires_event: fires_event.to_string(),
                     created_in_state: lifecycle_state.to_string(),

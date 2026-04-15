@@ -42,12 +42,12 @@ pub struct CaseInstance {
     pub active_tasks: Vec<ActiveTask>,
 
     /// Saved history state configurations.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub history_store: Option<HashMap<String, Vec<String>>>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub history_store: HashMap<String, Vec<String>>,
 
     /// Active compensation logs.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub compensation_logs: Option<HashMap<String, CompensationLog>>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub compensation_logs: HashMap<String, CompensationLog>,
 
     /// Instance status.
     pub status: InstanceStatus,
@@ -138,6 +138,14 @@ pub struct TimerState {
     /// Original duration in milliseconds, if preserved by the runtime.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
+
+    /// Simulated time in milliseconds when this timer was created.
+    ///
+    /// Preserved across serialization so `business_deadline_ms` can always
+    /// compute the calendar-adjusted deadline from the original creation time,
+    /// regardless of how many times the instance has been drained and persisted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at_ms: Option<u64>,
 }
 
 /// Active nonterminal task state.
