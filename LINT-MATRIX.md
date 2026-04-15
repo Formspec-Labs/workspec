@@ -73,7 +73,7 @@
 | K-027 | Kernel S9.5 / LCD S5.2 | Compensation log MUST be append-only. | Runtime data structure. | T3 | compensation | E2E |
 | K-028 | Kernel S9.6 | Instance migration MUST produce provenance. | Runtime obligation. | T3 | provenance | E2E |
 | K-029 | Kernel S9.7 / LCD S6.2 | `startTimer` MUST specify exactly one of `duration` or `deadline`. | Mutual exclusivity not enforced. | T1 | timer | T1 |
-| K-030 | Kernel S10.5 | Extension keys MUST be `x-` prefixed. | Pattern enforcement. | T1 | cross-reference | T1 |
+| K-030 | Kernel S10.6 | Extension keys MUST be `x-` prefixed. | Pattern enforcement. | T1 | cross-reference | T1 |
 | K-031 | Kernel S11.1 | Contract validation MUST produce structured results. | Runtime integration contract. | T3 | lifecycle-soundness | E2E |
 | K-032 | Kernel S12 | Lifecycle state MUST be separated from case state. | Architectural invariant. | T3 | state-type-semantics | E2E |
 | K-033 | LCD S2.1 | Guard evaluation: document order, first match wins. | Runtime evaluation rule. | T3 | determinism | E2E |

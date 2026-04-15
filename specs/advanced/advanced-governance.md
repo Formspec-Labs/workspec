@@ -163,13 +163,13 @@ Every activity execution produces standard provenance records. Additionally, eac
 
 ### 4.7 Integration with Kernel Lifecycle
 
-A constraint zone is activated when the kernel transitions to a state that references the zone. The zone is bound to a kernel state via the `x-constraintZoneRef` property on the kernel state's `extensions` (Kernel S10.5). When entering the state, the zone's activities are initialized to their declared markings. When the zone is satisfied, it raises a `constraintZone.satisfied` event that matches outgoing transitions from the kernel state.
+A constraint zone is activated when the kernel transitions to a state that references the zone. The zone is bound to a kernel state via the `x-constraintZoneRef` property on the kernel state's `extensions` (Kernel S10.6). When entering the state, the zone's activities are initialized to their declared markings. When the zone is satisfied, it raises a `constraintZone.satisfied` event that matches outgoing transitions from the kernel state.
 
 Constraint zones do not introduce a new kernel state type. They are a governance overlay on existing `compound` states: the compound state provides the lifecycle container, and the zone provides declarative internal behavior in place of explicit substates and transitions.
 
 ### 4.8 Governance Attachment
 
-Constraint zones attach via the `extensions` seam (Kernel S10.5). The zone itself is declared in the Advanced Governance Document; the kernel state references it by id.
+Constraint zones attach via the `extensions` seam (Kernel S10.6). The zone itself is declared in the Advanced Governance Document; the kernel state references it by id.
 
 ---
 

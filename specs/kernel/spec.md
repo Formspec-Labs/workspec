@@ -363,6 +363,7 @@ Higher layers enrich the evaluation context by adding their variables through na
 | `parameters` | Layer 1 | `lifecycleHook` -- temporal parameters resolved to date-effective values. |
 | `agent` | Layer 2 | `actorExtension` -- agent operational state including calibration metrics. |
 | `output` | Layer 2 | `contractHook` -- agent output being evaluated. |
+| `custody` | Binding | `custodyHook` — current custody posture declaration, if any. |
 
 By the time any FEL expression evaluates, the context contains all enriched values. The workflow author writes expressions like `caseFile.income < parameters.eligibilityThreshold` -- the resolution is automatic.
 
@@ -487,7 +488,7 @@ Timeouts generate kernel `$timeout.*` events (S4.10) that the lifecycle handles 
 
 This section is normative.
 
-The kernel defines five extension seams. Higher layers attach governance and capabilities through these seams.
+The kernel defines six extension seams. Higher layers attach governance and capabilities through these seams.
 
 ### 10.1 `actorExtension`
 
@@ -524,7 +525,17 @@ This is the primary governance seam. Governance documents from higher layers dec
 
 **Transition-specific overrides:** When tag-based governance is not specific enough, governance documents MAY target specific transitions by identifier.
 
-### 10.5 `extensions`
+### 10.5 `custodyHook`
+
+**Purpose:** Custody posture declaration.
+
+Every WOS deployment handles protected content under a declared custody posture. The kernel itself makes no assumption about custody — a trust-the-host monolith and a multi-party distributed binding both conform to the kernel unchanged. Higher layers and bindings attach custody semantics here.
+
+Custody postures are declared, not inferred. Bindings that populate this seam MUST declare, at minimum: who may read content during ordinary operation, whether recovery can occur without the user, and whether delegated compute exposes content to ordinary service components. Custody transitions (changes to any of those answers) are recorded as canonical lifecycle facts (Governance S2.9).
+
+The kernel does NOT define the concrete Trust Profile object. Trellis (the distributed-trust binding) defines that object and binds it to this seam. A monolithic binding may populate this seam with a single declared posture (e.g., "provider-readable, no recovery without user, no delegated compute") and satisfy conformance.
+
+### 10.6 `extensions`
 
 **Purpose:** Standard escape hatch.
 

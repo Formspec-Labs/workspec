@@ -146,12 +146,17 @@
       "default": 3,
       "description": "Maximum cascade depth for relationship-triggered events ($related.*) before the processor halts generation (Kernel S4.10). Prevents unbounded cascading in cyclically related cases. Default: 3."
     },
+    "custodyHook": {
+      "type": "object",
+      "description": "Custody posture declaration seam (S10.5). Opaque to the kernel; bindings populate this with declared posture semantics. A monolithic binding may declare a single posture; a distributed binding may declare a full Trust Profile object.",
+      "additionalProperties": true
+    },
     "extensions": {
       "type": "object",
       "propertyNames": {
         "pattern": "^x-"
       },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'. The standard extensibility mechanism for implementation-specific or experimental features (Kernel S10.5)."
+      "description": "Extension data. All keys MUST be prefixed with 'x-'. The standard extensibility mechanism for implementation-specific or experimental features (Kernel S10.6)."
     }
   },
   "$defs": {
