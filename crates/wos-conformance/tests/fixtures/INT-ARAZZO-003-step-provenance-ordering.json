@@ -74,7 +74,7 @@
             }
           ],
           "outputBinding": {
-            "caseFile.finalOutput": "$.step-c.label"
+            "caseFile.finalOutput": "$.steps['step-c'].output.label"
           }
         }
       }

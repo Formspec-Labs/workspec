@@ -74,7 +74,7 @@
             }
           ],
           "outputBinding": {
-            "caseFile.pipelineResult": "$.persist.status"
+            "caseFile.pipelineResult": "$.steps.persist.output.status"
           }
         }
       }

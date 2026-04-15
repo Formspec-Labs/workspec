@@ -178,6 +178,10 @@ All integration binding types share the following properties:
 
 **Forward compatibility note:** The profile is designed to grow backwards-compatibly. Adding new supported constructs does not require existing profiles to change. Removing a supported construct is a breaking change and requires a new major version of this specification.
 
+**Iteration order for wildcard over objects:** For `[*]` applied to a JSON object, iteration order equals `serde_json::Map` insertion order (preserved as-of-parse). Fixtures SHOULD NOT rely on alphabetical key order unless they sort explicitly.
+
+**All-or-nothing binding:** If any `outputBinding` JSONPath resolves to no value, the binding invocation fails with a binding error. For optional event payload fields, use a default-providing input mapping in the downstream consumer rather than relying on partial output bindings.
+
 ### 3.4 Request-Response Bindings
 
 A `request-response` binding defines a synchronous HTTP service invocation.
@@ -223,6 +227,10 @@ An `arazzo-sequence` binding references an Arazzo document (OpenAPI Initiative) 
 | `outputBinding` | object | OPTIONAL | Maps Arazzo workflow output to case state paths. Keys are case state paths; values are JSON Path expressions into the Arazzo workflow output. |
 
 Each step in the Arazzo sequence produces a separate provenance record in the workflow's Facts tier (Kernel S8). When a step in the Arazzo sequence invokes an AI agent registered in a Layer 2 AI Integration Document, that invocation is subject to the agent's deontic constraints and autonomy level.
+
+**WOS v1.0 limitation:** In WOS v1.0, step inputs cannot reference prior step outputs via FEL (`$.steps[...]`). Cross-step data flow is through the sequence-level output binding only. Inter-step references are reserved for Arazzo Engine Binding (§2 of TODO).
+
+Step outputs are accessible in the binding-level `outputBinding` via `$.steps.<stepId>.output`. The runtime structures the accumulated step context as `{ "steps": { "<stepId>": { "output": <stepResponse> } } }`.
 
 ```json
 {

@@ -5,14 +5,23 @@
 //! An Arazzo sequence is a multi-step API orchestration. Each step is declared
 //! in `binding.extensions.steps` as an array of `ArazzoStepSpec` objects. Steps
 //! execute in order; each step's outputs are accumulated into a `StepContext`
-//! so subsequent steps can reference them via `$.steps[stepId].outputs.*`.
+//! so subsequent steps can reference them via `$.steps.<stepId>.output`.
+//!
+//! The step context passed to `apply_output_binding` is structured as:
+//! `{ "steps": { "<stepId>": { "output": <step_response> } } }`
+//! This matches the spec path convention `$.steps.<stepId>.output` (singular).
 //!
 //! Failure semantics: if a step fails, `ArazzoStep { outcome: "failed" }` is
 //! emitted for that step, the sequence halts, and the handler returns `Err`.
 //! Subsequent steps are not attempted.
 //!
 //! After all steps succeed, the binding-level `output_binding` may compose
-//! final case-state values from `$.steps[*].outputs` in the `StepContext`.
+//! final case-state values from the `StepContext` using `$.steps.<stepId>.output`.
+//!
+//! **WOS v1.0 limitation:** step inputs cannot reference prior step outputs via
+//! FEL (`$.steps[...]`). Cross-step data flow is through the sequence-level
+//! output binding only. Inter-step references are reserved for Arazzo Engine
+//! Binding (§2 of TODO).
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -82,7 +91,8 @@ impl IntegrationBindingHandler for ArazzoHandler {
         let steps = parse_steps(binding, service_ref)?;
         let mut provenance = Vec::new();
         // Accumulated per-step outputs: stepId → step output JSON.
-        let mut step_context: HashMap<String, serde_json::Value> = HashMap::new();
+        // Used for building the binding-level step context ($.steps.<stepId>.output).
+        let mut step_outputs: HashMap<String, serde_json::Value> = HashMap::new();
 
         for step in &steps {
             let (step_result_prov, step_output) = execute_step(
@@ -91,7 +101,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                 kernel,
                 observed,
                 step,
-                &step_context,
+                &step_outputs,
                 now_iso,
             );
             let step_provenance = step_result_prov;
@@ -99,7 +109,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
             match step_output {
                 Ok(output) => {
                     // Accumulate step output for subsequent steps.
-                    step_context.insert(step.step_id.clone(), output.clone());
+                    step_outputs.insert(step.step_id.clone(), output.clone());
                     provenance.extend(step_provenance);
 
                     // Apply per-step output mapping to case state immediately.
@@ -138,12 +148,14 @@ impl IntegrationBindingHandler for ArazzoHandler {
         }
 
         // Binding-level output mapping composes final outputs from all step results.
+        // The step context is structured as `{ "steps": { "<stepId>": { "output": <value> } } }`
+        // so callers can address step outputs as `$.steps.<stepId>.output` (spec §3.5).
         if !binding.output_binding.is_empty() {
-            let step_context_value = serde_json::to_value(&step_context).map_err(|e| {
-                RuntimeError::Integration(format!(
-                    "Arazzo sequence '{service_ref}': failed to serialize step context: {e}"
-                ))
-            })?;
+            let steps_map: HashMap<String, serde_json::Value> = step_outputs
+                .into_iter()
+                .map(|(id, output)| (id, serde_json::json!({ "output": output })))
+                .collect();
+            let step_context_value = serde_json::json!({ "steps": steps_map });
             let updates = apply_output_binding(
                 &mut record.instance.case_state,
                 &binding.output_binding,
@@ -236,12 +248,15 @@ fn execute_step(
     }
 
     // Invoke the service.
+    // Per-step idempotency keys are not implemented in WOS v1.0.
+    // The sequence-level `idempotencyKeyExpression` covers replay at the binding level.
+    // Per-step idempotency is deferred to Arazzo Engine Binding (§2 of TODO).
     let invoke_result = load_or_invoke_service_result(
         ctx.service,
         record,
         &step.service_ref,
         &step_binding,
-        None, // steps do not use per-step idempotency keys in this implementation
+        None,
         now_iso,
     );
 
