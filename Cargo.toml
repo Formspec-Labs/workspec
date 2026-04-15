@@ -7,3 +7,7 @@ members = [
     "crates/wos-formspec-binding",
 ]
 resolver = "3"
+
+# fel-core lives in the Formspec monorepo (`../crates/fel-core` when this tree is `formspec/wos-spec`).
+[workspace.dependencies]
+fel-core = { path = "../crates/fel-core" }

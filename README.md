@@ -109,6 +109,21 @@ The kernel tags transitions (`review`, `determination`, `adverse-decision`, `hol
 
 ---
 
+## Building the Rust workspace
+
+This tree is normally checked out as **`formspec/wos-spec`** inside the [Formspec](https://github.com/Formspec-org/formspec) repository. The workspace depends on **`fel-core`** at `../crates/fel-core` (that is, `formspec/crates/fel-core`).
+
+From `formspec/wos-spec`:
+
+```bash
+cargo test -p wos-core
+cargo test -p wos-runtime
+```
+
+If you work from a **standalone** clone of only the `wos-spec` repository, that relative path will not resolve unless you mirror the same directory layout (for example keep a full Formspec checkout and build from `formspec/wos-spec`). A plain `git` dependency on Formspec is not used here because Cargo would recurse into Formspec’s own `wos-spec` submodule when fetching sources.
+
+---
+
 ## Specification inventory
 
 **18** normative specs and **18** JSON Schemas. Each document validates against its schema. Schemas live under `schemas/` in folders that mirror the specs (`kernel/`, `governance/`, `sidecars/`, `ai/`, `advanced/`, `profiles/`, `companions/`).
