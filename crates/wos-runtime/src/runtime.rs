@@ -750,13 +750,11 @@ impl WosRuntime {
             &record.instance.definition_url,
             &record.instance.definition_version,
         )?;
-        let mut single = [provenance];
         populate_provenance_record_fields(
-            &mut single,
+            std::slice::from_mut(&mut provenance),
             &kernel,
             &record.instance.definition_version,
         );
-        let [provenance] = single;
         record.instance.provenance_position += 1;
         record.provenance_log.push(provenance);
         record.instance.updated_at = now_iso;
@@ -802,13 +800,11 @@ impl WosRuntime {
             &record.instance.definition_url,
             &record.instance.definition_version,
         )?;
-        let mut single = [dismissal];
         populate_provenance_record_fields(
-            &mut single,
+            std::slice::from_mut(&mut dismissal),
             &kernel,
             &record.instance.definition_version,
         );
-        let [dismissal] = single;
         record.provenance_log.push(dismissal);
         record.instance.updated_at = now_iso;
         self.store.save_record(record)?;
@@ -1448,13 +1444,11 @@ impl WosRuntime {
             &record.instance.definition_url,
             &record.instance.definition_version,
         )?;
-        let mut single = [rejection];
         populate_provenance_record_fields(
-            &mut single,
+            std::slice::from_mut(&mut rejection),
             &kernel,
             &record.instance.definition_version,
         );
-        let [rejection] = single;
         record.provenance_log.push(rejection);
         record.instance.updated_at = updated_at.to_string();
         if let Some(token) = idempotency_token {
