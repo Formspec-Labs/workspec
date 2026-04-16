@@ -179,12 +179,21 @@ fn activity_with_entities(
         );
     }
 
-    // §5.3 `prov:used`: one Entity per input. The digest covers the whole
-    // inputs vector, so it is attached to the *first* input Entity only.
+    // §5.3 `prov:used`: one Entity per input. The entity's `@id` is minted
+    // from the `(activity_index, item_index)` coordinate, which addresses
+    // the original `ProvenanceRecord.inputs[item_index]` slot. Consumers
+    // that need the runtime's opaque reference look it up there — we do
+    // NOT carry a redundant `wos:entityRef` property (not defined in §5.3).
+    //
+    // The digest covers the ENTIRE inputs/outputs vec, not the per-item
+    // entity. Attaching it to the first entity is a convention; attaching
+    // to every entity would falsely imply per-item digests. Consumers
+    // should treat the digest as a property of the activity's input/output
+    // bundle, not of any individual entity.
     let mut entities: Vec<Value> = Vec::new();
     if !record.inputs.is_empty() {
         let mut used_iris: Vec<Value> = Vec::with_capacity(record.inputs.len());
-        for (item_index, input_ref) in record.inputs.iter().enumerate() {
+        for item_index in 0..record.inputs.len() {
             let entity_iri = format!(
                 "{}entity/input/{index}/{item_index}",
                 config.provenance_namespace
@@ -194,7 +203,6 @@ fn activity_with_entities(
             let mut entity = serde_json::Map::new();
             entity.insert("@id".into(), Value::String(entity_iri));
             entity.insert("@type".into(), Value::String("prov:Entity".into()));
-            entity.insert("wos:entityRef".into(), Value::String(input_ref.clone()));
             if item_index == 0
                 && let Some(digest) = record.input_digest.as_deref()
             {
@@ -208,10 +216,11 @@ fn activity_with_entities(
         node.insert("prov:used".into(), Value::Array(used_iris));
     }
 
-    // §5.3 `prov:generated`: symmetric to `prov:used` for outputs.
+    // §5.3 `prov:generated`: symmetric to `prov:used` for outputs. Same
+    // digest-on-first-entity rationale as above.
     if !record.outputs.is_empty() {
         let mut generated_iris: Vec<Value> = Vec::with_capacity(record.outputs.len());
-        for (item_index, output_ref) in record.outputs.iter().enumerate() {
+        for item_index in 0..record.outputs.len() {
             let entity_iri = format!(
                 "{}entity/output/{index}/{item_index}",
                 config.provenance_namespace
@@ -221,7 +230,6 @@ fn activity_with_entities(
             let mut entity = serde_json::Map::new();
             entity.insert("@id".into(), Value::String(entity_iri));
             entity.insert("@type".into(), Value::String("prov:Entity".into()));
-            entity.insert("wos:entityRef".into(), Value::String(output_ref.clone()));
             if item_index == 0
                 && let Some(digest) = record.output_digest.as_deref()
             {
@@ -332,13 +340,21 @@ mod tests {
         let input_entity = &document.graph[1];
         assert_eq!(input_entity["@id"], "urn:wos:prov:test:entity/input/0/0");
         assert_eq!(input_entity["@type"], "prov:Entity");
-        assert_eq!(input_entity["wos:entityRef"], "case/123");
+        // §5.3 defines no `wos:entityRef` property — the `@id` coordinate
+        // already decodes to the `ProvenanceRecord.inputs[item_index]` slot.
+        assert!(
+            input_entity.get("wos:entityRef").is_none(),
+            "wos:entityRef is not in §5.3 and must not be emitted: {input_entity}"
+        );
         assert_eq!(input_entity["wos:inputDigest"], "sha256:aaaa");
 
         let output_entity = &document.graph[2];
         assert_eq!(output_entity["@id"], "urn:wos:prov:test:entity/output/0/0");
         assert_eq!(output_entity["@type"], "prov:Entity");
-        assert_eq!(output_entity["wos:entityRef"], "case/123#state");
+        assert!(
+            output_entity.get("wos:entityRef").is_none(),
+            "wos:entityRef is not in §5.3 and must not be emitted: {output_entity}"
+        );
         assert_eq!(output_entity["wos:outputDigest"], "sha256:bbbb");
 
         let agent = &document.graph[3];
