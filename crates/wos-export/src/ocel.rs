@@ -89,6 +89,14 @@ fn object_types() -> Value {
 /// Deduplicate `record_kind` occurrences into an OCEL `eventTypes` array.
 /// Order is stable: first-seen wins, matching the activity emission order the
 /// PROV-O exporter uses so snapshot diffs stay clean for Task 5 fixtures.
+///
+/// Each event type declares the full set of STATIC optional attributes a
+/// `ProvenanceRecord` may carry (§6.3). Because `ProvenanceKind` is a uniform
+/// struct — every variant shares the same optional field set — we emit the
+/// same schema for every event type. The indexed `inputs.{i}` / `outputs.{i}`
+/// attributes are NOT declared here because their count varies per record
+/// (OCEL 2.0 tolerates undeclared attributes; strict schema validation is
+/// optional).
 fn event_types(records: &[&ProvenanceRecord]) -> Value {
     let mut seen: Vec<String> = Vec::new();
     for record in records {
@@ -98,8 +106,25 @@ fn event_types(records: &[&ProvenanceRecord]) -> Value {
         }
     }
     seen.into_iter()
-        .map(|name| json!({ "name": name, "attributes": [] }))
+        .map(|name| json!({ "name": name, "attributes": static_event_attribute_schema() }))
         .collect()
+}
+
+/// Static attribute schema shared by every event type. Mirrors the fields
+/// emitted by [`event_attributes`] for non-indexed, non-dynamic values.
+fn static_event_attribute_schema() -> Value {
+    json!([
+        { "name": "actorId", "type": "string" },
+        { "name": "fromState", "type": "string" },
+        { "name": "toState", "type": "string" },
+        { "name": "event", "type": "string" },
+        { "name": "data", "type": "string" },
+        { "name": "actorType", "type": "string" },
+        { "name": "lifecycleState", "type": "string" },
+        { "name": "definitionVersion", "type": "string" },
+        { "name": "inputDigest", "type": "string" },
+        { "name": "outputDigest", "type": "string" }
+    ])
 }
 
 /// Emit the single `wf-instance` object. Its `instanceId` attribute carries
@@ -182,15 +207,20 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
         // introspect it as nested JSON.
         attributes.push(json!({ "name": "data", "value": data.clone() }));
     }
-    if !record.inputs.is_empty() {
-        // Emit as a JSON array so OCEL consumers see the structured list
-        // rather than a delimited string (cf. the XES joined representation).
-        let inputs: Vec<Value> = record.inputs.iter().map(|s| Value::String(s.clone())).collect();
-        attributes.push(json!({ "name": "inputs", "value": Value::Array(inputs) }));
+    // §6.3 inputs/outputs. OCEL 2.0 requires attribute `value` to be a scalar
+    // matching the declared type in `eventTypes[*].attributes`, so we CANNOT
+    // emit a JSON array here. Instead, flatten each vec into indexed scalar
+    // attributes using the convention `name: "inputs.{i}"` / `"outputs.{i}"`.
+    // This preserves order and per-item identity while remaining spec-valid.
+    // Consumers reconstruct the vec by filtering attribute names with the
+    // prefix `inputs.` or `outputs.`. The indexed attributes are dynamic
+    // (count varies per record) and are therefore NOT declared in the
+    // `eventTypes` schema — only the static optional fields are.
+    for (item_index, input) in record.inputs.iter().enumerate() {
+        attributes.push(json!({ "name": format!("inputs.{item_index}"), "value": input }));
     }
-    if !record.outputs.is_empty() {
-        let outputs: Vec<Value> = record.outputs.iter().map(|s| Value::String(s.clone())).collect();
-        attributes.push(json!({ "name": "outputs", "value": Value::Array(outputs) }));
+    for (item_index, output) in record.outputs.iter().enumerate() {
+        attributes.push(json!({ "name": format!("outputs.{item_index}"), "value": output }));
     }
     if let Some(digest) = record.input_digest.as_deref() {
         attributes.push(json!({ "name": "inputDigest", "value": digest }));
@@ -379,14 +409,106 @@ mod tests {
             find("definitionVersion"),
             Some(&Value::String("3.2.1".into()))
         );
+        // Inputs/outputs flatten to indexed scalar attributes so each `value`
+        // is a primitive string (OCEL 2.0 spec requirement).
         assert_eq!(
-            find("inputs"),
-            Some(&json!(["case/1", "case/2"])),
-            "inputs must be emitted as a JSON array",
+            find("inputs.0"),
+            Some(&Value::String("case/1".into())),
+            "inputs must flatten to indexed scalar attributes",
         );
-        assert_eq!(find("outputs"), Some(&json!(["case/1#state"])));
+        assert_eq!(find("inputs.1"), Some(&Value::String("case/2".into())));
+        assert_eq!(find("outputs.0"), Some(&Value::String("case/1#state".into())));
+        // The non-indexed `inputs` / `outputs` names must NOT appear.
+        assert!(find("inputs").is_none(), "non-indexed `inputs` must not be emitted");
+        assert!(find("outputs").is_none(), "non-indexed `outputs` must not be emitted");
         assert_eq!(find("inputDigest"), Some(&Value::String("sha256:aaaa".into())));
         assert_eq!(find("outputDigest"), Some(&Value::String("sha256:bbbb".into())));
+    }
+
+    #[test]
+    fn inputs_outputs_attribute_values_are_primitive_strings_not_arrays() {
+        // OCEL 2.0: `eventTypes[*].attributes[*].type` is a scalar primitive.
+        // Therefore each `events[*].attributes[*].value` MUST be a primitive
+        // matching that declared type. A JSON array would produce an invalid
+        // OCEL document. Guard that contract explicitly.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z");
+        record.inputs = vec!["a".into(), "b".into(), "c".into()];
+        record.outputs = vec!["x".into()];
+        log.push(record);
+
+        let document = export(&log, &config());
+        let attributes = document["events"][0]["attributes"]
+            .as_array()
+            .expect("attributes array");
+
+        for attribute in attributes {
+            assert!(
+                !attribute["value"].is_array(),
+                "no attribute value may be a JSON array (OCEL 2.0 requires scalar): {attribute}"
+            );
+        }
+
+        // And we should see the three indexed input entries + one indexed
+        // output entry, matching the vec lengths.
+        let indexed_inputs: Vec<_> = attributes
+            .iter()
+            .filter(|attr| attr["name"].as_str().unwrap_or("").starts_with("inputs."))
+            .collect();
+        assert_eq!(indexed_inputs.len(), 3, "one indexed attribute per input: {attributes:?}");
+        let indexed_outputs: Vec<_> = attributes
+            .iter()
+            .filter(|attr| attr["name"].as_str().unwrap_or("").starts_with("outputs."))
+            .collect();
+        assert_eq!(indexed_outputs.len(), 1);
+    }
+
+    #[test]
+    fn event_types_declare_static_attribute_schema() {
+        // OCEL 2.0 expects `eventTypes[*].attributes` to describe the shape
+        // of event attributes so consumers can validate the log. The static
+        // optional fields on `ProvenanceRecord` MUST be declared; the
+        // dynamic indexed `inputs.{i}` / `outputs.{i}` attributes are not
+        // (their cardinality varies per record).
+        let mut log = ProvenanceLog::default();
+        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        let document = export(&log, &config());
+
+        let event_types = document["eventTypes"].as_array().expect("eventTypes array");
+        assert_eq!(event_types.len(), 1);
+        let attributes = event_types[0]["attributes"]
+            .as_array()
+            .expect("eventType attributes array");
+
+        let names: Vec<&str> = attributes
+            .iter()
+            .map(|attr| attr["name"].as_str().expect("attribute name"))
+            .collect();
+        for required in [
+            "actorId",
+            "fromState",
+            "toState",
+            "event",
+            "data",
+            "actorType",
+            "lifecycleState",
+            "definitionVersion",
+            "inputDigest",
+            "outputDigest",
+        ] {
+            assert!(
+                names.contains(&required),
+                "eventType schema missing static attribute {required}: {names:?}"
+            );
+        }
+
+        // Every declared attribute must carry a primitive `type` string.
+        for attribute in attributes {
+            assert!(
+                attribute["type"].is_string(),
+                "eventType attribute needs a primitive `type`: {attribute}"
+            );
+        }
     }
 
     #[test]
@@ -417,6 +539,13 @@ mod tests {
             assert!(
                 !names.contains(&omitted),
                 "attribute {omitted} must not appear when field is unset: {names:?}"
+            );
+        }
+        // Indexed input/output attributes must also be absent when vecs are empty.
+        for name in &names {
+            assert!(
+                !name.starts_with("inputs.") && !name.starts_with("outputs."),
+                "indexed input/output attribute leaked for empty vec: {name}"
             );
         }
     }
