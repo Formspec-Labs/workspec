@@ -2,11 +2,18 @@
 
 //! End-to-end export conformance tests (Semantic Profile §§5–6).
 //!
-//! Each test loads a standalone export fixture from `tests/fixtures/`, runs
-//! its 3-event workflow (Draft → Submitted → Approved) through the
-//! conformance engine to produce a runtime-stamped provenance log, feeds
-//! that log through the appropriate exporter (`wos_export::prov_o`, `xes`,
-//! or `ocel`), and verifies structural properties declared in the fixture.
+//! Each test loads a standalone export fixture from
+//! `tests/fixtures/export/`, runs its 3-event workflow (Draft → Submitted
+//! → Approved) through the conformance engine to produce a
+//! runtime-stamped provenance log, feeds that log through the appropriate
+//! exporter (`wos_export::prov_o`, `xes`, or `ocel`), and verifies
+//! structural properties declared in the fixture.
+//!
+//! Export fixtures live in a dedicated subdirectory so the scanners that
+//! walk `tests/fixtures/` for `ConformanceFixture` entries — `meta.rs`
+//! and `kernel_conformance.rs` — can exclude them by location rather than
+//! by filename prefix. A directory-based boundary is intent-revealing and
+//! robust to future naming.
 //!
 //! # Fixture envelope
 //!
@@ -111,7 +118,7 @@ fn run_export_fixture(fixture_filename: &str) {
 
 fn load_fixture(filename: &str) -> ExportFixture {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let path = format!("{manifest}/tests/fixtures/{filename}");
+    let path = format!("{manifest}/tests/fixtures/export/{filename}");
     let json = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("could not read fixture '{path}': {error}"));
     serde_json::from_str(&json)

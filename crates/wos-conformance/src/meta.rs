@@ -698,18 +698,14 @@ fn load_fixture_specs(fixtures_dir: &Path) -> Result<Vec<FixtureSpec>, Conforman
 
     fixture_paths
         .into_iter()
+        // Only loose `*.json` files in the fixtures directory root are
+        // standard `ConformanceFixture` entries. Subdirectories (notably
+        // `export/`, which holds export-conformance fixtures with a
+        // distinct envelope) are skipped: `read_dir` does not recurse, so
+        // directory entries have no `.json` extension and fall out here.
         .filter(|path| {
             path.extension()
                 .is_some_and(|extension| extension == "json")
-        })
-        // Export-conformance fixtures (sp-export-*.json) use a distinct
-        // envelope shape and are owned by `tests/export_conformance.rs`.
-        // Exclude them from `ConformanceFixture` parsing so they can coexist
-        // with runtime fixtures in the same directory.
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_none_or(|name| !name.starts_with("sp-export-"))
         })
         .map(|path| {
             let json = std::fs::read_to_string(&path).map_err(|error| {

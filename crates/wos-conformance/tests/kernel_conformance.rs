@@ -824,41 +824,36 @@ fn all_fixtures_parse_and_resolve() {
     for entry in std::fs::read_dir(&fixtures_dir).expect("fixtures dir exists") {
         let entry = entry.expect("readable entry");
         let path = entry.path();
-        if path.extension().map_or(false, |e| e == "json") {
-            // Export-conformance fixtures (sp-export-*.json) use a distinct
-            // envelope shape — see `tests/export_conformance.rs`. They live
-            // here alongside runtime fixtures for discoverability, but they
-            // are owned by that test file and must not be parsed as
-            // `ConformanceFixture`.
-            let filename = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or_default();
-            if filename.starts_with("sp-export-") {
-                continue;
-            }
-            let json = std::fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-            let fixture: wos_conformance::ConformanceFixture = serde_json::from_str(&json)
-                .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
-            // Verify document paths resolve relative to the fixture directory.
-            let base = path.parent().unwrap().to_str().unwrap();
-            for (role, doc_path) in &fixture.documents {
-                if doc_path == "inline" {
-                    assert!(
-                        fixture.inline_documents.contains_key(role),
-                        "fixture {} declares inline {role} document but omits inline_documents.{role}",
-                        path.display()
-                    );
-                    continue;
-                }
-                let full = format!("{base}/{doc_path}");
+        // Only loose `*.json` files at the fixtures root are standard
+        // `ConformanceFixture` entries. The `export/` subdirectory holds
+        // export-conformance fixtures with a distinct envelope — they are
+        // owned by `tests/export_conformance.rs` and must not be parsed
+        // as `ConformanceFixture`. `read_dir` does not recurse, so the
+        // `.json` extension guard below excludes the subdirectory itself.
+        if !path.extension().is_some_and(|e| e == "json") {
+            continue;
+        }
+        let json = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let fixture: wos_conformance::ConformanceFixture = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+        // Verify document paths resolve relative to the fixture directory.
+        let base = path.parent().unwrap().to_str().unwrap();
+        for (role, doc_path) in &fixture.documents {
+            if doc_path == "inline" {
                 assert!(
-                    std::path::Path::new(&full).exists(),
-                    "fixture {} references non-existent {role} document: {doc_path}",
+                    fixture.inline_documents.contains_key(role),
+                    "fixture {} declares inline {role} document but omits inline_documents.{role}",
                     path.display()
                 );
+                continue;
             }
+            let full = format!("{base}/{doc_path}");
+            assert!(
+                std::path::Path::new(&full).exists(),
+                "fixture {} references non-existent {role} document: {doc_path}",
+                path.display()
+            );
         }
     }
 }
