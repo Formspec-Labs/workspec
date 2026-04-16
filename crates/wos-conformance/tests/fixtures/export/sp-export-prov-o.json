@@ -1,46 +1,6 @@
 {
   "id": "SP-EXPORT-001-prov-o",
-  "description": "Draft → Submitted → Approved workflow exported as PROV-O JSON-LD. Asserts the activity/agent graph shape required by Semantic Profile §5.3 / §5.6: every Activity carries @id, @type=prov:Activity, wos:actionType, and (for stamped records) prov:atTime; the @context carries the prov/xsd/wos prefixes; and the deduplicated agent count produces at least 2 activities + 1 agent = ≥ 3 nodes (we assert ≥ 4 to cover case-state mutations the runtime also records on transitions).",
-  "kernel": {
-    "$wosKernel": "1.0",
-    "url": "https://test.wos-spec.org/sp-export/prov-o",
-    "actors": [
-      { "id": "author", "type": "human" },
-      { "id": "approver", "type": "human" }
-    ],
-    "caseFile": {
-      "fields": {
-        "status": { "type": "string", "default": "draft" }
-      }
-    },
-    "lifecycle": {
-      "initialState": "draft",
-      "states": {
-        "draft": {
-          "type": "atomic",
-          "transitions": [
-            { "event": "submit", "target": "submitted" }
-          ]
-        },
-        "submitted": {
-          "type": "atomic",
-          "onEntry": [
-            { "action": "setData", "path": "caseFile.status", "value": "submitted" }
-          ],
-          "transitions": [
-            { "event": "approve", "target": "approved" }
-          ]
-        },
-        "approved": {
-          "type": "final"
-        }
-      }
-    }
-  },
-  "events": [
-    { "event": "submit", "actor": "author" },
-    { "event": "approve", "actor": "approver" }
-  ],
+  "description": "Draft → Submitted → Approved workflow exported as PROV-O JSON-LD. Asserts the activity/agent graph shape required by Semantic Profile §5.3 / §5.6: every Activity carries @id, @type=prov:Activity, wos:actionType, and (for stamped records) prov:atTime; the @context carries the prov/xsd/wos prefixes; and the deduplicated agent count produces at least 2 activities + 1 agent = ≥ 3 nodes (we assert ≥ 4 to cover case-state mutations the runtime also records on transitions). Kernel and event sequence are defined once in tests/export_conformance.rs (shared_workflow_kernel / shared_workflow_events).",
   "export": {
     "format": "prov_o",
     "config": {

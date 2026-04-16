@@ -50,21 +50,22 @@ use wos_export::{ExportConfig, ocel, prov_o, xes};
 /// Deliberately decoupled from `ConformanceFixture`: the runtime fixture
 /// envelope is tuned for state-transition and provenance-match assertions,
 /// not structural checks against serialized export output.
+///
+/// The kernel and event sequence are NOT in the fixture JSON — all three
+/// export fixtures drive the identical Draft → Submitted → Approved
+/// workflow, so `shared_workflow_kernel()` and `shared_workflow_events()`
+/// define them once in Rust and every per-format fixture carries only
+/// the assertions specific to its serializer. This eliminates ~40 lines
+/// of duplicated JSON per fixture while keeping the per-format
+/// contracts (id, description, export config, assertions) inspectable in
+/// plain JSON.
 #[derive(Debug, Deserialize)]
 struct ExportFixture {
     id: String,
     #[allow(dead_code)]
     description: String,
-    kernel: Value,
-    events: Vec<FixtureEvent>,
     export: ExportSpec,
     assertions: Value,
-}
-
-#[derive(Debug, Deserialize)]
-struct FixtureEvent {
-    event: String,
-    actor: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +78,61 @@ struct ExportSpec {
 struct ExportConfigSpec {
     provenance_namespace: String,
     instance_id: String,
+}
+
+/// Kernel shared by all export-conformance fixtures.
+///
+/// A two-transition lifecycle `draft → submitted → approved`, where the
+/// `submitted.onEntry` sets `caseFile.status`. This produces the minimum
+/// 3-record provenance log (two state transitions plus one case-state
+/// mutation) that the three serializers exercise.
+fn shared_workflow_kernel() -> Value {
+    json!({
+        "$wosKernel": "1.0",
+        "url": "https://test.wos-spec.org/sp-export/shared-workflow",
+        "actors": [
+            { "id": "author", "type": "human" },
+            { "id": "approver", "type": "human" }
+        ],
+        "caseFile": {
+            "fields": {
+                "status": { "type": "string", "default": "draft" }
+            }
+        },
+        "lifecycle": {
+            "initialState": "draft",
+            "states": {
+                "draft": {
+                    "type": "atomic",
+                    "transitions": [
+                        { "event": "submit", "target": "submitted" }
+                    ]
+                },
+                "submitted": {
+                    "type": "atomic",
+                    "onEntry": [
+                        { "action": "setData", "path": "caseFile.status", "value": "submitted" }
+                    ],
+                    "transitions": [
+                        { "event": "approve", "target": "approved" }
+                    ]
+                },
+                "approved": {
+                    "type": "final"
+                }
+            }
+        }
+    })
+}
+
+/// Event sequence shared by all export-conformance fixtures. Each event
+/// has a distinct actor so exporters that deduplicate by actor_id
+/// produce at least two `prov:Agent` nodes.
+fn shared_workflow_events() -> Vec<Value> {
+    vec![
+        json!({ "event": "submit", "actor": "author" }),
+        json!({ "event": "approve", "actor": "approver" }),
+    ]
 }
 
 // ── Test entry points ────────────────────────────────────────────
@@ -125,6 +181,19 @@ fn load_fixture(filename: &str) -> ExportFixture {
         .unwrap_or_else(|error| panic!("fixture '{filename}' failed to parse: {error}"))
 }
 
+/// Minimum number of provenance records every export fixture MUST produce.
+///
+/// All three export fixtures drive the same Draft → Submitted → Approved
+/// workflow (two transitions plus case-state mutations), so any run that
+/// emits fewer than two records indicates the workflow did not execute as
+/// specified — downstream assertions like `event_count == log.len()` would
+/// be vacuously satisfied on a zero- or one-event log.
+///
+/// Enforcing this floor once in `run_workflow_to_stamped_log` (rather than
+/// per-format inside `assert_prov_o` / `assert_xes` / `assert_ocel`) closes
+/// the silent-pass hole across every export path at a single site.
+const MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT: usize = 2;
+
 /// Drive the fixture's event sequence through `WorkflowEngine` and return
 /// the resulting stamped provenance records as a `ProvenanceLog`.
 ///
@@ -132,15 +201,22 @@ fn load_fixture(filename: &str) -> ExportFixture {
 /// the standard fixture path; using the runtime path (not a hand-rolled log)
 /// ensures timestamps come from `wos_runtime::stamp_provenance` the same way
 /// a production instance would stamp them.
+///
+/// Post-condition: the returned log carries at least
+/// `MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT` stamped records. Callers can
+/// therefore trust `event_count == log.len()` assertions to be
+/// non-vacuous — a workflow that silently produced zero events would panic
+/// here, not slip through as a green test.
 fn run_workflow_to_stamped_log(fixture: &ExportFixture) -> ProvenanceLog {
-    // Write the inline kernel to a temp file so WorkflowEngine can read it
+    // Write the shared kernel to a temp file so WorkflowEngine can read it
     // via the existing fixture path resolver. The TempDir is held alive for
     // the duration of the function so the path stays valid.
     let tempdir = tempfile::tempdir().expect("failed to create temp dir");
     let kernel_path = tempdir.path().join("kernel.json");
     std::fs::write(
         &kernel_path,
-        serde_json::to_string_pretty(&fixture.kernel).expect("kernel must serialize"),
+        serde_json::to_string_pretty(&shared_workflow_kernel())
+            .expect("kernel must serialize"),
     )
     .expect("failed to write temp kernel");
     let kernel_path_str = kernel_path
@@ -148,18 +224,12 @@ fn run_workflow_to_stamped_log(fixture: &ExportFixture) -> ProvenanceLog {
         .expect("temp kernel path is not valid UTF-8")
         .to_string();
 
-    let event_sequence: Vec<Value> = fixture
-        .events
-        .iter()
-        .map(|entry| json!({ "event": entry.event, "actor": entry.actor }))
-        .collect();
-
     let conformance_fixture: ConformanceFixture = serde_json::from_value(json!({
         "id": fixture.id,
         "rule": "SP-EXPORT",
         "description": "export-conformance runtime driver",
         "documents": { "kernel": kernel_path_str },
-        "event_sequence": event_sequence,
+        "event_sequence": shared_workflow_events(),
         "expected_transitions": []
     }))
     .expect("could not build ConformanceFixture");
@@ -184,19 +254,28 @@ fn run_workflow_to_stamped_log(fixture: &ExportFixture) -> ProvenanceLog {
     for record in result.provenance {
         log.push(record);
     }
+
+    // Silent-pass guard: every export fixture's workflow MUST emit at least
+    // `MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT` records. See the constant's
+    // doc comment for the rationale.
+    assert!(
+        log.len() >= MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT,
+        "export fixture '{}' produced only {} provenance record(s); expected ≥ {} (the workflow is a 2-transition Draft → Submitted → Approved sequence). A log this short silently satisfies event_count == log.len() assertions and hides regressions.",
+        fixture.id,
+        log.len(),
+        MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT
+    );
+
     log
 }
 
 // ── PROV-O assertions ────────────────────────────────────────────
 
 fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConfig) {
-    assert!(
-        log.len() >= 2,
-        "PROV-O fixture '{}' expected at least 2 provenance records (one per transition), got {}",
-        fixture.id,
-        log.len()
-    );
-
+    // The non-vacuity floor (log.len() >= 2) is enforced once in
+    // `run_workflow_to_stamped_log` via
+    // `MIN_EXPECTED_PROVENANCE_RECORDS_PER_EXPORT`, so every per-format
+    // `event_count == log.len()` assertion below is non-vacuous.
     let document = prov_o::export(log, config);
     let serialized = serde_json::to_value(&document).expect("PROV-O document must serialize");
     let graph = serialized["@graph"]
@@ -409,7 +488,12 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     // exporter behaviour by feeding an auxiliary, hand-built log containing
     // one unstamped record — the fixture asserts that the exporter's
     // contract (time: "" rather than omission) still holds.
-    if assertion_bool(assertions, "ocel_preserves_empty_timestamp_as_string") {
+    //
+    // The assertion key reads as an invariant ("asserts … preserved as empty
+    // string") rather than a unit-test-style name. The pure unit test in
+    // `wos_export::ocel` — `preserves_empty_timestamp_as_string` — covers the
+    // same property at the serializer level and stays named for that context.
+    if assertion_bool(assertions, "asserts_empty_timestamp_preserved_as_empty_string_in_ocel") {
         let mut unstamped_log = ProvenanceLog::default();
         unstamped_log.push(ProvenanceRecord::state_transition(
             "draft",
@@ -563,4 +647,67 @@ fn assertion_string_array(assertions: &Value, key: &str) -> Vec<String> {
                 .to_string()
         })
         .collect()
+}
+
+// ── extract_event_keys regression tests ─────────────────────────
+//
+// A prior iteration of this helper used `xml.split("<event>")` to segment
+// events, which silently produced zero blocks for `<event attr="…">` or
+// any namespaced variant of the open tag (quick-xml pretty-prints with
+// indentation, not padding, so the literal byte sequence wasn't always
+// present). The parser-based implementation below is robust against
+// attributes on the open tag. These tests pin that contract.
+
+/// `<event>` carries attributes on its open tag: the parser-based
+/// implementation must still emit one block with the child `<string>`
+/// key. A literal-string split on `"<event>"` would see zero matches and
+/// return `vec![]`, so a regressed implementation would turn a truthful
+/// test into vacuous pass/fail.
+#[test]
+fn extract_event_keys_handles_event_with_open_tag_attributes() {
+    let xml = r#"<log><event id="e1"><string key="concept:name" value="submit"/></event></log>"#;
+
+    let events = extract_event_keys(xml);
+
+    assert_eq!(
+        events,
+        vec![vec!["concept:name".to_string()]],
+        "event with attribute on open tag must still yield one block with its child key"
+    );
+}
+
+/// An `<event></event>` block with no child `<string>` / `<date>`
+/// elements must yield a single empty key list (one block, zero keys) —
+/// not be dropped. The block itself is still a real event.
+#[test]
+fn extract_event_keys_yields_empty_list_for_childless_event() {
+    let xml = "<log><event></event></log>";
+
+    let events = extract_event_keys(xml);
+
+    assert_eq!(
+        events,
+        vec![Vec::<String>::new()],
+        "childless <event>...</event> must yield one block with zero keys, not be dropped"
+    );
+}
+
+/// A self-closing `<event/>` is not a shape the XES exporter currently
+/// emits, but the helper must not crash on it. It is a shape quick-xml
+/// reports as `Empty(event)`, which the current arm order treats as
+/// "child element of the currently-open event" — but no event is open
+/// at the top level, so `current` is `None` and the attribute loop is a
+/// no-op. Net effect: zero events surfaced. This test pins that
+/// behavior so a future refactor cannot accidentally crash on the
+/// unusual shape.
+#[test]
+fn extract_event_keys_does_not_crash_on_self_closing_event() {
+    let xml = "<log><event/></log>";
+
+    let events = extract_event_keys(xml);
+
+    assert!(
+        events.is_empty(),
+        "self-closing <event/> at top level must not surface any event block, got {events:?}"
+    );
 }
