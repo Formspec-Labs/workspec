@@ -111,12 +111,18 @@ export class FixtureBackend implements IWosBackend {
     return this.instances.find(i => i.instanceId === id) ?? null;
   }
 
-  async listInstances(filter?: InstanceFilter): Promise<PaginatedResult<CaseInstanceView>> {
+  async listInstances(filter?: InstanceFilter, page?: number, pageSize?: number): Promise<PaginatedResult<CaseInstanceView>> {
     let items = [...this.instances];
     if (filter?.status) items = items.filter(i => filter.status!.includes(i.status));
     if (filter?.impactLevel) items = items.filter(i => filter.impactLevel!.includes(i.impactLevel));
     if (filter?.definitionUrl) items = items.filter(i => i.definitionUrl === filter.definitionUrl);
-    return { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 };
+    const resolvedPage = Math.max(1, page ?? 1);
+    const resolvedPageSize = Math.max(1, pageSize ?? 50);
+    const total = items.length;
+    const totalPages = Math.max(1, Math.ceil(total / resolvedPageSize));
+    const start = (resolvedPage - 1) * resolvedPageSize;
+    const paged = items.slice(start, start + resolvedPageSize);
+    return { items: paged, total, page: resolvedPage, pageSize: resolvedPageSize, totalPages };
   }
 
   private provenanceData: Record<string, ProvenanceRecord[]> = {
