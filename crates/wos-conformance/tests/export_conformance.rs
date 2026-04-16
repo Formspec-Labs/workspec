@@ -299,25 +299,26 @@ fn assert_xes(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConfi
         );
     }
 
-    // Every event block must carry the required string/date keys. We split
-    // on <event> boundaries rather than re-parse because the assertions are
-    // per-event-block; parse validity is already covered above.
-    let event_blocks: Vec<&str> = xml.split("<event>").skip(1).collect();
+    // Every event block must carry the required string/date keys. Parse the
+    // XML with quick_xml::Reader rather than splitting on the literal "<event>"
+    // byte sequence: a substring split would silently pass with zero blocks if
+    // the exporter ever emits "<event attr=\"…\">" or namespaced variants.
+    let event_keys = extract_event_keys(&xml);
     assert_eq!(
-        event_blocks.len(),
+        event_keys.len(),
         log.len(),
-        "XES event block split count ({}) must equal log length ({}) for fixture '{}'",
-        event_blocks.len(),
+        "XES parsed <event> count ({}) must equal log length ({}) for fixture '{}'",
+        event_keys.len(),
         log.len(),
         fixture.id
     );
-    for key in assertion_string_array(assertions, "xes_event_required_keys") {
-        let needle = format!(r#"key="{key}""#);
-        for (index, block) in event_blocks.iter().enumerate() {
+    for required in assertion_string_array(assertions, "xes_event_required_keys") {
+        for (index, keys) in event_keys.iter().enumerate() {
             assert!(
-                block.contains(&needle),
-                "XES event[{index}] missing key '{key}' for fixture '{}': {block}",
-                fixture.id
+                keys.iter().any(|k| k == &required),
+                "XES event[{index}] missing key '{required}' for fixture '{}' (keys present: {:?})",
+                fixture.id,
+                keys
             );
         }
     }
@@ -477,6 +478,47 @@ fn count_xml_elements(xml: &str, tag: &[u8]) -> usize {
         buffer.clear();
     }
     count
+}
+
+/// For each `<event>...</event>` block in the XML, collect the `key` attribute
+/// values of its child `<string>` / `<date>` elements. Using the parser (not
+/// string splitting) ensures correctness against any future attribute variants
+/// on the `<event>` open tag.
+fn extract_event_keys(xml: &str) -> Vec<Vec<String>> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut events: Vec<Vec<String>> = Vec::new();
+    let mut current: Option<Vec<String>> = None;
+    let mut buffer = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(XmlEvent::Eof) => break,
+            Ok(XmlEvent::Start(element)) if element.name().as_ref() == b"event" => {
+                current = Some(Vec::new());
+            }
+            Ok(XmlEvent::End(element)) if element.name().as_ref() == b"event" => {
+                if let Some(keys) = current.take() {
+                    events.push(keys);
+                }
+            }
+            Ok(XmlEvent::Empty(element)) | Ok(XmlEvent::Start(element)) => {
+                if let Some(keys) = current.as_mut() {
+                    for attr in element.attributes().flatten() {
+                        if attr.key.as_ref() == b"key" {
+                            keys.push(String::from_utf8_lossy(&attr.value).into_owned());
+                        }
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(error) => panic!(
+                "XES extract_event_keys hit a parse error at byte {}: {error:?}",
+                reader.buffer_position()
+            ),
+        }
+        buffer.clear();
+    }
+    events
 }
 
 fn assertion_u64(assertions: &Value, key: &str) -> u64 {
