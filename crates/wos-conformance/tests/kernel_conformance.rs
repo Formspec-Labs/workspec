@@ -825,6 +825,18 @@ fn all_fixtures_parse_and_resolve() {
         let entry = entry.expect("readable entry");
         let path = entry.path();
         if path.extension().map_or(false, |e| e == "json") {
+            // Export-conformance fixtures (sp-export-*.json) use a distinct
+            // envelope shape — see `tests/export_conformance.rs`. They live
+            // here alongside runtime fixtures for discoverability, but they
+            // are owned by that test file and must not be parsed as
+            // `ConformanceFixture`.
+            let filename = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            if filename.starts_with("sp-export-") {
+                continue;
+            }
             let json = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
             let fixture: wos_conformance::ConformanceFixture = serde_json::from_str(&json)

@@ -1,0 +1,57 @@
+{
+  "id": "SP-EXPORT-003-ocel",
+  "description": "Draft → Submitted → Approved workflow exported as OCEL 2.0 JSON. Asserts the four top-level arrays required by §6.4 (objectTypes, eventTypes, objects, events), that events.len() equals the provenance record count, that every event carries a relationship to the sole wf-instance object, and that empty timestamps round-trip as \"\" rather than being omitted (OCEL requires time on every event; the exporter deliberately surfaces missed-stamp sites with an empty string).",
+  "kernel": {
+    "$wosKernel": "1.0",
+    "url": "https://test.wos-spec.org/sp-export/ocel",
+    "actors": [
+      { "id": "author", "type": "human" },
+      { "id": "approver", "type": "human" }
+    ],
+    "caseFile": {
+      "fields": {
+        "status": { "type": "string", "default": "draft" }
+      }
+    },
+    "lifecycle": {
+      "initialState": "draft",
+      "states": {
+        "draft": {
+          "type": "atomic",
+          "transitions": [
+            { "event": "submit", "target": "submitted" }
+          ]
+        },
+        "submitted": {
+          "type": "atomic",
+          "onEntry": [
+            { "action": "setData", "path": "caseFile.status", "value": "submitted" }
+          ],
+          "transitions": [
+            { "event": "approve", "target": "approved" }
+          ]
+        },
+        "approved": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "events": [
+    { "event": "submit", "actor": "author" },
+    { "event": "approve", "actor": "approver" }
+  ],
+  "export": {
+    "format": "ocel",
+    "config": {
+      "provenance_namespace": "urn:wos:prov:test:",
+      "instance_id": "sp-export-ocel"
+    }
+  },
+  "assertions": {
+    "ocel_top_level_keys": ["eventTypes", "events", "objectTypes", "objects"],
+    "ocel_event_count_matches_log": true,
+    "ocel_every_event_relates_to_instance": true,
+    "ocel_preserves_empty_timestamp_as_string": true
+  }
+}

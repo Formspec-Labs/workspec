@@ -702,6 +702,15 @@ fn load_fixture_specs(fixtures_dir: &Path) -> Result<Vec<FixtureSpec>, Conforman
             path.extension()
                 .is_some_and(|extension| extension == "json")
         })
+        // Export-conformance fixtures (sp-export-*.json) use a distinct
+        // envelope shape and are owned by `tests/export_conformance.rs`.
+        // Exclude them from `ConformanceFixture` parsing so they can coexist
+        // with runtime fixtures in the same directory.
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_none_or(|name| !name.starts_with("sp-export-"))
+        })
         .map(|path| {
             let json = std::fs::read_to_string(&path).map_err(|error| {
                 ConformanceError::Parse(format!("read fixture '{}': {error}", path.display()))

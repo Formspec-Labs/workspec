@@ -1,0 +1,59 @@
+{
+  "id": "SP-EXPORT-002-xes",
+  "description": "Draft → Submitted → Approved workflow exported as IEEE 1849-2016 XES XML. Asserts the output parses as well-formed XML via quick_xml::Reader, contains exactly one <trace>, and emits one <event> per provenance record, each carrying concept:name and time:timestamp. Also asserts §6.3's custom lifecycle attribute choice: wos:lifecycleState is present and standard lifecycle:transition is absent (WOS lifecycle state names are NOT mapped to the fixed XES lifecycle vocabulary).",
+  "kernel": {
+    "$wosKernel": "1.0",
+    "url": "https://test.wos-spec.org/sp-export/xes",
+    "actors": [
+      { "id": "author", "type": "human" },
+      { "id": "approver", "type": "human" }
+    ],
+    "caseFile": {
+      "fields": {
+        "status": { "type": "string", "default": "draft" }
+      }
+    },
+    "lifecycle": {
+      "initialState": "draft",
+      "states": {
+        "draft": {
+          "type": "atomic",
+          "transitions": [
+            { "event": "submit", "target": "submitted" }
+          ]
+        },
+        "submitted": {
+          "type": "atomic",
+          "onEntry": [
+            { "action": "setData", "path": "caseFile.status", "value": "submitted" }
+          ],
+          "transitions": [
+            { "event": "approve", "target": "approved" }
+          ]
+        },
+        "approved": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "events": [
+    { "event": "submit", "actor": "author" },
+    { "event": "approve", "actor": "approver" }
+  ],
+  "export": {
+    "format": "xes",
+    "config": {
+      "provenance_namespace": "urn:wos:prov:test:",
+      "instance_id": "sp-export-xes"
+    }
+  },
+  "assertions": {
+    "xes_parses_as_xml": true,
+    "xes_trace_count": 1,
+    "xes_event_count_matches_log": true,
+    "xes_event_required_keys": ["concept:name", "time:timestamp"],
+    "xes_uses_custom_lifecycle_state": true,
+    "xes_rejects_standard_lifecycle_transition": true
+  }
+}

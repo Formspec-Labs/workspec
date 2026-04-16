@@ -16,4 +16,6 @@ wos-runtime = { path = "../wos-runtime" }
 
 [dev-dependencies]
 insta = { version = "1", features = ["json"] }
+quick-xml = "0.36"
 tempfile = "3"
+wos-export = { path = "../wos-export" }

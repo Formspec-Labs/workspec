@@ -1423,11 +1423,13 @@ name = "wos-conformance"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "quick-xml",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "wos-core",
+ "wos-export",
  "wos-formspec-binding",
  "wos-runtime",
 ]

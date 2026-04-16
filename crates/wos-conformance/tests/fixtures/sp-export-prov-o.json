@@ -1,0 +1,59 @@
+{
+  "id": "SP-EXPORT-001-prov-o",
+  "description": "Draft → Submitted → Approved workflow exported as PROV-O JSON-LD. Asserts the activity/agent graph shape required by Semantic Profile §5.3 / §5.6: every Activity carries @id, @type=prov:Activity, wos:actionType, and (for stamped records) prov:atTime; the @context carries the prov/xsd/wos prefixes; and the deduplicated agent count produces at least 2 activities + 1 agent = ≥ 3 nodes (we assert ≥ 4 to cover case-state mutations the runtime also records on transitions).",
+  "kernel": {
+    "$wosKernel": "1.0",
+    "url": "https://test.wos-spec.org/sp-export/prov-o",
+    "actors": [
+      { "id": "author", "type": "human" },
+      { "id": "approver", "type": "human" }
+    ],
+    "caseFile": {
+      "fields": {
+        "status": { "type": "string", "default": "draft" }
+      }
+    },
+    "lifecycle": {
+      "initialState": "draft",
+      "states": {
+        "draft": {
+          "type": "atomic",
+          "transitions": [
+            { "event": "submit", "target": "submitted" }
+          ]
+        },
+        "submitted": {
+          "type": "atomic",
+          "onEntry": [
+            { "action": "setData", "path": "caseFile.status", "value": "submitted" }
+          ],
+          "transitions": [
+            { "event": "approve", "target": "approved" }
+          ]
+        },
+        "approved": {
+          "type": "final"
+        }
+      }
+    }
+  },
+  "events": [
+    { "event": "submit", "actor": "author" },
+    { "event": "approve", "actor": "approver" }
+  ],
+  "export": {
+    "format": "prov_o",
+    "config": {
+      "provenance_namespace": "urn:wos:prov:test:",
+      "instance_id": "sp-export-prov-o"
+    }
+  },
+  "assertions": {
+    "prov_o_graph_min_nodes": 4,
+    "prov_o_context_prefixes": ["prov", "xsd", "wos"],
+    "prov_o_activity_required_fields": ["@id", "@type", "wos:actionType"],
+    "prov_o_activity_type_value": "prov:Activity",
+    "prov_o_stamped_activities_have_at_time": true,
+    "prov_o_min_agents": 1
+  }
+}
