@@ -1,3 +1,5 @@
+// Rust guideline compliant 2026-04-16
+
 //! PROV-O JSON-LD serializer (WOS Semantic Profile §5).
 //!
 //! Serializes a [`ProvenanceLog`] into a W3C PROV-O graph expressed as JSON-LD.
@@ -46,6 +48,16 @@ pub struct ProvODocument {
 /// downstream `xsd:dateTime` consumer.
 #[must_use]
 pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> ProvODocument {
+    // `provenance_namespace` is concatenated directly with record ids to mint
+    // IRIs (see `ExportConfig::provenance_namespace` docs). A caller that
+    // forgets the trailing separator produces malformed IRIs; guard against
+    // it in debug builds so tests and CI surface the misuse loudly, but keep
+    // release builds hot (production paths should use validated config).
+    debug_assert!(
+        config.provenance_namespace.ends_with(':') || config.provenance_namespace.ends_with('/'),
+        "ExportConfig::provenance_namespace must end with ':' or '/' to mint valid IRIs, got '{}'",
+        config.provenance_namespace,
+    );
     let records = log.records();
 
     // Agents are emitted in first-seen order (the `agents` Vec records the
@@ -126,11 +138,36 @@ fn activity_node(index: usize, record: &ProvenanceRecord, config: &ExportConfig)
         );
     }
 
+    // TODO(spec-upstream): Semantic Profile §5.3 also requires the
+    // following Activity properties — all blocked on `ProvenanceRecord`
+    // gaining the corresponding fields:
+    //   - `prov:used` (§5.3, `inputs`): one entity per record input.
+    //   - `prov:wasGeneratedBy` (§5.3, `outputs`): one entity per output.
+    //   - `wos:definitionVersion` (§5.3): governing document version.
+    //   - `wos:inputDigest` / `wos:outputDigest` (§5.3): tamper hashes on
+    //     the referenced entities (not the Activity itself).
+    // TODO(spec-upstream): Semantic Profile §5.4 requires higher-tier
+    // provenance (Reasoning / Counterfactual / Narrative) to be wrapped
+    // in `prov:Bundle` entities linked to the Facts record via
+    // `prov:wasDerivedFrom`. Blocked on `ProvenanceRecord` carrying an
+    // `audit_layer` (or tier) discriminator so this exporter can route
+    // non-Facts records through the bundle path instead of emitting
+    // flat Activities.
+
     Value::Object(node)
 }
 
 /// Emit a `prov:Agent` node for a unique actor id (§5.3, §5.5 fallback).
 fn agent_node(actor_id: &str, config: &ExportConfig) -> Value {
+    // TODO(spec-upstream): Semantic Profile §5.5 maps WOS actor types
+    // onto PROV-O Agent subclasses:
+    //   human  → [`prov:Person`,         `wos:HumanAgent`]
+    //   system → [`prov:SoftwareAgent`,  `wos:SystemAgent`]
+    //   agent  → [`prov:SoftwareAgent`,  `wos:AIAgent`]
+    // `ProvenanceRecord` has no `actor_type` discriminator today, so we
+    // emit the defensible "unknown" fallback: plain `prov:Agent`. When
+    // `actor_type` is added upstream, assert both the PROV-O and WOS
+    // types via an `@type` array here.
     json!({
         "@id": agent_iri(actor_id, config),
         "@type": "prov:Agent",

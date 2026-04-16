@@ -3,9 +3,20 @@
 //! OCEL 2.0 JSON serializer (WOS Semantic Profile §6.4).
 //!
 //! Serializes a [`ProvenanceLog`] into an Object-Centric Event Log shaped per
-//! the OCEL 2.0 JSON specification. Each provenance record becomes an event;
-//! the workflow instance becomes the sole object (per-case-file-item E2O
-//! linking is out of scope for this phase — see §6.5 Self-Review).
+//! the OCEL 2.0 JSON specification.
+//!
+//! # Object modelling gap
+//!
+//! This implementation models only the workflow instance itself as an OCEL
+//! Object (type `wf-instance`). Every event relates back to that single
+//! object with qualifier `relates-to`. The spec (§6.4) mandates that each
+//! **Case File Item** is also an OCEL Object, with E2O relationships
+//! connecting mutating events to the items they touch and O2O relationships
+//! representing cross-references between items. That richer shape is an
+//! upstream-architectural gap: `ProvenanceRecord` does not today carry the
+//! per-record read/write sets that E2O materialization requires. The gap is
+//! tracked in a follow-up ticket and is NOT addressable from inside this
+//! crate.
 //!
 //! # Empty timestamp handling
 //!
@@ -26,11 +37,18 @@ use crate::{ExportConfig, camel_case_record_kind};
 /// The returned value is shaped exactly per the OCEL 2.0 spec: four top-level
 /// arrays (`objectTypes`, `eventTypes`, `objects`, `events`). Every event
 /// relates to a single `wf-instance` object whose id is `config.instance_id`;
-/// per-case-file-item E2O relationships are deferred (§6.5 Self-Review).
+/// per-case-file-item E2O relationships are deferred — see module docs for
+/// the object modelling gap.
 #[must_use]
 pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> Value {
     let records = log.records();
 
+    // TODO(spec-upstream): §6.5 Export Scope restricts process-mining
+    // export to Facts-tier records by default; higher-tier records
+    // (Reasoning, Counterfactual, Narrative) are excluded unless explicitly
+    // configured. `ProvenanceRecord` has no `audit_layer` discriminator
+    // today, so this iteration emits every record. Add a tier filter here
+    // once upstream records carry their tier.
     let events: Vec<Value> = records
         .iter()
         .enumerate()
@@ -78,6 +96,14 @@ fn event_types(records: &[ProvenanceRecord]) -> Value {
 /// contains no stamped records) so downstream OCEL tools can anchor the
 /// object in the event timeline.
 fn objects(config: &ExportConfig, records: &[ProvenanceRecord]) -> Value {
+    // Lexicographic `.min()` over timestamps is only correct when every
+    // timestamp uses the same UTC form (`...Z`). The WOS runtime emits
+    // strict RFC 3339 UTC via `wos_runtime::stamp_provenance` (see
+    // `crates/wos-runtime/src/lib.rs`), so this assumption holds for
+    // runtime-produced logs. If a future source supplies offset-bearing
+    // timestamps (`...+01:00`), normalize to UTC before comparing — a
+    // lexicographic min over mixed offsets can silently pick the wrong
+    // record.
     let earliest = records
         .iter()
         .map(|record| record.timestamp.as_str())

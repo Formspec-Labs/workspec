@@ -122,6 +122,16 @@ fn write_trace(
         .create_element("trace")
         .write_inner_content::<_, quick_xml::Error>(|w| {
             write_string_attribute(w, "concept:name", &config.instance_id)?;
+            // TODO(spec-upstream): §6.3 requires `wos:definitionVersion`
+            // as a trace-level custom attribute (governing document version).
+            // Blocked on `ProvenanceRecord` (or a log-level sidecar) carrying
+            // the definition version so it can be surfaced here.
+            // TODO(spec-upstream): §6.5 Export Scope restricts process-mining
+            // export to Facts-tier records by default; higher-tier records
+            // (Reasoning, Counterfactual, Narrative) are excluded unless
+            // explicitly configured. `ProvenanceRecord` has no `audit_layer`
+            // discriminator today, so this iteration emits every record. Add
+            // a tier filter here once upstream records carry their tier.
             for (index, record) in log.records().iter().enumerate() {
                 write_event(w, index, record)?;
             }
@@ -150,6 +160,14 @@ fn write_event(
             // sibling behaviour where the actor becomes a synthetic agent.
             let resource = record.actor_id.as_deref().unwrap_or("system");
             write_string_attribute(w, "org:resource", resource)?;
+
+            // TODO(spec-upstream): §6.3 maps `actorType` to the XES
+            // Organizational extension's `org:group` attribute. Blocked on
+            // `ProvenanceRecord` carrying an `actor_type` discriminator.
+            // TODO(spec-upstream): §6.3 also requires per-event `inputs`,
+            // `outputs`, `inputDigest`, and `outputDigest` as custom
+            // `<string>` attributes. Blocked on `ProvenanceRecord` carrying
+            // input/output sets and their digests.
 
             // ProvenanceRecord has no stable id; the record's position in the
             // log is a deterministic identifier that also doubles as a sort
