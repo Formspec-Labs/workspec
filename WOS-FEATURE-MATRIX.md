@@ -97,12 +97,14 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 3.6 | **Defeasible rules** | Applies general rules with priority-based exceptions | ✅ ^2 | ~ | ✘ | ✘ | ✘ | ✘ | ~ |
 | 3.7 | **Temporal parameters (date-effective values)** | Applies policy values indexed by effective date based on filing timestamps | ✅ | ✔ | ✘ | ~ | ✘ | ✘ | ✘ |
 | 3.8 | **Regulatory version bindings** | Binds documents to specific versions by date; preserves original versions for old cases | ✅ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| 3.9 | **Policy change propagation** | Migrates, reviews, or grandfathers in-flight cases when regulations change | ✅ | ~ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| 3.9 | **Policy change propagation** ^7 | Migrates, reviews, or grandfathers in-flight cases when regulations change | 🟦 | ~ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | 3.10 | **Constraint solver / optimization** | Allocates resources using constraint solving (e.g., OptaPlanner) | ✘ | ✘ | ✘ | ✔ | ✘ | ✘ | ✘ |
 
 > ^1 **Decision tables / DRGs:** WOS delegates to external decision services. The spec requires no embedded decision engine.
 >
 > ^2 **Defeasible rules:** WOS ranks authority (statute > regulation > policy > guideline) and composes override mechanics.
+>
+> ^7 **Policy change propagation:** Migration is specified (Runtime §11, Governance §2.9) via a manual `migrate` operation with implicit grandfather semantics. A declarative `migrationPolicy` enum with `grandfather | migrateAll | migrateByState | expression` options is **not** specified; operators compose the three modes ad-hoc. See `IDEA_SCRATCH.md` #3 for the proposed declarative enum.
 
 ---
 
@@ -176,7 +178,7 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 7.2 | **Mandatory notice before adverse decisions** | Issues notice containing reasons, appeal rights, and deadlines before decisions take effect | ✅ | ✘ | ✘ | ✘ |
 | 7.3 | **Individualized explanation** | Adverse decisions must include reasons specific to the individual case | ✅ | ✘ | ~ | ✘ |
 | 7.4 | **Counterfactual explanation** | Details both positive factors (what could change) and negative factors (what was irrelevant) | ✅ | ✘ | ✘ | ✘ |
-| 7.5 | **Dual-readability narrative** | Produces both machine-readable and human-prose narratives from the same provenance | 🟡 | ✘ | ✘ | ✘ |
+| 7.5 | **Deterministic adverse-decision notice (dual-form)** ^6 | Specified deterministic algorithm (not model-generated) that derives two co-synchronized outputs from Facts + Reasoning provenance: a machine-readable artifact and a human-prose artifact. Identical inputs MUST produce identical outputs in both forms. | ⚪ | ✘ | ✘ | ✘ |
 | 7.6 | **Appeal with independent adjudicator** | Ensures appeals are reviewed by someone independent of the original decision-maker | ✅ | ✘ | ~ | ✘ |
 | 7.7 | **Continuation of service during appeal** | Freezes adverse impacts and maintains services during the appeal period | ✅ | ✘ | ✘ | ✘ |
 | 7.8 | **Agent disclosure requirement** | Mandates disclosure of AI participation for all rights-impacting workflows | ✅ | ✘ | ✘ | ✘ |
@@ -187,6 +189,8 @@ Full 16-competitor ratings reside in the companion spreadsheet (`wos-formspec-co
 | 7.13 | **EU AI Act high-risk alignment** | Aligning specification with EU AI Act Art. 13-14 requirements | 🟡 | ~ | ~ | ✘ |
 | 7.14 | **OMB M-24-10 compliance support** | Consistent with federal AI guidance on agent disclosure and governance structures | 🟡 | ✘ | ✘ | ~ |
 | 7.15 | **Legal hold (distinct from workflow hold)** | Statutory-override hold that survives terminal state and blocks destruction with explicit release semantics | ✅ | ~ | ~ | ✘ |
+
+> ^6 **Deterministic adverse-decision notice:** Sits at Governance §3.2, distinct from the non-authoritative Narrative tier (AI Integration §13). Not specified as of 2026-04-15; see `IDEA_SCRATCH.md` #2 for framing and scoring (Importance 9, Complexity 9, Tech Debt 8).
 
 ---
 

@@ -38,7 +38,7 @@ Validate the runtime against real commercial workflow engines. Shakes out bugs i
 
 Build on the stable provenance export surface from §2. Each item depends on export semantics being locked.
 
-- [ ] **Dual-readability narrative** — Machine-readable + human prose from the same provenance; specify and implement generation. The governance/regulatory story lives here.
+- [ ] **Deterministic adverse-decision notice (dual-form)** — Specified deterministic algorithm (not model-generated) that derives two co-synchronized outputs from the same Facts + Reasoning provenance: a machine-readable artifact (structured, citable, diffable under audit) and a human-prose artifact (plain language, suitable for legal service). Identical inputs MUST produce identical outputs in both forms. Sits at Governance §3.2 — explicitly separated from the non-authoritative Narrative tier (AI Integration §13). Serves subject, attorney, auditor, and implementer from one algorithm. See `IDEA_SCRATCH.md` #2 for full framing and scoring (Importance 9, Complexity 9, Tech Debt 8).
 - [ ] **Merkle provenance chains** — Cryptographic hash-chaining for tamper-evident logs. Requires stable export format.
 - [ ] **Simulation trace format** — Standardize replay of simulation runs for validation and tooling.
 
