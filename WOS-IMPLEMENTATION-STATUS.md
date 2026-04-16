@@ -16,7 +16,7 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 | **wos-conformance** | ✅ | Manages 144 fixtures and handles Batch 16 processor reporting. |
 | **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, and event queues. |
 | **wos-formspec-binding** | ✅ | Implements the S15 protocol, task prefill, and response validation. |
-| **wos-export** | ✅ | Serializes provenance to PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); crate-level unit tests green; SP-EXPORT-* conformance fixtures pending. |
+| **wos-export** | ✅ | Serializes provenance to PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); 3 SP-EXPORT-* conformance fixtures green. |
 | **wos-assurance** | 🟡 | Spec complete; reference implementation pending. Attaches via provenanceLayer and custodyHook seams. |
 
 ---
