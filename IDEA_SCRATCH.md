@@ -278,23 +278,16 @@ Governance attaches via `lifecycleHook` keyed on **semantic tags** (`determinati
   5. **ISO 8601 duration `pattern`** — `AppealMechanism.appealWindow`, `HoldPolicy.expectedDuration`, similar fields. Batch-add validation pattern.
   6. **Drift Monitor `AlertThreshold` prose table** — add missing prose table to `drift-monitor.md` (schema `$def` already exists).
 
-### #47 Provenance Export (PROV-O first) — **Imp 7 · Cx 8 · Debt 5**
-
-- **Idea:** Serialize internal provenance to W3C PROV-O. 93 `ProvenanceKind` variants.
-- **Scope reduced:** PROV-O first. OCEL 2.0 and IEEE XES as follow-up items once PROV-O lands and exposes subsystem mapping decisions. The ambiguous subsystems (deontic, autonomy, confidence) force design work that should land once, not three times.
-- **Variant classification:** ~48% obvious mapping (lifecycle, timers, tasks, events), ~32% needs design (deontic has no native PROV vocabulary; autonomy "computed" derivation has no PROV anchor; confidence decay is time-based erosion; "blocked-action" records handle awkwardly), ~20% payload-convention-dependent (`data: Option<Value>` is untyped JSON).
-- **Interacts with:** JSON-LD decision (see Open Questions). PROV-O is RDF-native; shipping PROV-O export effectively stakes out a `@context` position for provenance.
-
 ### #48 Merkle Provenance Chains — **Imp 6 · Cx 6 · Debt 4**
 
 - **Idea:** Cryptographic hash-chaining for tamper-evident provenance logs. Append-only, signed tree heads, inclusion proofs. Attaches via Assurance `provenanceLayer` seam.
-- **Context:** Matches research corpus R1 (SCITT / RFC 9162). Assurance §5.2 explicitly excludes cryptographic signing — net-new, but clear landing zone. Depends on #47 (stable format to hash against).
+- **Context:** Matches research corpus R1 (SCITT / RFC 9162). Assurance §5.2 explicitly excludes cryptographic signing — net-new, but clear landing zone. **#47 provenance export now shipped** (PROV-O / OCEL / XES) — hashable format available.
 - **Scope:** Hash-chaining only initially (lightest path). Full SCITT transparency-service integration as later ADR.
 
-### #52 Simulation Trace Format — **Imp 4 · Cx 4 · Debt 2**
+### #52 Simulation Trace Format — **Imp 4 · Cx 3 · Debt 2**
 
-- **Idea:** Standardized replay format for simulation runs — validation, tooling, regression testing. Reuses XES event log format from #47 follow-up.
-- **Depends on #47** baseline.
+- **Idea:** Normative replay semantics for simulation runs — validation, tooling, regression testing. Event log format is XES (already shipped via #47's `wos-export::xes`).
+- **Scope reduced:** format exists; remaining work is the normative replay contract (what must a processor reproduce given an XES trace) plus conformance fixtures.
 
 ### #56 Runtime §2 Isolation-Invariant Lint Rule — **Imp 5 · Cx 2 · Debt 3**
 
@@ -406,6 +399,7 @@ Distinct from Architectural Decisions Confirmed. These are normative features wi
 - **RFC 9535 `outputBinding` profile** — Explicit inclusion (member access, index, wildcard, slice); exclusion (recursive descent, filter expressions); rejection MUST at load time (lint I-001). `integration.md §3.3.1`. (Shipped NB.2.)
 - **CloudEvents correlation key format** — `{instanceId}:{bindingId}:{invocationId}`. `integration.md §6`. (Shipped NB.3.)
 - **`finiteDomainDeclarations`** — SMT-supporting schema-level domain enumerations. Advanced Governance `VerifiableConstraint`. (Shipped AG010.)
+- **Provenance export: PROV-O / OCEL 2.0 / XES** — full three-format export from `crates/wos-export/` (`prov_o.rs`, `ocel.rs`, `xes.rs`). All 93 `ProvenanceKind` variants mapped. Semantic Profile §5 (PROV-O), §6.3 (XES), §6.4 (OCEL). Conformance fixtures `sp-export-prov-o.json`, `sp-export-ocel.json`, `sp-export-xes.json`. Shipped commits `9daf447` → `d8fbcf0` → `7cd3cd3` → `3ed010e` → `bd4e52f`. (Formerly #47.) **Note:** shipped fuller scope than the Imp 7 / Cx 8 entry assumed — OCEL and XES landed alongside PROV-O, not as follow-ups. Subsystem-mapping design decisions (deontic, autonomy, confidence) were evidently resolved in the implementation; the code is the reference.
 
 ---
 
@@ -552,12 +546,11 @@ Tech Debt = **architectural lock-in risk**, not deployment convention drift.
 | **#28 Claim-check artifact references** | 4 | 4 | 3 | 1.75 | Net-new integrity mechanism. |
 | **#30 WS-HumanTask lifecycle completion** | 5 | 4 | 2 | 1.75 | `Suspended` / `Cancelled` / `Return`. |
 | **#26b caseFieldPolicy schema** | 6 | 6 | 4 | 1.67 | Multi-role confidential cases. |
-| **#48 Merkle provenance chains** | 6 | 6 | 4 | 1.67 | Tamper-evident logs; depends on #47. |
-| **#47 Provenance export (PROV-O first)** | 7 | 8 | 5 | 1.5 | Foundational; unlocks #48/#52. |
+| **#48 Merkle provenance chains** | 6 | 6 | 4 | 1.67 | Tamper-evident logs over the now-shipped export format. |
 | **#21 Extension registry (seams-only MVP)** | 5 | 4 | 3 | 2.0 | Scope narrowed to seams + Trellis registry use. |
 | **#29b Milestone reactive firing (GSM-style)** | 6 | 5 | 2 | 1.6 | New capability after #29a lands. |
 | **#3 Policy-based migration routing** | 5 | 6 | 2 | 1.17 | Composes with §2.9; tenant-scope behavioral gap. |
-| **#52 Simulation trace format** | 4 | 4 | 2 | 1.5 | Depends on #47. |
+| **#52 Simulation trace format** | 4 | 3 | 2 | 2.0 | Replay contract over shipped XES format. |
 | **#27 Cancellation regions** | 4 | 6 | 3 | 1.17 | YAWL-style regions. |
 
 ### Defer — by trigger
