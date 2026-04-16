@@ -259,12 +259,12 @@ export type Unsubscribe = () => void;
 export interface IRealtimePort {
   connect(): void;
   disconnect(): void;
-  onKernelInit(cb: (kernel: WOSKernelDocument) => void): Unsubscribe;
-  onKernelChanged(cb: (kernel: WOSKernelDocument) => void): Unsubscribe;
+  onKernelInit(cb: (kernel: WOSKernelDocument, url?: string) => void): Unsubscribe;
+  onKernelChanged(cb: (kernel: WOSKernelDocument, url?: string) => void): Unsubscribe;
   onCollaboratorsUpdate(cb: (users: { id: string; name: string; cursor: { x: number; y: number } }[]) => void): Unsubscribe;
   onCursorUpdate(cb: (cursors: { userId: string; cursor: { x: number; y: number } }) => void): Unsubscribe;
   sendCursorMove(pos: { x: number; y: number }): void;
-  sendKernelUpdate(kernel: WOSKernelDocument): void;
+  sendKernelUpdate(kernel: WOSKernelDocument, url?: string): void;
 }
 
 export interface AuthUser {
