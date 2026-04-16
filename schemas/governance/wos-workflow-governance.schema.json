@@ -973,11 +973,18 @@
       "type": "object",
       "required": [
         "holdType",
-        "expectedDuration",
-        "resumeTrigger",
-        "timeoutAction"
+        "expectedDuration"
       ],
       "additionalProperties": false,
+      "if": {
+        "not": {
+          "properties": { "holdType": { "const": "legal-hold" } },
+          "required": ["holdType"]
+        }
+      },
+      "then": {
+        "required": ["resumeTrigger", "timeoutAction"]
+      },
       "properties": {
         "holdType": {
           "type": "string",

@@ -7,8 +7,8 @@
   "properties": {
     "assuranceLevel": {
       "type": "string",
-      "enum": ["L1", "L2", "L3", "L4"],
-      "description": "Assurance level taxonomy (S2.1). Implementations MAY define additional levels; additional levels MUST be declared against the base four."
+      "description": "Ordered assurance level per S2.1. Base values: L1 (self-asserted), L2 (corroborated), L3 (verified), L4 (in-person). Implementations MAY define additional levels declared against the base four.",
+      "examples": ["L1", "L2", "L3", "L4"]
     },
     "subjectContinuity": {
       "type": "object",

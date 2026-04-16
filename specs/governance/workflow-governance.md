@@ -65,6 +65,10 @@ A Workflow Governance Document targets a WOS Kernel Document via the `targetWork
 - **`contractHook`:** Data validation pipelines validate external data against contracts.
 - **`provenanceLayer`:** The Reasoning and Counterfactual tiers extend the kernel's Facts tier.
 
+### 1.6 Section Numbering Note
+
+Sections S2.9, S4.9, and S7.15 use identifier numbers that match the WOS Feature Matrix capability rows they specify, rather than the document's sequential hierarchy. This preserves stable cross-document citation anchors. In the document body, S2.9 appears within S2 Conformance, S4.9 appears within S11 Delegation of Authority, and S7.15 appears within S12 Typed Hold Policies.
+
 ### 1.5 Notational Conventions
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [BCP 14][RFC 2119] [RFC 8174] when, and only when, they appear in ALL CAPITALS, as shown here.
@@ -557,7 +561,7 @@ Hold policies attach via `lifecycleHook` on `hold`-tagged transitions and states
 
 ### 7.15 Legal Hold (Distinct from Workflow Hold)
 
-A **legal hold** is a distinct hold type with statutory-override semantics. Unlike workflow holds (S7.10), which suspend a workflow pending an event or condition and expect eventual resumption, a legal hold:
+A **legal hold** is a distinct hold type with statutory-override semantics. Unlike workflow holds (S12 Typed Hold Policies), which suspend a workflow pending an event or condition and expect eventual resumption, a legal hold:
 
 - Blocks data destruction, retention expiry, and scheduled lifecycle operations regardless of ordinary workflow state.
 - Survives terminal workflow states. A case under legal hold MUST NOT be purged, archived, or cryptographically erased even if the workflow has otherwise concluded.

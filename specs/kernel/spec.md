@@ -531,7 +531,7 @@ This is the primary governance seam. Governance documents from higher layers dec
 
 Every WOS deployment handles protected content under a declared custody posture. The kernel itself makes no assumption about custody — a trust-the-host monolith and a multi-party distributed binding both conform to the kernel unchanged. Higher layers and bindings attach custody semantics here.
 
-Custody postures are declared, not inferred. Bindings that populate this seam MUST declare, at minimum: who may read content during ordinary operation, whether recovery can occur without the user, and whether delegated compute exposes content to ordinary service components. Custody transitions (changes to any of those answers) are recorded as canonical lifecycle facts (Governance S2.9).
+Custody postures are declared, not inferred. Bindings that populate this seam MUST declare, at minimum: who may read content during ordinary operation, whether recovery can occur without the user, and whether delegated compute exposes content to ordinary service components. When Governance (Layer 1) is adopted, custody transitions (changes to any of those answers) are recorded as canonical lifecycle facts (Governance S2.9).
 
 The kernel does NOT define the concrete Trust Profile object. Trellis (the distributed-trust binding) defines that object and binds it to this seam. A monolithic binding may populate this seam with a single declared posture (e.g., "provider-readable, no recovery without user, no delegated compute") and satisfy conformance.
 
