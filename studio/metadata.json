@@ -1,0 +1,5 @@
+{
+  "name": "GovFlow: State Benefits Management System",
+  "description": "A comprehensive platform for state agencies to manage benefit applications, featuring a workflow designer, task management, and an applicant portal.",
+  "requestFramePermissions": []
+}
