@@ -166,7 +166,7 @@ Pick up when §§2–5 stabilize. Ordered cheap-to-expensive.
 
 **Provenance export (PE)**
 
-- [x] PE.1 — `wos-export` crate: PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); `timestamp` added to `ProvenanceRecord`; crate-level unit tests green (9daf447, 7cedfae, d8fbcf0, 7cd3cd3, 3ed010e, bd4e52f). Known limitations: higher-tier PROV-O bundles (§5.4) not emitted; OCEL events link to instance object only (per-case-file-item E2O links deferred); SHACL validation out of scope; agent actor-type falls back to plain `prov:Agent` pending `ProvenanceRecord` actor-type extension; SP-EXPORT-* conformance fixtures pending.
+- [x] PE.1 — `wos-export` crate: PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); `timestamp` added to `ProvenanceRecord`; 3 SP-EXPORT-* conformance fixtures green (9daf447, 7cedfae, d8fbcf0, 7cd3cd3, 3ed010e, bd4e52f, b55b67e). Known limitations: higher-tier PROV-O bundles (§5.4) not emitted; OCEL events link to instance object only (per-case-file-item E2O links deferred); SHACL validation out of scope; agent actor-type falls back to plain `prov:Agent` pending `ProvenanceRecord` actor-type extension.
 
 **Integration Profile binding kinds (NB)**
 
