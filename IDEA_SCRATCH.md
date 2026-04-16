@@ -326,14 +326,14 @@ Items with real reactivation triggers (not speculation). "Defer" means captured 
 ### #7 OCEL 2.0 Object-Centric Case Model
 
 - **Idea:** Typed objects with E2O relationships as *internal* case state model.
-- **Context:** OCEL 2.0 is already a provenance export target (Semantic Profile §6.4 — see #47). Export surface acts as watching post for systematic lossy mappings.
+- **Context:** OCEL 2.0 ships as a provenance export target (Semantic Profile §6.4, `crates/wos-export/src/ocel.rs`). Export surface is the live watching post for systematic lossy mappings.
 - **Trigger:** Multi-object mutation patterns emerge, or flat→OCEL export shows systematic semantic loss.
 
 ### #9 JSON-LD Export Surface (reopened)
 
 - **Idea:** JSON-LD `@context` for WOS documents, targeting export compatibility with PROV-O / OCEL / schema.org / NIEM.
-- **Context reopened 2026-04-16:** Prior rejection ("plain JSON/YAML, semantic web as companion layer") dates to v3–v5. #47 targets PROV-O (RDF-native) export — rejecting JSON-LD for authoring while embracing RDF for export is incoherent. Ontology-spec work (TODO §2, unwritten) will force the question. Government linked-data mandates accelerating.
-- **Trigger:** `ontology-spec.md` drafts begin OR #47 lands and exposes context-bag design decisions.
+- **Context reopened 2026-04-16:** Prior rejection ("plain JSON/YAML, semantic web as companion layer") dates to v3–v5. Provenance export shipped as PROV-O JSON-LD (`wos-export/src/prov_o.rs`), OCEL, and XES — so RDF is already a target. Rejecting JSON-LD for *authoring* while embracing it for *export* remains coherent only if the authoring surface stays plain JSON. Ontology-spec work (TODO §2, unwritten) will force the decision on whether `@context` should land in authoring too.
+- **Trigger:** `ontology-spec.md` drafts begin OR the shipped PROV-O export exposes context-bag design decisions that want pull-back into authoring.
 - **Scope note:** Reopened as *export surface design*, not wholesale JSON-LD-native authoring. Plain JSON wire format stays.
 
 ### #32 Multi-Instance Iteration
@@ -381,7 +381,7 @@ Items with real reactivation triggers (not speculation). "Defer" means captured 
 - **#5 DAG Processing Model** — Contradicts axis 4 (append-only event-stream folding). Reactive re-evaluation is the rejected alternative; the decision is committed at the axis level.
 - **#8 FEL Conformance Profiles** — Kernel §7.4 rejects grammar extensions.
 - **#10 WCOS + FEEL** — Rename + DMN-expression-language. Both abandoned.
-- **#17 SHACL** — Existing Rust lint (55 T2 rules) covers cross-doc validation. SHACL adopting would duplicate with RDF-native validator. If #47 needs export-shape validation, that becomes a scoped "PROV-O export validation" item, not a SHACL resurrection.
+- **#17 SHACL** — Existing Rust lint (55 T2 rules) covers cross-doc validation. SHACL adopting would duplicate with RDF-native validator. The shipped PROV-O export now produces JSON-LD; if it needs output-shape validation, scope a "PROV-O export validation" item — don't resurrect SHACL wholesale.
 - **#18 Minimal Governance Envelope** — Strip lifecycle from kernel; produces doc that cannot be understood in isolation.
 - **#19 FEEL Expression Language** — FEL is purpose-built; FEEL carries DMN assumptions.
 - **BPMN Parity as Authoring Goal** — Export target, not authoring surface. Topology rejected; event taxonomy adopted (normative via #20).
@@ -484,7 +484,7 @@ Cross-references between IDEA (design backlog) and TODO.md (execution tracker):
 | #2 | §4 "Deterministic adverse-decision notice" | Already cross-referenced from TODO |
 | #28 | §6 "Claim check pattern" | Add cross-ref |
 | #26a/#26b | §6 "Role-based field visibility" | Add cross-ref |
-| #47 | §2 "Provenance export" | IDEA = design, TODO = execution |
+| #47 | §2 "Provenance export" | **Shipped** — moved to IDEA Shipped section. |
 | #48 | §4 "Merkle provenance chains" | Same |
 | #49 | §3 | Same |
 | #50 | §5 | Same |
@@ -558,9 +558,9 @@ Tech Debt = **architectural lock-in risk**, not deployment convention drift.
 | Item | Imp | Cx | Debt | Trigger |
 |------|----:|---:|-----:|---------|
 | **#32 Multi-instance iteration** | 6 | 7 | 5 | #20 lands. |
-| **#7 OCEL 2.0 object-centric case** | 2 | 9 | 5 | Multi-object mutation or #47 export shows systematic loss. |
+| **#7 OCEL 2.0 object-centric case** | 2 | 9 | 5 | Multi-object mutation or shipped OCEL export shows systematic loss. |
 | **#50 EU AI Act / OMB M-24-10 alignment** | 7 | 5 | 4 | Procurement deadline or regulatory inquiry (watchlist). |
-| **#9 JSON-LD export surface** | 5 | 5 | 3 | `ontology-spec.md` drafts begin or #47 exposes context decisions. |
+| **#9 JSON-LD export surface** | 5 | 5 | 3 | `ontology-spec.md` drafts begin, or shipped PROV-O export pulls `@context` into authoring. |
 | **#49 Engine adapters** | 5 | 8 | 3 | First commercial deployment requesting adapter. |
 | **#4 Tripartite object model** | 2 | 9 | 3 | Activity-definition reuse becomes real pattern. |
 | **#51 Statutory deadline chains** | 4 | 7 | 3 | First deployment needing chained legal deadlines. |
@@ -601,9 +601,11 @@ Joint design:
 
 #26a (canRead semantics) ──prerequisite──> #26b (caseFieldPolicy)
 #36 (equity expression language) ──prerequisite──> #35 (equity enforcement)
-#47 (PROV-O export) ──┬──> #48 Merkle chains
-                      └──> #52 Simulation trace
-#9 (JSON-LD export surface) ──gated by──> ontology-spec.md drafts OR #47 decisions
+Provenance export shipped (PROV-O / OCEL / XES in crates/wos-export/).
+  #48 Merkle chains ──hashes──> shipped export format
+  #52 Simulation trace ──replay over──> shipped XES format
+
+#9 (JSON-LD export surface) ──gated by──> ontology-spec.md drafts OR shipped PROV-O pulling @context into authoring
 
 M-1 BLOCKED ──ship #37 standalone
 M-2 REJECTED ──ship #39 standalone
@@ -625,7 +627,7 @@ M-2 REJECTED ──ship #39 standalone
 10. **Task suspension reducibility** (#30). Always reducible to `holdType: task-suspended`, or independent task state needed?
 11. **Equity expression language** (#36). FEL extension, restricted DSL, or FEL + windowing?
 12. **Assurance-level composition** (#43). Minimum floor per impact level, disclosure-only, or implementation-defined?
-13. **JSON-LD export surface** (#9). When should `@context` ship — with #47 or separately via ontology-spec?
+13. **JSON-LD authoring surface** (#9). #47 shipped PROV-O as JSON-LD for export. Should `@context` also land in the authoring surface (via `ontology-spec.md`), or stay export-only?
 14. **#29b firing mechanism.** Event-based (enqueue synthetic event) or guard-based (`$milestone.*` FEL boolean)?
 
 **Resolved during 2026-04-16 audit:**
@@ -718,7 +720,7 @@ Citations for the Ground Truth, capability claims, and validation findings:
 3. Resolve **#29a milestone spec-lag** — spec prose + `triggerMode` schema property.
 4. Execute **unified provenance-record-shape ADR sequence:** #23 → #24a → #2 (including NoticeTemplate reconciliation).
 5. ADR for **#20 Typed events** — resolve timer calendar-semantics explicitly; strict five kinds.
-6. ADR for **#47 PROV-O export** — then #48 + #52 follow.
+6. **#47 shipped** (PROV-O / OCEL / XES). Next audit-product work: **#48 Merkle chains** over the shipped format; **#52 simulation trace** normative replay contract over XES.
 7. Ship low-cost batch in one sprint: **#12, #13, #42, #56, #46, #26a, #36 → #35, #37, #39**.
 8. **Joint design pass:** #25 + #24b (with §6.2 + §11.2 composition).
 9. Execute merges: Assertion Library → Workflow Governance, Verification Report → Advanced Governance, Due Process Config partial merge → Workflow Governance (pending #45 step 0).
