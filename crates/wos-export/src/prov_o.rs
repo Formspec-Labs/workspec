@@ -111,6 +111,21 @@ fn activity_node(index: usize, record: &ProvenanceRecord, config: &ExportConfig)
         );
     }
 
+    // §5.3 derivation note: the spec maps a record-level `lifecycleState`
+    // field to `wos:atLifecycleState` on the Activity. `ProvenanceRecord`
+    // has no dedicated `lifecycle_state` field yet, so we derive the value
+    // from `from_state` — the canonical pre-transition state for transition
+    // records, which is also the lifecycle state active when the activity
+    // occurred. When `lifecycle_state` is added upstream this is the single
+    // site that needs to change: swap the source from `from_state` to the
+    // new field.
+    if let Some(lifecycle_state) = record.from_state.as_deref() {
+        node.insert(
+            "wos:atLifecycleState".into(),
+            Value::String(lifecycle_state.to_owned()),
+        );
+    }
+
     Value::Object(node)
 }
 
@@ -259,6 +274,35 @@ mod tests {
                 .iter()
                 .any(|node| node["@type"] == "prov:Agent"),
             "actor-less record must not emit any prov:Agent node"
+        );
+    }
+
+    #[test]
+    fn emits_at_lifecycle_state_from_from_state() {
+        // §5.3 maps the record's `lifecycleState` to `wos:atLifecycleState`
+        // on the Activity. `ProvenanceRecord` has no `lifecycle_state` field
+        // yet, so state-transition records derive it from `from_state` (the
+        // canonical pre-transition state).
+        let mut log = ProvenanceLog::default();
+        log.push(stamped_transition(Some("user-1")));
+        // Also push an unstamped, actor-less state-entry record whose
+        // `from_state` is None — it must NOT emit `wos:atLifecycleState`.
+        log.push(ProvenanceRecord::state_entered("approved"));
+
+        let document = export(&log, &config());
+
+        // First record: `from_state = "a"` → `wos:atLifecycleState = "a"`.
+        let transition = &document.graph[0];
+        assert_eq!(
+            transition["wos:atLifecycleState"], "a",
+            "state-transition activity must expose from_state as wos:atLifecycleState: {transition}"
+        );
+
+        // Second record: no `from_state` → field omitted, not emitted empty.
+        let entry = &document.graph[1];
+        assert!(
+            entry.get("wos:atLifecycleState").is_none(),
+            "record without from_state must not emit wos:atLifecycleState: {entry}"
         );
     }
 
