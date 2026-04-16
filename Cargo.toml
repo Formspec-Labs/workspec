@@ -5,6 +5,7 @@ members = [
     "crates/wos-conformance",
     "crates/wos-runtime",
     "crates/wos-formspec-binding",
+    "crates/wos-export",
 ]
 resolver = "3"
 
