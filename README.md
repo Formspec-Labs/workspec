@@ -2,7 +2,7 @@
 
 **Machine-authorable governance for workflows where decisions affect people.**
 
-Part of [Formspec](https://formspec.org). Open source under the [AGPL-3.0 License](../LICENSE).
+Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE) (specs, schemas, runtime) and [BSL 1.1](../LICENSE-BSL) (studio). See [LICENSING.md](../LICENSING.md) for details.
 
 ---
 
@@ -219,7 +219,7 @@ WOS did not invent lifecycle modeling. It combines proven concepts with novel go
 
 ## Project status
 
-WOS is maintained by Michael Deeb as part of Formspec under AGPL-3.0. The specification is **pre-release**; there are no production deployments yet.
+WOS is maintained by Michael Deeb as part of Formspec under Apache-2.0 / BSL 1.1. The specification is **pre-release**; there are no production deployments yet.
 
 **Shipped:** 18 specs, 18 schemas, 41 workflow samples, 146 dynamic conformance scenarios (all green), 197 lint constraints (all with test witnesses), five Rust crates, the Runtime S15 coprocessor protocol, and seven completed code-review rounds.
 
@@ -227,4 +227,4 @@ WOS is maintained by Michael Deeb as part of Formspec under AGPL-3.0. The specif
 
 **If development stopped:** Your workflow JSON is yours. The schemas are public. Any team can implement the spec independently. The product is the document, not a hosted service.
 
-**Licensing:** AGPL-3.0 applies to this codebase. Workflow JSON you author is your data. Dual licensing for AGPL-sensitive procurement is on the Formspec roadmap.
+**Licensing:** Apache-2.0 applies to specs, schemas, and runtime crates. BSL 1.1 applies to the studio (authoring tooling), converting to Apache-2.0 in April 2030. Workflow JSON you author is your data. See [LICENSING.md](../LICENSING.md) for details.

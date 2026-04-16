@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "@formspec-org/wos-studio",
   "private": true,
   "version": "0.0.0",
+  "license": "BSL-1.1",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
