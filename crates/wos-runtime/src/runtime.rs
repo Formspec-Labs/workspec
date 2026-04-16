@@ -16,8 +16,8 @@ use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
 };
 use wos_core::model::governance::DelegationScope;
-use wos_core::model::kernel::{ActionKind, ImpactLevel, KernelDocument};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::model::kernel::{ActionKind, ActorKind, ImpactLevel, KernelDocument};
+use wos_core::provenance::{audit_layer_for_kind, ProvenanceKind, ProvenanceRecord};
 use wos_core::timer::{max_tolerance_ms, tolerance_to_iso, Timer};
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
@@ -472,6 +472,11 @@ impl WosRuntime {
         let (pending_presentations, presentation_provenance) =
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
+        populate_provenance_record_fields(
+            &mut appended_provenance,
+            &kernel,
+            &record.instance.definition_version,
+        );
         stamp_provenance(&mut appended_provenance, &now_iso);
         record.instance.provenance_position = appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance);
@@ -514,6 +519,18 @@ impl WosRuntime {
 
         let Some(event) = record.instance.pending_events.first().cloned() else {
             if !appended_provenance.is_empty() {
+                // Resolve kernel for SP §5.3/§5.4 field population (due-timer
+                // materialization path). The kernel is always resolvable here
+                // because the instance is persisted.
+                let kernel = self.resolver.resolve_kernel(
+                    &record.instance.definition_url,
+                    &record.instance.definition_version,
+                )?;
+                populate_provenance_record_fields(
+                    &mut appended_provenance,
+                    &kernel,
+                    &record.instance.definition_version,
+                );
                 stamp_provenance(&mut appended_provenance, &now_iso);
                 record.instance.updated_at = now_iso;
                 record.instance.provenance_position += appended_provenance.len() as u64;
@@ -545,6 +562,11 @@ impl WosRuntime {
         appended_provenance.extend(decision.provenance);
 
         let Some(event) = decision.event else {
+            populate_provenance_record_fields(
+                &mut appended_provenance,
+                &kernel,
+                &record.instance.definition_version,
+            );
             stamp_provenance(&mut appended_provenance, &now_iso);
             record.instance.updated_at = now_iso;
             record.instance.provenance_position += appended_provenance.len() as u64;
@@ -625,6 +647,11 @@ impl WosRuntime {
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
 
+        populate_provenance_record_fields(
+            &mut appended_provenance,
+            &kernel,
+            &record.instance.definition_version,
+        );
         stamp_provenance(&mut appended_provenance, &now_iso);
         record.instance.provenance_position += appended_provenance.len() as u64;
         record.provenance_log.extend(appended_provenance.clone());
@@ -756,6 +783,19 @@ impl WosRuntime {
             Some(serde_json::json!({ "reason": reason })),
         );
         dismissal.timestamp = now_iso.clone();
+        // Populate SP §5.3 fields so dismissal records carry the same shape
+        // as records that flow through the main stamp path.
+        let kernel = self.resolver.resolve_kernel(
+            &record.instance.definition_url,
+            &record.instance.definition_version,
+        )?;
+        let mut single = [dismissal];
+        populate_provenance_record_fields(
+            &mut single,
+            &kernel,
+            &record.instance.definition_version,
+        );
+        let [dismissal] = single;
         record.provenance_log.push(dismissal);
         record.instance.updated_at = now_iso;
         self.store.save_record(record)?;
@@ -851,6 +891,16 @@ impl WosRuntime {
                     "validationOutcome": validation.validation_outcome,
                 })),
             ));
+            // Resolve kernel so we can populate SP §5.3 fields before persisting.
+            let kernel = self.resolver.resolve_kernel(
+                &record.instance.definition_url,
+                &record.instance.definition_version,
+            )?;
+            populate_provenance_record_fields(
+                &mut provenance,
+                &kernel,
+                &record.instance.definition_version,
+            );
             stamp_provenance(&mut provenance, &now_iso);
             record.instance.provenance_position += provenance.len() as u64;
             record.provenance_log.extend(provenance);
@@ -935,6 +985,11 @@ impl WosRuntime {
                 "caseMutated": case_mutated,
             })),
         ));
+        populate_provenance_record_fields(
+            &mut provenance,
+            &kernel,
+            &record.instance.definition_version,
+        );
         stamp_provenance(&mut provenance, &now_iso);
         record.instance.provenance_position += provenance.len() as u64;
         record.provenance_log.extend(provenance);
@@ -1374,6 +1429,19 @@ impl WosRuntime {
             Some(serde_json::json!({ "code": code })),
         );
         rejection.timestamp = updated_at.to_string();
+        // Populate SP §5.3 fields so rejection records carry the same shape
+        // as records that flow through the main stamp path.
+        let kernel = self.resolver.resolve_kernel(
+            &record.instance.definition_url,
+            &record.instance.definition_version,
+        )?;
+        let mut single = [rejection];
+        populate_provenance_record_fields(
+            &mut single,
+            &kernel,
+            &record.instance.definition_version,
+        );
+        let [rejection] = single;
         record.provenance_log.push(rejection);
         record.instance.updated_at = updated_at.to_string();
         if let Some(token) = idempotency_token {
@@ -1634,6 +1702,136 @@ pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
             record.timestamp = now_iso.to_string();
         }
     }
+}
+
+/// Populate the eight push-stamped Semantic Profile fields on `records`
+/// immediately before persistence (SP §5.3, §5.4, §5.5, §6.3, §6.5).
+///
+/// This is the sole append-path site where these fields are filled in, so
+/// every record handed to the store downstream carries the full SP-required
+/// shape. Each field is set only when it is currently `None` / empty — the
+/// same push-stamped discipline as [`stamp_provenance`]. Callers MUST invoke
+/// this before `stamp_provenance` (timestamp is independent and stamped last).
+///
+/// The populator mirrors the AI Integration-aware actor lookup used by
+/// `integration_handlers::request_response` (see its `actor_kind_to_string`
+/// site): we resolve `actor_id` against the kernel's declared `actors` and
+/// map `ActorKind::Human → "human"`, `ActorKind::System → "system"`. Records
+/// whose `actor_id` is not in the kernel registry keep `actor_type = None`
+/// (SP §5.3 "omit, do not default"). The `"agent"` variant is reserved for
+/// AI Integration agent-registry resolution (out of scope here —
+// TODO(spec-upstream) below).
+pub fn populate_provenance_record_fields(
+    records: &mut [ProvenanceRecord],
+    kernel: &KernelDocument,
+    definition_version: &str,
+) {
+    for record in records {
+        // Tier classification (SP §5.4, §6.5).
+        if record.audit_layer.is_none() {
+            record.audit_layer = Some(audit_layer_for_kind(record.record_kind).to_string());
+        }
+
+        // Actor type (SP §5.3, §5.5, §6.3).
+        if record.actor_type.is_none()
+            && let Some(actor_id) = record.actor_id.as_deref()
+            && let Some(actor) = kernel.actors.iter().find(|a| a.id == actor_id)
+        {
+            record.actor_type = Some(match actor.kind {
+                ActorKind::Human => "human".to_string(),
+                ActorKind::System => "system".to_string(),
+                // TODO(spec-upstream): map ActorKind::Agent → "agent" once
+                // the AI Integration agent registry lookup is threaded into
+                // the runtime context. ActorKind today is Human | System only.
+            });
+        }
+
+        // Definition version (SP §5.3, §6.3).
+        if record.definition_version.is_none() && !definition_version.is_empty() {
+            record.definition_version = Some(definition_version.to_string());
+        }
+
+        // Lifecycle state (SP §5.3, §6.3): promote from record-specific sources.
+        if record.lifecycle_state.is_none() {
+            match record.record_kind {
+                ProvenanceKind::StateTransition => {
+                    // The pre-transition state IS the lifecycle state at
+                    // action time (the event fired while the instance
+                    // occupied `from_state`).
+                    if let Some(from) = record.from_state.as_deref() {
+                        record.lifecycle_state = Some(from.to_string());
+                    }
+                }
+                ProvenanceKind::CaseStateMutation => {
+                    // `case_state_mutation` embeds the lifecycle state in `data`.
+                    let state = record
+                        .data
+                        .as_ref()
+                        .and_then(|d| d.get("lifecycleState"))
+                        .and_then(serde_json::Value::as_str);
+                    if let Some(state) = state {
+                        record.lifecycle_state = Some(state.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Inputs / outputs (SP §5.3, §6.3) — only for record kinds that have
+        // identifiable entity relationships. Other kinds stay empty.
+        match record.record_kind {
+            ProvenanceKind::StateTransition => {
+                if record.inputs.is_empty()
+                    && let Some(event) = record.event.as_deref()
+                {
+                    record.inputs = vec![event.to_string()];
+                }
+                if record.outputs.is_empty()
+                    && let Some(to_state) = record.to_state.as_deref()
+                {
+                    record.outputs = vec![to_state.to_string()];
+                }
+            }
+            ProvenanceKind::CaseStateMutation => {
+                if record.inputs.is_empty()
+                    && let Some(path) = record
+                        .data
+                        .as_ref()
+                        .and_then(|d| d.get("path"))
+                        .and_then(serde_json::Value::as_str)
+                {
+                    record.inputs = vec![path.to_string()];
+                }
+                if record.outputs.is_empty()
+                    && let Some(new_value) = record.data.as_ref().and_then(|d| d.get("newValue"))
+                {
+                    record.outputs = vec![new_value.to_string()];
+                }
+            }
+            _ => {}
+        }
+
+        // Digests (SP §5.3, §6.3) — computed last, from the final inputs/outputs.
+        if record.input_digest.is_none() {
+            record.input_digest = digest_of(&record.inputs);
+        }
+        if record.output_digest.is_none() {
+            record.output_digest = digest_of(&record.outputs);
+        }
+    }
+}
+
+/// SHA-256 hex digest of the JSON-serialized `items` vector.
+///
+/// Returns `None` when the vector is empty (per SP §5.3, digests are only
+/// emitted when the corresponding inputs/outputs are present).
+fn digest_of(items: &[String]) -> Option<String> {
+    if items.is_empty() {
+        return None;
+    }
+    use sha2::{Digest, Sha256};
+    let payload = serde_json::to_string(items).unwrap_or_default();
+    Some(format!("{:x}", Sha256::digest(payload.as_bytes())))
 }
 
 fn parse_timestamp(timestamp: &str) -> Result<u64, RuntimeError> {
@@ -1938,6 +2136,261 @@ mod tests {
         let mut records: Vec<ProvenanceRecord> = Vec::new();
         stamp_provenance(&mut records, "2026-04-15T12:00:00Z");
         assert!(records.is_empty());
+    }
+
+    /// Build a minimal kernel with configurable actors for populator tests.
+    /// Keeps each test self-contained without dragging in the full DSL fixtures.
+    fn kernel_with_actors(version: &str, actors: serde_json::Value) -> KernelDocument {
+        serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:populator",
+            "version": version,
+            "actors": actors,
+            "lifecycle": {
+                "initialState": "Draft",
+                "states": {
+                    "Draft": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn audit_layer_stamped_by_runtime_pass() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![
+            ProvenanceRecord::state_transition("Draft", "Submitted", "submit", None),
+            ProvenanceRecord {
+                record_kind: ProvenanceKind::NarrativeTierRecorded,
+                timestamp: String::new(),
+                actor_id: None,
+                from_state: None,
+                to_state: None,
+                event: None,
+                data: None,
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
+            },
+        ];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].audit_layer.as_deref(), Some("facts"));
+        assert_eq!(records[1].audit_layer.as_deref(), Some("narrative"));
+    }
+
+    #[test]
+    fn actor_type_human_from_registry() {
+        let kernel = kernel_with_actors(
+            "1.0.0",
+            serde_json::json!([{ "id": "reviewer", "type": "human" }]),
+        );
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            Some("reviewer"),
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].actor_type.as_deref(), Some("human"));
+    }
+
+    #[test]
+    fn actor_type_system_from_registry() {
+        let kernel = kernel_with_actors(
+            "1.0.0",
+            serde_json::json!([{ "id": "scheduler", "type": "system" }]),
+        );
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "tick",
+            Some("scheduler"),
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].actor_type.as_deref(), Some("system"));
+    }
+
+    #[test]
+    fn actor_type_absent_when_no_actor_id() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::timer_fired("timer-1", "deadline")];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        // No actor_id on timer_fired — actor_type stays None, not defaulted to "system".
+        assert!(records[0].actor_type.is_none());
+    }
+
+    #[test]
+    fn actor_type_absent_when_actor_not_in_registry() {
+        // Unknown actor ids are NOT defaulted — the spec says omit, not default.
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            Some("unknown-actor"),
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert!(records[0].actor_type.is_none());
+    }
+
+    #[test]
+    fn lifecycle_state_set_to_from_state_on_transition() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            None,
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].lifecycle_state.as_deref(), Some("Draft"));
+    }
+
+    #[test]
+    fn lifecycle_state_promoted_from_case_state_mutation_data() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::case_state_mutation(
+            "/amount",
+            &serde_json::json!(42),
+            None,
+            "UnderReview",
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].lifecycle_state.as_deref(), Some("UnderReview"));
+    }
+
+    #[test]
+    fn definition_version_propagated_from_kernel_document() {
+        let kernel = kernel_with_actors("2.7.3", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            None,
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "2.7.3");
+
+        assert_eq!(records[0].definition_version.as_deref(), Some("2.7.3"));
+    }
+
+    #[test]
+    fn inputs_outputs_set_for_state_transition() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            None,
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].inputs, vec!["submit".to_string()]);
+        assert_eq!(records[0].outputs, vec!["Submitted".to_string()]);
+    }
+
+    #[test]
+    fn inputs_outputs_set_for_case_state_mutation() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::case_state_mutation(
+            "/amount",
+            &serde_json::json!(42),
+            None,
+            "UnderReview",
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].inputs, vec!["/amount".to_string()]);
+        assert_eq!(records[0].outputs, vec!["42".to_string()]);
+    }
+
+    #[test]
+    fn digests_computed_and_non_empty_when_inputs_present() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            None,
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        let input_digest = records[0]
+            .input_digest
+            .as_ref()
+            .expect("input_digest populated when inputs are present");
+        let output_digest = records[0]
+            .output_digest
+            .as_ref()
+            .expect("output_digest populated when outputs are present");
+        assert_eq!(input_digest.len(), 64, "SHA-256 hex is 64 chars");
+        assert_eq!(output_digest.len(), 64, "SHA-256 hex is 64 chars");
+        assert!(input_digest.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(output_digest.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn digests_absent_when_inputs_empty() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        // A timer_fired record has no inputs/outputs — digests must stay None.
+        let mut records = vec![ProvenanceRecord::timer_fired("timer-1", "deadline")];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert!(records[0].inputs.is_empty());
+        assert!(records[0].outputs.is_empty());
+        assert!(records[0].input_digest.is_none());
+        assert!(records[0].output_digest.is_none());
+    }
+
+    #[test]
+    fn populate_is_idempotent_preserves_preset_values() {
+        // Push-stamped discipline: if a field is already set, do not overwrite.
+        let kernel = kernel_with_actors(
+            "1.0.0",
+            serde_json::json!([{ "id": "reviewer", "type": "human" }]),
+        );
+        let mut record = ProvenanceRecord::state_transition(
+            "Draft",
+            "Submitted",
+            "submit",
+            Some("reviewer"),
+        );
+        record.audit_layer = Some("reasoning".to_string());
+        record.actor_type = Some("agent".to_string());
+        record.lifecycle_state = Some("Preset".to_string());
+        record.definition_version = Some("99.99.99".to_string());
+        let mut records = vec![record];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].audit_layer.as_deref(), Some("reasoning"));
+        assert_eq!(records[0].actor_type.as_deref(), Some("agent"));
+        assert_eq!(records[0].lifecycle_state.as_deref(), Some("Preset"));
+        assert_eq!(records[0].definition_version.as_deref(), Some("99.99.99"));
     }
 
     #[derive(Debug, Clone)]

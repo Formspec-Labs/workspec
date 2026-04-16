@@ -656,6 +656,20 @@ impl ProvenanceRecord {
     }
 }
 
+/// Classify a provenance record kind into its tier (SP §5.4, §6.5).
+///
+/// The tier for a record is deterministic from its `ProvenanceKind`. All current
+/// variants map to `"facts"` except `NarrativeTierRecorded`, which is already
+/// the explicit narrative-tier carrier. The `"reasoning"` and `"counterfactual"`
+/// tiers (SP §5.4) are reserved for Layer 1 injection paths not yet wired to
+/// a dedicated `ProvenanceKind` variant.
+pub fn audit_layer_for_kind(kind: ProvenanceKind) -> &'static str {
+    match kind {
+        ProvenanceKind::NarrativeTierRecorded => "narrative",
+        _ => "facts",
+    }
+}
+
 /// Append-only provenance log.
 #[derive(Debug, Clone, Default)]
 pub struct ProvenanceLog {
@@ -845,6 +859,24 @@ mod tests {
         assert_eq!(restored.outputs, vec!["entity:decision".to_string()]);
         assert_eq!(restored.input_digest.as_deref(), Some("sha256:deadbeef"));
         assert_eq!(restored.output_digest.as_deref(), Some("sha256:cafebabe"));
+    }
+
+    #[test]
+    fn audit_layer_for_kind_maps_narrative_only() {
+        assert_eq!(
+            audit_layer_for_kind(ProvenanceKind::NarrativeTierRecorded),
+            "narrative"
+        );
+        assert_eq!(
+            audit_layer_for_kind(ProvenanceKind::StateTransition),
+            "facts"
+        );
+        assert_eq!(
+            audit_layer_for_kind(ProvenanceKind::CaseStateMutation),
+            "facts"
+        );
+        assert_eq!(audit_layer_for_kind(ProvenanceKind::TaskCompleted), "facts");
+        assert_eq!(audit_layer_for_kind(ProvenanceKind::EventEmitted), "facts");
     }
 
     /// Legacy records that predate these fields MUST still deserialize,
