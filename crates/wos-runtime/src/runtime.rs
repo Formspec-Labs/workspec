@@ -1818,7 +1818,13 @@ pub fn populate_provenance_record_fields(
                 if record.outputs.is_empty()
                     && let Some(new_value) = record.data.as_ref().and_then(|d| d.get("newValue"))
                 {
-                    record.outputs = vec![new_value.to_string()];
+                    // SP §5.3 outputs are scalar entity references. JSON string
+                    // scalars must appear unquoted (so `"approved"` → `approved`,
+                    // matching the unquoted form of numbers/bools). Other JSON
+                    // shapes (number, bool, null, object, array) fall back to
+                    // the JSON serialization, which already lacks surrounding
+                    // quotes for primitives.
+                    record.outputs = vec![stringify_scalar(new_value)];
                 }
             }
             _ => {}
@@ -1831,6 +1837,22 @@ pub fn populate_provenance_record_fields(
         if record.output_digest.is_none() {
             record.output_digest = digest_of(&record.outputs);
         }
+    }
+}
+
+/// Stringify a JSON scalar for inclusion in `inputs`/`outputs` (SP §5.3).
+///
+/// JSON strings are emitted as their raw value (without surrounding quotes);
+/// everything else falls back to the JSON serialization — which for numbers,
+/// bools, and null is already unquoted, and for composite shapes (objects,
+/// arrays) preserves the embedded structure for downstream exporters.
+///
+/// This keeps the stringified form consistent across scalar JSON types:
+/// `Value::String("x")` → `"x"`, `Value::Number(42)` → `"42"`.
+fn stringify_scalar(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
     }
 }
 
@@ -2337,6 +2359,30 @@ mod tests {
 
         assert_eq!(records[0].inputs, vec!["/amount".to_string()]);
         assert_eq!(records[0].outputs, vec!["42".to_string()]);
+    }
+
+    /// Finding 2 regression: JSON string newValue must stringify as the bare
+    /// string, not the JSON-quoted form. Previously `new_value.to_string()`
+    /// emitted `"\"approved\""` for `Value::String("approved")`, inconsistent
+    /// with the unquoted `"42"` emitted for `Value::Number(42)`.
+    #[test]
+    fn outputs_unquoted_for_case_state_mutation_string_value() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut records = vec![ProvenanceRecord::case_state_mutation(
+            "/status",
+            &serde_json::json!("approved"),
+            None,
+            "UnderReview",
+        )];
+
+        populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
+
+        assert_eq!(records[0].inputs, vec!["/status".to_string()]);
+        assert_eq!(
+            records[0].outputs,
+            vec!["approved".to_string()],
+            "JSON string newValue must appear unquoted in outputs"
+        );
     }
 
     #[test]
