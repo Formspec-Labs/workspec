@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-15
-**Counts:** 18 specs, 18 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 5 crates, 197 lint rules (197 tested, 0 untested)
+**Counts:** 18 specs, 18 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 6 crates, 197 lint rules (197 tested, 0 untested)
 
 **Links:** [ADR-0058](../thoughts/adr/0058-wos-core-gap-analysis.md) (gap analysis) · [ADR-0057](../thoughts/adr/0057-wos-core-implementation-boundary.md) (core vs implementation) · [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md)
 
@@ -19,7 +19,7 @@
 
 Highest leverage-per-effort: both items unlock downstream tiers and have no external blocker.
 
-- [ ] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. 30+ record kinds already stable; export path missing. Ships industry-standard audit-tool interop without waiting on engine bindings.
+- [x] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. Landed 2026-04-15 — see Completed.
 - [ ] **Ontology field identity** — Implement ontology-driven semantic field identity (`ontology-spec.md`). Grounds AI integration, cross-document alignment, and the regulatory specs in §5. Cheaper to land now than to retrofit after regulatory specs are drafted.
 
 ---
@@ -163,6 +163,10 @@ Pick up when §§2–5 stabilize. Ordered cheap-to-expensive.
 **Business calendar (BC)**
 
 - [x] BC.1 — Business Calendar SLA runtime integration: lazy deadline evaluation at check time, `calendarVersion` snapshot, `DidNotConverge` error on convergence failure; 4 fixtures G-S10-001 through G-S10-004 green (c93052f).
+
+**Provenance export (PE)**
+
+- [x] PE.1 — `wos-export` crate: PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); `timestamp` added to `ProvenanceRecord`; crate-level unit tests green (9daf447, 7cedfae, d8fbcf0, 7cd3cd3, 3ed010e, bd4e52f). Known limitations: higher-tier PROV-O bundles (§5.4) not emitted; OCEL events link to instance object only (per-case-file-item E2O links deferred); SHACL validation out of scope; agent actor-type falls back to plain `prov:Agent` pending `ProvenanceRecord` actor-type extension; SP-EXPORT-* conformance fixtures pending.
 
 **Integration Profile binding kinds (NB)**
 

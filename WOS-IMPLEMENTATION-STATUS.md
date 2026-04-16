@@ -1,6 +1,6 @@
 # WOS Implementation Status & Roadmap
 
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-15
 **Status:** Certified Reference Implementation (Draft 1)
 
 This document tracks crate maturity, test coverage, and the technical roadmap. For a high-level feature comparison, see `WOS-FEATURE-MATRIX.md`.
@@ -16,6 +16,7 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 | **wos-conformance** | ✅ | Manages 144 fixtures and handles Batch 16 processor reporting. |
 | **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, and event queues. |
 | **wos-formspec-binding** | ✅ | Implements the S15 protocol, task prefill, and response validation. |
+| **wos-export** | ✅ | Serializes provenance to PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); crate-level unit tests green; SP-EXPORT-* conformance fixtures pending. |
 | **wos-assurance** | 🟡 | Spec complete; reference implementation pending. Attaches via provenanceLayer and custodyHook seams. |
 
 ---
@@ -87,7 +88,7 @@ WOS employs a linked-data architecture to ensure interoperability and AI-safety.
 *   [x] **History State Semantics:** DeepHistory (full state snapshot) and ShallowHistory (exit point only) implemented in `wos-core`. 9 K-H-* conformance fixtures covering depth-1, depth-2, depth-3, and parallel-exit re-entry. (KS.1 complete)
 *   [x] **Milestone Firing:** Data-driven milestone firing independent of workflow state implemented in `wos-runtime`. Ordering pinned: data write durable → `MilestoneFired` → reactive transitions evaluated. 5 K-M-* conformance fixtures. (KS.2 complete)
 *   [ ] **Merkle Provenance Chains:** Adds cryptographic hash-chaining for tamper-proof logs.
-*   [ ] **Provenance Export Formats:** Serializes internal provenance to W3C PROV-O, OCEL 2.0, and IEEE 1849 XES for external tooling. `provenance.rs` implements 30+ provenance kinds; export serialization is the gap.
+*   [x] **Provenance Export Formats:** `wos-export` crate serializes internal provenance to W3C PROV-O (JSON-LD), IEEE 1849 XES (XML), and OCEL 2.0 (JSON) per Semantic Profile §§5.3–5.6 and §§6.3–6.4; `timestamp` added to `ProvenanceRecord` as export prerequisite; crate-level unit tests green. Known limitations: higher-tier PROV-O bundles (§5.4 Reasoning/Counterfactual/Narrative) not emitted; OCEL case-file-item object tracking linked to instance object only (per-item E2O links future); SHACL validation of PROV-O output out of scope; agent actor-type currently falls back to plain `prov:Agent` pending `ProvenanceRecord` actor-type extension. SP-EXPORT-* conformance fixtures pending.
 *   [ ] **Simulation Trace Format:** Standardizes formats for replaying simulation runs.
 *   [ ] **Federation Profile:** Enables cross-processor migration and signal routing.
 
@@ -116,7 +117,7 @@ WOS employs a linked-data architecture to ensure interoperability and AI-safety.
 | Policy engine bridge | 🟡 | ✅ | `PolicyDecision` normalized to `{decision, reasons, obligations}` at binding boundary; OPA adapter; 4 INT-POLICY-* fixtures. (NB.4) |
 | History states | 🟡 | ✅ | DeepHistory + ShallowHistory implemented; 9 K-H-* fixtures covering depth-1, depth-2, parallel-exit, depth-3. (KS.1) |
 | Milestone firing | 🟡 | ✅ | Milestone firing with pinned ordering (write → MilestoneFired → transitions); 5 K-M-* fixtures. (KS.2) |
-| PROV-O / OCEL / XES export | 🟡 | 🟡 (internal) | Internal provenance complete; export serialization not implemented. |
+| PROV-O / OCEL / XES export | 🟡 | ✅ | `wos-export` crate emits PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); unit tests green; SP-EXPORT-* conformance fixtures pending. Bundles, per-item OCEL links, and SHACL validation deferred. |
 
 ---
 
