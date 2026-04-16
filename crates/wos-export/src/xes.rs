@@ -1,10 +1,16 @@
-// Rust guideline compliant 2026-02-21
+// Rust guideline compliant 2026-04-16
 
 //! IEEE 1849-2016 XES XML serializer (WOS Semantic Profile §6.3).
 //!
 //! Serializes a [`wos_core::provenance::ProvenanceLog`] into an XES XML
 //! document as a single `<trace>` whose `<event>` elements correspond, in
-//! order, to the records in the log.
+//! order, to the Facts-tier records in the log.
+//!
+//! # Scope filter (§6.5)
+//!
+//! Higher-tier records (Reasoning, Counterfactual, Narrative) are excluded
+//! from the trace by default. Records with `audit_layer = None` are treated
+//! as Facts for backward compatibility with pre-extension runtimes.
 //!
 //! # Lifecycle attribute choice
 //!
@@ -74,6 +80,12 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> String {
     String::from_utf8(buffer).expect("quick-xml emits UTF-8 by construction")
 }
 
+/// §6.5 scope predicate. A record is in-scope iff its `audit_layer` is
+/// `Some("facts")` or `None` (legacy / unclassified records).
+fn is_facts_tier(record: &ProvenanceRecord) -> bool {
+    matches!(record.audit_layer.as_deref(), None | Some("facts"))
+}
+
 /// Declare the XES standard extensions used by this exporter (§6.3).
 ///
 /// Concept, Time, and Lifecycle are MUST; Organizational and Identity are
@@ -118,21 +130,28 @@ fn write_trace(
     log: &ProvenanceLog,
     config: &ExportConfig,
 ) -> Result<(), quick_xml::Error> {
+    // §6.5 filter up front so both trace-level aggregation and event emission
+    // see the same record set.
+    let facts_records: Vec<&ProvenanceRecord> = log
+        .records()
+        .iter()
+        .filter(|record| is_facts_tier(record))
+        .collect();
+
+    // §6.3 trace-level `wos:definitionVersion`: all records in a log share
+    // one governing definition, so the first populated value is canonical.
+    let definition_version: Option<&str> = facts_records
+        .iter()
+        .find_map(|record| record.definition_version.as_deref());
+
     writer
         .create_element("trace")
         .write_inner_content::<_, quick_xml::Error>(|w| {
             write_string_attribute(w, "concept:name", &config.instance_id)?;
-            // TODO(spec-upstream): §6.3 requires `wos:definitionVersion`
-            // as a trace-level custom attribute (governing document version).
-            // Blocked on `ProvenanceRecord` (or a log-level sidecar) carrying
-            // the definition version so it can be surfaced here.
-            // TODO(spec-upstream): §6.5 Export Scope restricts process-mining
-            // export to Facts-tier records by default; higher-tier records
-            // (Reasoning, Counterfactual, Narrative) are excluded unless
-            // explicitly configured. `ProvenanceRecord` has no `audit_layer`
-            // discriminator today, so this iteration emits every record. Add
-            // a tier filter here once upstream records carry their tier.
-            for (index, record) in log.records().iter().enumerate() {
+            if let Some(version) = definition_version {
+                write_string_attribute(w, "wos:definitionVersion", version)?;
+            }
+            for (index, record) in facts_records.iter().enumerate() {
                 write_event(w, index, record)?;
             }
             Ok(())
@@ -161,13 +180,10 @@ fn write_event(
             let resource = record.actor_id.as_deref().unwrap_or("system");
             write_string_attribute(w, "org:resource", resource)?;
 
-            // TODO(spec-upstream): §6.3 maps `actorType` to the XES
-            // Organizational extension's `org:group` attribute. Blocked on
-            // `ProvenanceRecord` carrying an `actor_type` discriminator.
-            // TODO(spec-upstream): §6.3 also requires per-event `inputs`,
-            // `outputs`, `inputDigest`, and `outputDigest` as custom
-            // `<string>` attributes. Blocked on `ProvenanceRecord` carrying
-            // input/output sets and their digests.
+            // §6.3: actorType → org:group (XES Organizational extension).
+            if let Some(actor_type) = record.actor_type.as_deref() {
+                write_string_attribute(w, "org:group", actor_type)?;
+            }
 
             // ProvenanceRecord has no stable id; the record's position in the
             // log is a deterministic identifier that also doubles as a sort
@@ -175,11 +191,28 @@ fn write_event(
             write_string_attribute(w, "identity:id", &index.to_string())?;
 
             // CUSTOM attribute (see module docs) — deliberately NOT
-            // lifecycle:transition. WOS from_state carries the workflow
-            // state at event time; empty string is the spec-compliant
-            // representation for "no source state" (e.g. initial entry).
-            let lifecycle_state = record.from_state.as_deref().unwrap_or("");
-            write_string_attribute(w, "wos:lifecycleState", lifecycle_state)?;
+            // lifecycle:transition. Source of truth is `lifecycle_state`
+            // (populated by the runtime at stamp time, §5.3). Omit the
+            // attribute entirely when the record carries no lifecycle state
+            // so downstream consumers see "not applicable" rather than an
+            // empty string masquerading as a known state.
+            if let Some(lifecycle_state) = record.lifecycle_state.as_deref() {
+                write_string_attribute(w, "wos:lifecycleState", lifecycle_state)?;
+            }
+
+            // §6.3 per-event inputs/outputs + digests.
+            if !record.inputs.is_empty() {
+                write_string_attribute(w, "wos:inputs", &record.inputs.join(","))?;
+            }
+            if !record.outputs.is_empty() {
+                write_string_attribute(w, "wos:outputs", &record.outputs.join(","))?;
+            }
+            if let Some(digest) = record.input_digest.as_deref() {
+                write_string_attribute(w, "wos:inputDigest", digest)?;
+            }
+            if let Some(digest) = record.output_digest.as_deref() {
+                write_string_attribute(w, "wos:outputDigest", digest)?;
+            }
 
             Ok(())
         })?;
@@ -229,6 +262,10 @@ mod tests {
     fn stamped_transition(actor: Option<&str>) -> ProvenanceRecord {
         let mut record = ProvenanceRecord::state_transition("Draft", "Review", "submit", actor);
         record.timestamp = "2026-01-01T00:00:00Z".into();
+        // Populate lifecycle_state so downstream assertions for
+        // `wos:lifecycleState` have a value to check. Previously derived
+        // from `from_state`; the runtime now populates this field directly.
+        record.lifecycle_state = Some("Draft".into());
         record
     }
 
@@ -297,6 +334,114 @@ mod tests {
     }
 
     #[test]
+    fn emits_org_group_when_actor_type_present() {
+        // §6.3: actorType → org:group.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("user-1"));
+        record.actor_type = Some("human".into());
+        log.push(record);
+
+        let xml = export(&log, &config());
+
+        assert!(
+            xml.contains(r#"<string key="org:group" value="human"/>"#),
+            "expected org:group=human attribute: {xml}"
+        );
+    }
+
+    #[test]
+    fn omits_org_group_when_actor_type_absent() {
+        let mut log = ProvenanceLog::default();
+        // stamped_transition leaves actor_type = None.
+        log.push(stamped_transition(Some("user-1")));
+
+        let xml = export(&log, &config());
+
+        assert!(
+            !xml.contains(r#"key="org:group""#),
+            "record without actor_type must not emit org:group: {xml}"
+        );
+    }
+
+    #[test]
+    fn emits_inputs_outputs_and_digests_when_present() {
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("user-1"));
+        record.inputs = vec!["case/1".into(), "case/2".into()];
+        record.outputs = vec!["case/1#state".into()];
+        record.input_digest = Some("sha256:aaaa".into());
+        record.output_digest = Some("sha256:bbbb".into());
+        log.push(record);
+
+        let xml = export(&log, &config());
+
+        assert!(
+            xml.contains(r#"<string key="wos:inputs" value="case/1,case/2"/>"#),
+            "expected joined wos:inputs: {xml}"
+        );
+        assert!(
+            xml.contains(r#"<string key="wos:outputs" value="case/1#state"/>"#),
+            "expected joined wos:outputs: {xml}"
+        );
+        assert!(
+            xml.contains(r#"<string key="wos:inputDigest" value="sha256:aaaa"/>"#),
+            "expected wos:inputDigest: {xml}"
+        );
+        assert!(
+            xml.contains(r#"<string key="wos:outputDigest" value="sha256:bbbb"/>"#),
+            "expected wos:outputDigest: {xml}"
+        );
+    }
+
+    #[test]
+    fn omits_inputs_outputs_when_empty() {
+        let mut log = ProvenanceLog::default();
+        log.push(stamped_transition(Some("user-1"))); // inputs/outputs empty
+
+        let xml = export(&log, &config());
+
+        assert!(!xml.contains(r#"key="wos:inputs""#));
+        assert!(!xml.contains(r#"key="wos:outputs""#));
+        assert!(!xml.contains(r#"key="wos:inputDigest""#));
+        assert!(!xml.contains(r#"key="wos:outputDigest""#));
+    }
+
+    #[test]
+    fn emits_trace_level_definition_version_when_any_record_has_it() {
+        // §6.3 requires `wos:definitionVersion` as a trace-level attribute.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("user-1"));
+        record.definition_version = Some("2.1.0".into());
+        log.push(record);
+
+        let xml = export(&log, &config());
+
+        // The trace attribute must appear AFTER concept:name and BEFORE the
+        // first <event>. Split on <event> to grab the trace header block.
+        let trace_header = xml
+            .split("<event>")
+            .next()
+            .expect("at least the pre-event prefix exists");
+        assert!(
+            trace_header.contains(r#"<string key="wos:definitionVersion" value="2.1.0"/>"#),
+            "trace-level definitionVersion missing or misplaced: {xml}"
+        );
+    }
+
+    #[test]
+    fn omits_trace_level_definition_version_when_all_records_lack_it() {
+        let mut log = ProvenanceLog::default();
+        log.push(stamped_transition(Some("user-1"))); // definition_version = None
+
+        let xml = export(&log, &config());
+
+        assert!(
+            !xml.contains(r#"key="wos:definitionVersion""#),
+            "must not emit trace-level definitionVersion when no record supplies one: {xml}"
+        );
+    }
+
+    #[test]
     fn omits_timestamp_when_record_unstamped() {
         let mut log = ProvenanceLog::default();
         // Unstamped — constructor leaves timestamp empty.
@@ -345,6 +490,23 @@ mod tests {
         assert!(
             !xml.contains("lifecycle:transition"),
             "must NOT emit standard lifecycle:transition — WOS states are not XES lifecycle vocab: {xml}"
+        );
+    }
+
+    #[test]
+    fn omits_lifecycle_state_when_field_is_none() {
+        // Records with no lifecycle_state (e.g. lifecycle-external events)
+        // omit the attribute entirely — absence is truth.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("user-1"));
+        record.lifecycle_state = None;
+        log.push(record);
+
+        let xml = export(&log, &config());
+
+        assert!(
+            !xml.contains(r#"key="wos:lifecycleState""#),
+            "lifecycle_state=None must not emit wos:lifecycleState: {xml}"
         );
     }
 
@@ -413,5 +575,29 @@ mod tests {
                 "extension with prefix={prefix} missing: {xml}"
             );
         }
+    }
+
+    #[test]
+    fn filters_non_facts_tier_records_per_section_6_5() {
+        // §6.5: narrative-tier records excluded from default XES export.
+        let mut log = ProvenanceLog::default();
+
+        let mut facts = stamped_transition(Some("user-1"));
+        facts.audit_layer = Some("facts".into());
+        log.push(facts);
+
+        let mut narrative = stamped_transition(Some("user-2"));
+        narrative.audit_layer = Some("narrative".into());
+        log.push(narrative);
+
+        let xml = export(&log, &config());
+
+        // Exactly one event survives (the facts-tier record). user-2 must
+        // not appear anywhere in the XML.
+        assert_eq!(count_elements(&xml, "event"), 1);
+        assert!(
+            !xml.contains("user-2"),
+            "narrative-tier actor must be excluded from export: {xml}"
+        );
     }
 }

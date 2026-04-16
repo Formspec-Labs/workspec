@@ -6,16 +6,27 @@
 //! Every Facts tier record becomes a `prov:Activity` node linked (when an actor
 //! is known) to a deduplicated `prov:Agent` node, per §5.3.
 //!
-//! # Actor type limitation
+//! # Scope filter (§6.5)
 //!
-//! §5.5 maps WOS actor types (`human` / `system` / `agent`) to specific
-//! `prov:Agent` subclasses (`prov:Person`, `prov:SoftwareAgent`, plus WOS
-//! domain types `wos:HumanAgent` / `wos:SystemAgent` / `wos:AIAgent`).
-//! [`ProvenanceRecord`] currently carries only an opaque `actor_id` with no
-//! actor-type discriminator, so this exporter emits the defensible
-//! "unknown actor type" fallback: every agent node is typed as plain
-//! `prov:Agent`. Consumers that need the richer subclass annotation must
-//! enrich the graph out of band (e.g., via an actor registry join).
+//! Higher-tier provenance records (Reasoning, Counterfactual, Narrative) are
+//! excluded from the graph by default: §6.5 restricts process-mining/PROV-O
+//! export to Facts-tier records. Records with `audit_layer = None` are treated
+//! as Facts for backward compatibility with pre-extension runtimes.
+//!
+//! # Actor type mapping (§5.5)
+//!
+//! When `ProvenanceRecord.actor_type` is populated, the emitted `prov:Agent`
+//! node carries the matching §5.5 subclass pair:
+//!
+//! - `Some("human")`  → `["prov:Person", "wos:HumanAgent"]`
+//! - `Some("system")` → `["prov:SoftwareAgent", "wos:SystemAgent"]`
+//! - `Some("agent")`  → `["prov:SoftwareAgent", "wos:AIAgent"]`
+//! - `None`           → `"prov:Agent"` (actor not in any registry)
+//!
+//! Distinct `(actor_id, actor_type)` pairs produce distinct agent nodes. The
+//! common case (one actor_type per actor_id) behaves identically to pure
+//! actor-id dedup; the tuple key only matters when a single id appears under
+//! multiple types, which the spec permits.
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -38,9 +49,10 @@ pub struct ProvODocument {
 
 /// Serialize a provenance log to a PROV-O JSON-LD document (§5.3, §5.6).
 ///
-/// Each [`ProvenanceRecord`] becomes a `prov:Activity`. Agents are
-/// deduplicated: each distinct `actor_id` produces one `prov:Agent` node
-/// regardless of how many activities reference it.
+/// Each Facts-tier [`ProvenanceRecord`] becomes a `prov:Activity`, plus one
+/// `prov:Entity` per input (linked via `prov:used`) and one per output
+/// (linked via `prov:generated`). Agents are deduplicated by
+/// `(actor_id, actor_type)`.
 ///
 /// Records with an empty `timestamp` (never persistence-stamped; see
 /// [`ProvenanceRecord::timestamp`] docs) omit `prov:atTime` because the
@@ -58,32 +70,51 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> ProvODocument {
         "ExportConfig::provenance_namespace must end with ':' or '/' to mint valid IRIs, got '{}'",
         config.provenance_namespace,
     );
-    let records = log.records();
+
+    // §6.5 scope filter: Facts-tier records only. `None` is Facts for
+    // backward compatibility with pre-extension runtimes.
+    let facts_records: Vec<(usize, &ProvenanceRecord)> = log
+        .records()
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| is_facts_tier(record))
+        .collect();
 
     // Agents are emitted in first-seen order (the `agents` Vec records the
     // order; `seen_actors` is only a membership filter). Stable ordering
-    // keeps snapshot diffs clean for Task 5 fixtures.
-    let mut seen_actors = BTreeSet::new();
-    let mut activities = Vec::with_capacity(records.len());
-    let mut agents = Vec::new();
+    // keeps snapshot diffs clean for Task 5 fixtures. Key includes
+    // `actor_type` so the rare case of one id under multiple subclasses
+    // yields distinct nodes (§5.5).
+    let mut seen_actors: BTreeSet<(String, Option<String>)> = BTreeSet::new();
+    let mut activities_and_entities: Vec<Value> = Vec::new();
+    let mut agents: Vec<Value> = Vec::new();
 
-    for (index, record) in records.iter().enumerate() {
-        activities.push(activity_node(index, record, config));
+    for (index, record) in &facts_records {
+        let (activity, entities) = activity_with_entities(*index, record, config);
+        activities_and_entities.push(activity);
+        activities_and_entities.extend(entities);
 
-        if let Some(actor_id) = record.actor_id.as_deref()
-            && seen_actors.insert(actor_id.to_owned())
-        {
-            agents.push(agent_node(actor_id, config));
+        if let Some(actor_id) = record.actor_id.as_deref() {
+            let key = (actor_id.to_owned(), record.actor_type.clone());
+            if seen_actors.insert(key) {
+                agents.push(agent_node(actor_id, record.actor_type.as_deref(), config));
+            }
         }
     }
 
-    let mut graph = activities;
+    let mut graph = activities_and_entities;
     graph.extend(agents);
 
     ProvODocument {
         context: context_object(),
         graph,
     }
+}
+
+/// §6.5 scope predicate. A record is in-scope for PROV-O / process-mining
+/// export iff its `audit_layer` is `Some("facts")` or `None` (legacy).
+fn is_facts_tier(record: &ProvenanceRecord) -> bool {
+    matches!(record.audit_layer.as_deref(), None | Some("facts"))
 }
 
 /// Build the `@context` object. The three prefixes called out in §5.6 /
@@ -96,8 +127,14 @@ fn context_object() -> Value {
     })
 }
 
-/// Emit a `prov:Activity` node for a single record (§5.3).
-fn activity_node(index: usize, record: &ProvenanceRecord, config: &ExportConfig) -> Value {
+/// Emit a `prov:Activity` plus every input/output `prov:Entity` it references.
+/// The Activity gets `prov:used` / `prov:generated` IRI arrays; the entities
+/// become sibling nodes in the @graph so JSON-LD consumers can resolve them.
+fn activity_with_entities(
+    index: usize,
+    record: &ProvenanceRecord,
+    config: &ExportConfig,
+) -> (Value, Vec<Value>) {
     // `ProvenanceRecord` has no stable id today; mint a deterministic one
     // from the record's position in the log. When a record id is added
     // upstream this is the one site that needs to change.
@@ -123,54 +160,99 @@ fn activity_node(index: usize, record: &ProvenanceRecord, config: &ExportConfig)
         );
     }
 
-    // §5.3 derivation note: the spec maps a record-level `lifecycleState`
-    // field to `wos:atLifecycleState` on the Activity. `ProvenanceRecord`
-    // has no dedicated `lifecycle_state` field yet, so we derive the value
-    // from `from_state` — the canonical pre-transition state for transition
-    // records, which is also the lifecycle state active when the activity
-    // occurred. When `lifecycle_state` is added upstream this is the single
-    // site that needs to change: swap the source from `from_state` to the
-    // new field.
-    if let Some(lifecycle_state) = record.from_state.as_deref() {
+    // §5.3 `wos:atLifecycleState`: authoritative source is `lifecycle_state`
+    // once the runtime populates it. Task 3 guarantees transition records
+    // carry `Some(...)`; records without it (e.g. counters, events outside
+    // the lifecycle machine) omit the property.
+    if let Some(lifecycle_state) = record.lifecycle_state.as_deref() {
         node.insert(
             "wos:atLifecycleState".into(),
             Value::String(lifecycle_state.to_owned()),
         );
     }
 
-    // TODO(spec-upstream): Semantic Profile §5.3 also requires the
-    // following Activity properties — all blocked on `ProvenanceRecord`
-    // gaining the corresponding fields:
-    //   - `prov:used` (§5.3, `inputs`): one entity per record input.
-    //   - `prov:wasGeneratedBy` (§5.3, `outputs`): one entity per output.
-    //   - `wos:definitionVersion` (§5.3): governing document version.
-    //   - `wos:inputDigest` / `wos:outputDigest` (§5.3): tamper hashes on
-    //     the referenced entities (not the Activity itself).
-    // TODO(spec-upstream): Semantic Profile §5.4 requires higher-tier
-    // provenance (Reasoning / Counterfactual / Narrative) to be wrapped
-    // in `prov:Bundle` entities linked to the Facts record via
-    // `prov:wasDerivedFrom`. Blocked on `ProvenanceRecord` carrying an
-    // `audit_layer` (or tier) discriminator so this exporter can route
-    // non-Facts records through the bundle path instead of emitting
-    // flat Activities.
+    // §5.3 `wos:definitionVersion`: governing document version.
+    if let Some(version) = record.definition_version.as_deref() {
+        node.insert(
+            "wos:definitionVersion".into(),
+            Value::String(version.to_owned()),
+        );
+    }
 
-    Value::Object(node)
+    // §5.3 `prov:used`: one Entity per input. The digest covers the whole
+    // inputs vector, so it is attached to the *first* input Entity only.
+    let mut entities: Vec<Value> = Vec::new();
+    if !record.inputs.is_empty() {
+        let mut used_iris: Vec<Value> = Vec::with_capacity(record.inputs.len());
+        for (item_index, input_ref) in record.inputs.iter().enumerate() {
+            let entity_iri = format!(
+                "{}entity/input/{index}/{item_index}",
+                config.provenance_namespace
+            );
+            used_iris.push(Value::String(entity_iri.clone()));
+
+            let mut entity = serde_json::Map::new();
+            entity.insert("@id".into(), Value::String(entity_iri));
+            entity.insert("@type".into(), Value::String("prov:Entity".into()));
+            entity.insert("wos:entityRef".into(), Value::String(input_ref.clone()));
+            if item_index == 0
+                && let Some(digest) = record.input_digest.as_deref()
+            {
+                entity.insert(
+                    "wos:inputDigest".into(),
+                    Value::String(digest.to_owned()),
+                );
+            }
+            entities.push(Value::Object(entity));
+        }
+        node.insert("prov:used".into(), Value::Array(used_iris));
+    }
+
+    // §5.3 `prov:generated`: symmetric to `prov:used` for outputs.
+    if !record.outputs.is_empty() {
+        let mut generated_iris: Vec<Value> = Vec::with_capacity(record.outputs.len());
+        for (item_index, output_ref) in record.outputs.iter().enumerate() {
+            let entity_iri = format!(
+                "{}entity/output/{index}/{item_index}",
+                config.provenance_namespace
+            );
+            generated_iris.push(Value::String(entity_iri.clone()));
+
+            let mut entity = serde_json::Map::new();
+            entity.insert("@id".into(), Value::String(entity_iri));
+            entity.insert("@type".into(), Value::String("prov:Entity".into()));
+            entity.insert("wos:entityRef".into(), Value::String(output_ref.clone()));
+            if item_index == 0
+                && let Some(digest) = record.output_digest.as_deref()
+            {
+                entity.insert(
+                    "wos:outputDigest".into(),
+                    Value::String(digest.to_owned()),
+                );
+            }
+            entities.push(Value::Object(entity));
+        }
+        node.insert("prov:generated".into(), Value::Array(generated_iris));
+    }
+
+    (Value::Object(node), entities)
 }
 
-/// Emit a `prov:Agent` node for a unique actor id (§5.3, §5.5 fallback).
-fn agent_node(actor_id: &str, config: &ExportConfig) -> Value {
-    // TODO(spec-upstream): Semantic Profile §5.5 maps WOS actor types
-    // onto PROV-O Agent subclasses:
-    //   human  → [`prov:Person`,         `wos:HumanAgent`]
-    //   system → [`prov:SoftwareAgent`,  `wos:SystemAgent`]
-    //   agent  → [`prov:SoftwareAgent`,  `wos:AIAgent`]
-    // `ProvenanceRecord` has no `actor_type` discriminator today, so we
-    // emit the defensible "unknown" fallback: plain `prov:Agent`. When
-    // `actor_type` is added upstream, assert both the PROV-O and WOS
-    // types via an `@type` array here.
+/// Emit a `prov:Agent` node for a unique (actor_id, actor_type) pair (§5.3, §5.5).
+fn agent_node(actor_id: &str, actor_type: Option<&str>, config: &ExportConfig) -> Value {
+    // §5.5 subclass pair. Unknown/missing actor_type falls back to plain
+    // `prov:Agent` — this preserves backward compatibility with records
+    // whose actor is not resolvable in any registry.
+    let type_value: Value = match actor_type {
+        Some("human") => json!(["prov:Person", "wos:HumanAgent"]),
+        Some("system") => json!(["prov:SoftwareAgent", "wos:SystemAgent"]),
+        Some("agent") => json!(["prov:SoftwareAgent", "wos:AIAgent"]),
+        _ => Value::String("prov:Agent".into()),
+    };
+
     json!({
         "@id": agent_iri(actor_id, config),
-        "@type": "prov:Agent",
+        "@type": type_value,
     })
 }
 
@@ -211,25 +293,57 @@ mod tests {
     #[test]
     fn exports_state_transition_as_prov_activity() {
         let mut log = ProvenanceLog::default();
-        log.push(stamped_transition(Some("user-42")));
+        // Populate inputs/outputs so this exercises the full §5.3 emission:
+        // 1 Activity + 1 input Entity + 1 output Entity + 1 Agent = 4 nodes.
+        let mut record = stamped_transition(Some("user-42"));
+        record.inputs = vec!["case/123".into()];
+        record.outputs = vec!["case/123#state".into()];
+        record.input_digest = Some("sha256:aaaa".into());
+        record.output_digest = Some("sha256:bbbb".into());
+        record.lifecycle_state = Some("a".into());
+        record.definition_version = Some("1.0.0".into());
+        log.push(record);
 
         let document = export(&log, &config());
 
-        // One activity + one agent.
-        assert_eq!(document.graph.len(), 2);
+        // Activity + input Entity + output Entity + Agent.
+        assert_eq!(document.graph.len(), 4);
 
         let activity = &document.graph[0];
         assert_eq!(activity["@id"], "urn:wos:prov:test:0");
         assert_eq!(activity["@type"], "prov:Activity");
         assert_eq!(activity["wos:actionType"], "stateTransition");
         assert_eq!(activity["prov:atTime"], "2026-01-01T00:00:00Z");
+        assert_eq!(activity["wos:atLifecycleState"], "a");
+        assert_eq!(activity["wos:definitionVersion"], "1.0.0");
         assert_eq!(
             activity["prov:wasAssociatedWith"],
             "urn:wos:prov:test:agent/user-42"
         );
+        assert_eq!(
+            activity["prov:used"],
+            json!(["urn:wos:prov:test:entity/input/0/0"])
+        );
+        assert_eq!(
+            activity["prov:generated"],
+            json!(["urn:wos:prov:test:entity/output/0/0"])
+        );
 
-        let agent = &document.graph[1];
+        let input_entity = &document.graph[1];
+        assert_eq!(input_entity["@id"], "urn:wos:prov:test:entity/input/0/0");
+        assert_eq!(input_entity["@type"], "prov:Entity");
+        assert_eq!(input_entity["wos:entityRef"], "case/123");
+        assert_eq!(input_entity["wos:inputDigest"], "sha256:aaaa");
+
+        let output_entity = &document.graph[2];
+        assert_eq!(output_entity["@id"], "urn:wos:prov:test:entity/output/0/0");
+        assert_eq!(output_entity["@type"], "prov:Entity");
+        assert_eq!(output_entity["wos:entityRef"], "case/123#state");
+        assert_eq!(output_entity["wos:outputDigest"], "sha256:bbbb");
+
+        let agent = &document.graph[3];
         assert_eq!(agent["@id"], "urn:wos:prov:test:agent/user-42");
+        // actor_type unset → plain prov:Agent fallback.
         assert_eq!(agent["@type"], "prov:Agent");
     }
 
@@ -265,7 +379,7 @@ mod tests {
 
         let document = export(&log, &config());
 
-        // 3 activities + exactly 1 agent.
+        // 3 activities + exactly 1 agent (no inputs/outputs on these records).
         assert_eq!(document.graph.len(), 4);
         let agents: Vec<_> = document
             .graph
@@ -302,31 +416,146 @@ mod tests {
     }
 
     #[test]
-    fn emits_at_lifecycle_state_from_from_state() {
-        // §5.3 maps the record's `lifecycleState` to `wos:atLifecycleState`
-        // on the Activity. `ProvenanceRecord` has no `lifecycle_state` field
-        // yet, so state-transition records derive it from `from_state` (the
-        // canonical pre-transition state).
+    fn emits_at_lifecycle_state_from_field() {
+        // §5.3: authoritative source is `lifecycle_state`, populated by the
+        // runtime at stamp time. Records without it omit the property.
         let mut log = ProvenanceLog::default();
-        log.push(stamped_transition(Some("user-1")));
-        // Also push an unstamped, actor-less state-entry record whose
-        // `from_state` is None — it must NOT emit `wos:atLifecycleState`.
+        let mut with_state = stamped_transition(Some("user-1"));
+        with_state.lifecycle_state = Some("draft".into());
+        log.push(with_state);
+        // Second record has no lifecycle_state → property omitted.
         log.push(ProvenanceRecord::state_entered("approved"));
 
         let document = export(&log, &config());
 
-        // First record: `from_state = "a"` → `wos:atLifecycleState = "a"`.
-        let transition = &document.graph[0];
+        let first = &document.graph[0];
         assert_eq!(
-            transition["wos:atLifecycleState"], "a",
-            "state-transition activity must expose from_state as wos:atLifecycleState: {transition}"
+            first["wos:atLifecycleState"], "draft",
+            "record with lifecycle_state must emit wos:atLifecycleState: {first}"
         );
 
-        // Second record: no `from_state` → field omitted, not emitted empty.
-        let entry = &document.graph[1];
+        let second = &document.graph[1];
         assert!(
-            entry.get("wos:atLifecycleState").is_none(),
-            "record without from_state must not emit wos:atLifecycleState: {entry}"
+            second.get("wos:atLifecycleState").is_none(),
+            "record without lifecycle_state must not emit the field: {second}"
+        );
+    }
+
+    #[test]
+    fn emits_human_agent_subclass_for_actor_type_human() {
+        // §5.5: `actor_type = "human"` → [prov:Person, wos:HumanAgent].
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("user-42"));
+        record.actor_type = Some("human".into());
+        log.push(record);
+
+        let document = export(&log, &config());
+
+        let agent = document
+            .graph
+            .iter()
+            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/user-42".into())))
+            .expect("agent node must exist");
+        assert_eq!(agent["@type"], json!(["prov:Person", "wos:HumanAgent"]));
+    }
+
+    #[test]
+    fn emits_system_agent_subclass_for_actor_type_system() {
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("runtime"));
+        record.actor_type = Some("system".into());
+        log.push(record);
+
+        let document = export(&log, &config());
+
+        let agent = document
+            .graph
+            .iter()
+            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/runtime".into())))
+            .expect("agent node");
+        assert_eq!(
+            agent["@type"],
+            json!(["prov:SoftwareAgent", "wos:SystemAgent"])
+        );
+    }
+
+    #[test]
+    fn emits_ai_agent_subclass_for_actor_type_agent() {
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped_transition(Some("claude"));
+        record.actor_type = Some("agent".into());
+        log.push(record);
+
+        let document = export(&log, &config());
+
+        let agent = document
+            .graph
+            .iter()
+            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/claude".into())))
+            .expect("agent node");
+        assert_eq!(
+            agent["@type"],
+            json!(["prov:SoftwareAgent", "wos:AIAgent"])
+        );
+    }
+
+    #[test]
+    fn distinct_actor_types_for_same_id_produce_distinct_agents() {
+        // §5.5 edge case: spec permits same actor_id under multiple subclasses.
+        // Dedup key must include actor_type so each pair yields its own node.
+        let mut log = ProvenanceLog::default();
+        let mut human = stamped_transition(Some("id-1"));
+        human.actor_type = Some("human".into());
+        log.push(human);
+        let mut system = stamped_transition(Some("id-1"));
+        system.actor_type = Some("system".into());
+        log.push(system);
+
+        let document = export(&log, &config());
+
+        let agents: Vec<_> = document
+            .graph
+            .iter()
+            .filter(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/id-1".into())))
+            .collect();
+        assert_eq!(
+            agents.len(),
+            2,
+            "distinct actor_type values for same id must yield distinct agent nodes"
+        );
+    }
+
+    #[test]
+    fn filters_non_facts_tier_records_per_section_6_5() {
+        // §6.5: Narrative-tier records are excluded from default PROV-O export.
+        let mut log = ProvenanceLog::default();
+
+        let mut facts = stamped_transition(Some("user-1"));
+        facts.audit_layer = Some("facts".into());
+        log.push(facts);
+
+        let mut narrative = stamped_transition(Some("user-2"));
+        narrative.audit_layer = Some("narrative".into());
+        log.push(narrative);
+
+        let document = export(&log, &config());
+
+        // Only the facts-tier activity survives; its agent is present; the
+        // narrative record and its agent are absent.
+        let activities: Vec<_> = document
+            .graph
+            .iter()
+            .filter(|node| node["@type"] == "prov:Activity")
+            .collect();
+        assert_eq!(activities.len(), 1);
+
+        assert!(
+            !document
+                .graph
+                .iter()
+                .any(|node| node.get("@id")
+                    == Some(&Value::String("urn:wos:prov:test:agent/user-2".into()))),
+            "narrative-tier agent must be excluded from default export"
         );
     }
 

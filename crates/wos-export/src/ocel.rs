@@ -1,9 +1,15 @@
-// Rust guideline compliant 2026-02-21
+// Rust guideline compliant 2026-04-16
 
 //! OCEL 2.0 JSON serializer (WOS Semantic Profile §6.4).
 //!
 //! Serializes a [`ProvenanceLog`] into an Object-Centric Event Log shaped per
 //! the OCEL 2.0 JSON specification.
+//!
+//! # Scope filter (§6.5)
+//!
+//! Higher-tier records (Reasoning, Counterfactual, Narrative) are excluded
+//! from the default export. The `wf-instance` object is emitted regardless
+//! of filter outcome — it anchors the log even when no events survive.
 //!
 //! # Object modelling gap
 //!
@@ -41,15 +47,15 @@ use crate::{ExportConfig, camel_case_record_kind};
 /// the object modelling gap.
 #[must_use]
 pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> Value {
-    let records = log.records();
+    // §6.5 scope filter: Facts-tier records only. `None` is Facts for
+    // backward compatibility with pre-extension runtimes.
+    let facts_records: Vec<&ProvenanceRecord> = log
+        .records()
+        .iter()
+        .filter(|record| is_facts_tier(record))
+        .collect();
 
-    // TODO(spec-upstream): §6.5 Export Scope restricts process-mining
-    // export to Facts-tier records by default; higher-tier records
-    // (Reasoning, Counterfactual, Narrative) are excluded unless explicitly
-    // configured. `ProvenanceRecord` has no `audit_layer` discriminator
-    // today, so this iteration emits every record. Add a tier filter here
-    // once upstream records carry their tier.
-    let events: Vec<Value> = records
+    let events: Vec<Value> = facts_records
         .iter()
         .enumerate()
         .map(|(index, record)| event_node(index, record, &config.instance_id))
@@ -57,10 +63,15 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> Value {
 
     json!({
         "objectTypes": object_types(),
-        "eventTypes": event_types(records),
-        "objects": objects(config, records),
+        "eventTypes": event_types(&facts_records),
+        "objects": objects(config, &facts_records),
         "events": events,
     })
+}
+
+/// §6.5 scope predicate. Shared-semantics copy of the PROV-O / XES filter.
+fn is_facts_tier(record: &ProvenanceRecord) -> bool {
+    matches!(record.audit_layer.as_deref(), None | Some("facts"))
 }
 
 /// Fixed `objectTypes` array. OCEL 2.0 requires typed objects; this phase
@@ -78,7 +89,7 @@ fn object_types() -> Value {
 /// Deduplicate `record_kind` occurrences into an OCEL `eventTypes` array.
 /// Order is stable: first-seen wins, matching the activity emission order the
 /// PROV-O exporter uses so snapshot diffs stay clean for Task 5 fixtures.
-fn event_types(records: &[ProvenanceRecord]) -> Value {
+fn event_types(records: &[&ProvenanceRecord]) -> Value {
     let mut seen: Vec<String> = Vec::new();
     for record in records {
         let name = camel_case_record_kind(record);
@@ -95,7 +106,7 @@ fn event_types(records: &[ProvenanceRecord]) -> Value {
 /// the earliest non-empty record timestamp (falling back to `""` when the log
 /// contains no stamped records) so downstream OCEL tools can anchor the
 /// object in the event timeline.
-fn objects(config: &ExportConfig, records: &[ProvenanceRecord]) -> Value {
+fn objects(config: &ExportConfig, records: &[&ProvenanceRecord]) -> Value {
     // Lexicographic `.min()` over timestamps is only correct when every
     // timestamp uses the same UTC form (`...Z`). The WOS runtime emits
     // strict RFC 3339 UTC via `wos_runtime::stamp_provenance` (see
@@ -139,18 +150,28 @@ fn event_node(index: usize, record: &ProvenanceRecord, instance_id: &str) -> Val
 }
 
 /// Collect the optional `ProvenanceRecord` fields into OCEL event attributes.
-/// Only non-`None` fields are included; `record_kind` and `timestamp` are
-/// carried on the event envelope and are intentionally excluded.
+/// Only non-`None` / non-empty fields are included; `record_kind` and
+/// `timestamp` are carried on the event envelope and are intentionally
+/// excluded here.
 fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
     let mut attributes = Vec::new();
     if let Some(actor_id) = record.actor_id.as_deref() {
         attributes.push(json!({ "name": "actorId", "value": actor_id }));
+    }
+    if let Some(actor_type) = record.actor_type.as_deref() {
+        attributes.push(json!({ "name": "actorType", "value": actor_type }));
     }
     if let Some(from_state) = record.from_state.as_deref() {
         attributes.push(json!({ "name": "fromState", "value": from_state }));
     }
     if let Some(to_state) = record.to_state.as_deref() {
         attributes.push(json!({ "name": "toState", "value": to_state }));
+    }
+    if let Some(lifecycle_state) = record.lifecycle_state.as_deref() {
+        attributes.push(json!({ "name": "lifecycleState", "value": lifecycle_state }));
+    }
+    if let Some(version) = record.definition_version.as_deref() {
+        attributes.push(json!({ "name": "definitionVersion", "value": version }));
     }
     if let Some(event) = record.event.as_deref() {
         attributes.push(json!({ "name": "event", "value": event }));
@@ -160,6 +181,22 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
         // the JSON subtree shape is domain-specific and OCEL consumers can
         // introspect it as nested JSON.
         attributes.push(json!({ "name": "data", "value": data.clone() }));
+    }
+    if !record.inputs.is_empty() {
+        // Emit as a JSON array so OCEL consumers see the structured list
+        // rather than a delimited string (cf. the XES joined representation).
+        let inputs: Vec<Value> = record.inputs.iter().map(|s| Value::String(s.clone())).collect();
+        attributes.push(json!({ "name": "inputs", "value": Value::Array(inputs) }));
+    }
+    if !record.outputs.is_empty() {
+        let outputs: Vec<Value> = record.outputs.iter().map(|s| Value::String(s.clone())).collect();
+        attributes.push(json!({ "name": "outputs", "value": Value::Array(outputs) }));
+    }
+    if let Some(digest) = record.input_digest.as_deref() {
+        attributes.push(json!({ "name": "inputDigest", "value": digest }));
+    }
+    if let Some(digest) = record.output_digest.as_deref() {
+        attributes.push(json!({ "name": "outputDigest", "value": digest }));
     }
     attributes
 }
@@ -306,5 +343,114 @@ mod tests {
         let object_types = document["objectTypes"].as_array().expect("objectTypes array");
         assert_eq!(object_types.len(), 1);
         assert_eq!(object_types[0]["name"], "wf-instance");
+    }
+
+    #[test]
+    fn emits_sp_section_6_3_attributes_when_populated() {
+        // §6.3 symmetry with XES: actorType, lifecycleState, definitionVersion,
+        // inputs/outputs as JSON arrays, and the two digests.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z");
+        record.actor_type = Some("human".into());
+        record.lifecycle_state = Some("draft".into());
+        record.definition_version = Some("3.2.1".into());
+        record.inputs = vec!["case/1".into(), "case/2".into()];
+        record.outputs = vec!["case/1#state".into()];
+        record.input_digest = Some("sha256:aaaa".into());
+        record.output_digest = Some("sha256:bbbb".into());
+        log.push(record);
+
+        let document = export(&log, &config());
+
+        let attributes = document["events"][0]["attributes"]
+            .as_array()
+            .expect("attributes array");
+
+        let find = |name: &str| -> Option<&Value> {
+            attributes
+                .iter()
+                .find(|attr| attr["name"] == name)
+                .map(|attr| &attr["value"])
+        };
+
+        assert_eq!(find("actorType"), Some(&Value::String("human".into())));
+        assert_eq!(find("lifecycleState"), Some(&Value::String("draft".into())));
+        assert_eq!(
+            find("definitionVersion"),
+            Some(&Value::String("3.2.1".into()))
+        );
+        assert_eq!(
+            find("inputs"),
+            Some(&json!(["case/1", "case/2"])),
+            "inputs must be emitted as a JSON array",
+        );
+        assert_eq!(find("outputs"), Some(&json!(["case/1#state"])));
+        assert_eq!(find("inputDigest"), Some(&Value::String("sha256:aaaa".into())));
+        assert_eq!(find("outputDigest"), Some(&Value::String("sha256:bbbb".into())));
+    }
+
+    #[test]
+    fn omits_optional_attributes_when_absent() {
+        // Baseline record has actor_id + from/to/event only; the new fields
+        // must be absent from the attribute list.
+        let mut log = ProvenanceLog::default();
+        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+
+        let document = export(&log, &config());
+        let attributes = document["events"][0]["attributes"]
+            .as_array()
+            .expect("attributes array");
+        let names: Vec<&str> = attributes
+            .iter()
+            .map(|attr| attr["name"].as_str().expect("name"))
+            .collect();
+
+        for omitted in [
+            "actorType",
+            "lifecycleState",
+            "definitionVersion",
+            "inputs",
+            "outputs",
+            "inputDigest",
+            "outputDigest",
+        ] {
+            assert!(
+                !names.contains(&omitted),
+                "attribute {omitted} must not appear when field is unset: {names:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn filters_non_facts_tier_records_per_section_6_5() {
+        // §6.5: Narrative-tier records excluded from default OCEL export.
+        let mut log = ProvenanceLog::default();
+
+        let mut facts = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z");
+        facts.audit_layer = Some("facts".into());
+        log.push(facts);
+
+        let mut narrative = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:01Z");
+        narrative.audit_layer = Some("narrative".into());
+        narrative.actor_id = Some("narrator".into());
+        log.push(narrative);
+
+        let document = export(&log, &config());
+
+        let events = document["events"].as_array().expect("events array");
+        assert_eq!(events.len(), 1, "narrative record must be excluded");
+
+        // The narrator should not appear as an event actor attribute.
+        let narrator_present = events.iter().any(|event| {
+            event["attributes"]
+                .as_array()
+                .map(|attrs| {
+                    attrs
+                        .iter()
+                        .any(|attr| attr["name"] == "actorId" && attr["value"] == "narrator")
+                })
+                .unwrap_or(false)
+        });
+        assert!(!narrator_present, "narrator must be filtered: {events:?}");
     }
 }
