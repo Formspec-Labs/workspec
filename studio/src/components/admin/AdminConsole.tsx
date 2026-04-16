@@ -46,6 +46,7 @@ export function AdminConsole() {
   const [versions, setVersions] = useState<PolicyVersionView[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventView[]>([]);
   const [healthStatus, setHealthStatus] = useState<ServiceHealthView[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [isRegisterAgentOpen, setIsRegisterAgentOpen] = useState(false);
   const [isCreateDelegationOpen, setIsCreateDelegationOpen] = useState(false);
@@ -60,16 +61,18 @@ export function AdminConsole() {
   const [holidayForm, setHolidayForm] = useState({ title: '', date: '', type: 'federal' });
 
   useEffect(() => {
-    governance.listAgents(DEFAULT_WORKFLOW_URL).then(setAgents);
-    governance.listDeonticConstraints(DEFAULT_WORKFLOW_URL).then(setDeonticConstraints);
-    governance.getQualityControls(DEFAULT_WORKFLOW_URL).then(setQualityControls);
-    governance.listPipelines(DEFAULT_WORKFLOW_URL).then(setPipelines);
-    governance.getVerificationReport(DEFAULT_WORKFLOW_URL).then(setVerificationReport);
-    governance.getEquityConfig(DEFAULT_WORKFLOW_URL).then(setEquityConfig);
-    governance.listDelegations(DEFAULT_WORKFLOW_URL).then(setDelegations);
-    governance.listPolicyVersions(DEFAULT_WORKFLOW_URL).then(setVersions);
-    governance.listCalendarEvents(DEFAULT_WORKFLOW_URL).then(setCalendarEvents);
-    governance.getHealthStatus().then(setHealthStatus);
+    Promise.all([
+      governance.listAgents(DEFAULT_WORKFLOW_URL).then(setAgents),
+      governance.listDeonticConstraints(DEFAULT_WORKFLOW_URL).then(setDeonticConstraints),
+      governance.getQualityControls(DEFAULT_WORKFLOW_URL).then(setQualityControls),
+      governance.listPipelines(DEFAULT_WORKFLOW_URL).then(setPipelines),
+      governance.getVerificationReport(DEFAULT_WORKFLOW_URL).then(setVerificationReport),
+      governance.getEquityConfig(DEFAULT_WORKFLOW_URL).then(setEquityConfig),
+      governance.listDelegations(DEFAULT_WORKFLOW_URL).then(setDelegations),
+      governance.listPolicyVersions(DEFAULT_WORKFLOW_URL).then(setVersions),
+      governance.listCalendarEvents(DEFAULT_WORKFLOW_URL).then(setCalendarEvents),
+      governance.getHealthStatus().then(setHealthStatus),
+    ]).finally(() => setIsLoading(false));
   }, [governance]);
 
   const handleRegisterAgent = async () => {
@@ -106,6 +109,15 @@ export function AdminConsole() {
     setIsAddHolidayOpen(false);
     setHolidayForm({ title: '', date: '', type: 'federal' });
   };
+
+  if (isLoading) return (
+    <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex flex-col items-center gap-4">
+        <Activity className="w-8 h-8 text-blue-500 animate-spin" />
+        <p className="text-sm font-medium text-gray-500">Loading admin console...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">

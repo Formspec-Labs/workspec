@@ -1,15 +1,4 @@
-export interface DashboardMetrics {
-  activeInstances: number;
-  completed7d: number;
-  slaCompliance: number;
-  avgProcessingTimeDays: number;
-  aiAcceptanceRate: number;
-  activeInstancesTrend: number;
-  completed7dTrend: number;
-  slaComplianceTrend: number;
-  avgProcessingTimeTrend: number;
-  aiAcceptanceRateTrend: number;
-}
+export type { DashboardMetrics } from './services/WosPorts';
 
 export interface SortConfig {
   field: string;

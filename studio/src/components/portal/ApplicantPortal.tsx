@@ -32,7 +32,7 @@ export function ApplicantPortal({ caseId: propCaseId }: { caseId?: string }) {
     accommodations: [] as string[]
   });
 
-  const caseId = propCaseId || 'CASE-2026-12C5';
+  const caseId = propCaseId || 'urn:wos:instance:benefits-adj:2026-03-20:i9j0k1l2';
 
   useEffect(() => {
     applicant.getDetermination(caseId).then(setDetermination);

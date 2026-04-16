@@ -25,7 +25,6 @@ export class InboxPage {
 
   async expectPeekDrawerVisible() {
     await expect(this.page.getByText('Quick Peek')).toBeVisible();
-    await expect(this.page.getByText('AI Insights')).toBeVisible();
   }
 
   async selectTask(caseId: string) {

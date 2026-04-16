@@ -1,10 +1,11 @@
-import type { WOSKernelDocument, State, Transition, Action as WosAction } from '../types/wos/kernel';
+import type { WOSKernelDocument, State, Transition, Action as WosAction, Region } from '../types/wos/kernel';
 
 export interface WorkflowStage {
   id: string;
   name: string;
   type: string;
   description?: string;
+  parentId?: string;
   position: { x: number; y: number };
   config: {
     assignee?: { type: string; id: string; label: string };
@@ -103,6 +104,9 @@ export interface KernelToDesignerResult {
 }
 
 export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerResult {
+  if (!kernel.lifecycle?.states) {
+    return { stages: [], connections: [] };
+  }
   const flat = flattenStates(kernel.lifecycle.states);
   const allTransitions = collectTransitions(kernel.lifecycle.states);
 
@@ -120,6 +124,7 @@ export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerRes
       name: id.split('.').pop() ?? id,
       type: stageType,
       description: state.description,
+      ...(id.includes('.') ? { parentId: id.substring(0, id.lastIndexOf('.')) } : {}),
       position: {
         x: depth * LAYOUT_SPACING_X + 50,
         y: col * LAYOUT_SPACING_Y + 50,
@@ -180,56 +185,178 @@ const STAGE_TYPE_TO_WOS: Record<StageType, State['type']> = {
   'sub-workflow': 'compound',
 };
 
+interface TopologyLocation {
+  state: State;
+  path: string[];
+  kind: 'state' | 'region-state';
+  parentKind: 'root' | 'compound' | 'region' | 'parallel';
+}
+
+function indexTopology(states: Record<string, State>): Map<string, TopologyLocation> {
+  const index = new Map<string, TopologyLocation>();
+  function walk(
+    map: Record<string, State>,
+    prefix: string[],
+    parentKind: TopologyLocation['parentKind'],
+    kind: TopologyLocation['kind'],
+  ): void {
+    for (const [id, state] of Object.entries(map)) {
+      const path = [...prefix, id];
+      index.set(path.join('.'), { state, path, kind, parentKind });
+      if (state.states) {
+        walk(state.states, path, 'compound', 'state');
+      }
+      if (state.regions) {
+        for (const [regionId, region] of Object.entries(state.regions)) {
+          walk(region.states, [...path, regionId], 'region', 'region-state');
+        }
+      }
+    }
+  }
+  walk(states, [], 'root', 'state');
+  return index;
+}
+
+function buildStateFromStage(
+  stage: WorkflowStage,
+  connections: WorkflowConnection[],
+  preservedShape?: Pick<State, 'type' | 'initialState' | 'states' | 'regions' | 'cancellationPolicy' | 'historyState'>,
+): State {
+  const wosType = preservedShape?.type ?? STAGE_TYPE_TO_WOS[stage.type] ?? 'atomic';
+  const transitions: Transition[] = connections
+    .filter(c => c.from === stage.id)
+    .map(c => {
+      const t: Transition = { event: c.trigger ?? `${c.from}_to_${c.to}`, target: c.to };
+      if (c.condition) t.guard = c.condition;
+      return t;
+    });
+
+  const onEntry: WosAction[] = [];
+  if (stage.config.assignee) {
+    onEntry.push({
+      action: 'createTask',
+      taskRef: stage.name,
+      assignTo: stage.config.assignee.id,
+    });
+  }
+  if (stage.type === 'ai-pipeline' && stage.config.steps) {
+    for (const step of stage.config.steps) {
+      onEntry.push({ action: 'invokeService', serviceRef: step });
+    }
+  }
+
+  const state: State = {
+    type: wosType,
+    ...(stage.description ? { description: stage.description } : {}),
+    ...(onEntry.length > 0 ? { onEntry } : {}),
+    ...(transitions.length > 0 ? { transitions } : {}),
+    ...(stage.config.wosTags ? { tags: stage.config.wosTags } : {}),
+    ...(preservedShape?.initialState !== undefined ? { initialState: preservedShape.initialState } : {}),
+    ...(preservedShape?.states !== undefined ? { states: preservedShape.states } : {}),
+    ...(preservedShape?.regions !== undefined ? { regions: preservedShape.regions } : {}),
+    ...(preservedShape?.cancellationPolicy !== undefined ? { cancellationPolicy: preservedShape.cancellationPolicy } : {}),
+    ...(preservedShape?.historyState !== undefined ? { historyState: preservedShape.historyState } : {}),
+  };
+
+  return state;
+}
+
+function cloneStateMap(states: Record<string, State>): Record<string, State> {
+  return JSON.parse(JSON.stringify(states));
+}
+
 export function designerToKernel(
   workflow: DesignerWorkflow,
   baseKernel?: WOSKernelDocument,
 ): WOSKernelDocument {
-  const states: Record<string, State> = {};
+  const stageById = new Map(workflow.stages.map(s => [s.id, s]));
 
-  for (const stage of workflow.stages) {
-    const wosType = STAGE_TYPE_TO_WOS[stage.type] ?? 'atomic';
-    const transitions: Transition[] = workflow.connections
-      .filter(c => c.from === stage.id)
-      .map(c => {
-        const t: Transition = { event: c.trigger ?? `${c.from}_to_${c.to}`, target: c.to };
-        if (c.condition) t.guard = c.condition;
-        return t;
-      });
+  let rootStates: Record<string, State>;
+  let initialState: string;
 
-    const onEntry: WosAction[] = [];
-    if (stage.config.assignee) {
-      onEntry.push({
-        action: 'createTask',
-        taskRef: stage.name,
-        assignTo: stage.config.assignee.id,
-      });
-    }
-    if (stage.type === 'ai-pipeline' && stage.config.steps) {
-      for (const step of stage.config.steps) {
-        onEntry.push({
-          action: 'invokeService',
-          serviceRef: step,
-        });
+  if (baseKernel?.lifecycle?.states) {
+    const baseStates = cloneStateMap(baseKernel.lifecycle.states);
+    const topology = indexTopology(baseStates);
+
+    // Update every existing state in-place with the matching stage's editable fields.
+    // Delete states whose path is no longer in the designer.
+    function updateAndPrune(
+      map: Record<string, State>,
+      prefix: string[],
+    ): void {
+      for (const id of Object.keys(map)) {
+        const path = [...prefix, id];
+        const fullId = path.join('.');
+        const stage = stageById.get(fullId);
+        const state = map[id];
+
+        if (!stage) {
+          delete map[id];
+          continue;
+        }
+
+        const preserved: Parameters<typeof buildStateFromStage>[2] = {
+          type: state.type,
+          ...(state.initialState !== undefined ? { initialState: state.initialState } : {}),
+          ...(state.states !== undefined ? { states: state.states } : {}),
+          ...(state.regions !== undefined ? { regions: state.regions } : {}),
+          ...(state.cancellationPolicy !== undefined ? { cancellationPolicy: state.cancellationPolicy } : {}),
+          ...(state.historyState !== undefined ? { historyState: state.historyState } : {}),
+        };
+        map[id] = buildStateFromStage(stage, workflow.connections, preserved);
+
+        if (map[id].states) {
+          updateAndPrune(map[id].states as Record<string, State>, path);
+          if (Object.keys(map[id].states as Record<string, State>).length === 0) {
+            delete (map[id] as State).states;
+            delete (map[id] as State).initialState;
+          }
+        }
+        if (map[id].regions) {
+          const regions = map[id].regions as Record<string, Region>;
+          for (const regionId of Object.keys(regions)) {
+            updateAndPrune(regions[regionId].states, [...path, regionId]);
+            if (Object.keys(regions[regionId].states).length === 0) {
+              delete regions[regionId];
+            }
+          }
+          if (Object.keys(regions).length === 0) {
+            delete (map[id] as State).regions;
+          }
+        }
       }
     }
 
-    const state: State = {
-      type: wosType,
-      ...(stage.description ? { description: stage.description } : {}),
-      ...(onEntry.length > 0 ? { onEntry } : {}),
-      ...(transitions.length > 0 ? { transitions } : {}),
-      ...(stage.config.wosTags ? { tags: stage.config.wosTags as string[] } : {}),
-    };
+    updateAndPrune(baseStates, []);
 
-    const localId = stage.id.includes('.') ? stage.id.split('.').pop()! : stage.id;
-    states[localId] = state;
+    // Add any stages that had no base counterpart (designer-added).
+    for (const stage of workflow.stages) {
+      if (!topology.has(stage.id) && !stage.id.includes('.')) {
+        if (!baseStates[stage.id]) {
+          baseStates[stage.id] = buildStateFromStage(stage, workflow.connections);
+        }
+      }
+    }
+
+    rootStates = baseStates;
+    initialState = baseKernel.lifecycle.initialState
+      ?? workflow.stages[0]?.id?.split('.')[0]
+      ?? Object.keys(rootStates)[0]
+      ?? 'start';
+  } else {
+    // No baseKernel: treat all stages as flat top-level states.
+    rootStates = {};
+    for (const stage of workflow.stages) {
+      if (!stage.id.includes('.')) {
+        rootStates[stage.id] = buildStateFromStage(stage, workflow.connections);
+      }
+    }
+    initialState = workflow.stages[0]?.id ?? Object.keys(rootStates)[0] ?? 'start';
   }
-
-  const initialState = workflow.stages[0]?.id?.split('.').pop() ?? Object.keys(states)[0] ?? 'start';
 
   const kernel: WOSKernelDocument = {
     ...(baseKernel ? { $wosKernel: baseKernel.$wosKernel } : { $wosKernel: '1.0' }),
-    ...(baseKernel ? { $schema: baseKernel.$schema } : {}),
+    ...(baseKernel?.$schema ? { $schema: baseKernel.$schema } : {}),
     url: workflow.id,
     version: workflow.version,
     title: workflow.name,
@@ -238,7 +365,7 @@ export function designerToKernel(
     ...(baseKernel?.actors ? { actors: baseKernel.actors } : {}),
     lifecycle: {
       initialState,
-      states,
+      states: rootStates,
     },
     ...(baseKernel?.caseFile ? { caseFile: baseKernel.caseFile } : {}),
     ...(baseKernel?.contracts ? { contracts: baseKernel.contracts } : {}),

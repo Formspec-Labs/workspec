@@ -1,20 +1,48 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# WOS Studio
 
-# Run and deploy your AI Studio app
+A browser-based case management studio for WOS (Workflow Orchestration System). Provides an inbox, form workspace, case viewer, process dashboard, workflow designer, admin console, audit trail, applicant portal, and report builder — all backed by live kernel state synchronized over WebSockets.
 
-This contains everything you need to run your app locally.
+## Architecture
 
-View your app in AI Studio: https://ai.studio/apps/dacf15d0-8e7b-4653-b910-fc196c3d9a8a
+- **Hexagonal ports**: UI components depend on typed port interfaces (`src/services/WosPorts.ts`). A stub adapter (`src/services/WosBackend.ts`) provides fixture data for development.
+- **Server**: Express + Socket.IO (`server.ts`). Loads WOS kernel fixtures, exposes REST endpoints, and broadcasts kernel changes over WebSockets.
+- **Client**: React 19 + Tailwind CSS 4 + Vite. `FormEngine` drives reactive form state. Sonner handles toasts.
 
-## Run Locally
+## Setup
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev
+```
 
+The server starts on `http://localhost:3000` (or `$PORT`).
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | No | Enables AI chat features (proxied server-side) |
+| `API_TOKEN` | No | Bearer token for `/api/` routes. Unset = no auth |
+| `CORS_ORIGIN` | No | CORS origin header. Defaults to `*` |
+| `PORT` | No | Server port. Defaults to `3000` |
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start dev server with HMR |
+| `npm run build` | Production build to `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run lint` | TypeScript type-check (`tsc --noEmit`) |
+| `npm test` | Run unit tests (Vitest) |
+| `npm run test:e2e` | Run E2E tests (Playwright) |
+| `npm run clean` | Remove `dist/` |
+
+## Testing
+
+- **Unit tests**: Vitest with jsdom. Colocated `*.test.ts(x)` files or `src/__tests__/`.
+- **E2E tests**: Playwright. Fixtures in `tests/e2e/fixtures/`, specs in `e2e/`.
+
+## License
+
+BSL-1.1

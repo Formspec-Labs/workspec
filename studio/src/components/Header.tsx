@@ -170,7 +170,7 @@ export function Header({ onViewInbox, onViewDashboard, onViewOutbound, onViewDes
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input 
             type="text" 
-            placeholder="Search cases... (Press Enter)" 
+            placeholder="Search cases... (Enter for sample)" 
             className="pl-9 pr-4 py-1.5 bg-gray-100 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 rounded-lg text-sm w-64 transition-all outline-none"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

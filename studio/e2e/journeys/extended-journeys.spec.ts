@@ -51,8 +51,8 @@ test.describe('Extended Service Journeys', () => {
     await audit.goto();
 
     // Forensic Search
-    await audit.searchRecord('CASE-2026-12C5');
-    await audit.selectRecord('CASE-2026-12C5');
+    await audit.searchRecord('urn:wos:instance:benefits-adj:2026-03-20:i9j0k1l2');
+    await audit.selectRecord('urn:wos:instance:benefits-adj:2026-03-20:i9j0k1l2');
 
     // Integrity Verification
     await audit.verifyIntegrity();

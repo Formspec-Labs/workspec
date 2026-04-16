@@ -48,15 +48,23 @@ export function FormWorkspace({ taskId, onBack }: FormWorkspaceProps) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const inst = await backend.getInstance('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4');
-      if (cancelled || !inst) return;
+      const inst = await backend.getInstance(taskId);
+      if (cancelled || !inst) {
+        const tasks = await backend.listInstances();
+        const found = tasks.items.find(i => i.activeTasks.some(t => t.taskId === taskId)) ?? null;
+        if (cancelled || !found) return;
+        setInstance(found);
+        const bundle = await backend.loadBundle(found.definitionUrl);
+        if (!cancelled) setKernel(bundle.kernel);
+        return;
+      }
       setInstance(inst);
       const bundle = await backend.loadBundle(inst.definitionUrl);
       if (!cancelled) setKernel(bundle.kernel);
     }
     load();
     return () => { cancelled = true; };
-  }, [backend]);
+  }, [backend, taskId]);
 
   const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
     setIsResizing(true);
@@ -213,7 +221,7 @@ export function FormWorkspace({ taskId, onBack }: FormWorkspaceProps) {
         </div>
       </div>
 
-      <ActionBar />
+      <ActionBar instanceId={instance?.instanceId} />
     </div>
   );
 }

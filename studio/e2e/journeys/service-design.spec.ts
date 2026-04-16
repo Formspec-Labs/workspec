@@ -17,7 +17,7 @@ test.describe('Caseworker Journey: Efficient Triage', () => {
     
     // User Behavior: Peek at a specific case to see AI insights
     // Using a known case ID from mock data or first row
-    await inbox.peekTask('CASE-2026-89A2'); 
+    await inbox.peekTask('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4');
     
     // Outcome: Insights are visible instantly
     await inbox.expectPeekDrawerVisible();
@@ -27,8 +27,8 @@ test.describe('Caseworker Journey: Efficient Triage', () => {
     const inbox = new InboxPage(page);
     await inbox.goto();
     
-    await inbox.selectTask('CASE-2026-89A2');
-    await inbox.selectTask('CASE-2025-44B1');
+    await inbox.selectTask('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4');
+    await inbox.selectTask('urn:wos:instance:benefits-adj:2026-04-07:e5f6g7h8');
     
     await inbox.expectBulkActionBarVisible();
   });

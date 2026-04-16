@@ -28,7 +28,7 @@ export class DesignerPage {
   }
 
   async expectMiniMapVisible(visible: boolean) {
-    const miniMap = this.page.locator('.w-48.h-32'); // Based on the implementation
+    const miniMap = this.page.locator('[data-testid="mini-map"]');
     if (visible) {
       await expect(miniMap).toBeVisible();
     } else {
@@ -44,7 +44,7 @@ export class DesignerPage {
     const fromNode = this.page.locator(`[layoutid="${fromStageId}"]`);
     const toNode = this.page.locator(`[layoutid="${toStageId}"]`);
     
-    const port = fromNode.locator('button[title="Drag to connect"]');
+    const port = fromNode.locator('[title="Drag to connect"]');
     
     await port.hover();
     await this.page.mouse.down();

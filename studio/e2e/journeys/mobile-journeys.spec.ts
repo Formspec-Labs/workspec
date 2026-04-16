@@ -26,7 +26,7 @@ test.describe('Mobile Specific Journeys', () => {
     await audit.goto();
     
     // Select a record
-    await audit.selectRecord('CASE-2026-89A2');
+    await audit.selectRecord('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4');
     
     // Check for vertical stacking in authority chain
     // Use a more specific selector for the authority chain container

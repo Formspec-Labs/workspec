@@ -23,7 +23,7 @@ export interface TaskListItem {
 }
 
 export interface IInboxPort {
-  listTasks(filter?: InstanceFilter): Promise<PaginatedResult<TaskListItem>>;
+  listTasks(filter?: InstanceFilter, page?: number, pageSize?: number): Promise<PaginatedResult<TaskListItem>>;
   getTask(taskId: string): Promise<TaskListItem | null>;
 }
 
@@ -165,7 +165,7 @@ export interface EquityConfigView {
   remediationTriggers?: EquityRemediationTriggerView[];
 }
 
-export interface IGovernancePort {
+export interface IGovernanceReader {
   listAgents(workflowUrl: string): Promise<AgentView[]>;
   listDeonticConstraints(workflowUrl: string): Promise<DeonticConstraintView[]>;
   getQualityControls(workflowUrl: string): Promise<QualityControlsView | null>;
@@ -173,11 +173,16 @@ export interface IGovernancePort {
   getVerificationReport(workflowUrl: string): Promise<VerificationReportView | null>;
   getEquityConfig(workflowUrl: string): Promise<EquityConfigView | null>;
   listDelegations(workflowUrl: string): Promise<DelegationEntry[]>;
-  revokeDelegation(workflowUrl: string, delegationId: string): Promise<void>;
   listPolicyVersions(workflowUrl: string): Promise<PolicyVersionView[]>;
   listCalendarEvents(workflowUrl: string): Promise<CalendarEventView[]>;
   getHealthStatus(): Promise<ServiceHealthView[]>;
 }
+
+export interface IGovernanceWriter {
+  revokeDelegation(workflowUrl: string, delegationId: string): Promise<void>;
+}
+
+export interface IGovernancePort extends IGovernanceReader, IGovernanceWriter {}
 
 export interface DashboardMetrics {
   activeInstances: number;
@@ -231,7 +236,7 @@ export interface IDashboardPort {
 export interface ApplicantDeterminationView {
   instanceId: string;
   programName: string;
-  decision: 'approved' | 'denied' | 'reduced' | 'terminated';
+  decision: 'approved' | 'denied' | 'reduced' | 'terminated' | 'pending';
   dateIssued: string;
   deadlineDate: string;
   benefitsContinue: boolean;
@@ -249,13 +254,30 @@ export interface IApplicantPort {
   submitAppeal(instanceId: string, reason: string): Promise<void>;
 }
 
+export type Unsubscribe = () => void;
+
 export interface IRealtimePort {
   connect(): void;
   disconnect(): void;
-  onKernelInit(cb: (kernel: WOSKernelDocument) => void): void;
-  onKernelChanged(cb: (kernel: WOSKernelDocument) => void): void;
-  onCollaboratorsUpdate(cb: (users: { id: string; name: string; cursor: { x: number; y: number } }[]) => void): void;
-  onCursorUpdate(cb: (cursors: { userId: string; cursor: { x: number; y: number } }) => void): void;
+  onKernelInit(cb: (kernel: WOSKernelDocument) => void): Unsubscribe;
+  onKernelChanged(cb: (kernel: WOSKernelDocument) => void): Unsubscribe;
+  onCollaboratorsUpdate(cb: (users: { id: string; name: string; cursor: { x: number; y: number } }[]) => void): Unsubscribe;
+  onCursorUpdate(cb: (cursors: { userId: string; cursor: { x: number; y: number } }) => void): Unsubscribe;
   sendCursorMove(pos: { x: number; y: number }): void;
   sendKernelUpdate(kernel: WOSKernelDocument): void;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar?: string;
+}
+
+export interface IAuthPort {
+  getCurrentUser(): Promise<AuthUser | null>;
+  login(credentials: { email: string; password: string }): Promise<AuthUser>;
+  logout(): Promise<void>;
+  hasRole(role: string): Promise<boolean>;
 }

@@ -3,14 +3,15 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { WosProvider } from './context/WosContext.tsx';
-import { ToastProvider } from './context/ToastContext.tsx';
+
+if (!import.meta.env.VITE_AI_ENABLED) {
+  console.warn('[WOS Studio] AI features disabled — GEMINI_API_KEY not configured on server');
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <WosProvider>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
+      <App />
     </WosProvider>
   </StrictMode>,
 );

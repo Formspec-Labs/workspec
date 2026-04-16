@@ -31,31 +31,32 @@ import type { WOSLifecycleDetailConfiguration } from '../types/wos/lifecycle-det
 import type { WOSDriftMonitorConfig } from '../types/wos/drift-monitor';
 import type { WOSAgentConfig } from '../types/wos/agent-config';
 import type { WosDocumentBundle } from '../services/WosBackend';
+import { validateAndCast } from '../services/schema-validator';
 
 export type { WosDocumentBundle };
 
 export function loadBenefitsAdjudicationBundle(): WosDocumentBundle {
   return {
-    kernel: kernelFixture as unknown as WOSKernelDocument,
-    governance: governanceFixture as unknown as WOSWorkflowGovernanceDocument,
-    ai: aiFixture as unknown as WOSAIIntegrationDocument,
-    policyParameters: policyParamsFixture as unknown as WOSPolicyParameterConfig,
-    notificationTemplates: notificationTemplateFixture as unknown as WOSNotificationTemplateConfig,
-    businessCalendar: businessCalendarFixture as unknown as WOSBusinessCalendarConfig,
-    advanced: advancedFixture as unknown as WOSAdvancedGovernanceDocument,
-    equity: equityFixture as unknown as WOSEquityConfig,
-    driftMonitor: driftMonitorFixture as unknown as WOSDriftMonitorConfig,
-    agentConfigs: [agentConfigFixture as unknown as WOSAgentConfig],
-    verificationReport: verificationReportFixture as unknown as WOSVerificationReport,
-    correspondenceMetadata: correspondenceMetadataFixture as unknown as WOSCorrespondenceMetadataConfig,
-    semanticProfile: semanticFixture as unknown as WOSSemanticProfileDocument,
-    integrationProfile: integrationFixture as unknown as WOSIntegrationProfileDocument,
-    lifecycleDetail: lifecycleDetailFixture as unknown as WOSLifecycleDetailConfiguration,
+    kernel: validateAndCast<WOSKernelDocument>(kernelFixture, 'WOSKernelDocument'),
+    governance: validateAndCast<WOSWorkflowGovernanceDocument>(governanceFixture, 'WOSWorkflowGovernanceDocument'),
+    ai: validateAndCast<WOSAIIntegrationDocument>(aiFixture, 'WOSAIIntegrationDocument'),
+    policyParameters: validateAndCast<WOSPolicyParameterConfig>(policyParamsFixture, 'WOSPolicyParameterConfig'),
+    notificationTemplates: validateAndCast<WOSNotificationTemplateConfig>(notificationTemplateFixture, 'WOSNotificationTemplateConfig'),
+    businessCalendar: validateAndCast<WOSBusinessCalendarConfig>(businessCalendarFixture, 'WOSBusinessCalendarConfig'),
+    advanced: validateAndCast<WOSAdvancedGovernanceDocument>(advancedFixture, 'WOSAdvancedGovernanceDocument'),
+    equity: validateAndCast<WOSEquityConfig>(equityFixture, 'WOSEquityConfig'),
+    driftMonitor: validateAndCast<WOSDriftMonitorConfig>(driftMonitorFixture, 'WOSDriftMonitorConfig'),
+    agentConfigs: [validateAndCast<WOSAgentConfig>(agentConfigFixture, 'WOSAgentConfig')],
+    verificationReport: validateAndCast<WOSVerificationReport>(verificationReportFixture, 'WOSVerificationReport'),
+    correspondenceMetadata: validateAndCast<WOSCorrespondenceMetadataConfig>(correspondenceMetadataFixture, 'WOSCorrespondenceMetadataConfig'),
+    semanticProfile: validateAndCast<WOSSemanticProfileDocument>(semanticFixture, 'WOSSemanticProfileDocument'),
+    integrationProfile: validateAndCast<WOSIntegrationProfileDocument>(integrationFixture, 'WOSIntegrationProfileDocument'),
+    lifecycleDetail: validateAndCast<WOSLifecycleDetailConfiguration>(lifecycleDetailFixture, 'WOSLifecycleDetailConfiguration'),
   };
 }
 
 export function loadPurchaseOrderBundle(): WosDocumentBundle {
   return {
-    kernel: purchaseOrderFixture as unknown as WOSKernelDocument,
+    kernel: validateAndCast<WOSKernelDocument>(purchaseOrderFixture, 'WOSKernelDocument'),
   };
 }

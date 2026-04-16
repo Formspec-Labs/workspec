@@ -23,6 +23,21 @@ import { useInbox, useBackend } from './context/WosContext';
 import type { TaskListItem } from './services/WosPorts';
 import type { CaseInstanceView } from './services/WosBackend';
 
+const ViewErrorBoundary: React.FC<{ name: string; children: React.ReactNode }> = ({ name, children }) => {
+  return (
+    <ErrorBoundary fallback={
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="text-center space-y-4">
+          <p className="text-lg font-semibold text-gray-700">{name} encountered an error</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">Reload</button>
+        </div>
+      </div>
+    }>
+      {children}
+    </ErrorBoundary>
+  );
+};
+
 type ViewState = 'inbox' | 'workspace' | 'viewer' | 'dashboard' | 'outbound' | 'designer' | 'admin' | 'audit' | 'portal' | 'reports';
 
 export default function App() {
@@ -66,25 +81,26 @@ export default function App() {
   const renderContent = () => {
     switch (view) {
       case 'dashboard':
-        return <ProcessDashboard />;
+        return <ViewErrorBoundary name="Dashboard"><ProcessDashboard /></ViewErrorBoundary>;
       case 'outbound':
-        return <OutboundManagementPanel />;
+        return <ViewErrorBoundary name="Outbound"><OutboundManagementPanel /></ViewErrorBoundary>;
       case 'designer':
-        return <WorkflowDesigner />;
+        return <ViewErrorBoundary name="Designer"><WorkflowDesigner /></ViewErrorBoundary>;
       case 'admin':
-        return <AdminConsole />;
+        return <ViewErrorBoundary name="Admin"><AdminConsole /></ViewErrorBoundary>;
       case 'audit':
-        return <AuditViewer />;
+        return <ViewErrorBoundary name="Audit"><AuditViewer /></ViewErrorBoundary>;
       case 'portal':
-        return <ApplicantPortal />;
+        return <ViewErrorBoundary name="Portal"><ApplicantPortal /></ViewErrorBoundary>;
       case 'reports':
-        return <ReportBuilder />;
+        return <ViewErrorBoundary name="Reports"><ReportBuilder /></ViewErrorBoundary>;
       case 'viewer':
-        return viewingCaseId ? <CaseViewer caseId={viewingCaseId} onBack={() => setView('inbox')} /> : null;
+        return <ViewErrorBoundary name="Case Viewer">{viewingCaseId ? <CaseViewer caseId={viewingCaseId} onBack={() => setView('inbox')} /> : null}</ViewErrorBoundary>;
       case 'workspace':
-        return currentTaskId ? <FormWorkspace taskId={currentTaskId} onBack={() => setView('inbox')} /> : null;
+        return <ViewErrorBoundary name="Workspace">{currentTaskId ? <FormWorkspace taskId={currentTaskId} onBack={() => setView('inbox')} /> : null}</ViewErrorBoundary>;
       default:
         return (
+          <ViewErrorBoundary name="Inbox">
           <div className="flex flex-1 overflow-hidden">
             <SidebarFilters
               filters={filters}
@@ -119,6 +135,7 @@ export default function App() {
               <TaskList tasks={tasks} filters={filters} setFilters={setFilters} onTaskClick={(id) => { setCurrentTaskId(id); setView('workspace'); }} />
             </div>
           </div>
+          </ViewErrorBoundary>
         );
     }
   };

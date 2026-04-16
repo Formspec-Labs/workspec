@@ -4,11 +4,12 @@ import type {
 } from './WosBackend';
 import type {
   IInboxPort, TaskListItem, ICaseViewerPort, IWorkflowDesignPort, WosValidationResult,
-  IGovernancePort, AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView, PipelineView, PipelineStageView,
+  IGovernancePort, IGovernanceReader, IGovernanceWriter, AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView, PipelineView, PipelineStageView,
   VerificationReportView, VerificationResultView, EquityConfigView,
   PolicyVersionView, CalendarEventView, ServiceHealthView,
   IDashboardPort, DashboardMetrics, StageMetricView, AlertView, DriftDataPoint, PipelineDataPoint,
-  IApplicantPort, ApplicantDeterminationView, IRealtimePort,
+  IApplicantPort, ApplicantDeterminationView, IRealtimePort, Unsubscribe,
+  IAuthPort, AuthUser,
 } from './WosPorts';
 import type { WOSKernelDocument } from '../types/wos/kernel';
 
@@ -158,13 +159,29 @@ export class FixtureBackend implements IWosBackend {
   }
 
   async submitEvent(instanceId: string, event: string, actorId: string, data?: Record<string, unknown>): Promise<EvaluationResult> {
-    return { previousConfiguration: ['intake'], newConfiguration: ['incomeVerification'], eventsFired: [event], caseStateMutations: data ?? {} };
+    const inst = this.instances.find(i => i.instanceId === instanceId);
+    if (!inst) throw new Error(`Instance not found: ${instanceId}`);
+    const prevConfig = [...inst.configuration];
+    inst.configuration = [event];
+    if (data) {
+      Object.assign(inst.caseState, data);
+    }
+    inst.updatedAt = new Date().toISOString();
+    return {
+      previousConfiguration: prevConfig,
+      newConfiguration: inst.configuration,
+      eventsFired: [event],
+      caseStateMutations: data ?? {},
+    };
   }
 
   async getAvailableTransitions(instanceId: string): Promise<AvailableTransition[]> {
+    const inst = this.instances.find(i => i.instanceId === instanceId);
+    if (!inst) return [];
+    const appData = inst.caseState.application as { isComplete?: boolean } | undefined;
     return [
-      { event: 'applicationComplete', target: 'incomeVerification', guard: 'caseFile.application.isComplete = true', guardSatisfied: false, tags: ['intake'], description: 'Complete application proceeds to income verification' },
-      { event: 'applicationIncomplete', target: 'returnedToApplicant', guard: 'caseFile.application.isComplete = false', guardSatisfied: true, tags: ['intake'], description: 'Incomplete application returned to applicant' },
+      { event: 'applicationComplete', target: 'incomeVerification', guard: 'caseFile.application.isComplete = true', guardSatisfied: Boolean(appData?.isComplete), tags: ['intake'], description: 'Complete application proceeds to income verification' },
+      { event: 'applicationIncomplete', target: 'returnedToApplicant', guard: 'caseFile.application.isComplete = false', guardSatisfied: !appData?.isComplete, tags: ['intake'], description: 'Incomplete application returned to applicant' },
     ];
   }
 }
@@ -337,9 +354,19 @@ export class FixtureGovernancePort implements IGovernancePort {
     const bundle = await this.backend.loadBundle(workflowUrl);
     const govs = bundle.governance;
     if (!govs) return [];
-    const delegations = (govs as any).delegations;
+    const delegations = govs.delegations;
     if (!delegations) return [{ id: 'del-1', delegator: 'Director M. Smith', delegate: 'Sarah Jenkins', scope: 'Eligibility Determination', authority: 'determination', legalInstrument: 'DOA-2025-001', startDate: '2026-01-01', endDate: '2026-12-31', status: 'active' as const }];
-    return delegations;
+    return delegations.map(d => ({
+      id: d.id,
+      delegator: d.delegator,
+      delegate: d.delegate,
+      scope: typeof d.scope === 'object' ? (d.scope.caseTypes?.join(', ') ?? 'general') : String(d.scope),
+      authority: d.authority,
+      legalInstrument: d.legalInstrument,
+      startDate: d.effectiveDate ?? '',
+      endDate: d.expirationDate,
+      status: 'active' as const,
+    }));
   }
   async revokeDelegation() {}
   async listPolicyVersions(workflowUrl: string): Promise<PolicyVersionView[]> {
@@ -375,7 +402,7 @@ export class FixtureDashboardPort implements IDashboardPort {
   async getStageMetrics(): Promise<StageMetricView[]> {
     const kernel = (await this.backend.loadBundle('https://agency.gov/workflows/benefits-adjudication')).kernel;
     const states = kernel.lifecycle?.states ?? {};
-    return Object.entries(states).slice(0, 6).map(([name]) => ({ name, count: Math.floor(Math.random() * 10) + 1, avgWait: `${Math.floor(Math.random() * 3) + 1}d`, status: 'normal' as const }));
+    return Object.entries(states).slice(0, 6).map(([name], i) => ({ name, count: (i + 1) * 2, avgWait: `${(i % 3) + 1}d`, status: 'normal' as const }));
   }
   async getAlerts(): Promise<AlertView[]> {
     return [
@@ -384,7 +411,7 @@ export class FixtureDashboardPort implements IDashboardPort {
     ];
   }
   async getDriftData(): Promise<DriftDataPoint[]> {
-    return ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'].map((week, i) => ({ week, overrideRate: 5 + i * 2 + Math.random() * 3, timeOnTask: 20 + Math.random() * 10 }));
+    return ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'].map((week, i) => ({ week, overrideRate: 5 + i * 2, timeOnTask: 20 + i * 2 }));
   }
   async getPipelineData(): Promise<PipelineDataPoint[]> {
     return [{ name: 'Intake', volume: 45, capacity: 50 }, { name: 'Review', volume: 32, capacity: 40 }, { name: 'Determination', volume: 18, capacity: 20 }];
@@ -396,15 +423,16 @@ export class FixtureApplicantPort implements IApplicantPort {
   async getDetermination(instanceId: string): Promise<ApplicantDeterminationView | null> {
     const inst = await this.backend.getInstance(instanceId);
     if (!inst) return null;
-    const cs = inst.caseState as any;
+    const cs = inst.caseState;
+    const determination = cs.determination as { decision?: string; reason?: string } | undefined;
     return {
       instanceId,
       programName: 'Housing Benefits',
-      decision: cs?.determination?.decision ?? 'pending',
+      decision: (determination?.decision as ApplicantDeterminationView['decision']) ?? 'pending',
       dateIssued: inst.updatedAt,
       deadlineDate: inst.timers.find(t => t.event === 'appealWindowExpired')?.deadline ?? '',
       benefitsContinue: false,
-      summary: cs?.determination?.reason ?? 'Under review',
+      summary: determination?.reason ?? 'Under review',
       evidenceConsidered: ['Tax Return 2025', 'Utility Bill March 2026', 'ID Verification'],
       rulesApplied: ['Income Eligibility Rule v4'],
       aiDisclosure: { wasUsed: true, description: 'AI assisted in document extraction and income verification.' },
@@ -419,10 +447,24 @@ export class FixtureApplicantPort implements IApplicantPort {
 export class StubRealtimePort implements IRealtimePort {
   connect() {}
   disconnect() {}
-  onKernelInit() {}
-  onKernelChanged() {}
-  onCollaboratorsUpdate() {}
-  onCursorUpdate() {}
+  onKernelInit(): Unsubscribe { return () => {}; }
+  onKernelChanged(): Unsubscribe { return () => {}; }
+  onCollaboratorsUpdate(): Unsubscribe { return () => {}; }
+  onCursorUpdate(): Unsubscribe { return () => {}; }
   sendCursorMove() {}
   sendKernelUpdate() {}
+}
+
+export class FixtureAuthPort implements IAuthPort {
+  private user: AuthUser = {
+    id: 'user-1',
+    name: 'Jane Doe',
+    email: 'jane.doe@agency.gov',
+    role: 'Supervisor',
+  };
+
+  async getCurrentUser(): Promise<AuthUser | null> { return this.user; }
+  async login(): Promise<AuthUser> { return this.user; }
+  async logout(): Promise<void> {}
+  async hasRole(role: string): Promise<boolean> { return this.user.role === role; }
 }

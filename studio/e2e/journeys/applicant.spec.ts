@@ -12,7 +12,7 @@ test.describe('Applicant Journey: Transparency & Trust', () => {
     await navigateMobile(page, 'Applicant Portal');
     
     // User Behavior: Click on a piece of evidence
-    const evidenceItem = page.getByText('2025 IRS Form 1040').first();
+    const evidenceItem = page.getByText('Tax Return 2025').first();
     await evidenceItem.click();
     
     // Outcome: Evidence viewer modal opens with official record details

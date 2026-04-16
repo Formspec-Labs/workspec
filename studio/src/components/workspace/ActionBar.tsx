@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { Save, Send, AlertCircle, PauseCircle, X, CheckCircle, XCircle } from 'lucide-react';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { useBackend } from '../../context/WosContext';
 
-export function ActionBar() {
+interface ActionBarProps {
+  instanceId?: string;
+  aiFieldCount?: number;
+}
+
+export function ActionBar({ instanceId, aiFieldCount = 0 }: ActionBarProps) {
+  const backend = useBackend();
   const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
   const [decisionType, setDecisionType] = useState<'approve' | 'reject' | null>(null);
   const [reasonCode, setReasonCode] = useState('');
@@ -13,10 +20,20 @@ export function ActionBar() {
     setIsDecisionModalOpen(true);
   };
 
-  const confirmDecision = () => {
-    console.log(`Decision: ${decisionType}, Reason: ${reasonCode}, Rationale: ${rationale}`);
+  const confirmDecision = async () => {
+    if (instanceId && decisionType) {
+      try {
+        await backend.submitEvent(
+          instanceId,
+          decisionType === 'approve' ? 'approve' : 'reject',
+          'current-user',
+          { reasonCode, rationale }
+        );
+      } catch (err) {
+        console.error('Failed to submit decision:', err);
+      }
+    }
     setIsDecisionModalOpen(false);
-    // In a real app, this would call the service
   };
 
   return (
@@ -24,7 +41,7 @@ export function ActionBar() {
       <div className="flex items-center justify-between sm:justify-start gap-4">
         <div className="flex items-center gap-2 text-[10px] sm:text-sm text-amber-600 bg-amber-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border border-amber-200">
           <AlertCircle className="w-3.5 h-3.5 sm:w-4 h-4" />
-          <span className="font-medium">2 AI fields pending review</span>
+          <span className="font-medium">{aiFieldCount > 0 ? `${aiFieldCount} AI fields pending review` : 'No AI fields pending'}</span>
         </div>
         
         <button className="sm:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-md transition-colors" title="Cancel">
