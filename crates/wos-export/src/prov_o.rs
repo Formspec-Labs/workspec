@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::ExportConfig;
+use crate::{ExportConfig, camel_case_record_kind};
 
 /// A PROV-O graph serialized as JSON-LD (§5.6).
 #[derive(Debug, Serialize)]
@@ -140,19 +140,6 @@ fn agent_node(actor_id: &str, config: &ExportConfig) -> Value {
 /// Compose the IRI used for a `prov:Agent` node so activities can link to it.
 fn agent_iri(actor_id: &str, config: &ExportConfig) -> String {
     format!("{}agent/{actor_id}", config.provenance_namespace)
-}
-
-/// Render `record_kind` in camelCase, reusing the serde rename already on
-/// [`ProvenanceKind`] — guarantees the emitted string matches the spec's
-/// on-the-wire form (§5.3 example: `"stateTransition"`).
-fn camel_case_record_kind(record: &ProvenanceRecord) -> String {
-    match serde_json::to_value(record.record_kind) {
-        Ok(Value::String(name)) => name,
-        // The enum is `#[serde(rename_all = "camelCase")]` over plain
-        // unit variants, so serialization cannot fail or produce a
-        // non-string value. Treat any surprise as a bug.
-        other => unreachable!("ProvenanceKind must serialize as a string, got {other:?}"),
-    }
 }
 
 #[cfg(test)]

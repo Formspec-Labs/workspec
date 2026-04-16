@@ -28,11 +28,10 @@
 
 use quick_xml::events::{BytesDecl, Event};
 use quick_xml::writer::Writer;
-use serde_json::Value;
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::ExportConfig;
+use crate::{ExportConfig, camel_case_record_kind};
 
 /// Serialize a provenance log to an XES XML document (§6.3).
 ///
@@ -193,18 +192,6 @@ fn write_date_attribute(
         .with_attributes([("key", key), ("value", value)])
         .write_empty()?;
     Ok(())
-}
-
-/// Render `record_kind` in camelCase using the serde rename already attached
-/// to [`wos_core::provenance::ProvenanceKind`]. Keeping a single source of
-/// truth means the XES emission always matches the PROV-O and JSON forms.
-fn camel_case_record_kind(record: &ProvenanceRecord) -> String {
-    match serde_json::to_value(record.record_kind) {
-        Ok(Value::String(name)) => name,
-        // `ProvenanceKind` is `#[serde(rename_all = "camelCase")]` over unit
-        // variants, so serialization produces a JSON string or is a bug.
-        other => unreachable!("ProvenanceKind must serialize as a string, got {other:?}"),
-    }
 }
 
 #[cfg(test)]

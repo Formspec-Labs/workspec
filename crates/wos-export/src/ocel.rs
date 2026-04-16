@@ -19,7 +19,7 @@ use serde_json::{Map, Value, json};
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::ExportConfig;
+use crate::{ExportConfig, camel_case_record_kind};
 
 /// Serialize a provenance log as an OCEL 2.0 JSON document (§6.4).
 ///
@@ -136,18 +136,6 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
         attributes.push(json!({ "name": "data", "value": data.clone() }));
     }
     attributes
-}
-
-/// Render `record_kind` in camelCase, reusing the serde rename already on
-/// [`ProvenanceKind`] so the on-the-wire form stays identical to PROV-O /
-/// XES (§5.3, §6.4 example: `"stateTransition"`).
-fn camel_case_record_kind(record: &ProvenanceRecord) -> String {
-    match serde_json::to_value(record.record_kind) {
-        Ok(Value::String(name)) => name,
-        // `ProvenanceKind` is `#[serde(rename_all = "camelCase")]` over plain
-        // unit variants, so serialization cannot fail or yield a non-string.
-        other => unreachable!("ProvenanceKind must serialize as a string, got {other:?}"),
-    }
 }
 
 #[cfg(test)]
