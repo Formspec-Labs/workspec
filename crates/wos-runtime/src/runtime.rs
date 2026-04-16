@@ -1491,7 +1491,7 @@ fn business_deadline_ms(
         i64::try_from(timer.duration_ms)
             .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
     );
-
+  
     match next_business_moment(start_utc, duration, calendar) {
         Ok(result) => {
             let result_ms = u64::try_from(result.timestamp_millis())

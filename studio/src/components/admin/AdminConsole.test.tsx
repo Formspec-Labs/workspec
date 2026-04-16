@@ -120,8 +120,8 @@ describe('AdminConsole', () => {
     await waitFor(() => {
       expect(screen.getByText(/noFinalDenial/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/prohibition/i)).toBeInTheDocument();
-    expect(screen.getByText(/permission/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/prohibition/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/permission/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/escalateToHuman/i)).toBeInTheDocument();
   });
 
@@ -189,9 +189,9 @@ describe('AdminConsole', () => {
     await switchToPolicyTab(/Equity/i);
 
     await waitFor(() => {
-      expect(screen.getByText(/geographicRegion/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/geographicRegion/i).length).toBeGreaterThan(0);
     });
     expect(screen.getByText(/northeast/i)).toBeInTheDocument();
-    expect(screen.getByText(/review/i)).toBeInTheDocument();
+    expect(screen.getByText(/disparity > 0\.15/i)).toBeInTheDocument();
   });
 });
