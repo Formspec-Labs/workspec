@@ -133,6 +133,14 @@ impl IntegrationBindingHandler for ArazzoHandler {
                                     "integrationType": binding.kind,
                                     "updatedPaths": updates,
                                 })),
+                                audit_layer: None,
+                                actor_type: None,
+                                lifecycle_state: None,
+                                definition_version: None,
+                                inputs: Vec::new(),
+                                outputs: Vec::new(),
+                                input_digest: None,
+                                output_digest: None,
                             });
                         }
                     }
@@ -176,6 +184,14 @@ impl IntegrationBindingHandler for ArazzoHandler {
                         "phase": "binding-level",
                         "updatedPaths": updates,
                     })),
+                    audit_layer: None,
+                    actor_type: None,
+                    lifecycle_state: None,
+                    definition_version: None,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_digest: None,
+                    output_digest: None,
                 });
             }
         }
@@ -314,6 +330,14 @@ fn execute_step(
             "outcome": "ok",
             "durationMs": duration_ms,
         })),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     });
 
     (step_provenance, Ok(step_result.output))
@@ -394,6 +418,14 @@ fn arazzo_step_record(
             "outcome": outcome,
             "durationMs": duration_ms,
         })),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     }
 }
 

@@ -106,6 +106,14 @@ impl IntegrationBindingHandler for ToolHandler {
                     "idempotencyKey": idempotency_key,
                     "stepResultRecordedAt": step_result.recorded_at,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
@@ -123,6 +131,14 @@ impl IntegrationBindingHandler for ToolHandler {
                     "input": input,
                     "output": step_result.output,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 
@@ -156,6 +172,14 @@ impl IntegrationBindingHandler for ToolHandler {
                     "integrationType": binding.kind,
                     "updatedPaths": updates,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 

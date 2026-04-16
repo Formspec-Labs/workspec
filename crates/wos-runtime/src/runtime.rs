@@ -596,6 +596,14 @@ impl WosRuntime {
                 to_state: None,
                 event: Some(event.event.clone()),
                 data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 
@@ -1065,6 +1073,14 @@ impl WosRuntime {
                                 "idempotencyKey": idempotency_key,
                                 "stepResultRecordedAt": step_result.recorded_at,
                             })),
+                            audit_layer: None,
+                            actor_type: None,
+                            lifecycle_state: None,
+                            definition_version: None,
+                            inputs: Vec::new(),
+                            outputs: Vec::new(),
+                            input_digest: None,
+                            output_digest: None,
                         });
                     } else {
                         provenance.push(ProvenanceRecord {
@@ -1080,6 +1096,14 @@ impl WosRuntime {
                                 "output": step_result.output,
                                 "persistedBeforeAdvance": true,
                             })),
+                            audit_layer: None,
+                            actor_type: None,
+                            lifecycle_state: None,
+                            definition_version: None,
+                            inputs: Vec::new(),
+                            outputs: Vec::new(),
+                            input_digest: None,
+                            output_digest: None,
                         });
                     }
 
@@ -1099,6 +1123,14 @@ impl WosRuntime {
                                 "valid": validation_result.valid,
                                 "errors": validation_result.errors,
                             })),
+                            audit_layer: None,
+                            actor_type: None,
+                            lifecycle_state: None,
+                            definition_version: None,
+                            inputs: Vec::new(),
+                            outputs: Vec::new(),
+                            input_digest: None,
+                            output_digest: None,
                         });
                     }
                 }
@@ -1798,6 +1830,14 @@ fn compensation_provenance(
             to_state: None,
             event: None,
             data: Some(serde_json::json!({ "order": reversed })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::CompensationScopeBoundary,
@@ -1807,6 +1847,14 @@ fn compensation_provenance(
             to_state: None,
             event: None,
             data: Some(serde_json::json!({ "innerScopeOnly": true })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
     } else if visited.len() == 2 {
         if let Some((from, _)) = fail_transition {
@@ -1827,6 +1875,14 @@ fn compensation_provenance(
                     "compensated": compensated,
                     "excluded": [*from],
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
     }

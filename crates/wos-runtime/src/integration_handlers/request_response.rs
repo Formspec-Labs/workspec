@@ -90,6 +90,14 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                     "idempotencyKey": idempotency_key,
                     "stepResultRecordedAt": step_result.recorded_at,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
@@ -107,6 +115,14 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                     "output": step_result.output,
                     "persistedBeforeAdvance": true,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 
@@ -139,6 +155,14 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                     "integrationType": binding.kind,
                     "updatedPaths": updates,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 
@@ -201,6 +225,14 @@ pub(crate) fn validate_integration_contract(
             "valid": validation_result.valid,
             "errors": validation_result.errors,
         })),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     }))
 }
 

@@ -98,6 +98,14 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
                 "reasons": decision.reasons,
                 "obligations": decision.obligations,
             })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
 
         // Apply the output binding using the canonical decision as the source document.
@@ -127,6 +135,14 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
                     "integrationType": binding.kind,
                     "updatedPaths": updates,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
 

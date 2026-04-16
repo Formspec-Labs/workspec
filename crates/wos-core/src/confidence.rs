@@ -161,5 +161,13 @@ fn prov(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
         to_state: None,
         event: None,
         data: Some(data),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     }
 }

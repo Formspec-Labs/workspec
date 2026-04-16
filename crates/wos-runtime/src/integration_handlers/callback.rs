@@ -210,6 +210,14 @@ fn handle_outbound(
             "invocationId": outbound_event_id,
             "expectedUntil": expected_until,
         })),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     };
 
     Ok(vec![pending_provenance])
@@ -273,6 +281,14 @@ fn handle_inbound(
                 "integrationType": "callback",
                 "updatedPaths": updates,
             })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
     }
 
@@ -290,6 +306,14 @@ fn handle_inbound(
         to_state: None,
         event: None,
         data: Some(received_data),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     });
 
     Ok(provenance)

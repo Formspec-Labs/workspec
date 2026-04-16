@@ -63,6 +63,14 @@ pub fn evaluate_deontic_constraints(
         data: Some(serde_json::json!({
             "order": ["permissions", "prohibitions", "obligations", "confidence", "volume", "sampling"]
         })),
+        audit_layer: None,
+        actor_type: None,
+        lifecycle_state: None,
+        definition_version: None,
+        inputs: Vec::new(),
+        outputs: Vec::new(),
+        input_digest: None,
+        output_digest: None,
     });
 
     // Evaluate at three composition levels (AI S4.7).
@@ -119,6 +127,14 @@ pub fn evaluate_deontic_constraints(
             to_state: None,
             event: None,
             data: Some(serde_json::json!({ "level": level })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
     }
 
@@ -144,6 +160,14 @@ pub fn evaluate_deontic_constraints(
                             "rightId": right.id,
                             "attributedToAgent": false,
                         })),
+                        audit_layer: None,
+                        actor_type: None,
+                        lifecycle_state: None,
+                        definition_version: None,
+                        inputs: Vec::new(),
+                        outputs: Vec::new(),
+                        input_digest: None,
+                        output_digest: None,
                     });
                 }
             }
@@ -176,6 +200,14 @@ pub fn evaluate_deontic_constraints(
                     "effectiveAction": violation_action_str(action),
                     "reason": reason,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
     }
@@ -220,6 +252,14 @@ fn evaluate_constraint_set(
                     "constraintType": "permission",
                     "rationale": rationale,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
         for prohib in &constraints.prohibitions {
@@ -235,6 +275,14 @@ fn evaluate_constraint_set(
                     "constraintType": "prohibition",
                     "rationale": rationale,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
         for oblig in &constraints.obligations {
@@ -250,6 +298,14 @@ fn evaluate_constraint_set(
                     "constraintType": "obligation",
                     "rationale": rationale,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
         return;
@@ -301,6 +357,14 @@ fn evaluate_constraint_set(
                     to_state: None,
                     event: None,
                     data: Some(data),
+                    audit_layer: None,
+                    actor_type: None,
+                    lifecycle_state: None,
+                    definition_version: None,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_digest: None,
+                    output_digest: None,
                 });
                 violations.push((perm.id.clone(), effective_action));
             }
@@ -338,6 +402,14 @@ fn evaluate_constraint_set(
                     "constraintId": prohib.id,
                     "action": violation_action_str(prohib.on_violation),
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
             violations.push((prohib.id.clone(), prohib.on_violation));
         }
@@ -366,6 +438,14 @@ fn evaluate_constraint_set(
                     "constraintId": oblig.id,
                     "action": violation_action_str(oblig.on_violation),
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
             violations.push((oblig.id.clone(), oblig.on_violation));
         }
@@ -400,6 +480,14 @@ fn handle_null_propagation(
                         "constraintId": constraint_id,
                         "impactLevel": impact_level_str(impact_level),
                     })),
+                    audit_layer: None,
+                    actor_type: None,
+                    lifecycle_state: None,
+                    definition_version: None,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_digest: None,
+                    output_digest: None,
                 });
                 true
             }
@@ -420,6 +508,14 @@ fn handle_null_propagation(
                     "reason": "null-expression-escalation",
                     "impactLevel": impact_level_str(impact_level),
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
             true
         }
@@ -468,6 +564,14 @@ fn check_consistency(
                                 "agentValue": agent_value,
                                 "caseValue": case_value,
                             })),
+                            audit_layer: None,
+                            actor_type: None,
+                            lifecycle_state: None,
+                            definition_version: None,
+                            inputs: Vec::new(),
+                            outputs: Vec::new(),
+                            input_digest: None,
+                            output_digest: None,
                         });
                     }
                 }

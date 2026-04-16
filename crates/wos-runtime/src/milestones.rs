@@ -62,6 +62,14 @@ pub fn evaluate_milestones(
                 to_state: None,
                 event: None,
                 data: Some(json!({ "milestoneId": id })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
         }
     }

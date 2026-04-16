@@ -87,6 +87,14 @@ pub fn continuous_reevaluate(
                     "triggeringMutation": triggering_mutation,
                     "cyclesUsed": cycles,
                 })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
             });
             return Ok(ContinuousEvalResult {
                 transitions_fired: total_fired,

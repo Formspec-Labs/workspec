@@ -243,6 +243,14 @@ impl ReferenceCompanionPolicy {
                         "activity": target,
                         "reason": "excluded-while-pending",
                     })),
+                    audit_layer: None,
+                    actor_type: None,
+                    lifecycle_state: None,
+                    definition_version: None,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_digest: None,
+                    output_digest: None,
                 });
             }
         }
@@ -290,6 +298,14 @@ impl ReferenceCompanionPolicy {
             to_state: None,
             event: None,
             data: Some(serde_json::json!({ "zoneId": zone_id })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         });
     }
 }

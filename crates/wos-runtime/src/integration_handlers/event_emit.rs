@@ -95,6 +95,14 @@ impl IntegrationBindingHandler for EventEmitHandler {
             to_state: None,
             event: None,
             data: Some(envelope.to_provenance_data()),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
         };
 
         Ok(vec![provenance])
