@@ -744,6 +744,19 @@ impl WosRuntime {
             })),
         );
         provenance.timestamp = now_iso.clone();
+        // Populate SP §5.3 fields so persist-task-draft records carry the same
+        // shape as records that flow through the main stamp path.
+        let kernel = self.resolver.resolve_kernel(
+            &record.instance.definition_url,
+            &record.instance.definition_version,
+        )?;
+        let mut single = [provenance];
+        populate_provenance_record_fields(
+            &mut single,
+            &kernel,
+            &record.instance.definition_version,
+        );
+        let [provenance] = single;
         record.instance.provenance_position += 1;
         record.provenance_log.push(provenance);
         record.instance.updated_at = now_iso;
@@ -3282,6 +3295,74 @@ mod tests {
             .provenance_log
             .iter()
             .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted));
+    }
+
+    /// Regression: the persist-task-draft append site must route its record
+    /// through `populate_provenance_record_fields` so it carries the same
+    /// SP §5.3 shape (audit_layer, definition_version, …) as every other
+    /// append path. Prior to the Finding 1 fix this site set only
+    /// `timestamp` and pushed the record directly, skipping the populator.
+    #[test]
+    fn persist_task_draft_populates_new_fields() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:draft-kernel",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel);
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-draft-pop".to_string(),
+                definition_url: "urn:test:draft-kernel".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .unwrap();
+
+        let mut record = runtime.store.load_record("case-draft-pop").unwrap();
+        let task = manual_formspec_task("case-draft-pop", 1, Some("urn:mapping:response"));
+        let task_id = task.task_id.clone();
+        record.instance.active_tasks.push(task);
+        runtime.store.save_record(record).unwrap();
+
+        runtime
+            .persist_task_draft(
+                &task_id,
+                serde_json::json!({
+                    "status": "stopped",
+                    "definitionUrl": "urn:formspec:review",
+                    "definitionVersion": "1.0.0",
+                    "data": { "approved": false }
+                }),
+                "reviewer",
+                None,
+            )
+            .unwrap();
+
+        let record = runtime.store.load_record("case-draft-pop").unwrap();
+        let draft_entry = record
+            .provenance_log
+            .iter()
+            .find(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted)
+            .expect("TaskDraftPersisted record appended");
+        assert_eq!(
+            draft_entry.audit_layer.as_deref(),
+            Some("facts"),
+            "populator must stamp audit_layer on persist_task_draft path"
+        );
+        assert_eq!(
+            draft_entry.definition_version.as_deref(),
+            Some("1.0.0"),
+            "populator must stamp definition_version on persist_task_draft path"
+        );
     }
 
     #[test]
