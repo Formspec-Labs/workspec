@@ -44,6 +44,7 @@ pub struct ProvODocument {
 /// [`ProvenanceRecord::timestamp`] docs) omit `prov:atTime` because the
 /// canonical time is unknown — emitting an empty string would poison any
 /// downstream `xsd:dateTime` consumer.
+#[must_use]
 pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> ProvODocument {
     let records = log.records();
 

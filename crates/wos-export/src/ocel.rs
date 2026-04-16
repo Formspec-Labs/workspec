@@ -265,6 +265,15 @@ mod tests {
         let events = document["events"].as_array().expect("events array");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["time"], "", "empty timestamp must round-trip as empty string");
+
+        // When every record is unstamped, the instance object's `instanceId`
+        // attribute falls back to an empty `time` (documented at module level).
+        let objects = document["objects"].as_array().expect("objects array");
+        let instance_attrs = objects[0]["attributes"].as_array().expect("attributes array");
+        assert_eq!(
+            instance_attrs[0]["time"], "",
+            "all-unstamped log must produce empty instanceId attribute time"
+        );
     }
 
     #[test]
