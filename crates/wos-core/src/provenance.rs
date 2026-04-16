@@ -658,15 +658,118 @@ impl ProvenanceRecord {
 
 /// Classify a provenance record kind into its tier (SP §5.4, §6.5).
 ///
-/// The tier for a record is deterministic from its `ProvenanceKind`. All current
-/// variants map to `"facts"` except `NarrativeTierRecorded`, which is already
-/// the explicit narrative-tier carrier. The `"reasoning"` and `"counterfactual"`
-/// tiers (SP §5.4) are reserved for Layer 1 injection paths not yet wired to
-/// a dedicated `ProvenanceKind` variant.
+/// The tier for a record is deterministic from its `ProvenanceKind`. Only
+/// `NarrativeTierRecorded` maps to `"narrative"` today — every other variant
+/// is a factual observation (`"facts"`). The `"reasoning"` and
+/// `"counterfactual"` tiers (SP §5.4) are reserved for Layer 1 injection
+/// paths not yet wired to a dedicated `ProvenanceKind` variant.
+///
+/// The match is written exhaustively (no wildcard arm) so that adding a new
+/// `ProvenanceKind` variant upstream forces the author to consciously decide
+/// its tier — silent mis-classification via a wildcard fallback is the exact
+/// failure mode this indirection is here to prevent.
 pub fn audit_layer_for_kind(kind: ProvenanceKind) -> &'static str {
     match kind {
+        // Narrative tier (SP §5.4): the sole variant carrying narrative-layer
+        // annotations today.
         ProvenanceKind::NarrativeTierRecorded => "narrative",
-        _ => "facts",
+
+        // Facts tier (SP §5.4): every other variant records an observable
+        // fact about workflow execution. Deliberately enumerated rather than
+        // collapsed into `_` so a new variant triggers a compile error until
+        // its tier is assigned.
+        ProvenanceKind::StateTransition
+        | ProvenanceKind::UnmatchedEvent
+        | ProvenanceKind::CaseStateMutation
+        | ProvenanceKind::TimerCreated
+        | ProvenanceKind::TimerFired
+        | ProvenanceKind::TimerCancelled
+        | ProvenanceKind::OnEntry
+        | ProvenanceKind::OnExit
+        | ProvenanceKind::ActionExecuted
+        | ProvenanceKind::InvalidDuration
+        | ProvenanceKind::ToleranceViolation
+        | ProvenanceKind::DeonticViolation
+        | ProvenanceKind::DeonticEvaluation
+        | ProvenanceKind::DeonticResolution
+        | ProvenanceKind::DeonticBypass
+        | ProvenanceKind::RightsViolation
+        | ProvenanceKind::ConsistencyViolation
+        | ProvenanceKind::AutonomyViolation
+        | ProvenanceKind::AutonomyCapped
+        | ProvenanceKind::AutonomyComputed
+        | ProvenanceKind::HumanTaskCreated
+        | ProvenanceKind::ToolViolation
+        | ProvenanceKind::EscalationPending
+        | ProvenanceKind::AutonomyDemotion
+        | ProvenanceKind::ConfidenceViolation
+        | ProvenanceKind::ConfidenceDecay
+        | ProvenanceKind::CumulativeConfidenceViolation
+        | ProvenanceKind::SessionPaused
+        | ProvenanceKind::GroundTruthLabel
+        | ProvenanceKind::AgentOutput
+        | ProvenanceKind::ActorTypeViolation
+        | ProvenanceKind::AgentProvenanceAnnotation
+        | ProvenanceKind::AgentVersionChange
+        | ProvenanceKind::ConstraintTamperBlocked
+        | ProvenanceKind::DriftReclassification
+        | ProvenanceKind::AgentStateTransition
+        | ProvenanceKind::ProxyInvocation
+        | ProvenanceKind::DispositiveViolation
+        | ProvenanceKind::FallbackTriggered
+        | ProvenanceKind::FallbackAttempt
+        | ProvenanceKind::FallbackTerminal
+        | ProvenanceKind::NoticeSent
+        | ProvenanceKind::SeparationViolation
+        | ProvenanceKind::AppealFiled
+        | ProvenanceKind::ProtocolViolation
+        | ProvenanceKind::IndependentFirstEnforced
+        | ProvenanceKind::SamplingDecision
+        | ProvenanceKind::OverrideViolation
+        | ProvenanceKind::OverrideRecorded
+        | ProvenanceKind::PipelineStageCompleted
+        | ProvenanceKind::PipelineRiskProfile
+        | ProvenanceKind::PipelineRejection
+        | ProvenanceKind::TaskCreated
+        | ProvenanceKind::TaskPresented
+        | ProvenanceKind::TaskDismissed
+        | ProvenanceKind::TaskDraftPersisted
+        | ProvenanceKind::TaskResponseSubmitted
+        | ProvenanceKind::TaskResponseRejected
+        | ProvenanceKind::DataMapping
+        | ProvenanceKind::TaskCompleted
+        | ProvenanceKind::TaskFailed
+        | ProvenanceKind::TaskSkipped
+        | ProvenanceKind::ParameterResolved
+        | ProvenanceKind::CompensationLogEntry
+        | ProvenanceKind::CompensationExecuted
+        | ProvenanceKind::CompensationScopeBoundary
+        | ProvenanceKind::DelegationViolation
+        | ProvenanceKind::InstanceResumed
+        | ProvenanceKind::StepResultPersisted
+        | ProvenanceKind::IdempotencyDedup
+        | ProvenanceKind::InstanceMigrated
+        | ProvenanceKind::ContractValidation
+        | ProvenanceKind::HistoryCleared
+        | ProvenanceKind::DcrActivityExecuted
+        | ProvenanceKind::DcrRelationEvaluated
+        | ProvenanceKind::DcrResolutionError
+        | ProvenanceKind::ZoneSatisfied
+        | ProvenanceKind::EquityAlert
+        | ProvenanceKind::VerificationReportProduced
+        | ProvenanceKind::ImmutabilityViolation
+        | ProvenanceKind::ActivationBlocked
+        | ProvenanceKind::CalendarIgnored
+        | ProvenanceKind::NotificationSuppressed
+        | ProvenanceKind::RelationshipChanged
+        | ProvenanceKind::MilestoneFired
+        | ProvenanceKind::EventEmitted
+        | ProvenanceKind::EventConsumed
+        | ProvenanceKind::CallbackReceived
+        | ProvenanceKind::CallbackPending
+        | ProvenanceKind::ArazzoStep
+        | ProvenanceKind::ToolInvoked
+        | ProvenanceKind::PolicyDecision => "facts",
     }
 }
 
@@ -877,6 +980,128 @@ mod tests {
         );
         assert_eq!(audit_layer_for_kind(ProvenanceKind::TaskCompleted), "facts");
         assert_eq!(audit_layer_for_kind(ProvenanceKind::EventEmitted), "facts");
+    }
+
+    /// Finding 3 regression: every `ProvenanceKind` variant must map to a
+    /// tier via an explicit match arm — no wildcard fallback. The hand-list
+    /// below mirrors the enum; adding a new variant upstream fails this
+    /// test (exhaustive match in the helper) AND this list (missing entry),
+    /// forcing the author to consciously assign its tier.
+    #[test]
+    fn audit_layer_for_kind_covers_every_variant() {
+        let all: &[ProvenanceKind] = &[
+            ProvenanceKind::StateTransition,
+            ProvenanceKind::UnmatchedEvent,
+            ProvenanceKind::CaseStateMutation,
+            ProvenanceKind::TimerCreated,
+            ProvenanceKind::TimerFired,
+            ProvenanceKind::TimerCancelled,
+            ProvenanceKind::OnEntry,
+            ProvenanceKind::OnExit,
+            ProvenanceKind::ActionExecuted,
+            ProvenanceKind::InvalidDuration,
+            ProvenanceKind::ToleranceViolation,
+            ProvenanceKind::DeonticViolation,
+            ProvenanceKind::DeonticEvaluation,
+            ProvenanceKind::DeonticResolution,
+            ProvenanceKind::DeonticBypass,
+            ProvenanceKind::RightsViolation,
+            ProvenanceKind::ConsistencyViolation,
+            ProvenanceKind::AutonomyViolation,
+            ProvenanceKind::AutonomyCapped,
+            ProvenanceKind::AutonomyComputed,
+            ProvenanceKind::HumanTaskCreated,
+            ProvenanceKind::ToolViolation,
+            ProvenanceKind::EscalationPending,
+            ProvenanceKind::AutonomyDemotion,
+            ProvenanceKind::ConfidenceViolation,
+            ProvenanceKind::ConfidenceDecay,
+            ProvenanceKind::CumulativeConfidenceViolation,
+            ProvenanceKind::SessionPaused,
+            ProvenanceKind::GroundTruthLabel,
+            ProvenanceKind::AgentOutput,
+            ProvenanceKind::ActorTypeViolation,
+            ProvenanceKind::AgentProvenanceAnnotation,
+            ProvenanceKind::AgentVersionChange,
+            ProvenanceKind::NarrativeTierRecorded,
+            ProvenanceKind::ConstraintTamperBlocked,
+            ProvenanceKind::DriftReclassification,
+            ProvenanceKind::AgentStateTransition,
+            ProvenanceKind::ProxyInvocation,
+            ProvenanceKind::DispositiveViolation,
+            ProvenanceKind::FallbackTriggered,
+            ProvenanceKind::FallbackAttempt,
+            ProvenanceKind::FallbackTerminal,
+            ProvenanceKind::NoticeSent,
+            ProvenanceKind::SeparationViolation,
+            ProvenanceKind::AppealFiled,
+            ProvenanceKind::ProtocolViolation,
+            ProvenanceKind::IndependentFirstEnforced,
+            ProvenanceKind::SamplingDecision,
+            ProvenanceKind::OverrideViolation,
+            ProvenanceKind::OverrideRecorded,
+            ProvenanceKind::PipelineStageCompleted,
+            ProvenanceKind::PipelineRiskProfile,
+            ProvenanceKind::PipelineRejection,
+            ProvenanceKind::TaskCreated,
+            ProvenanceKind::TaskPresented,
+            ProvenanceKind::TaskDismissed,
+            ProvenanceKind::TaskDraftPersisted,
+            ProvenanceKind::TaskResponseSubmitted,
+            ProvenanceKind::TaskResponseRejected,
+            ProvenanceKind::DataMapping,
+            ProvenanceKind::TaskCompleted,
+            ProvenanceKind::TaskFailed,
+            ProvenanceKind::TaskSkipped,
+            ProvenanceKind::ParameterResolved,
+            ProvenanceKind::CompensationLogEntry,
+            ProvenanceKind::CompensationExecuted,
+            ProvenanceKind::CompensationScopeBoundary,
+            ProvenanceKind::DelegationViolation,
+            ProvenanceKind::InstanceResumed,
+            ProvenanceKind::StepResultPersisted,
+            ProvenanceKind::IdempotencyDedup,
+            ProvenanceKind::InstanceMigrated,
+            ProvenanceKind::ContractValidation,
+            ProvenanceKind::HistoryCleared,
+            ProvenanceKind::DcrActivityExecuted,
+            ProvenanceKind::DcrRelationEvaluated,
+            ProvenanceKind::DcrResolutionError,
+            ProvenanceKind::ZoneSatisfied,
+            ProvenanceKind::EquityAlert,
+            ProvenanceKind::VerificationReportProduced,
+            ProvenanceKind::ImmutabilityViolation,
+            ProvenanceKind::ActivationBlocked,
+            ProvenanceKind::CalendarIgnored,
+            ProvenanceKind::NotificationSuppressed,
+            ProvenanceKind::RelationshipChanged,
+            ProvenanceKind::MilestoneFired,
+            ProvenanceKind::EventEmitted,
+            ProvenanceKind::EventConsumed,
+            ProvenanceKind::CallbackReceived,
+            ProvenanceKind::CallbackPending,
+            ProvenanceKind::ArazzoStep,
+            ProvenanceKind::ToolInvoked,
+            ProvenanceKind::PolicyDecision,
+        ];
+
+        for kind in all {
+            let tier = audit_layer_for_kind(*kind);
+            assert!(
+                matches!(tier, "facts" | "narrative" | "reasoning" | "counterfactual"),
+                "{kind:?} classified as unknown tier {tier:?}"
+            );
+        }
+
+        // Exactly one variant is narrative today.
+        let narrative_count = all
+            .iter()
+            .filter(|k| audit_layer_for_kind(**k) == "narrative")
+            .count();
+        assert_eq!(
+            narrative_count, 1,
+            "only NarrativeTierRecorded should classify as narrative today"
+        );
     }
 
     /// Legacy records that predate these fields MUST still deserialize,
