@@ -24,9 +24,11 @@ use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use wos_runtime::{
     BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
-    IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime,
+    IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime, stamp_provenance,
 };
 
 use crate::fixture::ConformanceFixture;
@@ -304,6 +306,17 @@ impl WorkflowEngine {
             }
         }
 
+        // Auxiliary provenance (invalid fixture delay strings, etc.) is
+        // constructed here rather than by the runtime, so it escapes the
+        // runtime's stamp_provenance path. Stamp it against the engine's
+        // simulated clock so downstream consumers see a uniformly stamped
+        // log (no record with an empty timestamp). Records produced before
+        // any `delay` entry fires land at the clock's initial moment; that
+        // is fine — the contract is "non-empty ISO-8601 timestamp", not
+        // "strictly monotonic per record".
+        let now_iso = format_timestamp_millis(self.clock.now_ms())?;
+        stamp_provenance(&mut auxiliary_provenance, &now_iso);
+
         // Merge lifecycle provenance with auxiliary provenance.
         let mut provenance = lifecycle_provenance;
         provenance.extend(auxiliary_provenance);
@@ -532,6 +545,19 @@ impl Clock for SharedClock {
     fn now_ms(&self) -> u64 {
         self.now_ms.load(Ordering::SeqCst)
     }
+}
+
+/// Format a Unix-millisecond timestamp as RFC 3339, matching the runtime's
+/// private `format_timestamp` logic. Kept local so the conformance engine can
+/// stamp auxiliary (non-runtime) provenance on its own clock without reaching
+/// into a non-public runtime helper.
+fn format_timestamp_millis(timestamp_ms: u64) -> Result<String, ConformanceError> {
+    let nanos_i128 = i128::from(timestamp_ms) * 1_000_000;
+    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(nanos_i128)
+        .map_err(|error| ConformanceError::Engine(format!("clock timestamp: {error}")))?;
+    timestamp
+        .format(&Rfc3339)
+        .map_err(|error| ConformanceError::Engine(format!("clock timestamp format: {error}")))
 }
 
 fn fixture_document_json(

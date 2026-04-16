@@ -10,6 +10,7 @@ repository = "https://github.com/formspec/formspec"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+time = { version = "0.3", features = ["formatting"] }
 wos-core = { path = "../wos-core" }
 wos-formspec-binding = { path = "../wos-formspec-binding" }
 wos-runtime = { path = "../wos-runtime" }

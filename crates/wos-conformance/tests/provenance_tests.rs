@@ -948,3 +948,59 @@ fn guard_evaluation_fallthrough_when_first_guard_fails() {
         result.failures
     );
 }
+
+// ========================================================================
+// Auxiliary provenance (invalid fixture delay) is stamped by the engine.
+// ========================================================================
+//
+// Regression: the engine constructs ProvenanceRecord::invalid_duration records
+// with an empty timestamp and previously merged them into the final log via
+// `.extend(...)` without stamping. Downstream exporters and consumers expect
+// every record surfaced from a fixture run to carry a non-empty RFC-3339
+// timestamp. This test pins that expectation by forcing the invalid-duration
+// path with a malformed ISO-8601 duration string.
+#[test]
+fn invalid_fixture_delay_produces_stamped_auxiliary_provenance() {
+    let kernel = timer_kernel();
+    let (_dir, kernel_path) = write_kernel_to_temp(kernel);
+    let fixture: ConformanceFixture = serde_json::from_value(json!({
+        "id": "test-invalid-delay",
+        "rule": "test",
+        "description": "malformed ISO-8601 duration triggers invalidDuration provenance",
+        "documents": { "kernel": kernel_path },
+        "event_sequence": [
+            { "event": "noop", "delay": "NOT-AN-ISO-DURATION" }
+        ],
+        "expected_transitions": []
+    }))
+    .unwrap();
+
+    let mut engine = WorkflowEngine::new(&fixture).expect("engine init failed");
+    let result = engine.execute(&fixture).expect("execute failed");
+
+    let invalid_records: Vec<_> = result
+        .provenance
+        .iter()
+        .filter(|record| {
+            record.record_kind == wos_conformance::ProvenanceKind::InvalidDuration
+        })
+        .collect();
+
+    assert_eq!(
+        invalid_records.len(),
+        1,
+        "expected exactly one invalidDuration record, got {} (all records: {:?})",
+        invalid_records.len(),
+        result.provenance
+    );
+
+    // Every record — runtime-emitted and auxiliary alike — must carry a
+    // non-empty timestamp. If the engine ever regresses to unstamped auxiliary
+    // provenance, the specific failure below names the record.
+    for record in &result.provenance {
+        assert!(
+            !record.timestamp.is_empty(),
+            "every provenance record must be stamped; got unstamped record: {record:?}"
+        );
+    }
+}
