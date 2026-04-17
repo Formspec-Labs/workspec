@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (benchmark runner as a binary in `wos-synth` or a new `wos-bench` crate), markdown for problem statements, JSON for results.
 
-**Spec anchor:** [architecture-review-handoff.md §5.5](../reviews/2026-04-16-architecture-review-handoff.md) — fixture corpus doubles as synthesis benchmark.
+**Spec anchor:** [architecture-review-handoff.md §5.5](../archive/reviews/2026-04-16-architecture-review-handoff.md) — fixture corpus doubles as synthesis benchmark.
 
 ---
 

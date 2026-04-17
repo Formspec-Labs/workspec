@@ -11,7 +11,7 @@ Each question below is presented with options, the original recommendation, and 
 
 ## Q1. Is Claim A (LLM authoring) an accepted first-class goal?
 
-The positioning work ([POSITIONING.md](../../POSITIONING.md), [README.md](../../README.md)) and [ADR 0064](../../../../thoughts/adr/0064-wos-granularity-and-ai-native-positioning.md) already treat Claim A as first-class. But this question affects how aggressively we invest in it.
+The positioning work ([POSITIONING.md](../../POSITIONING.md), [README.md](../../README.md)) and [ADR 0064](../../../thoughts/adr/0064-wos-granularity-and-ai-native-positioning.md) already treat Claim A as first-class. But this question affects how aggressively we invest in it.
 
 **Options:**
 
@@ -53,7 +53,7 @@ The positioning work ([POSITIONING.md](../../POSITIONING.md), [README.md](../../
 
 ## Q3. Release-versioning tool of choice — independent tags per layer, or a monorepo release manifest?
 
-Context: the parent formspec repo already has [ADR 0063](../../../../thoughts/adr/0063-release-trains-by-tier.md) for a similar split across npm packages using Changesets. The WOS question is whether to align on that tool or pick something else for the spec/schema/crate stack.
+Context: the parent formspec repo already has [ADR 0063](../../../thoughts/adr/0063-release-trains-by-tier.md) for a similar split across npm packages using Changesets. The WOS question is whether to align on that tool or pick something else for the spec/schema/crate stack.
 
 **Options:**
 

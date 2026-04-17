@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (`wos-lint`), `serde` for JSON, existing rule infrastructure.
 
-**Spec anchor:** [architecture-review-handoff.md §5.2](../reviews/2026-04-16-architecture-review-handoff.md).
+**Spec anchor:** [architecture-review-handoff.md §5.2](../archive/reviews/2026-04-16-architecture-review-handoff.md).
 
 ---
 

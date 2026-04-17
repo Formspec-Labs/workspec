@@ -8,7 +8,7 @@
 
 **Tech Stack:** Git tags, GitHub Actions release workflow, existing Cargo workspace, markdown CHANGELOGs.
 
-**Spec anchor:** [architecture-review-handoff.md §4.4](../reviews/2026-04-16-architecture-review-handoff.md) — split release trains by layer.
+**Spec anchor:** [architecture-review-handoff.md §4.4](../archive/reviews/2026-04-16-architecture-review-handoff.md) — split release trains by layer.
 
 **Related:** Parent repo [ADR 0063](../../../thoughts/adr/0063-release-trains-by-tier.md) does the same split for Formspec packages. This plan extends the pattern to WOS layers.
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (`wos-lint`), JSON Schema 2020-12, existing `x-lm` annotation convention.
 
-**Spec anchor:** [architecture-review-handoff.md §5.1](../reviews/2026-04-16-architecture-review-handoff.md).
+**Spec anchor:** [architecture-review-handoff.md §5.1](../archive/reviews/2026-04-16-architecture-review-handoff.md).
 
 ---
 

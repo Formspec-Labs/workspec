@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (new `wos-synth` crate), `anthropic-sdk` or equivalent via HTTP, reqwest, tokio. Optional: llama-cpp fallback provider for offline runs.
 
-**Spec anchor:** [architecture-review-handoff.md §5.4](../reviews/2026-04-16-architecture-review-handoff.md) — the reference impl for [Claim A](../../POSITIONING.md).
+**Spec anchor:** [architecture-review-handoff.md §5.4](../archive/reviews/2026-04-16-architecture-review-handoff.md) — the reference impl for [Claim A](../../POSITIONING.md).
 
 ---
 

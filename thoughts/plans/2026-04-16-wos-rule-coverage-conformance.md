@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (`wos-lint`, `wos-conformance`), markdown generation from rule registry, GitHub Actions for CI gating.
 
-**Spec anchor:** [architecture-review-handoff.md §4.2](../reviews/2026-04-16-architecture-review-handoff.md) — honest conformance numbers.
+**Spec anchor:** [architecture-review-handoff.md §4.2](../archive/reviews/2026-04-16-architecture-review-handoff.md) — honest conformance numbers.
 
 ---
 

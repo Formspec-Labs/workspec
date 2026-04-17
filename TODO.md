@@ -1,13 +1,13 @@
 # WOS TODO
 
 **Last audited:** 2026-04-16
-**Counts:** 18 specs, 19 schemas (kernel extension patternProperties landed 2026-04-16), 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 6 crates, 197 lint rules (197 tested, 0 untested)
+**Counts:** 18 specs, 19 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 6 crates, 197 lint rules (197 tested, 0 untested)
 
 **Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md)
 
 **2026-04-16 architecture review.** An external review ([archived handoff](thoughts/archive/reviews/2026-04-16-architecture-review-handoff.md)) produced four hygiene items (§4) and six LLM-authoring items (§5). Architectural validation decisions live in [ADR 0064](../thoughts/adr/0064-wos-granularity-and-ai-native-positioning.md). Positioning updated in [POSITIONING.md](POSITIONING.md) and [README.md](README.md) to lead with the Claim A / Claim B framing. Active plans:
 
-- **§4.1 Extension fix** — 19 schemas patched with `patternProperties ^x-` (landed). Follow-up: K-EXT-001/K-EXT-002 lint rules + fixtures (captured as backlog).
+- **§4.1 Extension fix** — 19 schemas patched with `patternProperties ^x-` at every nested level (2026-04-16 root + 2026-04-17 nested). §10.6 amended to document both `extensions` property and sibling `x-` keys, and to reserve `x-wos-*` namespace. Follow-up: K-EXT-001/K-EXT-002 lint rules + fixtures (captured in rule-coverage plan).
 - **§4.3 Precedence clause** — Added to both companions (landed). Follow-up: COMP-001 drift-detection lint rule.
 - **§4.2 Rule-coverage conformance** — [plan](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). Prerequisite for §4.4.
 - **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Depends on §4.2.
@@ -17,7 +17,8 @@
 - **§5.4 `wos-synth` crate** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). Flagship Claim A reference impl.
 - **§5.5 Synthesis benchmark** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Falsifies Claim A with metrics.
 - **§5.6 Repositioning docs** — README + POSITIONING updated (landed).
-- **§8 Open questions** — [doc](thoughts/reviews/2026-04-16-architecture-review-open-questions.md) captures 5 maintainer-decision questions (Claim A scope, `wos-synth` location, release tool, load-bearing seeds, compat-matrix convention). Each is linked to the plan(s) it blocks.
+- **§8 Open questions** — [doc](thoughts/reviews/2026-04-16-architecture-review-open-questions.md) captures 5 maintainer-decision questions (Claim A scope, `wos-synth` location, release tool, load-bearing seeds, compat-matrix convention). Each is linked to the plan(s) it blocks. Synthesized multi-reviewer recommendations added 2026-04-17.
+- **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). Adds three pytest suites (meta-validity, fixture validity, spec-example validity) modeled on parent Formspec's `tests/conformance/spec/test_spec_examples.py`. Closes the "no regression guard for schema edits" gap flagged in the code-review.
 
 **Missing / unknown references:** `ADR-0058 (wos-core-gap-analysis)` and `ADR-0057 (wos-core-implementation-boundary)` were cited from prior headers but do not exist at `../thoughts/adr/`. Status: unknown — either never authored, relocated, or inlined into other material. Resolve before next audit.
 

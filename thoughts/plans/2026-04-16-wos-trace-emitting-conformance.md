@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (`wos-conformance`, `wos-runtime`), `serde` for JSON, existing fixture infrastructure.
 
-**Spec anchor:** [architecture-review-handoff.md §5.3](../reviews/2026-04-16-architecture-review-handoff.md).
+**Spec anchor:** [architecture-review-handoff.md §5.3](../archive/reviews/2026-04-16-architecture-review-handoff.md).
 
 ---
 
