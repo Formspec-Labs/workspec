@@ -8,10 +8,11 @@
 //! # Rule coverage
 //!
 //! ## Kernel — cross-path
-//! | Rule  | Sev     | What is checked                                                      |
-//! |-------|---------|----------------------------------------------------------------------|
-//! | K-010 | error   | createTask assignTo MUST reference a declared kernel actor          |
-//! | K-037 | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
+//! | Rule      | Sev     | What is checked                                                      |
+//! |-----------|---------|----------------------------------------------------------------------|
+//! | K-010     | error   | createTask assignTo MUST reference a declared kernel actor          |
+//! | K-037     | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
+//! | K-EXT-002 | warning | Keys using the reserved `x-wos-*` namespace (Kernel §10.6)           |
 //!
 //! ## Governance — due process
 //! | Rule  | Sev     | What is checked                                                      |
@@ -167,6 +168,12 @@ fn collect_events_typed(
 
 /// Run all Tier 2 cross-document checks across the project.
 pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
+    // K-EXT-002: Reserved `x-wos-*` namespace check runs across every document
+    // in the project, regardless of kind.
+    for doc in project.documents() {
+        check_reserved_wos_namespace(&doc.value, "", diagnostics);
+    }
+
     let kernel_doc = project.kernel();
     let typed_kernel: Option<KernelDocument> =
         kernel_doc.and_then(|k| serde_json::from_value::<KernelDocument>(k.value.clone()).ok());
@@ -2082,4 +2089,182 @@ fn is_rights_or_safety_impacting_typed(kernel: &KernelDocument) -> bool {
 /// Typed: check if kernel impact level is rights-impacting.
 fn is_rights_impacting_typed(kernel: &KernelDocument) -> bool {
     kernel.impact_level == Some(ImpactLevel::RightsImpacting)
+}
+
+// ---------------------------------------------------------------------------
+// K-EXT-002: Reserved `x-wos-*` namespace
+// ---------------------------------------------------------------------------
+
+/// K-EXT-002: Warn when any key uses the reserved `x-wos-*` namespace.
+///
+/// Per Kernel §10.6, the prefix `x-wos-` is RESERVED for future normative use
+/// by the WOS specification. Implementations and vendors MUST NOT author keys
+/// beginning with `x-wos-` until a future spec version publishes them under
+/// that namespace.
+///
+/// The check is case-sensitive (lowercase per §10.6) and requires a non-empty
+/// suffix. The bare prefix `x-wos-` (no suffix) is malformed but not a
+/// reserved-namespace usage, so it is ignored here. Other vendor prefixes
+/// like `x-acme-` or `x-vendor-` are unaffected.
+fn check_reserved_wos_namespace(
+    value: &Value,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(obj) = value.as_object() {
+        for (key, child) in obj {
+            let child_path = format!("{path}/{}", json_pointer_escape(key));
+            if is_reserved_wos_key(key) {
+                diagnostics.push(Diagnostic::warning(
+                    "K-EXT-002",
+                    &child_path,
+                    format!(
+                        "key '{key}' uses reserved namespace 'x-wos-*'; reserved for future normative use per Kernel §10.6"
+                    ),
+                ));
+            }
+            check_reserved_wos_namespace(child, &child_path, diagnostics);
+        }
+    } else if let Some(arr) = value.as_array() {
+        for (i, child) in arr.iter().enumerate() {
+            let child_path = format!("{path}/{i}");
+            check_reserved_wos_namespace(child, &child_path, diagnostics);
+        }
+    }
+}
+
+/// Test whether a key falls inside the reserved `x-wos-*` namespace.
+///
+/// Lowercase-only (per §10.6) and requires a non-empty suffix after the
+/// `x-wos-` prefix.
+fn is_reserved_wos_key(key: &str) -> bool {
+    key.strip_prefix("x-wos-")
+        .is_some_and(|suffix| !suffix.is_empty())
+}
+
+/// Escape a JSON object key for inclusion in a JSON Pointer (RFC 6901).
+///
+/// `~` becomes `~0` and `/` becomes `~1`.
+fn json_pointer_escape(key: &str) -> String {
+    key.replace('~', "~0").replace('/', "~1")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn run(value: Value) -> Vec<Diagnostic> {
+        let mut diags = Vec::new();
+        check_reserved_wos_namespace(&value, "", &mut diags);
+        diags
+    }
+
+    #[test]
+    fn k_ext_002_root_level_x_wos_key_flagged() {
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "x-wos-future": true
+        });
+        let diags = run(doc);
+        let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
+        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(matches[0].severity, crate::Severity::Warning);
+        assert_eq!(matches[0].path, "/x-wos-future");
+        assert!(matches[0].message.contains("x-wos-future"));
+        assert!(matches[0].message.contains("§10.6"));
+    }
+
+    #[test]
+    fn k_ext_002_nested_x_wos_key_has_correct_path() {
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "lifecycle": {
+                "states": {
+                    "approved": {
+                        "x-wos-experimental": { "enabled": true }
+                    }
+                }
+            }
+        });
+        let diags = run(doc);
+        let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
+        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches[0].path,
+            "/lifecycle/states/approved/x-wos-experimental"
+        );
+    }
+
+    #[test]
+    fn k_ext_002_other_vendor_prefix_not_flagged() {
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "x-vendor-foo": "hello",
+            "x-acme-bar": { "nested": true }
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "K-EXT-002"),
+            "unexpected K-EXT-002: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn k_ext_002_x_prefix_inside_extensions_not_flagged() {
+        // K-030 / K-EXT-001 territory: vendor keys inside `extensions` are fine
+        // as long as they don't use the reserved `x-wos-` namespace.
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "extensions": {
+                "x-acme-foo": "value",
+                "x-vendor-config": { "k": 1 }
+            }
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "K-EXT-002"),
+            "unexpected K-EXT-002: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn k_ext_002_bare_prefix_and_uppercase_not_flagged() {
+        // `x-wos-` (empty suffix) is malformed but not reserved-use.
+        // `X-WOS-*` is uppercase; §10.6 specifies lowercase.
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "x-wos-": "empty suffix",
+            "X-WOS-future": "uppercase",
+            "X-Wos-Mixed": "mixed case"
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "K-EXT-002"),
+            "unexpected K-EXT-002 for non-matching keys: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn k_ext_002_inside_array_elements_flagged() {
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "actors": [
+                { "id": "alice", "x-wos-trait": "experimental" }
+            ]
+        });
+        let diags = run(doc);
+        let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
+        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(matches[0].path, "/actors/0/x-wos-trait");
+    }
+
+    #[test]
+    fn json_pointer_escape_handles_reserved_chars() {
+        assert_eq!(json_pointer_escape("plain"), "plain");
+        assert_eq!(json_pointer_escape("a/b"), "a~1b");
+        assert_eq!(json_pointer_escape("a~b"), "a~0b");
+        // Order matters: ~ must be escaped before /.
+        assert_eq!(json_pointer_escape("a~/b"), "a~0~1b");
+    }
 }
