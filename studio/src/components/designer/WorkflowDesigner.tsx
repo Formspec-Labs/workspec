@@ -29,6 +29,9 @@ import { mapWosValidation, type WorkflowValidation, type PaletteItemData, type P
 
 const MAX_HISTORY = 100;
 
+/** Designer tab focuses this kernel; ignore realtime broadcasts for other workflows. */
+const DESIGNER_KERNEL_URL = 'https://agency.gov/workflows/benefits-adjudication';
+
 const PALETTE_ITEMS: PaletteItemData[] = [
   { id: 'simple', label: 'Task', icon: 'Plus', color: 'bg-blue-50', description: 'A human review or action task' },
   { id: 'ai-pipeline', label: 'AI Pipeline', icon: 'Cpu', color: 'bg-purple-50', description: 'AI-powered document extraction or analysis' },
@@ -102,6 +105,7 @@ export function WorkflowDesigner() {
     realtime.connect();
     const unsubs = [
       realtime.onKernelInit((kernel) => {
+        if (kernel.url !== DESIGNER_KERNEL_URL) return;
         const wf = toDesignerWorkflow(kernel);
         setCurrentKernel(kernel);
         setWorkflow(wf);
@@ -110,6 +114,7 @@ export function WorkflowDesigner() {
         validateWorkflow(wf);
       }),
       realtime.onKernelChanged((kernel) => {
+        if (kernel.url !== DESIGNER_KERNEL_URL) return;
         const wf = toDesignerWorkflow(kernel);
         setCurrentKernel(kernel);
         setWorkflow(wf);
@@ -122,16 +127,19 @@ export function WorkflowDesigner() {
   }, [realtime]);
 
   useEffect(() => {
-    workflowDesign.loadKernel('https://agency.gov/workflows/benefits-adjudication').then(kernel => {
-      if (kernel && !workflow) {
-        setCurrentKernel(kernel);
-        const wf = toDesignerWorkflow(kernel);
-        setWorkflow(wf);
-        setHistory([wf]);
-        setHistoryIndex(0);
-        validateWorkflow(wf);
-      }
+    let cancelled = false;
+    workflowDesign.loadKernel(DESIGNER_KERNEL_URL).then(kernel => {
+      if (cancelled || !kernel) return;
+      setCurrentKernel(kernel);
+      const wf = toDesignerWorkflow(kernel);
+      setWorkflow(wf);
+      setHistory([wf]);
+      setHistoryIndex(0);
+      validateWorkflow(wf);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [workflowDesign]);
 
   const validateWorkflow = (wf: DesignerWorkflow) => {
