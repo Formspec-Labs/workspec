@@ -25,6 +25,7 @@ const StageNode = memo(({
   return (
     <motion.div
       layoutId={stage.id}
+      data-stage-id={stage.id}
       initial={false}
       tabIndex={0}
       role="button"
@@ -410,7 +411,7 @@ export function DesignerCanvas({
         )}
       </div>
 
-      <div className="absolute bottom-52 right-8 flex flex-col-reverse gap-4 z-30">
+      <div className="fixed bottom-24 right-4 z-30 flex flex-col-reverse gap-4 sm:bottom-28 md:absolute md:bottom-52 md:right-8">
         <AnimatePresence>
           {showMiniMap && (
             <motion.div
@@ -485,6 +486,7 @@ export function DesignerCanvas({
           <AnimatePresence>
             {searchQuery && (
               <motion.div
+                data-testid="designer-stage-search-results"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
