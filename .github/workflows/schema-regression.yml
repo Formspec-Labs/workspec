@@ -1,0 +1,39 @@
+name: WOS schema regression
+
+on:
+  pull_request:
+    paths:
+      - "schemas/**"
+      - "fixtures/**"
+      - "specs/**/*.md"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/schema-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "schemas/**"
+      - "fixtures/**"
+      - "specs/**/*.md"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/schema-regression.yml"
+
+jobs:
+  schema-regression:
+    name: pytest tests/schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip "jsonschema[format]" pytest
+
+      - name: Run schema regression suite
+        run: python -m pytest tests/schemas/ -v
