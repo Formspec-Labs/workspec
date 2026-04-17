@@ -1,6 +1,6 @@
 {
   "id": "SP-EXPORT-003-ocel",
-  "description": "Draft → Submitted → Approved workflow exported as OCEL 2.0 JSON. Asserts the four top-level arrays required by §6.4 (objectTypes, eventTypes, objects, events), that events.len() equals the provenance record count, that every event carries a relationship to the sole wf-instance object, and that empty timestamps round-trip as \"\" rather than being omitted (OCEL requires time on every event; the exporter deliberately surfaces missed-stamp sites with an empty string). Kernel and event sequence are defined once in tests/export_conformance.rs (shared_workflow_kernel / shared_workflow_events).",
+  "description": "Draft → Submitted → Approved workflow exported as OCEL 2.0 JSON. Asserts the four top-level arrays required by §6.4 (objectTypes, eventTypes, objects, events), that events.len() equals the Facts-tier provenance record count, that every event carries a relationship to the sole wf-instance object, and that empty timestamps round-trip as \"\" rather than being omitted (OCEL requires time on every event; the exporter surfaces missed-stamp sites with an empty string). Also asserts §5.3/§5.5/§6.3 event attributes (actorType / lifecycleState / definitionVersion / fromState / toState / event / inputDigest / outputDigest on applicable records), §6.3 indexed `inputs.0` / `outputs.0` scalar attributes (OCEL 2.0 requires primitive attribute values, NOT arrays), and the §6.4 uniform static eventType schema declaring the nine optional attributes. Kernel and event sequence are defined once in tests/export_conformance.rs (shared_workflow_kernel / shared_workflow_events).",
   "export": {
     "format": "ocel",
     "config": {
@@ -12,6 +12,25 @@
     "ocel_top_level_keys": ["eventTypes", "events", "objectTypes", "objects"],
     "ocel_event_count_matches_log": true,
     "ocel_every_event_relates_to_instance": true,
-    "asserts_empty_timestamp_preserved_as_empty_string_in_ocel": true
+    "asserts_empty_timestamp_preserved_as_empty_string_in_ocel": true,
+    "ocel_min_events_with_actor_type": 1,
+    "ocel_min_events_with_lifecycle_state": 1,
+    "ocel_min_events_with_definition_version": 1,
+    "ocel_min_events_with_indexed_inputs": 1,
+    "ocel_min_events_with_indexed_outputs": 1,
+    "ocel_min_events_with_input_digest": 1,
+    "ocel_min_events_with_output_digest": 1,
+    "ocel_event_type_required_schema_attributes": [
+      "actorId",
+      "actorType",
+      "lifecycleState",
+      "definitionVersion",
+      "fromState",
+      "toState",
+      "event",
+      "inputDigest",
+      "outputDigest"
+    ],
+    "ocel_object_type_names": ["wf-instance"]
   }
 }

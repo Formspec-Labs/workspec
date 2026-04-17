@@ -1,6 +1,6 @@
 {
   "id": "SP-EXPORT-001-prov-o",
-  "description": "Draft → Submitted → Approved workflow exported as PROV-O JSON-LD. Asserts the activity/agent graph shape required by Semantic Profile §5.3 / §5.6: every Activity carries @id, @type=prov:Activity, wos:actionType, and (for stamped records) prov:atTime; the @context carries the prov/xsd/wos prefixes; and the deduplicated agent count produces at least 2 activities + 1 agent = ≥ 3 nodes (we assert ≥ 4 to cover case-state mutations the runtime also records on transitions). Kernel and event sequence are defined once in tests/export_conformance.rs (shared_workflow_kernel / shared_workflow_events).",
+  "description": "Draft → Submitted → Approved workflow exported as PROV-O JSON-LD. Asserts the Facts-tier graph shape required by Semantic Profile §§5.3, §5.5, §5.6, §6.5: every prov:Activity carries @id, @type=prov:Activity, wos:actionType, and (for stamped records) prov:atTime + wos:definitionVersion; state-transition activities with resolved inputs/outputs link to prov:Entity siblings via prov:used / prov:generated; the first input/output entity carries wos:inputDigest / wos:outputDigest (sha256 hex); the Human-declared actor yields an Agent whose @type is the §5.5 array [prov:Person, wos:HumanAgent]; and the §6.5 Facts-tier filter keeps narrative/reasoning/counterfactual records out of the default export. Kernel and event sequence are defined once in tests/export_conformance.rs (shared_workflow_kernel / shared_workflow_events).",
   "export": {
     "format": "prov_o",
     "config": {
@@ -14,6 +14,14 @@
     "prov_o_activity_required_fields": ["@id", "@type", "wos:actionType"],
     "prov_o_activity_type_value": "prov:Activity",
     "prov_o_stamped_activities_have_at_time": true,
-    "prov_o_min_agents": 1
+    "prov_o_min_agents": 1,
+    "prov_o_activities_have_definition_version": true,
+    "prov_o_expected_definition_version": "1.0.0",
+    "prov_o_min_activities_with_at_lifecycle_state": 1,
+    "prov_o_min_state_transition_entities_per_resolved_transition": 2,
+    "prov_o_first_entity_has_digest": true,
+    "prov_o_digest_hex_length": 64,
+    "prov_o_human_agent_type_pair": ["prov:Person", "wos:HumanAgent"],
+    "facts_tier_filter_applied": true
   }
 }
