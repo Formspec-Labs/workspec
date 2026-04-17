@@ -7,7 +7,13 @@
 
 **Missing / unknown references:** `ADR-0058 (wos-core-gap-analysis)` and `ADR-0057 (wos-core-implementation-boundary)` were cited from prior headers but do not exist at `../thoughts/adr/`. Status: unknown — either never authored, relocated, or inlined into other material. Resolve before next audit.
 
-**Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` migrate as metadata; re-scoring deferred.
+**Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` are preserved per item as metadata — they inform relative weight within each tier but do not override cross-tier ordering.
+
+**Score definitions (0–10 scale):**
+
+- **Imp** — **Importance.** How much does this item move the project forward (architectural leverage, first-adopter enablement, civil-rights/compliance weight). Higher = do it.
+- **Cx** — **Complexity.** How much real work (design + implementation + test) this takes. Higher = bigger lift.
+- **Debt** — **Architectural tech debt if deferred.** How much extra rework lands later if we don't do it now. Higher = cheaper now than later. Confined-scope fixes score low; load-bearing foundational items (0/N fixtures, unclosed escape hatches) score high.
 
 ---
 
@@ -28,9 +34,9 @@
 
 > **Status:** sequencing unresolved. TODO previously placed engine adapters as a near-term priority; IDEA_SCRATCH #49 marked them Defer with trigger "first commercial deployment requesting a specific adapter." No arbitrating document. Items kept in the backlog below but **not** scheduled until this question is resolved.
 
-- [ ] **#49 Camunda 8 Worker** — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
-- [ ] **#49 Temporal Workflow** — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
-- [ ] **#49 AWS Step Functions** — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
+- [ ] **#49 Camunda 8 Worker** `[Imp 5 / Cx 8 / Debt 3]` — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
+- [ ] **#49 Temporal Workflow** `[Imp 5 / Cx 8 / Debt 3]` — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
+- [ ] **#49 AWS Step Functions** `[Imp 5 / Cx 8 / Debt 3]` — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
 
 ---
 
@@ -42,10 +48,10 @@ Previously split across "schema closures" and "behavioral specs." Collapsed and 
 
 Items that get materially more expensive if deferred, or that block a first real adopter. Do these first.
 
-- [ ] **DRAFTS triage** *(prerequisite — not an IDEA item)* — `DRAFTS/` contains 12 kernel version proposals (v2–v7 + competing v7 drafts). Classify archive / delete / extract. **Blocks #20.** Must complete before any schema/spec PR touching the kernel lands.
+- [ ] **DRAFTS triage** `[Imp 5 / Cx 3 / Debt 7]` *(prerequisite — not an IDEA item)* — `DRAFTS/` contains 12 kernel version proposals (v2–v7 + competing v7 drafts). Classify archive / delete / extract. **Blocks #20.** Must complete before any schema/spec PR touching the kernel lands. High Debt: deferring compounds every downstream kernel decision against ambiguous prior art.
 - [ ] **#24a Mandatory Facts-Tier input snapshot** `[Imp 8 / Cx 3 / Debt 7]` — Tighten Facts Tier §8.2: case-file input snapshot MANDATORY and typed at `determination`-tagged transitions. 0 of 146 conformance fixtures populate `inputs` today — retrofit is cheap NOW, expensive once fixtures accumulate. Silent dependency of #2. Unblocks #23.
 - [ ] **#23 OverrideRecord schema** `[Imp 6 / Cx 2 / Debt 4]` — Promote Governance §7.3 three-field requirement (rationale + authority verification + supporting evidence) into typed `OverrideRecord` `$def`. Part of unified ADR sequence #23 → #24a → #2.
-- [ ] **NoticeTemplate reconciliation** — TWO conflicting schema definitions today: thin `sections: string[]` in Due Process schema vs. rich `TemplateSection[]` with FEL conditions in Notification Template schema. Drop the thin version; Notification Template is canonical. **Blocks #2.**
+- [ ] **NoticeTemplate reconciliation** `[Imp 7 / Cx 2 / Debt 5]` — TWO conflicting schema definitions today: thin `sections: string[]` in Due Process schema vs. rich `TemplateSection[]` with FEL conditions in Notification Template schema. Drop the thin version; Notification Template is canonical. **Blocks #2.** High Debt: second schema locks in a second divergent authoring surface the longer it ships.
 - [ ] **#2 Deterministic adverse-decision notice (dual-form)** `[Imp 9 / Cx 7 / Debt 6]` — Specified deterministic algorithm (not model-generated) deriving two co-synchronized outputs from the same Facts + Reasoning provenance: a machine-readable artifact (structured, citable, diffable under audit) and a human-prose artifact (plain language, suitable for legal service). Identical inputs MUST produce identical outputs in both forms. Sits at Governance §3.2 — explicitly separated from the non-authoritative Narrative tier (AI Integration §13). Delivery mechanism = Notification Template §4.4 (FEL-conditional sections + `requiredVariables` enforcement). Scaffolding today: `AdverseDecisionPolicy` typed but permissive; `NoticeSent` is a hardcoded stub (`event_handler.rs:72-81`); zero runtime rendering code. Remaining work: deterministic assembly algorithm + rendering pipeline + determinism fixtures. **Dependencies:** #24a + #23 + NoticeTemplate reconciliation.
 - [ ] **#20 Typed event meta-vocabulary** `[Imp 8 / Cx 6 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union `{ kind: "timer" | "message" | "signal" | "condition" | "error", ... }`. No `named` wrapper; no escape hatch. Co-type `Action.event` for `startTimer`. Closes kernel's last load-bearing openness. Affects 16+ kernel fixtures; promotes lint K-007 to schema validation. **Depends on DRAFTS triage.**
 - [ ] **#31 Jurisdiction-aware business calendar selection** `[Imp 6 / Cx 3 / Debt 4]` — Runtime resolution of which calendar applies from a case-file field (e.g., `applicant.jurisdiction`). Replaces current "implementation-defined" selection. Multi-jurisdiction rights-impacting workflows: compliance risk without this.
@@ -91,9 +97,9 @@ Specifies processor behavior, governance semantics, or runtime obligations. Not 
 
 Absorbed from IDEA_SCRATCH. Schedule alongside whichever critical-path item naturally touches them.
 
-- [ ] **Assertion Library → Workflow Governance** as "Named Assertions" section. Library without #38 reference protocol is incomplete; absorb rather than fix.
-- [ ] **Verification Report → Advanced Governance** as "Output Artifacts" section. Thin sidecar.
-- [ ] **Due Process Config partial merge → Workflow Governance** (pending #45 step 0). If thin NoticeTemplate drops (per #2) and AppealRouting + ContinuationPolicy remain, the merge closes the `ContinuationPolicy` ↔ `AppealMechanism.continuationOfServices` linkage gap structurally.
+- [ ] **Assertion Library → Workflow Governance** `[Imp 4 / Cx 3 / Debt 3]` — Absorb as "Named Assertions" section. Library without #38 reference protocol is incomplete; absorb rather than fix.
+- [ ] **Verification Report → Advanced Governance** `[Imp 3 / Cx 2 / Debt 2]` — Absorb as "Output Artifacts" section. Thin sidecar.
+- [ ] **Due Process Config partial merge → Workflow Governance** `[Imp 5 / Cx 3 / Debt 4]` (pending #45 step 0) — If thin NoticeTemplate drops (per #2) and AppealRouting + ContinuationPolicy remain, the merge closes the `ContinuationPolicy` ↔ `AppealMechanism.continuationOfServices` linkage gap structurally.
 - **M-1 Drift Monitor + Agent Config — BLOCKED.** Merge blocked by `fixtures/ai/benefits-drift-monitor.json` shipping standalone. Ship #37 standalone binding instead; reconsider merge if fixture is revised.
 - **M-2 Notification Template + Due Process Config — REJECTED.** 4 non-due-process categories. Ship #39 standalone linkage instead.
 
@@ -128,7 +134,7 @@ External-deadline-driven. Benefits from ontology (§2) landing first.
 
 Pick up when §§2–6 stabilize.
 
-- [ ] **SCXML interoperability** — Bidirectional WOS ↔ SCXML mapping (currently informative only).
+- [ ] **SCXML interoperability** `[Imp 3 / Cx 6 / Debt 2]` — Bidirectional WOS ↔ SCXML mapping (currently informative only).
 - [ ] **#51 Statutory deadline chains** `[Imp 4 / Cx 7 / Debt 3]` — Interdependent government deadlines and automated legal consequences. Architecturally expensive — wrong abstraction here is expensive.
 
 ---
