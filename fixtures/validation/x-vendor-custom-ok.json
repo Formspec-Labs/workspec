@@ -1,0 +1,31 @@
+{
+  "$wosKernel": "1.0",
+  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "url": "https://test.wos-spec.org/workflows/x-vendor-custom-ok",
+  "version": "1.0.0",
+  "title": "K-EXT-002 Negative Fixture",
+  "description": "Minimal kernel that uses a non-reserved vendor x-* namespace at root. K-EXT-002 MUST NOT emit a warning for x-acme-* keys; only the reserved x-wos-* namespace is gated.",
+  "status": "active",
+  "impactLevel": "operational",
+
+  "x-acme-foo": {
+    "note": "Vendor-authored extension outside the reserved x-wos-* namespace; must NOT trigger K-EXT-002."
+  },
+
+  "actors": [
+    { "id": "system", "type": "system", "description": "System actor." }
+  ],
+
+  "lifecycle": {
+    "initialState": "open",
+    "states": {
+      "open": {
+        "type": "atomic",
+        "transitions": [
+          { "event": "close", "target": "closed" }
+        ]
+      },
+      "closed": { "type": "final" }
+    }
+  }
+}
