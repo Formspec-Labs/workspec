@@ -1,8 +1,16 @@
 # WOS — Workflow Orchestration Standard
 
-**Machine-authorable governance for workflows where decisions affect people.**
+**A workflow standard designed to be authored by LLMs and, when desired, executed with AI agents.**
 
 Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE) (specs, schemas, runtime) and [BSL 1.1](../LICENSE-BSL) (studio). See [LICENSING.md](../LICENSING.md) for details.
+
+---
+
+## Two-line pitch
+
+Other workflow standards were designed for humans with canvases. WOS is designed for LLMs with schemas. Agents as runtime actors are a reference extension of the same design.
+
+See [POSITIONING.md](POSITIONING.md) for the load-bearing claims behind this framing.
 
 ---
 
@@ -10,7 +18,12 @@ Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE
 
 WOS is a JSON-native specification for the **governance layer** of sensitive workflows — benefits adjudication, permit reviews, fraud investigations, any process where a decision affects someone's rights. It defines what protections apply, what constraints bind AI agents, what the audit trail must contain, and what the reasoning was behind each determination.
 
-It is designed for **machine authoring and machine validation**: AI can generate WOS documents from schemas, static analysis checks 197 constraints that schemas alone cannot express, SMT solvers can prove governance properties safe for all inputs, and conformance fixtures verify runtime behavior matches the spec. This is not possible with BPMN XML, which was designed for visual editing by humans in a modeler canvas.
+It is designed for **machine authoring and machine validation** across two separable claims:
+
+- **Claim A — LLM-authored workflows.** Workflows are structured data. An LLM can generate them against the schemas; static lint gives immediate structural feedback; conformance fixtures give immediate behavioral feedback. The spec → schema → lint → conformance loop is the LLM's authoring loop. 18 schemas, 197 lint rules, and a rule-coverage conformance suite make the signal precise enough to author against.
+- **Claim B — Agents as first-class runtime actors.** When the workflow runs, agents are declarable participants alongside humans and services, with autonomy levels, confidence gates, deontic constraints, and drift monitoring. Optional, but native to the design via the kernel's `actorExtension` seam.
+
+BPMN XML cannot retrofit Claim A — its visual-first representation defeats structured generation. Temporal cannot retrofit it either — it is code-first, not spec-first. Claim B is disclosed in the AI Integration layer and its conformance fixtures.
 
 WOS does **not** replace your workflow engine. It targets Camunda, Temporal, Flowable, KIE, and Step Functions as execution substrates. The engine handles persistence, timers, crash recovery, and the full orchestration vocabulary. WOS governs the transitions that matter for rights, audit, and AI oversight.
 
