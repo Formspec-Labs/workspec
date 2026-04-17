@@ -51,20 +51,13 @@ fn map_kernel(r: &SqliteRow) -> StorageResult<KernelRow> {
 }
 
 fn map_instance(r: &SqliteRow) -> StorageResult<InstanceRow> {
-    let governance: Option<String> = r.try_get("governance_state")?;
     Ok(InstanceRow {
         instance_id: r.try_get("instance_id")?,
         definition_url: r.try_get("definition_url")?,
         definition_version: r.try_get("definition_version")?,
         status: r.try_get("status")?,
-        configuration: serde_json::from_str(&r.try_get::<String, _>("configuration")?)?,
-        case_state: serde_json::from_str(&r.try_get::<String, _>("case_state")?)?,
-        active_tasks: serde_json::from_str(&r.try_get::<String, _>("active_tasks")?)?,
-        timers: serde_json::from_str(&r.try_get::<String, _>("timers")?)?,
-        governance_state: governance
-            .map(|s| serde_json::from_str::<serde_json::Value>(&s))
-            .transpose()?,
         impact_level: r.try_get("impact_level")?,
+        instance_json: serde_json::from_str(&r.try_get::<String, _>("instance_json")?)?,
         created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
         updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
     })
@@ -153,30 +146,18 @@ impl Storage for SqliteStorage {
     }
 
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()> {
-        let configuration = serde_json::to_string(&row.configuration)?;
-        let case_state = serde_json::to_string(&row.case_state)?;
-        let active_tasks = serde_json::to_string(&row.active_tasks)?;
-        let timers = serde_json::to_string(&row.timers)?;
-        let governance: Option<String> = match &row.governance_state {
-            Some(v) => Some(serde_json::to_string(v)?),
-            None => None,
-        };
+        let instance_json = serde_json::to_string(&row.instance_json)?;
         sqlx::query(
             "INSERT INTO instances (instance_id, definition_url, definition_version, status,
-               configuration, case_state, active_tasks, timers, governance_state,
-               impact_level, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               impact_level, instance_json, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&row.instance_id)
         .bind(&row.definition_url)
         .bind(&row.definition_version)
         .bind(&row.status)
-        .bind(&configuration)
-        .bind(&case_state)
-        .bind(&active_tasks)
-        .bind(&timers)
-        .bind(&governance)
         .bind(&row.impact_level)
+        .bind(&instance_json)
         .bind(row.created_at)
         .bind(row.updated_at)
         .execute(&self.pool)
@@ -225,7 +206,7 @@ impl Storage for SqliteStorage {
             "SELECT * FROM instances {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?"
         );
 
-        let mut count_q = sqlx::query_scalar::<_, i64>(&count_sql);
+        let mut count_q = sqlx::query(&count_sql);
         let mut list_q = sqlx::query(&list_sql);
         for bucket in [&q.status, &q.impact_level, &q.definition_url].into_iter() {
             if let Some(xs) = bucket {
@@ -235,12 +216,10 @@ impl Storage for SqliteStorage {
                 }
             }
         }
-        let total: i64 = count_q.fetch_one(&self.pool).await?;
+        let count_row = count_q.fetch_one(&self.pool).await?;
+        let total: i64 = count_row.try_get(0)?;
         let rows = list_q.bind(limit).bind(offset).fetch_all(&self.pool).await?;
-        let items: Vec<InstanceRow> = rows
-            .iter()
-            .map(map_instance)
-            .collect::<Result<_, _>>()?;
+        let items: Vec<InstanceRow> = rows.iter().map(map_instance).collect::<Result<_, _>>()?;
 
         Ok(Page {
             items,
@@ -266,31 +245,18 @@ impl Storage for SqliteStorage {
         let appended = mutator(&mut current)?;
         current.updated_at = Utc::now();
 
-        let configuration = serde_json::to_string(&current.configuration)?;
-        let case_state = serde_json::to_string(&current.case_state)?;
-        let active_tasks = serde_json::to_string(&current.active_tasks)?;
-        let timers = serde_json::to_string(&current.timers)?;
-        let governance: Option<String> = match &current.governance_state {
-            Some(v) => Some(serde_json::to_string(v)?),
-            None => None,
-        };
-
+        let instance_json = serde_json::to_string(&current.instance_json)?;
         sqlx::query(
             "UPDATE instances SET
                definition_url = ?, definition_version = ?, status = ?,
-               configuration = ?, case_state = ?, active_tasks = ?,
-               timers = ?, governance_state = ?, impact_level = ?, updated_at = ?
+               impact_level = ?, instance_json = ?, updated_at = ?
              WHERE instance_id = ?",
         )
         .bind(&current.definition_url)
         .bind(&current.definition_version)
         .bind(&current.status)
-        .bind(&configuration)
-        .bind(&case_state)
-        .bind(&active_tasks)
-        .bind(&timers)
-        .bind(&governance)
         .bind(&current.impact_level)
+        .bind(&instance_json)
         .bind(current.updated_at)
         .bind(&current.instance_id)
         .execute(&mut *tx)

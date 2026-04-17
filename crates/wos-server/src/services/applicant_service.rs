@@ -43,14 +43,13 @@ impl ApplicantService {
             .unwrap_or_else(|| row.definition_url.clone());
 
         let provenance = self.provenance.list(instance_id).await?;
-        let decision = row
-            .case_state
+        let case_state = row.case_state();
+        let decision = case_state
             .get("decision")
             .and_then(|v| v.as_str())
             .unwrap_or("pending")
             .to_string();
-        let summary = row
-            .case_state
+        let summary = case_state
             .get("determinationSummary")
             .and_then(|v| v.as_str())
             .unwrap_or("Determination in progress.")
@@ -60,8 +59,7 @@ impl ApplicantService {
             .iter()
             .flat_map(|p| p.reasoning.iter().flat_map(|r| r.rules_applied.iter().cloned()))
             .collect();
-        let evidence_considered: Vec<String> = row
-            .case_state
+        let evidence_considered: Vec<String> = case_state
             .get("evidence")
             .and_then(|v| v.as_array())
             .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
@@ -93,15 +91,14 @@ impl ApplicantService {
             decision,
             date_issued: row.updated_at.to_rfc3339(),
             deadline_date: row
-                .timers
+                .timers()
                 .as_array()
                 .and_then(|a| a.first())
                 .and_then(|t| t.get("deadline"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),
-            benefits_continue: row
-                .case_state
+            benefits_continue: case_state
                 .get("benefitsContinue")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
@@ -117,8 +114,7 @@ impl ApplicantService {
                 positive: Vec::new(),
                 negative: Vec::new(),
             },
-            appeal_status: row
-                .case_state
+            appeal_status: case_state
                 .get("appealStatus")
                 .and_then(|v| v.as_str())
                 .unwrap_or("not-filed")
@@ -142,12 +138,23 @@ impl ApplicantService {
             .update_instance_atomic(
                 instance_id,
                 &move |row| {
-                    let obj = row
-                        .case_state
-                        .as_object_mut()
-                        .ok_or_else(|| crate::storage::StorageError::Other(
-                            "case_state is not an object".into(),
-                        ))?;
+                    // Mutate the caseState sub-object inside the embedded
+                    // CaseInstance JSON. If the shape is unexpected we coerce
+                    // into an empty object rather than bailing — the appeal
+                    // write is always safe to perform.
+                    let inst = row.instance_json.as_object_mut().ok_or_else(|| {
+                        crate::storage::StorageError::Other(
+                            "instance_json is not an object".into(),
+                        )
+                    })?;
+                    let case_state = inst
+                        .entry("caseState".to_string())
+                        .or_insert_with(|| serde_json::json!({}));
+                    let obj = case_state.as_object_mut().ok_or_else(|| {
+                        crate::storage::StorageError::Other(
+                            "caseState is not an object".into(),
+                        )
+                    })?;
                     obj.insert(
                         "appealStatus".into(),
                         serde_json::Value::String("filed".into()),

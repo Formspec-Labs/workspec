@@ -68,21 +68,16 @@ async fn provenance(
 }
 
 async fn transitions(
-    State(_s): State<AppState>,
-    Path(_id): Path<String>,
+    State(s): State<AppState>,
+    Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<AvailableTransitionView>>> {
-    // Populated by the eval service (step 7). Until then, return none so the
-    // studio's UI shows a disabled action bar rather than 500ing.
-    Ok(Json(Vec::new()))
+    Ok(Json(s.services.eval.available_transitions(&id).await?))
 }
 
 async fn submit_event(
-    State(_s): State<AppState>,
-    Path(_id): Path<String>,
-    Json(_req): Json<SubmitEventRequest>,
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<SubmitEventRequest>,
 ) -> ApiResult<Json<EvaluationResultView>> {
-    // Wired up by the eval service in step 7.
-    Err(ApiError::ServiceUnavailable(
-        "eval service not yet wired; see plan step 7".into(),
-    ))
+    Ok(Json(s.services.eval.submit_event(&id, &req).await?))
 }

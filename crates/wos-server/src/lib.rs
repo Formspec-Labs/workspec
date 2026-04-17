@@ -10,6 +10,7 @@ pub mod domain;
 pub mod error;
 pub mod http;
 pub mod realtime;
+pub mod seed;
 pub mod services;
 pub mod storage;
 
@@ -46,6 +47,12 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
         auth,
         services,
     };
+
+    if cfg.seed {
+        if let Err(e) = seed::run(&state).await {
+            tracing::warn!(error = %e, "seed step failed");
+        }
+    }
 
     let (router, io_layer) = http::router(state.clone());
     let app = router.layer(io_layer);

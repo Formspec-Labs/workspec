@@ -1,5 +1,5 @@
--- Initial schema for wos-server.
--- All JSON columns use SQLite's JSON1 storage (TEXT with JSON functions).
+-- Initial schema for wos-server. All JSON columns are TEXT with application-
+-- managed serde_json round-tripping (no JSON1 extension assumed).
 
 CREATE TABLE kernels (
   url          TEXT PRIMARY KEY,
@@ -11,25 +11,27 @@ CREATE TABLE kernels (
   updated_at   TEXT NOT NULL
 );
 
+-- `instance_json` holds the full wos-core `CaseInstance` document so that
+-- the server can round-trip through `Evaluator::from_instance` without
+-- losing any runtime bookkeeping (history_store, fired_milestones,
+-- pending_events, compensation logs, volume_counters, extensions, ...).
+-- The other columns are denormalized indexes populated from
+-- `instance_json` at write time — treat them as read-only search hints.
 CREATE TABLE instances (
   instance_id        TEXT PRIMARY KEY,
   definition_url     TEXT NOT NULL,
   definition_version TEXT NOT NULL,
   status             TEXT NOT NULL,
-  configuration      TEXT NOT NULL,
-  case_state         TEXT NOT NULL,
-  active_tasks       TEXT NOT NULL,
-  timers             TEXT NOT NULL,
-  governance_state   TEXT,
   impact_level       TEXT NOT NULL,
+  instance_json      TEXT NOT NULL,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
 );
 
-CREATE INDEX idx_instances_status        ON instances(status);
-CREATE INDEX idx_instances_impact_level  ON instances(impact_level);
-CREATE INDEX idx_instances_definition    ON instances(definition_url);
-CREATE INDEX idx_instances_created_desc  ON instances(created_at DESC);
+CREATE INDEX idx_instances_status       ON instances(status);
+CREATE INDEX idx_instances_impact_level ON instances(impact_level);
+CREATE INDEX idx_instances_definition   ON instances(definition_url);
+CREATE INDEX idx_instances_created_desc ON instances(created_at DESC);
 
 CREATE TABLE provenance (
   id            TEXT PRIMARY KEY,

@@ -53,22 +53,64 @@ pub struct KernelRow {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// A stored case instance. Payload fields are all serde JSON so the view
-/// layer can re-hydrate without coupling the schema to `wos-core` internals.
+/// A stored case instance.
+///
+/// `instance_json` holds the serialised `wos-core::CaseInstance` so the server
+/// can round-trip through `Evaluator::from_instance` without losing runtime
+/// bookkeeping (history_store, fired_milestones, pending_events,
+/// compensation_logs, volume_counters, extensions, etc.). The remaining
+/// columns are denormalised search indexes populated from `instance_json`
+/// at write time — `build_instance_row` in the eval service is the single
+/// writer of truth.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceRow {
     pub instance_id: String,
     pub definition_url: String,
     pub definition_version: String,
     pub status: String,
-    pub configuration: serde_json::Value,
-    pub case_state: serde_json::Value,
-    pub active_tasks: serde_json::Value,
-    pub timers: serde_json::Value,
-    pub governance_state: Option<serde_json::Value>,
     pub impact_level: String,
+    pub instance_json: serde_json::Value,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl InstanceRow {
+    /// Convenience: look up the configuration (active states) from the
+    /// embedded instance JSON.
+    pub fn configuration(&self) -> Vec<String> {
+        self.instance_json
+            .get("configuration")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn case_state(&self) -> serde_json::Value {
+        self.instance_json
+            .get("caseState")
+            .cloned()
+            .unwrap_or(serde_json::json!({}))
+    }
+
+    pub fn active_tasks(&self) -> &serde_json::Value {
+        self.instance_json
+            .get("activeTasks")
+            .unwrap_or(&serde_json::Value::Null)
+    }
+
+    pub fn timers(&self) -> &serde_json::Value {
+        self.instance_json
+            .get("timers")
+            .unwrap_or(&serde_json::Value::Null)
+    }
+
+    pub fn governance_state(&self) -> Option<&serde_json::Value> {
+        self.instance_json.get("governanceState").filter(|v| !v.is_null())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

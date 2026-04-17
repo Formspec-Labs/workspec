@@ -23,29 +23,18 @@ impl InstanceService {
     }
 
     pub fn map_row(row: &InstanceRow) -> CaseInstanceView {
-        let configuration = row
-            .configuration
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-
+        let configuration = row.configuration();
         let active_tasks = row
-            .active_tasks
+            .active_tasks()
             .as_array()
             .map(|a| a.iter().map(map_task).collect())
             .unwrap_or_default();
-
         let timers = row
-            .timers
+            .timers()
             .as_array()
             .map(|a| a.iter().map(map_timer).collect())
             .unwrap_or_default();
-
-        let governance_state = row.governance_state.as_ref().and_then(map_governance_state);
+        let governance_state = row.governance_state().and_then(map_governance_state);
 
         CaseInstanceView {
             instance_id: row.instance_id.clone(),
@@ -53,7 +42,7 @@ impl InstanceService {
             definition_version: row.definition_version.clone(),
             status: row.status.clone(),
             configuration,
-            case_state: row.case_state.clone(),
+            case_state: row.case_state(),
             active_tasks,
             timers,
             governance_state,
@@ -63,7 +52,6 @@ impl InstanceService {
         }
     }
 
-    /// Flatten the active tasks of an instance to the studio's `TaskListItem` rows.
     pub async fn map_row_to_tasks(&self, row: &InstanceRow) -> Vec<TaskListItemView> {
         let definition_title = self
             .bundle
@@ -71,17 +59,10 @@ impl InstanceService {
             .await
             .map(|k| k.title)
             .unwrap_or_else(|| row.definition_url.clone());
-        let configuration: Vec<String> = row
-            .configuration
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let configuration = row.configuration();
+        let case_state = row.case_state();
 
-        let Some(active_tasks) = row.active_tasks.as_array() else {
+        let Some(active_tasks) = row.active_tasks().as_array() else {
             return Vec::new();
         };
         active_tasks
@@ -97,7 +78,7 @@ impl InstanceService {
                     deadline: view.deadline,
                     impact_level: view.impact_level.or_else(|| Some(row.impact_level.clone())),
                     configuration: configuration.clone(),
-                    case_state: row.case_state.clone(),
+                    case_state: case_state.clone(),
                     definition_title: definition_title.clone(),
                     definition_url: row.definition_url.clone(),
                     created_at: view.created_at,
@@ -108,9 +89,6 @@ impl InstanceService {
 }
 
 fn map_task(v: &serde_json::Value) -> ActiveTaskView {
-    fn s(v: &serde_json::Value, k: &str) -> Option<String> {
-        v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
-    }
     ActiveTaskView {
         task_id: s(v, "taskId").unwrap_or_default(),
         task_ref: s(v, "taskRef").unwrap_or_default(),
@@ -126,9 +104,6 @@ fn map_task(v: &serde_json::Value) -> ActiveTaskView {
 }
 
 fn map_timer(v: &serde_json::Value) -> TimerView {
-    fn s(v: &serde_json::Value, k: &str) -> Option<String> {
-        v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
-    }
     TimerView {
         timer_id: s(v, "timerId").unwrap_or_default(),
         deadline: s(v, "deadline").unwrap_or_default(),
@@ -149,14 +124,14 @@ fn map_governance_state(v: &serde_json::Value) -> Option<GovernanceStateView> {
             .and_then(|x| x.as_array())
             .map(|a| a.iter().map(map_hold).collect())
             .unwrap_or_default(),
-        review_state: v.get("reviewState").cloned().unwrap_or(serde_json::json!({})),
+        review_state: v
+            .get("reviewState")
+            .cloned()
+            .unwrap_or(serde_json::json!({})),
     })
 }
 
 fn map_delegation_short(v: &serde_json::Value) -> DelegationShortView {
-    fn s(v: &serde_json::Value, k: &str) -> Option<String> {
-        v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
-    }
     DelegationShortView {
         delegator_id: s(v, "delegatorId").unwrap_or_default(),
         delegate_id: s(v, "delegateId").unwrap_or_default(),
@@ -168,9 +143,6 @@ fn map_delegation_short(v: &serde_json::Value) -> DelegationShortView {
 }
 
 fn map_hold(v: &serde_json::Value) -> HoldView {
-    fn s(v: &serde_json::Value, k: &str) -> Option<String> {
-        v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
-    }
     HoldView {
         hold_type: s(v, "holdType").unwrap_or_default(),
         started_at: s(v, "startedAt").unwrap_or_default(),
@@ -178,4 +150,8 @@ fn map_hold(v: &serde_json::Value) -> HoldView {
         resume_trigger: s(v, "resumeTrigger").unwrap_or_default(),
         hold_state: s(v, "holdState"),
     }
+}
+
+fn s(v: &serde_json::Value, k: &str) -> Option<String> {
+    v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
 }
