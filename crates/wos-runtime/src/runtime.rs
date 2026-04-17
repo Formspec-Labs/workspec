@@ -1720,6 +1720,13 @@ pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
 /// same push-stamped discipline as [`stamp_provenance`]. Callers MUST invoke
 /// this before `stamp_provenance` (timestamp is independent and stamped last).
 ///
+/// The populator intentionally does NOT set `timestamp`. Callers either call
+/// [`stamp_provenance`] on the same records immediately after the populate
+/// pass (the common path), OR pre-assign `timestamp` themselves before the
+/// record enters the populator (e.g. `persist_task_draft`, `dismiss_task`,
+/// `record_submission_rejection`, which stamp from their ambient `now_iso`).
+/// Both patterns satisfy the "every stored record has a timestamp" invariant.
+///
 /// The populator mirrors the AI Integration-aware actor lookup used by
 /// `integration_handlers::request_response` (see its `actor_kind_to_string`
 /// site): we resolve `actor_id` against the kernel's declared `actors` and

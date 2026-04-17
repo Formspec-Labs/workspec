@@ -209,6 +209,17 @@ fn sp_export_004_facts_tier_filter() {
     ];
     populate_provenance_record_fields(&mut records, &kernel, "1.0.0");
     stamp_provenance(&mut records, "2026-04-16T00:00:00Z");
+    // Pin the populator's idempotency invariant: the tier override below only
+    // works because `populate_provenance_record_fields` fills `audit_layer`
+    // from `None` and leaves a non-None value untouched. If that ever changes,
+    // this assertion makes the silent failure loud — otherwise a future
+    // populator that re-computed `audit_layer` would overwrite our override
+    // and the "narrative excluded" assertion would pass for the wrong reason.
+    debug_assert_eq!(
+        records[1].audit_layer.as_deref(),
+        Some("facts"),
+        "populate should have filled audit_layer to facts before we override"
+    );
     records[1].audit_layer = Some("narrative".to_string());
 
     let mut log = ProvenanceLog::default();
@@ -552,24 +563,42 @@ fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportCo
         fixture.id
     );
     // Check IRI shape: input entities start with `{namespace}entity/input/`;
-    // output entities with `{namespace}entity/output/`. Both prefixes must
-    // appear at least once.
+    // output entities with `{namespace}entity/output/`. Each resolved
+    // state-transition contributes at least one input-prefix entity and one
+    // output-prefix entity (mirroring the total-entity scaling above), so
+    // both prefix counts scale with `resolved_transition_count`. An
+    // unconditional `>= 1` would silently accept a regression on fixtures
+    // with multiple resolved transitions.
     let input_prefix = format!("{}entity/input/", config.provenance_namespace);
     let output_prefix = format!("{}entity/output/", config.provenance_namespace);
+    let min_input_entities = resolved_transition_count;
+    let min_output_entities = resolved_transition_count;
+    let input_entity_count = entities
+        .iter()
+        .filter(|entity| {
+            entity
+                .get("@id")
+                .and_then(Value::as_str)
+                .is_some_and(|iri| iri.starts_with(&input_prefix))
+        })
+        .count() as u64;
     assert!(
-        entities.iter().any(|entity| entity
-            .get("@id")
-            .and_then(Value::as_str)
-            .is_some_and(|iri| iri.starts_with(&input_prefix))),
-        "PROV-O graph must contain at least one prov:Entity with @id prefix '{input_prefix}' (fixture '{}')",
+        input_entity_count >= min_input_entities,
+        "PROV-O graph must contain ≥ {min_input_entities} prov:Entity with @id prefix '{input_prefix}' (one per resolved state-transition, got {input_entity_count}) for fixture '{}'",
         fixture.id
     );
+    let output_entity_count = entities
+        .iter()
+        .filter(|entity| {
+            entity
+                .get("@id")
+                .and_then(Value::as_str)
+                .is_some_and(|iri| iri.starts_with(&output_prefix))
+        })
+        .count() as u64;
     assert!(
-        entities.iter().any(|entity| entity
-            .get("@id")
-            .and_then(Value::as_str)
-            .is_some_and(|iri| iri.starts_with(&output_prefix))),
-        "PROV-O graph must contain at least one prov:Entity with @id prefix '{output_prefix}' (fixture '{}')",
+        output_entity_count >= min_output_entities,
+        "PROV-O graph must contain ≥ {min_output_entities} prov:Entity with @id prefix '{output_prefix}' (one per resolved state-transition, got {output_entity_count}) for fixture '{}'",
         fixture.id
     );
 
