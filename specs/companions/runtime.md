@@ -30,6 +30,18 @@ This document is a **draft specification**. It is a companion to the WOS Kernel 
 
 ---
 
+## Normative Precedence
+
+This companion and the WOS Lifecycle Detail Companion are both normative. Where they appear to conflict:
+
+- On **instance behavior, event queuing, durability semantics, timer firing, and host interfaces**: this document (`runtime.md`) is authoritative.
+- On **state structure, transitions, guards, compensation topology, timer scoping, and evaluation algorithms**: `lifecycle-detail.md` is authoritative.
+- On anything else: the conflict is a spec defect. File an issue.
+
+A conformant processor MUST resolve apparent conflicts in the order above rather than choosing by convenience.
+
+---
+
 ## 1. Introduction
 
 ### 1.1 Purpose
