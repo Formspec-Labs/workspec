@@ -8,6 +8,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::AppState;
 
+pub mod ai_chat;
 pub mod applicant;
 pub mod auth;
 pub mod bundles;
@@ -30,6 +31,7 @@ pub fn router(state: AppState) -> (Router, SocketIoLayer) {
         .merge(governance::routes())
         .merge(dashboard::routes())
         .merge(applicant::routes())
+        .merge(ai_chat::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

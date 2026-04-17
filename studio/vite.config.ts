@@ -18,6 +18,17 @@ export default defineConfig(({mode}) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: env.WOS_SERVER_URL || 'http://localhost:4000',
+          changeOrigin: true,
+        },
+        '/socket.io': {
+          target: env.WOS_SERVER_URL || 'http://localhost:4000',
+          changeOrigin: true,
+          ws: true,
+        },
+      },
     },
     test: {
       environment: 'jsdom',
