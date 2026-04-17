@@ -106,3 +106,20 @@ Either path is bounded work (~1 hour) since the scaffold is ~200 LOC of placehol
 The `--features synth` gate in this scaffold's `Cargo.toml` is NOT how the final architecture works — that's a feature flag, and ADR 0065 explicitly calls out feature flags as the wrong seam for dependency inversion. Crate boundaries are the right seam. The CI guard job that was set up to verify feature-gate effectiveness transitions into a `cargo tree` check asserting `wos-synth-core` has no LLM-client deps in its graph.
 
 **Do not add more code to this scaffold** until the split is applied — any new files here will have to move during Task 1 of the revised plan.
+
+---
+
+## Architectural note (2026-04-17)
+
+This crate is under refactor. The monolithic `wos-synth` is being split into four crates to adopt proper dependency inversion (no provider deps in the core loop crate), matching the `packages/formspec-chat` + `packages/formspec-mcp` pattern in the parent Formspec project:
+
+- **`wos-synth-core`** — the loop, `Prompter` trait, `ToolContext` trait, prompt templates. Zero provider deps.
+- **`wos-synth-anthropic`** — concrete `Prompter` impl for the Anthropic API.
+- **`wos-synth-mock`** — deterministic test/bench provider.
+- **`wos-synth-cli`** — binary that wires the four pieces together.
+
+Tool handlers (document creation, lint, conformance invocation) move to a new `wos-mcp` crate, mirroring `packages/formspec-mcp`. `wos-synth-core`'s `ToolContext` trait abstracts over the tool surface so the loop can dispatch through `wos-mcp`'s in-process entry point without coupling to transport or protocol.
+
+See `thoughts/plans/2026-04-16-wos-synth-crate.md` for the full rewrite and `thoughts/plans/2026-04-17-wos-authoring-crate.md` / `thoughts/plans/2026-04-17-wos-mcp-crate.md` for the authoring-stack plans this split aligns with.
+
+**Status of this directory:** placeholder for what becomes `wos-synth-core`. Code here will be reorganized when Tasks 1–8 of the rewritten plan land.
