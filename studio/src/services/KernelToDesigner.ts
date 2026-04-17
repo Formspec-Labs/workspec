@@ -121,7 +121,7 @@ export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerRes
 
     return {
       id,
-      name: id.split('.').pop() ?? id,
+      name: getWosStateDisplayName(id),
       type: stageType,
       description: state.description,
       ...(id.includes('.') ? { parentId: id.substring(0, id.lastIndexOf('.')) } : {}),
@@ -151,24 +151,62 @@ export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerRes
   const connections: WorkflowConnection[] = [];
   let connIdx = 0;
   for (const { from, transition } of allTransitions) {
-    const targetId = transition.target;
-    if (stageIds.has(from) && (stageIds.has(targetId) || targetId.startsWith('$'))) {
-      connections.push({
-        id: `conn-${connIdx++}`,
-        from,
-        to: targetId,
-        condition: transition.guard,
-        trigger: transition.event,
-      });
-    }
+    if (!stageIds.has(from)) continue;
+    const targetId = resolveTransitionTarget(stageIds, from, transition.target);
+    if (targetId === null) continue;
+    connections.push({
+      id: `conn-${connIdx++}`,
+      from,
+      to: targetId,
+      condition: transition.guard,
+      trigger: transition.event,
+    });
   }
 
   return { stages, connections };
 }
 
+/**
+ * Resolve a transition's `target` against the scope of its `from` state. WOS
+ * targets are scope-local; the designer works in a flat namespace, so we have
+ * to walk up the `from` state's ancestor chain to find a matching stage.
+ *
+ * Returns the fully-qualified stage id that the designer should connect to,
+ * or the original target if it's a sentinel (`$join`, `$fork`, etc.), or
+ * `null` if no stage matches.
+ */
+function resolveTransitionTarget(stageIds: Set<string>, from: string, target: string): string | null {
+  if (target.startsWith('$')) return target;
+  if (stageIds.has(target)) return target;
+  const fromParts = from.split('.');
+  // Try each ancestor scope, starting from the closest.
+  for (let i = fromParts.length - 1; i >= 0; i--) {
+    const candidate = [...fromParts.slice(0, i), target].join('.');
+    if (stageIds.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Inverse of resolveTransitionTarget: given a fully-qualified connection
+ * target, express it as a scope-local string relative to `from`. This keeps
+ * the round-tripped kernel textually close to the original (targets that
+ * were scope-local stay scope-local).
+ */
+function scopeLocalTarget(from: string, target: string): string {
+  if (target.startsWith('$')) return target;
+  const fromScope = from.split('.').slice(0, -1);
+  const targetParts = target.split('.');
+  let i = 0;
+  while (i < fromScope.length && i < targetParts.length - 1 && fromScope[i] === targetParts[i]) i++;
+  if (i === fromScope.length) return targetParts.slice(i).join('.');
+  return target;
+}
+
 export function getWosStateDisplayName(stateId: string): string {
   const parts = stateId.split('.');
-  return parts[parts.length - 1].replace(/([A-Z])/g, ' $1').trim();
+  const raw = parts[parts.length - 1].replace(/([A-Z])/g, ' $1').trim();
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 const STAGE_TYPE_TO_WOS: Record<StageType, State['type']> = {
@@ -217,27 +255,28 @@ function indexTopology(states: Record<string, State>): Map<string, TopologyLocat
   return index;
 }
 
-function buildStateFromStage(
-  stage: WorkflowStage,
-  connections: WorkflowConnection[],
-  preservedShape?: Pick<State, 'type' | 'initialState' | 'states' | 'regions' | 'cancellationPolicy' | 'historyState'>,
-): State {
-  const wosType = preservedShape?.type ?? STAGE_TYPE_TO_WOS[stage.type] ?? 'atomic';
+/**
+ * Build a state for a designer stage that has no counterpart in the base
+ * kernel (a designer-added state). Only used on the "new state" path. For
+ * stages that existed in the base kernel, use overlayDesignerEdits instead
+ * so we don't discard the original's transitions, actions, or extensions.
+ */
+function buildStateFromStage(stage: WorkflowStage, connections: WorkflowConnection[]): State {
+  const wosType = STAGE_TYPE_TO_WOS[stage.type] ?? 'atomic';
   const transitions: Transition[] = connections
     .filter(c => c.from === stage.id)
     .map(c => {
-      const t: Transition = { event: c.trigger ?? `${c.from}_to_${c.to}`, target: c.to };
+      const t: Transition = {
+        event: c.trigger ?? `${c.from}_to_${c.to}`,
+        target: scopeLocalTarget(c.from, c.to),
+      };
       if (c.condition) t.guard = c.condition;
       return t;
     });
 
   const onEntry: WosAction[] = [];
   if (stage.config.assignee) {
-    onEntry.push({
-      action: 'createTask',
-      taskRef: stage.name,
-      assignTo: stage.config.assignee.id,
-    });
+    onEntry.push({ action: 'createTask', taskRef: stage.name, assignTo: stage.config.assignee.id });
   }
   if (stage.type === 'ai-pipeline' && stage.config.steps) {
     for (const step of stage.config.steps) {
@@ -245,20 +284,144 @@ function buildStateFromStage(
     }
   }
 
-  const state: State = {
-    type: wosType,
-    ...(stage.description ? { description: stage.description } : {}),
-    ...(onEntry.length > 0 ? { onEntry } : {}),
-    ...(transitions.length > 0 ? { transitions } : {}),
-    ...(stage.config.wosTags ? { tags: stage.config.wosTags } : {}),
-    ...(preservedShape?.initialState !== undefined ? { initialState: preservedShape.initialState } : {}),
-    ...(preservedShape?.states !== undefined ? { states: preservedShape.states } : {}),
-    ...(preservedShape?.regions !== undefined ? { regions: preservedShape.regions } : {}),
-    ...(preservedShape?.cancellationPolicy !== undefined ? { cancellationPolicy: preservedShape.cancellationPolicy } : {}),
-    ...(preservedShape?.historyState !== undefined ? { historyState: preservedShape.historyState } : {}),
-  };
-
+  const state: State = { type: wosType };
+  if (stage.description) state.description = stage.description;
+  if (onEntry.length > 0) state.onEntry = onEntry;
+  if (transitions.length > 0) state.transitions = transitions;
+  if (stage.config.wosTags) state.tags = stage.config.wosTags;
   return state;
+}
+
+/**
+ * Overlay designer edits on top of the original state object from the base
+ * kernel. Preserves the original's `onEntry`, `onExit`, `transitions`, tags,
+ * extensions, regions, substates, and metadata — anything the designer is
+ * not empowered to edit stays byte-for-byte identical. Only the following
+ * are rewritten from the designer's view:
+ *
+ *   - description
+ *   - the first createTask's assignTo (assignee changed)
+ *   - invokeService actions for ai-pipeline (steps changed)
+ *   - transitions (only when the set of outgoing connections has diverged)
+ *
+ * This is a diff-preserving merge, not a regeneration.
+ */
+function overlayDesignerEdits(original: State, stage: WorkflowStage, connections: WorkflowConnection[]): State {
+  const merged: State = { ...original };
+
+  // description: last-writer-wins from the designer, but preserve `undefined`
+  // (don't write an empty string into the output).
+  if (stage.description !== undefined) {
+    if (stage.description === '') delete merged.description;
+    else merged.description = stage.description;
+  }
+
+  // tags: designer's wosTags are authoritative if present.
+  if (stage.config.wosTags !== undefined) {
+    if (stage.config.wosTags.length === 0) delete merged.tags;
+    else merged.tags = stage.config.wosTags;
+  }
+
+  // assignee: find the first createTask in onEntry and update its assignTo
+  // in place. If the designer cleared the assignee, we don't remove the
+  // createTask action (the kernel may legitimately assign via other means).
+  if (original.onEntry) {
+    const newOnEntry: WosAction[] = original.onEntry.map((a) => ({ ...a }));
+    if (stage.config.assignee) {
+      const createTaskIdx = newOnEntry.findIndex(a => a.action === 'createTask');
+      if (createTaskIdx >= 0) {
+        newOnEntry[createTaskIdx] = { ...newOnEntry[createTaskIdx], assignTo: stage.config.assignee.id };
+      }
+    }
+    // ai-pipeline steps: rewrite the invokeService actions only if the designer
+    // has steps and they differ from the originals.
+    if (stage.type === 'ai-pipeline' && stage.config.steps) {
+      const existingSteps = newOnEntry
+        .filter(a => a.action === 'invokeService')
+        .map(a => a.serviceRef ?? 'Service');
+      const changed =
+        existingSteps.length !== stage.config.steps.length ||
+        existingSteps.some((s, i) => s !== stage.config.steps![i]);
+      if (changed) {
+        const withoutInvoke = newOnEntry.filter(a => a.action !== 'invokeService');
+        for (const step of stage.config.steps) {
+          withoutInvoke.push({ action: 'invokeService', serviceRef: step });
+        }
+        merged.onEntry = withoutInvoke;
+      } else {
+        merged.onEntry = newOnEntry;
+      }
+    } else {
+      merged.onEntry = newOnEntry;
+    }
+  } else if (stage.config.assignee) {
+    // Base had no onEntry but the designer set an assignee — synthesize.
+    merged.onEntry = [{ action: 'createTask', taskRef: stage.name, assignTo: stage.config.assignee.id }];
+  }
+
+  // transitions: if the designer's connection set from this stage matches the
+  // original (by event + resolved target), preserve the original transitions
+  // verbatim (including descriptions, compensating actions, extensions).
+  // Otherwise rebuild from connections — the user has explicitly edited them.
+  const outgoing = connections.filter(c => c.from === stage.id);
+  const originalResolved: { event: string; resolvedTarget: string | null; transition: Transition }[] =
+    (original.transitions ?? []).map(t => ({
+      event: t.event,
+      resolvedTarget: null,
+      transition: t,
+    }));
+
+  // We can only compare resolved targets if we have a topology context. In
+  // overlay mode we match against the connection's `from` id to resolve the
+  // original target. For that, we need stageIds — passed down by caller via
+  // closure below.
+  if (compareConnectionSet(outgoing, original.transitions ?? [], stage.id)) {
+    if (original.transitions) merged.transitions = original.transitions.map(t => ({ ...t }));
+    else delete merged.transitions;
+  } else {
+    const rebuilt = outgoing.map(c => {
+      const t: Transition = {
+        event: c.trigger ?? `${c.from}_to_${c.to}`,
+        target: scopeLocalTarget(c.from, c.to),
+      };
+      if (c.condition) t.guard = c.condition;
+      return t;
+    });
+    if (rebuilt.length > 0) merged.transitions = rebuilt;
+    else delete merged.transitions;
+  }
+
+  return merged;
+}
+
+/**
+ * Returns true when the designer's outgoing connections describe the same
+ * set of transitions as the original state. Uses (event, resolved target)
+ * as the identity tuple. When true, the caller should preserve original
+ * transitions verbatim rather than rebuild.
+ */
+function compareConnectionSet(
+  outgoing: WorkflowConnection[],
+  originalTransitions: Transition[],
+  fromId: string,
+): boolean {
+  if (outgoing.length !== originalTransitions.length) return false;
+  const originalKeys = new Set(
+    originalTransitions.map(t => `${t.event}::${t.target}`),
+  );
+  for (const c of outgoing) {
+    const localTarget = scopeLocalTarget(c.from, c.to);
+    const key = `${c.trigger ?? `${c.from}_to_${c.to}`}::${localTarget}`;
+    if (!originalKeys.has(key)) return false;
+    // Also verify guard equivalence when present.
+    const matching = originalTransitions.find(t =>
+      t.event === (c.trigger ?? `${c.from}_to_${c.to}`) && t.target === localTarget,
+    );
+    if (matching && (matching.guard ?? undefined) !== (c.condition ?? undefined)) return false;
+  }
+  // Also fail if we truncated the fromId check — sanity.
+  if (fromId.length === 0) return false;
+  return true;
 }
 
 function cloneStateMap(states: Record<string, State>): Record<string, State> {
@@ -295,15 +458,10 @@ export function designerToKernel(
           continue;
         }
 
-        const preserved: Parameters<typeof buildStateFromStage>[2] = {
-          type: state.type,
-          ...(state.initialState !== undefined ? { initialState: state.initialState } : {}),
-          ...(state.states !== undefined ? { states: state.states } : {}),
-          ...(state.regions !== undefined ? { regions: state.regions } : {}),
-          ...(state.cancellationPolicy !== undefined ? { cancellationPolicy: state.cancellationPolicy } : {}),
-          ...(state.historyState !== undefined ? { historyState: state.historyState } : {}),
-        };
-        map[id] = buildStateFromStage(stage, workflow.connections, preserved);
+        // Overlay designer edits on top of the original state, keeping
+        // original onEntry/onExit/transitions/extensions/metadata intact
+        // unless the designer explicitly changed them.
+        map[id] = overlayDesignerEdits(state, stage, workflow.connections);
 
         if (map[id].states) {
           updateAndPrune(map[id].states as Record<string, State>, path);

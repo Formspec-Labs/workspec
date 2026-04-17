@@ -7,8 +7,10 @@ import { useBackend } from '../../context/WosContext';
 import type { CaseInstanceView, ActiveTaskView } from '../../services/WosBackend';
 import type { WOSKernelDocument } from '../../types/wos/kernel';
 
+export type WorkspaceTarget = { kind: 'task'; id: string } | { kind: 'instance'; id: string };
+
 interface FormWorkspaceProps {
-  taskId: string;
+  target: WorkspaceTarget;
   onBack: () => void;
 }
 
@@ -34,7 +36,7 @@ function getImpactBadgeConfig(impactLevel: string) {
   }
 }
 
-export function FormWorkspace({ taskId, onBack }: FormWorkspaceProps) {
+export function FormWorkspace({ target, onBack }: FormWorkspaceProps) {
   const [showReference, setShowReference] = useState(window.innerWidth > 1024);
   const [referenceWidth, setReferenceWidth] = useState(55);
   const [isResizing, setIsResizing] = useState(false);
@@ -48,23 +50,21 @@ export function FormWorkspace({ taskId, onBack }: FormWorkspaceProps) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const inst = await backend.getInstance(taskId);
-      if (cancelled || !inst) {
+      let found: CaseInstanceView | null = null;
+      if (target.kind === 'instance') {
+        found = await backend.getInstance(target.id);
+      } else {
         const tasks = await backend.listInstances();
-        const found = tasks.items.find(i => i.activeTasks.some(t => t.taskId === taskId)) ?? null;
-        if (cancelled || !found) return;
-        setInstance(found);
-        const bundle = await backend.loadBundle(found.definitionUrl);
-        if (!cancelled) setKernel(bundle.kernel);
-        return;
+        found = tasks.items.find(i => i.activeTasks.some(t => t.taskId === target.id)) ?? null;
       }
-      setInstance(inst);
-      const bundle = await backend.loadBundle(inst.definitionUrl);
+      if (cancelled || !found) return;
+      setInstance(found);
+      const bundle = await backend.loadBundle(found.definitionUrl);
       if (!cancelled) setKernel(bundle.kernel);
     }
     load();
     return () => { cancelled = true; };
-  }, [backend, taskId]);
+  }, [backend, target]);
 
   const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
     setIsResizing(true);

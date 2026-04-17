@@ -100,23 +100,25 @@ export function WorkflowDesigner() {
 
   useEffect(() => {
     realtime.connect();
-    realtime.onKernelInit((kernel) => {
-      const wf = toDesignerWorkflow(kernel);
-      setCurrentKernel(kernel);
-      setWorkflow(wf);
-      setHistory([wf]);
-      setHistoryIndex(0);
-      validateWorkflow(wf);
-    });
-    realtime.onKernelChanged((kernel) => {
-      const wf = toDesignerWorkflow(kernel);
-      setCurrentKernel(kernel);
-      setWorkflow(wf);
-      validateWorkflow(wf);
-    });
-    realtime.onCollaboratorsUpdate((users) => setCollaborators(users));
-    realtime.onCursorUpdate((cursor) => setRemoteCursors(prev => ({ ...prev, [cursor.userId]: cursor.cursor })));
-    return () => { realtime.disconnect(); };
+    const unsubs = [
+      realtime.onKernelInit((kernel) => {
+        const wf = toDesignerWorkflow(kernel);
+        setCurrentKernel(kernel);
+        setWorkflow(wf);
+        setHistory([wf]);
+        setHistoryIndex(0);
+        validateWorkflow(wf);
+      }),
+      realtime.onKernelChanged((kernel) => {
+        const wf = toDesignerWorkflow(kernel);
+        setCurrentKernel(kernel);
+        setWorkflow(wf);
+        validateWorkflow(wf);
+      }),
+      realtime.onCollaboratorsUpdate((users) => setCollaborators(users)),
+      realtime.onCursorUpdate((cursor) => setRemoteCursors(prev => ({ ...prev, [cursor.userId]: cursor.cursor }))),
+    ];
+    return () => { unsubs.forEach(u => u()); realtime.disconnect(); };
   }, [realtime]);
 
   useEffect(() => {
@@ -182,7 +184,8 @@ export function WorkflowDesigner() {
     setWorkflow(newWf);
     validateWorkflow(newWf);
     if (!isRemote) {
-      realtime.sendKernelUpdate(designerToKernel(newWf, currentKernel ?? undefined));
+      const updated = designerToKernel(newWf, currentKernel ?? undefined);
+      realtime.sendKernelUpdate(updated, updated.url);
     }
   };
 
@@ -222,7 +225,7 @@ export function WorkflowDesigner() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyIndex, history, selectedElement]);
+  }, [historyIndex, history, selectedElement, workflow]);
 
   const handleDeleteStage = (id: string) => {
     if (!workflow) return;

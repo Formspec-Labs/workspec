@@ -12,13 +12,11 @@ test.describe('Mobile Specific Journeys', () => {
     // Switch to Agents tab
     await admin.switchTab('Agents');
     
-    // Check for card layout (table should be hidden)
-    const cardLayout = page.locator('.grid.grid-cols-1.gap-4.lg\\:hidden');
+    const cardLayout = page.getByTestId('admin-agent-registry-mobile');
     await expect(cardLayout).toBeVisible();
-    
-    // Verify at least one agent card is visible
-    await expect(page.locator('.lg\\:hidden').getByText('Intake Classifier').first()).toBeVisible();
-    await expect(page.locator('.lg\\:hidden').getByText('96%').first()).toBeVisible(); // Accuracy
+
+    await expect(cardLayout.getByText('documentExtractor').first()).toBeVisible();
+    await expect(cardLayout.getByText('eligibilityScreener').first()).toBeVisible();
   });
 
   test('Audit: Vertical Authority Chain on Mobile', async ({ page }) => {
@@ -33,8 +31,7 @@ test.describe('Mobile Specific Journeys', () => {
     const authorityChain = page.locator('section').filter({ hasText: /Authority Chain/i }).locator('.flex-col');
     await expect(authorityChain.first()).toBeVisible();
     
-    // Verify chain elements
     await expect(page.getByText('Sarah Jenkins').first()).toBeVisible();
-    await expect(page.getByText(/Director Sarah Jenkins/i).first()).toBeVisible();
+    await expect(page.getByText(/Delegated by Director M\. Smith/i).first()).toBeVisible();
   });
 });

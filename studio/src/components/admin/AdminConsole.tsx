@@ -524,7 +524,7 @@ function AgentRegistry({ agents, onRegister }: { agents: AgentView[]; onRegister
         </div>
       </div>
 
-      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div data-testid="admin-agent-registry-mobile" className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-4">
         {agents.map(agent => (
           <div key={agent.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
             <div className="flex items-start justify-between">

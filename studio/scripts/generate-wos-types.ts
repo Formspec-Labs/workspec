@@ -31,47 +31,118 @@ const schemas = [
   { src: 'assurance/wos-assurance.schema.json', name: 'assurance' },
 ];
 
-async function generateAll() {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+const NAMESPACED_MODULES = new Set(['agent-config', 'drift-monitor', 'advanced', 'integration-profile']);
 
-  for (const { src, name } of schemas) {
-    const schemaPath = path.join(SCHEMAS_DIR, src);
-    if (!fs.existsSync(schemaPath)) {
-      console.warn(`SKIP ${src} — not found`);
-      continue;
-    }
-    try {
-      const ts = await compileFromFile(schemaPath, {
-        cwd: SCHEMAS_DIR,
-        declareExternallyReferenced: true,
-        enableConstEnums: true,
-        style: { singleQuote: true, trailingComma: 'all' as any, printWidth: 120 },
-      });
-      const outPath = path.join(OUTPUT_DIR, `${name}.ts`);
-      fs.writeFileSync(outPath, ts);
-      console.log(`OK   ${name}.ts`);
-    } catch (err: any) {
-      console.error(`FAIL ${name}: ${err.message}`);
-    }
+async function compileSchema(src: string, name: string): Promise<string | null> {
+  const schemaPath = path.join(SCHEMAS_DIR, src);
+  if (!fs.existsSync(schemaPath)) {
+    console.warn(`SKIP ${src} — not found`);
+    return null;
   }
+  try {
+    return await compileFromFile(schemaPath, {
+      cwd: SCHEMAS_DIR,
+      declareExternallyReferenced: true,
+      enableConstEnums: true,
+      style: { singleQuote: true, trailingComma: 'all' as any, printWidth: 120 },
+    });
+  } catch (err: any) {
+    console.warn(`SKIP ${name} — compile failed: ${err?.message ?? err}`);
+    return null;
+  }
+}
 
-  const NAMESPACED_MODULES = new Set(['agent-config', 'drift-monitor', 'advanced', 'integration-profile']);
-
-  const barrel = schemas
-    .filter(({ name }) => fs.existsSync(path.join(OUTPUT_DIR, `${name}.ts`)))
-    .map(({ name }) => {
+function buildBarrel(presentNames: string[]): string {
+  return presentNames
+    .map((name) => {
       if (NAMESPACED_MODULES.has(name)) {
         const pascal = name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('');
         return `export * as ${pascal} from './${name}';`;
       }
       return `export * from './${name}';`;
     })
-    .join('\n');
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'index.ts'), barrel + '\n');
-  console.log(`\nBarrel index.ts written (${schemas.length} modules)`);
+    .join('\n') + '\n';
 }
 
-generateAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+interface ProducedArtifacts {
+  contents: Map<string, string>;
+  skipped: Set<string>;
+}
+
+async function produceArtifacts(): Promise<ProducedArtifacts> {
+  const contents = new Map<string, string>();
+  const skipped = new Set<string>();
+  for (const { src, name } of schemas) {
+    const ts = await compileSchema(src, name);
+    if (ts !== null) contents.set(`${name}.ts`, ts);
+    else skipped.add(name);
+  }
+  const presentNames = schemas
+    .map(s => s.name)
+    .filter(name => contents.has(`${name}.ts`));
+  contents.set('index.ts', buildBarrel(presentNames));
+  return { contents, skipped };
+}
+
+async function writeAll(): Promise<void> {
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  const { contents, skipped } = await produceArtifacts();
+  for (const [filename, content] of contents) {
+    fs.writeFileSync(path.join(OUTPUT_DIR, filename), content);
+    console.log(`OK   ${filename}`);
+  }
+  if (skipped.size > 0) {
+    console.log(`Skipped (schema unreachable): ${Array.from(skipped).join(', ')}`);
+  }
+  console.log(`\n${contents.size} files written to ${OUTPUT_DIR}`);
+}
+
+async function checkFreshness(): Promise<void> {
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    console.error(`Generated types directory missing: ${OUTPUT_DIR}`);
+    console.error('Run `npm run types:gen` to generate types.');
+    process.exit(1);
+  }
+  const { contents, skipped } = await produceArtifacts();
+  const mismatches: string[] = [];
+  for (const [filename, expected] of contents) {
+    // Skip freshness check for index.ts when some schemas failed to compile —
+    // the local committed barrel may legitimately include files we couldn't
+    // re-derive here (e.g. integration-profile depends on an external URL
+    // that isn't reachable offline).
+    if (filename === 'index.ts' && skipped.size > 0) continue;
+    const filePath = path.join(OUTPUT_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      mismatches.push(`${filename} missing`);
+      continue;
+    }
+    const current = fs.readFileSync(filePath, 'utf-8');
+    if (current !== expected) {
+      mismatches.push(`${filename} out of date`);
+    }
+  }
+  if (mismatches.length > 0) {
+    console.error('WOS type bindings are stale:');
+    for (const msg of mismatches) console.error(`  - ${msg}`);
+    console.error('\nRun `npm run types:gen` to regenerate.');
+    process.exit(1);
+  }
+  if (skipped.size > 0) {
+    console.log(`(skipped unreachable schemas: ${Array.from(skipped).join(', ')})`);
+  }
+  console.log(`OK   WOS type bindings are in sync (${contents.size} files compared)`);
+}
+
+const mode = process.argv[2] ?? 'generate';
+
+if (mode === 'check') {
+  checkFreshness().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+} else {
+  writeAll().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

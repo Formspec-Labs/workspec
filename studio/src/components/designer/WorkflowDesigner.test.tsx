@@ -31,10 +31,10 @@ const mockWorkflowDesign: IWorkflowDesignPort = {
 const mockRealtime: IRealtimePort = {
   connect: vi.fn(),
   disconnect: vi.fn(),
-  onKernelInit: vi.fn(),
-  onKernelChanged: vi.fn(),
-  onCollaboratorsUpdate: vi.fn(),
-  onCursorUpdate: vi.fn(),
+  onKernelInit: vi.fn().mockReturnValue(() => {}),
+  onKernelChanged: vi.fn().mockReturnValue(() => {}),
+  onCollaboratorsUpdate: vi.fn().mockReturnValue(() => {}),
+  onCursorUpdate: vi.fn().mockReturnValue(() => {}),
   sendCursorMove: vi.fn(),
   sendKernelUpdate: vi.fn(),
 };

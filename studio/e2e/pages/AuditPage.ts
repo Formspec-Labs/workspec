@@ -11,12 +11,12 @@ export class AuditPage {
   }
 
   async searchRecord(query: string) {
-    await this.page.getByPlaceholder(/Search Case ID/i).fill(query);
+    await this.page.getByPlaceholder(/Search actor, event, or ID/i).fill(query);
   }
 
   async selectRecord(id: string) {
-    // Select from the list, not the search input
-    await this.page.locator('button').filter({ hasText: id }).first().click();
+    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await this.page.getByRole('button', { name: new RegExp(escaped) }).first().click();
   }
 
   async verifyIntegrity() {

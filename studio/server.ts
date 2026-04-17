@@ -2,7 +2,6 @@ import express from 'express';
 import { createServer, type Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'fs';
@@ -29,6 +28,13 @@ export interface StartServerOptions {
   geminiApiKey?: string;
   attachVite?: boolean;
   serveStatic?: boolean;
+  /**
+   * `'disk'` (default): PUT /api/bundles/:url/kernel writes the body back to
+   *   the source fixture file on disk.
+   * `'memory'`: updates the in-memory registry only. Use this in integration
+   *   tests so kernel PUTs don't mutate the repo's fixtures on disk.
+   */
+  persistMode?: 'disk' | 'memory';
 }
 
 export interface StartedServer {
@@ -207,6 +213,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   const geminiApiKey = options.geminiApiKey ?? process.env.GEMINI_API_KEY;
   const attachVite = options.attachVite ?? (process.env.NODE_ENV !== 'production');
   const serveStatic = options.serveStatic ?? (process.env.NODE_ENV === 'production');
+  const persistMode = options.persistMode ?? 'disk';
 
   const app = express();
   const httpServer = createServer(app);
@@ -223,7 +230,15 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   const provenance = { ...DEMO_PROVENANCE };
 
   app.use(cors({ origin: corsOrigin, methods: ['GET', 'POST', 'PUT', 'DELETE'] }));
-  app.use(express.json({ limit: '1mb' }));
+
+  // Body parsing: routes get a 1mb default, but /api/ai/chat uses a stricter
+  // per-route 64kb parser. Skipping the global parser on that path lets the
+  // route-local middleware actually run (body-parser is one-shot per request).
+  const defaultJson = express.json({ limit: '1mb' });
+  app.use((req, res, next) => {
+    if (req.path === '/api/ai/chat') return next();
+    return defaultJson(req, res, next);
+  });
   app.use('/api/', makeAuthMiddleware(apiToken));
 
   // ---------- Kernel bundle endpoints ----------
@@ -268,13 +283,15 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
       return res.status(400).json({ error: 'Invalid kernel', issues: validation.issues });
     }
 
-    entry.bundle.kernel = body;
-    try {
-      writeFileSync(entry.sourcePath, JSON.stringify(body, null, 2));
-    } catch (err) {
-      console.error('Failed to persist kernel:', err);
-      return res.status(500).json({ error: 'Failed to persist kernel' });
+    if (persistMode === 'disk') {
+      try {
+        writeFileSync(entry.sourcePath, JSON.stringify(body, null, 2));
+      } catch (err) {
+        console.error('Failed to persist kernel:', err);
+        return res.status(500).json({ error: 'Failed to persist kernel' });
+      }
     }
+    entry.bundle.kernel = body;
     io.emit('kernel:changed', { url, kernel: body });
     res.json({ ok: true });
   });
@@ -285,7 +302,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   });
 
   // Back-compat single-kernel endpoints (resolve to the first registered kernel).
-  const primaryEntry = kernelRegistry.values().next().value as KernelRegistryEntry;
+  const primaryEntry = kernelRegistry.values().next().value as KernelRegistryEntry | undefined;
+  if (!primaryEntry) {
+    throw new Error('Internal invariant violation: kernelRegistry is empty after load');
+  }
   app.get('/api/kernel', (_req, res) => {
     res.json(primaryEntry.bundle.kernel);
   });
@@ -566,12 +586,23 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     res.json({ hasRole: req.params.role === 'Supervisor' });
   });
 
-  // /api/ai/chat is hardened: always requires API_TOKEN; refuses wildcard CORS in prod;
-  // validates payload shape; caps size at 64kb.
+  // /api/ai/chat is hardened: always requires API_TOKEN (when CORS is
+  // wildcard or in production); enforces a 64kb body limit; validates
+  // payload shape.
+  const aiChatJson = express.json({ limit: '64kb' });
+  const aiChatBodyParser: express.RequestHandler = (req, res, next) => {
+    aiChatJson(req, res, (err?: unknown) => {
+      if (err && typeof err === 'object' && (err as { type?: string }).type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Payload too large (64kb limit)' });
+      }
+      if (err) return next(err as Error);
+      next();
+    });
+  };
   app.post(
     '/api/ai/chat',
-    express.json({ limit: '64kb' }),
-    requireTokenMiddleware(apiToken, corsOrigin),
+    aiChatBodyParser,
+    makeAuthMiddleware(apiToken),
     async (req, res) => {
       if (!geminiApiKey) {
         return res.status(503).json({ error: 'AI service not configured' });
@@ -615,21 +646,24 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     });
 
     socket.on('kernel:update', (message: unknown) => {
-      if (!message || typeof message !== 'object') return;
+      if (!message || typeof message !== 'object') return socket.emit('kernel:update-rejected', { reason: 'invalid_message' });
       const { url, kernel } = message as { url?: unknown; kernel?: unknown };
-      if (typeof url !== 'string' || !kernel || typeof kernel !== 'object') return;
+      if (typeof url !== 'string' || !kernel || typeof kernel !== 'object') return socket.emit('kernel:update-rejected', { reason: 'invalid_payload' });
       const entry = kernelRegistry.get(url);
-      if (!entry) return;
+      if (!entry) return socket.emit('kernel:update-rejected', { reason: 'unknown_url' });
       const jsonSize = JSON.stringify(kernel).length;
-      if (jsonSize > 1_000_000) return;
+      if (jsonSize > 1_000_000) return socket.emit('kernel:update-rejected', { reason: 'payload_too_large' });
       const validation = validateKernelDocument(kernel);
-      if (!validation.isValid) return;
-      entry.bundle.kernel = kernel;
-      try {
-        writeFileSync(entry.sourcePath, JSON.stringify(kernel, null, 2));
-      } catch (err) {
-        console.error('Failed to persist kernel via socket:', err);
+      if (!validation.isValid) return socket.emit('kernel:update-rejected', { reason: 'validation_failed', issues: validation.issues });
+      if (persistMode === 'disk') {
+        try {
+          writeFileSync(entry.sourcePath, JSON.stringify(kernel, null, 2));
+        } catch (err) {
+          console.error('Failed to persist kernel via socket:', err);
+          return socket.emit('kernel:update-rejected', { reason: 'persist_failed' });
+        }
       }
+      entry.bundle.kernel = kernel;
       socket.broadcast.emit('kernel:changed', { url, kernel });
     });
 
@@ -642,6 +676,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   // ---------- Static / dev middleware ----------
 
   if (attachVite) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -679,13 +714,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer().then(({ addressPort, kernelRegistry }) => {
+  startServer().then(({ addressPort, kernelRegistry, close }) => {
     console.log(`WOS Studio server running on http://localhost:${addressPort}`);
     console.log(`Loaded ${kernelRegistry.size} kernel fixture(s): ${Array.from(kernelRegistry.keys()).join(', ')}`);
 
     const shutdown = () => {
       console.log('Shutting down...');
-      process.exit(0);
+      close().then(() => process.exit(0)).catch(() => process.exit(0));
     };
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);

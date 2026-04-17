@@ -194,7 +194,7 @@ export class FixtureBackend implements IWosBackend {
 
 export class FixtureInboxPort implements IInboxPort {
   constructor(private backend: IWosBackend) {}
-  async listTasks(filter?: InstanceFilter): Promise<PaginatedResult<TaskListItem>> {
+  async listTasks(filter?: InstanceFilter, page?: number, pageSize?: number): Promise<PaginatedResult<TaskListItem>> {
     const res = await this.backend.listInstances(filter);
     const items: TaskListItem[] = res.items.flatMap(inst =>
       inst.activeTasks.map(task => ({
@@ -212,7 +212,13 @@ export class FixtureInboxPort implements IInboxPort {
         createdAt: task.createdAt,
       })),
     );
-    return { items, total: items.length, page: 1, pageSize: 50, totalPages: 1 };
+    const resolvedPage = Math.max(1, page ?? 1);
+    const resolvedPageSize = Math.max(1, pageSize ?? 50);
+    const total = items.length;
+    const totalPages = Math.max(1, Math.ceil(total / resolvedPageSize));
+    const start = (resolvedPage - 1) * resolvedPageSize;
+    const paged = items.slice(start, start + resolvedPageSize);
+    return { items: paged, total, page: resolvedPage, pageSize: resolvedPageSize, totalPages };
   }
   async getTask(taskId: string): Promise<TaskListItem | null> {
     const res = await this.backend.listInstances();

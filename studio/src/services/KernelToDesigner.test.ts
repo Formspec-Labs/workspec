@@ -4,6 +4,20 @@ import { validateKernelDocument } from './wos-kernel-validator';
 import type { WOSKernelDocument, State } from '../types/wos/kernel';
 import { loadBenefitsAdjudicationBundle } from '../data/fixtures';
 
+/** Strip keys whose value is `undefined` so `toEqual` behaves predictably. */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(stripUndefined) as unknown as T;
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function makeKernel(states: WOSKernelDocument['lifecycle']['states'], initialState?: string): WOSKernelDocument {
   const firstKey = initialState ?? Object.keys(states)[0] ?? 'start';
   return {
@@ -61,7 +75,7 @@ describe('KernelToDesigner round-trip', () => {
     expect(validateKernelDocument(roundTripped).isValid).toBe(true);
   });
 
-  it('preserves compound initialState and substate shape through round-trip', () => {
+  it('preserves compound initialState, transitions, and substate shape through round-trip', () => {
     const kernel = makeKernel({
       intake: { type: 'atomic', transitions: [{ event: 'submit', target: 'review' }] },
       review: {
@@ -80,12 +94,17 @@ describe('KernelToDesigner round-trip', () => {
     const review = roundTripped.lifecycle.states.review;
     expect(review.type).toBe('compound');
     expect(review.initialState).toBe('gathering');
-    expect(Object.keys(review.states ?? {}).sort()).toEqual(['deliberating', 'gathering']);
     expect(review.regions).toBeUndefined();
+
+    const gathering = review.states?.gathering;
+    const deliberating = review.states?.deliberating;
+    expect(gathering?.transitions).toEqual([{ event: 'ready', target: 'deliberating' }]);
+    expect(deliberating?.transitions).toEqual([{ event: 'decide', target: 'done' }]);
+
     expect(validateKernelDocument(roundTripped).isValid).toBe(true);
   });
 
-  it('preserves parallel regions and cancellationPolicy through round-trip', () => {
+  it('preserves parallel regions, cancellationPolicy, and region-local transitions', () => {
     const kernel = makeKernel({
       intake: { type: 'atomic', transitions: [{ event: 'submit', target: 'parallelReview' }] },
       parallelReview: {
@@ -113,10 +132,17 @@ describe('KernelToDesigner round-trip', () => {
     expect(parallel.cancellationPolicy).toBe('wait-all');
     expect(parallel.states).toBeUndefined();
     expect(parallel.regions).toBeDefined();
-    expect(Object.keys(parallel.regions ?? {}).sort()).toEqual(['pathA', 'pathB']);
-    expect(parallel.regions?.pathA.initialState).toBe('stepA1');
-    expect(parallel.regions?.pathA.states.stepA1.type).toBe('atomic');
-    expect(parallel.regions?.pathB.initialState).toBe('stepB1');
+
+    // Region-local transitions must survive verbatim.
+    expect(parallel.regions?.pathA.states.stepA1.transitions).toEqual([
+      { event: 'doneA', target: 'stepADone' },
+    ]);
+    expect(parallel.regions?.pathB.states.stepB1.transitions).toEqual([
+      { event: 'doneB', target: 'stepBDone' },
+    ]);
+    // The outer parallel-state transition (`$join`) is preserved.
+    expect(parallel.transitions).toEqual([{ event: '$join', target: 'done' }]);
+
     expect(validateKernelDocument(roundTripped).isValid).toBe(true);
   });
 
@@ -145,5 +171,67 @@ describe('KernelToDesigner round-trip', () => {
       console.error('round-trip schema issues:', result.issues.slice(0, 10));
     }
     expect(result.isValid).toBe(true);
+  });
+
+  it('preserves region-local transitions, taskRef, and onEntry actions on benefits fixture', () => {
+    // This is the regression test for the round-trip's silent data loss:
+    // region-scoped transitions and task references must survive without
+    // being dropped or rewritten.
+    const bundle = loadBenefitsAdjudicationBundle();
+    const kernel = bundle.kernel;
+
+    const roundTripped = designerToKernel(designerFromKernel(kernel), kernel);
+
+    // Region-local transition — the canonical failure mode.
+    const pendingReviewA = kernel.lifecycle.states.eligibilityReview.regions!.reviewerA.states.pendingReviewA;
+    const rtPendingReviewA = roundTripped.lifecycle.states.eligibilityReview.regions!.reviewerA.states.pendingReviewA;
+    expect(rtPendingReviewA.transitions).toEqual(pendingReviewA.transitions);
+
+    // createTask onEntry must preserve the original taskRef (not be renamed
+    // to the stage's leaf name).
+    expect(rtPendingReviewA.onEntry).toEqual(pendingReviewA.onEntry);
+    const createTask = rtPendingReviewA.onEntry?.find(a => a.action === 'createTask');
+    expect(createTask?.taskRef).toBe('eligibilityDetermination');
+    expect(createTask?.assignTo).toBe('caseworkerA');
+  });
+
+  it('preserves the entire benefits fixture byte-for-byte when the designer makes no edits', () => {
+    // Stronger guarantee: a null-edit round-trip should be an identity on
+    // every state that appears in the designer view.
+    const bundle = loadBenefitsAdjudicationBundle();
+    const kernel = bundle.kernel;
+
+    const roundTripped = designerToKernel(designerFromKernel(kernel), kernel);
+
+    // Compare each state that kernelToDesigner emits as a stage. Ignore
+    // top-level metadata (url/title/version could legitimately change).
+    function walk(originalMap: Record<string, State>, rtMap: Record<string, State>, pathPrefix: string[]) {
+      for (const id of Object.keys(originalMap)) {
+        const path = [...pathPrefix, id];
+        const orig = originalMap[id];
+        const rt = rtMap[id];
+        expect(rt, `state missing at ${path.join('.')}`).toBeDefined();
+        // Deep comparison of editable-preserved fields.
+        expect(stripUndefined(rt.transitions), `transitions drift at ${path.join('.')}`).toEqual(stripUndefined(orig.transitions));
+        expect(stripUndefined(rt.onEntry), `onEntry drift at ${path.join('.')}`).toEqual(stripUndefined(orig.onEntry));
+        expect(stripUndefined(rt.onExit), `onExit drift at ${path.join('.')}`).toEqual(stripUndefined(orig.onExit));
+        expect(rt.tags, `tags drift at ${path.join('.')}`).toEqual(orig.tags);
+        expect(rt.description, `description drift at ${path.join('.')}`).toEqual(orig.description);
+        expect(rt.initialState, `initialState drift at ${path.join('.')}`).toEqual(orig.initialState);
+        expect(rt.cancellationPolicy, `cancellationPolicy drift at ${path.join('.')}`).toEqual(orig.cancellationPolicy);
+        expect(rt.historyState, `historyState drift at ${path.join('.')}`).toEqual(orig.historyState);
+        if (orig.states) walk(orig.states, rt.states ?? {}, path);
+        if (orig.regions) {
+          for (const regionId of Object.keys(orig.regions)) {
+            const origRegion = orig.regions[regionId];
+            const rtRegion = rt.regions?.[regionId];
+            expect(rtRegion, `region missing at ${path.join('.')}.${regionId}`).toBeDefined();
+            expect(rtRegion!.initialState).toBe(origRegion.initialState);
+            walk(origRegion.states, rtRegion!.states, [...path, regionId]);
+          }
+        }
+      }
+    }
+    walk(kernel.lifecycle.states, roundTripped.lifecycle.states, []);
   });
 });

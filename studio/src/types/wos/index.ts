@@ -10,7 +10,6 @@ export * as DriftMonitor from './drift-monitor';
 export * as Advanced from './advanced';
 export * from './equity';
 export * from './verification-report';
-export * as IntegrationProfile from './integration-profile';
 export * from './semantic-profile';
 export * from './lifecycle-detail';
 export * from './correspondence-metadata';

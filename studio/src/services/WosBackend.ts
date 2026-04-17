@@ -155,7 +155,7 @@ export interface IWosBackend {
   loadBundle(workflowUrl: string): Promise<WosDocumentBundle>;
   listBundles(): Promise<KernelSummary[]>;
   getInstance(instanceId: string): Promise<CaseInstanceView | null>;
-  listInstances(filter?: InstanceFilter): Promise<PaginatedResult<CaseInstanceView>>;
+  listInstances(filter?: InstanceFilter, page?: number, pageSize?: number): Promise<PaginatedResult<CaseInstanceView>>;
   getProvenance(instanceId: string): Promise<ProvenanceRecord[]>;
   submitEvent(instanceId: string, event: string, actorId: string, data?: Record<string, unknown>): Promise<EvaluationResult>;
   getAvailableTransitions(instanceId: string): Promise<AvailableTransition[]>;

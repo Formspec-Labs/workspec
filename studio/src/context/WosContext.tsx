@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo, useRef } from 'react';
 import { FixtureBackend, FixtureInboxPort, FixtureCaseViewerPort, FixtureWorkflowDesignPort, FixtureGovernancePort, FixtureDashboardPort, FixtureApplicantPort, FixtureAuthPort } from '../services/FixtureAdapter';
 import { HttpWosBackend, HttpInboxPort, HttpCaseViewerPort, HttpWorkflowDesignPort, HttpGovernancePort, HttpDashboardPort, HttpApplicantPort, HttpAuthPort } from '../services/HttpWosBackend';
 import { SocketIORealtimePort } from '../services/SocketIORealtimePort';
@@ -17,6 +17,8 @@ export interface WosPorts {
   realtime: IRealtimePort;
   auth: IAuthPort;
 }
+
+export type WosBackendKind = 'fixture' | 'http';
 
 const WosContext = createContext<WosPorts | null>(null);
 
@@ -49,16 +51,40 @@ function createHttpPorts(): WosPorts {
   };
 }
 
-function createDefaultPorts(): WosPorts {
-  if (typeof window !== 'undefined' && '__WOS_USE_HTTP__' in window) {
-    return createHttpPorts();
-  }
-  return createFixturePorts();
+function resolveBackendKind(explicit?: WosBackendKind): WosBackendKind {
+  if (explicit) return explicit;
+  const env = (import.meta.env.VITE_WOS_BACKEND ?? '').toString().toLowerCase();
+  if (env === 'http' || env === 'fixture') return env;
+  if (typeof window !== 'undefined' && '__WOS_USE_HTTP__' in window) return 'http';
+  return 'fixture';
 }
 
-export const WosProvider: React.FC<{ children: React.ReactNode; ports?: Partial<WosPorts> }> = ({ children, ports }) => {
-  const defaults = createDefaultPorts();
-  const value = { ...defaults, ...ports };
+function createPorts(kind: WosBackendKind): WosPorts {
+  return kind === 'http' ? createHttpPorts() : createFixturePorts();
+}
+
+export interface WosProviderProps {
+  children: React.ReactNode;
+  ports?: Partial<WosPorts>;
+  /**
+   * Which adapter set to instantiate. **Read once at first render** and then
+   * latched for the provider's lifetime — changing this prop after mount has
+   * no effect. To switch backends at runtime, unmount and remount the
+   * provider (for example by giving it a `key` tied to the desired kind).
+   */
+  backendKind?: WosBackendKind;
+}
+
+export const WosProvider: React.FC<WosProviderProps> = ({ children, ports, backendKind }) => {
+  const kind = resolveBackendKind(backendKind);
+  // Create the default ports exactly once per provider lifetime so every
+  // consumer sees a stable reference. Overrides via `ports` are merged on
+  // top without losing referential stability for the untouched ports.
+  const defaultsRef = useRef<WosPorts | null>(null);
+  if (defaultsRef.current === null) {
+    defaultsRef.current = createPorts(kind);
+  }
+  const value = useMemo<WosPorts>(() => ({ ...defaultsRef.current!, ...ports }), [ports]);
   return <WosContext.Provider value={value}>{children}</WosContext.Provider>;
 };
 

@@ -31,7 +31,11 @@ import { motion, AnimatePresence } from 'motion/react';
 
 type ProvenanceTier = ProvenanceRecord['tier'];
 
-const DEFAULT_INSTANCE_ID = 'urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4';
+/** Demo fixture instances merged into the explorer for cross-case search journeys. */
+const AUDIT_DEMO_INSTANCE_IDS = [
+  'urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4',
+  'urn:wos:instance:benefits-adj:2026-03-20:i9j0k1l2',
+] as const;
 
 export function AuditViewer() {
   const caseViewer = useCaseViewer();
@@ -43,7 +47,22 @@ export function AuditViewer() {
   const [verificationProof, setVerificationProof] = useState<string | null>(null);
 
   useEffect(() => {
-    caseViewer.getProvenance(DEFAULT_INSTANCE_ID).then(setProvenanceRecords);
+    let cancelled = false;
+    (async () => {
+      const batches = await Promise.all(
+        AUDIT_DEMO_INSTANCE_IDS.map(id => caseViewer.getProvenance(id)),
+      );
+      if (cancelled) return;
+      const byId = new Map<string, ProvenanceRecord>();
+      for (const batch of batches) {
+        for (const r of batch) byId.set(r.id, r);
+      }
+      const merged = [...byId.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      setProvenanceRecords(merged);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [caseViewer]);
 
   const filteredRecords = provenanceRecords.filter(r => {
@@ -102,7 +121,9 @@ export function AuditViewer() {
             Provenance Explorer
           </h2>
           <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider font-bold">4-Tier WOS Provenance Trail</p>
-          <div className="mt-2 text-[9px] font-mono text-gray-400 truncate">{DEFAULT_INSTANCE_ID}</div>
+          <div className="mt-2 text-[9px] font-mono text-gray-400">
+            {AUDIT_DEMO_INSTANCE_IDS.length} demo instance URNs — search to filter
+          </div>
 
           <div className="mt-4 sm:mt-6 space-y-4">
             <div className="relative">
@@ -129,6 +150,8 @@ export function AuditViewer() {
           {filteredRecords.map(record => (
             <button
               key={record.id}
+              type="button"
+              aria-label={`Case ${record.instanceId} — ${record.event}`}
               onClick={() => { setSelectedRecordId(record.id); setVerificationProof(null); }}
               className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${selectedRecordId === record.id ? 'bg-blue-50 border-l-4 border-blue-600' : 'border-l-4 border-transparent'}`}
             >

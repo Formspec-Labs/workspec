@@ -5,6 +5,65 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+export type State = {
+  [k: string]: unknown;
+} & {
+  /**
+   * State type (Kernel S4.3). 'atomic': no substates. 'compound': contains substates with initialState. 'parallel': contains concurrent regions. 'final': completion indicator, no outgoing transitions.
+   */
+  type: 'atomic' | 'compound' | 'parallel' | 'final';
+  /**
+   * Actions executed when this state is entered.
+   */
+  onEntry?: Action[];
+  /**
+   * Actions executed when this state is exited.
+   */
+  onExit?: Action[];
+  /**
+   * Outgoing transitions from this state. Evaluated in document order -- first matching guard wins (Kernel S4.6).
+   */
+  transitions?: Transition[];
+  /**
+   * Semantic tags for governance attachment via lifecycleHook (Kernel S4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.
+   */
+  tags?: string[];
+  /**
+   * Initial substate identifier. REQUIRED when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3).
+   */
+  initialState?: string;
+  /**
+   * Substates within a compound state. REQUIRED (non-empty) when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3).
+   */
+  states?: {
+    [k: string]: State;
+  };
+  /**
+   * Named concurrent regions within a parallel state. REQUIRED (non-empty) when type = 'parallel'. MUST NOT appear on atomic, compound, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3, S4.4).
+   */
+  regions?: {
+    [k: string]: Region;
+  };
+  /**
+   * Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.
+   */
+  cancellationPolicy?: 'wait-all' | 'cancel-siblings' | 'fail-fast';
+  /**
+   * History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.
+   */
+  historyState?: 'shallow' | 'deep';
+  /**
+   * Human-readable description of this state.
+   */
+  description?: string;
+  /**
+   * Extension data for this state.
+   */
+  extensions?: {
+    [k: string]: unknown;
+  };
+};
+
 /**
  * A WOS Kernel Document per the Workflow Orchestration Standard (WOS) Kernel Specification v1.0. The kernel is the minimal orchestration substrate: it defines lifecycle topology (states, transitions, events, milestones), case state (typed data with append-only mutation history), actor model (human and system, extensible via actorExtension seam), impact level classification, contract validation interface, provenance Facts tier, durable execution guarantees, and five named extension seams. The kernel is self-sufficient -- a kernel-only deployment orchestrates workflows without requiring any governance layer. WOS is a companion framework to Formspec v1.0 that MUST NOT alter core Formspec processing semantics.
  */
@@ -115,62 +174,6 @@ export interface Lifecycle {
    */
   milestones?: {
     [k: string]: Milestone;
-  };
-}
-export interface State {
-  /**
-   * State type (Kernel S4.3). 'atomic': no substates. 'compound': contains substates with initialState. 'parallel': contains concurrent regions. 'final': completion indicator, no outgoing transitions.
-   */
-  type: 'atomic' | 'compound' | 'parallel' | 'final';
-  /**
-   * Actions executed when this state is entered.
-   */
-  onEntry?: Action[];
-  /**
-   * Actions executed when this state is exited.
-   */
-  onExit?: Action[];
-  /**
-   * Outgoing transitions from this state. Evaluated in document order -- first matching guard wins (Kernel S4.6).
-   */
-  transitions?: Transition[];
-  /**
-   * Semantic tags for governance attachment via lifecycleHook (Kernel S4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.
-   */
-  tags?: string[];
-  /**
-   * Initial substate identifier. REQUIRED for compound states.
-   */
-  initialState?: string;
-  /**
-   * Substates within a compound state.
-   */
-  states?: {
-    [k: string]: State;
-  };
-  /**
-   * Named concurrent regions within a parallel state.
-   */
-  regions?: {
-    [k: string]: Region;
-  };
-  /**
-   * Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state.
-   */
-  cancellationPolicy?: 'wait-all' | 'cancel-siblings' | 'fail-fast';
-  /**
-   * History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3).
-   */
-  historyState?: 'shallow' | 'deep';
-  /**
-   * Human-readable description of this state.
-   */
-  description?: string;
-  /**
-   * Extension data for this state.
-   */
-  extensions?: {
-    [k: string]: unknown;
   };
 }
 export interface Action {

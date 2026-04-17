@@ -51,6 +51,10 @@ export class SocketIORealtimePort implements IRealtimePort {
     this.socket?.disconnect();
     this.socket = null;
     this.listenersAttached = false;
+    this.kernelInitCbs = [];
+    this.kernelChangedCbs = [];
+    this.collaboratorsCbs = [];
+    this.cursorCbs = [];
   }
 
   onKernelInit(cb: KernelCallback): Unsubscribe {

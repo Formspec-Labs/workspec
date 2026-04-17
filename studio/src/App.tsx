@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { SidebarFilters } from './components/SidebarFilters';
 import { TaskList } from './components/TaskList';
-import { FormWorkspace } from './components/workspace/FormWorkspace';
+import { FormWorkspace, type WorkspaceTarget } from './components/workspace/FormWorkspace';
 import { CaseViewer } from './components/viewer/CaseViewer';
 import { ProcessDashboard } from './components/dashboard/ProcessDashboard';
 import { OutboundManagementPanel } from './components/notifications/OutboundManagementPanel';
@@ -45,7 +45,7 @@ export default function App() {
   const backend = useBackend();
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [wosInstances, setWosInstances] = useState<CaseInstanceView[]>([]);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [workspaceTarget, setWorkspaceTarget] = useState<WorkspaceTarget | null>(null);
   const [viewingCaseId, setViewingCaseId] = useState<string | null>(null);
   const [view, setView] = useState<ViewState>('inbox');
   const [filters, setFilters] = useState({
@@ -68,7 +68,7 @@ export default function App() {
 
   const handleNavigate = (link: { type: string; id: string }) => {
     if (link.type === 'task') {
-      setCurrentTaskId(link.id);
+      setWorkspaceTarget({ kind: 'task', id: link.id });
       setView('workspace');
     } else if (link.type === 'case') {
       setViewingCaseId(link.id);
@@ -97,7 +97,7 @@ export default function App() {
       case 'viewer':
         return <ViewErrorBoundary name="Case Viewer">{viewingCaseId ? <CaseViewer caseId={viewingCaseId} onBack={() => setView('inbox')} /> : null}</ViewErrorBoundary>;
       case 'workspace':
-        return <ViewErrorBoundary name="Workspace">{currentTaskId ? <FormWorkspace taskId={currentTaskId} onBack={() => setView('inbox')} /> : null}</ViewErrorBoundary>;
+        return <ViewErrorBoundary name="Workspace">{workspaceTarget ? <FormWorkspace target={workspaceTarget} onBack={() => setView('inbox')} /> : null}</ViewErrorBoundary>;
       default:
         return (
           <ViewErrorBoundary name="Inbox">
@@ -116,8 +116,7 @@ export default function App() {
                       <button
                         key={inst.instanceId}
                         onClick={() => {
-                          const taskRef = inst.activeTasks[0]?.taskRef ?? 'review';
-                          setCurrentTaskId(inst.instanceId);
+                          setWorkspaceTarget({ kind: 'instance', id: inst.instanceId });
                           setView('workspace');
                         }}
                         className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0 shadow-sm"
@@ -132,7 +131,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <TaskList tasks={tasks} filters={filters} setFilters={setFilters} onTaskClick={(id) => { setCurrentTaskId(id); setView('workspace'); }} />
+              <TaskList tasks={tasks} filters={filters} setFilters={setFilters} onTaskClick={(id) => { setWorkspaceTarget({ kind: 'task', id }); setView('workspace'); }} />
             </div>
           </div>
           </ViewErrorBoundary>

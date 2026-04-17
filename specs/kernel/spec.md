@@ -140,17 +140,21 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 | `onExit` | array of Action | OPTIONAL | Actions executed on state exit. |
 | `transitions` | array of Transition | OPTIONAL | Outgoing transitions from this state. |
 | `tags` | array of string | OPTIONAL | Semantic tags for governance attachment via `lifecycleHook` (S10.4). |
-| `initialState` | string | CONDITIONAL | Required for `compound` states. |
-| `regions` | map of Region | CONDITIONAL | Required for `parallel` states. |
-| `cancellationPolicy` | enum | OPTIONAL | For `parallel` states only: `cancel-siblings`, `wait-all`, or `fail-fast`. Default: `wait-all`. |
+| `initialState` | string | CONDITIONAL | REQUIRED when `type` = `compound`. MUST NOT appear on `atomic`, `parallel`, or `final` states. |
+| `states` | map of State | CONDITIONAL | REQUIRED (non-empty) when `type` = `compound`. MUST NOT appear on `atomic`, `parallel`, or `final` states. |
+| `regions` | map of Region | CONDITIONAL | REQUIRED (non-empty) when `type` = `parallel`. MUST NOT appear on `atomic`, `compound`, or `final` states. |
+| `cancellationPolicy` | enum | CONDITIONAL | Permitted only when `type` = `parallel`: `cancel-siblings`, `wait-all`, or `fail-fast`. Default: `wait-all`. MUST NOT appear on `atomic`, `compound`, or `final` states. |
+| `historyState` | enum | CONDITIONAL | Permitted only when `type` = `compound`: `shallow` or `deep` (S4.14). MUST NOT appear on `atomic`, `parallel`, or `final` states. |
 
-**Atomic states** have no substates.
+**Atomic states** have no substates. They MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`.
 
-**Compound states** contain substates with a designated `initialState`. When entered, execution proceeds to the initial substate.
+**Compound states** contain substates with a designated `initialState`. When entered, execution proceeds to the initial substate. A compound state MUST declare `initialState` and a non-empty `states` map.
 
-**Parallel states** contain named regions executing concurrently. A parallel state is not exited until all regions reach a final state, unless the `cancellationPolicy` overrides this behavior.
+**Parallel states** contain named regions executing concurrently. A parallel state is not exited until all regions reach a final state, unless the `cancellationPolicy` overrides this behavior. A parallel state MUST declare a non-empty `regions` map and MUST NOT declare `initialState` or `states`.
 
-**Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions.
+**Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions and MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`.
+
+The structural constraints above are enforced by the Kernel JSON Schema (`schemas/kernel/wos-kernel.schema.json`) via conditional `allOf` blocks on the `State` definition. A Kernel Structural processor MUST reject any document that violates them. The "final states MUST NOT have outgoing transitions" rule remains a semantic constraint enforced by a Kernel Complete processor (see S13.3).
 
 ### 4.4 Cancellation Policy
 
@@ -598,14 +602,19 @@ A Kernel Structural processor MUST accept the purchase order approval fixture wi
 
 ### 13.3 Schema Limitations
 
-The kernel JSON Schema validates structural correctness but cannot enforce all semantic constraints. The following constraints MUST be enforced by a Kernel Complete processor:
+The kernel JSON Schema validates structural correctness. The state-type structural invariants (S4.3) -- which properties are required or forbidden for each `type` value -- are encoded in the schema via conditional `allOf` blocks on the `State` definition and MUST be enforced by a Kernel Structural processor. Specifically, the schema enforces:
 
-- **Final states MUST NOT have outgoing transitions.** A `final` state with a `transitions` array is structurally valid but semantically invalid.
-- **Compound states MUST have `initialState` and `states`.** A `compound` state without substates is structurally valid but semantically invalid.
-- **Parallel states MUST have `regions`.** A `parallel` state without regions is structurally valid but semantically invalid.
+- **Compound states MUST have `initialState` and a non-empty `states` map.**
+- **Parallel states MUST have a non-empty `regions` map.**
+- **Atomic and final states MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`.**
+- **`cancellationPolicy` is permitted only on `parallel` states.**
+- **`historyState` is permitted only on `compound` states.**
+
+The following constraints remain semantic and MUST be enforced by a Kernel Complete processor (they are not expressible in JSON Schema without prohibitive complexity):
+
+- **Final states MUST NOT have outgoing transitions.** A `final` state with a `transitions` array is structurally valid against the schema but semantically invalid.
 - **Kernel-generated event names (`$` prefix) MUST NOT be used as document-authored event names** (S4.10).
-
-These constraints are not expressed in the schema because JSON Schema's conditional validation (if/then keyed on `type`) would significantly increase schema complexity without proportionate benefit for the LLM-authoring use case.
+- **Referenced states MUST exist.** A transition `target`, compound `initialState`, or lifecycle-level `initialState` that names an undeclared state is semantically invalid.
 
 ---
 

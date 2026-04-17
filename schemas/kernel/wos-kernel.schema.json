@@ -238,6 +238,90 @@
       "type": "object",
       "required": ["type"],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "$comment": "Kernel S4.3: compound states MUST have initialState and a non-empty states map.",
+          "if": {
+            "properties": { "type": { "const": "compound" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["initialState", "states"],
+            "properties": {
+              "states": { "minProperties": 1 }
+            }
+          }
+        },
+        {
+          "$comment": "Kernel S4.3, S4.4: parallel states MUST have a non-empty regions map.",
+          "if": {
+            "properties": { "type": { "const": "parallel" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["regions"],
+            "properties": {
+              "regions": { "minProperties": 1 }
+            }
+          }
+        },
+        {
+          "$comment": "Kernel S4.3: atomic states MUST NOT carry compound/parallel structural fields.",
+          "if": {
+            "properties": { "type": { "const": "atomic" } },
+            "required": ["type"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["initialState"] },
+                { "required": ["states"] },
+                { "required": ["regions"] },
+                { "required": ["cancellationPolicy"] },
+                { "required": ["historyState"] }
+              ]
+            }
+          }
+        },
+        {
+          "$comment": "Kernel S4.3: final states are completion indicators and MUST NOT carry compound/parallel structural fields.",
+          "if": {
+            "properties": { "type": { "const": "final" } },
+            "required": ["type"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["initialState"] },
+                { "required": ["states"] },
+                { "required": ["regions"] },
+                { "required": ["cancellationPolicy"] },
+                { "required": ["historyState"] }
+              ]
+            }
+          }
+        },
+        {
+          "$comment": "Kernel S4.4: cancellationPolicy is only meaningful on parallel states.",
+          "if": {
+            "required": ["cancellationPolicy"]
+          },
+          "then": {
+            "properties": { "type": { "const": "parallel" } },
+            "required": ["type"]
+          }
+        },
+        {
+          "$comment": "Kernel S4.14: historyState is only meaningful on compound states.",
+          "if": {
+            "required": ["historyState"]
+          },
+          "then": {
+            "properties": { "type": { "const": "compound" } },
+            "required": ["type"]
+          }
+        }
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -282,33 +366,33 @@
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Initial substate identifier. REQUIRED for compound states."
+          "description": "Initial substate identifier. REQUIRED when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3)."
         },
         "states": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Substates within a compound state."
+          "description": "Substates within a compound state. REQUIRED (non-empty) when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3)."
         },
         "regions": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Region"
           },
-          "description": "Named concurrent regions within a parallel state."
+          "description": "Named concurrent regions within a parallel state. REQUIRED (non-empty) when type = 'parallel'. MUST NOT appear on atomic, compound, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3, S4.4)."
         },
         "cancellationPolicy": {
           "type": "string",
           "enum": ["wait-all", "cancel-siblings", "fail-fast"],
           "default": "wait-all",
-          "description": "Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state.",
+          "description": "Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.",
           "examples": ["wait-all", "cancel-siblings"]
         },
         "historyState": {
           "type": "string",
           "enum": ["shallow", "deep"],
-          "description": "History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3)."
+          "description": "History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State."
         },
         "description": {
           "type": "string",
