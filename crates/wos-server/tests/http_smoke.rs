@@ -46,7 +46,27 @@ fn app(state: AppState) -> axum::Router {
 }
 
 #[tokio::test]
-async fn health_endpoint_returns_ok_status() {
+async fn healthz_returns_infra_liveness() {
+    let state = build_app_state().await;
+    let response = app(state)
+        .oneshot(
+            Request::builder()
+                .uri("/api/healthz")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json.get("status").and_then(|v| v.as_str()), Some("ok"));
+}
+
+#[tokio::test]
+async fn health_returns_service_health_array() {
     let state = build_app_state().await;
     let response = app(state)
         .oneshot(
@@ -58,12 +78,12 @@ async fn health_endpoint_returns_ok_status() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024)
+    let body = axum::body::to_bytes(response.into_body(), 4096)
         .await
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    // Governance service returns an empty ServiceHealthView[] when no
-    // bundles are loaded. The response is a JSON array, not an object.
+    // Governance /health returns a `ServiceHealthView[]`; empty when no
+    // bundles are loaded.
     assert!(json.is_array(), "health response must be an array, got {json}");
 }
 

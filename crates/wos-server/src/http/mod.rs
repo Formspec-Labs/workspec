@@ -47,7 +47,10 @@ pub fn router(state: AppState) -> (Router, SocketIoLayer) {
 }
 
 fn health_router() -> Router<AppState> {
-    Router::new().route("/health", axum::routing::get(health::get))
+    // Infra liveness at `/healthz`. Governance owns `/health` and returns a
+    // `ServiceHealthView[]` per the studio `IGovernanceReader.getHealthStatus`
+    // contract; `/healthz` is the lightweight probe for load balancers.
+    Router::new().route("/healthz", axum::routing::get(health::get))
 }
 
 fn build_cors(origin: &str) -> CorsLayer {
