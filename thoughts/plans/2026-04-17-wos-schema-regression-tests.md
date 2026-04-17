@@ -12,7 +12,7 @@
 
 **Tech Stack:** Python 3.11+, `pytest`, `jsonschema[format]` (already in parent's `pyproject.toml`).
 
-**Spec anchor:** [Code review findings](../reviews/2026-04-16-architecture-review-open-questions.md), Finding #7 — schema change has no committed regression guard.
+**Spec anchor:** [Code review findings](../archive/reviews/2026-04-16-architecture-review-open-questions.md), Finding #7 — schema change has no committed regression guard.
 
 **Prior art:**
 - `/Users/mikewolfd/Work/formspec/tests/conformance/spec/test_spec_examples.py:19-34` — pattern to port.

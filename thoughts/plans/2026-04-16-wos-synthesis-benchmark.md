@@ -4,13 +4,13 @@
 
 **Goal:** Pair every fixture in `wos-spec/fixtures/` with a natural-language problem statement. The set becomes a workflow-synthesis benchmark analogous to SWE-bench: given requirement R, did the LLM + WOS toolchain produce a conformant workflow? Track the rate monthly.
 
-**Architecture:** A separate `crates/wos-bench/` crate that depends on [`wos-synth`](./2026-04-16-wos-synth-crate.md) as a library. `wos-bench` owns fixture sets, scoring, regression tracking, and result artifacts. `wos-synth` owns the provider trait, prompt templates, trace types, and outcome enum. The two-crate split (resolved in [open questions Q6](../reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two)) keeps the authoring demo separate from the measurement infrastructure; shared primitives prevent drift.
+**Architecture:** A separate `crates/wos-bench/` crate that depends on [`wos-synth`](./2026-04-16-wos-synth-crate.md) as a library. `wos-bench` owns fixture sets, scoring, regression tracking, and result artifacts. `wos-synth` owns the provider trait, prompt templates, trace types, and outcome enum. The two-crate split (resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two)) keeps the authoring demo separate from the measurement infrastructure; shared primitives prevent drift.
 
 Problem statements live in `benchmarks/problems/*.md`; per-run outputs in `benchmarks/runs/<date>-<provider>-<model>/results.json`; a `BENCHMARK.md` leaderboard summarizes results over time.
 
 **Tech Stack:** Rust (new `crates/wos-bench/` crate depending on `wos-synth --features synth`), markdown for problem statements, JSON for results.
 
-**Spec anchor:** [architecture-review-handoff.md §5.5](../archive/reviews/2026-04-16-architecture-review-handoff.md) — fixture corpus doubles as synthesis benchmark. Two-crate split resolved in [open questions Q6](../reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two). Claim A first-class status resolved in [open questions Q1](../reviews/2026-04-16-architecture-review-open-questions.md#q1-is-claim-a-llm-authoring-an-accepted-first-class-goal).
+**Spec anchor:** [architecture-review-handoff.md §5.5](../archive/reviews/2026-04-16-architecture-review-handoff.md) — fixture corpus doubles as synthesis benchmark. Two-crate split resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two). Claim A first-class status resolved in [open questions Q1](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q1-is-claim-a-llm-authoring-an-accepted-first-class-goal).
 
 ---
 

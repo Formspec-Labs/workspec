@@ -76,7 +76,7 @@ pub enum Graduation {
 **Files:**
 - Modify: every file under `crates/wos-lint/src/rules/` and `crates/wos-conformance/src/rules/`.
 
-**Background (from [open questions Q4 decision, 2026-04-17](../reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** The ladder uses a four-state graduation (`Draft` → `Tested` → `Stable` → `LoadBearing`). Promotion to `LoadBearing` uses a four-part mechanical test (specRef + suggestedFix + fixture + removal-breaks-conformance). Initial seeded `LoadBearing` set is the union of all three reviewers' proposals, with K-012 / K-017 held at `Stable` pending an explicit audit.
+**Background (from [open questions Q4 decision, 2026-04-17](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** The ladder uses a four-state graduation (`Draft` → `Tested` → `Stable` → `LoadBearing`). Promotion to `LoadBearing` uses a four-part mechanical test (specRef + suggestedFix + fixture + removal-breaks-conformance). Initial seeded `LoadBearing` set is the union of all three reviewers' proposals, with K-012 / K-017 held at `Stable` pending an explicit audit.
 
 - [ ] **Step 2.1:** For each rule that already has a passing fixture in the tree, promote it to `graduation: Graduation::Tested` and set `fixtures` to the fixture paths. Use `grep -r <rule-id>` in fixtures/ + tests to find the links.
 
@@ -188,7 +188,7 @@ Graduation ladder:
 - Create: `crates/wos-conformance/src/bin/ratchet-check.rs` (or a subcommand on an existing binary).
 - Modify: `.github/workflows/wos-coverage.yml` (add a slow-path job).
 
-**Background (from [Q4 Action item](../reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** "Removing the rule permits a conformance-suite regression" is the hardest of the four criteria to verify by inspection. Without automation it collapses to judgment, and the ratchet becomes aspirational. Run this check only at promotion time (when a PR changes a rule's `graduation` to `LoadBearing`), not per-PR — the job is O(n × conformance-suite) and expensive.
+**Background (from [Q4 Action item](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** "Removing the rule permits a conformance-suite regression" is the hardest of the four criteria to verify by inspection. Without automation it collapses to judgment, and the ratchet becomes aspirational. Run this check only at promotion time (when a PR changes a rule's `graduation` to `LoadBearing`), not per-PR — the job is O(n × conformance-suite) and expensive.
 
 - [ ] **Step 7.1:** Implement `wos-conformance ratchet-check --rule <id>`:
   1. Disable the named rule in the active registry.
