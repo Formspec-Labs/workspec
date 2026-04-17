@@ -2229,6 +2229,23 @@ mod tests {
     }
 
     #[test]
+    fn k_ext_002_reserved_namespace_inside_extensions_still_flagged() {
+        // §10.6 reserves `x-wos-*` regardless of location. A vendor can't
+        // smuggle `x-wos-*` through the `extensions` container.
+        let doc = json!({
+            "$wosKernel": "1.0",
+            "extensions": {
+                "x-acme-foo": "allowed",
+                "x-wos-future": "RESERVED"
+            }
+        });
+        let diags = run(doc);
+        let hits: Vec<&_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
+        assert_eq!(hits.len(), 1, "expected exactly 1 K-EXT-002, got: {diags:?}");
+        assert_eq!(hits[0].path, "/extensions/x-wos-future");
+    }
+
+    #[test]
     fn k_ext_002_bare_prefix_and_uppercase_not_flagged() {
         // `x-wos-` (empty suffix) is malformed but not reserved-use.
         // `X-WOS-*` is uppercase; §10.6 specifies lowercase.
