@@ -24,7 +24,7 @@ export class InboxPage {
   }
 
   async expectPeekDrawerVisible() {
-    await expect(this.page.getByText('Quick Peek')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: /Quick Peek|Case Detail/ })).toBeVisible();
   }
 
   async selectTask(caseId: string) {

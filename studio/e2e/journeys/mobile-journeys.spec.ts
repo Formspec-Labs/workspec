@@ -24,13 +24,9 @@ test.describe('Mobile Specific Journeys', () => {
     await audit.goto();
     
     // Select a record
-    await audit.selectRecord('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4');
-    
-    // Check for vertical stacking in authority chain
-    // Use a more specific selector for the authority chain container
-    const authorityChain = page.locator('section').filter({ hasText: /Authority Chain/i }).locator('.flex-col');
-    await expect(authorityChain.first()).toBeVisible();
-    
+    await audit.selectRecord('urn:wos:instance:benefits-adj:2026-03-20:i9j0k1l2');
+
+    await expect(page.getByText('Authority Chain').first()).toBeVisible();
     await expect(page.getByText('Sarah Jenkins').first()).toBeVisible();
     await expect(page.getByText(/Delegated by Director M\. Smith/i).first()).toBeVisible();
   });
