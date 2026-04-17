@@ -3,3 +3,8 @@
 
 # Generated LLM spec extractions (same role as Formspec *.llm.md; regenerate, do not hand-edit)
 specs/**/*.llm.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

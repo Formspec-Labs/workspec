@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Make `from tests.schemas.conftest import ...` resolve when pytest runs
+# from either the wos-spec/ submodule root or the parent formspec monorepo.
+pythonpath = ["."]
+testpaths = ["tests"]
