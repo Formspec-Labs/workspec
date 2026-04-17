@@ -46,6 +46,33 @@ pub fn lint_document(json: &str) -> Result<Vec<Diagnostic>, LintError> {
     Ok(diagnostics)
 }
 
+/// Lint a single JSON Schema file for documentation coverage (`SCHEMA-DOC-001`).
+///
+/// Unlike [`lint_document`], which lints WOS *documents* that carry a
+/// `$wos*` marker, this function lints the JSON Schema files under
+/// `wos-spec/schemas/` themselves. For every *leaf property* (a node with
+/// a concrete `type` and no composite children), it enforces:
+///
+/// - **Baseline**: `description` is present and at least 60 characters,
+///   and `examples` is a non-empty array.
+/// - **Critical** (`x-lm.critical == true`): `description` is at least
+///   140 characters and `examples` has at least 2 entries.
+///
+/// Diagnostic paths are JSON Pointers into the schema document (e.g.,
+/// `/properties/url`, `/$defs/State/properties/kind`).
+///
+/// # Errors
+///
+/// Returns [`LintError::Parse`] if `schema_json` is not valid JSON.
+pub fn lint_schema(schema_json: &str) -> Result<Vec<Diagnostic>, LintError> {
+    let root: serde_json::Value = serde_json::from_str(schema_json)
+        .map_err(|e| LintError::Parse(format!("invalid JSON schema: {e}")))?;
+    let mut diagnostics = Vec::new();
+    rules::schema_doc::check_schema(&root, &mut diagnostics);
+    diagnostics.sort();
+    Ok(diagnostics)
+}
+
 /// Lint a project directory (Tier 1 + Tier 2 checks).
 ///
 /// Loads all WOS documents from the directory, resolves cross-references,
