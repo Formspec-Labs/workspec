@@ -55,6 +55,8 @@ The positioning work ([POSITIONING.md](../../POSITIONING.md), [README.md](../../
 2. Ensure the default workspace CI job (`cargo build --workspace`) builds *without* `--features synth`, with a single additional CI job that runs *with* it. Without this, the feature gate is unenforced theatre — a default build that silently pulls an LLM client defeats the isolation purpose the gate exists for.
 3. Write the extraction trigger into the crate README as a **single observable condition, two parts AND'd**: *the provider trait has survived one full release train without a breaking change AND a second production-quality provider implementation exists beyond the default.* Both parts are observable; neither is calendar-based. This replaces the ambiguous "when a second consumer wants it OR at 1.0" — a calendar trigger would ignore the actual signal (trait stability).
 
+**2026-04-17 addendum:** The extraction-trigger language applies to `wos-synth-core` specifically (the loop crate), not to the monolithic `wos-synth` originally scoped. Under the DIP split recorded in [ADR 0065](../../../../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md), `wos-synth-core` is the sibling-repo-extraction candidate; `wos-synth-anthropic`, `wos-synth-mock`, and `wos-synth-cli` are already independent crates and need no further extraction. The feature-gate enforcement step (step 2 above) is superseded by crate-boundary separation: provider deps live in separate crates, not behind a `--features synth` flag. The CI-guard job that was to verify feature-gate effectiveness is reinterpreted as a `cargo tree` check that `wos-synth-core`'s dep graph contains no LLM-client crates regardless of features.
+
 **Blocks:** [§5.4 wos-synth plan](../plans/2026-04-16-wos-synth-crate.md) — Task 1 currently assumes Option 1/3 (in-tree). Change to sibling-repo would require revising that task.
 
 ---
@@ -160,6 +162,14 @@ Added 2026-04-17 during review revision. The plans live side-by-side but leave t
 2. Implement the benchmark runner as `crates/wos-bench/` (new crate, Tier: tooling, non-default feature if Cargo workspace member), importing `wos-synth` as a library dependency. Binary target is `wos-bench`.
 3. Document the boundary in both crate READMEs: `wos-synth` README states "owns the provider abstraction and prompt primitives — benchmark crate imports these"; `wos-bench` README states "consumes `wos-synth` as a library; owns fixture sets, scoring, regression tracking." Future contributors should not fold them together or split the provider abstraction across two crates.
 4. Share the trace format: `wos-bench` records the same trace shape that `wos-synth generate --trace` emits — one format for both the demo and the measurement.
+
+**2026-04-17 addendum:** The "two crates sharing primitives" framing holds, but the primitives now live in a different location than originally stated. Under [ADR 0065](../../../../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md):
+
+- `wos-synth-core` owns the **loop primitives**: `Prompter` trait, `ToolContext` trait, prompt templates, trace types, outcome enum.
+- `wos-mcp` owns the **tool-handler primitives**: 20+ tools over `wos-authoring` with dual entry (MCP stdio + in-process dispatch).
+- `wos-bench` depends on `wos-synth-core` (for the loop) + one `Prompter` provider + (transitively) `wos-mcp` via `ToolContext`'s production implementation.
+
+The original Q6 decision said `wos-bench` depends on `wos-synth`; revised: `wos-bench` depends on `wos-synth-core` + `wos-synth-mock` (or `-anthropic`) + `wos-mcp`. Shared primitives still prevent drift — just across three crate boundaries instead of two.
 
 **Blocks:** [§5.4 wos-synth plan](../plans/2026-04-16-wos-synth-crate.md) Task 1 (crate layout decision) and [§5.5 benchmark plan](../plans/2026-04-16-wos-synthesis-benchmark.md) Task 1 (crate placement decision) — both plans currently leave this as "or."
 

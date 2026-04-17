@@ -84,3 +84,25 @@ contract. Those are different axes.
 | 7 | `synth-trace.schema.json` | pending |
 
 See `thoughts/plans/2026-04-16-wos-synth-crate.md` for the full plan.
+
+## Architectural status (2026-04-17 addendum)
+
+This scaffold was landed before [ADR 0065](../../../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) which splits the monolithic `wos-synth` design into four crates:
+
+| Crate | Role |
+|---|---|
+| `wos-synth-core` | Loop + `Prompter` trait + `ToolContext` trait + prompt templates |
+| `wos-synth-anthropic` | Concrete `Prompter` via Anthropic SDK |
+| `wos-synth-mock` | Deterministic mock `Prompter` |
+| `wos-synth-cli` | Binary wiring one `Prompter` + one `ToolContext` |
+
+During Task 1 of the revised [§5.4 plan](../../thoughts/plans/2026-04-16-wos-synth-crate.md), this crate directory is EITHER:
+
+- **Renamed to `crates/wos-synth-core/`** and its `--features synth` gate removed (provider deps extracted to the new `wos-synth-anthropic` crate), OR
+- **Left in place** with a deprecation comment and a new `crates/wos-synth-core/` created fresh, then the old `crates/wos-synth/` deleted after migration.
+
+Either path is bounded work (~1 hour) since the scaffold is ~200 LOC of placeholders. Tasks 2–7 of the revised plan target the split layout, not this scaffold.
+
+The `--features synth` gate in this scaffold's `Cargo.toml` is NOT how the final architecture works — that's a feature flag, and ADR 0065 explicitly calls out feature flags as the wrong seam for dependency inversion. Crate boundaries are the right seam. The CI guard job that was set up to verify feature-gate effectiveness transitions into a `cargo tree` check asserting `wos-synth-core` has no LLM-client deps in its graph.
+
+**Do not add more code to this scaffold** until the split is applied — any new files here will have to move during Task 1 of the revised plan.
