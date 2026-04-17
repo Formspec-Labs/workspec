@@ -15,16 +15,19 @@ export class DesignerPage {
 
   async searchStage(name: string) {
     const searchInput = this.page.getByPlaceholder('Find stage...');
+    await expect(searchInput).toBeVisible();
     await searchInput.fill(name);
   }
 
   async expectStageInSearchResults(name: string) {
-    // The search results are in a dropdown, we look for a button with the text
-    await expect(this.page.locator('button').filter({ hasText: name }).first()).toBeVisible();
+    const panel = this.page.getByTestId('designer-stage-search-results');
+    await expect(panel.getByRole('button', { name: new RegExp(name, 'i') })).toBeVisible();
   }
 
   async toggleMiniMap() {
-    await this.page.locator('button[title="Toggle Mini-map"]').click();
+    const btn = this.page.getByRole('button', { name: /toggle mini-map/i });
+    await btn.scrollIntoViewIfNeeded();
+    await btn.click();
   }
 
   async expectMiniMapVisible(visible: boolean) {
@@ -41,11 +44,11 @@ export class DesignerPage {
    * This tests the "Intuitive Connection" logic.
    */
   async connectStages(fromStageId: string, toStageId: string) {
-    const fromNode = this.page.locator(`[layoutid="${fromStageId}"]`);
-    const toNode = this.page.locator(`[layoutid="${toStageId}"]`);
-    
+    const fromNode = this.page.locator(`[data-stage-id="${fromStageId}"]`);
+    const toNode = this.page.locator(`[data-stage-id="${toStageId}"]`);
+
     const port = fromNode.locator('[title="Drag to connect"]');
-    
+
     await port.hover();
     await this.page.mouse.down();
     await toNode.hover();
