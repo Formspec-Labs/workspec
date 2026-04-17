@@ -108,6 +108,11 @@
     "EntryTemplate": {
       "type": "object",
       "required": ["id", "channel", "direction", "actorType"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -166,6 +171,11 @@
     "CorrespondenceEntry": {
       "type": "object",
       "required": ["templateRef", "channel", "direction", "actorType", "contentRef", "summary", "timestamp"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "templateRef": {

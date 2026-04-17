@@ -116,6 +116,11 @@
     "ParameterDefinition": {
       "type": "object",
       "required": ["description", "type", "resolutionDateRef", "values"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "description": {
@@ -173,6 +178,11 @@
     "DateValue": {
       "type": "object",
       "required": ["effectiveDate", "value"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "effectiveDate": {
@@ -194,6 +204,11 @@
     "RegulatoryBinding": {
       "type": "object",
       "required": ["id", "description", "resolutionDateRef", "bindingType", "values"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -255,6 +270,11 @@
     "BindingDateValue": {
       "type": "object",
       "required": ["effectiveDate", "value"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "effectiveDate": {

@@ -91,6 +91,11 @@
     "AssertionDefinition": {
       "type": "object",
       "required": ["id", "type", "description"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {

@@ -60,6 +60,11 @@
     "ProtectedCategory": {
       "type": "object",
       "required": ["id", "groupByPath"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1, "examples": ["geographicRegion", "ageGroup"] },
@@ -75,6 +80,11 @@
     "DisparityMethod": {
       "type": "object",
       "required": ["id", "method"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -88,6 +98,11 @@
     },
     "ReportingSchedule": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "frequency": { "type": "string", "description": "ISO 8601 duration.", "examples": ["P30D", "P7D"] },
@@ -102,6 +117,11 @@
     "RemediationTrigger": {
       "type": "object",
       "required": ["condition", "action"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "condition": { "type": "string", "minLength": 1, "description": "Condition expression.", "examples": ["disparity > 0.20 for 2 consecutive periods"] },

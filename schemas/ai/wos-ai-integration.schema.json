@@ -202,6 +202,11 @@
         "modelIdentifier",
         "modelVersion"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -330,6 +335,11 @@
       "required": [
         "id"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -366,6 +376,11 @@
     },
     "DeonticConstraints": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "permissions": {
@@ -404,6 +419,11 @@
         "id",
         "onViolation"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -463,6 +483,11 @@
         "condition",
         "onViolation"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -513,6 +538,11 @@
         "requirement",
         "onViolation"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -563,6 +593,11 @@
         "id",
         "entitlement"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -617,6 +652,11 @@
         "threshold",
         "onViolation"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "threshold": {
@@ -645,6 +685,11 @@
       "required": [
         "enabled"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -674,6 +719,11 @@
         "event",
         "decayFactor"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "event": {
@@ -702,6 +752,11 @@
       "required": [
         "action"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "action": {
@@ -767,6 +822,11 @@
     },
     "OversightExtensions": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "suppressAgentOutput": {
@@ -782,6 +842,11 @@
     },
     "OversightPresentation": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "showConfidence": {
@@ -808,6 +873,11 @@
     },
     "VolumeConstraints": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "maxAutonomousPerHour": {
@@ -835,6 +905,11 @@
       "required": [
         "rate"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "rate": {
@@ -873,6 +948,11 @@
       "required": [
         "discloseThatAgentAssisted"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "discloseThatAgentAssisted": {
@@ -900,6 +980,11 @@
     },
     "NarrativeTierConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -925,6 +1010,11 @@
     },
     "DriftDetectionConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "trainingDataDisclosure": {
@@ -945,6 +1035,11 @@
     },
     "RubberStampConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -982,6 +1077,11 @@
     },
     "AssistGovernanceProxy": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -1003,6 +1103,11 @@
       "required": [
         "category"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "category": {

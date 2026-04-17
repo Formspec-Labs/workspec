@@ -87,6 +87,11 @@
     "TargetWorkflow": {
       "type": "object",
       "required": ["url"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "url": {
@@ -109,6 +114,11 @@
     "ContextConfiguration": {
       "type": "object",
       "required": ["contextUrl", "contextVersion"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "contextUrl": {
@@ -157,6 +167,11 @@
     "DomainVocabulary": {
       "type": "object",
       "required": ["prefix", "namespace"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "prefix": {
@@ -183,6 +198,11 @@
     "ShapeConfiguration": {
       "type": "object",
       "required": ["shapeGraphs"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "shapeGraphs": {
@@ -218,6 +238,11 @@
     "ProvMappingConfiguration": {
       "type": "object",
       "required": ["provenanceNamespace"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "provenanceNamespace": {
@@ -247,6 +272,11 @@
         },
         "tierMapping": {
           "type": "object",
+          "patternProperties": {
+            "^x-": {
+              "$comment": "Vendor extensions per Kernel spec §10.6"
+            }
+          },
           "additionalProperties": false,
           "properties": {
             "reasoning": {
@@ -275,6 +305,11 @@
     "ProcessMiningConfiguration": {
       "type": "object",
       "required": ["formats"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "formats": {

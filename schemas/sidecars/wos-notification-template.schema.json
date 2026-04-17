@@ -91,6 +91,11 @@
     "NotificationTemplate": {
       "type": "object",
       "required": ["category", "sections"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "category": {
@@ -179,6 +184,11 @@
     "TemplateSection": {
       "type": "object",
       "required": ["id", "contentType"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {

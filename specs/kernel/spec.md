@@ -539,11 +539,24 @@ Custody postures are declared, not inferred. Bindings that populate this seam MU
 
 The kernel does NOT define the concrete Trust Profile object. Trellis (the distributed-trust binding) defines that object and binds it to this seam. A monolithic binding may populate this seam with a single declared posture (e.g., "provider-readable, no recovery without user, no delegated compute") and satisfy conformance.
 
-### 10.6 `extensions`
+### 10.6 `extensions` and `x-` Keys
 
-**Purpose:** Standard escape hatch.
+**Purpose:** Standard escape hatch for vendor and implementation-specific data.
 
-The `extensions` property accepts arbitrary data with keys prefixed by `x-`. This is the standard extensibility mechanism for implementation-specific or experimental features.
+WOS supports two parallel mechanisms for vendor extensions:
+
+1. **`extensions` property.** An object whose keys MUST be prefixed with `x-`. Implementations that group vendor data under a single container SHOULD use this property.
+2. **`x-`-prefixed keys on any object.** Any object in a WOS document MAY carry sibling keys prefixed with `x-` alongside its declared properties. This matches the extension convention used by OpenAPI and is the recommended mechanism for decorating individual structural elements (states, transitions, actors, actions) with vendor metadata.
+
+Both mechanisms are equivalent in authority: a processor MUST NOT reject a document on the grounds that vendor data appears at one location rather than the other. Processors SHOULD preserve `x-` keys through read/write cycles (round-trip fidelity) but MAY strip them during normalization passes; any such behavior MUST be documented by the processor.
+
+**Naming rules for `x-` keys:**
+
+- Keys MUST be lowercase ASCII. `X-Vendor-Foo` is REJECTED by conformant validators.
+- Keys MUST follow the shape `x-<namespace>-<name>` where `<namespace>` identifies the publisher (e.g., `x-acme-tenant-id`, `x-camunda-priority`).
+- The prefix `x-wos-` is **RESERVED** for future normative use by this specification. Implementations and vendors MUST NOT author keys beginning with `x-wos-` until a future spec version publishes them under that namespace.
+
+Rationale for the two-mechanism design: the `extensions` container is useful when vendor data is itself structured and opaque; sibling `x-` keys are useful when vendor data decorates specific structural elements (e.g., `x-acme-ui-label` on a single state). Forcing all vendor data into a single container loses the structural locality that makes element-level decoration valuable. Forcing all vendor data to sibling keys obscures the distinction between data intended for WOS processors and data intended for vendor tooling.
 
 ---
 

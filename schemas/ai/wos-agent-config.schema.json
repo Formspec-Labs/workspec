@@ -89,6 +89,11 @@
     "EndpointConfig": {
       "type": "object",
       "required": ["url"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "url": {
@@ -117,6 +122,11 @@
     "CalibrationConfig": {
       "type": "object",
       "required": ["required"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "required": {
@@ -144,6 +154,11 @@
     },
     "AutonomyPolicy": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "escalation": {
@@ -166,6 +181,11 @@
     "EscalationRule": {
       "type": "object",
       "required": ["condition", "targetLevel"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "condition": {
@@ -193,6 +213,11 @@
     "DemotionRule": {
       "type": "object",
       "required": ["condition", "targetLevel"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "condition": {
@@ -220,6 +245,11 @@
     "ActionOverride": {
       "type": "object",
       "required": ["actionRef"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "actionRef": {

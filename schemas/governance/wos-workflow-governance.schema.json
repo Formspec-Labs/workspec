@@ -218,6 +218,11 @@
   "$defs": {
     "DueProcess": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "scope": {
@@ -235,6 +240,11 @@
     },
     "AdverseDecisionPolicy": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "noticeRequired": {
@@ -291,6 +301,11 @@
     },
     "AppealMechanism": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -346,6 +361,11 @@
         "tags",
         "protocols"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "tags": {
@@ -421,6 +441,11 @@
         "id",
         "stages"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -452,6 +477,11 @@
         "id",
         "type"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -529,6 +559,11 @@
       "required": [
         "type"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -604,6 +639,11 @@
     },
     "AuditConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "reasoningTier": {
@@ -618,6 +658,11 @@
     },
     "ReasoningTierConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "requiredForTags": {
@@ -640,6 +685,11 @@
     },
     "CounterfactualTierConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "requiredForTags": {
@@ -662,6 +712,11 @@
     },
     "QualityControls": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "reviewSampling": {
@@ -683,6 +738,11 @@
       "required": [
         "rate"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "rate": {
@@ -721,6 +781,11 @@
       "required": [
         "scope"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "scope": {
@@ -746,6 +811,11 @@
     },
     "OverrideAuthority": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "requireStructuredRationale": {
@@ -771,6 +841,11 @@
         "pattern",
         "verifiable"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "pattern": {
@@ -820,6 +895,11 @@
         "scope",
         "authority"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "dependentRequired": {
         "quorumCount": ["quorumPool"]
@@ -921,6 +1001,11 @@
     },
     "DelegationScope": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "impactLevels": {
@@ -980,6 +1065,11 @@
         "holdType",
         "expectedDuration"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "if": {
         "not": {
@@ -1063,6 +1153,11 @@
       "required": [
         "ruleId"
       ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "ruleId": {

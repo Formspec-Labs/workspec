@@ -78,6 +78,11 @@
     "AgentMonitor": {
       "type": "object",
       "required": ["agentRef", "evaluationWindow", "metrics"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "agentRef": {
@@ -111,6 +116,11 @@
     "MonitorMetric": {
       "type": "object",
       "required": ["name"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -133,6 +143,11 @@
     },
     "RubberStampConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -162,6 +177,11 @@
     "AlertThreshold": {
       "type": "object",
       "required": ["condition", "severity"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "condition": {
@@ -190,6 +210,11 @@
     },
     "DeploymentSequence": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {

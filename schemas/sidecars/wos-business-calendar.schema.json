@@ -135,6 +135,11 @@
     "Holiday": {
       "type": "object",
       "required": ["name"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -170,6 +175,11 @@
     "OperatingHours": {
       "type": "object",
       "required": ["start", "end"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "start": {

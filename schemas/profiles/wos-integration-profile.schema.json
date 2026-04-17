@@ -95,6 +95,11 @@
     "TargetWorkflow": {
       "type": "object",
       "required": ["url"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "url": {
@@ -113,6 +118,11 @@
     "IntegrationBinding": {
       "type": "object",
       "required": ["type"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "A named integration binding declaration. The type property determines which additional properties are valid.",
       "properties": {
@@ -326,6 +336,11 @@
     "InterfaceRef": {
       "type": "object",
       "required": ["$ref"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "$ref": {
@@ -339,6 +354,11 @@
     "InvocationDescriptor": {
       "type": "object",
       "required": ["method", "command"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "Non-HTTP invocation descriptor informed by CWL's CommandLineTool pattern (Integration Profile S3.6.1).",
       "properties": {
@@ -376,6 +396,11 @@
     "ContractRef": {
       "type": "object",
       "required": ["definitionRef"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "Reference to a Formspec Definition used as a validation contract (Integration Profile S4).",
       "properties": {
@@ -397,6 +422,11 @@
     "CorrelationRule": {
       "type": "object",
       "required": ["attribute", "caseStateMapping"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "A correlation rule for matching inbound events to workflow instances (Integration Profile S6).",
       "properties": {
@@ -417,6 +447,11 @@
     "DecisionMapping": {
       "type": "object",
       "required": ["permitPath"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "Maps a policy engine's response to a WOS governance decision (Integration Profile S8.3).",
       "properties": {
@@ -453,6 +488,11 @@
     "RetryPolicy": {
       "type": "object",
       "required": ["maxAttempts"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "Retry policy for failed integration invocations (Integration Profile S3.8).",
       "properties": {
@@ -483,6 +523,11 @@
     },
     "ResourceRequirements": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "description": "Resource constraints for tool invocations (Integration Profile S3.6.2).",
       "properties": {

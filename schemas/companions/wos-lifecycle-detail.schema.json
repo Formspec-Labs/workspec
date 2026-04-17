@@ -78,6 +78,11 @@
   "$defs": {
     "CompensationConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "defaultRecoveryMode": {
@@ -107,6 +112,11 @@
     "CompensationScopeOverride": {
       "type": "object",
       "required": ["scopeRef"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "scopeRef": {
@@ -133,6 +143,11 @@
     },
     "TimerConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "firingTolerance": {
@@ -149,6 +164,11 @@
     },
     "ScxmlMappingConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": {

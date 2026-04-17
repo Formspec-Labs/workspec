@@ -81,6 +81,11 @@
     "NoticeTemplate": {
       "type": "object",
       "required": ["id", "title", "sections"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -114,6 +119,11 @@
     "ExplanationTemplate": {
       "type": "object",
       "required": ["id", "level"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -142,6 +152,11 @@
     "AppealRouting": {
       "type": "object",
       "required": ["independenceConstraint"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "defaultReviewerPool": {
@@ -165,6 +180,11 @@
     "ContinuationPolicy": {
       "type": "object",
       "required": ["decisionType", "scope"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "decisionType": {

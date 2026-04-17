@@ -243,6 +243,11 @@
     "TimerState": {
       "type": "object",
       "required": ["timerId", "deadline", "event"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "timerId": {
@@ -273,6 +278,11 @@
     "ActiveTask": {
       "type": "object",
       "required": ["taskId", "taskRef", "status", "createdAt", "updatedAt"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "taskId": {
@@ -361,6 +371,11 @@
     "FormspecTaskContext": {
       "type": "object",
       "required": ["taskId", "instanceId", "contractRef", "definitionUrl", "definitionVersion", "binding", "assignedActor"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "taskId": {
@@ -448,6 +463,11 @@
     "ValidationOutcome": {
       "type": "object",
       "required": ["envelopeValid", "pinMatch", "definitionValid", "errors"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "envelopeValid": {
@@ -492,6 +512,11 @@
     "CompensationLog": {
       "type": "object",
       "required": ["scopeId", "entries"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "scopeId": {
@@ -512,6 +537,11 @@
     "CompensationEntry": {
       "type": "object",
       "required": ["actionId", "actionType", "compensatingAction", "completedAt"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "actionId": {
@@ -541,6 +571,11 @@
     "PendingEvent": {
       "type": "object",
       "required": ["event", "timestamp"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "event": {
@@ -571,6 +606,11 @@
     },
     "GovernanceState": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "activeDelegations": {
@@ -598,6 +638,11 @@
     "ActiveDelegation": {
       "type": "object",
       "required": ["delegatorId", "delegateId", "scope", "grantedAt"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "delegatorId": {
@@ -635,6 +680,11 @@
     "ActiveHold": {
       "type": "object",
       "required": ["holdType", "startedAt", "resumeTrigger"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "holdType": {
@@ -666,6 +716,11 @@
     },
     "VolumeCounters": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "hourly": {
@@ -688,6 +743,11 @@
     "VolumeCounter": {
       "type": "object",
       "required": ["count", "windowStart"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "count": {

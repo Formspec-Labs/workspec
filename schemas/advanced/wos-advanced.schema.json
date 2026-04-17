@@ -115,6 +115,11 @@
     "EquityGuardrail": {
       "type": "object",
       "required": ["id", "metric", "groupBy", "maxDisparity", "evaluationWindow", "minimumSampleSize", "onViolation"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -188,6 +193,11 @@
     "ConstraintZone": {
       "type": "object",
       "required": ["id", "activities", "relations"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -235,6 +245,11 @@
     "ZoneActivity": {
       "type": "object",
       "required": ["id"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -267,6 +282,11 @@
     "ZoneRelation": {
       "type": "object",
       "required": ["type", "source", "target"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -300,6 +320,11 @@
     "MultiStepSession": {
       "type": "object",
       "required": ["id", "steps"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -327,6 +352,11 @@
     "SessionStep": {
       "type": "object",
       "required": ["id"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1, "examples": ["documentInventory", "contentExtraction"] },
@@ -342,6 +372,11 @@
     },
     "ToolGovernance": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "toolRegistry": {
@@ -360,6 +395,11 @@
     "ToolDefinition": {
       "type": "object",
       "required": ["id", "category", "sideEffects"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1, "examples": ["databaseLookup", "documentParser"] },
@@ -372,6 +412,11 @@
     },
     "RateLimit": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "maxPerMinute": { "type": "integer", "minimum": 0 },
@@ -380,6 +425,11 @@
     },
     "AgentLifecycleConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "initialState": {
@@ -420,6 +470,11 @@
     "LifecycleTransition": {
       "type": "object",
       "required": ["name"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -440,6 +495,11 @@
     "VerifiableConstraint": {
       "type": "object",
       "required": ["constraintRef", "verifiable"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "constraintRef": {
@@ -476,6 +536,11 @@
           "additionalProperties": {
             "type": "object",
             "required": ["domain"],
+            "patternProperties": {
+              "^x-": {
+                "$comment": "Vendor extensions per Kernel spec §10.6"
+              }
+            },
             "additionalProperties": false,
             "properties": {
               "domain": {
@@ -491,6 +556,11 @@
     },
     "CalibrationConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "method": {
@@ -512,6 +582,11 @@
     },
     "DriftDetectionConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "methods": {
@@ -524,6 +599,11 @@
     "DriftMethod": {
       "type": "object",
       "required": ["method"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "method": {
@@ -542,6 +622,11 @@
     "DriftDimension": {
       "type": "object",
       "required": ["field", "type"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "field": { "type": "string", "minLength": 1 },
@@ -551,6 +636,11 @@
     "ShadowMode": {
       "type": "object",
       "required": ["enabled"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": { "type": "boolean" },
@@ -566,6 +656,11 @@
     "CircuitBreaker": {
       "type": "object",
       "required": ["enabled", "errorRateThreshold", "evaluationWindow", "cooldownDuration"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "enabled": { "type": "boolean" },

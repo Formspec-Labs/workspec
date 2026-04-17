@@ -168,6 +168,11 @@
     "ActorDeclaration": {
       "type": "object",
       "required": ["id", "type"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -200,6 +205,11 @@
     "Lifecycle": {
       "type": "object",
       "required": ["initialState", "states"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "initialState": {
@@ -242,6 +252,11 @@
     "State": {
       "type": "object",
       "required": ["type"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "allOf": [
         {
@@ -413,6 +428,11 @@
     "Region": {
       "type": "object",
       "required": ["initialState", "states"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "initialState": {
@@ -432,6 +452,11 @@
     "Transition": {
       "type": "object",
       "required": ["event", "target"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "event": {
@@ -488,6 +513,11 @@
     "Action": {
       "type": "object",
       "required": ["action"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "action": {
@@ -611,6 +641,11 @@
     "Milestone": {
       "type": "object",
       "required": ["condition"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "condition": {
@@ -631,6 +666,11 @@
     "CaseFile": {
       "type": "object",
       "required": ["fields"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "fields": {
@@ -664,6 +704,11 @@
     "CaseRelationship": {
       "type": "object",
       "required": ["type", "targetCase"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -699,6 +744,11 @@
     "FieldDefinition": {
       "type": "object",
       "required": ["type"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -719,6 +769,11 @@
     "ContractReference": {
       "type": "object",
       "required": ["binding", "ref"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "binding": {
@@ -758,6 +813,11 @@
     },
     "ProvenanceConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "digestAlgorithm": {
@@ -774,6 +834,11 @@
     },
     "ExecutionConfig": {
       "type": "object",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
       "additionalProperties": false,
       "properties": {
         "workflowTimeout": {
