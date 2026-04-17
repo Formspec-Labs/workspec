@@ -212,6 +212,20 @@ export function TaskList({ tasks, filters, setFilters, onTaskClick }: TaskListPr
           </div>
         </div>
 
+        <div className="flex md:hidden items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 overflow-x-auto no-scrollbar">
+          {savedViews.map(view => (
+            <button
+              key={`mobile-${view.id}`}
+              type="button"
+              onClick={() => setActiveView(view.id as 'all' | 'priority' | 'appeals')}
+              className={`flex shrink-0 items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeView === view.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              {view.icon}
+              {view.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 transform -translate-y-1/2" />
