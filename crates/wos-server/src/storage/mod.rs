@@ -1,0 +1,186 @@
+//! Storage trait and concrete backends.
+//!
+//! All persistence goes through the [`Storage`] trait so storage engines
+//! (SQLite, Postgres, JSONFS, ledger sinks) can be swapped behind the same
+//! service layer. SQLite is the default and only backend shipped today.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::config::{ServerConfig, StorageKind};
+
+pub mod sqlite;
+
+pub use sqlite::SqliteStorage;
+
+pub type StorageHandle = Arc<dyn Storage>;
+
+#[derive(Debug, Error)]
+pub enum StorageError {
+    #[error("not found")]
+    NotFound,
+
+    #[error("conflict: {0}")]
+    Conflict(String),
+
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    Migrate(#[from] sqlx::migrate::MigrateError),
+
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+
+    #[error("{0}")]
+    Other(String),
+}
+
+pub type StorageResult<T> = Result<T, StorageError>;
+
+/// A stored kernel document (`$wosKernel` definition + metadata).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelRow {
+    pub url: String,
+    pub title: String,
+    pub version: String,
+    pub status: String,
+    pub impact_level: String,
+    pub document: serde_json::Value,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// A stored case instance. Payload fields are all serde JSON so the view
+/// layer can re-hydrate without coupling the schema to `wos-core` internals.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceRow {
+    pub instance_id: String,
+    pub definition_url: String,
+    pub definition_version: String,
+    pub status: String,
+    pub configuration: serde_json::Value,
+    pub case_state: serde_json::Value,
+    pub active_tasks: serde_json::Value,
+    pub timers: serde_json::Value,
+    pub governance_state: Option<serde_json::Value>,
+    pub impact_level: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvenanceRow {
+    pub id: String,
+    pub instance_id: String,
+    pub seq: i64,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub tier: String,
+    pub payload: serde_json::Value,
+    pub hash: String,
+    pub previous_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DelegationRow {
+    pub id: String,
+    pub workflow_url: String,
+    pub delegator: String,
+    pub delegate: String,
+    pub scope: String,
+    pub authority: Option<String>,
+    pub legal_instrument: Option<String>,
+    pub start_date: chrono::DateTime<chrono::Utc>,
+    pub end_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserRow {
+    pub id: String,
+    pub email: String,
+    pub name: String,
+    pub role: String,
+    pub password_hash: String,
+    pub avatar: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionRow {
+    pub jti: String,
+    pub user_id: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub revoked: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InstanceQuery {
+    pub status: Option<Vec<String>>,
+    pub impact_level: Option<Vec<String>>,
+    pub definition_url: Option<Vec<String>>,
+    pub page: u32,      // 1-indexed to match the studio contract
+    pub page_size: u32, // capped downstream
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub total: u64,
+    pub page: u32,
+    pub page_size: u32,
+}
+
+/// Mutation passed to [`Storage::update_instance_atomic`]. Returning `Err`
+/// aborts the transaction; returning `Ok` commits the new row plus any
+/// provenance appended via the same handle inside the closure.
+pub type InstanceMutator<'a> =
+    &'a (dyn Fn(&mut InstanceRow) -> Result<Vec<ProvenanceRow>, StorageError> + Send + Sync);
+
+#[async_trait]
+pub trait Storage: Send + Sync + 'static {
+    // --- Kernel registry ---
+    async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>>;
+    async fn get_kernel(&self, url: &str) -> StorageResult<Option<KernelRow>>;
+    async fn upsert_kernel(&self, row: &KernelRow) -> StorageResult<()>;
+
+    // --- Instances ---
+    async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()>;
+    async fn get_instance(&self, id: &str) -> StorageResult<Option<InstanceRow>>;
+    async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>>;
+    async fn update_instance_atomic(
+        &self,
+        id: &str,
+        mutator: InstanceMutator<'_>,
+    ) -> StorageResult<InstanceRow>;
+
+    // --- Provenance ---
+    async fn list_provenance(&self, instance_id: &str) -> StorageResult<Vec<ProvenanceRow>>;
+    async fn last_provenance(&self, instance_id: &str) -> StorageResult<Option<ProvenanceRow>>;
+
+    // --- Delegations ---
+    async fn list_delegations(&self, workflow_url: &str) -> StorageResult<Vec<DelegationRow>>;
+    async fn upsert_delegation(&self, row: &DelegationRow) -> StorageResult<()>;
+    async fn revoke_delegation(&self, workflow_url: &str, id: &str) -> StorageResult<()>;
+
+    // --- Auth ---
+    async fn get_user_by_email(&self, email: &str) -> StorageResult<Option<UserRow>>;
+    async fn get_user(&self, id: &str) -> StorageResult<Option<UserRow>>;
+    async fn upsert_user(&self, row: &UserRow) -> StorageResult<()>;
+    async fn upsert_session(&self, row: &SessionRow) -> StorageResult<()>;
+    async fn revoke_session(&self, jti: &str) -> StorageResult<()>;
+    async fn session_is_valid(&self, jti: &str) -> StorageResult<bool>;
+}
+
+/// Build the storage backend selected by the config.
+pub async fn build(cfg: &ServerConfig) -> anyhow::Result<StorageHandle> {
+    match cfg.storage {
+        StorageKind::Sqlite => {
+            let store = SqliteStorage::connect(&cfg.database_url).await?;
+            store.migrate().await?;
+            Ok(Arc::new(store))
+        }
+    }
+}

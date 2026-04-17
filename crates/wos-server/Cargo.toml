@@ -1,0 +1,63 @@
+[package]
+name = "wos-server"
+version = "0.1.0"
+edition = "2024"
+description = "Reference HTTP + Socket.IO server for WOS (Workflow Orchestration Standard)"
+license = "Apache-2.0"
+repository = "https://github.com/formspec/formspec"
+
+[dependencies]
+wos-core   = { path = "../wos-core" }
+wos-lint   = { path = "../wos-lint" }
+wos-export = { path = "../wos-export" }
+fel-core.workspace = true
+
+axum         = { version = "0.8", features = ["macros", "ws"] }
+tokio        = { version = "1", features = ["full"] }
+tower        = "0.5"
+tower-http   = { version = "0.6", features = ["cors", "trace", "limit"] }
+http         = "1"
+socketioxide = { version = "0.17", features = ["state"] }
+
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+    "macros",
+    "chrono",
+    "migrate",
+    "json",
+] }
+
+async-trait   = "0.1"
+jsonwebtoken  = "9"
+argon2        = { version = "0.5", features = ["std"] }
+
+uuid   = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2   = "0.10"
+hex    = "0.4"
+
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+url        = { version = "2", features = ["serde"] }
+
+thiserror = "2"
+anyhow    = "1"
+tracing   = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+clap    = { version = "4", features = ["derive", "env"] }
+dotenvy = "0.15"
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+
+[dev-dependencies]
+tokio       = { version = "1", features = ["full", "test-util"] }
+tempfile    = "3"
+insta       = { version = "1", features = ["json"] }
+reqwest     = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
