@@ -71,11 +71,10 @@ struct KernelRejected {
 
 pub fn build(state: AppState) -> (SocketIoLayer, SocketIo) {
     let realtime = Arc::new(RealtimeState::default());
-    let realtime_for_layer = realtime.clone();
 
     let (layer, io) = SocketIo::builder()
         .with_state(state.clone())
-        .with_state(realtime_for_layer)
+        .with_state(realtime)
         .build_layer();
 
     io.ns("/", move |socket: SocketRef| {
