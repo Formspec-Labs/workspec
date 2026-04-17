@@ -15,6 +15,7 @@ mod fixture;
 pub mod formspec_processor;
 mod meta;
 mod provenance;
+pub mod rules;
 pub mod stubs;
 pub mod trace;
 

@@ -13,6 +13,7 @@ thiserror = "2"
 time = { version = "0.3", features = ["formatting"] }
 wos-core = { path = "../wos-core" }
 wos-formspec-binding = { path = "../wos-formspec-binding" }
+wos-lint = { path = "../wos-lint" }
 wos-runtime = { path = "../wos-runtime" }
 
 [dev-dependencies]

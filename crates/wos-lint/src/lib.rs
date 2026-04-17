@@ -12,10 +12,11 @@
 
 mod diagnostic;
 mod document;
-mod rules;
+pub mod rules;
 
 pub use diagnostic::{Diagnostic, Severity};
 pub use document::{DocumentKind, WosDocument, WosProject};
+pub use rules::{all_lint_rules, Graduation, RuleMetadata, Tier};
 
 /// Lint a single WOS document (Tier 1 checks only).
 ///
