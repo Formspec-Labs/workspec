@@ -17,7 +17,7 @@
 - **§5.4 `wos-synth` crate** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). Flagship Claim A reference impl.
 - **§5.5 Synthesis benchmark** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Falsifies Claim A with metrics.
 - **§5.6 Repositioning docs** — README + POSITIONING updated (landed).
-- **§8 Open questions** — [doc](thoughts/reviews/2026-04-16-architecture-review-open-questions.md) captures 5 maintainer-decision questions (Claim A scope, `wos-synth` location, release tool, load-bearing seeds, compat-matrix convention). Each is linked to the plan(s) it blocks. Synthesized multi-reviewer recommendations added 2026-04-17.
+- **§8 Open questions** — [doc (archived 2026-04-17)](thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md) captured 5 maintainer-decision questions (Claim A scope, `wos-synth` location, release tool, load-bearing seeds, compat-matrix convention) plus a 6th (wos-synth ↔ benchmark split) added during synthesis. All six resolved 2026-04-17 with plan updates landed in §4.2 / §4.4 / §5.4 / §5.5.
 - **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). Adds three pytest suites (meta-validity, fixture validity, spec-example validity) modeled on parent Formspec's `tests/conformance/spec/test_spec_examples.py`. Closes the "no regression guard for schema edits" gap flagged in the code-review.
 
 **Missing / unknown references:** `ADR-0058 (wos-core-gap-analysis)` and `ADR-0057 (wos-core-implementation-boundary)` were cited from prior headers but do not exist at `../thoughts/adr/`. Status: unknown — either never authored, relocated, or inlined into other material. Resolve before next audit.

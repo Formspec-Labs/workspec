@@ -23,7 +23,7 @@
 ## Completion criteria
 
 1. Four CHANGELOG files in `wos-spec/changelogs/{kernel,governance,ai,advanced}.md`.
-2. Tag scheme: `wos-kernel-v1.0.0`, `wos-governance-v1.0.0`, `wos-ai-v0.5.0`, `wos-advanced-v0.1.0` (research).
+2. Tag scheme: `kernel-v1.0.0`, `governance-v1.0.0`, `ai-v0.5.0`, `advanced-v0.1.0` (research). Matches ADR 0063 step 4 convention (no extra project prefix — WOS is its own submodule, no namespace collision).
 3. `COMPATIBILITY-MATRIX.md` declares which stream version ranges are known-good together.
 4. Release workflow has four jobs (one per stream); each job only runs when files matching that stream changed.
 5. Vendor-facing doc explains: "claim `wos-kernel@X + wos-ai@Y`; see matrix for pairings."
