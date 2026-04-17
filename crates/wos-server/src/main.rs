@@ -1,7 +1,7 @@
 use clap::Parser;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-use wos_server::ServerConfig;
+use wos_server::config::{Cli, Command};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -15,8 +15,15 @@ async fn main() -> anyhow::Result<()> {
         .with(fmt::layer().with_target(false))
         .init();
 
-    let cfg = ServerConfig::parse();
-    cfg.validate()?;
-
-    wos_server::run(cfg).await
+    let cli = Cli::parse();
+    match cli.command {
+        None => {
+            cli.serve.validate()?;
+            wos_server::run(cli.serve).await
+        }
+        Some(Command::Export(args)) => {
+            args.server.validate()?;
+            wos_server::export::run(args).await
+        }
+    }
 }

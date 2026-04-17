@@ -1,12 +1,65 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// Top-level CLI: the default invocation is `wos-server` (no subcommand),
+/// which boots the server. Add `wos-server export <id>` to dump provenance
+/// to PROV-O / XES / OCEL.
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "wos-server",
     about = "Reference WOS HTTP + Socket.IO server",
     version
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    #[command(flatten)]
+    pub serve: ServerConfig,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum Command {
+    /// Export provenance for an instance to PROV-O / XES / OCEL.
+    Export(ExportArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ExportArgs {
+    /// Instance identifier to export.
+    pub instance_id: String,
+
+    /// Target format.
+    #[arg(long, value_enum, default_value_t = ExportFormat::ProvO)]
+    pub format: ExportFormat,
+
+    /// Namespace for minted IRIs. Must end with `:` or `/`.
+    #[arg(
+        long,
+        default_value = "urn:wos:prov:wos-server:"
+    )]
+    pub namespace: String,
+
+    /// Output path. `-` (default) writes to stdout.
+    #[arg(long, default_value = "-")]
+    pub out: String,
+
+    #[command(flatten)]
+    pub server: ServerConfig,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    #[value(name = "prov-o")]
+    ProvO,
+    Xes,
+    Ocel,
+}
+
+#[derive(Args, Debug, Clone)]
+#[command(
+    about = "Boot the HTTP + Socket.IO server"
 )]
 pub struct ServerConfig {
     /// TCP port to listen on.
