@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use wos_core::provenance::ProvenanceRecord;
+
 use crate::domain::{
     AiDisclosureView, ApplicantDeterminationView, CounterfactualsView, MilestoneView,
 };
@@ -7,6 +9,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::storage::StorageHandle;
 
 use super::bundle_service::BundleService;
+use super::instance_service::InstanceService;
 use super::provenance_service::ProvenanceService;
 
 pub struct ApplicantService {
@@ -42,8 +45,10 @@ impl ApplicantService {
             .map(|k| k.title)
             .unwrap_or_else(|| row.definition_url.clone());
 
+        let instance = InstanceService::parse(&row)?;
         let provenance = self.provenance.list(instance_id).await?;
-        let case_state = row.case_state();
+
+        let case_state = instance.case_state.clone();
         let decision = case_state
             .get("decision")
             .and_then(|v| v.as_str())
@@ -55,33 +60,44 @@ impl ApplicantService {
             .unwrap_or("Determination in progress.")
             .to_string();
 
-        let rules_applied: Vec<String> = provenance
-            .iter()
-            .flat_map(|p| p.reasoning.iter().flat_map(|r| r.rules_applied.iter().cloned()))
-            .collect();
         let evidence_considered: Vec<String> = case_state
             .get("evidence")
             .and_then(|v| v.as_array())
             .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_default();
 
+        // Provenance-derived rules/milestones pull from the spec-shaped
+        // `wos_core::ProvenanceRecord` embedded in each response.
+        let rules_applied: Vec<String> = provenance
+            .iter()
+            .flat_map(|p| {
+                p.record
+                    .data
+                    .as_ref()
+                    .and_then(|d| d.get("rulesApplied"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect();
+
         let milestones = provenance
             .iter()
             .enumerate()
             .map(|(i, p)| MilestoneView {
                 id: p.id.clone(),
-                label: p.event.clone(),
+                label: p.record.event.clone().unwrap_or_default(),
                 status: if i + 1 == provenance.len() {
                     "current".into()
                 } else {
                     "completed".into()
                 },
-                description: p
-                    .reasoning
-                    .as_ref()
-                    .and_then(|r| r.explanation.clone())
-                    .unwrap_or_default(),
-                date: Some(p.timestamp.clone()),
+                description: String::new(),
+                date: Some(p.record.timestamp.clone()).filter(|s| !s.is_empty()),
             })
             .collect();
 
@@ -90,14 +106,11 @@ impl ApplicantService {
             program_name,
             decision,
             date_issued: row.updated_at.to_rfc3339(),
-            deadline_date: row
-                .timers()
-                .as_array()
-                .and_then(|a| a.first())
-                .and_then(|t| t.get("deadline"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
+            deadline_date: instance
+                .timers
+                .first()
+                .map(|t| t.deadline.clone())
+                .unwrap_or_default(),
             benefits_continue: case_state
                 .get("benefitsContinue")
                 .and_then(|v| v.as_bool())
@@ -106,7 +119,11 @@ impl ApplicantService {
             evidence_considered,
             rules_applied,
             ai_disclosure: AiDisclosureView {
-                was_used: provenance.iter().any(|p| p.ai_narrative.is_some()),
+                // `actor_type == "agent"` is the spec's marker for AI-mediated
+                // actions (`wos_core::provenance::ProvenanceRecord.actor_type`).
+                was_used: provenance
+                    .iter()
+                    .any(|p| p.record.actor_type.as_deref() == Some("agent")),
                 description: None,
                 human_reviewer: None,
             },
@@ -124,24 +141,24 @@ impl ApplicantService {
     }
 
     pub async fn submit_appeal(&self, instance_id: &str, reason: &str) -> ApiResult<()> {
-        // Pre-compute the next provenance row (read-before-txn: safe here
-        // because the SQLite writer is single-threaded in WAL mode).
-        let payload = serde_json::json!({
-            "event": "appealFiled",
-            "actor": { "id": "applicant", "type": "human", "name": "Applicant" },
-            "facts": { "inputs": { "reason": reason }, "outputs": {}, "metadata": {} },
-        });
-        let prov_row = self.provenance.prepare_next(instance_id, "facts", payload).await?;
+        // Build a spec-shaped provenance record for the appeal filing.
+        let mut record = ProvenanceRecord::state_transition(
+            "_",
+            "appealed",
+            "appealFiled",
+            Some("applicant"),
+        );
+        record.actor_type = Some("human".into());
+        record.audit_layer = Some("facts".into());
+        record.data = Some(serde_json::json!({ "reason": reason }));
+
+        let prov_row = self.provenance.prepare_next(instance_id, &record).await?;
         let reason_s = reason.to_string();
 
         self.storage
             .update_instance_atomic(
                 instance_id,
                 &move |row| {
-                    // Mutate the caseState sub-object inside the embedded
-                    // CaseInstance JSON. If the shape is unexpected we coerce
-                    // into an empty object rather than bailing — the appeal
-                    // write is always safe to perform.
                     let inst = row.instance_json.as_object_mut().ok_or_else(|| {
                         crate::storage::StorageError::Other(
                             "instance_json is not an object".into(),

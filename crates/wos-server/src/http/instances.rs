@@ -5,11 +5,11 @@ use axum::Router;
 
 use crate::AppState;
 use crate::domain::{
-    AvailableTransitionView, CaseInstanceView, EvaluationResultView, ListQuery, PaginatedView,
-    ProvenanceRecordView, SubmitEventRequest,
+    AvailableTransitionView, EvaluationResultView, InstanceResponse, ListQuery, PaginatedView,
+    SubmitEventRequest,
 };
+use crate::domain::provenance::ProvenanceResponse;
 use crate::error::{ApiError, ApiResult};
-use crate::services::instance_service::InstanceService;
 use crate::storage::InstanceQuery;
 
 pub fn routes() -> Router<AppState> {
@@ -24,7 +24,7 @@ pub fn routes() -> Router<AppState> {
 async fn list(
     State(s): State<AppState>,
     Query(q): Query<ListQuery>,
-) -> ApiResult<Json<PaginatedView<CaseInstanceView>>> {
+) -> ApiResult<Json<PaginatedView<InstanceResponse>>> {
     let page = q.page.unwrap_or(1);
     let page_size = q.page_size.unwrap_or(25);
     let storage_query = InstanceQuery {
@@ -35,11 +35,10 @@ async fn list(
         page_size,
     };
     let page_result = s.storage.list_instances(storage_query).await?;
-    let items: Vec<CaseInstanceView> = page_result
-        .items
-        .iter()
-        .map(InstanceService::map_row)
-        .collect();
+    let mut items = Vec::with_capacity(page_result.items.len());
+    for row in &page_result.items {
+        items.push(s.services.instance.to_response(row).await?);
+    }
     Ok(Json(PaginatedView::new(
         items,
         page_result.total,
@@ -51,19 +50,19 @@ async fn list(
 async fn get_one(
     State(s): State<AppState>,
     Path(id): Path<String>,
-) -> ApiResult<Json<CaseInstanceView>> {
+) -> ApiResult<Json<InstanceResponse>> {
     let row = s
         .storage
         .get_instance(&id)
         .await?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(InstanceService::map_row(&row)))
+    Ok(Json(s.services.instance.to_response(&row).await?))
 }
 
 async fn provenance(
     State(s): State<AppState>,
     Path(id): Path<String>,
-) -> ApiResult<Json<Vec<ProvenanceRecordView>>> {
+) -> ApiResult<Json<Vec<ProvenanceResponse>>> {
     Ok(Json(s.services.provenance.list(&id).await?))
 }
 

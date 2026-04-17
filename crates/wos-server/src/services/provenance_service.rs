@@ -1,9 +1,8 @@
 use sha2::{Digest, Sha256};
+use wos_core::provenance::ProvenanceRecord;
 
-use crate::domain::{
-    ActorRef, CounterfactualView, CriteriaCheckView, FactsView, IntegrityView,
-    ProvenanceRecordView, ReasoningView,
-};
+use crate::domain::provenance::ProvenanceResponse;
+use crate::error::{ApiError, ApiResult};
 use crate::storage::{ProvenanceRow, StorageHandle, StorageResult};
 
 pub struct ProvenanceService {
@@ -15,54 +14,60 @@ impl ProvenanceService {
         Self { storage }
     }
 
-    pub async fn list(&self, instance_id: &str) -> StorageResult<Vec<ProvenanceRecordView>> {
+    /// Return the full, hash-chain-verified provenance history for
+    /// `instance_id`. Stored payloads are `wos_core::ProvenanceRecord`
+    /// serialisations; each row is returned as a `ProvenanceResponse`
+    /// that flattens the spec-defined record with the server's integrity
+    /// metadata at the top level.
+    pub async fn list(&self, instance_id: &str) -> ApiResult<Vec<ProvenanceResponse>> {
         let rows = self.storage.list_provenance(instance_id).await?;
-        Ok(rows.iter().map(row_to_view).collect())
+        rows.iter().map(row_to_response).collect()
     }
 
-    /// Build the next [`ProvenanceRow`] in the chain for `instance_id`,
-    /// computing `previous_hash` from the last stored row (or a genesis
-    /// zero-hash when the chain is empty).
+    /// Single-row convenience over [`Self::prepare_batch`].
     pub async fn prepare_next(
         &self,
         instance_id: &str,
-        tier: &str,
-        payload: serde_json::Value,
+        record: &ProvenanceRecord,
     ) -> StorageResult<ProvenanceRow> {
-        let rows = self
-            .prepare_batch(instance_id, &[(tier.to_string(), payload)])
-            .await?;
-        rows.into_iter()
-            .next()
-            .ok_or_else(|| StorageError::Other("prepare_batch returned empty".into()))
+        let rows = self.prepare_batch(instance_id, std::slice::from_ref(record)).await?;
+        rows.into_iter().next().ok_or_else(|| {
+            crate::storage::StorageError::Other("prepare_batch returned empty".into())
+        })
     }
 
-    /// Chain `payloads` onto the instance's provenance log. Each tuple
-    /// contributes one row; the batch shares a single starting
-    /// `previous_hash` read (the stored tail) and then self-chains within
-    /// the batch so N records from a single event submission all commit as
-    /// one atomic tail.
+    /// Build N new chain rows for `records`, sharing one read of the
+    /// stored tail and self-chaining within the batch so the whole set
+    /// commits as one atomic append.
     pub async fn prepare_batch(
         &self,
         instance_id: &str,
-        payloads: &[(String, serde_json::Value)],
+        records: &[ProvenanceRecord],
     ) -> StorageResult<Vec<ProvenanceRow>> {
         let last = self.storage.last_provenance(instance_id).await?;
         let (mut next_seq, mut previous_hash) = match last {
             Some(r) => (r.seq + 1, r.hash),
             None => (1, ZERO_HASH.to_string()),
         };
-        let mut out = Vec::with_capacity(payloads.len());
-        for (tier, payload) in payloads {
+        let mut out = Vec::with_capacity(records.len());
+        for record in records {
+            let tier = record
+                .audit_layer
+                .clone()
+                .unwrap_or_else(|| "facts".to_string());
             let timestamp = chrono::Utc::now();
-            let hash = chain_hash(&previous_hash, instance_id, next_seq, &timestamp, tier, payload);
+            let payload = serde_json::to_value(record)
+                .map_err(|e| crate::storage::StorageError::Other(format!(
+                    "ProvenanceRecord serialise: {e}"
+                )))?;
+            let hash = chain_hash(&previous_hash, instance_id, next_seq, &timestamp, &tier, &payload);
             out.push(ProvenanceRow {
                 id: uuid::Uuid::new_v4().to_string(),
                 instance_id: instance_id.to_string(),
                 seq: next_seq,
                 timestamp,
-                tier: tier.clone(),
-                payload: payload.clone(),
+                tier,
+                payload,
                 hash: hash.clone(),
                 previous_hash,
             });
@@ -73,9 +78,13 @@ impl ProvenanceService {
     }
 }
 
-const ZERO_HASH: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+pub(crate) const ZERO_HASH: &str =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
-/// Canonical hash: `sha256(previous_hash || canonical_json(record))`.
+/// Canonical integrity hash: `sha256(previous_hash || canonical_json(payload_envelope))`.
+///
+/// The envelope pins every field that MUST influence the hash; adding or
+/// reordering a field here is a chain-breaking change.
 pub fn chain_hash(
     previous_hash: &str,
     instance_id: &str,
@@ -98,7 +107,7 @@ pub fn chain_hash(
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-/// Verify the hash chain. Returns `Err(index)` of the first broken link.
+/// Verify the chain. Returns `Err(index)` of the first broken link.
 pub fn verify_chain(rows: &[ProvenanceRow]) -> Result<(), usize> {
     let mut expected_prev = ZERO_HASH.to_string();
     for (i, r) in rows.iter().enumerate() {
@@ -121,92 +130,17 @@ pub fn verify_chain(rows: &[ProvenanceRow]) -> Result<(), usize> {
     Ok(())
 }
 
-fn row_to_view(r: &ProvenanceRow) -> ProvenanceRecordView {
-    // The payload is free-form; try to project known shapes.
-    fn s(v: &serde_json::Value, k: &str) -> Option<String> {
-        v.get(k).and_then(|x| x.as_str()).map(|x| x.to_string())
-    }
-
-    let actor = r
-        .payload
-        .get("actor")
-        .map(|a| ActorRef {
-            id: s(a, "id").unwrap_or_else(|| "system".into()),
-            actor_type: s(a, "type").unwrap_or_else(|| "system".into()),
-            name: s(a, "name").unwrap_or_else(|| "system".into()),
-        })
-        .unwrap_or(ActorRef {
-            id: "system".into(),
-            actor_type: "system".into(),
-            name: "System".into(),
-        });
-
-    let facts = r
-        .payload
-        .get("facts")
-        .map(|f| FactsView {
-            inputs: f.get("inputs").cloned().unwrap_or(serde_json::json!({})),
-            outputs: f.get("outputs").cloned().unwrap_or(serde_json::json!({})),
-            metadata: f.get("metadata").cloned().unwrap_or(serde_json::json!({})),
-        })
-        .unwrap_or(FactsView {
-            inputs: serde_json::json!({}),
-            outputs: serde_json::json!({}),
-            metadata: serde_json::json!({}),
-        });
-
-    let reasoning = r.payload.get("reasoning").map(|x| ReasoningView {
-        rules_applied: x
-            .get("rulesApplied")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_default(),
-        criteria_checked: x
-            .get("criteriaChecked")
-            .and_then(|a| a.as_array())
-            .map(|a| {
-                a.iter()
-                    .map(|c| CriteriaCheckView {
-                        label: s(c, "label").unwrap_or_default(),
-                        passed: c.get("passed").and_then(|v| v.as_bool()).unwrap_or(false),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        explanation: s(x, "explanation"),
-        source_authority: s(x, "sourceAuthority"),
-    });
-
-    let counterfactual = r.payload.get("counterfactual").map(|x| CounterfactualView {
-        positive: x
-            .get("positive")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_default(),
-        negative: x
-            .get("negative")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-            .unwrap_or_default(),
-    });
-
-    ProvenanceRecordView {
+pub fn row_to_response(r: &ProvenanceRow) -> ApiResult<ProvenanceResponse> {
+    let record: ProvenanceRecord = serde_json::from_value(r.payload.clone())
+        .map_err(|e| ApiError::ServiceUnavailable(format!(
+            "provenance payload is not a wos_core::ProvenanceRecord: {e}"
+        )))?;
+    Ok(ProvenanceResponse {
+        record,
         id: r.id.clone(),
         instance_id: r.instance_id.clone(),
-        timestamp: r.timestamp.to_rfc3339(),
-        tier: r.tier.clone(),
-        actor,
-        event: s(&r.payload, "event").unwrap_or_default(),
-        source_state: s(&r.payload, "sourceState").unwrap_or_default(),
-        target_state: s(&r.payload, "targetState").unwrap_or_default(),
-        facts,
-        reasoning,
-        ai_narrative: None,
-        counterfactual,
-        authority_chain: None,
-        integrity: IntegrityView {
-            hash: r.hash.clone(),
-            previous_hash: r.previous_hash.clone(),
-        },
-    }
+        seq: r.seq,
+        hash: r.hash.clone(),
+        previous_hash: r.previous_hash.clone(),
+    })
 }

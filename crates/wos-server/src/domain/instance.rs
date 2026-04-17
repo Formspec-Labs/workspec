@@ -1,102 +1,29 @@
+//! Server-specific additions to the spec's instance model.
+//!
+//! `InstanceResponse` wraps a `wos_core::instance::CaseInstance` with
+//! server-resolved fields that don't live on the instance itself
+//! (currently `impactLevel` and `definitionTitle`). The instance payload
+//! is **flattened** at the serde layer so the JSON body matches
+//! `CaseInstance`'s spec-defined shape plus the extra fields at the
+//! top level.
+
 use serde::{Deserialize, Serialize};
+use wos_core::instance::CaseInstance;
 
-/// `CaseInstanceView` in `WosBackend.ts:37`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// `GET /api/instances/:id` response.
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CaseInstanceView {
-    pub instance_id: String,
-    pub definition_url: String,
-    pub definition_version: String,
-    pub status: String,
-    pub configuration: Vec<String>,
-    pub case_state: serde_json::Value,
-    pub active_tasks: Vec<ActiveTaskView>,
-    pub timers: Vec<TimerView>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub governance_state: Option<GovernanceStateView>,
+pub struct InstanceResponse {
+    #[serde(flatten)]
+    pub instance: CaseInstance,
     pub impact_level: String,
-    pub created_at: String,
-    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub definition_title: Option<String>,
 }
 
-/// `ActiveTaskView` in `WosBackend.ts:56`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActiveTaskView {
-    pub task_id: String,
-    pub task_ref: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assigned_actor: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub contract_ref: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub binding: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deadline: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub impact_level: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-/// `TimerView` in `WosBackend.ts:69`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TimerView {
-    pub timer_id: String,
-    pub deadline: String,
-    pub event: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope_state: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GovernanceStateView {
-    pub active_delegations: Vec<DelegationShortView>,
-    pub active_holds: Vec<HoldView>,
-    pub review_state: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DelegationShortView {
-    pub delegator_id: String,
-    pub delegate_id: String,
-    pub scope: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authority: Option<String>,
-    pub granted_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HoldView {
-    pub hold_type: String,
-    pub started_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expected_end: Option<String>,
-    pub resume_trigger: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hold_state: Option<String>,
-}
-
-/// `EvaluationResult` in `WosBackend.ts:93`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EvaluationResultView {
-    pub previous_configuration: Vec<String>,
-    pub new_configuration: Vec<String>,
-    pub events_fired: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub provenance_record: Option<crate::domain::ProvenanceRecordView>,
-    pub case_state_mutations: serde_json::Value,
-}
-
-/// `AvailableTransition` in `WosBackend.ts:101`.
+/// `AvailableTransition` is not a spec type; the enumeration exists only
+/// to drive client-side UX. Guard satisfaction reporting is best-effort
+/// (authoritative evaluation happens inside `Evaluator::process_event`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableTransitionView {
@@ -105,12 +32,45 @@ pub struct AvailableTransitionView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guard: Option<String>,
     pub guard_satisfied: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
-/// `PaginatedResult<T>` in `WosBackend.ts:146`. Note `totalPages`.
+/// `POST /api/instances/:id/events` response. Summarises the effect of an
+/// evaluator step from the caller's perspective. The full per-record
+/// provenance chain is still available via `/instances/:id/provenance`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluationResultView {
+    pub previous_configuration: Vec<String>,
+    pub new_configuration: Vec<String>,
+    pub events_fired: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_record: Option<crate::domain::provenance::ProvenanceResponse>,
+    pub case_state_mutations: serde_json::Value,
+}
+
+/// A task-listing row: flattens `wos_core::instance::ActiveTask` and
+/// joins per-instance context (definition url, title, case state) so
+/// inbox UIs don't need to round-trip back for each task.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskListItem {
+    #[serde(flatten)]
+    pub task: wos_core::instance::ActiveTask,
+    pub instance_id: String,
+    pub definition_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub definition_title: Option<String>,
+    pub configuration: Vec<String>,
+    pub case_state: serde_json::Value,
+}
+
+/// Generic paginated wrapper. Used wherever the server has to page through
+/// a storage query (instances, tasks). 1-indexed `page` + `pageSize` to
+/// match the most common REST pagination convention.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaginatedView<T> {
@@ -138,28 +98,7 @@ impl<T> PaginatedView<T> {
     }
 }
 
-/// `TaskListItem` in `WosPorts.ts:10`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskListItemView {
-    pub task_id: String,
-    pub instance_id: String,
-    pub task_ref: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assigned_actor: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deadline: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub impact_level: Option<String>,
-    pub configuration: Vec<String>,
-    pub case_state: serde_json::Value,
-    pub definition_title: String,
-    pub definition_url: String,
-    pub created_at: String,
-}
-
-/// `POST /api/instances/:id/events` body.
+/// `POST /api/instances/:id/events` request body.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitEventRequest {
@@ -169,7 +108,7 @@ pub struct SubmitEventRequest {
     pub data: Option<serde_json::Value>,
 }
 
-/// Query params for list-instances / list-tasks.
+/// Shared query-string shape for list endpoints.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ListQuery {
