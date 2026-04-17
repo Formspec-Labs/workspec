@@ -78,6 +78,12 @@ impl EvalService {
             .map_err(|e| ApiError::ServiceUnavailable(format!("evaluator init failed: {e}")))?;
 
         let previous_configuration = evaluator.configuration().active_states().to_vec();
+        // Snapshot the evaluator's provenance depth BEFORE the event — any
+        // records produced during `process_event` land strictly after this
+        // cursor. Persisting only the delta (not the entire log each time)
+        // keeps our stored chain strictly append-only.
+        let prov_cursor_before = evaluator.provenance().records().len();
+
         let fired = evaluator
             .process_event(&req.event, Some(&req.actor_id), req.data.as_ref())
             .map_err(|e| ApiError::BadRequest(format!("evaluator rejected event: {e}")))?;
@@ -98,33 +104,49 @@ impl EvalService {
             .unwrap_or(serde_json::json!({}));
         let mutations = diff_case_state(&case_state_before, &case_state_after);
 
-        // Pre-compute the next provenance row so the atomic write closure is
-        // pure sync.
-        let payload = serde_json::json!({
-            "event": req.event,
-            "sourceState": previous_configuration.first().cloned().unwrap_or_default(),
-            "targetState": new_configuration.first().cloned().unwrap_or_default(),
-            "actor": {
-                "id": req.actor_id,
-                "type": "human",
-                "name": req.actor_id,
-            },
-            "facts": {
-                "inputs": req.data.clone().unwrap_or(serde_json::json!({})),
-                "outputs": case_state_after,
-                "metadata": { "fired": fired },
-            },
-        });
-        let prov_row = self
-            .provenance
-            .prepare_next(instance_id, "facts", payload)
-            .await?;
+        // Map every new evaluator-emitted record to a stored payload. Records
+        // are chained sha256-linked in order (see `prepare_batch`).
+        let new_records: Vec<wos_core::provenance::ProvenanceRecord> = evaluator
+            .provenance()
+            .records()
+            .iter()
+            .skip(prov_cursor_before)
+            .cloned()
+            .collect();
+
+        let mut payloads: Vec<(String, serde_json::Value)> = new_records
+            .iter()
+            .map(|r| (classify_tier(r), record_to_payload(r, &req.actor_id)))
+            .collect();
+
+        // If the evaluator emitted nothing (rare: no transition, no action),
+        // still record the submission attempt so the provenance chain
+        // reflects the event — matching the pre-refactor behaviour.
+        if payloads.is_empty() {
+            payloads.push((
+                "facts".into(),
+                serde_json::json!({
+                    "event": req.event,
+                    "sourceState": previous_configuration.first().cloned().unwrap_or_default(),
+                    "targetState": new_configuration.first().cloned().unwrap_or_default(),
+                    "actor": { "id": req.actor_id, "type": "human", "name": req.actor_id },
+                    "facts": {
+                        "inputs": req.data.clone().unwrap_or(serde_json::json!({})),
+                        "outputs": case_state_after,
+                        "metadata": { "fired": fired, "note": "no transition" },
+                    },
+                }),
+            ));
+        }
+
+        let prov_rows = self.provenance.prepare_batch(instance_id, &payloads).await?;
+        let head_record_for_view = prov_rows.first().cloned();
 
         let status = status_from_snapshot(&new_instance_json);
         let impact_level = row.impact_level.clone();
 
         let new_instance_json_mut = std::sync::Arc::new(new_instance_json);
-        let prov_row_mut = std::sync::Arc::new(prov_row.clone());
+        let prov_rows_mut = std::sync::Arc::new(prov_rows);
         let status_cloned = status.clone();
         let impact_level_cloned = impact_level.clone();
 
@@ -133,7 +155,7 @@ impl EvalService {
                 current.instance_json = (*new_instance_json_mut).clone();
                 current.status = status_cloned.clone();
                 current.impact_level = impact_level_cloned.clone();
-                Ok(vec![(*prov_row_mut).clone()])
+                Ok((*prov_rows_mut).clone())
             })
             .await?;
 
@@ -141,7 +163,7 @@ impl EvalService {
             previous_configuration,
             new_configuration,
             events_fired,
-            provenance_record: Some(row_to_view(&prov_row)),
+            provenance_record: head_record_for_view.as_ref().map(row_to_view),
             case_state_mutations: mutations,
         })
     }
@@ -205,6 +227,70 @@ fn walk_states(
         for region in state.regions.values() {
             walk_states(&region.states, active, out);
         }
+    }
+}
+
+/// Map a wos-core `ProvenanceRecord` into the loose `payload` JSON shape
+/// our storage layer expects. Every server-side provenance row follows this
+/// envelope, which in turn is what `ProvenanceService::row_to_view` and the
+/// export CLI read back.
+fn record_to_payload(
+    r: &wos_core::provenance::ProvenanceRecord,
+    fallback_actor: &str,
+) -> serde_json::Value {
+    let actor_id = r.actor_id.clone().unwrap_or_else(|| fallback_actor.to_string());
+    let actor_type = r.actor_type.clone().unwrap_or_else(|| "system".into());
+    serde_json::json!({
+        "recordKind": serde_json::to_value(r.record_kind).unwrap_or(serde_json::Value::Null),
+        "event": r.event.clone().unwrap_or_default(),
+        "sourceState": r.from_state.clone().unwrap_or_default(),
+        "targetState": r.to_state.clone().unwrap_or_default(),
+        "actor": {
+            "id": actor_id,
+            "type": actor_type,
+            "name": r.actor_id.clone().unwrap_or_else(|| fallback_actor.to_string()),
+        },
+        "facts": {
+            "inputs": serde_json::json!({}),
+            "outputs": r.data.clone().unwrap_or(serde_json::json!({})),
+            "metadata": {
+                "inputs": r.inputs,
+                "outputs": r.outputs,
+                "inputDigest": r.input_digest,
+                "outputDigest": r.output_digest,
+                "lifecycleState": r.lifecycle_state,
+                "definitionVersion": r.definition_version,
+            },
+        },
+    })
+}
+
+/// Route a wos-core record to one of the four Semantic-Profile tiers the
+/// studio recognises: `facts | reasoning | ai-narrative | counterfactual`.
+/// Deontic, autonomy, and confidence checks produce reasoning-tier records;
+/// everything else defaults to `facts` (S6.5 / the ProvenanceRecord
+/// `audit_layer` column in wos-core).
+fn classify_tier(r: &wos_core::provenance::ProvenanceRecord) -> String {
+    if let Some(tier) = r.audit_layer.as_deref() {
+        return tier.to_string();
+    }
+    use wos_core::provenance::ProvenanceKind as K;
+    match r.record_kind {
+        K::DeonticViolation
+        | K::DeonticEvaluation
+        | K::DeonticResolution
+        | K::DeonticBypass
+        | K::RightsViolation
+        | K::ConsistencyViolation
+        | K::AutonomyViolation
+        | K::AutonomyCapped
+        | K::AutonomyComputed
+        | K::HumanTaskCreated
+        | K::ToolViolation
+        | K::EscalationPending
+        | K::AutonomyDemotion
+        | K::ConfidenceViolation => "reasoning".into(),
+        _ => "facts".into(),
     }
 }
 

@@ -29,24 +29,47 @@ impl ProvenanceService {
         tier: &str,
         payload: serde_json::Value,
     ) -> StorageResult<ProvenanceRow> {
+        let rows = self
+            .prepare_batch(instance_id, &[(tier.to_string(), payload)])
+            .await?;
+        rows.into_iter()
+            .next()
+            .ok_or_else(|| StorageError::Other("prepare_batch returned empty".into()))
+    }
+
+    /// Chain `payloads` onto the instance's provenance log. Each tuple
+    /// contributes one row; the batch shares a single starting
+    /// `previous_hash` read (the stored tail) and then self-chains within
+    /// the batch so N records from a single event submission all commit as
+    /// one atomic tail.
+    pub async fn prepare_batch(
+        &self,
+        instance_id: &str,
+        payloads: &[(String, serde_json::Value)],
+    ) -> StorageResult<Vec<ProvenanceRow>> {
         let last = self.storage.last_provenance(instance_id).await?;
-        let (seq, previous_hash) = match last {
+        let (mut next_seq, mut previous_hash) = match last {
             Some(r) => (r.seq + 1, r.hash),
             None => (1, ZERO_HASH.to_string()),
         };
-        let timestamp = chrono::Utc::now();
-        let id = uuid::Uuid::new_v4().to_string();
-        let hash = chain_hash(&previous_hash, instance_id, seq, &timestamp, tier, &payload);
-        Ok(ProvenanceRow {
-            id,
-            instance_id: instance_id.to_string(),
-            seq,
-            timestamp,
-            tier: tier.to_string(),
-            payload,
-            hash,
-            previous_hash,
-        })
+        let mut out = Vec::with_capacity(payloads.len());
+        for (tier, payload) in payloads {
+            let timestamp = chrono::Utc::now();
+            let hash = chain_hash(&previous_hash, instance_id, next_seq, &timestamp, tier, payload);
+            out.push(ProvenanceRow {
+                id: uuid::Uuid::new_v4().to_string(),
+                instance_id: instance_id.to_string(),
+                seq: next_seq,
+                timestamp,
+                tier: tier.clone(),
+                payload: payload.clone(),
+                hash: hash.clone(),
+                previous_hash,
+            });
+            previous_hash = hash;
+            next_seq += 1;
+        }
+        Ok(out)
     }
 }
 
