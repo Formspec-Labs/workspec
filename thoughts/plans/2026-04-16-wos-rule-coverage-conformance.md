@@ -71,16 +71,40 @@ pub enum Graduation {
 
 - [ ] **Step 1.4:** Commit. `build: add fixtures and graduation metadata to WOS rule registry`.
 
-## Task 2: Backfill fixture links for existing tested rules
+## Task 2: Backfill fixture links + seed load-bearing set
 
 **Files:**
 - Modify: every file under `crates/wos-lint/src/rules/` and `crates/wos-conformance/src/rules/`.
+
+**Background (from [open questions Q4 decision, 2026-04-17](../reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** The ladder uses a four-state graduation (`Draft` → `Tested` → `Stable` → `LoadBearing`). Promotion to `LoadBearing` uses a four-part mechanical test (specRef + suggestedFix + fixture + removal-breaks-conformance). Initial seeded `LoadBearing` set is the union of all three reviewers' proposals, with K-012 / K-017 held at `Stable` pending an explicit audit.
 
 - [ ] **Step 2.1:** For each rule that already has a passing fixture in the tree, promote it to `graduation: Graduation::Tested` and set `fixtures` to the fixture paths. Use `grep -r <rule-id>` in fixtures/ + tests to find the links.
 
 - [ ] **Step 2.2:** Record untouched rules as still `Draft`. Do NOT fabricate fixture links — the honesty dividend depends on the ladder reflecting reality.
 
-- [ ] **Step 2.3:** Commit. `docs: backfill fixture links on promoted WOS lint rules`.
+- [ ] **Step 2.3:** Apply the mechanical promotion test to every candidate. A rule promotes to `LoadBearing` only if ALL four parts are met:
+  1. Rule metadata has a normative `spec_ref: &'static str` citing a `§` in a canonical spec file (e.g., `"kernel/spec.md#§5.3"`).
+  2. Rule metadata has an imperative `suggested_fix: &'static str` (non-empty).
+  3. `fixtures.len() >= 1`.
+  4. Removing the rule from the active set causes at least one conformance test to fail. **Verified by Task 3 automation, not by inspection.**
+
+- [ ] **Step 2.4:** Seeded initial `LoadBearing` set on first promotion pass (exactly these rules; everything else stays at `Tested` or below):
+  - **K-023** (terminal-without-transition)
+  - **K-030** (extension-prefix)
+  - **K-016** (mutation history append-only)
+  - **K-020** (every mutation produces Facts provenance)
+  - **K-047** (case relationships MUST NOT affect lifecycle evaluation)
+  - **G-037**, **G-042**, **G-043** (governance structural invariants)
+  - **G-044**, **G-045** (delegation date ordering)
+  - **AI-024** (agent-reference condition)
+
+- [ ] **Step 2.5:** Held at `Stable` pending Step 2.7 audit: **K-012**, **K-017**. Do not promote these in this task.
+
+- [ ] **Step 2.6:** Commit. `docs: backfill fixture links + seed load-bearing graduation ladder`.
+
+- [ ] **Step 2.7:** **K-012 / K-017 audit — separate commit.** For each of these two rules, answer in writing: "name the fixture that breaks when this rule is disabled." If an existing fixture breaks, record that fixture name in rule metadata `fixtures` and promote. If no existing fixture breaks, either (a) author a new fixture that breaks without the rule — then promote — or (b) leave at `Stable`. Do not write a fixture whose only purpose is to justify the promotion — that defeats the ratchet.
+
+- [ ] **Step 2.8:** Commit the audit outcome. `docs: K-012/K-017 load-bearing audit — <promoted|held>`.
 
 ## Task 3: Failing CI test — no un-linked rules past Draft
 
@@ -157,6 +181,23 @@ Graduation ladder:
 
 - [ ] **Step 6.1:** Add a job that runs `cargo run -p wos-conformance -- coverage --fail-on-stale`. Fails the PR if the matrix is stale or any promoted rule is un-linked.
 - [ ] **Step 6.2:** Commit. `build: CI gate for WOS rule-coverage drift`.
+
+## Task 7: Automate criterion (iv) of the `LoadBearing` promotion test
+
+**Files:**
+- Create: `crates/wos-conformance/src/bin/ratchet-check.rs` (or a subcommand on an existing binary).
+- Modify: `.github/workflows/wos-coverage.yml` (add a slow-path job).
+
+**Background (from [Q4 Action item](../reviews/2026-04-16-architecture-review-open-questions.md#q4-which-rules-today-are-load-bearing-on-the-graduation-ladder)):** "Removing the rule permits a conformance-suite regression" is the hardest of the four criteria to verify by inspection. Without automation it collapses to judgment, and the ratchet becomes aspirational. Run this check only at promotion time (when a PR changes a rule's `graduation` to `LoadBearing`), not per-PR — the job is O(n × conformance-suite) and expensive.
+
+- [ ] **Step 7.1:** Implement `wos-conformance ratchet-check --rule <id>`:
+  1. Disable the named rule in the active registry.
+  2. Run the full conformance suite.
+  3. Exit 0 (ratchet-safe) iff at least one test fails with the rule disabled; non-zero otherwise.
+
+- [ ] **Step 7.2:** Add a CI job that detects `graduation: Graduation::LoadBearing` additions in the diff and runs `ratchet-check` for each newly-promoted rule. Fails the PR if any check returns non-zero.
+
+- [ ] **Step 7.3:** Commit. `feat: ratchet-check automates criterion (iv) of LoadBearing promotion test`.
 
 ---
 

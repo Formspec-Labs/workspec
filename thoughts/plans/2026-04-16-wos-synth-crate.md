@@ -2,13 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `wos-synth` — the reference LLM-authoring harness — as a fourth crate alongside `wos-core`, `wos-lint`, `wos-conformance`. It takes natural language (+ optional context), generates a workflow document, lints it, applies fixes, runs conformance, iterates until stable, and emits the final document plus a trace of the loop.
+**Goal:** Build `wos-synth` — the reference LLM-authoring harness — as a fourth crate alongside `wos-core`, `wos-lint`, `wos-conformance`. It takes natural language (+ optional context), generates a workflow document, lints it, applies fixes, runs conformance, iterates until stable, and emits the final document plus a trace of the loop. `wos-synth` is the authoring demo (single spec); the separate [`wos-bench` crate](./2026-04-16-wos-synthesis-benchmark.md) is the measurement harness that imports `wos-synth` as a library.
 
 **Architecture:** Thin orchestrator. It does not embed an LLM; it calls a provider via a pluggable trait. Default provider uses the Anthropic SDK (Opus 4.7 with prompt caching). The loop is deterministic modulo the LLM: generate → diagnostics → targeted repair prompt → diagnostics → stop when diagnostics are empty or iteration cap reached. Prompt assembly consumes the schemas, the BLUF spec digests, and the diagnostic stream from `wos-lint` and `wos-conformance`.
 
-**Tech Stack:** Rust (new `wos-synth` crate), `anthropic-sdk` or equivalent via HTTP, reqwest, tokio. Optional: llama-cpp fallback provider for offline runs.
+Provider deps, LLM-client code, and the `anthropic-sdk` dependency are gated behind a **non-default `synth` Cargo feature**. Default workspace builds (`cargo build --workspace`) compile `wos-synth`'s public types (provider trait, prompt types, trace types) without pulling any LLM client. A single CI job exercises `--features synth`. This makes the feature gate enforced rather than theatre — a default build that silently pulls an LLM client would defeat the purpose. Decision and rationale: [open questions Q2](../reviews/2026-04-16-architecture-review-open-questions.md#q2-should-wos-synth-live-in-wos-spec-or-a-sibling-repo).
 
-**Spec anchor:** [architecture-review-handoff.md §5.4](../archive/reviews/2026-04-16-architecture-review-handoff.md) — the reference impl for [Claim A](../../POSITIONING.md).
+**Tech Stack:** Rust (new `wos-synth` crate), `anthropic-sdk` or equivalent via HTTP, reqwest, tokio (all gated behind `--features synth`). Optional: llama-cpp fallback provider for offline runs.
+
+**Spec anchor:** [architecture-review-handoff.md §5.4](../archive/reviews/2026-04-16-architecture-review-handoff.md) — the reference impl for [Claim A](../../POSITIONING.md). Location (in-tree with extraction trigger) resolved in [open questions Q2](../reviews/2026-04-16-architecture-review-open-questions.md#q2-should-wos-synth-live-in-wos-spec-or-a-sibling-repo). Claim A's first-class status resolved in [open questions Q1](../reviews/2026-04-16-architecture-review-open-questions.md#q1-is-claim-a-llm-authoring-an-accepted-first-class-goal). Two-crate split (synth + bench) resolved in [open questions Q6](../reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two).
 
 ---
 
@@ -40,16 +42,51 @@
 
 ---
 
-## Task 1: Scaffold the crate
+## Task 1: Scaffold the crate with feature-gated provider deps
 
 **Files:**
-- Create: `crates/wos-synth/Cargo.toml`, `src/lib.rs`, `src/main.rs`.
+- Create: `crates/wos-synth/Cargo.toml`, `src/lib.rs`, `src/main.rs`, `README.md`.
 - Modify: root `Cargo.toml`.
+- Modify or create: CI workflow.
 
-- [ ] **Step 1.1:** Add to workspace `members`.
-- [ ] **Step 1.2:** Deps: `serde`, `serde_json`, `clap`, `reqwest`, `tokio`, `thiserror`, `tracing`, `wos-lint`, `wos-conformance`, `wos-core`.
-- [ ] **Step 1.3:** `cargo build -p wos-synth` — green, even though lib is empty.
-- [ ] **Step 1.4:** Commit. `build: scaffold wos-synth crate`.
+- [ ] **Step 1.1:** Add `crates/wos-synth/` to workspace `members`.
+
+- [ ] **Step 1.2:** Cargo features:
+
+```toml
+[features]
+default = []
+# Enables LLM providers. Default builds do NOT pull any LLM client.
+synth = ["reqwest", "tokio", "anthropic-sdk"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+thiserror = "1"
+tracing = "0.1"
+wos-core = { path = "../wos-core" }
+wos-lint = { path = "../wos-lint" }
+wos-conformance = { path = "../wos-conformance" }
+
+# Feature-gated provider dependencies
+reqwest = { version = "0.12", optional = true, features = ["json"] }
+tokio = { version = "1", optional = true, features = ["full"] }
+anthropic-sdk = { version = "0.1", optional = true }
+```
+
+- [ ] **Step 1.3:** `cargo build --workspace` (no features) — green, zero `reqwest`/`tokio`/`anthropic-sdk` in the dep graph. `cargo build -p wos-synth --features synth` — also green. Verify with `cargo tree --prefix depth | grep -E 'reqwest|tokio|anthropic'` — absent without the feature.
+
+- [ ] **Step 1.4:** Add CI job matrix:
+  - Default job: `cargo build --workspace && cargo test --workspace` (no `--features synth`).
+  - Synth job: `cargo build -p wos-synth --features synth && cargo test -p wos-synth --features synth` — runs only when `crates/wos-synth/` or `Cargo.lock` changes.
+
+- [ ] **Step 1.5:** Author `crates/wos-synth/README.md` with:
+  1. **Boundary statement** (per Q6): *This crate owns the provider abstraction and prompt primitives. The benchmark crate (`wos-bench`) imports these as a library dependency; do not fold them together, do not split the provider abstraction across two crates.*
+  2. **Extraction trigger** (per Q2): *`wos-synth` graduates to a sibling repository when BOTH of these are true: the provider trait has survived one full release train without a breaking change AND a second production-quality provider implementation exists beyond the default. Both parts are observable; neither is calendar-based.*
+  3. **Benchmark-regressions-do-not-motivate-spec-changes policy** (per Q1): *Benchmark regressions do not motivate normative-spec changes unless the benchmark is exercising a claim the spec actually makes. Spec PRs whose motivation cites a benchmark failure must be reviewed against this rule.*
+
+- [ ] **Step 1.6:** Commit. `build: scaffold wos-synth crate with --features synth gate + boundary docs`.
 
 ## Task 2: Provider trait and mock implementation
 
