@@ -16,6 +16,7 @@ pub mod formspec_processor;
 mod meta;
 mod provenance;
 pub mod stubs;
+pub mod trace;
 
 pub use engine::WorkflowEngine;
 pub use fixture::{
@@ -30,6 +31,9 @@ pub use meta::{
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{StubService, StubValidator};
+pub use trace::{
+    ConformanceTrace, Delta, Event, GuardEvaluation, Outcome, PolicyApplication, TraceStep,
+};
 pub use wos_core::proxy::observe_assist_governance_proxy;
 
 /// Run a conformance fixture and return the results.
