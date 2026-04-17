@@ -1,0 +1,71 @@
+name: wos-synth (feature-gated build)
+
+# Dedicated job for the --features synth build matrix. Default workspace CI
+# (see schema-regression.yml and any Rust-wide job) does NOT set --features
+# synth, so provider dependencies (reqwest, tokio, anthropic-sdk) never
+# enter the default dep graph. This job exercises the synth-enabled build
+# and its tests, and runs only when wos-synth or the lockfile changes.
+
+on:
+  pull_request:
+    paths:
+      - "crates/wos-synth/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - ".github/workflows/wos-synth.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/wos-synth/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - ".github/workflows/wos-synth.yml"
+
+jobs:
+  build-and-test-synth:
+    name: cargo build/test -p wos-synth --features synth
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-synth-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-synth-
+
+      - name: Build wos-synth with --features synth
+        run: cargo build -p wos-synth --features synth
+
+      - name: Test wos-synth with --features synth
+        run: cargo test -p wos-synth --features synth
+
+  verify-feature-gate:
+    name: default build has no LLM deps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify provider deps absent from default dep graph
+        run: |
+          set -euo pipefail
+          leaked=$(cargo tree --workspace --prefix none 2>/dev/null | grep -E '^(reqwest|tokio|anthropic-sdk)( |$)' || true)
+          if [ -n "$leaked" ]; then
+            echo "Feature gate broken: provider deps present in default build:"
+            echo "$leaked"
+            exit 1
+          fi
+          echo "OK: no provider deps in default workspace build."

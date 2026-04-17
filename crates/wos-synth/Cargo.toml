@@ -1,0 +1,35 @@
+[package]
+name = "wos-synth"
+version = "0.1.0"
+edition = "2024"
+description = "Reference LLM-authoring harness for WOS (Workflow Orchestration Standard) documents"
+license = "Apache-2.0"
+repository = "https://github.com/formspec/formspec"
+
+[features]
+default = []
+# Enables LLM providers. Default builds do NOT pull any LLM client.
+# See README.md for the boundary with wos-bench, the extraction trigger,
+# and the benchmark-causality guardrail.
+synth = ["reqwest", "tokio", "anthropic-sdk"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+tracing = "0.1"
+wos-core = { path = "../wos-core" }
+wos-lint = { path = "../wos-lint" }
+wos-conformance = { path = "../wos-conformance" }
+
+# Feature-gated provider dependencies. Absent from the dep graph unless
+# --features synth is passed. Keep this contract enforced: do not add
+# unconditional reqwest/tokio/LLM-client deps to this section.
+reqwest = { version = "0.12", optional = true, features = ["json"] }
+tokio = { version = "1", optional = true, features = ["full"] }
+anthropic-sdk = { version = "0.1", optional = true }
+
+[[bin]]
+name = "wos-synth"
+path = "src/main.rs"
