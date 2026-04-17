@@ -2379,6 +2379,68 @@ mod tests {
         );
     }
 
+    /// `stringify_scalar` handles every `serde_json::Value` variant. The
+    /// string-unquoted case is covered above (finding-2 regression); this
+    /// test exercises the remaining branches so a future refactor of the
+    /// `other => other.to_string()` fall-through cannot silently change
+    /// behavior for bools, null, objects, or arrays. Numbers are covered
+    /// indirectly by `inputs_outputs_set_for_case_state_mutation` above.
+    #[test]
+    fn outputs_stringification_handles_all_value_types() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+
+        // Bool → unquoted `"true"` / `"false"`.
+        let mut bool_records = vec![ProvenanceRecord::case_state_mutation(
+            "/approved",
+            &serde_json::json!(true),
+            None,
+            "UnderReview",
+        )];
+        populate_provenance_record_fields(&mut bool_records, &kernel, "1.0.0");
+        assert_eq!(bool_records[0].outputs, vec!["true".to_string()]);
+
+        // Null → `"null"`.
+        let mut null_records = vec![ProvenanceRecord::case_state_mutation(
+            "/cleared",
+            &serde_json::Value::Null,
+            None,
+            "UnderReview",
+        )];
+        populate_provenance_record_fields(&mut null_records, &kernel, "1.0.0");
+        assert_eq!(null_records[0].outputs, vec!["null".to_string()]);
+
+        // Object → valid JSON serialization that round-trips to the original.
+        // We don't assert exact bytes — `serde_json` key order is deterministic
+        // today but tying the test to that is brittle, and the contract is
+        // "some valid JSON representation", not "these exact bytes".
+        let object_value = serde_json::json!({ "k": 1, "nested": { "x": true } });
+        let mut object_records = vec![ProvenanceRecord::case_state_mutation(
+            "/payload",
+            &object_value,
+            None,
+            "UnderReview",
+        )];
+        populate_provenance_record_fields(&mut object_records, &kernel, "1.0.0");
+        let object_output = &object_records[0].outputs[0];
+        let round_trip: serde_json::Value = serde_json::from_str(object_output)
+            .expect("object output must be valid JSON");
+        assert_eq!(round_trip, object_value, "object output must round-trip");
+
+        // Array → same round-trip contract.
+        let array_value = serde_json::json!([1, "two", false, null]);
+        let mut array_records = vec![ProvenanceRecord::case_state_mutation(
+            "/history",
+            &array_value,
+            None,
+            "UnderReview",
+        )];
+        populate_provenance_record_fields(&mut array_records, &kernel, "1.0.0");
+        let array_output = &array_records[0].outputs[0];
+        let round_trip: serde_json::Value = serde_json::from_str(array_output)
+            .expect("array output must be valid JSON");
+        assert_eq!(round_trip, array_value, "array output must round-trip");
+    }
+
     #[test]
     fn digests_computed_and_non_empty_when_inputs_present() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
