@@ -197,10 +197,15 @@ fn event_attributes(record: &ProvenanceRecord) -> Vec<Value> {
         attributes.push(json!({ "name": "event", "value": event }));
     }
     if let Some(data) = record.data.as_ref() {
-        // Emit `data` as a single structured attribute rather than flattening;
-        // the JSON subtree shape is domain-specific and OCEL consumers can
-        // introspect it as nested JSON.
-        attributes.push(json!({ "name": "data", "value": data.clone() }));
+        // OCEL 2.0 requires scalar attribute values matching the declared
+        // `type` in `eventTypes[*].attributes` — `data` is declared `string`
+        // in `static_event_attribute_schema()`. Structured `data` (objects,
+        // arrays, numbers, bools) is JSON-string-encoded at emission so the
+        // declared `string` type holds and consumers can round-trip with
+        // `JSON.parse`. Same rationale as the `inputs.{i}` / `outputs.{i}`
+        // flattening below.
+        let data_text = serde_json::to_string(data).unwrap_or_default();
+        attributes.push(json!({ "name": "data", "value": data_text }));
     }
     // §6.3 inputs/outputs. OCEL 2.0 requires attribute `value` to be a scalar
     // matching the declared type in `eventTypes[*].attributes`, so we CANNOT
@@ -424,8 +429,10 @@ mod tests {
     fn inputs_outputs_attribute_values_are_primitive_strings_not_arrays() {
         // OCEL 2.0: `eventTypes[*].attributes[*].type` is a scalar primitive.
         // Therefore each `events[*].attributes[*].value` MUST be a primitive
-        // matching that declared type. A JSON array would produce an invalid
-        // OCEL document. Guard that contract explicitly.
+        // matching that declared type. A JSON array or object would produce an
+        // invalid OCEL document. Guard that contract explicitly — a weaker
+        // `!is_array()` passes vacuously for `Value::Object(...)`, so we check
+        // that every value is one of the primitive JSON scalars.
         let mut log = ProvenanceLog::default();
         let mut record = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z");
         record.inputs = vec!["a".into(), "b".into(), "c".into()];
@@ -438,9 +445,10 @@ mod tests {
             .expect("attributes array");
 
         for attribute in attributes {
+            let value = &attribute["value"];
             assert!(
-                !attribute["value"].is_array(),
-                "no attribute value may be a JSON array (OCEL 2.0 requires scalar): {attribute}"
+                value.is_string() || value.is_number() || value.is_boolean() || value.is_null(),
+                "OCEL 2.0 requires scalar attribute values; got {value:?} for attribute {attribute:?}"
             );
         }
 
@@ -456,6 +464,45 @@ mod tests {
             .filter(|attr| attr["name"].as_str().unwrap_or("").starts_with("outputs."))
             .collect();
         assert_eq!(indexed_outputs.len(), 1);
+    }
+
+    #[test]
+    fn data_attribute_value_is_scalar_string_even_for_objects() {
+        // OCEL 2.0 requires each event attribute `value` to be a scalar
+        // matching the declared `type` in `eventTypes[*].attributes`. The
+        // static schema declares `{"name": "data", "type": "string"}`, but
+        // `ProvenanceRecord::data` is `Option<serde_json::Value>` and may
+        // carry objects, arrays, numbers, or bools at runtime. The exporter
+        // must JSON-string-encode structured `data` so the declared type
+        // contract holds.
+        let mut log = ProvenanceLog::default();
+        let mut record = stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z");
+        record.data = Some(serde_json::json!({ "k": 1, "nested": { "x": true } }));
+        log.push(record);
+
+        let document = export(&log, &config());
+        let attributes = document["events"][0]["attributes"]
+            .as_array()
+            .expect("attributes array");
+
+        let data_attr = attributes
+            .iter()
+            .find(|attr| attr["name"] == "data")
+            .expect("data attribute must be emitted when record.data is Some");
+
+        assert!(
+            data_attr["value"].is_string(),
+            "OCEL 2.0: `data` is declared `type: string`, so `value` MUST be a JSON string (got {:?})",
+            data_attr["value"],
+        );
+        let encoded = data_attr["value"].as_str().expect("data value is a string");
+        let round_trip: serde_json::Value =
+            serde_json::from_str(encoded).expect("stringified data must be valid JSON");
+        assert_eq!(
+            round_trip,
+            serde_json::json!({ "k": 1, "nested": { "x": true } }),
+            "round-trip must preserve the original structured data"
+        );
     }
 
     #[test]
