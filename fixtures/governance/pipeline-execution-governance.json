@@ -35,18 +35,5 @@
         }
       ]
     }
-  ],
-  "policyParameters": {
-    "bindings": [
-      {
-        "parameterId": "incomeCeiling",
-        "effectiveDate": "2026-01-01",
-        "values": [
-          {
-            "value": 999999
-          }
-        ]
-      }
-    ]
-  }
+  ]
 }
