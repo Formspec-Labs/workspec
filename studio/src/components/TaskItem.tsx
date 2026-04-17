@@ -133,8 +133,9 @@ export function TaskItem({ task, isSelected, onSelect, onClick, onPeek }: TaskIt
           </div>
         )}
         
-        <div className="flex items-center gap-2">
+        <div className="relative z-20 flex items-center gap-2">
           <button 
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPeek(task.taskId);

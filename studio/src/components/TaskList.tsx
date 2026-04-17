@@ -5,7 +5,6 @@ import { ArrowUpDown, Search, Filter as FilterIcon, X, AlertCircle, FileText } f
 import { SidebarFilters } from './SidebarFilters';
 import { motion, AnimatePresence } from 'motion/react';
 import { ConfirmationModal } from './ui/ConfirmationModal';
-import { List } from 'react-window';
 import { useInbox } from '../context/WosContext';
 import type { TaskListItem } from '../services/WosPorts';
 import type { InstanceFilter } from '../services/WosBackend';
@@ -75,7 +74,12 @@ export function TaskList({ tasks, filters, setFilters, onTaskClick }: TaskListPr
   const filteredAndSortedTasks = useMemo(() => {
     let result = tasks
       .filter(task => {
-        if (activeView === 'priority' && task.impactLevel !== 'critical' && task.impactLevel !== 'high') return false;
+        if (
+          activeView === 'priority' &&
+          !['critical', 'high', 'rights-impacting', 'safety-impacting'].includes(task.impactLevel || '')
+        ) {
+          return false;
+        }
         if (activeView === 'appeals' && !task.taskRef.toLowerCase().includes('appeal')) return false;
         if (filters.status.length > 0 && !filters.status.includes(task.status)) return false;
         if (filters.impactLevel.length > 0 && !filters.impactLevel.includes(task.impactLevel || '')) return false;
@@ -99,7 +103,7 @@ export function TaskList({ tasks, filters, setFilters, onTaskClick }: TaskListPr
 
   useEffect(() => {
     const filter: InstanceFilter | undefined = activeView === 'priority'
-      ? { impactLevel: ['critical', 'high'] }
+      ? { impactLevel: ['critical', 'high', 'rights-impacting', 'safety-impacting'] }
       : undefined;
 
     inbox.listTasks(filter).then(res => {
@@ -150,25 +154,6 @@ export function TaskList({ tasks, filters, setFilters, onTaskClick }: TaskListPr
   const confirmHold = async () => {
     setSelectedIds(new Set());
     setIsHoldOpen(false);
-  };
-
-  const TaskRow = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const task = filteredAndSortedTasks[index];
-    if (!task) return null;
-    return (
-      <div style={style}>
-        <TaskItem 
-          task={task} 
-          isSelected={selectedIds.has(task.taskId)}
-          onSelect={toggleSelect}
-          onClick={(id) => {
-            onTaskClick(id);
-            setPeekId(id);
-          }}
-          onPeek={() => setPeekId(task.taskId)}
-        />
-      </div>
-    );
   };
 
   const peekedTask = peekId ? tasks.find(t => t.taskId === peekId) : null;
@@ -324,16 +309,23 @@ export function TaskList({ tasks, filters, setFilters, onTaskClick }: TaskListPr
         )}
       </AnimatePresence>
 
-      <div className="flex-1 pb-24">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-24">
         {filteredAndSortedTasks.length > 0 ? (
-          <List
-            rowCount={filteredAndSortedTasks.length}
-            rowHeight={100}
-            className="no-scrollbar"
-            rowComponent={TaskRow as any}
-            rowProps={{}}
-            style={{ height: 800, width: '100%' }}
-          />
+          <div className="no-scrollbar w-full">
+            {filteredAndSortedTasks.map(task => (
+              <TaskItem
+                key={task.taskId}
+                task={task}
+                isSelected={selectedIds.has(task.taskId)}
+                onSelect={toggleSelect}
+                onClick={(id) => {
+                  onTaskClick(id);
+                  setPeekId(id);
+                }}
+                onPeek={() => setPeekId(task.taskId)}
+              />
+            ))}
+          </div>
         ) : (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
