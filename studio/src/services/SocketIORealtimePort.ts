@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import type { WOSKernelDocument } from '../types/wos/kernel';
 import type { IRealtimePort, Unsubscribe } from './WosPorts';
+import { getAccessToken } from './authedFetch';
 
 type KernelCallback = (kernel: WOSKernelDocument, url?: string) => void;
 type CollaboratorsCallback = (users: { id: string; name: string; cursor: { x: number; y: number } }[]) => void;
@@ -33,7 +34,8 @@ export class SocketIORealtimePort implements IRealtimePort {
 
   connect() {
     if (this.socket) return;
-    this.socket = io(window.location.origin);
+    const token = getAccessToken();
+    this.socket = io(window.location.origin, token ? { auth: { token } } : {});
     if (!this.listenersAttached) {
       this.socket.on('kernel:init', (value: unknown) => dispatchKernel(value, this.kernelInitCbs));
       this.socket.on('kernel:changed', (value: unknown) => dispatchKernel(value, this.kernelChangedCbs));

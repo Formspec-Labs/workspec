@@ -12,6 +12,7 @@ import type {
 } from './WosPorts';
 import type { WOSKernelDocument } from '../types/wos/kernel';
 import { validateKernelDocument } from './wos-kernel-validator';
+import { authedFetch, storeLogin, storeLogout, type TokenPair } from './authedFetch';
 
 const API_BASE = '/api';
 
@@ -300,7 +301,7 @@ export class HttpApplicantPort implements IApplicantPort {
 
 export class HttpAuthPort implements IAuthPort {
   async getCurrentUser(): Promise<AuthUser | null> {
-    const res = await fetch(`${API_BASE}/auth/me`);
+    const res = await authedFetch(`${API_BASE}/auth/me`);
     if (res.status === 401) return null;
     if (!res.ok) throw new Error(`Failed to get current user: ${res.status}`);
     return res.json();
@@ -313,16 +314,26 @@ export class HttpAuthPort implements IAuthPort {
       body: JSON.stringify(credentials),
     });
     if (!res.ok) throw new Error(`Login failed: ${res.status}`);
-    return res.json();
+    const body = await res.json();
+    // Rust wos-server returns a TokenPair with the user attached; legacy
+    // stubs return the AuthUser directly. Support both.
+    if (body && typeof body === 'object' && 'accessToken' in body && 'user' in body) {
+      storeLogin(body as TokenPair);
+      return (body as TokenPair).user;
+    }
+    return body as AuthUser;
   }
 
   async logout(): Promise<void> {
-    const res = await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    const res = await authedFetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    storeLogout();
     if (!res.ok) throw new Error(`Logout failed: ${res.status}`);
   }
 
   async hasRole(role: string): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/auth/has-role/${encodeURIComponent(role)}`);
+    const res = await authedFetch(
+      `${API_BASE}/auth/has-role/${encodeURIComponent(role)}`,
+    );
     if (!res.ok) throw new Error(`Failed to check role: ${res.status}`);
     const data = await res.json();
     return data.hasRole;
