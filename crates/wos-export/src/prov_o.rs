@@ -34,7 +34,7 @@ use std::collections::BTreeSet;
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::{ExportConfig, camel_case_record_kind};
+use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
 /// A PROV-O graph serialized as JSON-LD (§5.6).
 #[derive(Debug, Serialize)]
@@ -109,12 +109,6 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> ProvODocument {
         context: context_object(),
         graph,
     }
-}
-
-/// §6.5 scope predicate. A record is in-scope for PROV-O / process-mining
-/// export iff its `audit_layer` is `Some("facts")` or `None` (legacy).
-fn is_facts_tier(record: &ProvenanceRecord) -> bool {
-    matches!(record.audit_layer.as_deref(), None | Some("facts"))
 }
 
 /// Build the `@context` object. The three prefixes called out in §5.6 /

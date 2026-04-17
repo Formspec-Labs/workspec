@@ -36,7 +36,7 @@ use serde_json::{Map, Value, json};
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::{ExportConfig, camel_case_record_kind};
+use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
 /// Serialize a provenance log as an OCEL 2.0 JSON document (§6.4).
 ///
@@ -67,11 +67,6 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> Value {
         "objects": objects(config, &facts_records),
         "events": events,
     })
-}
-
-/// §6.5 scope predicate. Shared-semantics copy of the PROV-O / XES filter.
-fn is_facts_tier(record: &ProvenanceRecord) -> bool {
-    matches!(record.audit_layer.as_deref(), None | Some("facts"))
 }
 
 /// Fixed `objectTypes` array. OCEL 2.0 requires typed objects; this phase

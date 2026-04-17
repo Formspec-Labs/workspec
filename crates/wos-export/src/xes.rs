@@ -37,7 +37,7 @@ use quick_xml::writer::Writer;
 
 use wos_core::provenance::{ProvenanceLog, ProvenanceRecord};
 
-use crate::{ExportConfig, camel_case_record_kind};
+use crate::{ExportConfig, camel_case_record_kind, is_facts_tier};
 
 /// Serialize a provenance log to an XES XML document (§6.3).
 ///
@@ -78,12 +78,6 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> String {
         .expect("write to Vec<u8> cannot fail");
 
     String::from_utf8(buffer).expect("quick-xml emits UTF-8 by construction")
-}
-
-/// §6.5 scope predicate. A record is in-scope iff its `audit_layer` is
-/// `Some("facts")` or `None` (legacy / unclassified records).
-fn is_facts_tier(record: &ProvenanceRecord) -> bool {
-    matches!(record.audit_layer.as_deref(), None | Some("facts"))
 }
 
 /// Declare the XES standard extensions used by this exporter (§6.3).
@@ -140,9 +134,21 @@ fn write_trace(
 
     // §6.3 trace-level `wos:definitionVersion`: all records in a log share
     // one governing definition, so the first populated value is canonical.
+    // In debug builds assert that every populated `definition_version`
+    // matches — divergent values would silently first-wins and surface as
+    // real-world drift otherwise. Release builds keep the hot path clean
+    // and fall back to the first-wins behaviour; production pipelines
+    // should catch divergence upstream before it reaches the exporter.
     let definition_version: Option<&str> = facts_records
         .iter()
         .find_map(|record| record.definition_version.as_deref());
+    debug_assert!(
+        facts_records
+            .iter()
+            .filter_map(|record| record.definition_version.as_deref())
+            .all(|version| Some(version) == definition_version),
+        "all records in a log must carry the same definition_version (one version per log)"
+    );
 
     writer
         .create_element("trace")
@@ -200,12 +206,16 @@ fn write_event(
                 write_string_attribute(w, "wos:lifecycleState", lifecycle_state)?;
             }
 
-            // §6.3 per-event inputs/outputs + digests.
-            if !record.inputs.is_empty() {
-                write_string_attribute(w, "wos:inputs", &record.inputs.join(","))?;
+            // §6.3 per-event inputs/outputs + digests. Each input/output is
+            // emitted as its own `<string key="wos:input" .../>` element so
+            // individual values are recoverable even when they legitimately
+            // contain commas. XES allows repeated attribute keys; consumers
+            // collect them by scanning the event for matching `key=`.
+            for input in &record.inputs {
+                write_string_attribute(w, "wos:input", input)?;
             }
-            if !record.outputs.is_empty() {
-                write_string_attribute(w, "wos:outputs", &record.outputs.join(","))?;
+            for output in &record.outputs {
+                write_string_attribute(w, "wos:output", output)?;
             }
             if let Some(digest) = record.input_digest.as_deref() {
                 write_string_attribute(w, "wos:inputDigest", digest)?;
@@ -367,7 +377,9 @@ mod tests {
     fn emits_inputs_outputs_and_digests_when_present() {
         let mut log = ProvenanceLog::default();
         let mut record = stamped_transition(Some("user-1"));
-        record.inputs = vec!["case/1".into(), "case/2".into()];
+        // Include a value containing a comma to prove the repeated-key form
+        // is lossless where the previous joined form would have been lossy.
+        record.inputs = vec!["case/1".into(), "case/with,comma".into()];
         record.outputs = vec!["case/1#state".into()];
         record.input_digest = Some("sha256:aaaa".into());
         record.output_digest = Some("sha256:bbbb".into());
@@ -375,13 +387,28 @@ mod tests {
 
         let xml = export(&log, &config());
 
+        // Each input/output is emitted as its own element; XES permits
+        // repeated attribute keys.
         assert!(
-            xml.contains(r#"<string key="wos:inputs" value="case/1,case/2"/>"#),
-            "expected joined wos:inputs: {xml}"
+            xml.contains(r#"<string key="wos:input" value="case/1"/>"#),
+            "expected first wos:input attribute: {xml}"
         );
         assert!(
-            xml.contains(r#"<string key="wos:outputs" value="case/1#state"/>"#),
-            "expected joined wos:outputs: {xml}"
+            xml.contains(r#"<string key="wos:input" value="case/with,comma"/>"#),
+            "expected comma-bearing wos:input attribute: {xml}"
+        );
+        assert!(
+            xml.contains(r#"<string key="wos:output" value="case/1#state"/>"#),
+            "expected wos:output attribute: {xml}"
+        );
+        // The old joined plural forms must NOT appear.
+        assert!(
+            !xml.contains(r#"key="wos:inputs""#),
+            "legacy joined wos:inputs must not be emitted: {xml}"
+        );
+        assert!(
+            !xml.contains(r#"key="wos:outputs""#),
+            "legacy joined wos:outputs must not be emitted: {xml}"
         );
         assert!(
             xml.contains(r#"<string key="wos:inputDigest" value="sha256:aaaa"/>"#),
@@ -400,6 +427,8 @@ mod tests {
 
         let xml = export(&log, &config());
 
+        assert!(!xml.contains(r#"key="wos:input""#));
+        assert!(!xml.contains(r#"key="wos:output""#));
         assert!(!xml.contains(r#"key="wos:inputs""#));
         assert!(!xml.contains(r#"key="wos:outputs""#));
         assert!(!xml.contains(r#"key="wos:inputDigest""#));

@@ -69,3 +69,45 @@ pub(crate) fn camel_case_record_kind(record: &ProvenanceRecord) -> String {
         other => unreachable!("ProvenanceKind must serialize as a string, got {other:?}"),
     }
 }
+
+/// §6.5 scope predicate shared by every exporter.
+///
+/// A record is included in the default Facts-tier export iff its
+/// `audit_layer` is absent (legacy records, pre-extension runtimes) or
+/// explicitly `"facts"`. Higher-tier records (`"narrative"`, `"reasoning"`,
+/// `"counterfactual"`) are routed to Bundle exports, not the default
+/// Facts-tier surface.
+///
+/// Kept in one place so any future refinement of "what counts as Facts
+/// tier" applies uniformly to PROV-O, XES, and OCEL outputs.
+pub(crate) fn is_facts_tier(record: &ProvenanceRecord) -> bool {
+    matches!(record.audit_layer.as_deref(), None | Some("facts"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wos_core::provenance::ProvenanceRecord;
+
+    fn record_with_layer(layer: Option<&str>) -> ProvenanceRecord {
+        let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);
+        record.audit_layer = layer.map(String::from);
+        record
+    }
+
+    #[test]
+    fn is_facts_tier_accepts_none_and_facts() {
+        assert!(is_facts_tier(&record_with_layer(None)));
+        assert!(is_facts_tier(&record_with_layer(Some("facts"))));
+    }
+
+    #[test]
+    fn is_facts_tier_rejects_higher_tiers() {
+        for higher in ["narrative", "reasoning", "counterfactual"] {
+            assert!(
+                !is_facts_tier(&record_with_layer(Some(higher))),
+                "{higher}-tier records must be excluded from the default facts export"
+            );
+        }
+    }
+}
