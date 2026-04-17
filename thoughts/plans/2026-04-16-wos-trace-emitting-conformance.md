@@ -163,6 +163,6 @@ Fixture: benefits-adjudication (kernel 1.0)
 
 ## Why this matters
 
-The handoff says: "conformance becomes a teaching signal." An LLM in a generate-lint-conformance loop needs to know *why* a test failed, not *that* it failed. Structured traces are the teaching signal. This plan is a prerequisite for [§5.4 `wos-synth`](./2026-04-16-wos-synth-crate.md) — the synthesizer cannot self-correct from pass/fail alone.
+The handoff says: "conformance becomes a teaching signal." An LLM in a generate-lint-conformance loop needs to know *why* a test failed, not *that* it failed. Structured traces are the teaching signal. This plan is a prerequisite for [§5.4 `wos-synth-core`](./2026-04-16-wos-synth-crate.md) — the synthesizer cannot self-correct from pass/fail alone. `wos-synth-core` consumes `ConformanceTrace` via `ToolContext::run_conformance`, which the production `ToolContext` routes through `wos-mcp::dispatch("wos_run_conformance", ...)`.
 
 **Estimated effort:** ~2 engineer-weeks.

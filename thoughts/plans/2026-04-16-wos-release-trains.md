@@ -111,8 +111,13 @@ Hand-authored compatibility matrix for WOS release streams. Cells use SemVer car
 | `wos-lint@1.x`    | `wos-core@1.x` |
 | `wos-conformance@1.x` | `wos-core@1.x`, `wos-lint@1.x` |
 | `wos-runtime@0.x` | `wos-core@1.x` |
-| `wos-synth@0.x`   | `wos-core@1.x`, `wos-lint@1.x`, `wos-conformance@0.x`, `wos-runtime@0.x` |
-| `wos-bench@0.x`   | `wos-synth@0.x` |
+| `wos-authoring@0.x` | `wos-core@1.x` |
+| `wos-mcp@0.x`     | `wos-authoring@0.x`, `wos-lint@1.x`, `wos-conformance@0.x` |
+| `wos-synth-core@0.x` | `wos-core@1.x` (via traits; no direct authoring-layer dep) |
+| `wos-synth-anthropic@0.x` | `wos-synth-core@0.x` |
+| `wos-synth-mock@0.x` | `wos-synth-core@0.x` |
+| `wos-synth-cli@0.x` | `wos-synth-core@0.x`, `wos-synth-anthropic@0.x`, `wos-mcp@0.x` |
+| `wos-bench@0.x`   | `wos-synth-core@0.x`, `wos-synth-mock@0.x` (or `wos-synth-anthropic@0.x`) |
 
 ## Rules
 
@@ -148,9 +153,9 @@ Hand-authored compatibility matrix for WOS release streams. Cells use SemVer car
   "changelog": ["@changesets/cli/changelog", {}],
   "commit": false,
   "fixed": [
-    ["wos-kernel-docs", "wos-core", "wos-runtime"],
+    ["wos-kernel-docs", "wos-core", "wos-runtime", "wos-authoring"],
     ["wos-governance-docs"],
-    ["wos-ai-docs"],
+    ["wos-ai-docs", "wos-mcp", "wos-synth-core", "wos-synth-anthropic", "wos-synth-mock", "wos-synth-cli", "wos-bench"],
     ["wos-advanced-docs"]
   ],
   "linked": [],

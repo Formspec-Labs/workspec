@@ -124,6 +124,6 @@ For each tier:
 
 ## Why this matters
 
-The Claim A thesis is that LLMs can author WOS documents by reading schemas. The schema descriptions are the prompt. An LLM reading `"description": "timestamp"` cannot distinguish `Instant` from `ISO8601 with timezone`. Backfilling this surface is the single highest-leverage investment in Claim A feasibility.
+The Claim A thesis is that LLMs can author WOS documents by reading schemas. The schema descriptions are the prompt, whether consumed by `wos-synth-core` for batch authoring loops or by `wos-mcp` for external-agent tool schemas. An LLM reading `"description": "timestamp"` cannot distinguish `Instant` from `ISO8601 with timezone`. Backfilling this surface is the single highest-leverage investment in Claim A feasibility across both authoring interfaces.
 
 **Estimated effort:** ~1 engineer-week for the rule; ~2 engineer-weeks distributed across tiers for backfill.

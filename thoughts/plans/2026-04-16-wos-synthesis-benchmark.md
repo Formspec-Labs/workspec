@@ -4,11 +4,11 @@
 
 **Goal:** Pair every fixture in `wos-spec/fixtures/` with a natural-language problem statement. The set becomes a workflow-synthesis benchmark analogous to SWE-bench: given requirement R, did the LLM + WOS toolchain produce a conformant workflow? Track the rate monthly.
 
-**Architecture:** A separate `crates/wos-bench/` crate that depends on [`wos-synth`](./2026-04-16-wos-synth-crate.md) as a library. `wos-bench` owns fixture sets, scoring, regression tracking, and result artifacts. `wos-synth` owns the provider trait, prompt templates, trace types, and outcome enum. The two-crate split (resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two)) keeps the authoring demo separate from the measurement infrastructure; shared primitives prevent drift.
+**Architecture:** A separate `crates/wos-bench/` crate that depends on `wos-synth-core` as a library, plus one `Prompter` provider crate of choice (`wos-synth-mock` by default for CI; `wos-synth-anthropic` for reporting runs). `wos-bench` owns fixture sets, scoring, regression tracking, and result artifacts. `wos-synth-core` owns the provider trait, prompt templates, trace types, and outcome enum. The split (resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two)) keeps the authoring demo separate from the measurement infrastructure; shared primitives prevent drift. `wos-bench` imports `wos-synth-core` for the synthesis loop and selects the provider via CLI flag (not a feature flag): `--provider=mock` or `--provider=anthropic`.
 
 Problem statements live in `benchmarks/problems/*.md`; per-run outputs in `benchmarks/runs/<date>-<provider>-<model>/results.json`; a `BENCHMARK.md` leaderboard summarizes results over time.
 
-**Tech Stack:** Rust (new `crates/wos-bench/` crate depending on `wos-synth --features synth`), markdown for problem statements, JSON for results.
+**Tech Stack:** Rust (new `crates/wos-bench/` crate depending on `wos-synth-core` plus `wos-synth-mock` and/or `wos-synth-anthropic`), markdown for problem statements, JSON for results.
 
 **Spec anchor:** [architecture-review-handoff.md §5.5](../archive/reviews/2026-04-16-architecture-review-handoff.md) — fixture corpus doubles as synthesis benchmark. Two-crate split resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two). Claim A first-class status resolved in [open questions Q1](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q1-is-claim-a-llm-authoring-an-accepted-first-class-goal).
 
@@ -16,7 +16,7 @@ Problem statements live in `benchmarks/problems/*.md`; per-run outputs in `bench
 
 ## Prerequisites
 
-- [§5.4 `wos-synth` crate](./2026-04-16-wos-synth-crate.md) landed — the benchmark is the harness for that crate.
+- [§5.4 `wos-synth-core` crate](./2026-04-16-wos-synth-crate.md) landed — the benchmark is the harness for that crate.
 - [§5.3 trace-emitting conformance](./2026-04-16-wos-trace-emitting-conformance.md) — scoring uses trace deltas.
 - Existing fixtures under `wos-spec/fixtures/`.
 
@@ -34,7 +34,7 @@ Per problem, score:
 
 | Dimension | Measurement |
 |-----------|-------------|
-| **Converged** | Did `wos-synth` exit with outcome `Converged` within the iteration cap? |
+| **Converged** | Did `wos-synth-core` exit with outcome `Converged` within the iteration cap? |
 | **Structural match** | Fraction of top-level properties that match the reference fixture (Jaccard on paths). |
 | **Behavioral match** | T3 conformance pass-rate against the reference fixture's committed expected trace. |
 | **Iteration efficiency** | Number of repair iterations the loop needed (lower is better). |
@@ -45,7 +45,7 @@ Per run (all problems together), summarize: converged %, mean step-accuracy, mea
 ## File structure
 
 - **Create:** `benchmarks/problems/<fixture-slug>.md` — one per fixture, the NL problem statement.
-- **Create:** `crates/wos-synth/src/bench.rs` — benchmark runner (or new `wos-bench` crate).
+- **Create:** `crates/wos-bench/src/main.rs` — benchmark runner binary.
 - **Create:** `benchmarks/runs/` — committed result JSON per run.
 - **Create:** `BENCHMARK.md` — leaderboard-style summary.
 
@@ -57,7 +57,7 @@ Per run (all problems together), summarize: converged %, mean step-accuracy, mea
 - Create: `benchmarks/problems/benefits-adjudication.md`
 - Create: `benchmarks/problems/purchase-order-approval.md`
 - Create: `benchmarks/problems/medicaid-redetermination.md`
-- … one per fixture that `wos-synth` should be able to author.
+- … one per fixture that `wos-synth-core` should be able to author.
 
 - [ ] **Step 1.1:** Each statement is 1–3 paragraphs of plain English describing the workflow goal, the actors involved, the decision points, and any known constraints. Not a spec; a product brief.
 
@@ -97,17 +97,17 @@ A valid WOS kernel document plus governance sidecars (due-process, assertion-gat
 - Create: `crates/wos-bench/Cargo.toml`, `src/lib.rs`, `src/main.rs`, `README.md`.
 - Modify: root `Cargo.toml` workspace members.
 
-- [ ] **Step 2.1:** Scaffold `crates/wos-bench/` depending on `wos-synth = { path = "../wos-synth", features = ["synth"] }` plus `serde`/`serde_json`/`clap`. The binary is `wos-bench`; the library exposes the scoring rubric as a reusable module (for future external runners).
+- [ ] **Step 2.1:** Scaffold `crates/wos-bench/` depending on `wos-synth-core = { path = "../wos-synth-core" }` and `wos-synth-mock = { path = "../wos-synth-mock" }` plus `serde`/`serde_json`/`clap`. The binary is `wos-bench`; the library exposes the scoring rubric as a reusable module (for future external runners). Provider selection is a CLI flag (`--provider=mock|anthropic`), not a Cargo feature.
 
 - [ ] **Step 2.2:** `crates/wos-bench/README.md` must include:
   1. **Boundary statement** (per Q6): *This crate consumes `wos-synth` as a library. It owns fixture sets, scoring, regression tracking. It does NOT own the provider abstraction, prompt templates, or trace types — those live in `wos-synth`. Future contributors should not duplicate the provider abstraction here.*
   2. **Benchmark-regressions-do-not-motivate-spec-changes policy** (per Q1): *Benchmark regressions do not motivate normative-spec changes unless the benchmark is exercising a claim the spec actually makes. Spec PRs whose motivation cites a benchmark failure must be reviewed against this rule.*
 
-- [ ] **Step 2.3:** For each problem statement, invoke `wos_synth::synthesize(...)` as a library call (not a subprocess), capture outcome + trace. Score against the reference fixture using the rubric above.
+- [ ] **Step 2.3:** For each problem statement, invoke `wos_synth_core::synthesize(...)` as a library call (not a subprocess), capture outcome + trace. Score against the reference fixture using the rubric above.
 
 - [ ] **Step 2.4:** Write per-problem result JSON to `benchmarks/runs/<date>-<model>/results.json`.
 
-- [ ] **Step 2.5:** Commit. `feat: wos-bench crate — runner with rubric-based scoring, imports wos-synth as library`.
+- [ ] **Step 2.5:** Commit. `feat: wos-bench crate — runner with rubric-based scoring, imports wos-synth-core as library`.
 
 ## Task 3: Results aggregation and BENCHMARK.md
 

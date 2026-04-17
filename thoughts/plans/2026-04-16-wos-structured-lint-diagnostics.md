@@ -183,6 +183,6 @@ pub struct LintDiagnostic {
 
 ## Why this matters
 
-LLMs consume JSON; humans consume rendered prose. The handoff calls this "the lint output becomes an API, not a log." This is a prerequisite for [§5.4 `wos-synth`](./2026-04-16-wos-synth-crate.md): the LLM authoring loop needs machine-readable diagnostics to close the feedback cycle.
+LLMs consume JSON; humans consume rendered prose. The handoff calls this "the lint output becomes an API, not a log." `wos-synth-core`'s repair loop consumes `LintDiagnostic` via a `ToolContext::lint_document` call; the production `ToolContext` routes to `wos-mcp::dispatch("wos_lint", ...)`, which calls `wos_lint::lint_document`. The diagnostic JSON travels across two crate boundaries — its shape must stabilize at the `wos-lint` source so downstream consumers don't drift. This is a prerequisite for [§5.4 `wos-synth-core`](./2026-04-16-wos-synth-crate.md): the LLM authoring loop needs machine-readable diagnostics to close the feedback cycle.
 
 **Estimated effort:** ~1 engineer-week.
