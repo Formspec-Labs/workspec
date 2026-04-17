@@ -5,6 +5,11 @@
   "description": "A WOS Verification Report sidecar document. Records the results of SMT-based formal verification of deontic constraints and governance rules. Captures which constraints were verified, the result (proven-safe, proven-unsafe, inconclusive), counterexamples, and solver metadata. Reports are immutable provenance artifacts.",
   "type": "object",
   "required": ["$wosVerificationReport", "targetWorkflow", "timestamp", "solver", "results"],
+  "patternProperties": {
+    "^x-": {
+      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "$wosVerificationReport": {

@@ -8,6 +8,11 @@
     "$wosWorkflowGovernance",
     "targetWorkflow"
   ],
+  "patternProperties": {
+    "^x-": {
+      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "$wosWorkflowGovernance": {
