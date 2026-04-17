@@ -13,6 +13,7 @@ pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;
 pub mod provenance_service;
+pub mod timer_task;
 
 pub use applicant_service::ApplicantService;
 pub use bundle_service::BundleService;

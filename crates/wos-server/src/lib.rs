@@ -54,6 +54,9 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
         }
     }
 
+    // Start the timer-polling task alongside the HTTP/WS server.
+    let _timer_task = services::timer_task::spawn(state.clone());
+
     let (router, io_layer) = http::router(state.clone());
     let app = router.layer(io_layer);
 
