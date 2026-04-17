@@ -2,27 +2,34 @@
 
 use axum::Router;
 use axum::http::{HeaderValue, Method, header};
-use axum::routing::get;
 use socketioxide::layer::SocketIoLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::AppState;
 
+pub mod applicant;
 pub mod auth;
+pub mod bundles;
+pub mod dashboard;
+pub mod governance;
 pub mod health;
+pub mod instances;
+pub mod tasks;
 
-/// Build the axum router and Socket.IO layer. Attach the returned layer as
-/// a regular axum service via `.layer(layer)`.
 pub fn router(state: AppState) -> (Router, SocketIoLayer) {
-    let cors_origin = state.cfg.cors_origin.clone();
-    let cors = build_cors(&cors_origin);
-
+    let cors = build_cors(&state.cfg.cors_origin);
     let (io_layer, _io) = crate::realtime::build(state.clone());
 
     let api = Router::new()
-        .route("/health", get(health::get))
+        .merge(health_router())
         .merge(auth::routes())
+        .merge(bundles::routes())
+        .merge(instances::routes())
+        .merge(tasks::routes())
+        .merge(governance::routes())
+        .merge(dashboard::routes())
+        .merge(applicant::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -35,6 +42,10 @@ pub fn router(state: AppState) -> (Router, SocketIoLayer) {
         .layer(cors);
 
     (app, io_layer)
+}
+
+fn health_router() -> Router<AppState> {
+    Router::new().route("/health", axum::routing::get(health::get))
 }
 
 fn build_cors(origin: &str) -> CorsLayer {
