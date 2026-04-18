@@ -19,11 +19,15 @@ use crate::{
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
 
-/// Core authoring contract: dispatch, undo/redo, snapshot, diagnostics.
+/// Core authoring contract: undo/redo, snapshot, diagnostics.
+///
+/// `dispatch` is deliberately NOT on this trait — it takes the `pub(crate)`
+/// `Command` enum, so exposing it on a public trait would leak a private type.
+/// Command dispatch is an inherent `pub(crate)` method on `RawWosProject`
+/// and is the seam the forthcoming `WosProject` façade (Task 6) calls into.
+/// External consumers only see the intent-driven helper methods on
+/// `WosProject`, never `Command` itself.
 pub trait IWosProjectCore {
-    /// Apply a command to the document, returning a record of what was done.
-    fn dispatch(&mut self, cmd: Command) -> CommandResult;
-
     /// Reverse the last command.
     ///
     /// Returns `Err` until undo is fully implemented (Task 5).
@@ -316,10 +320,14 @@ impl RawWosProject {
     }
 }
 
-// ── IWosProjectCore implementation ────────────────────────────────────────────
+// ── Inherent command dispatch ─────────────────────────────────────────────────
 
-impl IWosProjectCore for RawWosProject {
-    fn dispatch(&mut self, cmd: Command) -> CommandResult {
+impl RawWosProject {
+    /// Apply a command to the document, returning a record of what was done.
+    ///
+    /// `pub(crate)` because `Command` is an internal dispatch enum; external
+    /// consumers interact with `WosProject` / `IWosProjectCore` helper methods.
+    pub(crate) fn dispatch(&mut self, cmd: Command) -> CommandResult {
         let result = match cmd {
             Command::AddState { id, kind } => self.apply_add_state(id, kind),
             Command::RemoveState { id } => self.apply_remove_state(id),
@@ -353,7 +361,11 @@ impl IWosProjectCore for RawWosProject {
 
         result
     }
+}
 
+// ── IWosProjectCore implementation ────────────────────────────────────────────
+
+impl IWosProjectCore for RawWosProject {
     fn undo(&mut self) -> Result<(), AuthoringDiagnostic> {
         // Stub — Task 5 replaces this with snapshot-based restoration.
         Err(AuthoringDiagnostic::error(

@@ -22,17 +22,22 @@ pub struct AppliedCommand {
     /// Human-readable label for audit logs.
     pub label: String,
 
-    /// The inverse command.  Dispatching this command against the document
+    /// The inverse command. Dispatching this command against the document
     /// restores it to the pre-application state for the limited case of undo.
     ///
     /// `None` for commands that cannot be trivially inverted at this level
     /// (undo for those commands uses full document snapshot restoration).
-    pub inverse: Option<Box<Command>>,
+    ///
+    /// `pub(crate)` because `Command` itself is an internal dispatch enum;
+    /// the public view of `AppliedCommand` is just its `label` for audit logs.
+    pub(crate) inverse: Option<Box<Command>>,
 }
 
 impl AppliedCommand {
     /// Construct a labeled `AppliedCommand` with an explicit inverse.
-    pub fn with_inverse(label: impl Into<String>, inverse: Command) -> Self {
+    ///
+    /// `pub(crate)` because the argument type is internal.
+    pub(crate) fn with_inverse(label: impl Into<String>, inverse: Command) -> Self {
         Self {
             label: label.into(),
             inverse: Some(Box::new(inverse)),
