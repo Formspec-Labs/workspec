@@ -414,15 +414,37 @@ impl RawWosProject {
         )))
     }
 
-    // ── SetTimer handler (stub) ───────────────────────────────────────────
+    // ── SetTimer handler ──────────────────────────────────────────────────
 
+    /// Set `x-wos-timers.<timer_id>` to a duration string.
+    ///
+    /// `duration` is stored verbatim — ISO 8601 conformance validation is
+    /// outside this layer's responsibility (see `wos-lint`).
     fn apply_set_timer(&mut self, timer_id: String, duration: String) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            format!("/extensions/x-wos-timers/{timer_id}"),
-            format!(
-                "SetTimer('{timer_id}', '{duration}') not yet implemented — lands in Task 4"
-            ),
-        ))
+        let ext = self
+            .doc
+            .extensions
+            .entry("x-wos-timers".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match ext.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-timers",
+                    "x-wos-timers extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        root.insert(
+            timer_id.clone(),
+            serde_json::json!({ "duration": duration }),
+        );
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "SetTimer({timer_id})"
+        )))
     }
 
     // ── AddExtensionKey handler ───────────────────────────────────────────
@@ -853,6 +875,41 @@ mod tests {
             .expect_err("duplicate contract name must be rejected");
 
         assert!(err.message.contains("already exists"));
+    }
+
+    // ── SetTimer ──────────────────────────────────────────────────────────
+
+    /// SetTimer writes the duration under x-wos-timers.<timer_id>.
+    #[test]
+    fn set_timer_writes_extension() {
+        let mut p = make_project();
+        p.dispatch(Command::SetTimer {
+            timer_id: "approvalDeadline".into(),
+            duration: "P7D".into(),
+        })
+        .expect("SetTimer must succeed");
+
+        let ext = &p.snapshot().extensions["x-wos-timers"];
+        assert_eq!(ext["approvalDeadline"]["duration"], "P7D");
+    }
+
+    /// SetTimer re-assigns an existing timer id without error.
+    #[test]
+    fn set_timer_overwrites_existing() {
+        let mut p = make_project();
+        p.dispatch(Command::SetTimer {
+            timer_id: "t1".into(),
+            duration: "P1D".into(),
+        })
+        .unwrap();
+        p.dispatch(Command::SetTimer {
+            timer_id: "t1".into(),
+            duration: "P30D".into(),
+        })
+        .unwrap();
+
+        let ext = &p.snapshot().extensions["x-wos-timers"];
+        assert_eq!(ext["t1"]["duration"], "P30D");
     }
 
     // ── AddActorDeontic ───────────────────────────────────────────────────
