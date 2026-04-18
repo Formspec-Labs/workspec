@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use wos_core::provenance::ProvenanceRecord;
-
 use crate::domain::{
     AiDisclosureView, ApplicantDeterminationView, CounterfactualsView, MilestoneView,
 };
@@ -140,21 +138,34 @@ impl ApplicantService {
         }))
     }
 
-    pub async fn submit_appeal(&self, instance_id: &str, reason: &str) -> ApiResult<()> {
-        // Build a spec-shaped provenance record for the appeal filing.
-        let mut record = ProvenanceRecord::state_transition(
-            "_",
-            "appealed",
-            "appealFiled",
-            Some("applicant"),
-        );
-        record.actor_type = Some("human".into());
-        record.audit_layer = Some("facts".into());
-        record.data = Some(serde_json::json!({ "reason": reason }));
+    /// Submit an appeal. Enqueues an `appealFiled` event on the instance and
+    /// drains it through the runtime so the kernel-defined appeal workflow
+    /// (if present) gets a chance to react. If the kernel doesn't define
+    /// `appealFiled`, the runtime records an `UnmatchedEvent` in provenance —
+    /// still a durable, tamper-evident audit record.
+    pub async fn submit_appeal(
+        &self,
+        runtime: &crate::runtime::AppRuntime,
+        instance_id: &str,
+        reason: &str,
+    ) -> ApiResult<()> {
+        let envelope = serde_json::json!({
+            "event": "appealFiled",
+            "actor": "applicant",
+            "data": { "reason": reason },
+        });
+        runtime
+            .enqueue_event(instance_id, envelope)
+            .await
+            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        runtime
+            .drain_once(instance_id)
+            .await
+            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
 
-        let prov_row = self.provenance.prepare_next(instance_id, &record).await?;
+        // Mirror the appeal status into case_state so the applicant view
+        // renders even without a dedicated appeal workflow in the kernel.
         let reason_s = reason.to_string();
-
         self.storage
             .update_instance_atomic(
                 instance_id,
@@ -180,7 +191,7 @@ impl ApplicantService {
                         "appealReason".into(),
                         serde_json::Value::String(reason_s.clone()),
                     );
-                    Ok(vec![prov_row.clone()])
+                    Ok(Vec::new())
                 },
             )
             .await

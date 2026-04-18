@@ -38,11 +38,7 @@ impl AppServices {
         let bundle = Arc::new(BundleService::new(cfg.clone(), storage.clone()).await?);
         let provenance = Arc::new(ProvenanceService::new(storage.clone()));
         let instance = Arc::new(InstanceService::new(storage.clone(), bundle.clone()));
-        let eval = Arc::new(EvalService::new(
-            storage.clone(),
-            bundle.clone(),
-            provenance.clone(),
-        ));
+        let eval = Arc::new(EvalService::new(storage.clone(), bundle.clone()));
         let governance = Arc::new(GovernanceService::new(storage.clone(), bundle.clone()));
         let dashboard = Arc::new(DashboardService::new(storage.clone()));
         let applicant = Arc::new(ApplicantService::new(

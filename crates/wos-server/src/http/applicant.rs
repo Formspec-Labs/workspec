@@ -30,6 +30,9 @@ async fn appeal(
     Path(id): Path<String>,
     Json(body): Json<AppealRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    s.services.applicant.submit_appeal(&id, &body.reason).await?;
+    s.services
+        .applicant
+        .submit_appeal(&s.runtime, &id, &body.reason)
+        .await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
