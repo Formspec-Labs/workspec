@@ -1,27 +1,93 @@
 # WOS TODO
 
-**Last audited:** 2026-04-16
-**Counts:** 18 specs, 19 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 7 crates, 197 lint rules in `LINT-MATRIX.md` (🚨 **unreconciled**: code registry has 97 reified entries per commit `1f8eae5` — §4.2 Task 2 closes the ~100-rule gap)
+**Last audited:** 2026-04-18
+**Counts:** 18 specs, 19 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 7 crates (wos-core, wos-lint, wos-conformance, wos-runtime, wos-formspec-binding, wos-export) plus 2 v0 scaffolds (wos-authoring, wos-mcp) and 1 throwaway (wos-synth-spike), 197 lint rules in `LINT-MATRIX.md` (🚨 **unreconciled**: code registry has 97 reified entries per commit `1f8eae5`; 7 rules promoted to `Tested` per commits `45e654d` + `bcaa294`; §4.2 Task 2 still open on the ~100-rule gap)
 
-**Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md)
+**Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
-**2026-04-16 architecture review.** An external review ([archived handoff](thoughts/archive/reviews/2026-04-16-architecture-review-handoff.md)) produced four hygiene items (§4) and six LLM-authoring items (§5). Architectural validation decisions live in [ADR 0064](../thoughts/adr/0064-wos-granularity-and-ai-native-positioning.md). Positioning updated in [POSITIONING.md](POSITIONING.md) and [README.md](README.md) to lead with the Claim A / Claim B framing. Active plans:
+---
 
-- **§4.1 Extension fix** — 19 schemas patched with `patternProperties ^x-` at every nested level (2026-04-16 root + 2026-04-17 nested). §10.6 amended to document both `extensions` property and sibling `x-` keys, and to reserve `x-wos-*` namespace. Follow-up: K-EXT-001/K-EXT-002 lint rules + fixtures (captured in rule-coverage plan).
-- **§4.3 Precedence clause** — Added to both companions (landed). Follow-up: COMP-001 drift-detection lint rule.
-- **§4.2 Rule-coverage conformance** — [plan](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). Prerequisite for §4.4.
-- **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Depends on §4.2.
-- **§5.1 Schema description audit** — [plan](thoughts/plans/2026-04-16-wos-schema-description-audit.md). Prerequisite for §5.4.
-- **§5.2 Structured lint diagnostics** — [plan](thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md). Prerequisite for §5.4.
-- **§5.3 Trace-emitting conformance** — [plan](thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md). Prerequisite for §5.4.
-- **`wos-authoring` crate (new 2026-04-17)** — [plan](thoughts/plans/2026-04-17-wos-authoring-crate.md). Intent-driven authoring helpers over `wos-core`, analogous to parent Formspec's `formspec-studio-core`. Prerequisite for `wos-mcp` and `wos-synth-core`.
-- **`wos-mcp` crate (new 2026-04-17)** — [plan](thoughts/plans/2026-04-17-wos-mcp-crate.md). Thin MCP adapter over `wos-authoring` with dual entry (MCP stdio + in-process dispatch), analogous to parent Formspec's `formspec-mcp`. Enables external-agent authoring (Claude Desktop / Cline) and serves as the production `ToolContext` implementation for `wos-synth-core`.
-- **§5.4 `wos-synth-core` + providers (rewritten 2026-04-17)** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). The original monolithic `wos-synth` scaffold at commit `2815e4d` is being reshaped into four crates per ADR 0065: `wos-synth-core` (loop + `Prompter` trait + `ToolContext` trait), `wos-synth-anthropic` (concrete provider), `wos-synth-mock` (test provider), `wos-synth-cli` (binary). Honors dependency inversion at crate boundaries rather than feature flags.
-- **§5.5 Synthesis benchmark** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Falsifies Claim A with metrics. Implemented as `wos-bench@0.x`, which consumes `wos-synth-core` + a provider of choice (e.g. `wos-synth-anthropic` or `wos-synth-mock`) rather than the monolithic `wos-synth`.
-- **§5.6 Repositioning docs** — README + POSITIONING updated (landed).
-- **§8 Open questions** — [doc (archived 2026-04-17)](thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md) captured 5 maintainer-decision questions (Claim A scope, `wos-synth` location, release tool, load-bearing seeds, compat-matrix convention) plus a 6th (wos-synth ↔ benchmark split) added during synthesis. All six resolved 2026-04-17 with plan updates landed in §4.2 / §4.4 / §5.4 / §5.5.
-- **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). Adds three pytest suites (meta-validity, fixture validity, spec-example validity) modeled on parent Formspec's `tests/conformance/spec/test_spec_examples.py`. Closes the "no regression guard for schema edits" gap flagged in the code-review.
-- **v0 spike (new 2026-04-17)** — [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md). 2–3 day disposable crate that validates the six-crate architecture before the larger plans (§wos-authoring, §wos-mcp, §5.4) execute. Prerequisite for maximum-confidence execution of those plans.
+## 2026-04-18 Code review of 2026-04-17/18 parallel-agent batch
+
+Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 sonnet sub-agents executing v0 scopes of wos-authoring / wos-mcp / wos-synth-spike / §4.2 Task 2 / §5.1 Task 2 / §5.2 Tasks 1-2 / §5.3 Tasks 2-3. **Aggregate: 6 of 7 REQUEST CHANGES, 1 APPROVE (§5.1 triage).** Five real blockers across three work units, plus supporting warnings.
+
+### Blockers (ordered by damage if not fixed)
+
+1. 🚨 **§5.3 teaching-signal is absent.** `ConformanceTrace.guards_evaluated` and `policies_applied` are hardcoded to `Vec::new()` at `crates/wos-conformance/src/lib.rs:189-190`. `Delta::GuardFalse` and `Delta::PolicyOverride` variants are dead code — no construction path. The stated purpose of trace-emitting conformance (LLM learns "your guard G-02 failed because policy P-11 applied…") is absent. Requires `wos-runtime::DrainOnceResult` to carry per-step guard evaluation records; runtime is native Rust and modifiable (the agent incorrectly framed it as "opaque WASM"). **Without this, §5.4 repair prompts cannot use traces as a teaching signal.**
+2. 🚨 **§5.3 golden traces are degenerate.** All 7 committed goldens under `fixtures/conformance/expected-traces/` are `{outcome: fail, steps: []}` because the T3 fixtures have a `data.amount` (event payload) vs `caseFile.amount` (guard expression) data-path mismatch. The parity regression test asserts "broken state equals broken state" → zero regression coverage. Fix: repair the T3 fixtures (add `initial_case_state` or `setData` bridge actions), re-capture goldens, only then commit as baseline.
+3. 🚨 **wos-authoring `Command` is `pub`.** Plan requires `pub(crate)` so `WosProject`/`IWosProjectCore` are the only public API. `crates/wos-authoring/src/lib.rs:24` + `command.rs:57` are `pub`. Downstream `wos-mcp` could bypass the authoring seam. Fix: change to `pub(crate) enum Command`; remove `pub use command::Command` from lib.rs.
+4. 🚨 **wos-authoring `ActorKind::Agent` doesn't exist.** Plan Task 4 `add_actor` assumes it; `crates/wos-core/src/model/kernel.rs:184-187` declares only `Human | System`. Resolve before `add_actor` lands: extend `ActorKind` in wos-core (consult `formspec-specs:spec-expert`) OR map AI agents to `ActorKind::System` with documentation OR drop `Agent` from the plan's API table. The plan's `ImpactLevel::Significant/High/Critical` are similarly fictitious (real variants: `RightsImpacting | SafetyImpacting | Operational | Informational`).
+5. 🚨 **§5.2 `SuggestedFix::Custom(String)` panics.** Tuple/newtype variant inside `#[serde(tag = "kind")]` internally-tagged enum is unsupported by serde; `serde_json::to_value(Custom("..."))` returns `Err`; any `.unwrap()` panics at runtime. `crates/wos-lint/src/diagnostic.rs:101-103`. **One-line fix:** convert to struct variant `Custom { hint: String }`.
+
+### Warnings worth addressing in the next commit cycle
+
+- **wos-mcp** (`cde0b04`, `53eb25f`):
+  - Sends a JSON-RPC response to `notifications/initialized` — JSON-RPC 2.0 and MCP spec both forbid responding to notifications. `src/server.rs:103`.
+  - Maps all dispatch errors to `-32603 INTERNAL_ERROR`; MCP spec wants `-32602 INVALID_PARAMS` for unknown tools and `isError: true` in result for tool-level failures. `src/server.rs:144`.
+  - `ServerError` enum is defined but never used (dead code).
+  - Integration test (`tests/stdio_transport.rs`) has no timeout and pipes stderr to `/dev/null`; a panicking binary would hang the test suite with no diagnostic.
+  - Handler signature (`fn ping(_args: Value)`) diverges from plan's `(registry, project_id, args)` shape — Task 3 will hit immediate friction.
+  - Hand-rolled JSON-RPC rationale didn't evaluate `default-features = false, features = ["stdio"]` on `rust-mcp-sdk`; that config avoids the hyper/axum/reqwest deps the agent flagged.
+- **v0 spike** (`26c7eaa`, `d2bb234`, `58fb369`):
+  - Model is `claude-sonnet-4-5`; current latest is `claude-sonnet-4-6`. `loop_mod.rs:136`.
+  - `LintError` from `wos_lint::lint_document` is mapped to `SpikeError::AnthropicApi` — misleading when the LLM emits JSON without a `$wos*` marker (the most likely non-convergence scenario). `loop_mod.rs:86`.
+  - Empty-string `ANTHROPIC_API_KEY` bypasses `MissingApiKey` guard (hits the API with "" key, gets cryptic "Unauthorized"). `main.rs:65-66`.
+- **§4.2 fixture-link backfill** (`45e654d`, `bcaa294`):
+  - K-EXT-002's two linked fixture files (`fixtures/validation/x-wos-*.json`) exist but are NOT executed by any test harness — the rule is tested only by inline JSON in `tier2.rs`. The `Tested` promotion rests on evidence those files don't contribute.
+  - AI-001 and AI-002 fixture links are indirect: listed fixtures have `"rule": "AI-005/009/034/035/036"`, not AI-001/002. Conformance verifier runs by batch number, so the links ARE structurally sound but the registry comments don't document the indirection (unlike AI-004/050 which correctly flag their inline-only evidence).
+  - G-052 lists 12 of 20 participating G-* fixtures. `evaluate_governance_complete` runs all 20 via `rule.starts_with("G-")` predicate. Either link all 20 or annotate as representative sample.
+- **§5.2 LintDiagnostic** (`cfedab3`, `a71a154`):
+  - `rule_id: &'static str` + `#[derive(Deserialize)]` is unsound for non-`'static` input; only matters once deserialization is attempted but is a latent runtime bug.
+  - Zero round-trip (JSON → Rust) tests; serialization-only coverage.
+  - `cfedab3` changed `pub use` on `Tier` from `rules::registry::Tier` to `diagnostic::Tier`; `wos-conformance` broke for 4 minutes until `bcaa294` reconciled. Workflow smell: atomic-with-downstream would have avoided the window. Followed discipline doc's "hot files" rule for workspace Cargo.toml; should extend to public re-exports.
+
+### Non-blocker observations worth knowing
+
+- **§5.1 triage** (`1e37b56`) — APPROVE. Minor factual corrections (K-023 is a crash-recovery conformance test, not a url lint rule; `$schema` descriptions vary more than "all missing or 47-char" claimed; 20 kernel fixtures reference `url` not 14; `title` count 15 not 16). Classifications are defensible; reshape wins validated (ExtensionsMap x30, JsonSchemaUri x18, bare items x39).
+- Pre-bump of workspace `Cargo.toml` (commit `b5cb7e2`) successfully prevented the parallel-dispatch race the practices doc was written for. Validated discipline.
+
+### New work items added by this review
+
+- 🚨 **§5.3 runtime instrumentation** — extend `wos-runtime::DrainOnceResult` to carry per-step guard/policy evaluations; wire through `wos-conformance::build_trace_from_result`. **Without this, §5.4's teaching-signal claim is false.**
+- 🚨 **§5.3 fixture repair** — fix `data.amount` ↔ `caseFile.amount` path in T3 fixtures (`crates/wos-conformance/fixtures/K-011/K-020/K-033`) before re-capturing goldens.
+- 🚨 **§5.2 `Custom` variant fix** — one-line refactor from `Custom(String)` to `Custom { hint: String }`.
+- 🚨 **wos-authoring pre-Task-4 fixes** — `Command` visibility; resolve `ActorKind::Agent` + `ImpactLevel` plan/reality mismatch.
+- **wos-mcp hygiene pass** — notification silence; JSON-RPC error codes; test timeout; handler signature aligned with plan before Task 3.
+- **v0 spike Task 4/5 follow-up** — incorporate review fixes (model bump, LintError variant, API-key guard) into the next spike dispatch.
+- **COMP-001 companion drift lint rule** — unchanged, still blocked on §5.2 Task 3 structured diagnostics migration.
+
+---
+
+## Current plan status (2026-04-18)
+
+Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from review
+
+- ✅ **§4.1 Extension fix** — 19 schemas patched at every nested level. §10.6 amended. K-EXT-002 lint rule landed (`5689d3c`) with review finding: linked fixtures not executed by harness. K-EXT-001 subsumed by schema `patternProperties`.
+- ✅ **§4.3 Precedence clause** — Added to both companions. COMP-001 drift-detection still pending (depends on §5.2 Task 3).
+- 🟡 **§4.2 Rule-coverage conformance** — [plan](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). **Task 1** (metadata registry, 97 entries) landed `1f8eae5`. **Task 2** (fixture-link backfill) landed `45e654d` + `bcaa294` — 7 promotions to `Tested` (K-001, AI-041, K-EXT-002, AI-001, AI-002, G-051, G-052). **Tasks 3-7 pending**: CI test, coverage CLI, LINT-MATRIX regen, CI gate, ratchet-check for LoadBearing promotion. Prerequisite for §4.4. Review warnings on K-EXT-002 / AI-001-002 / G-052 evidence quality.
+- 🔴 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. Depends on §4.2 full completion.
+- 🟡 **§5.1 Schema description audit** — [plan](thoughts/plans/2026-04-16-wos-schema-description-audit.md). **Task 1** (SCHEMA-DOC-001 lint rule + `lint_schema()` public fn) landed `03973e3`. **Task 2** (triage doc: 901 violations = ~56% backfill / ~44% reshape / <2% delete) landed `1e37b56`. **Tasks 3-4 pending**: tier-by-tier backfill (~2 engineer-weeks; start with ~137-violation reshape wins — ExtensionsMap + JsonSchemaUri + role/tag/id string `$defs`), then CI gate.
+- 🟡🚨 **§5.2 Structured lint diagnostics** — [plan](thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md). **Tasks 1-2** (LintDiagnostic types + golden tests) landed `cfedab3` + `a71a154`. **BLOCKER: `SuggestedFix::Custom(String)` panics on serialize.** **Tasks 3-6 pending**: rule migration of 91 rules (biggest task in the plan), output formatters, JSON schema publication, migration doc.
+- 🟡🚨 **§5.3 Trace-emitting conformance** — [plan](thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md). **Task 1** (ConformanceTrace type) landed `bb1d323`. **Tasks 2-3** (runner emission + golden traces) landed `80e0305` + `d961c9f`. **TWO BLOCKERS: `guards_evaluated`/`policies_applied` hardcoded empty (teaching signal absent); 7 committed goldens are degenerate `{outcome: fail, steps: []}`.** Fix `wos-runtime` + fixtures before Tasks 4-5 (explain/diff CLI + schema publication).
+- 🟡🚨 **`wos-authoring` crate** — [plan](thoughts/plans/2026-04-17-wos-authoring-crate.md). **Tasks 1-3** landed `a33094d` + `f9c879c` + `daec5b8`: Command enum (10 variants), AuthoringDiagnostic, RawWosProject, AddState/AddTransition handlers, 12 unit tests green. **TWO BLOCKERS: `Command` incorrectly `pub`; `ActorKind::Agent` doesn't exist in wos-core.** **Tasks 4-8 pending**: remaining 8 handlers, undo/redo, WosProject façade, README, integration test.
+- 🟡 **`wos-mcp` crate** — [plan](thoughts/plans/2026-04-17-wos-mcp-crate.md). **Tasks 1-2** landed `cde0b04` + `53eb25f`: hand-rolled JSON-RPC-2.0 stdio + in-process dispatch + `wos_ping` + ProjectRegistry stub, 5 tests green. 6 warnings (see above). **Tasks 3-6 pending**: document-management tools, lifecycle/actor tools, governance/AI tools, validation/query tools, tool-catalog schema. Depends on wos-authoring Tasks 4+.
+- 🔴 **§5.4 `wos-synth-core` + providers** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). Four-crate split per ADR 0065. Depends on wos-authoring + wos-mcp landing.
+- 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Depends on wos-synth-core.
+- ✅ **§5.6 Repositioning docs** — README + POSITIONING lead with Claim A / Claim B framing.
+- ✅ **§8 Open questions** — all 6 resolved 2026-04-17; doc archived at `thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md`.
+- ✅ **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). 6 commits (`793e2e8` through `59bf25b`); 72 pytest cases pass, 2 skip, 1 xfail. Meta-validity + fixture validity + spec-example validity + negative fixtures + CI gate.
+- 🟡 **v0 spike** — [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md). **Tasks 1-3** landed `26c7eaa` + `d2bb234` + `58fb369`: 529 LOC across 4 files (under 800 cap), lint-driven repair loop, 9 unit tests green. 3 warnings (see above — model version, LintError misclassification, API-key guard). **Tasks 4-5 pending**: conformance gate + retrospective with plan propagation.
+
+**Next actionable work items (ordered by ROI):**
+
+1. §5.2 `Custom` variant one-line fix — 5 minutes, unblocks Task 3 safely.
+2. wos-authoring `Command` visibility fix — 10 minutes, enforces seam before Task 4 lands.
+3. wos-authoring `ActorKind::Agent` decision — 30 minutes of spec consultation + either wos-core edit or plan edit.
+4. §5.3 T3 fixture repair (`data.amount` → `caseFile.amount` bridge) — ~2 hours; unblocks honest golden traces.
+5. §5.3 runtime instrumentation — ~1-2 days; makes trace a teaching signal.
+6. §5.1 reshape pass (`$defs` consolidation for 137 violations) — ~2 hours; high leverage against 901-violation backlog.
+7. Review-warning cleanup across wos-mcp + v0 spike + §4.2 registry comments — batchable, ~3 hours total.
+8. §4.2 Task 3 (CI fixture-link test) — ~2 hours; locks in the ratchet.
 
 **Missing / unknown references:** `ADR-0058 (wos-core-gap-analysis)` and `ADR-0057 (wos-core-implementation-boundary)` were cited from prior headers but do not exist at `../thoughts/adr/`. Status: unknown — either never authored, relocated, or inlined into other material. Resolve before next audit.
 
