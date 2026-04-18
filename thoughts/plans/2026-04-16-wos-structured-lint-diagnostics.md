@@ -114,7 +114,7 @@ pub struct LintDiagnostic {
 }
 ```
 
-- [ ] **Step 2.2:** Define `SuggestedFix` as an enum (`AddProperty`, `RemoveProperty`, `ReplaceValue`, `Rename`, `Custom(String)`), `serde(tag = "kind")`.
+- [ ] **Step 2.2:** Define `SuggestedFix` as an enum (`AddProperty`, `RemoveProperty`, `ReplaceValue`, `Rename`, `Custom { hint: String }`), `serde(tag = "kind")`. All variants MUST be struct-shaped — serde's internally-tagged enum representation does not support tuple/newtype variants (`Custom(String)` would fail to serialize).
 
 - [ ] **Step 2.3:** Define `SourceLocation` with `document`, `line`, `column`.
 
