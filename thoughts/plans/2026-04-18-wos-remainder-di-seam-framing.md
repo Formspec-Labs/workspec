@@ -21,7 +21,7 @@ This plan sequences the work still open in both **TODO.md** (spec-side) and **cr
 
 **Server side (PARITY.md top-ROI rows still open):** 6 P0/high-priority items — wire `ProvenanceSigner` seam (ROI 25), wire `ReportRenderer` seam (25), legal-sufficiency disclosure on exports (20), `PolicyLayeredValidator` with §15.7 ledger-gating (12.5), `RoleBasedAccessControl` separation-of-duties (12.5), `/explain` handler (12.5, rides on ReportRenderer + spec #2). Plus ~10 medium-ROI items (event idempotency, policy as-of resolution, chain-integrity verify endpoint, subject continuity-hash, hold CRUD, `IntegrationDispatchService` with correlation tokens, pipeline validation endpoint, calibration expiry, migration endpoint, drift write-side endpoint).
 
-**Spec side (TODO.md open items):** 7 items in §4.1 critical path (DRAFTS triage, #24a facts-tier snapshot, #23 OverrideRecord, NoticeTemplate reconciliation, #2 adverse-decision notice, #20 typed event vocabulary, #31 jurisdiction-aware calendar); 6 in §4.2 next-batch; 6 in §4.3 cheap batch (parallelizable); 13 in §4.4 behavioral backlog; 4 in §4.7 envelope-stack enablement (new items #58–#61); 3 structural merges in §4.5; 2 hygiene in §4.6; §5/§6/§7 downstream.
+**Spec side (TODO.md open items):** 7 items in §4.1 critical path (DRAFTS triage, #24a facts-tier snapshot, #23 OverrideRecord, NoticeTemplate reconciliation, #2 adverse-decision notice, #20 typed event vocabulary, #31 jurisdiction-aware calendar) + **1 proposed addition C8** (Runtime §9.1 explanation algorithm — see Track C); 6 in §4.2 next-batch; 6 in §4.3 cheap batch (parallelizable); 13 in §4.4 behavioral backlog; 4 in §4.7 envelope-stack enablement (new items #58–#61); 3 structural merges in §4.5; 2 hygiene in §4.6; §5/§6/§7 downstream.
 
 **Completed and excluded from this plan:** the 11-phase parity implementation, three validation audits, DI-seam sync, all existing PARITY rows marked `full`.
 
@@ -108,7 +108,7 @@ Runtime §12.7 trait. Same pattern as A1 — requires the same wos-runtime build
 
 - Extend `GET /api/subjects/:ref/assurance-chain` response in `crates/wos-server/src/http/assurance.rs` with `chainValid: bool`, `firstInvalidId: Option<String>`, and **`algorithmId: "wos-server-0.1-sha256-canonical"`** so a future spec-ratified algorithm can coexist without silently invalidating stored responses.
 - Continuity-hash construction: SHA-256 over canonical-JSON of each fact + prior fact's hash. Seed from `subject_ref`. Canonical-JSON form is itself under-specified in WOS — document the specific canonicalizer used (sorted keys, UTF-8, no whitespace) in the server README and flag as a spec gap to escalate.
-- If spec #62 or similar ratifies a different algorithm later, existing responses remain correct-for-their-algorithm; the server can serve both algorithms via the labelled envelope.
+- If spec #62 or similar ratifies a different algorithm later, responses already *served* remain correct-for-their-algorithm. **Stored hashes** in the database are another matter: migrating to a new algorithm requires either a dual-column storage schema (both algorithms retained for read) or a re-hash migration on the existing chain. Flag as a known forward-compat cost and track alongside C8's landing.
 
 ---
 
@@ -130,7 +130,12 @@ Revised design — two landing sites:
   - Runtime §15.7 ledger-gating: if `instance.impact_level ∈ {rights-impacting, safety-impacting}`, reject submits lacking `respondentLedgerRef`. Emit the normative `ledgerEvidenceMissing` failure per §S15.5.
   - Signature-class ↔ assurance-level binding (#43): compare submit's `signatureClass` to instance's recorded `AssuranceLevel`; reject under-levelled.
 
-Implementation: extend `WosRuntime` with a new `SubmitPolicy` trait object (parallel to `CompanionPolicy`), injected via `with_submit_policy` builder. `wos-server` provides `LedgerGatingSubmitPolicy` as the default-on policy. Alternative (simpler): expand `ContractValidator` trait with a new `validate_in_context(contract_ref, data, impact_level, instance_id)` method with a default impl that delegates to `validate` — non-breaking for existing impls, new impls can override.
+**Two implementation paths — the plan leaves the choice open; resolve at implementation start:**
+
+- **Path 1 — new `SubmitPolicy` trait object.** Parallel to `CompanionPolicy` (at `crates/wos-runtime/src/companion.rs`), injected via `with_submit_policy` builder. **Distinction from `CompanionPolicy`:** `CompanionPolicy::evaluate_event` is invoked *before lifecycle processing* on every event (deontic / autonomy / confidence gating). `SubmitPolicy` would be invoked specifically at task-response-submit boundary, where the instance's `impactLevel` is known and §15.7's ledger-evidence requirement applies. One could argue this belongs inside `CompanionPolicy` with a new event-type discriminator — that's defensible but widens `CompanionPolicy`'s contract.
+- **Path 2 — extend `ContractValidator` with `validate_in_context` default method.** Non-breaking addition: new trait method `validate_in_context(contract_ref, data, impact_level, instance_id)` with a default impl delegating to `validate`. `PolicyLayeredValidator` overrides the default and performs §15.7 gating. Existing `ContractValidator` impls keep compiling. Simpler; preferred unless a stronger case surfaces for a separate trait.
+
+`wos-server` ships `LedgerGatingSubmitPolicy` (Path 1) or the layered-validator override (Path 2) as the default-on policy.
 
 Unblocks §15.7 conformance.
 
@@ -451,7 +456,7 @@ Clear the prereqs that gate everything else.
 
 Unblocks Phase 3's `/explain` endpoint and Phase 4 attestation work.
 
-### Phase 2 — tighten the stubbed seams (2 days)
+### Phase 2 — tighten the stubbed seams (~2.5 days)
 
 - **B1 `PolicyLayeredValidator`** with §15.7 ledger-gating policy layer.
 - **B2 `RoleBasedAccessControl`** with separation-of-duties enforcement.
@@ -468,10 +473,11 @@ _Estimate assumes 2–3 engineers running C2/C3/C4/C6 concurrently and C5 pickin
 - **C4 NoticeTemplate reconciliation** → unblocks #2.
 - **C5 #2** Deterministic adverse-decision notice (dual-form) → blocks Phase 4's explanation endpoint on real content.
 - **C6 #20** Typed event meta-vocabulary (parallel with C2–C5; depends only on C1) → blocks D2 + D3.
+- **C8 Runtime §9.1 explanation algorithm** (shares #24a + #23 prerequisites with C5; can run parallel with C5) → unblocks A4's real algorithm. Phase 4's A4 scaffold ships regardless; C8 swaps the internals post-Phase-4 when it lands.
 
 ### Phase 4 — endpoints that ride on the wired seams (2–3 days)
 
-- **A4 `/instances/:id/explain` handler** — scaffolds against C5's algorithm, uses A2's renderer.
+- **A4 `/instances/:id/explain` handler** — ships with a purpose-built §9.1-shape scaffold service; swaps internals to C8's real algorithm when landed. Uses A2's renderer.
 - **A7 Event idempotency on `POST /events`**.
 - **A8 Policy-parameters as-of resolution**.
 - **A9 Subject continuity-hash validation**.
@@ -490,7 +496,7 @@ Parallel-safe with Phase 6.
 B3 moved up to Phase 2 to avoid breaking-change exposure. Remaining Phase-6 items:
 
 - **B4 Pipeline validation endpoint** — scaffolded now, swapped to real eval when Track E3 #38 lands.
-- **B5 Hold CRUD**.
+- **B5 Hold CRUD** (Option B — direct storage writes path; if Option A is chosen, defer this item until Phase 8 after C6 #20 lands).
 - **B6 Calibration expiry enforcement**.
 - **B7 Migration endpoint**.
 - **B8 Drift write-side endpoint**.
@@ -518,7 +524,11 @@ Track F — Merkle chains (§5 #48) is the next compounding-debt item beyond the
 
 ### Total estimate
 
-Phases 0–6: **~5–6 weeks** single-engineer, **~3 weeks** with 2–3 engineers running Track C + server work in parallel. Phase 3 is the bottleneck (spec-led, 5 engineer-weeks of work parallelisable across engineers). Phases 7–11 run indefinitely as backlog flows; the envelope-stack is usable end-to-end after Phase 6.
+Phases 0–6 strictly serial, single-engineer: ~**8–10 weeks** (Phase 0: 1d · Phase 1: ~1.5d · Phase 2: ~2.5d · Phase 3: ~5 weeks · Phase 4: ~3d · Phase 5: ~1 week · Phase 6: ~3d). Phase 3 is the bottleneck — it's specifically 5 weeks if a single engineer handles #24a + #23 + NoticeTemplate + #2 + #20 + #31 + C8 serially.
+
+With **2–3 engineers** running Phase 3 spec work in parallel with Phase 4–6 server work (most server items don't block on spec except A4/explanation scaffold), overall elapsed time drops to **~3–4 weeks**. Phase 3 itself drops to 2–3 weeks with 3 engineers.
+
+Phases 7–11 run indefinitely as backlog flows; the envelope-stack is usable end-to-end after Phase 6.
 
 ---
 
@@ -610,6 +620,8 @@ After each server-facing phase, update `crates/wos-server/PARITY.md`:
 
 - `crates/wos-server/src/runtime/signer.rs` — `NoopSigner` + trait wiring (A1).
 - `crates/wos-server/src/runtime/renderer.rs` — `JsonReportRenderer` + trait wiring (A2).
+- `crates/wos-server/src/services/explanation_service.rs` — §9.1-shape scaffold service backing the `/explain` handler (A4); internals swap to the real C8 algorithm when it lands.
+- `crates/wos-server/src/runtime/submit_policy.rs` (if Path 1 is chosen for B1) — `LedgerGatingSubmitPolicy` default-on policy.
 - `crates/wos-server/src/http/policy.rs` — as-of resolution (A8).
 - `crates/wos-server/src/http/holds.rs` — hold CRUD (B5).
 - `crates/wos-server/migrations/0003_drift_reports.sql` — drift-report storage (B8).
@@ -631,8 +643,9 @@ After each server-facing phase, update `crates/wos-server/PARITY.md`:
 
 ### wos-runtime / wos-core — minimal changes
 
-- `wos-core::traits::ExternalService::invoke` signature change — add `correlation_token: Option<&str>` (B3). **Breaking** for any external adapter; coordinate the update.
-- `wos-runtime::WosRuntime::new` builder — accept injected `ProvenanceSigner` + `ReportRenderer` if the trait methods aren't already on the builder.
+- `wos-core::traits::ExternalService` gains a default method `invoke_with_correlation(service_ref, input, idempotency_key, correlation_token)` delegating to `invoke` (B3). **Non-breaking** — existing adapters keep compiling against the current `invoke` signature; new integration handlers call `invoke_with_correlation`.
+- `wos-core::traits::ContractValidator` — optionally extended with `validate_in_context(contract_ref, data, impact_level, instance_id)` default method (B1 alternative path) if the submit-path `SubmitPolicy` approach isn't adopted. Non-breaking either way.
+- `wos-runtime::WosRuntime` (`crates/wos-runtime/src/runtime.rs`) — new `Box<dyn ProvenanceSigner>` + `Box<dyn ReportRenderer>` fields on the struct (~line 347–383), new builder methods `with_provenance_signer` / `with_report_renderer` (mirroring `with_companion_policy` at line 386). If adopting `SubmitPolicy` for B1, also add `with_submit_policy` builder. Thread the signer into every provenance-emit site.
 
 ### Coordination — PARITY.md + TODO.md
 
@@ -648,7 +661,7 @@ Both documents get updated in-place as phases land. Existing sections stay; stat
 
 **End of Phase 5:** envelope-reference fixtures all parse, lint clean, and run end-to-end through conformance. Ecosystem integrators have canonical patterns to copy.
 
-**End of Phase 6:** envelope stack is composable. A third party can plug Formspec + an identity adapter + a PDF/email layer and sign a 2-signer document end-to-end with auditable provenance, §15.7-gated rights-impacting submits, and externally-verifiable attestation via the injected `ProvenanceSigner`.
+**End of Phase 6:** envelope stack is composable. A third party can plug Formspec + an identity adapter + a PDF/email layer and sign a 2-signer document end-to-end with auditable provenance, §15.7-gated rights-impacting submits, and an attestation path wired through the injected `ProvenanceSigner` seam. The default `NoopSigner` makes the path end-to-end testable but signatures are empty; **externally-verifiable signing** requires either the feature-flagged `Ed25519FileKeySigner` reference impl or a consumer-injected HSM / cloud KMS / Respondent Ledger adapter — all of which slot into the same seam without further plumbing.
 
 **Downstream (Phases 7–11):** TODO.md §4.2, §4.3, §4.4 drain; engineering hygiene absorbed as code is touched; audit/evidence products (§5) deliver Merkle chains when demand signal appears.
 
