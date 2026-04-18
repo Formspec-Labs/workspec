@@ -33,6 +33,25 @@ fn lint_diagnostic_serializes_to_expected_json_shape() {
 }
 
 #[test]
+fn suggested_fix_custom_round_trips() {
+    let fix = SuggestedFix::Custom {
+        hint: "consult the NoticeTemplate reconciliation plan".to_string(),
+    };
+    let json = serde_json::to_value(&fix).expect("Custom must serialize without error");
+    assert_eq!(json["kind"], "custom");
+    assert_eq!(json["hint"], "consult the NoticeTemplate reconciliation plan");
+
+    let back: SuggestedFix =
+        serde_json::from_value(json).expect("Custom must deserialize without error");
+    match back {
+        SuggestedFix::Custom { hint } => {
+            assert_eq!(hint, "consult the NoticeTemplate reconciliation plan")
+        }
+        _ => panic!("expected Custom variant"),
+    }
+}
+
+#[test]
 fn optional_fields_are_omitted_when_empty() {
     let diag = LintDiagnostic {
         rule_id: "K-023",

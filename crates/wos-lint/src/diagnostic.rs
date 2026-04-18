@@ -100,7 +100,11 @@ pub enum SuggestedFix {
     /// Rename a key or identifier from `from` to `to`.
     Rename { from: String, to: String },
     /// Free-form remediation hint when none of the above variants fit.
-    Custom(String),
+    ///
+    /// Struct variant (not tuple) because serde's internally-tagged enum
+    /// representation (`#[serde(tag = "kind")]`) does not support newtype or
+    /// tuple variants — `serde_json::to_value` would fail at runtime.
+    Custom { hint: String },
 }
 
 /// File location of the offending JSON node.
