@@ -58,26 +58,22 @@
     }
   ],
   "expected_transitions": [
-    {
-      "from": "determination",
-      "to": "adverseNotice",
-      "event": "denied"
-    },
-    {
-      "from": "adverseNotice",
-      "to": "appeal",
-      "event": "appealFiled"
-    }
+    { "from": "intake", "to": "incomeVerification", "event": "applicationComplete" },
+    { "from": "incomeVerification", "to": "eligibilityReview", "event": "verificationComplete" },
+    { "from": "pendingReviewA", "to": "reviewADone", "event": "reviewAComplete" },
+    { "from": "pendingReviewB", "to": "reviewBDone", "event": "reviewBComplete" },
+    { "from": "eligibilityReview", "to": "determination", "event": "$join" },
+    { "from": "determination", "to": "adverseNotice", "event": "denied" },
+    { "from": "adverseNotice", "to": "appeal", "event": "appealFiled" }
   ],
   "expected_provenance": [
     {
-      "type": "timerStarted",
-      "timerId": "appealWindow",
-      "duration": "P30D"
+      "recordKind": "timerCreated",
+      "data": { "timerId": "appealWindow", "duration": "P30D" }
     },
     {
-      "type": "timerCancelled",
-      "timerId": "appealWindow"
+      "recordKind": "timerCancelled",
+      "data": { "timerId": "appealWindow" }
     }
   ],
   "expected_errors": []

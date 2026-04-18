@@ -76,5 +76,5 @@
       "expectedStateAfter": "determination"
     }
   ],
-  "outcome": "fail"
+  "outcome": "pass"
 }

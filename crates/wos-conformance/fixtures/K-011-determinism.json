@@ -30,9 +30,9 @@
   ],
   "expected_provenance": [
     {
-      "type": "stateTransition",
-      "from": "submitted",
-      "to": "approved",
+      "recordKind": "stateTransition",
+      "fromState": "submitted",
+      "toState": "approved",
       "actorId": "approver"
     }
   ],

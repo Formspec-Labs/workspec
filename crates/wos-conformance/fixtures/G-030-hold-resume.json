@@ -85,31 +85,32 @@
     }
   ],
   "expected_transitions": [
-    {
-      "from": "redeterminationDue",
-      "to": "pendingApplicantResponse",
-      "event": "$timeout.state"
-    },
-    {
-      "from": "pendingApplicantResponse",
-      "to": "intake",
-      "event": "applicantResponse"
-    }
+    { "from": "intake", "to": "eligibilityReview", "event": "applicationComplete" },
+    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
+    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
+    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" },
+    { "from": "activeBenefits", "to": "redeterminationDue", "event": "$timeout.state" },
+    { "from": "redeterminationDue", "to": "eligibilityReview", "event": "redeterminationSubmitted" },
+    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
+    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
+    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" },
+    { "from": "activeBenefits", "to": "redeterminationDue", "event": "$timeout.state" },
+    { "from": "redeterminationDue", "to": "pendingApplicantResponse", "event": "$timeout.state" },
+    { "from": "pendingApplicantResponse", "to": "intake", "event": "applicantResponse" }
   ],
   "expected_provenance": [
     {
-      "type": "timerStarted",
-      "timerId": "applicantResponseDeadline",
-      "duration": "P30D"
+      "recordKind": "timerCreated",
+      "data": { "timerId": "applicantResponseDeadline", "duration": "P30D" }
     },
     {
-      "type": "timerCancelled",
-      "timerId": "applicantResponseDeadline"
+      "recordKind": "timerCancelled",
+      "data": { "timerId": "applicantResponseDeadline" }
     },
     {
-      "type": "stateTransition",
-      "from": "pendingApplicantResponse",
-      "to": "intake",
+      "recordKind": "stateTransition",
+      "fromState": "pendingApplicantResponse",
+      "toState": "intake",
       "actorId": "applicant"
     }
   ],

@@ -144,16 +144,13 @@ fn trace_parity_g030_hold_resume() {
 // The parity tests above compare against committed goldens; they would pass
 // even if every fixture produced `{outcome: fail, steps: []}` because broken
 // state equals broken state. These tests pin the stronger property: each
-// happy-path T3 fixture must engage the runtime and emit at least as many
-// state-transition steps as the fixture declares under `expected_transitions`.
-// A fixture that fires zero steps means the guard-data path is broken — the
-// bug the 2026-04-18 review flagged. `outcome` is not asserted here because
-// several fixtures still have legacy-format `expected_provenance` entries
-// (keys `type`/`from`/`to` instead of `recordKind`/`fromState`/`toState`)
-// that keep `result.passed` false; that cleanup is tracked separately and
-// does not hide the runtime-engagement signal these tests protect.
+// happy-path T3 fixture must engage the runtime, pass its own assertions,
+// and emit exactly the number of steps the fixture declares under
+// `expected_transitions`. A fixture that fires zero steps means the
+// guard-data path is broken — the bug the 2026-04-18 review flagged and
+// that this suite now protects against.
 
-use wos_conformance::ConformanceFixture;
+use wos_conformance::{ConformanceFixture, Outcome};
 
 fn read_fixture_json(fixture_filename: &str) -> String {
     let workspace = workspace_root();
@@ -175,12 +172,19 @@ fn assert_fixture_engages_runtime(fixture_filename: &str) {
         expected_count > 0,
         "fixture '{fixture_filename}' declares no expected_transitions; not a happy-path fixture"
     );
-    assert!(
-        trace.steps.len() >= expected_count,
-        "fixture '{fixture_filename}' produced {} steps; expected at least {} \
-         (guard data-path mismatch — was the bug the 2026-04-18 review caught)",
+    assert_eq!(
+        trace.steps.len(),
+        expected_count,
+        "fixture '{fixture_filename}' produced {} steps; expected {} \
+         (guard data-path or expected_transitions drift)",
         trace.steps.len(),
         expected_count
+    );
+    assert_eq!(
+        trace.outcome,
+        Outcome::Pass,
+        "fixture '{fixture_filename}' did not pass; steps were {:?}",
+        trace.steps
     );
 }
 

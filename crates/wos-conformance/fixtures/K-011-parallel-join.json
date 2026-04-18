@@ -82,9 +82,9 @@
   ],
   "expected_provenance": [
     {
-      "type": "stateTransition",
-      "from": "eligibilityReview",
-      "to": "determination",
+      "recordKind": "stateTransition",
+      "fromState": "eligibilityReview",
+      "toState": "determination",
       "event": "$join"
     }
   ],

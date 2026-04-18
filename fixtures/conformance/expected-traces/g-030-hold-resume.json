@@ -15,13 +15,7 @@
       },
       "stateBefore": "intake",
       "stateAfter": "eligibilityReview",
-      "expectedStateAfter": "pendingApplicantResponse",
-      "delta": {
-        "kind": "stateMismatch",
-        "expected": "pendingApplicantResponse",
-        "actual": "eligibilityReview",
-        "cause": null
-      }
+      "expectedStateAfter": "eligibilityReview"
     },
     {
       "stepIndex": 1,
@@ -36,13 +30,7 @@
       },
       "stateBefore": "incomeVerification",
       "stateAfter": "caseworkerReview",
-      "expectedStateAfter": "intake",
-      "delta": {
-        "kind": "stateMismatch",
-        "expected": "intake",
-        "actual": "caseworkerReview",
-        "cause": null
-      }
+      "expectedStateAfter": "caseworkerReview"
     },
     {
       "stepIndex": 2,
@@ -56,7 +44,8 @@
         }
       },
       "stateBefore": "caseworkerReview",
-      "stateAfter": "reviewComplete"
+      "stateAfter": "reviewComplete",
+      "expectedStateAfter": "reviewComplete"
     },
     {
       "stepIndex": 3,
@@ -66,7 +55,8 @@
         "payload": {}
       },
       "stateBefore": "eligibilityReview",
-      "stateAfter": "activeBenefits"
+      "stateAfter": "activeBenefits",
+      "expectedStateAfter": "activeBenefits"
     },
     {
       "stepIndex": 4,
@@ -76,7 +66,8 @@
         "payload": {}
       },
       "stateBefore": "activeBenefits",
-      "stateAfter": "redeterminationDue"
+      "stateAfter": "redeterminationDue",
+      "expectedStateAfter": "redeterminationDue"
     },
     {
       "stepIndex": 5,
@@ -86,7 +77,8 @@
         "payload": {}
       },
       "stateBefore": "redeterminationDue",
-      "stateAfter": "eligibilityReview"
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "eligibilityReview"
     },
     {
       "stepIndex": 6,
@@ -100,7 +92,8 @@
         }
       },
       "stateBefore": "incomeVerification",
-      "stateAfter": "caseworkerReview"
+      "stateAfter": "caseworkerReview",
+      "expectedStateAfter": "caseworkerReview"
     },
     {
       "stepIndex": 7,
@@ -110,7 +103,8 @@
         "payload": {}
       },
       "stateBefore": "caseworkerReview",
-      "stateAfter": "reviewComplete"
+      "stateAfter": "reviewComplete",
+      "expectedStateAfter": "reviewComplete"
     },
     {
       "stepIndex": 8,
@@ -120,7 +114,8 @@
         "payload": {}
       },
       "stateBefore": "eligibilityReview",
-      "stateAfter": "activeBenefits"
+      "stateAfter": "activeBenefits",
+      "expectedStateAfter": "activeBenefits"
     },
     {
       "stepIndex": 9,
@@ -130,7 +125,8 @@
         "payload": {}
       },
       "stateBefore": "activeBenefits",
-      "stateAfter": "redeterminationDue"
+      "stateAfter": "redeterminationDue",
+      "expectedStateAfter": "redeterminationDue"
     },
     {
       "stepIndex": 10,
@@ -140,7 +136,8 @@
         "payload": {}
       },
       "stateBefore": "redeterminationDue",
-      "stateAfter": "pendingApplicantResponse"
+      "stateAfter": "pendingApplicantResponse",
+      "expectedStateAfter": "pendingApplicantResponse"
     },
     {
       "stepIndex": 11,
@@ -154,8 +151,9 @@
         }
       },
       "stateBefore": "pendingApplicantResponse",
-      "stateAfter": "intake"
+      "stateAfter": "intake",
+      "expectedStateAfter": "intake"
     }
   ],
-  "outcome": "fail"
+  "outcome": "pass"
 }

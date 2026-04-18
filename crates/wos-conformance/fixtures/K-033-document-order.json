@@ -95,9 +95,9 @@
   ],
   "expected_provenance": [
     {
-      "type": "stateTransition",
-      "from": "pending",
-      "to": "fastApproved",
+      "recordKind": "stateTransition",
+      "fromState": "pending",
+      "toState": "fastApproved",
       "actorId": "approver"
     }
   ],

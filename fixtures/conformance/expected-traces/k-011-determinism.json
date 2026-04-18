@@ -18,5 +18,5 @@
       "expectedStateAfter": "approved"
     }
   ],
-  "outcome": "fail"
+  "outcome": "pass"
 }
