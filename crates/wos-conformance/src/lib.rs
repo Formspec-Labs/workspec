@@ -216,7 +216,7 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
                 .filter(|g| g.event == transition.event && g.source_state == transition.from)
                 .cloned()
                 .collect(),
-            policies_applied: Vec::new(),
+            policies_applied: policy_applications_for_event(&result.provenance, &transition.event),
             delta,
         };
 
@@ -224,6 +224,72 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
     }
 
     trace
+}
+
+/// Extract structured [`PolicyApplication`] records from a flat provenance log.
+///
+/// Scans the provenance records in drain order and synthesizes one
+/// `PolicyApplication` per record whose `record_kind` represents a
+/// governance / AI policy or rule that fired, and whose `data` contains a
+/// `ruleId` or `policyId` string. The synthesized `parameter_bindings` is
+/// the whole `data` object so downstream consumers (CLI `explain`, LLM
+/// repair prompts) can surface rule parameters verbatim.
+///
+/// The `event_filter` restricts output to records whose `event` field
+/// matches — this anchors the applications to the trace step's triggering
+/// event, matching the evaluator's in-drain ordering.
+///
+/// This is a heuristic: the runtime does not currently expose a canonical
+/// "policy application" seam on its companion-policy return type. When
+/// that seam lands, replace this extractor with the structured pass-through
+/// and keep the `PolicyApplication` shape stable.
+fn policy_applications_for_event(
+    provenance: &[ProvenanceRecord],
+    event_filter: &str,
+) -> Vec<PolicyApplication> {
+    provenance
+        .iter()
+        .filter(|record| is_policy_kind(&record.record_kind))
+        .filter(|record| {
+            record
+                .event
+                .as_deref()
+                .map(|e| e == event_filter)
+                .unwrap_or(false)
+        })
+        .filter_map(|record| {
+            let data = record.data.as_ref()?;
+            let policy_id = data
+                .get("ruleId")
+                .or_else(|| data.get("policyId"))
+                .and_then(|v| v.as_str())?;
+            Some(PolicyApplication {
+                policy_id: policy_id.to_string(),
+                parameter_bindings: data.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Whether a [`ProvenanceKind`] represents a governance/AI policy firing.
+///
+/// Covers the explicit-evaluation kinds that carry a rule/policy id:
+/// deontic resolution, autonomy computation, override records, pipeline
+/// risk profile. Violation kinds (DeonticViolation, AutonomyViolation)
+/// are intentionally excluded — they indicate that a rule FAILED, not
+/// that one applied.
+fn is_policy_kind(kind: &ProvenanceKind) -> bool {
+    matches!(
+        kind,
+        ProvenanceKind::DeonticEvaluation
+            | ProvenanceKind::DeonticResolution
+            | ProvenanceKind::DeonticBypass
+            | ProvenanceKind::AutonomyComputed
+            | ProvenanceKind::AutonomyDemotion
+            | ProvenanceKind::OverrideRecorded
+            | ProvenanceKind::PolicyDecision
+            | ProvenanceKind::PipelineRiskProfile
+    )
 }
 
 /// Write a [`ConformanceTrace`] to `target/conformance-traces/<slug>.json`.
@@ -392,6 +458,85 @@ mod runner_trace_tests {
             "trace step count must match expected_transitions count"
         );
         assert_eq!(trace.outcome, Outcome::Pass);
+    }
+
+    /// §5.3 policy-application extractor: DeonticEvaluation with a
+    /// ruleId data field surfaces as a structured PolicyApplication on
+    /// the step whose event matches. Non-policy provenance kinds and
+    /// unmatched events are filtered out.
+    #[test]
+    fn policy_applications_synthesized_from_deontic_evaluation_records() {
+        let matching = ProvenanceRecord {
+            record_kind: ProvenanceKind::DeonticEvaluation,
+            timestamp: "2026-04-18T00:00:00Z".to_string(),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: Some("approve".to_string()),
+            data: Some(serde_json::json!({
+                "ruleId": "P-income-threshold",
+                "version": "v2",
+                "threshold": 50_000
+            })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
+        };
+        // Non-policy kind: must be filtered out.
+        let state_transition = ProvenanceRecord {
+            record_kind: ProvenanceKind::StateTransition,
+            timestamp: "2026-04-18T00:00:00Z".to_string(),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: Some("approve".to_string()),
+            data: Some(serde_json::json!({ "ruleId": "not-a-policy" })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
+        };
+        // Different event: must be filtered out.
+        let other_event = ProvenanceRecord {
+            record_kind: ProvenanceKind::AutonomyComputed,
+            timestamp: "2026-04-18T00:00:00Z".to_string(),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: Some("other".to_string()),
+            data: Some(serde_json::json!({ "policyId": "P-other" })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
+        };
+
+        let provenance = vec![matching, state_transition, other_event];
+        let applied = policy_applications_for_event(&provenance, "approve");
+
+        assert_eq!(applied.len(), 1);
+        assert_eq!(applied[0].policy_id, "P-income-threshold");
+        assert_eq!(
+            applied[0].parameter_bindings,
+            serde_json::json!({
+                "ruleId": "P-income-threshold",
+                "version": "v2",
+                "threshold": 50_000
+            })
+        );
     }
 
     /// slugify: verifies fixture id → safe slug conversion.
