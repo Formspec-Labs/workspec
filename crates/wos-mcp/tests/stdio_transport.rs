@@ -4,8 +4,16 @@
 //! JSON-RPC-2.0 sequence via stdin, and asserts that responses on stdout are
 //! well-formed and contain expected fields.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+/// Wall-clock budget for the entire subprocess round-trip. If the binary
+/// panics, deadlocks, or writes no stdout, the test fails with a clear
+/// message instead of hanging the suite.
+const RUN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Build the binary path from the current CARGO_MANIFEST_DIR, falling back
 /// to discovering it through `cargo build`.
@@ -24,11 +32,12 @@ fn binary_path() -> std::path::PathBuf {
 
 /// Send a sequence of newline-delimited JSON requests to the binary and
 /// collect the corresponding responses.
+///
+/// Enforces a wall-clock timeout (`RUN_TIMEOUT`) and captures stderr so
+/// that a panicking, deadlocked, or silently-exiting binary surfaces a
+/// useful failure message rather than hanging the test suite.
 fn run_sequence(requests: &[serde_json::Value]) -> Vec<serde_json::Value> {
     let binary = binary_path();
-
-    // Build the binary if it doesn't exist yet (e.g. `cargo test --no-build`
-    // is not used, so this should already exist; but be defensive).
     assert!(
         binary.exists(),
         "wos-mcp binary not found at {binary:?}. Run `cargo build -p wos-mcp` first."
@@ -37,12 +46,13 @@ fn run_sequence(requests: &[serde_json::Value]) -> Vec<serde_json::Value> {
     let mut child = Command::new(&binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("failed to spawn wos-mcp binary");
 
     let mut stdin = child.stdin.take().unwrap();
     let stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
 
     // Write all requests, then close stdin to signal EOF.
     for req in requests {
@@ -51,18 +61,48 @@ fn run_sequence(requests: &[serde_json::Value]) -> Vec<serde_json::Value> {
     }
     drop(stdin); // EOF → binary's read loop exits
 
-    let reader = BufReader::new(stdout);
-    let responses: Vec<serde_json::Value> = reader
-        .lines()
-        .map(|l| {
-            let line = l.expect("failed to read stdout line");
-            serde_json::from_str(&line).expect("response is not valid JSON")
-        })
-        .collect();
+    // Read stdout on a worker thread so the main thread can enforce a
+    // wall-clock timeout against it.
+    let (tx, rx) = mpsc::channel();
+    let reader_thread = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        let lines: Vec<String> = reader
+            .lines()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("failed to read stdout line");
+        let _ = tx.send(lines);
+    });
 
-    let _status = child.wait().expect("failed to wait for child");
+    let lines = match rx.recv_timeout(RUN_TIMEOUT) {
+        Ok(lines) => lines,
+        Err(_) => {
+            // Grab whatever stderr is available to surface the root cause
+            // (panic message, etc.) before we kill the child.
+            let mut stderr_buf = String::new();
+            let _ = stderr.read_to_string(&mut stderr_buf);
+            let _ = child.kill();
+            panic!(
+                "wos-mcp stdio round-trip timed out after {:?}.\nstderr:\n{stderr_buf}",
+                RUN_TIMEOUT
+            );
+        }
+    };
+    let _ = reader_thread.join();
 
-    responses
+    let status = child.wait().expect("failed to wait for child");
+
+    // If the binary exited non-zero, surface captured stderr so panic
+    // messages from the server reach the test output.
+    if !status.success() {
+        let mut stderr_buf = String::new();
+        let _ = stderr.read_to_string(&mut stderr_buf);
+        panic!("wos-mcp exited with {status}.\nstderr:\n{stderr_buf}");
+    }
+
+    lines
+        .into_iter()
+        .map(|line| serde_json::from_str(&line).expect("response is not valid JSON"))
+        .collect()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
