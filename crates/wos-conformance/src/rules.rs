@@ -33,7 +33,12 @@ pub fn all_rules() -> &'static [RuleMetadata] {
 /// not yet reified as metadata entries — that tracking is part of the
 /// rule-coverage plan follow-up.
 static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
-    // AI-001: verified by processor manifest test against fixtures with batches 3, 4, 5, 10.
+    // AI-001: Fixture links are indirect — the linked files carry rule IDs
+    // AI-005, AI-009, and AI-034, not AI-001 directly. The conformance verifier
+    // runs by batch number (see AI_REGISTRATION_BATCHES) so the structural
+    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
+    // (See 2026-04-18 review.)
+    // Verified by processor manifest test against fixtures with batches 3, 4, 5, 10.
     RuleMetadata {
         id: "AI-001",
         tier: Tier::T3,
@@ -48,7 +53,12 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // AI-002: verified by processor manifest test against batch 5 (confidence framework) fixtures.
+    // AI-002: Fixture links are indirect — the linked files carry rule IDs
+    // AI-034, AI-035, and AI-036, not AI-002 directly. The conformance verifier
+    // runs by batch number (see AI_CONFIDENCE_BATCHES) so the structural
+    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
+    // (See 2026-04-18 review.)
+    // Verified by processor manifest test against batch 5 (confidence framework) fixtures.
     RuleMetadata {
         id: "AI-002",
         tier: Tier::T3,
