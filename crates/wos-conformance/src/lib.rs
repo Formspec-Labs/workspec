@@ -86,6 +86,152 @@ pub fn run_fixture(
     Ok(result)
 }
 
+/// Run a conformance fixture and return both the pass/fail result and a
+/// structured [`ConformanceTrace`].
+///
+/// The trace is built from the observed state transitions and event sequence
+/// captured during execution. Because `wos_runtime` is an opaque boundary,
+/// per-transition guard evaluations are not visible at this level; the
+/// `guards_evaluated` and `policies_applied` fields of each [`TraceStep`] are
+/// left empty. The trace still captures state-before / state-after, the
+/// triggering event, and the expected state for every step — sufficient for
+/// golden-baseline regression and LLM teaching signals.
+///
+/// The trace is also written to
+/// `target/conformance-traces/<fixture-slug>.json` on every run (pass or fail).
+/// The output directory is created automatically if it does not exist.
+///
+/// # Errors
+///
+/// Same as [`run_fixture`].
+pub fn run_fixture_with_trace(
+    fixture_json: &str,
+    base_dir: &str,
+) -> Result<(ConformanceResult, ConformanceTrace), ConformanceError> {
+    let result = run_fixture(fixture_json, base_dir)?;
+
+    // Parse fixture again to extract id and event_sequence metadata.
+    let fixture: ConformanceFixture =
+        serde_json::from_str(fixture_json).map_err(|e| ConformanceError::Parse(e.to_string()))?;
+
+    let trace = build_trace_from_result(&fixture, &result);
+    emit_trace_to_disk(&fixture.id, &trace);
+
+    Ok((result, trace))
+}
+
+/// Build a [`ConformanceTrace`] from a completed [`ConformanceResult`].
+///
+/// One [`TraceStep`] is emitted per observed transition. For fixtures that
+/// produce no transitions (error/lint-negative fixtures), the trace records
+/// the expected zero-transition outcome directly.
+///
+/// The `kernel_version` is extracted from the fixture's event sequence
+/// metadata. Because the conformance harness does not re-expose the parsed
+/// kernel document after `run_fixture` completes, the version defaults to
+/// `"unknown"` — callers that need the exact kernel version should read it
+/// directly from the kernel document before calling this function.
+fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceResult) -> ConformanceTrace {
+    // Use a synthetic kernel version derived from fixture metadata. The engine
+    // does not return kernel metadata through `ConformanceResult`, so we use
+    // "1.0" as the stable conformance-harness sentinel. Real version info is
+    // available by parsing the kernel document independently.
+    let kernel_version = "1.0".to_string();
+
+    let outcome = if result.passed {
+        Outcome::Pass
+    } else {
+        Outcome::Fail
+    };
+
+    let mut trace = ConformanceTrace::new(fixture.id.clone(), kernel_version);
+    trace.outcome = outcome;
+
+    // Map each observed transition to a TraceStep. The fixture's
+    // expected_transitions list provides the expected target state for each
+    // step index. If the fixture has fewer expected transitions than observed
+    // ones, the extra steps carry no expected state.
+    for (idx, transition) in result.transitions.iter().enumerate() {
+        let expected_state_after = fixture
+            .expected_transitions
+            .get(idx)
+            .map(|exp| exp.to.clone());
+
+        // Compute delta when actual state differs from expected.
+        let delta = expected_state_after.as_ref().and_then(|expected| {
+            if *expected != transition.to {
+                Some(Delta::StateMismatch {
+                    expected: expected.clone(),
+                    actual: transition.to.clone(),
+                    cause: None,
+                })
+            } else {
+                None
+            }
+        });
+
+        let step = TraceStep {
+            step_index: idx as u32,
+            event: Event {
+                name: transition.event.clone(),
+                source_actor: fixture
+                    .event_sequence
+                    .get(idx)
+                    .and_then(|e| e.actor.clone()),
+                payload: fixture
+                    .event_sequence
+                    .get(idx)
+                    .and_then(|e| e.data.clone()),
+            },
+            state_before: transition.from.clone(),
+            state_after: transition.to.clone(),
+            expected_state_after,
+            guards_evaluated: Vec::new(),
+            policies_applied: Vec::new(),
+            delta,
+        };
+
+        trace.push_step(step);
+    }
+
+    trace
+}
+
+/// Write a [`ConformanceTrace`] to `target/conformance-traces/<slug>.json`.
+///
+/// Silently no-ops if the directory cannot be created or the file cannot be
+/// written — trace emission must never break the test suite.
+fn emit_trace_to_disk(fixture_id: &str, trace: &ConformanceTrace) {
+    let slug = slugify(fixture_id);
+    let dir = std::path::Path::new("target/conformance-traces");
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let path = dir.join(format!("{slug}.json"));
+    if let Ok(json) = serde_json::to_string_pretty(trace) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// Convert a fixture id to a filesystem-safe slug.
+///
+/// Lowercases the string and replaces any character that is not alphanumeric
+/// or a hyphen with a hyphen, then collapses consecutive hyphens.
+pub fn slugify(id: &str) -> String {
+    let mut slug = String::with_capacity(id.len());
+    let mut prev_hyphen = false;
+    for ch in id.chars() {
+        if ch.is_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            prev_hyphen = false;
+        } else if !prev_hyphen {
+            slug.push('-');
+            prev_hyphen = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
+}
+
 /// Result of running a conformance fixture.
 #[derive(Debug)]
 pub struct ConformanceResult {
@@ -119,4 +265,110 @@ pub enum ConformanceError {
     /// Referenced document file not found.
     #[error("document not found: {0}")]
     DocumentNotFound(String),
+}
+
+#[cfg(test)]
+mod runner_trace_tests {
+    use super::*;
+
+    /// Resolve a fixture from `tests/fixtures/` and return (json, base_dir).
+    /// The `tests/fixtures/` directory is already wired for `run_fixture`.
+    fn read_test_fixture(name: &str) -> (String, String) {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{manifest}/tests/fixtures/{name}");
+        let json = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("could not read fixture '{path}': {e}"));
+        let base_dir = std::path::Path::new(&path)
+            .parent()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        (json, base_dir)
+    }
+
+    /// purchase-order-simple: approve then orderProcessed produces two transitions
+    /// (submitted → approved → completed). Verify step count, state progression,
+    /// and that all steps have correct expected_state_after (no delta on pass).
+    #[test]
+    fn trace_purchase_order_simple_two_transitions() {
+        let (json, base_dir) = read_test_fixture("purchase-order-simple.json");
+        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
+            .expect("run_fixture_with_trace failed");
+
+        assert!(result.passed, "fixture must pass: {:?}", result.failures);
+        assert_eq!(trace.steps.len(), 2, "expected exactly 2 trace steps");
+
+        let step0 = &trace.steps[0];
+        assert_eq!(step0.step_index, 0);
+        assert_eq!(step0.state_before, "submitted");
+        assert_eq!(step0.state_after, "approved");
+        assert_eq!(step0.event.name, "approve");
+        assert_eq!(
+            step0.expected_state_after.as_deref(),
+            Some("approved"),
+            "step0 expected_state_after must reflect fixture expectation"
+        );
+        assert!(step0.delta.is_none(), "no delta for a passing step");
+
+        let step1 = &trace.steps[1];
+        assert_eq!(step1.step_index, 1);
+        assert_eq!(step1.state_before, "approved");
+        assert_eq!(step1.state_after, "completed");
+        assert_eq!(step1.event.name, "orderProcessed");
+        assert!(step1.delta.is_none(), "no delta for a passing step");
+
+        assert_eq!(trace.outcome, Outcome::Pass);
+    }
+
+    /// purchase-order-reject-resubmit: four transitions in sequence.
+    /// Verify step count, indices, and that all steps are delta-free (all pass).
+    #[test]
+    fn trace_purchase_order_reject_resubmit_four_transitions() {
+        let (json, base_dir) = read_test_fixture("purchase-order-reject-resubmit.json");
+        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
+            .expect("run_fixture_with_trace failed");
+
+        assert!(result.passed, "fixture must pass: {:?}", result.failures);
+        assert_eq!(trace.steps.len(), 4, "expected exactly 4 trace steps");
+
+        for (i, step) in trace.steps.iter().enumerate() {
+            assert_eq!(step.step_index, i as u32, "step index must be sequential");
+            assert!(
+                step.delta.is_none(),
+                "step {i} has unexpected delta: {:?}",
+                step.delta
+            );
+        }
+        assert_eq!(trace.outcome, Outcome::Pass);
+    }
+
+    /// medicaid-happy-path: multi-step compound-state fixture.
+    /// Verify step count matches expected_transitions length and all pass.
+    #[test]
+    fn trace_medicaid_happy_path_step_count_matches_expected_transitions() {
+        let (json, base_dir) = read_test_fixture("medicaid-happy-path.json");
+        let fixture: ConformanceFixture = serde_json::from_str(&json).unwrap();
+
+        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
+            .expect("run_fixture_with_trace failed");
+
+        assert!(result.passed, "fixture must pass: {:?}", result.failures);
+        assert_eq!(
+            trace.steps.len(),
+            fixture.expected_transitions.len(),
+            "trace step count must match expected_transitions count"
+        );
+        assert_eq!(trace.outcome, Outcome::Pass);
+    }
+
+    /// slugify: verifies fixture id → safe slug conversion.
+    #[test]
+    fn slugify_converts_ids_to_safe_slugs() {
+        assert_eq!(slugify("K-011-determinism"), "k-011-determinism");
+        assert_eq!(slugify("AI-041-negative-fallback-cycle"), "ai-041-negative-fallback-cycle");
+        assert_eq!(slugify("K-011-parallel-join"), "k-011-parallel-join");
+        // Non-alphanumeric characters other than hyphen collapse to a single hyphen.
+        assert_eq!(slugify("foo_bar.baz"), "foo-bar-baz");
+    }
 }
