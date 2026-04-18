@@ -8,22 +8,26 @@ use crate::storage::StorageHandle;
 
 pub mod applicant_service;
 pub mod bundle_service;
+pub mod calendar_service;
 pub mod conformance_service;
 pub mod dashboard_service;
 pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;
 pub mod lint_service;
+pub mod notifications_service;
 pub mod provenance_service;
 pub mod semantic_service;
 pub mod timer_task;
 
 pub use applicant_service::ApplicantService;
 pub use bundle_service::BundleService;
+pub use calendar_service::CalendarService;
 pub use dashboard_service::DashboardService;
 pub use eval_service::EvalService;
 pub use governance_service::GovernanceService;
 pub use instance_service::InstanceService;
+pub use notifications_service::NotificationsService;
 pub use provenance_service::ProvenanceService;
 
 pub struct AppServices {
@@ -34,6 +38,8 @@ pub struct AppServices {
     pub governance: Arc<GovernanceService>,
     pub dashboard: Arc<DashboardService>,
     pub applicant: Arc<ApplicantService>,
+    pub calendar: Arc<CalendarService>,
+    pub notifications: Arc<NotificationsService>,
 }
 
 impl AppServices {
@@ -49,6 +55,8 @@ impl AppServices {
             bundle.clone(),
             provenance.clone(),
         ));
+        let calendar = Arc::new(CalendarService::new(bundle.clone()));
+        let notifications = Arc::new(NotificationsService::new(bundle.clone()));
         Ok(Self {
             bundle,
             instance,
@@ -57,6 +65,8 @@ impl AppServices {
             governance,
             dashboard,
             applicant,
+            calendar,
+            notifications,
         })
     }
 }
