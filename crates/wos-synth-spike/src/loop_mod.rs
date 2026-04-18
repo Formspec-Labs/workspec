@@ -130,10 +130,10 @@ async fn call_anthropic(api_key: &str, prompt: &str) -> Result<String, SpikeErro
     // We collect all chunks into a single string.
     Client::new()
         .auth(api_key)
-        // claude-sonnet-4-5 is the recommended model for code generation tasks
-        // that require strong instruction following.  Opus is more expensive
+        // claude-sonnet-4-6 is the current recommended model for code generation
+        // tasks that require strong instruction following.  Opus is more expensive
         // and Haiku is faster but less reliable for structured JSON output.
-        .model("claude-sonnet-4-5")
+        .model("claude-sonnet-4-6")
         .max_tokens(4096)
         // Temperature 0 maximises determinism — we want JSON, not creativity.
         .temperature(0.0)
