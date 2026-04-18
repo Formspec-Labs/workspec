@@ -2,6 +2,8 @@
 
 _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO surface on branch `claude/wos-spec-backend-y17wJ` as of commit `645fbd8`._
 
+> **Validation pass applied** (commit `d61b2af` → next). Three independent audits (spec citations, server surface, status grades + ROI math) flagged 6 citation errors, 1 path fabrication (`/api/kernels` → actual `/api/bundles`), 4 mis-graded rows, an unsorted "ranked" table, and 4 unfair critiques (multi-step sessions, circuit breakers, drift "impossible work", three-way explanation schism). All applied. The ranking now sorts by ROI; the chain-integrity rationale was corrected (helper exists but has zero callers; chain is built on write but never re-verified on read). The previously-claimed three-way explanation schism is downgraded to a contract+implementation pair (Runtime §9 + Gov §3.3 only); Assurance §5 attestation is a different concept.
+
 **Methodology.** Walked each spec extracting every imperative observable (MUST statements on processor behaviour, enumerated operations, processor-obligation tables). Cross-referenced against `crates/wos-server/src/http/*.rs` routes, `realtime/mod.rs` events, and `runtime/mod.rs` methods. Schema files that define document shapes (not observables) are marked "spec-side" — they're consumed as validation inputs to `POST /api/lint/document`, not served as first-class resources.
 
 **Status legend.**
@@ -19,14 +21,14 @@ _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO su
 
 | Status | Count |
 |---|---|
-| full | 28 |
-| partial | 9 |
-| stub | 7 |
+| full | 27 |
+| partial | 11 |
+| stub | 6 |
 | none | 11 |
 | spec-side | 13 |
 | **total** | **68** |
 
-Kernel + runtime companion are fully implemented. Governance L1 read-side and sidecar operations are solid. The gaps cluster in three places: (1) assurance attestation / continuity cross-subject queries, (2) integration-profile real dispatch (currently echo), (3) semantic profile's SHACL / SPARQL (triplestore adapter needed). Stubs are concentrated in advanced L3 (SMT verification, drift detection) — all three require external adapters the plan defers.
+Kernel + runtime companion are mostly implemented (Runtime §12 has six of the spec's nine host interfaces). Governance L1 read-side and sidecar operations are solid. The gaps cluster in three places: (1) assurance attestation / continuity hash validation, (2) integration-profile real dispatch (currently echo) plus correlation tokens, (3) semantic profile's SHACL / SPARQL (triplestore adapter needed). Stubs are concentrated in advanced L3 (SMT verification, drift detection) — both require external adapters; their response shapes are spec-correct so consumers can integrate today.
 
 ---
 
@@ -37,15 +39,15 @@ Spec: `specs/kernel/spec.md` — the authoritative WOS Kernel Specification. Sch
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
 | Kernel §2.2 Structural | Parse + validate kernel document | wos-kernel | `POST /api/kernel/validate` | full | Routed through `wos-lint::lint_document` |
-| Kernel §2.2 Structural | Round-trip kernel without loss | wos-kernel | `PUT /api/kernels/:url/kernel` | full | Serde preserves all fields |
-| Kernel §2.2 Structural | List registered kernels | — | `GET /api/kernels` | full | Alias of legacy `/bundles` |
-| Kernel §2.2 Structural | Load kernel document | wos-kernel | `GET /api/kernels/:url/kernel` | full |  |
-| Kernel §2.2 Structural | Load kernel + sidecars bundle | — | `GET /api/kernels/:url` | full | Joins all attached sidecars |
+| Kernel §2.2 Structural | Round-trip kernel without loss | wos-kernel | `PUT /api/bundles/:url/kernel` | full | Serde preserves all fields |
+| Kernel §2.2 Structural | List registered kernels | — | `GET /api/bundles` | full | Bundle = kernel + sidecars |
+| Kernel §2.2 Structural | Load kernel document | wos-kernel | `GET /api/bundles/:url/kernel` | full |  |
+| Kernel §2.2 Structural | Load kernel + sidecars bundle | — | `GET /api/bundles/:url` | full | Joins all attached sidecars |
 | Kernel §3 Actor Model | Actor type resolution | wos-kernel | — | spec-side | Embedded in kernel doc; evaluator uses it internally |
 | Kernel §4 Lifecycle | Deterministic event evaluation | wos-kernel | `POST /api/instances/:id/events` | full | Routes through `AppRuntime` → `WosRuntime` |
-| Kernel §5 Provenance | Append-only provenance with hash chain | wos-kernel | `GET /api/instances/:id/provenance` | full | `ProvenanceService::prepare_batch` enforces chain |
-| Kernel §5 Provenance | Chain integrity verification | wos-kernel | — | **none** | No dedicated `/provenance/verify` endpoint; chain is verified on read but result isn't surfaced. **User value: medium** — auditors want an explicit "chain valid" response. |
-| Kernel §6 Contracts | Contract reference resolution | wos-kernel | — | spec-side | Internal to evaluator |
+| Kernel §8 Provenance | Append-only provenance with hash chain | wos-kernel | `GET /api/instances/:id/provenance` | full | `ProvenanceService::prepare_batch` enforces chain on write |
+| Kernel §8 Provenance | Chain integrity verification | wos-kernel | — | **none** | Chain is enforced on write but never re-verified on read; `ProvenanceService::verify_chain` helper exists with zero callers. **User value: medium** — auditors want an explicit "chain valid" response |
+| Kernel §11 Contracts | Contract reference resolution | wos-kernel | — | spec-side | Internal to evaluator |
 
 ### correspondence-metadata
 
@@ -72,16 +74,16 @@ Spec: `specs/companions/runtime.md` — the behavioural contract between the pro
 | Runtime §3.4 Status transitions | Completed / terminated via kernel events | wos-case-instance | `POST /api/instances/:id/events` | full | Handled by evaluator |
 | Runtime §4 Event delivery | Enqueue event | — | `POST /api/instances/:id/events` | full | Queue → drain |
 | Runtime §4 Event delivery | Drain event queue | — | `POST /api/instances/:id/drain` | full | `drain_until_idle` |
-| Runtime §4.3 Exactly-once | Idempotency on event IDs | — | — | partial | Runtime accepts idempotency tokens on task submission; event submission doesn't dedupe. **User value: high** for at-least-once producers |
+| Runtime §4.3 Exactly-once | Idempotency on event IDs | — | — | **none** | The event submission path has no dedupe. Idempotency tokens exist for task submission only (§Formspec Tasks below). **User value: high** for at-least-once producers |
 | Runtime §5 Action execution | onEntry/onExit/transition actions | — | `POST /api/instances/:id/events` | full | Evaluator executes |
 | Runtime §5.4 invokeService | Service invocation seam | — | via `runtime/service.rs::EchoExternalService` | **stub** | Echoes input. Real dispatch lives in integration profile §3 |
 | Runtime §5.5 Contract validation | Formspec validation on task submit | wos-case-instance | `POST /api/tasks/:id/response` | partial | `runtime/validator.rs::PermissiveValidator` accepts all. Real `FormspecProcessor` not wired |
 | Runtime §6 Durability | Atomic checkpoint | — | n/a | full | `update_instance_atomic` transactional in SQLite |
 | Runtime §7 Timers | Timer create / cancel / fire | — | `services/timer_task.rs` polls | partial | Correct for ≤200 instances; efficiency review flagged full-scan issue |
-| Runtime §9 Explanation | Explanation assembly | — | — | **none** | No `/instances/:id/explain` endpoint. **User value: high** — due-process spec (§3.3) obligates explanation delivery. Currently a known gap |
+| Runtime §9 Explanation | Explanation assembly | — | `GET /api/applicant/:id/determination` | partial | `applicant_service` already assembles rules-applied + milestones + AI disclosure for the applicant view. The dedicated `/instances/:id/explain` per Runtime §9.1's deterministic-algorithm contract is missing; due-process delivery (Gov §3.3) flows through the partial surface today. **User value: high** for adverse-decision workflows |
 | Runtime §10 Eval modes | Dry-run transitions | — | `GET /api/instances/:id/transitions` | full | Pure kernel walk |
 | Runtime §11 Multi-version coexistence | Instances pinned to definition version | — | `GET /api/instances/:id` | full | `definition_version` preserved on row |
-| Runtime §S12 Host interfaces | RuntimeStore / DocumentResolver / TaskPresenter / AccessControl / ExternalService / ContractValidator | — | via `runtime/` impls | full | All six hooks implemented (access + validator permissive) |
+| Runtime §12 Host interfaces | InstanceStore / DocumentResolver / ContractValidator / ExternalService / AccessControl / ProvenanceSigner / ReportRenderer / EventQueue / TaskPresenter | — | via `runtime/` + `wos-runtime::store` impls | partial | Six of nine implemented (InstanceStore as `SqliteRuntimeStore`, DocumentResolver, ContractValidator/permissive, ExternalService/echo, AccessControl/permissive, TaskPresenter). ProvenanceSigner, ReportRenderer, EventQueue not yet hosted |
 | Runtime §Formspec Tasks | Present task | wos-case-instance | `task:assigned` event | full | Socket.IO broadcast |
 | Runtime §Formspec Tasks | Persist task draft | — | `POST /api/tasks/:id/draft` | full |  |
 | Runtime §Formspec Tasks | Submit task response | — | `POST /api/tasks/:id/response` | full | Returns `Completed`/`Failed`/`Rejected` |
@@ -112,16 +114,16 @@ Spec: `specs/governance/workflow-governance.md`. Schema: `schemas/governance/wos
 | Gov §3.3 Explanation | Assemble explanation | — | — | **none** | See Runtime §9; duplicated obligation |
 | Gov §3.4 Counterfactual | Counterfactual explanation | — | — | **none** | Typically derived from FEL evaluation traces; expensive feature with narrow audience. **User value: medium** — only XAI-serious deployments need this |
 | Gov §3.5 Appeal | Record appeal | — | `POST /api/applicant/:id/appeal` | full | Routes through `AppRuntime::enqueue_event` |
-| Gov §3.6 Continuation of service | Hold management | — | — | **none** | Hold state lives in `CaseInstance.governance_state` but no CRUD endpoint. **User value: medium** — benefits adjudication needs this |
+| Gov §3.6 Continuation of service | Hold management | — | — | **none** | Holds are stored on `CaseInstance.governance_state.active_holds` but no CRUD endpoint. **User value: medium** — benefits adjudication needs this |
 | Gov §4 Review protocols | Two-reviewer / supervisor override | — | — | spec-side | Enforced by kernel actor model + lifecycle actions; no separate endpoint needed |
-| Gov §5 Deontic constraints | Enumerate constraints on workflow | wos-workflow-governance | `GET /api/governance/:url/deontic-constraints` | full | Projected from bundle |
-| Gov §5 Deontic constraints | List violations per instance | — | `GET /api/instances/:id/deontic-violations` | full | Filtered provenance view |
+| Gov §10 Deontic constraints | Enumerate constraints on workflow | wos-workflow-governance | `GET /api/governance/:url/deontic-constraints` | full | Projected from bundle |
+| Gov §10 Deontic constraints | List violations per instance | — | `GET /api/instances/:id/deontic-violations` | full | Filtered provenance view |
 | Gov §6 Delegations | List delegations | wos-workflow-governance | `GET /api/governance/:url/delegations` | full |  |
 | Gov §6 Delegations | Create delegation | — | `POST /api/governance/:url/delegations` | full | Supervisor-gated |
 | Gov §6 Delegations | Revoke delegation | — | `DELETE /api/governance/:url/delegations/:id` | full |  |
-| Gov §7 Assertion gates | Pipeline enumeration | wos-assertion-gate | `GET /api/governance/:url/pipelines` | full |  |
-| Gov §7 Assertion gates | Run pipeline against inputs | — | — | **none** | Plan called this out as `POST /validate-pipeline`; not yet implemented. **User value: high** — pipelines are the primary deontic-check mechanism |
-| Gov §8 Quality controls | List quality controls | wos-workflow-governance | `GET /api/governance/:url/quality-controls` | full |  |
+| Gov §5.4 Assertion gates | Pipeline enumeration | wos-assertion-gate | `GET /api/governance/:url/pipelines` | full | Pipelines live under §5 Data Validation Pipelines, not §7 |
+| Gov §5.4 Assertion gates | Run pipeline against inputs | — | — | **none** | No `POST /validate-pipeline`. **User value: high** — pipelines are the primary data-validation mechanism for untrusted inputs |
+| Gov §7 Quality controls | List quality controls | wos-workflow-governance | `GET /api/governance/:url/quality-controls` | full |  |
 | Gov §2.9 Schema upgrade | Named lifecycle operation | — | — | **none** | Migration endpoint missing (`POST /api/instances/:id/migrate`). **User value: medium** — rare outside multi-year workflows |
 
 ### Due Process Config (sidecar)
@@ -157,7 +159,7 @@ Spec: `specs/ai/ai-integration.md`. Schema: `schemas/ai/wos-ai-integration.schem
 | AI §3 Agent registration | List registered agents | wos-ai-integration | `GET /api/agents?workflowUrl=…` | full |  |
 | AI §3 Agent registration | Get agent by id | wos-agent-config | `GET /api/agents/:id` | full |  |
 | AI §3.5 Trust boundary | Trust boundary declaration | wos-ai-integration | `GET /api/governance/:url/agents` | partial | Read-only projection, doesn't expose boundary details |
-| AI §3.7 Agent MUST NOT review own output | Separation of duties enforcement | — | — | partial | Currently `PermissiveAccessControl`; not enforced. **User value: high** — spec explicitly names this as MUST |
+| AI §1.5 / Gov §7.2 | Separation of duties (agent must not review own output) | — | — | **none** | `PermissiveAccessControl::can_transition` returns `true` unconditionally; `AccessControl` trait has no method comparing actor identity to original author. **User value: high** — Gov §7.2 obligates this normatively (AI §1.5 informative table cross-references) |
 | AI §4 Deontic constraints | Permissions / prohibitions / obligations for agents | — | `GET /api/governance/:url/deontic-constraints` | full | Shared endpoint |
 | AI §5 Autonomy | Autonomy level cap | wos-agent-config | — | partial | Stored on agent row, not enforced on actions |
 | AI §5.3 Autonomy capped on expired calibration | Enforce calibration expiry | wos-agent-config | — | **none** | No scheduled check; calibration metadata stored but never consulted. **User value: medium** — safety feature for production agents |
@@ -179,7 +181,7 @@ Spec: `specs/ai/drift-monitor.md`. Schema: `schemas/ai/wos-drift-monitor.schema.
 
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
-| Drift §1.3 Monitor metrics | PSI / KS drift over windows | wos-drift-monitor | `GET /api/agents/:id/drift` | **stub** | Returns `{psi: null, ks: null, note: "configure WOS_DRIFT_DETECTOR"}`. **User value: medium** — real value requires a drift detector process; server should return the *last computed* report rather than computing on demand. Suggested fix: treat drift reports as externally-written rows, add `POST /api/agents/:id/drift` for producers |
+| Drift §1.3 Monitor metrics | Serve drift report shaped by configured metrics | wos-drift-monitor | `GET /api/agents/:id/drift` | **stub** | Spec defines metric config shape (PSI / KS / threshold); doesn't obligate the processor to compute. Endpoint returns spec-correct envelope with `psi: null, ks: null`. **User value: medium** — real impls have an external detector write reports; suggested follow-up: add a write-side `POST /api/agents/:id/drift` so the GET serves the most-recent externally-produced report |
 | Drift §1.4 Deployment sequence | Canary / shadow gating on drift | — | — | spec-side | Enforced at gateway, not server |
 
 ---
@@ -190,17 +192,17 @@ Spec: `specs/advanced/advanced-governance.md`. Schema: `schemas/advanced/wos-adv
 
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
-| Advanced §3 Equity guardrails | Evaluate equity over window | wos-equity | `POST /api/equity/evaluate` | **stub** | Real group-by runs but outcome predicate is stubbed; result shape is spec-correct. **User value: high** — this is the main equity observable |
+| Advanced §3 Equity guardrails | Evaluate equity over window | wos-equity | `POST /api/equity/evaluate` | partial | Real group-by runs over instances; outcome predicate is stubbed (`Some(_) ⇒ false`). Result shape is spec-correct. **User value: high** — main equity observable |
 | Advanced §3.3 Async evaluation | Scheduled equity runs | wos-equity | — | spec-side | Belongs to a scheduler, not the server |
 | Advanced §4 Constraint zones | List zones on workflow | wos-advanced | `GET /api/governance/:url/constraint-zones` | full | Projected from sidecar |
 | Advanced §4.4 Relation evaluation | Compute DCR marking → valid next actions | — | `GET /api/instances/:id/constraint-zones/:zone/valid-actions` | **stub** | Returns declared activities; real marking evaluation against provenance not implemented. **User value: medium** — DCR-style case management is niche today |
-| Advanced §5 Multi-step sessions | Session start / continue / complete | — | — | **none** | Plan had this as stretch. **User value: low** — overlaps with kernel compound states; serious implementations should extend the kernel instead |
+| Advanced §5 Multi-step sessions | Session start / continue / complete with cumulative-confidence gating | — | — | **none** | §5.4 specifies cumulative-confidence product across DAG steps with intervention-point checkpoints — distinct from kernel compound states (which have no confidence semantics). **User value: medium** — narrow consumer set (multi-step LLM reasoning chains) |
 | Advanced §6 Verifiable constraints | SMT verification | wos-verification-report | `POST /api/verification/verify` | **stub** | Returns `inconclusive` for every constraint. Real proofs require `WOS_SMT=z3`. Shape is spec-correct — consumers can integrate today |
 | Advanced §7 Tool use governance | Tool invocation gating | — | `POST /api/agents/:id/tool-invocation-check` | **stub** | Shared with AI §tool use |
 | Advanced §8 Agent lifecycle | State machine transitions | — | `POST /api/agents/:id/lifecycle-transition` | full | Shared with AI §agent lifecycle |
 | Advanced §9 Calibration | Recalibration triggers | wos-agent-config | — | **none** | See AI §5.3 |
 | Advanced §10 Shadow mode | Agent shadow deployment | — | `POST /api/agents/:id/shadow` | partial | Shared with AI |
-| Advanced §11 Circuit breaker | Agent-level breaker | — | — | **none** | **User value: low** — typical deployments use process-level circuit breakers (sidecar or service mesh); encoding in the spec is over-reach |
+| Advanced §11 Circuit breaker | Agent-level breaker (errorRateThreshold / cooldownDuration / closed-open-half-open) | — | — | **none** | Agent-semantic — error rate of agent invocations feeds agent lifecycle state via `lifecycleHook`. Distinct from network-layer breakers a service mesh provides. **User value: medium** — standalone-agent deployments need it |
 
 ### Verification Report (sidecar)
 
@@ -227,7 +229,7 @@ Spec: `specs/assurance/assurance.md`. Schema: `schemas/assurance/wos-assurance.s
 | Assurance §3 Subject continuity | Cross-instance timeline for a subject | wos-assurance | `GET /api/subjects/:ref/assurance-chain` | partial | Returns ordered facts; continuity-hash validation not implemented. **User value: high** — continuity is the main assurance observable |
 | Assurance §4 Invariant 6 | Assurance level ≠ disclosure posture | wos-assurance | — | full | Enforced at type level (two independent enums on request) |
 | Assurance §5 Attestation | Provider-neutral attestation | — | — | **none** | No `/api/instances/:id/identity-facts/:id/attest`. **User value: medium** — legal-sufficiency deployments need attestation; low-assurance deployments don't |
-| Assurance §6 Legal sufficiency disclosure | Disclosure metadata on exports | — | — | **none** | Spec §6 obligates every artifact to carry a legal-sufficiency disclosure. Currently missing from PROV-O / XES / OCEL exports. **User value: high** — this is explicit spec MUST |
+| Assurance §6 Legal sufficiency disclosure | Disclosure metadata on exports when claims are made | — | — | **none** | §6.1 obligates a disclosure of which conditions an implementation relies on (process, signature semantics, records-management, applicable law) **when** the implementation makes claims about evidentiary weight. Server-side exports today make no such claims and therefore are technically compliant; if/when we add attestation (§5), exports must carry the disclosure. **User value: medium** — gating the attestation work, not currently blocking |
 | Assurance §custody | Custody posture declaration | — | — | **none** | Plan had `GET /api/instances/:id/custody-posture` as a stretch. **User value: medium** — specialised to chain-of-custody workflows |
 
 ---
@@ -257,7 +259,7 @@ Spec: `specs/profiles/semantic.md`. Schema: `schemas/profiles/wos-semantic-profi
 
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
-| Semantic §2 Doc structure | Load semantic profile | wos-semantic-profile | `GET /api/kernels/:url` | partial | Served as part of the bundle; no dedicated `/semantic/:url` projection |
+| Semantic §2 Doc structure | Load semantic profile | wos-semantic-profile | `GET /api/bundles/:url` | partial | Served as part of the bundle; no dedicated `/semantic/:url` projection |
 | Semantic §3 JSON-LD context | Serve JSON-LD context | — | — | **none** | Plan had `GET /api/semantic/jsonld-context`. **User value: medium** — needed by RDF consumers but can be shipped as static file |
 | Semantic §4 SHACL | SHACL validation | — | — | **none** | Requires a SHACL engine. **User value: medium** — overlaps with our lint surface; real RDF shops want this |
 | Semantic §5 PROV-O mapping | Export provenance as PROV-O | — | `GET /api/instances/:id/provenance/export?format=prov-o` | full |  |
@@ -293,37 +295,36 @@ Spec: `specs/sidecars/notification-template.md`. Schema: `schemas/sidecars/wos-n
 
 Rows where the spec obligates a surface but the user value is questionable, and what we recommend.
 
-### Low value — defer or delete
+### Low value — defer
 
-1. **Advanced §11 Circuit breaker.** Encoding a per-agent circuit breaker in a governance document duplicates what every deployment already has at the service-mesh / API-gateway layer. Recommend: remove from spec, or reclassify as "operational guidance".
-2. **Advanced §5 Multi-step sessions.** The kernel's compound states already express multi-step orchestration. A parallel "session" concept creates two ways to do the same thing. Recommend: drop from advanced spec; document how to express sessions via kernel states.
-3. **Semantic §6 SPARQL in-server.** In-process SPARQL requires an embedded triplestore and doesn't pay off for the usual "export → external tool" workflow. Users who need SPARQL have Apache Jena / Oxigraph already. Recommend: keep as optional feature behind `triplestore-oxigraph`; don't mark as MUST.
-4. **AI §6 Fallback chain retrieval.** Fallback chains are typically driven by the agent registry at runtime, not queried by clients. The endpoint would have no real consumer. Recommend: leave as spec-side data on the AI integration doc; no dedicated endpoint.
-5. **Drift Monitor as "compute on demand".** Current stub computes nothing. Better: treat drift reports as externally-produced artifacts, add a write endpoint for drift detector processes, and serve the last report. Recommend: flip the spec's obligation from "processor computes" to "processor stores and serves".
-6. **AI §tool-invocation-check.** Currently hardcoded to `allowed = status==active && deploymentState==production`. The spec obligates a richer check (rate limits, tool-specific restrictions, cooldowns) but those are gateway concerns, not server concerns. Recommend: remove from server-side obligations; keep as metadata on the agent config.
-7. **Kernel §Correspondence template application.** Overlaps with Notification template render. Recommend: merge the two specs into one "outbound content templating" surface.
-8. **Runtime §Suspend / resume.** No evidence anyone uses these in practice. Recommend: lazy-implement when a real case comes in; don't build eagerly.
+1. **Semantic §6 SPARQL in-server.** In-process SPARQL requires an embedded triplestore and doesn't pay off for the usual "export → external tool" workflow. Users who need SPARQL have Apache Jena / Oxigraph already. Recommend: keep as optional feature behind `triplestore-oxigraph`; don't mark as MUST.
+2. **AI §6 Fallback chain retrieval.** Fallback chains are typically driven by the agent registry at runtime, not queried by clients. The endpoint would have no real consumer. Recommend: leave as spec-side data on the AI integration doc; no dedicated endpoint.
+3. **Runtime §Suspend / resume.** No evidence anyone uses these in practice. Recommend: lazy-implement when a real case comes in; don't build eagerly.
+4. **Kernel §Correspondence template application.** Overlaps semantically with Notification template render (both shape outbound content). Recommend: clarify the boundary in the specs (correspondence = audit trail of *received* communication, notification = *outbound* content) — not a deletion case, but the surface area suggests merging or sharper delineation.
 
 ### High value — the real gaps
 
 Rows where the spec is right and the missing surface is a concrete user-value block:
 
-- **Runtime §9 / Gov §3.3 Explanation assembly.** Due-process spec obligates rendered explanation; no endpoint. This is the #1 gap.
-- **Assurance §6 Legal-sufficiency disclosure on exports.** The semantic export endpoints don't carry the spec-required disclosure. Low-effort to add; blocks legal-sufficiency claims.
-- **Gov §7 Pipeline validation.** Assertion-gate pipelines are the main deontic mechanism; no way to run one against inputs.
+- **Runtime §9 / Gov §3.3 Explanation assembly.** Runtime §9 specifies the deterministic algorithm; Gov §3.3 specifies what must be delivered (individualised / categorical / aggregate by impact level). The two are a contract+implementation pair, not duplication. Server provides a *partial* surface today via the applicant-determination view; the dedicated `/instances/:id/explain` per Runtime §9.1 is missing.
+- **Gov §5.4 Pipeline validation.** Assertion-gate pipelines have no run-against-inputs endpoint.
 - **PolicyParam §1.3 As-of resolution.** Date-indexed policy resolution is the *whole point* of the policy-parameters sidecar and has no endpoint.
 - **Integ §6 Correlation.** Async request/response (most interesting integrations) need correlation tokens; currently absent.
-- **AI §3.7 Agent separation of duties.** Spec explicitly MUST-says agent can't review own output; `PermissiveAccessControl` permits it.
+- **Gov §7.2 Separation of duties.** Spec normatively MUST-says actor cannot review own output (cross-referenced informatively in AI §1.5); `PermissiveAccessControl` permits it.
+- **Assurance §3 Subject continuity.** Continuity-hash validation absent; chain endpoint exists but doesn't prove the chain.
 
 ### Spec smells
 
-Ambiguities or over-reach in the specs themselves:
+Ambiguities worth flagging on the spec side, but **not** grounds for unilateral server-side dismissal:
 
-1. **Overlap between `correspondence-metadata` and `notification-template`.** Both define outbound content shapes for audit trails. Users have to know which to use when. → merge or clearly delineate.
-2. **Runtime §9 Explanation vs. Gov §3.3 Explanation vs. Assurance §5 Attestation.** Three specs, one concept. Pick one normative home.
-3. **`drift-monitor.md` obligates "processor monitors drift"** but the actual work has to happen elsewhere (the processor doesn't see the model's inference stream). Recommend: restructure as "processor stores and serves externally-produced drift reports".
-4. **Advanced governance's multi-step sessions** invent a parallel state concept. Don't. Reuse the kernel.
-5. **`assertion-library.md`** defines a reusable assertion shape but no spec actually declares how to *invoke* one. Missing `invokeAssertion` obligation in `workflow-governance.md` §7.
+1. **Overlap between `correspondence-metadata` and `notification-template`.** Both define outbound content shapes. The boundary should be tightened in the specs — recommend an editorial pass, not a deletion.
+2. **`assertion-library.md`** defines a reusable assertion shape but no spec actually declares how to *invoke* one. The `invokeAssertion` obligation is missing from `workflow-governance.md` §5.4. Recommend adding the invoke binding spec-side.
+
+The previous version of this document also flagged Advanced §5 multi-step sessions, Advanced §11 circuit breakers, and Drift §1.3 as over-reach. Re-reading the specs more carefully:
+
+- **Multi-step sessions (Advanced §5)** specify cumulative-confidence gating across DAG steps with intervention-point checkpoints — distinct from kernel compound states (which have no confidence semantics). Different abstractions; both have a place.
+- **Circuit breakers (Advanced §11)** are agent-semantic (error rate of agent invocations feeding agent lifecycle state), not network-semantic. Service mesh breakers don't know what an agent's error predicate is. Defer if there's no consumer, but don't treat as over-reach.
+- **Drift §1.3** only defines the *config shape* for drift metrics; nothing in the spec obligates the processor to compute them. The earlier "the processor structurally can't do this" critique was solving a non-problem.
 
 ---
 
@@ -364,39 +365,41 @@ Every gap scored on three independent axes. **Priority** is user impact × urgen
 
 ### Ranked table
 
+Sorted by ROI (= P × D / C; higher is more value-per-effort). Rescored relative to the pre-validation draft: Legal-sufficiency D 3 → 4 (every export shipped without disclosure compounds retrofit cost when attestation lands); Integration correlation D 4 → 5 (own document calls this breaking-change risk for every adapter); Chain-integrity D 1 → 2 (auditors hand-roll absent); Real drift P 2 → 3 (drift is the only behavioural surface for AI governance customers).
+
 | Gap | Spec § | P | C | D | ROI |
 |---|---|---|---|---|---|
-| Agent separation-of-duties enforcement | AI §3.7 | 5 | 2 | **5** | **12.5** |
-| Legal-sufficiency disclosure on exports | Assurance §6 | 5 | 1 | 3 | **15.0** |
-| Explanation assembly endpoint | Runtime §9 / Gov §3.3 | 5 | 3 | **5** | **8.3** |
-| Pipeline validation endpoint | Gov §7 | 4 | 3 | **5** | 6.7 |
+| Legal-sufficiency disclosure on exports | Assurance §6 | 5 | 1 | 4 | **20.0** |
+| Agent separation-of-duties enforcement | Gov §7.2 / AI §1.5 | 5 | 2 | 5 | **12.5** |
+| Chain-integrity verify endpoint | Kernel §8 | 4 | 1 | 2 | 8.0 |
+| Explanation assembly endpoint (full) | Runtime §9 / Gov §3.3 | 5 | 3 | 5 | 8.3 |
+| Pipeline validation endpoint | Gov §5.4 | 4 | 3 | 5 | 6.7 |
+| Integration correlation tokens | Integ §6 | 4 | 3 | 5 | 6.7 |
 | Policy-parameters as-of resolution | PolicyParam §1.3 | 4 | 2 | 3 | 6.0 |
-| Integration correlation tokens | Integ §6 | 4 | 3 | 4 | 5.3 |
 | Hold create / release CRUD | Gov §3.6 | 3 | 2 | 3 | 4.5 |
-| Chain-integrity verify endpoint | Kernel §5 | 4 | 1 | 1 | 4.0 |
 | Subject continuity-hash validation | Assurance §3 | 3 | 2 | 2 | 3.0 |
 | Calibration expiry enforcement | AI §5.3 | 3 | 2 | 2 | 3.0 |
+| Real drift detection | Drift §1.3 | 3 | 5 | 4 | 2.4 |
 | JSON-LD context endpoint | Semantic §3 | 2 | 1 | 1 | 2.0 |
 | Provenance attestation | Assurance §5 | 3 | 3 | 2 | 2.0 |
 | SHACL validation | Semantic §4 | 2 | 3 | 2 | 1.3 |
 | Counterfactual explanation | Gov §3.4 | 2 | 4 | 2 | 1.0 |
+| Multi-step sessions | Advanced §5 | 2 | 3 | 3 | 2.0 |
 | Migration endpoint | Gov §2.9 | 2 | 3 | 1 | 0.7 |
 | Real SMT verification | Advanced §6 | 2 | 5 | 1 | 0.4 |
-| Real drift detection | Drift §1.3 | 2 | 5 | 4 | 1.6† |
-| Multi-step sessions | Advanced §5 | 1 | 3 | 3 | 1.0† |
+| Agent circuit breakers | Advanced §11 | 2 | 3 | 1 | 0.7 |
 | SPARQL in-server | Semantic §6 | 1 | 5 | 1 | 0.2 |
-| Agent circuit breakers | Advanced §11 | 1 | 3 | 1 | 0.3 |
 
-_ROI = P × D / C. Higher = more value-per-effort._
-_† Row has a spec-side recommendation that should be resolved before implementation. See below._
+Event-idempotency on `POST /api/instances/:id/events` (Runtime §4.3) was downgraded from "partial" to "none" during validation — added to the gap pool: P 4, C 2, D 4 → ROI 8.0. Goes alongside chain-integrity verify in week 1.
 
-### Top three by debt burden
+### Top by debt burden (D = 5)
 
 These are the gaps where deferral **actively costs more every week**, independent of priority:
 
-1. **Agent separation-of-duties (AI §3.7)** — permissive behaviour is already shipped. Every new consumer builds expectations around "agent can self-review." Tightening later becomes a breaking change. Fix before more consumers land.
-2. **Explanation assembly (Runtime §9 / Gov §3.3 / Assurance §5)** — three specs normatively home the same concept. If each grows its own endpoint, future consolidation is a triple rewrite. Pick the home **now** and retire the other two claims at the spec level.
-3. **Pipeline validation (Gov §7)** — without a server-side gate evaluator, handler code hand-rolls assertion logic. Every month of delay scatters more bespoke assertion calls across the codebase.
+1. **Agent separation-of-duties (Gov §7.2 / AI §1.5).** Permissive behaviour is already shipped. Every new consumer builds expectations around "agent can self-review." Tightening later becomes a breaking change. Fix before more consumers land.
+2. **Explanation assembly (Runtime §9 + Gov §3.3).** Two specs (algorithm + delivery contract) normatively home this. Server has a partial surface via applicant-determination today; if we let it solidify there, the Runtime §9.1 deterministic-algorithm contract becomes a parallel implementation later. Pick the dedicated `/explain` endpoint now.
+3. **Pipeline validation (Gov §5.4).** Without a server-side gate evaluator, handler code hand-rolls assertion logic. Every month of delay scatters more bespoke assertion calls across the codebase.
+4. **Integration correlation (Integ §6).** `ExternalService::invoke` is already in adapters' hands; adding correlation later breaks the trait. The longer we wait, the more adapters we invalidate.
 
 ### Decision matrix (cross-tabulated)
 
@@ -411,49 +414,53 @@ These are the gaps where deferral **actively costs more every week**, independen
 
 ### Recommended sequence
 
-**Week 1 — MUST-compliance + quick wins (~2 days total):**
+**Week 1 — quick wins + tighten the easy compounding gaps (~1 day total):**
 
-1. Legal-sufficiency disclosure on exports (30 min)
-2. Chain-integrity verify endpoint (1 hr)
-3. JSON-LD context endpoint (30 min)
-4. Agent separation-of-duties enforcement (2 hr) — **stops permissive drift**
-5. Policy-parameters as-of resolution (2 hr) — **unlocks the sidecar**
+1. Legal-sufficiency disclosure on exports (30 min) — emit a `wosDisclosure` block in PROV-O / XES / OCEL headers so the future attestation work doesn't require re-issuing exports.
+2. Chain-integrity verify endpoint (1 hr) — wrap the existing `verify_chain` helper.
+3. JSON-LD context endpoint (30 min) — static serve.
+4. Agent separation-of-duties enforcement (2 hr) — **stops permissive drift**; tighten `AccessControl::can_transition` on transitions whose source state has a `review`-tagged actor.
+5. Policy-parameters as-of resolution (2 hr) — date-indexed lookup over the policy-parameters sidecar.
+6. Event-idempotency on `POST /events` (2 hr) — accept an `idempotencyToken` in the request body, dedupe in `event_queue`.
 
-**Week 2 — normative-home consolidation (~5 days total):**
+**Week 2 — full explanation + pipeline (~3 days total):**
 
-6. Pipeline validation endpoint (1 day)
-7. Explanation assembly endpoint (1 day) — **pick this as the single home**; retire the other two specs' parallel claims
-8. Hold CRUD (3 hr)
-9. Calibration expiry enforcement (3 hr)
-10. Subject continuity-hash validation (2 hr)
+7. Pipeline validation endpoint (1 day) — `POST /api/governance/:url/validate-pipeline` with `{inputs}`; assertion evaluator returns `{passed, failures}`.
+8. Explanation assembly endpoint (1 day) — `GET /api/instances/:id/explain` per Runtime §9.1's deterministic algorithm; Gov §3.3 delivery contract is satisfied by selecting the explanation level from the instance's impact level. Existing applicant-determination view stays; new endpoint is the spec-shaped one.
+9. Hold CRUD (3 hr) — `POST /api/instances/:id/holds` + `DELETE …/:holdId`; route through runtime so provenance is consistent.
+10. Calibration expiry enforcement (3 hr) — background job; autonomy cap when calibration `validUntil` < now.
+11. Subject continuity-hash validation (2 hr) — extend `assurance_chain` response with `chainValid: bool`.
 
-**Week 3 — integration correctness (~3 days total):**
+**Week 3 — integration correctness + attestation (~3 days total):**
 
-11. Integration correlation tokens (1 day) — **do before more adapters land**
-12. Provenance attestation (1 day)
-13. Migration endpoint (1 day)
+12. Integration correlation tokens (1 day) — **do before more adapters land**. Add `correlation_token: Option<String>` to `ExternalService::invoke` and `wos-runtime` callback registry.
+13. Provenance attestation (1 day) — Ed25519 signing path; emits attestation record with the legal-sufficiency disclosure block.
+14. Migration endpoint (1 day) — `POST /api/instances/:id/migrate` exposing `WosRuntime::migrate`.
 
-**Don't build — propose spec change first:**
+**Defer for product-fit signal:**
 
-- **Multi-step sessions** (Advanced §5) — propose deletion; kernel compound states cover it.
-- **Agent circuit breakers** (Advanced §11) — propose deletion; service-mesh concern.
-- **Real drift detection** (Drift §1.3) — propose flipping: processor *receives and stores* externally-produced reports rather than computing. Current spec obligates work the processor structurally can't do (no inference stream access).
-- **SHACL validation** (Semantic §4) — wait for a consumer ask; overlaps with existing lint surface.
+- **Real drift detection** (Drift §1.3) — add write-side `POST /api/agents/:id/drift` and have the GET serve the most-recent stored report. Skip until an external detector is in scope.
+- **Real SMT verification** (Advanced §6) — stub shape is durable; wait for a customer with a real proof obligation.
+- **SHACL validation** (Semantic §4) — defer until an RDF consumer asks; overlaps with the lint surface.
+- **Multi-step sessions** (Advanced §5) — defer; legitimate spec but narrow consumer set today (multi-step LLM reasoning chains).
+- **Agent circuit breakers** (Advanced §11) — defer; standalone-agent deployments will need it eventually.
 
-**Deferred indefinitely — non-load-bearing:**
+**Deferred indefinitely:**
 
 - **SPARQL in-server** (Semantic §6) — export-to-external is the standard pattern.
-- **Real SMT verification** (Advanced §6) — stub's spec-correct shape is durable; swap is transparent when a real consumer appears.
+- **Counterfactual explanation** (Gov §3.4) — narrow XAI audience.
 
-### The three compounding costs of deferral
+### The four compounding costs of deferral
 
 1. **Ossified permissive behaviour.** Every day the server ships with `PermissiveAccessControl` allowing agents to self-review, more consumers depend on that behaviour. Closing this gap later is no longer additive — it's a breaking change that invalidates existing integrations. Cost doubles every month.
 
-2. **Three-way explanation schism.** Runtime §9 (explanation assembly), Gov §3.3 (due-process explanation), and Assurance §5 (attestation) all normatively home the same concept. If we grow three endpoints before picking one, consolidation becomes a triple rewrite with migration paths for three client sets. Cost is three independent implementations instead of one.
+2. **Explanation surface fragmentation.** Runtime §9.1 specifies a deterministic explanation algorithm; Gov §3.3 specifies what must be delivered (individualised / categorical / aggregate). The two are a contract+implementation pair, not duplication, but the partial surface today (applicant-determination) doesn't satisfy Runtime §9.1's algorithm contract. If consumers build against the partial surface, the dedicated `/explain` endpoint later becomes a migration path rather than an addition. Cost is one extra migration per consumer.
 
-3. **Integration-binding dispatch shape.** The `ExternalService::invoke` trait signature doesn't model correlation tokens today. Any adapter written against the current shape will need a breaking trait update when correlation lands. The longer we wait, the more adapters we invalidate. Cost is linear in the number of external adapters written between now and the fix.
+3. **Integration-binding dispatch shape.** The `ExternalService::invoke` trait signature doesn't model correlation tokens today. Any adapter written against the current shape will need a breaking trait update when correlation lands. Cost is linear in the number of external adapters written between now and the fix.
 
-The remaining 17 gaps are **additive** — deferring them creates no compounding cost. They're pure feature work that can happen whenever there's a concrete consumer.
+4. **Pipeline assertion scatter.** Without a server-side `validate-pipeline` endpoint, handlers and services hand-code assertion checks against governance rules. Every new check ossifies the pattern of bespoke assertion logic in handler code. Consolidation later means tracking down N inlined assertions and rerouting them through the gate evaluator.
+
+The remaining 16 gaps are **additive** — deferring them creates no compounding cost. They're pure feature work that can happen whenever there's a concrete consumer.
 
 
 ---
@@ -462,5 +469,5 @@ The remaining 17 gaps are **additive** — deferring them creates no compounding
 
 - The "stub" status is load-bearing: consumers can integrate today against spec-correct response shapes. Swapping to real adapters (Z3 for SMT, a real drift detector, a real SHACL engine) doesn't change the wire protocol. Stubs are a feature, not a compromise, for a reference implementation.
 - The server intentionally does NOT implement the Lifecycle Detail Companion as HTTP endpoints — it's an internal algorithm reference. Conformance tests cover it.
-- Every sidecar that's marked entirely "spec-side" (due-process-config, policy-parameters, assertion-library, agent-config, verification-report, equity-config) is served through the existing `/api/kernels/:url` bundle join. Adding dedicated endpoints would fragment the surface.
+- Every sidecar that's marked entirely "spec-side" (due-process-config, policy-parameters, assertion-library, agent-config, verification-report, equity-config) is served through the existing `/api/bundles/:url` bundle join. Adding dedicated endpoints would fragment the surface.
 
