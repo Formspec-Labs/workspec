@@ -979,6 +979,10 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
+    // crates/wos-lint/src/rules/tier2.rs (e.g. `k_ext_002_root_level_x_wos_key_flagged`).
+    // The two linked `fixtures/validation/x-wos-*.json` files are authoring
+    // artifacts, not executed by the conformance harness. (See 2026-04-18 review.)
     RuleMetadata {
         id: "K-EXT-002",
         tier: Tier::T2,
