@@ -10,6 +10,10 @@
 //! tool-execution failure is returned as a *successful* JSON-RPC response
 //! with `result: { isError: true, content: [...] }`. `server.rs` relies on
 //! these variants to pick the right shape.
+//!
+//! Transport-level errors (stdin/stdout I/O, JSON parse) are handled
+//! inline in `server.rs` — the previous `ServerError` wrapper had no
+//! consumers and added a type without adding information.
 
 use thiserror::Error;
 
@@ -48,15 +52,3 @@ pub enum DispatchError {
     },
 }
 
-/// Transport-level errors for the JSON-RPC-2.0 stdio loop.
-#[derive(Debug, Error)]
-pub enum ServerError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("JSON parse error: {0}")]
-    Json(#[from] serde_json::Error),
-
-    #[error("dispatch error: {0}")]
-    Dispatch(#[from] DispatchError),
-}

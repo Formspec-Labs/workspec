@@ -45,7 +45,7 @@ src/
   server.rs       — [[bin]] stdio JSON-RPC-2.0 loop
   dispatch.rs     — in-process dispatch entry point (library API)
   registry.rs     — ProjectRegistry (stub; expanded in Task 3)
-  errors.rs       — ToolError, DispatchError, ServerError
+  errors.rs       — ToolError, DispatchError
   tools/
     mod.rs        — re-exports all tool handlers
     ping.rs       — wos_ping health-check tool
