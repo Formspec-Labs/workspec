@@ -13,7 +13,9 @@ Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 so
 
 ### Blockers (ordered by damage if not fixed)
 
-> **2026-04-18 status update:** blockers 2, 3, 4, 5 cleared this session across eight commits (`0f6f049`, `9470b14`, `0f7e27b`, `0b61e96`, `ddd25d3`, `56369bf`, `a42c281`, `935dce9`). Only blocker 1 (§5.3 teaching signal via `guards_evaluated` / `policies_applied`) remains. Summary:
+> **2026-04-18 status update (session 2):** ALL FIVE blockers now cleared. Blocker 1 (§5.3 teaching signal) closed in four commits `b0b9ac5` + `95b88e9` + `b28f610` + `120086e`: Evaluator captures GuardEvaluation records including short-circuited false guards; DrainOnceResult.guard_evaluations plumbs them through runtime; TraceStep.guards_evaluated populated with per-step matching; Delta::GuardFalse enriched when an expected transition's guard blocks; TraceStep.policies_applied synthesized from governance/AI provenance kinds carrying ruleId/policyId. Seven goldens regenerated (purely additive). Type alignment: wos-conformance::trace::GuardEvaluation is now a re-export of wos_core::eval::GuardEvaluation (single source of truth; source_state / target_state / event fields added to carry the teaching signal). §5.3 trace emission is a usable teaching signal for §5.4 repair prompts. Full prior session summary:
+>
+> **Earlier in session:** blockers 2, 3, 4, 5 cleared across eight commits (`0f6f049`, `9470b14`, `0f7e27b`, `0b61e96`, `ddd25d3`, `56369bf`, `a42c281`, `935dce9`). Summary:
 >
 > - **§5.2 Custom variant:** `SuggestedFix::Custom(String)` → `Custom { hint: String }` with round-trip test; §5.2 plan sketch updated to match.
 > - **wos-authoring Command sealing:** enum is `pub(crate)`, `lib.rs` re-export dropped, `dispatch` moved off the public `IWosProjectCore` trait onto an inherent `pub(crate)` method on `RawWosProject`, and `AppliedCommand::inverse` / `with_inverse` tightened to `pub(crate)`. `cargo check -p wos-authoring --tests` now runs with zero warnings. Close of the session-review Finding 1 follow-up.
@@ -56,7 +58,7 @@ Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 so
 
 ### New work items added by this review
 
-- 🚨 **§5.3 runtime instrumentation** — extend `wos-runtime::DrainOnceResult` to carry per-step guard/policy evaluations; wire through `wos-conformance::build_trace_from_result`. **Without this, §5.4's teaching-signal claim is false.**
+- ✅ **§5.3 runtime instrumentation** — landed `b0b9ac5` + `95b88e9` + `b28f610` + `120086e`. DrainOnceResult.guard_evaluations carries GuardEvaluation records from the evaluator; build_trace_from_result populates TraceStep.guards_evaluated per-step and enriches Delta::GuardFalse when an expected transition's guard evaluated false. PolicyApplication synthesized from governance/AI provenance records carrying ruleId/policyId. Seven T3 goldens regenerated (additive only). §5.4 repair prompts now have a real teaching signal.
 - 🚨 **§5.3 fixture repair** — fix `data.amount` ↔ `caseFile.amount` path in T3 fixtures (`crates/wos-conformance/fixtures/K-011/K-020/K-033`) before re-capturing goldens.
 - 🚨 **§5.2 `Custom` variant fix** — one-line refactor from `Custom(String)` to `Custom { hint: String }`.
 - 🚨 **wos-authoring pre-Task-4 fixes** — `Command` visibility; resolve `ActorKind::Agent` + `ImpactLevel` plan/reality mismatch.
@@ -88,13 +90,12 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 
 **Next actionable work items (ordered by ROI):**
 
-> Blockers 2-5 landed 2026-04-18; T3 provenance follow-up also landed. Sequence now starts at §5.3 runtime instrumentation (the last 2026-04-18 blocker).
+> All 2026-04-18 blockers landed. Review-warning cleanup batch (wos-mcp + v0 spike + §4.2 annotations) also landed this session. Sequence now starts at §5.1 per-tier backfill.
 
-1. §5.3 runtime instrumentation — ~1-2 days; makes trace a teaching signal (extend `wos-runtime::DrainOnceResult` + wire through `build_trace_from_result`).
-2. §5.1 per-tier backfill — start with kernel tier (109 violations) since it has the highest adopter count and most stable surface; use the reshape pre-pass's consolidated `$defs/ExtensionsMap` / `$defs/JsonSchemaUri` as the model for other shared definitions. ~1-2 days per tier.
-3. Review-warning cleanup across wos-mcp + v0 spike + §4.2 registry comments — batchable, ~3 hours total.
-4. §4.2 Task 3 (CI fixture-link test) — ~2 hours; locks in the ratchet.
-5. wos-authoring Tasks 4-8 — remaining handlers, undo/redo, WosProject façade, README, integration test; now unblocked.
+1. §5.1 per-tier backfill — start with kernel tier (109 violations) since it has the highest adopter count and most stable surface; use the reshape pre-pass's consolidated `$defs/ExtensionsMap` / `$defs/JsonSchemaUri` as the model for other shared definitions. ~1-2 days per tier.
+2. §4.2 Task 3 (CI fixture-link test) — ~2 hours; locks in the ratchet.
+3. wos-authoring Tasks 4-8 — remaining handlers, undo/redo, WosProject façade, README, integration test; now unblocked.
+4. §5.3 Tasks 4-5 — `wos-conformance explain` / `diff` CLI subcommands and `schemas/conformance/conformance-trace.schema.json` publication. Guard and policy payloads are now populated so the CLI would have real content to format.
 
 **ADR references (resolved 2026-04-18):** `ADR-0057 (wos-core-implementation-boundary)` and `ADR-0058 (wos-core-gap-analysis)` live in `thoughts/archive/adr/` (implemented). Prior audit looked in active `thoughts/adr/` and incorrectly flagged them as missing. Citations in `enterprise-implementation-roadmap.md:257`, `thoughts/plans/2026-04-13-wos-runtime-crate.md:423`, `thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md:302`, and `specs/companions/runtime.md:51,:906` all resolve against the archive copies.
 
