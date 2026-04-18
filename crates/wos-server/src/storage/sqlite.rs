@@ -6,8 +6,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use std::str::FromStr;
 
 use super::{
-    DelegationRow, InstanceMutator, InstanceQuery, InstanceRow, KernelRow, Page, ProvenanceRow,
-    SessionRow, Storage, StorageError, StorageResult, UserRow,
+    DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator, InstanceQuery,
+    InstanceRow, KernelRow, Page, ProvenanceRow, SessionRow, Storage, StorageError,
+    StorageResult, UserRow,
 };
 
 pub struct SqliteStorage {
@@ -79,6 +80,29 @@ fn map_provenance(r: &SqliteRow) -> StorageResult<ProvenanceRow> {
         payload: serde_json::from_str(&r.try_get::<String, _>("payload")?)?,
         hash: r.try_get("hash")?,
         previous_hash: r.try_get("previous_hash")?,
+    })
+}
+
+fn map_identity_fact(r: &SqliteRow) -> StorageResult<IdentityFactRow> {
+    Ok(IdentityFactRow {
+        id: r.try_get("id")?,
+        instance_id: r.try_get("instance_id")?,
+        subject_ref: r.try_get("subject_ref")?,
+        assurance_level: r.try_get("assurance_level")?,
+        disclosure_posture: r.try_get("disclosure_posture")?,
+        fact_json: serde_json::from_str(&r.try_get::<String, _>("fact_json")?)?,
+        upgraded_from: r.try_get("upgraded_from")?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
+    })
+}
+
+fn map_inbound_event(r: &SqliteRow) -> StorageResult<InboundCloudEventRow> {
+    Ok(InboundCloudEventRow {
+        cloud_event_id: r.try_get("cloud_event_id")?,
+        instance_id: r.try_get("instance_id")?,
+        binding: r.try_get("binding")?,
+        received_at: r.try_get::<DateTime<Utc>, _>("received_at")?,
+        payload_json: serde_json::from_str(&r.try_get::<String, _>("payload_json")?)?,
     })
 }
 
@@ -363,6 +387,90 @@ impl Storage for SqliteStorage {
         )
         .bind(workflow_url)
         .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_identity_fact(&self, row: &IdentityFactRow) -> StorageResult<()> {
+        let fact = serde_json::to_string(&row.fact_json)?;
+        sqlx::query(
+            "INSERT INTO identity_facts (id, instance_id, subject_ref, assurance_level,
+               disclosure_posture, fact_json, upgraded_from, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.id)
+        .bind(&row.instance_id)
+        .bind(&row.subject_ref)
+        .bind(&row.assurance_level)
+        .bind(&row.disclosure_posture)
+        .bind(&fact)
+        .bind(&row.upgraded_from)
+        .bind(row.created_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_identity_fact(&self, id: &str) -> StorageResult<Option<IdentityFactRow>> {
+        let row = sqlx::query("SELECT * FROM identity_facts WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.as_ref().map(map_identity_fact).transpose()
+    }
+
+    async fn list_identity_facts(
+        &self,
+        instance_id: &str,
+    ) -> StorageResult<Vec<IdentityFactRow>> {
+        let rows = sqlx::query(
+            "SELECT * FROM identity_facts WHERE instance_id = ? ORDER BY created_at ASC",
+        )
+        .bind(instance_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter().map(map_identity_fact).collect()
+    }
+
+    async fn list_assurance_chain(
+        &self,
+        subject_ref: &str,
+    ) -> StorageResult<Vec<IdentityFactRow>> {
+        let rows = sqlx::query(
+            "SELECT * FROM identity_facts WHERE subject_ref = ? ORDER BY created_at ASC",
+        )
+        .bind(subject_ref)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter().map(map_identity_fact).collect()
+    }
+
+    async fn get_inbound_cloud_event(
+        &self,
+        cloud_event_id: &str,
+    ) -> StorageResult<Option<InboundCloudEventRow>> {
+        let row = sqlx::query("SELECT * FROM integration_inbound WHERE cloud_event_id = ?")
+            .bind(cloud_event_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.as_ref().map(map_inbound_event).transpose()
+    }
+
+    async fn insert_inbound_cloud_event(
+        &self,
+        row: &InboundCloudEventRow,
+    ) -> StorageResult<()> {
+        let payload = serde_json::to_string(&row.payload_json)?;
+        sqlx::query(
+            "INSERT INTO integration_inbound (cloud_event_id, instance_id, binding, received_at, payload_json)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&row.cloud_event_id)
+        .bind(&row.instance_id)
+        .bind(&row.binding)
+        .bind(row.received_at)
+        .bind(&payload)
         .execute(&self.pool)
         .await?;
         Ok(())

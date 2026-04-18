@@ -9,6 +9,7 @@ use crate::AppState;
 
 pub mod ai_chat;
 pub mod applicant;
+pub mod assurance;
 pub mod auth;
 pub mod bundles;
 pub mod calendar;
@@ -18,6 +19,7 @@ pub mod deontic;
 pub mod governance;
 pub mod health;
 pub mod instances;
+pub mod integration;
 pub mod lint;
 pub mod notifications;
 pub mod tasks;
@@ -40,6 +42,8 @@ pub fn router(state: AppState) -> Router {
         .merge(calendar::routes())
         .merge(notifications::routes())
         .merge(deontic::routes())
+        .merge(assurance::routes())
+        .merge(integration::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

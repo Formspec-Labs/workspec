@@ -7,6 +7,7 @@ use crate::config::ServerConfig;
 use crate::storage::StorageHandle;
 
 pub mod applicant_service;
+pub mod assurance_service;
 pub mod bundle_service;
 pub mod calendar_service;
 pub mod conformance_service;
@@ -15,6 +16,7 @@ pub mod deontic_service;
 pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;
+pub mod integration_service;
 pub mod lint_service;
 pub mod notifications_service;
 pub mod provenance_service;

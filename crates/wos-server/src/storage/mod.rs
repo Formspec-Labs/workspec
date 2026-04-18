@@ -164,6 +164,30 @@ pub struct SessionRow {
     pub revoked: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityFactRow {
+    pub id: String,
+    pub instance_id: String,
+    pub subject_ref: String,
+    pub assurance_level: String,
+    pub disclosure_posture: String,
+    pub fact_json: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upgraded_from: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboundCloudEventRow {
+    pub cloud_event_id: String,
+    pub instance_id: String,
+    pub binding: String,
+    pub received_at: chrono::DateTime<chrono::Utc>,
+    pub payload_json: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct InstanceQuery {
     pub status: Option<Vec<String>>,
@@ -212,6 +236,19 @@ pub trait Storage: Send + Sync + 'static {
     async fn list_delegations(&self, workflow_url: &str) -> StorageResult<Vec<DelegationRow>>;
     async fn upsert_delegation(&self, row: &DelegationRow) -> StorageResult<()>;
     async fn revoke_delegation(&self, workflow_url: &str, id: &str) -> StorageResult<()>;
+
+    // --- Identity facts (assurance) ---
+    async fn insert_identity_fact(&self, row: &IdentityFactRow) -> StorageResult<()>;
+    async fn get_identity_fact(&self, id: &str) -> StorageResult<Option<IdentityFactRow>>;
+    async fn list_identity_facts(&self, instance_id: &str) -> StorageResult<Vec<IdentityFactRow>>;
+    async fn list_assurance_chain(&self, subject_ref: &str) -> StorageResult<Vec<IdentityFactRow>>;
+
+    // --- Inbound CloudEvents idempotency ---
+    async fn get_inbound_cloud_event(
+        &self,
+        cloud_event_id: &str,
+    ) -> StorageResult<Option<InboundCloudEventRow>>;
+    async fn insert_inbound_cloud_event(&self, row: &InboundCloudEventRow) -> StorageResult<()>;
 
     // --- Auth ---
     async fn get_user_by_email(&self, email: &str) -> StorageResult<Option<UserRow>>;
