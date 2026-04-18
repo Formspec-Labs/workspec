@@ -26,6 +26,7 @@ use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use wos_core::eval::GuardEvaluation;
 use wos_runtime::{
     BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
     IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime, stamp_provenance,
@@ -259,6 +260,7 @@ impl WorkflowEngine {
         // from the runtime provenance log.
         let mut auxiliary_provenance: Vec<ProvenanceRecord> = Vec::new();
         let mut observed_transitions: Vec<Transition> = Vec::new();
+        let mut observed_guards: Vec<GuardEvaluation> = Vec::new();
 
         for event_entry in &fixture.event_sequence {
             // Advance simulated clock if the fixture declares a delay.
@@ -277,6 +279,7 @@ impl WorkflowEngine {
                         result,
                         &mut observed_transitions,
                         &mut lifecycle_provenance,
+                        &mut observed_guards,
                     );
                 }
             }
@@ -288,6 +291,7 @@ impl WorkflowEngine {
                         result,
                         &mut observed_transitions,
                         &mut lifecycle_provenance,
+                        &mut observed_guards,
                     );
                 }
             } else {
@@ -301,6 +305,7 @@ impl WorkflowEngine {
                         result,
                         &mut observed_transitions,
                         &mut lifecycle_provenance,
+                        &mut observed_guards,
                     );
                 }
             }
@@ -397,6 +402,7 @@ impl WorkflowEngine {
             failures,
             transitions: observed_transitions,
             provenance,
+            guard_evaluations: observed_guards,
             binding_used: Some(self.binding_used.clone()),
         })
     }
@@ -656,6 +662,7 @@ fn append_runtime_result(
     result: DrainOnceResult,
     transitions: &mut Vec<Transition>,
     provenance: &mut Vec<ProvenanceRecord>,
+    guard_evaluations: &mut Vec<GuardEvaluation>,
 ) {
     transitions.extend(result.transitions.into_iter().map(|transition| Transition {
         from: transition.from,
@@ -663,6 +670,7 @@ fn append_runtime_result(
         event: transition.event,
     }));
     provenance.extend(result.provenance);
+    guard_evaluations.extend(result.guard_evaluations);
 }
 
 /// Check whether an expected provenance record partially matches an actual one.

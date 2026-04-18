@@ -104,6 +104,95 @@ fn trace_parity_k011_determinism() {
     assert_trace_matches(&trace, "K-011-determinism");
 }
 
+/// §5.3 teaching signal: when a guarded transition's guard evaluates false
+/// and another guard fires instead, the trace's Delta must surface
+/// `guardFalse` pointing at the blocked transition's guard_id + inputs —
+/// not a bare `stateMismatch` — so an LLM can learn which guard it needs
+/// to repair.
+///
+/// K-PO-004 (inline fixture below) expects submitted → approved on
+/// `decide`, but amount=75000 sends it to pendingDirectorApproval via the
+/// other guard. The expected `approved` transition's guard
+/// `caseFile.amount <= 50000` evaluates false; that's the teachable moment.
+#[test]
+fn guard_false_delta_surfaces_blocking_guard_id() {
+    use wos_conformance::{run_fixture_with_trace, Delta};
+    let kernel_path = workspace_root()
+        .join("fixtures/kernel/purchase-order-approval.json")
+        .canonicalize()
+        .unwrap();
+    let fixture_json = serde_json::json!({
+        "id": "K-GUARD-FALSE-DELTA",
+        "rule": "K-011",
+        "description": "Mismatched expected path triggers GuardFalse delta",
+        "documents": { "kernel": kernel_path.to_str().unwrap() },
+        "initial_case_state": {
+            "amount": 75000,
+            "orderId": "PO-BIG",
+            "vendor": "Acme"
+        },
+        "event_sequence": [
+            { "event": "approve", "actor": "approver", "data": {} }
+        ],
+        "expected_transitions": [
+            { "from": "submitted", "to": "approved", "event": "approve" }
+        ],
+        "expected_provenance": [],
+        "expected_errors": []
+    })
+    .to_string();
+
+    let workspace = workspace_root();
+    let (_result, trace) =
+        run_fixture_with_trace(&fixture_json, workspace.to_str().unwrap()).unwrap();
+
+    let step = trace
+        .steps
+        .first()
+        .expect("at least one transition observed");
+    match &step.delta {
+        Some(Delta::GuardFalse { guard_id, inputs }) => {
+            assert_eq!(guard_id, "submitted->approved:approve");
+            assert_eq!(
+                inputs,
+                &serde_json::json!({ "caseFile": { "amount": 75000 } })
+            );
+        }
+        other => panic!("expected Delta::GuardFalse, got {:?}", other),
+    }
+}
+
+/// §5.3 teaching signal: guards_evaluated must populate on fixtures that
+/// actually exercise guards. K-011-determinism fires through the purchase-
+/// order guard `caseFile.amount <= 50000`; the first trace step's
+/// guardsEvaluated must surface that evaluation with result=true and
+/// inputs subset to `{ caseFile: { amount: 3000 } }`.
+///
+/// Without this, §5.4's repair prompt has no per-step teaching payload —
+/// the trace records only "this transition fired" instead of "this guard
+/// evaluated true against these inputs and that's why it fired".
+#[test]
+fn teaching_signal_populates_guards_evaluated_on_k011_determinism() {
+    let trace = run_t3_fixture("K-011-determinism.json");
+    assert!(!trace.steps.is_empty(), "trace must have at least one step");
+    let step_zero = &trace.steps[0];
+    assert!(
+        !step_zero.guards_evaluated.is_empty(),
+        "step 0 must carry guard evaluations; trace is the teaching signal"
+    );
+    let passed_guard = step_zero
+        .guards_evaluated
+        .iter()
+        .find(|g| g.target_state == "approved")
+        .expect("approved-target guard must be recorded");
+    assert!(passed_guard.result, "approved-target guard evaluated true");
+    assert_eq!(
+        passed_guard.inputs,
+        serde_json::json!({ "caseFile": { "amount": 3000 } }),
+        "inputs must subset case state to referenced paths"
+    );
+}
+
 /// K-011-parallel-join: benefits adjudication parallel regions.
 #[test]
 fn trace_parity_k011_parallel_join() {

@@ -15,7 +15,22 @@
       },
       "stateBefore": "submitted",
       "stateAfter": "approved",
-      "expectedStateAfter": "approved"
+      "expectedStateAfter": "approved",
+      "guardsEvaluated": [
+        {
+          "guardId": "submitted->approved:approve",
+          "sourceState": "submitted",
+          "targetState": "approved",
+          "event": "approve",
+          "expression": "caseFile.amount <= 50000",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "amount": 3000
+            }
+          }
+        }
+      ]
     }
   ],
   "outcome": "pass"

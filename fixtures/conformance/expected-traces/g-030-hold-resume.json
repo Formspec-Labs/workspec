@@ -15,7 +15,24 @@
       },
       "stateBefore": "intake",
       "stateAfter": "eligibilityReview",
-      "expectedStateAfter": "eligibilityReview"
+      "expectedStateAfter": "eligibilityReview",
+      "guardsEvaluated": [
+        {
+          "guardId": "intake->eligibilityReview:applicationComplete",
+          "sourceState": "intake",
+          "targetState": "eligibilityReview",
+          "event": "applicationComplete",
+          "expression": "caseFile.application.isComplete = true",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "application": {
+                "isComplete": true
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "stepIndex": 1,

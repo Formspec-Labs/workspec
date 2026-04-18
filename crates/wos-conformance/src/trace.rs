@@ -41,14 +41,13 @@ pub struct Event {
     pub payload: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GuardEvaluation {
-    pub guard_id: String,
-    pub expression: String,
-    pub result: bool,
-    pub inputs: serde_json::Value,
-}
+// `GuardEvaluation` is the canonical runtime-observation type defined in
+// `wos-core`. Re-exported here so the trace JSON schema uses one source-of-
+// truth type across the runtime → conformance boundary. Adds source_state /
+// target_state / event fields beyond the original 4-field sketch; these are
+// load-bearing for the teaching signal (§5.3) so an LLM reading a failing
+// trace can reason about which transition's guard blocked its expected path.
+pub use wos_core::eval::GuardEvaluation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -160,10 +159,13 @@ mod tests {
             state_after: "review".into(),
             expected_state_after: Some("review".into()),
             guards_evaluated: vec![GuardEvaluation {
-                guard_id: "G-01".into(),
+                guard_id: "initial->review:application.submitted".into(),
+                source_state: "initial".into(),
+                target_state: "review".into(),
+                event: "application.submitted".into(),
                 expression: "amount > 0".into(),
                 result: true,
-                inputs: json!({ "amount": 5 }),
+                inputs: json!({ "caseFile": { "amount": 5 } }),
             }],
             policies_applied: vec![PolicyApplication {
                 policy_id: "P-01".into(),

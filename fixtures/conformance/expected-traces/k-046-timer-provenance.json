@@ -15,7 +15,24 @@
       },
       "stateBefore": "intake",
       "stateAfter": "incomeVerification",
-      "expectedStateAfter": "incomeVerification"
+      "expectedStateAfter": "incomeVerification",
+      "guardsEvaluated": [
+        {
+          "guardId": "intake->incomeVerification:applicationComplete",
+          "sourceState": "intake",
+          "targetState": "incomeVerification",
+          "event": "applicationComplete",
+          "expression": "caseFile.application.isComplete = true",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "application": {
+                "isComplete": true
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "stepIndex": 1,
@@ -30,7 +47,24 @@
       },
       "stateBefore": "incomeVerification",
       "stateAfter": "eligibilityReview",
-      "expectedStateAfter": "eligibilityReview"
+      "expectedStateAfter": "eligibilityReview",
+      "guardsEvaluated": [
+        {
+          "guardId": "incomeVerification->eligibilityReview:verificationComplete",
+          "sourceState": "incomeVerification",
+          "targetState": "eligibilityReview",
+          "event": "verificationComplete",
+          "expression": "caseFile.verification.status = 'verified'",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "verification": {
+                "status": "verified"
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "stepIndex": 2,
@@ -76,7 +110,45 @@
       },
       "stateBefore": "eligibilityReview",
       "stateAfter": "determination",
-      "expectedStateAfter": "determination"
+      "expectedStateAfter": "determination",
+      "guardsEvaluated": [
+        {
+          "guardId": "eligibilityReview->reconciliation:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "reconciliation",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision != caseFile.reviewB.decision",
+          "result": false,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "ineligible"
+              },
+              "reviewB": {
+                "decision": "ineligible"
+              }
+            }
+          }
+        },
+        {
+          "guardId": "eligibilityReview->determination:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "determination",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision = caseFile.reviewB.decision",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "ineligible"
+              },
+              "reviewB": {
+                "decision": "ineligible"
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "stepIndex": 5,

@@ -126,6 +126,13 @@ pub fn run_fixture_with_trace(
 /// produce no transitions (error/lint-negative fixtures), the trace records
 /// the expected zero-transition outcome directly.
 ///
+/// Guard evaluations from [`ConformanceResult::guard_evaluations`] are
+/// attached to trace steps using the heuristic that guards sharing the
+/// step's `(event, source_state)` pair participated in producing that step
+/// or one of its short-circuited siblings. This matches the evaluator's
+/// in-drain ordering (guards fire strictly before the transition they
+/// gate) and gives the §5.3 teaching signal per-step granularity.
+///
 /// The `kernel_version` is extracted from the fixture's event sequence
 /// metadata. Because the conformance harness does not re-expose the parsed
 /// kernel document after `run_fixture` completes, the version defaults to
@@ -158,15 +165,32 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
             .map(|exp| exp.to.clone());
 
         // Compute delta when actual state differs from expected.
+        //
+        // If a guard on the expected transition evaluated false, surface
+        // Delta::GuardFalse instead of a bare StateMismatch. This is the
+        // §5.3 teaching signal: an LLM reading the trace learns exactly
+        // which guard blocked its intended path and what inputs it saw.
         let delta = expected_state_after.as_ref().and_then(|expected| {
-            if *expected != transition.to {
+            if *expected == transition.to {
+                return None;
+            }
+            let blocking_guard = result.guard_evaluations.iter().find(|g| {
+                !g.result
+                    && g.event == transition.event
+                    && g.source_state == transition.from
+                    && g.target_state == *expected
+            });
+            if let Some(guard) = blocking_guard {
+                Some(Delta::GuardFalse {
+                    guard_id: guard.guard_id.clone(),
+                    inputs: guard.inputs.clone(),
+                })
+            } else {
                 Some(Delta::StateMismatch {
                     expected: expected.clone(),
                     actual: transition.to.clone(),
                     cause: None,
                 })
-            } else {
-                None
             }
         });
 
@@ -186,7 +210,12 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
             state_before: transition.from.clone(),
             state_after: transition.to.clone(),
             expected_state_after,
-            guards_evaluated: Vec::new(),
+            guards_evaluated: result
+                .guard_evaluations
+                .iter()
+                .filter(|g| g.event == transition.event && g.source_state == transition.from)
+                .cloned()
+                .collect(),
             policies_applied: Vec::new(),
             delta,
         };
@@ -246,6 +275,9 @@ pub struct ConformanceResult {
 
     /// Actual provenance records produced.
     pub provenance: Vec<ProvenanceRecord>,
+
+    /// Guard expressions evaluated, in observation order (§5.3 teaching signal).
+    pub guard_evaluations: Vec<GuardEvaluation>,
 
     /// Binding discriminator used during execution.
     pub binding_used: Option<String>,

@@ -13,7 +13,22 @@
       },
       "stateBefore": "pending",
       "stateAfter": "fastApproved",
-      "expectedStateAfter": "fastApproved"
+      "expectedStateAfter": "fastApproved",
+      "guardsEvaluated": [
+        {
+          "guardId": "pending->fastApproved:approve",
+          "sourceState": "pending",
+          "targetState": "fastApproved",
+          "event": "approve",
+          "expression": "caseFile.amount <= 50000",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "amount": 3000
+            }
+          }
+        }
+      ]
     }
   ],
   "outcome": "pass"
