@@ -11,6 +11,7 @@
 //! 3. Add a match arm here.
 
 use crate::errors::DispatchError;
+use crate::registry::ProjectRegistry;
 use crate::tools;
 
 /// Route a tool call to its handler by name.
@@ -20,21 +21,29 @@ use crate::tools;
 /// Callers that know the tool name statically (e.g. tests) may also call
 /// the handler function directly via `wos_mcp::tools::<handler>`.
 ///
+/// Handler signature matches
+/// `thoughts/plans/2026-04-17-wos-mcp-crate.md`:
+/// `(&ProjectRegistry, &str, Value) -> Result<Value, ToolError>`.
+/// Most handlers extract a project from `registry` by `project_id`;
+/// project-less tools (e.g. `wos_ping`, `wos_list_projects`) ignore it.
+///
 /// Returns `DispatchError::UnknownTool` for routing failures and
 /// `DispatchError::ToolFailed` for errors raised by the handler itself.
 /// The stdio transport uses this distinction to map the former to a
 /// JSON-RPC error and the latter to an `isError: true` result.
 pub async fn dispatch(
+    registry: &ProjectRegistry,
     tool_name: &str,
+    project_id: &str,
     args: serde_json::Value,
 ) -> Result<serde_json::Value, DispatchError> {
     match tool_name {
-        "wos_ping" => tools::ping(args)
-            .await
-            .map_err(|source| DispatchError::ToolFailed {
+        "wos_ping" => tools::ping(registry, project_id, args).await.map_err(|source| {
+            DispatchError::ToolFailed {
                 tool: tool_name.to_string(),
                 source,
-            }),
+            }
+        }),
         other => Err(DispatchError::UnknownTool(other.to_string())),
     }
 }
@@ -47,7 +56,10 @@ mod tests {
     /// This is a library call — no subprocess, no JSON-RPC round-trip.
     #[tokio::test]
     async fn dispatch_wos_ping_returns_pong() {
-        let result = dispatch("wos_ping", serde_json::json!({})).await.unwrap();
+        let registry = ProjectRegistry::new();
+        let result = dispatch(&registry, "wos_ping", "", serde_json::json!({}))
+            .await
+            .unwrap();
         assert_eq!(result, serde_json::json!({"pong": true}));
     }
 
@@ -57,12 +69,24 @@ mod tests {
     /// JSON-RPC response shapes.
     #[tokio::test]
     async fn dispatch_unknown_tool_errors() {
-        let err = dispatch("wos_nonexistent", serde_json::json!({}))
+        let registry = ProjectRegistry::new();
+        let err = dispatch(&registry, "wos_nonexistent", "", serde_json::json!({}))
             .await
             .unwrap_err();
         assert!(
             matches!(err, DispatchError::UnknownTool(ref name) if name == "wos_nonexistent"),
             "expected DispatchError::UnknownTool, got: {err}"
         );
+    }
+
+    /// Handler signature parity with the plan: `wos_ping` accepts
+    /// `(&ProjectRegistry, &str, Value)` and ignores the first two args.
+    #[tokio::test]
+    async fn wos_ping_handler_accepts_registry_and_project_id() {
+        let registry = ProjectRegistry::new();
+        let result = tools::ping(&registry, "ignored-id", serde_json::json!({"anything": 1}))
+            .await
+            .unwrap();
+        assert_eq!(result, serde_json::json!({"pong": true}));
     }
 }

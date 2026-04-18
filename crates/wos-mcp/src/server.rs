@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
+use wos_mcp::registry::ProjectRegistry;
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
@@ -82,7 +84,7 @@ const INVALID_PARAMS: i32 = -32602;
 ///
 /// Per JSON-RPC-2.0 §4.1 and MCP spec, notifications MUST NOT receive a
 /// response — the server silently consumes them.
-async fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+async fn handle_request(registry: &ProjectRegistry, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     // Notification detection: absence of `id` field is the JSON-RPC-2.0
     // signal that the client does not want a response. A present-but-null
     // `id` is still a request (legal, though unusual).
@@ -141,7 +143,16 @@ async fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
                 .cloned()
                 .unwrap_or(Value::Object(Default::default()));
 
-            match wos_mcp::dispatch::dispatch(&tool_name, args).await {
+            // `project_id` lives inside `arguments` for handlers that need it.
+            // Pulled out here so the handler signature stays uniform across all
+            // tools — project-less tools (e.g. `wos_ping`) just ignore it.
+            let project_id = args
+                .get("project_id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+
+            match wos_mcp::dispatch::dispatch(registry, &tool_name, &project_id, args).await {
                 Ok(result) => JsonRpcResponse::ok(
                     id,
                     serde_json::json!({
@@ -192,6 +203,11 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
+    // One registry per process; Task 3 will populate it with `WosProject`
+    // entries. Held behind a plain `&` borrow — the stdio loop is
+    // single-threaded, so no locking is needed yet.
+    let registry = ProjectRegistry::new();
+
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
@@ -213,7 +229,7 @@ async fn main() {
         let response: Option<JsonRpcResponse> = match serde_json::from_str::<JsonRpcRequest>(
             trimmed,
         ) {
-            Ok(req) => handle_request(req).await,
+            Ok(req) => handle_request(&registry, req).await,
             Err(e) => Some(JsonRpcResponse::err(
                 Value::Null,
                 -32700, // Parse error
