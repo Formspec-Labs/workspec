@@ -575,7 +575,7 @@
         "action": {
           "type": "string",
           "enum": ["createTask", "invokeService", "setData", "emitEvent", "startTimer", "cancelTimer", "log"],
-          "description": "Action type (Kernel S9.2).",
+          "description": "Discriminator selecting which action semantics apply to this object (Kernel §9.2). The value determines which sibling fields are used: `createTask` (human / Formspec-backed task — `taskRef`, `assignTo`, `contractRef`), `invokeService` (external service — `serviceRef`, `idempotencyKey`), `setData` (case-file mutation — `path`, `value`), `emitEvent` (`eventType`, `data`), `startTimer` (`timerId`, `duration` or `deadline`, `event`), `cancelTimer` (`timerId`), and `log` (provenance entry — `message`, `data`).",
           "examples": ["createTask", "invokeService", "setData"],
           "x-lm": {
             "critical": true,
@@ -585,17 +585,20 @@
         "taskRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to a task definition. Used with createTask."
+          "description": "Reference to a task definition used when `action` = `createTask`. The reference identifies the task template the binding resolves to create a new task instance; the binding's registry defines how `taskRef` values are resolved.",
+          "examples": ["reviewPurchaseOrder", "eligibilityDetermination"]
         },
         "assignTo": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor identifier to assign the task to. Used with createTask."
+          "description": "Actor identifier for task assignment when `action` = `createTask`. MUST match the `id` of a declared actor (Kernel §3). The runtime uses binding-specific routing policies (role-based queues, load balancing, manual claim) to map the assignment onto a concrete actor instance.",
+          "examples": ["approver", "caseWorker"]
         },
         "serviceRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to an external service. Used with invokeService."
+          "description": "Reference to an external service used when `action` = `invokeService` (Kernel §9.2, §9.3). The binding's registry resolves this name to a concrete integration (e.g., HTTP endpoint, queue, local plugin).",
+          "examples": ["creditBureauLookup", "notificationService"]
         },
         "idempotencyKey": {
           "type": "string",
@@ -612,47 +615,58 @@
         "path": {
           "type": "string",
           "minLength": 1,
-          "description": "Case file field path. Used with setData.",
+          "description": "Dotted case-file field path when `action` = `setData` (Kernel §5, §9.2). Identifies the case-file slot to be mutated; every mutation is recorded in the case state history (§5.4).",
           "examples": ["caseFile.status", "caseFile.approvedBy"]
         },
         "value": {
-          "description": "Value to set. Used with setData. May be a literal or FEL expression string."
+          "description": "Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. The resolved value MUST be consistent with the declared type of the target case-file field.",
+          "examples": ["approved", 42, "caseFile.amount * 1.1"]
         },
         "eventType": {
           "type": "string",
           "minLength": 1,
-          "description": "Event type identifier. Used with emitEvent."
+          "description": "Identifier of the event to emit when `action` = `emitEvent`. The emitted event is routed back into the lifecycle and MAY trigger transitions on the current instance or correlated instances. MUST NOT start with `$` (reserved for kernel-generated events per §4.10).",
+          "examples": ["applicationComplete", "escalate"]
         },
         "data": {
-          "description": "Event data payload. Used with emitEvent."
+          "description": "Optional payload carried by the emitted event when `action` = `emitEvent`. Any JSON value; bindings MAY define payload schemas per event type.",
+          "examples": [{ "reason": "insufficient-documentation" }, { "amount": 1000 }]
         },
         "timerId": {
           "type": "string",
           "minLength": 1,
-          "description": "Timer identifier. Used with startTimer and cancelTimer."
+          "description": "Identifier used to correlate `startTimer` and `cancelTimer` actions against the same durable timer (Kernel §9.2, §9.7). MUST be unique within the set of currently-running timers for a workflow instance.",
+          "examples": ["reviewDeadline", "followUpReminder"]
         },
         "duration": {
           "type": "string",
-          "description": "ISO 8601 duration. Used with startTimer.",
+          "description": "Relative timer duration as an ISO 8601 duration string, used with `action` = `startTimer` when the deadline is relative to the moment the timer starts. Either `duration` or `deadline` MUST be supplied (not both).",
           "examples": ["PT4H", "P30D"]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 datetime deadline. Used with startTimer and createTask."
+          "description": "Absolute timer deadline as an ISO 8601 datetime, used with `action` = `startTimer` (or on `createTask` to set a task deadline). Either `duration` or `deadline` MUST be supplied on `startTimer` (not both).",
+          "examples": ["2026-05-01T17:00:00Z", "2026-06-30T00:00:00Z"]
         },
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Event to emit when timer fires. Used with startTimer."
+          "description": "Event identifier emitted when a `startTimer` timer fires (Kernel §9.2, §4.10). When the timer expires, the processor synthesises an event of this name and routes it through the lifecycle like any other event; if it matches a transition, that transition fires.",
+          "examples": ["timerExpired", "reviewOverdue"]
         },
         "message": {
           "type": "string",
-          "description": "Log message. Used with log."
+          "description": "Free-text message recorded to the provenance Facts tier when `action` = `log` (Kernel §8.2, §9.2). Useful for explanatory audit entries that do not change lifecycle or case state.",
+          "examples": ["Eligibility determination completed", "Appeal window opened"]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this action does."
+          "description": "Free-text explanation of what this action does. Consumed by documentation and authoring tooling; not interpreted by the processor.",
+          "examples": [
+            "Notify the applicant that the application was received",
+            "Record the final eligibility decision on the case"
+          ]
         },
         "compensatingAction": {
           "$ref": "#/$defs/Action",
@@ -661,27 +675,38 @@
         "contractRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to a contract in the contracts map for validation or Formspec-backed task presentation."
+          "description": "Name of a contract in the enclosing document's `contracts` map (Kernel §11). Used with `createTask` to bind the created task to a Formspec Definition or JSON Schema; the binding (formspec vs jsonSchema) is determined by the referenced ContractReference. The kernel delegates all validation to a conformant contract processor.",
+          "examples": ["purchaseOrder", "eligibilityApplication"]
         },
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to prefill a Formspec-backed task response. Used with createTask; overrides the ContractReference value for this task."
+          "description": "URI of a Mapping document used to prefill the initial Response of a Formspec-backed task (Runtime Companion §S15). Used with `createTask`; overrides any `prefillMappingRef` declared on the referenced ContractReference for this task.",
+          "examples": [
+            "urn:formspec:example.gov:purchase-order:prefill:1.0.0",
+            "https://agency.gov/mappings/eligibility-prefill.json"
+          ]
         },
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to project a completed Formspec Response into case state. Used with createTask; overrides the ContractReference value for this task."
+          "description": "URI of a Mapping document used to project a completed Formspec Response into case state (Runtime Companion §S15). Used with `createTask`; overrides any `responseMappingRef` declared on the referenced ContractReference for this task. If absent (and none is declared on the ContractReference), Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.",
+          "examples": [
+            "urn:formspec:example.gov:purchase-order:response:1.0.0",
+            "https://agency.gov/mappings/eligibility-response.json"
+          ]
         },
         "completionEvent": {
           "type": "string",
           "minLength": 1,
-          "description": "Event emitted when a Formspec-backed task completes successfully."
+          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `completed` state (Runtime Companion §S15). Used with `createTask` to route successful task completion back into the workflow; the event is processed via the standard lifecycle rules.",
+          "examples": ["purchaseOrderApproved", "eligibilitySubmitted"]
         },
         "failureEvent": {
           "type": "string",
           "minLength": 1,
-          "description": "Event emitted when a Formspec-backed task fails validation, ledger gating, abandonment, or post-pass checks."
+          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `failed` state — e.g., validation failure, ledger gating denial, task abandonment, or post-pass check failure (Runtime Companion §S15). Used with `createTask`.",
+          "examples": ["purchaseOrderRejected", "eligibilityRejected"]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
