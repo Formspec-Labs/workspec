@@ -111,17 +111,21 @@
 
 ---
 
-## Dual entry: MCP stdio + in-process dispatch
+## Two audiences, same handler functions
 
-Two entry points exist because two consumers have different needs:
+`wos-mcp` serves two distinct caller populations over a single set of handler functions:
 
-**External agents** (Claude Desktop, Cline, VS Code MCP extension) speak JSON-RPC-2.0 over stdio. They launch `wos-mcp` as a subprocess and exchange request/response messages. `server.rs` owns this: it reads lines from stdin, parses JSON-RPC requests, routes to the handler table, and writes JSON-RPC responses to stdout. SIGTERM triggers graceful shutdown.
+1. **External MCP clients** — Claude Desktop, Cline, or any MCP-protocol-speaking agent. Reached via the stdio binary (`wos-mcp` executable), which wraps the handler functions in JSON-RPC-2.0 over stdin/stdout. `server.rs` owns this: it reads lines from stdin, parses JSON-RPC requests, routes to the handler table, writes JSON-RPC responses to stdout, and handles SIGTERM for graceful shutdown.
 
-**`wos-synth-core`** runs inside the same process as the authoring loop. Spinning up a subprocess and round-tripping through JSON-RPC adds latency and serialization cost to every iteration of the generate-lint-fix loop. `dispatch.rs` exposes `pub fn dispatch(tool: &str, args: Value) -> Result<Value, DispatchError>` as a plain Rust function. `wos-synth-core` implements `ToolContext::Production` by calling `wos_mcp::dispatch` directly — no subprocess, no socket, no JSON parsing overhead beyond what the handler itself needs.
+2. **In-workspace Rust callers** — `wos-synth-core`'s `ToolContext` implementation, `wos-bench`'s scoring code, integration tests. These call the handler functions directly as ordinary library functions. No protocol, no serialization beyond what the handler itself needs, no subprocess.
 
-Both entry points read from the same handler table: a `HashMap<&'static str, HandlerFn>` where each value is a function pointer with signature `fn(&ProjectRegistry, &str, Value) -> Result<Value, ToolError>`. The handler implementations live in `src/tools/` and are never aware of which entry point invoked them. This mirrors exactly the pattern in `packages/formspec-mcp/src/dispatch.ts` (in-process) and `packages/formspec-mcp/src/create-server.ts` (protocol entry).
+In JavaScript/TypeScript (parent Formspec's context), the equivalent pattern requires a `dispatch()` shim because client and server compile as separate packages. Rust workspaces have no such boundary — `wos-synth-core` can `use wos_mcp::tools::lint_document` as a normal import. The "in-workspace" path is therefore not a separate entry point but simply the default function-call path; no dispatch indirection is needed in Rust.
 
-The `ProjectRegistry` is shared across both entry points within a single process. In the stdio binary, one `Arc<Mutex<ProjectRegistry>>` is created at startup and passed to both the server loop and any future control-plane extensions. In library use (in-process), the caller creates a `ProjectRegistry` and passes it through; `wos-synth-core` manages the registry's lifetime alongside its own state.
+What IS shared across both audiences: the tool handler signatures (input → output), the JSON Schemas published for each tool (consumed by MCP clients for tool-call generation and by in-workspace callers alike for argument validation), and the tool-catalog schema at `schemas/mcp/wos-mcp-tools.schema.json`.
+
+Both audiences read from the same handler table: a `HashMap<&'static str, HandlerFn>` where each value is a function pointer with signature `fn(&ProjectRegistry, &str, Value) -> Result<Value, ToolError>`. The handler implementations live in `src/tools/` and are never aware of which caller population invoked them.
+
+The `ProjectRegistry` is shared across both audiences within a single process. In the stdio binary, one `Arc<Mutex<ProjectRegistry>>` is created at startup and passed to the server loop. In library use, the caller creates a `ProjectRegistry` and passes it through; `wos-synth-core` manages the registry's lifetime alongside its own state.
 
 ---
 
@@ -153,17 +157,17 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 1.5:** Write an integration test in `tests/stdio_transport.rs` that spawns the binary as a child process, sends a JSON-RPC request, and asserts the response contains `"pong"`.
 - [ ] **Step 1.6:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): scaffold crate + JSON-RPC-2.0 stdio transport + wos_ping`.
 
-### Task 2: Dual entry — add `dispatch()` in-process function
+### Task 2: Expose tool handlers as public Rust functions + MCP stdio server over them
 
 **Files:**
 - Create: `src/dispatch.rs`
 - Create: `src/registry.rs` (stub — no `WosProject` yet, just the UUID-keyed map skeleton)
 
-- [ ] **Step 2.1:** Define `HandlerFn` type alias and the `TOOL_HANDLERS` static map in `dispatch.rs`. Initially contains only `wos_ping`.
-- [ ] **Step 2.2:** Implement `pub fn dispatch(registry: &ProjectRegistry, tool: &str, args: Value) -> Result<Value, DispatchError>`. Looks up `tool` in `TOOL_HANDLERS`, calls the handler, returns the result or a `DispatchError::UnknownTool` if not found.
-- [ ] **Step 2.3:** Refactor `server.rs` to call `dispatch()` rather than invoking handlers directly. Both entry points now share the same handler table.
-- [ ] **Step 2.4:** Unit test: call `dispatch(registry, "wos_ping", json!({}))` from a test — asserts identical output to what the stdio binary returns for the same call.
-- [ ] **Step 2.5:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): dual entry — MCP stdio + in-process dispatch share handlers`.
+- [ ] **Step 2.1:** Define `HandlerFn` type alias and the `TOOL_HANDLERS` static map in `dispatch.rs`. Initially contains only `wos_ping`. All handler functions are `pub` — in-workspace Rust callers (`wos-synth-core`, `wos-bench`, tests) import them directly by name without needing a dispatch shim.
+- [ ] **Step 2.2:** Implement `pub fn dispatch(registry: &ProjectRegistry, tool: &str, args: Value) -> Result<Value, DispatchError>` as a convenience wrapper for callers that receive the tool name as a runtime string (e.g., the stdio server). Direct callers that know the tool name statically call the handler function directly.
+- [ ] **Step 2.3:** Refactor `server.rs` to route through `TOOL_HANDLERS` rather than invoking handlers directly in an inline match. Both the stdio server and in-workspace callers now share the same handler table.
+- [ ] **Step 2.4:** Unit test: call `wos_mcp::tools::query::wos_ping(registry, "", json!({}))` directly as a library function — asserts the same output as what the stdio binary returns for the equivalent JSON-RPC call.
+- [ ] **Step 2.5:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): expose tool handlers as pub Rust functions + MCP stdio server over shared handler table`.
 
 ### Task 3: `ProjectRegistry` + document management tools
 

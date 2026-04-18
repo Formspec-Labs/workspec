@@ -25,6 +25,34 @@
 
 ---
 
+## Why each crate boundary earns its cost
+
+The "Why this matters" section below frames the four-crate split by analogy to `formspec-chat` + `formspec-mcp`. This section names the concrete downstream consumers that justify each boundary in WOS terms.
+
+1. **`wos-synth-core` — the loop + abstractions.** The loop living in a crate with no provider or transport deps benefits three concrete consumer groups: (a) `wos-bench` running mock-provider benchmarks in CI without pulling `anthropic-sdk`, `tokio`, or `reqwest` into its dependency graph — CI must not require API keys; (b) future vendors embedding WOS authoring in their own product who want to ship their own LLM client (OpenAI, self-hosted llama.cpp, Cohere, etc.) without inheriting Anthropic SDK deps from `wos-synth-core`; (c) offline-only deployments (e.g., air-gapped government environments, which are a realistic audience for a tool about algorithmic due-process compliance) that want the loop available locally without any HTTP client in their dep graph.
+
+2. **`wos-synth-anthropic` — concrete Anthropic provider.** Direct consumers: `wos-synth-cli` (default binding for production use) and `wos-bench` for production-quality reporting runs where real token costs and latency need to be measured. A second provider (e.g., `wos-synth-openai`) would be a ~100 LOC sibling crate implementing the `Prompter` trait. The crate boundary makes that addition trivially additive — a new file, a new Cargo.toml, no feature flags, no conditional compilation in `wos-synth-core`.
+
+3. **`wos-synth-mock` — deterministic test provider.** Consumers: `wos-bench` for CI runs (no API keys in CI); `wos-synth-core`'s own integration tests; future `wos-synth-*` provider conformance tests that need to verify loop behavior without incurring API cost. Separating `wos-synth-mock` from `wos-synth-core` means `wos-synth-core`'s test suite does not need to distinguish "real" from "mock" tests — tests that need deterministic responses import the mock crate; tests that exercise the real Anthropic path are gated on `ANTHROPIC_API_KEY`. Clean seam.
+
+4. **`wos-synth-cli` — binary.** Consumers: humans running `wos-synth generate` and CI pipelines. Separating the binary from the library lets `wos-bench` import `wos-synth-core` without inheriting `clap` or any binary-only deps. More importantly, the CLI is the one place where provider selection is configured from the environment — keeping that decision out of library code ensures the loop is provider-agnostic by construction rather than by discipline.
+
+### Why `ToolContext` earns the trait cost
+
+`ToolContext` is an abstraction with one production implementation (forward to `wos-mcp::dispatch`) and one stopgap (`DirectToolContext`, wrapping `wos-lint`/`wos-conformance` directly until `wos-mcp` lands). A trait with one current production impl looks like YAGNI. Four concrete second-consumer candidates justify it:
+
+1. **Instrumented variant for `wos-bench`.** Wraps the production `ToolContext` to count tool invocations, measure per-call latency, and record diagnostic-repair cycles per problem statement. Without the trait, `wos-bench` has to fork or monkey-patch the loop to collect these metrics.
+
+2. **Caching variant.** During a repair iteration, `lint_document` and `run_conformance` may be called repeatedly on near-identical documents. A caching `ToolContext` that memoizes results keyed by document hash is opt-in via the trait and has zero impact on the production path. This is especially relevant for the benchmark, where many iterations may converge on the same document hash.
+
+3. **Remote variant.** Some deployments will want the tool surface on a different machine from the LLM orchestrator (e.g., conformance checks run on a large-fixture server, LLM calls run on an inference server). A remote `ToolContext` over JSON-RPC satisfies this without touching the loop code.
+
+4. **Dry-run variant for `wos-synth-cli --dry-run`.** Returns synthetic diagnostics to exercise the loop without hitting real lint or conformance. Useful for local development and CI smoke tests where the full tool surface is unavailable.
+
+**The trait earns its abstraction cost once ANY ONE of these second consumers is written.** In the absence of all four, revisit the abstraction during the v0 spike (see `2026-04-17-wos-synth-v0-spike.md` if created). Do not keep the trait purely for hypothetical extensibility.
+
+---
+
 ## Prerequisites
 
 - [§5.1 schema description audit](./2026-04-16-wos-schema-description-audit.md) — the schemas must be rich enough for LLM generation to be feasible.

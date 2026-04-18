@@ -585,6 +585,22 @@ This is exactly the situation `formspec-core` was in before `formspec-studio-cor
 
 ---
 
+## WOS-specific pressures that justify this crate
+
+The "Why This Matters" section above frames `wos-authoring` by analogy to `formspec-studio-core`. This section anchors each capability in a concrete WOS-specific pressure — not a Formspec parallel.
+
+1. **Atomic multi-command transactions.** An LLM driving the authoring loop via `wos-mcp` may generate a sequence like "add state X + add transition X→Y + set Y as terminal" that fails validation halfway through. Without atomic batching, the document ends up in a half-migrated state the LLM must diagnose and clean up. With atomic batching at the helper boundary, the whole sequence rolls back on failure, and the LLM receives a single diagnostic it can address in one repair prompt. The users here are both `wos-synth-core`'s repair loop and interactive Claude Desktop users — both are authoring through `wos-mcp` tool calls that each map to one or more helper invocations.
+
+2. **Undo/redo over batches.** `wos-bench` benchmarks multiple authoring attempts per problem statement. Between attempts, it needs to roll back to a known-good baseline cheaply without re-parsing the source document. Undo at helper granularity is faster than re-deserializing from JSON and re-running all preceding helpers from scratch. The beneficiary is exclusively `wos-bench` — the benchmarking harness is the pressure that makes undo worth implementing now.
+
+3. **Intent-driven helpers (the 28 listed).** Each helper encodes a WOS authoring pattern that an LLM would otherwise have to sequence manually from raw type mutations. `add_rights_impacting_decision`, for example, composes 4–6 primitives (state + transitions + governance assertion + impact level + actor assignment) that have specific co-occurrence constraints in the WOS spec. An LLM calling primitives one at a time in a multi-turn loop has more opportunities to violate these constraints mid-sequence. Consolidating in `wos-authoring` means `wos-mcp` tool handlers stay to ≤5 lines and the LLM makes one tool call instead of six, receiving one structured result instead of six incremental responses. The user is any LLM author via `wos-mcp`.
+
+4. **Command pipeline (dispatch + handlers + diagnostics).** A dispatch-style mutation model gives a single chokepoint for instrumentation that multiple WOS consumers need independently: `wos-bench` needs trace emission and metric counters to score iteration quality; future `wos-studio` (GUI authoring, on the roadmap but out of scope here) needs the same mutation events for live preview. Centralizing in the pipeline means neither consumer has to monkey-patch the authoring loop or add tracing ad hoc inside individual helpers.
+
+> **If any of these pressures disappears, revisit the scope of `wos-authoring`.** In particular: if `wos-bench` never lands (Q1 is reversed), undo/redo can be trimmed. If `wos-mcp` consumers never ask for multi-primitive helpers, the helper set can shrink to 1:1 wrappers over `wos-core` primitives (but keep the crate as the thin wrapper layer — `wos-mcp` tool handlers still benefit from separation).
+
+---
+
 ## Estimated Effort
 
 ~2 engineer-weeks for the complete crate including all 28 helpers, round-trip tests, and the integration test. The pipeline and history foundation (Task 2) is the riskiest piece — the undo-at-helper-granularity discipline needs to be established correctly before any helpers land. Tasks 3–5 are mechanical given the foundation. Task 6 is the validation gate; if the integration test is hard to make pass, the most likely cause is the guarded-fork transition behavior needing refinement.
