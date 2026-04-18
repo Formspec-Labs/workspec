@@ -496,13 +496,8 @@ impl WorkflowEngine {
 
         if !submission_provenance.is_empty() {
             results.push(DrainOnceResult {
-                processed_event: None,
-                processed_event_token: None,
-                transitions: Vec::new(),
                 provenance: submission_provenance,
-                created_task_ids: Vec::new(),
-                emitted_events: Vec::new(),
-                guard_evaluations: Vec::new(),
+                ..DrainOnceResult::default()
             });
         }
 

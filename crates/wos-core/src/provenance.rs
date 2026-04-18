@@ -199,6 +199,40 @@ pub enum ProvenanceKind {
     PolicyDecision,
 }
 
+impl ProvenanceKind {
+    /// Whether this kind represents a governance / AI policy or rule that
+    /// applied during event processing.
+    ///
+    /// Used by the runtime to decide which records should have their `event`
+    /// field stamped with the drain's processed event (for records whose
+    /// constructors left `event = None` — the governance layer does this
+    /// uniformly today), and by the conformance trace builder to decide
+    /// which records contribute a `PolicyApplication` entry on a trace step.
+    ///
+    /// Semantics are "applied" not "violated". Violation-shaped kinds
+    /// (`DeonticViolation`, `AutonomyViolation`, `ConfidenceViolation`, ...)
+    /// signal that a rule FAILED, not that one applied, so they are
+    /// intentionally excluded. `DeonticBypass` and `AutonomyDemotion` are
+    /// semantically "policy overridden / demoted", not accept-and-fire —
+    /// they are included because downstream teaching-signal consumers want
+    /// to see that an override/demotion DID happen (with its rationale)
+    /// when reasoning about a workflow's actual behaviour. Consumers can
+    /// filter them out if they specifically want accept-and-fire semantics.
+    pub fn is_policy_application(&self) -> bool {
+        matches!(
+            self,
+            ProvenanceKind::DeonticEvaluation
+                | ProvenanceKind::DeonticResolution
+                | ProvenanceKind::DeonticBypass
+                | ProvenanceKind::AutonomyComputed
+                | ProvenanceKind::AutonomyDemotion
+                | ProvenanceKind::OverrideRecorded
+                | ProvenanceKind::PolicyDecision
+                | ProvenanceKind::PipelineRiskProfile
+        )
+    }
+}
+
 /// A single provenance record.
 ///
 /// Records carry an RFC 3339 / ISO 8601 `timestamp` populated by the runtime

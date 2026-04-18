@@ -89,13 +89,21 @@ pub fn run_fixture(
 /// Run a conformance fixture and return both the pass/fail result and a
 /// structured [`ConformanceTrace`].
 ///
-/// The trace is built from the observed state transitions and event sequence
-/// captured during execution. Because `wos_runtime` is an opaque boundary,
-/// per-transition guard evaluations are not visible at this level; the
-/// `guards_evaluated` and `policies_applied` fields of each [`TraceStep`] are
-/// left empty. The trace still captures state-before / state-after, the
-/// triggering event, and the expected state for every step — sufficient for
-/// golden-baseline regression and LLM teaching signals.
+/// The trace is built from the observed state transitions, the per-drain
+/// guard evaluations and the provenance-derived policy applications
+/// captured during execution. Each [`TraceStep`] carries:
+///   - state before / after and the triggering event
+///   - every guard expression tested during the step's drain (including
+///     short-circuited `false` guards on competing transitions), with
+///     inputs subset to the paths the guard referenced
+///   - every policy / rule that applied during the step's drain (governance
+///     deontic resolutions, autonomy computations, override records, etc.),
+///     with parameter bindings preserved from the underlying provenance
+///   - a [`Delta`] when the actual target diverges from
+///     [`ConformanceFixture::expected_transitions`] — enriched to
+///     [`Delta::GuardFalse`] when the expected transition's guard
+///     evaluated false, so repair prompts see the blocking expression
+///     directly rather than a bare state mismatch.
 ///
 /// The trace is also written to
 /// `target/conformance-traces/<fixture-slug>.json` on every run (pass or fail).
@@ -183,6 +191,7 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
             if let Some(guard) = blocking_guard {
                 Some(Delta::GuardFalse {
                     guard_id: guard.guard_id.clone(),
+                    expression: guard.expression.clone(),
                     inputs: guard.inputs.clone(),
                 })
             } else {
@@ -228,28 +237,41 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
 
 /// Extract structured [`PolicyApplication`] records from a flat provenance log.
 ///
-/// Scans the provenance records in drain order and synthesizes one
-/// `PolicyApplication` per record whose `record_kind` represents a
-/// governance / AI policy or rule that fired, and whose `data` contains a
-/// `ruleId` or `policyId` string. The synthesized `parameter_bindings` is
-/// the whole `data` object so downstream consumers (CLI `explain`, LLM
-/// repair prompts) can surface rule parameters verbatim.
+/// Scans records in drain order and synthesizes one `PolicyApplication`
+/// per record whose `record_kind` returns true from
+/// [`ProvenanceKind::is_policy_application`]. The synthesized
+/// `parameter_bindings` is the whole `data` object so downstream consumers
+/// (CLI `explain`, LLM repair prompts) can surface rule parameters verbatim.
+///
+/// `policy_id` resolution order:
+///   1. `data.ruleId` (if governance rules adopt a canonical rule-id key)
+///   2. `data.policyId` (if AI integration docs adopt a policy-id key)
+///   3. `data.constraintId` (what governance actually emits today — see
+///      `crates/wos-core/src/deontic.rs::DeonticBypass` construction)
+///   4. `data.id` or `data.tool` (autonomy / tool-governance fallback)
+///   5. The record_kind's camelCase name (`deonticResolution`,
+///      `autonomyComputed`, …) — used for aggregate records that carry
+///      no single identifier but whose kind IS the teaching signal
+///      (e.g. `DeonticResolution` with `{effectiveAction, reason}`).
 ///
 /// The `event_filter` restricts output to records whose `event` field
-/// matches — this anchors the applications to the trace step's triggering
-/// event, matching the evaluator's in-drain ordering.
+/// matches. Governance records are stamped with the drain's event by
+/// `wos-runtime::drain_once` (see the stamping loop there); kernel-layer
+/// records set `event` directly at construction. Records with no event
+/// are skipped — they belong to a broader scope (instance or case-wide)
+/// and would mis-attach if forced onto a specific step.
 ///
-/// This is a heuristic: the runtime does not currently expose a canonical
+/// This is a heuristic: the runtime does not yet expose a canonical
 /// "policy application" seam on its companion-policy return type. When
-/// that seam lands, replace this extractor with the structured pass-through
-/// and keep the `PolicyApplication` shape stable.
+/// that seam lands, replace the extractor body with the structured
+/// pass-through and keep the `PolicyApplication` shape stable.
 fn policy_applications_for_event(
     provenance: &[ProvenanceRecord],
     event_filter: &str,
 ) -> Vec<PolicyApplication> {
     provenance
         .iter()
-        .filter(|record| is_policy_kind(&record.record_kind))
+        .filter(|record| record.record_kind.is_policy_application())
         .filter(|record| {
             record
                 .event
@@ -257,39 +279,35 @@ fn policy_applications_for_event(
                 .map(|e| e == event_filter)
                 .unwrap_or(false)
         })
-        .filter_map(|record| {
-            let data = record.data.as_ref()?;
+        .map(|record| {
+            let data = record
+                .data
+                .clone()
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
             let policy_id = data
                 .get("ruleId")
                 .or_else(|| data.get("policyId"))
-                .and_then(|v| v.as_str())?;
-            Some(PolicyApplication {
-                policy_id: policy_id.to_string(),
-                parameter_bindings: data.clone(),
-            })
+                .or_else(|| data.get("constraintId"))
+                .or_else(|| data.get("id"))
+                .or_else(|| data.get("tool"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| policy_kind_id(&record.record_kind));
+            PolicyApplication {
+                policy_id,
+                parameter_bindings: data,
+            }
         })
         .collect()
 }
 
-/// Whether a [`ProvenanceKind`] represents a governance/AI policy firing.
-///
-/// Covers the explicit-evaluation kinds that carry a rule/policy id:
-/// deontic resolution, autonomy computation, override records, pipeline
-/// risk profile. Violation kinds (DeonticViolation, AutonomyViolation)
-/// are intentionally excluded — they indicate that a rule FAILED, not
-/// that one applied.
-fn is_policy_kind(kind: &ProvenanceKind) -> bool {
-    matches!(
-        kind,
-        ProvenanceKind::DeonticEvaluation
-            | ProvenanceKind::DeonticResolution
-            | ProvenanceKind::DeonticBypass
-            | ProvenanceKind::AutonomyComputed
-            | ProvenanceKind::AutonomyDemotion
-            | ProvenanceKind::OverrideRecorded
-            | ProvenanceKind::PolicyDecision
-            | ProvenanceKind::PipelineRiskProfile
-    )
+/// Fallback policy id for aggregate records that carry no explicit
+/// identifier — uses the record_kind's camelCase serde name.
+fn policy_kind_id(kind: &ProvenanceKind) -> String {
+    serde_json::to_value(kind)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| format!("{:?}", kind))
 }
 
 /// Write a [`ConformanceTrace`] to `target/conformance-traces/<slug>.json`.
@@ -536,6 +554,73 @@ mod runner_trace_tests {
                 "version": "v2",
                 "threshold": 50_000
             })
+        );
+    }
+
+    /// §5.3 policy extractor: governance records carry `constraintId` in
+    /// `data` (see `crates/wos-core/src/deontic.rs`) — the extractor must
+    /// recognize that key, not just `ruleId` / `policyId`. Without this,
+    /// every real governance fixture produced empty `policies_applied`.
+    #[test]
+    fn policy_applications_recognize_constraint_id_on_deontic_bypass() {
+        let bypass = ProvenanceRecord {
+            record_kind: ProvenanceKind::DeonticBypass,
+            timestamp: "2026-04-18T00:00:00Z".to_string(),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: Some("approve".to_string()),
+            data: Some(serde_json::json!({
+                "constraintId": "perm-income-range",
+                "constraintType": "permission",
+                "rationale": "emergency override"
+            })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
+        };
+        let applied = policy_applications_for_event(&[bypass], "approve");
+        assert_eq!(applied.len(), 1);
+        assert_eq!(applied[0].policy_id, "perm-income-range");
+    }
+
+    /// §5.3 policy extractor: aggregate records with no identifier
+    /// (e.g. `DeonticResolution` which carries `{effectiveAction, reason}`)
+    /// fall back to the record_kind's camelCase name so they still
+    /// contribute to the teaching signal.
+    #[test]
+    fn policy_applications_fall_back_to_kind_name_when_no_identifier() {
+        let resolution = ProvenanceRecord {
+            record_kind: ProvenanceKind::DeonticResolution,
+            timestamp: "2026-04-18T00:00:00Z".to_string(),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: Some("determined".to_string()),
+            data: Some(serde_json::json!({
+                "effectiveAction": "reject",
+                "reason": "most-restrictive"
+            })),
+            audit_layer: None,
+            actor_type: None,
+            lifecycle_state: None,
+            definition_version: None,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            input_digest: None,
+            output_digest: None,
+        };
+        let applied = policy_applications_for_event(&[resolution], "determined");
+        assert_eq!(applied.len(), 1);
+        assert_eq!(applied[0].policy_id, "deonticResolution");
+        assert_eq!(
+            applied[0].parameter_bindings["effectiveAction"],
+            serde_json::json!("reject")
         );
     }
 

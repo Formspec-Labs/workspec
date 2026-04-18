@@ -562,6 +562,7 @@ impl WosRuntime {
             guard_evaluations: Vec::new(),
         };
 
+        let drained_event_name = event.event.clone();
         let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
             kernel: kernel.clone(),
             instance: record.instance.clone(),
@@ -655,6 +656,24 @@ impl WosRuntime {
         let (pending_presentations, presentation_provenance) =
             self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
         appended_provenance.extend(presentation_provenance);
+
+        // Stamp the drain's event onto policy-application provenance
+        // records that left `event = None`. The governance / AI / autonomy
+        // / confidence constructors all set `event: None` because they
+        // don't carry the triggering event in their construction context,
+        // but the trace teaching-signal (§5.3) needs this association so
+        // conformance traces can scope `policies_applied` to the right
+        // trace step. Scoped strictly to `is_policy_application()` kinds
+        // — kernel-layer records (state transitions, action executions)
+        // already set `event` correctly in their constructors and the
+        // field is load-bearing there (see `ProvenanceRecord::state_transition`).
+        for prov_record in &mut appended_provenance {
+            if prov_record.event.is_none()
+                && prov_record.record_kind.is_policy_application()
+            {
+                prov_record.event = Some(drained_event_name.clone());
+            }
+        }
 
         populate_provenance_record_fields(
             &mut appended_provenance,

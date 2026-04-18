@@ -1433,6 +1433,12 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
 /// (`caseFile.*` / `event.*`). Paths not resolvable against the supplied
 /// state are omitted — the output is a lossy teaching-signal snapshot, not
 /// a complete evaluation context.
+///
+/// Wildcard paths (`caseFile.relationships[*].kind`, produced by FEL
+/// expressions like `every(caseFile.relationships, $.kind == 'parent')`)
+/// are expanded: the `[*]` segment is replaced with the full array, so
+/// the teaching signal shows every element the guard reasoned over rather
+/// than silently dropping the dependency.
 fn build_guard_inputs(
     expr: &Expr,
     case_state: &HashMap<String, serde_json::Value>,
@@ -1447,29 +1453,29 @@ fn build_guard_inputs(
             None => continue,
         };
 
+        // Strip trailing `[*]` from the first segment for lookup; we resolve
+        // the full array and keep the wildcard implicit in the shape.
+        let first_segment = rest.split_once('.').map_or(rest, |(h, _)| h);
+        let lookup_head = first_segment.trim_end_matches("[*]");
         let root_value = match namespace {
-            "caseFile" => {
-                let (head, tail) = rest.split_once('.').map_or((rest, ""), |(h, t)| (h, t));
-                let value = case_state.get(head);
-                (value, tail)
-            }
-            "event" => {
-                let (head, tail) = rest.split_once('.').map_or((rest, ""), |(h, t)| (h, t));
-                let value = event_data
-                    .and_then(|ev| ev.as_object())
-                    .and_then(|obj| obj.get(head));
-                (value, tail)
-            }
+            "caseFile" => case_state.get(lookup_head),
+            "event" => event_data
+                .and_then(|ev| ev.as_object())
+                .and_then(|obj| obj.get(lookup_head)),
             _ => continue,
         };
 
-        let (Some(top_value), tail) = root_value else {
-            continue;
-        };
+        let Some(top_value) = root_value else { continue };
 
+        let tail = rest.split_once('.').map_or("", |(_, t)| t);
         let leaf_value = walk_json_path(top_value, tail);
-        let first_segment = rest.split_once('.').map_or(rest, |(h, _)| h);
-        insert_nested(&mut inputs, namespace, first_segment, tail, leaf_value);
+        insert_nested(
+            &mut inputs,
+            namespace,
+            lookup_head,
+            tail,
+            leaf_value,
+        );
     }
 
     serde_json::Value::Object(inputs)

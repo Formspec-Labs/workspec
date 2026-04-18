@@ -589,6 +589,48 @@ fn take_guard_evaluations_drains_buffer() {
     );
 }
 
+/// FEL dependency extraction produces wildcard paths like
+/// `caseFile.relationships[*].kind` for expressions using `every()` /
+/// `some()` / `countWhere()` over a collection. The teaching-signal
+/// inputs must surface the full array so repair prompts see every
+/// element the guard reasoned over — silently dropping wildcard deps
+/// was the review-flagged warning on `build_guard_inputs`.
+#[test]
+fn guard_evaluation_inputs_include_wildcard_array_elements() {
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "check",
+            "passed",
+            "every(caseFile.items, $.ok = true)",
+        )]),
+    );
+    states.insert("passed".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut().insert(
+        "items".to_string(),
+        serde_json::json!([{ "ok": true }, { "ok": true }]),
+    );
+
+    eval.process_event("check", None, None).unwrap();
+
+    let evals = eval.guard_evaluations();
+    assert_eq!(evals.len(), 1);
+    assert!(evals[0].result);
+    // The full items array must show up in inputs — not silently dropped
+    // because the dep was `caseFile.items[*].ok`.
+    let items = evals[0]
+        .inputs
+        .pointer("/caseFile/items")
+        .expect("items array surfaces under caseFile namespace");
+    assert_eq!(
+        items,
+        &serde_json::json!([{ "ok": true }, { "ok": true }])
+    );
+}
+
 #[test]
 fn guard_evaluation_inputs_include_event_data() {
     // Guards can reference $event.* paths; inputs must include the

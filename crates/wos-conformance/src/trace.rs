@@ -66,8 +66,16 @@ pub enum Delta {
         cause: Option<String>,
     },
     /// Guard evaluated false unexpectedly.
+    ///
+    /// `guard_id` is the synthesized `{source}->{target}:{event}` id from
+    /// `wos_core::eval::GuardEvaluation`. Since the kernel allows two
+    /// transitions to share that triple (differing only by their `guard`
+    /// expression), the synthesized id alone is ambiguous — `expression`
+    /// is the load-bearing teaching signal that lets a repair prompt
+    /// target the specific FEL expression that blocked the expected path.
     GuardFalse {
         guard_id: String,
+        expression: String,
         inputs: serde_json::Value,
     },
     /// Policy application changed the outcome.
@@ -243,13 +251,15 @@ mod tests {
     #[test]
     fn delta_guard_false_round_trips_with_kind_tag() {
         let delta = Delta::GuardFalse {
-            guard_id: "G-02".into(),
-            inputs: json!({ "benefit_amount": 520, "income_limit": 500 }),
+            guard_id: "reviewed->approved:decide".into(),
+            expression: "caseFile.benefit_amount <= caseFile.income_limit".into(),
+            inputs: json!({ "caseFile": { "benefit_amount": 520, "income_limit": 500 } }),
         };
 
         let json_str = serde_json::to_string(&delta).expect("serialize");
         assert!(json_str.contains("\"kind\":\"guardFalse\""));
-        assert!(json_str.contains("\"guardId\":\"G-02\""));
+        assert!(json_str.contains("\"guardId\":\"reviewed->approved:decide\""));
+        assert!(json_str.contains("\"expression\":\"caseFile.benefit_amount"));
 
         let parsed: Delta = serde_json::from_str(&json_str).expect("deserialize");
         assert_eq!(parsed, delta);
