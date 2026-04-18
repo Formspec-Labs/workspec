@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use wos_core::{
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
-    model::kernel::{Actor, ContractReference, State, Transition},
+    model::kernel::{Actor, ContractReference, Milestone, State, Transition},
 };
 
 use crate::{
@@ -456,6 +456,49 @@ impl RawWosProject {
         )))
     }
 
+    // ── AddMilestone / RemoveMilestone handlers ───────────────────────────
+
+    fn apply_add_milestone(
+        &mut self,
+        milestone_id: String,
+        condition: String,
+    ) -> CommandResult {
+        if self.doc.lifecycle.milestones.contains_key(&milestone_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/lifecycle/milestones/{milestone_id}"),
+                format!("milestone '{milestone_id}' already exists"),
+            ));
+        }
+
+        self.doc.lifecycle.milestones.insert(
+            milestone_id.clone(),
+            Milestone {
+                condition,
+                description: None,
+            },
+        );
+
+        Ok(AppliedCommand::with_inverse(
+            format!("AddMilestone({milestone_id})"),
+            Command::RemoveMilestone { milestone_id },
+        ))
+    }
+
+    fn apply_remove_milestone(&mut self, milestone_id: String) -> CommandResult {
+        if !self.doc.lifecycle.milestones.contains_key(&milestone_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/lifecycle/milestones/{milestone_id}"),
+                format!("milestone '{milestone_id}' not found"),
+            ));
+        }
+
+        self.doc.lifecycle.milestones.remove(&milestone_id);
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "RemoveMilestone({milestone_id})"
+        )))
+    }
+
     // ── SetTimer handler ──────────────────────────────────────────────────
 
     /// Set `x-wos-timers.<timer_id>` to a duration string.
@@ -541,6 +584,11 @@ impl RawWosProject {
                 constraint_id,
                 rule,
             } => self.apply_add_actor_deontic(constraint_id, rule),
+            Command::AddMilestone {
+                milestone_id,
+                condition,
+            } => self.apply_add_milestone(milestone_id, condition),
+            Command::RemoveMilestone { milestone_id } => self.apply_remove_milestone(milestone_id),
             Command::SetTimer { timer_id, duration } => self.apply_set_timer(timer_id, duration),
             Command::AddExtensionKey { key, value } => self.apply_add_extension_key(key, value),
         };
@@ -1029,6 +1077,74 @@ mod tests {
             })
             .expect_err("collision must be rejected");
         assert!(err.message.contains("already exists"));
+    }
+
+    // ── AddMilestone / RemoveMilestone ────────────────────────────────────
+
+    /// AddMilestone inserts a condition into lifecycle.milestones.
+    #[test]
+    fn add_milestone_appears_in_snapshot() {
+        let mut p = make_project();
+        p.dispatch(Command::AddMilestone {
+            milestone_id: "approved".into(),
+            condition: "caseFile.status == \"approved\"".into(),
+        })
+        .expect("AddMilestone must succeed");
+
+        let ms = p
+            .snapshot()
+            .lifecycle
+            .milestones
+            .get("approved")
+            .expect("milestone must exist")
+            .clone();
+        assert_eq!(ms.condition, "caseFile.status == \"approved\"");
+    }
+
+    /// Duplicate milestone ids are rejected.
+    #[test]
+    fn add_milestone_duplicate_returns_error() {
+        let mut p = make_project();
+        p.dispatch(Command::AddMilestone {
+            milestone_id: "m1".into(),
+            condition: "a".into(),
+        })
+        .unwrap();
+        let err = p
+            .dispatch(Command::AddMilestone {
+                milestone_id: "m1".into(),
+                condition: "b".into(),
+            })
+            .expect_err("duplicate milestone must be rejected");
+        assert!(err.message.contains("already exists"));
+    }
+
+    /// RemoveMilestone drops the entry.
+    #[test]
+    fn remove_milestone_drops_entry() {
+        let mut p = make_project();
+        p.dispatch(Command::AddMilestone {
+            milestone_id: "m1".into(),
+            condition: "c".into(),
+        })
+        .unwrap();
+        p.dispatch(Command::RemoveMilestone {
+            milestone_id: "m1".into(),
+        })
+        .expect("RemoveMilestone must succeed");
+        assert!(p.snapshot().lifecycle.milestones.is_empty());
+    }
+
+    /// RemoveMilestone for an unknown id errors.
+    #[test]
+    fn remove_milestone_unknown_errors() {
+        let mut p = make_project();
+        let err = p
+            .dispatch(Command::RemoveMilestone {
+                milestone_id: "ghost".into(),
+            })
+            .expect_err("unknown milestone must be rejected");
+        assert!(err.message.contains("not found"));
     }
 
     // ── SetTimer ──────────────────────────────────────────────────────────

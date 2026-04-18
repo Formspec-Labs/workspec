@@ -150,6 +150,22 @@ pub(crate) enum Command {
         rule: String,
     },
 
+    // ── Milestones ─────────────────────────────────────────────────────────
+
+    /// Add a named milestone condition under `lifecycle.milestones`.
+    AddMilestone {
+        /// Unique milestone identifier (map key under `lifecycle.milestones`).
+        milestone_id: String,
+        /// FEL condition string evaluated against the case state (kernel §S4.13).
+        condition: String,
+    },
+
+    /// Remove a milestone by identifier.
+    RemoveMilestone {
+        /// Identifier of the milestone to remove.
+        milestone_id: String,
+    },
+
     // ── Timers ─────────────────────────────────────────────────────────────
 
     /// Record a timer configuration in `x-wos-timers`.
@@ -226,6 +242,15 @@ mod tests {
         let _set_timer = Command::SetTimer {
             timer_id: "approvalDeadline".into(),
             duration: "P7D".into(),
+        };
+
+        let _add_milestone = Command::AddMilestone {
+            milestone_id: "readyForReview".into(),
+            condition: "caseFile.amount > 0".into(),
+        };
+
+        let _remove_milestone = Command::RemoveMilestone {
+            milestone_id: "readyForReview".into(),
         };
 
         let _add_ext = Command::AddExtensionKey {
