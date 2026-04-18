@@ -8,10 +8,12 @@ use crate::storage::StorageHandle;
 
 pub mod applicant_service;
 pub mod bundle_service;
+pub mod conformance_service;
 pub mod dashboard_service;
 pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;
+pub mod lint_service;
 pub mod provenance_service;
 pub mod semantic_service;
 pub mod timer_task;

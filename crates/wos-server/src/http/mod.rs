@@ -11,10 +11,12 @@ pub mod ai_chat;
 pub mod applicant;
 pub mod auth;
 pub mod bundles;
+pub mod conformance;
 pub mod dashboard;
 pub mod governance;
 pub mod health;
 pub mod instances;
+pub mod lint;
 pub mod tasks;
 
 pub fn router(state: AppState) -> Router {
@@ -30,6 +32,8 @@ pub fn router(state: AppState) -> Router {
         .merge(dashboard::routes())
         .merge(applicant::routes())
         .merge(ai_chat::routes())
+        .merge(lint::routes())
+        .merge(conformance::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
