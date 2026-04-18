@@ -1,7 +1,8 @@
-// MCP transport: hand-rolled. rust-mcp-sdk v0.9.0 exists but pulls in
-// hyper/axum/reqwest/SSL — far too heavy for a pure stdio adapter. The
-// JSON-RPC-2.0 stdio protocol is ~100 LOC to hand-roll and carries no
-// ecosystem risk. See crates/wos-mcp/README.md for the full rationale.
+// MCP transport: hand-rolled JSON-RPC-2.0 over stdio (~100 LOC). The
+// original rationale ("rust-mcp-sdk v0.9.0 pulls hyper/axum/reqwest/SSL")
+// was retracted 2026-04-18: `default-features = false, features = ["stdio"]`
+// avoids those deps. See the TODO at crates/wos-mcp/Cargo.toml for the
+// feature analysis and crates/wos-mcp/README.md for the current rationale.
 
 //! `wos-mcp` binary — JSON-RPC-2.0 stdio server for the WOS MCP interface.
 //!
