@@ -77,13 +77,23 @@ const INTERNAL_ERROR: i32 = -32603;
 
 // ── Routing ──────────────────────────────────────────────────────────────────
 
-/// Process one JSON-RPC request and return the response value.
-async fn handle_request(req: JsonRpcRequest) -> JsonRpcResponse {
-    let id = req.id.clone().unwrap_or(Value::Null);
+/// Process one JSON-RPC request and return the response value, or `None` if
+/// the incoming message was a JSON-RPC-2.0 notification (no `id` field).
+///
+/// Per JSON-RPC-2.0 §4.1 and MCP spec, notifications MUST NOT receive a
+/// response — the server silently consumes them.
+async fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+    // Notification detection: absence of `id` field is the JSON-RPC-2.0
+    // signal that the client does not want a response. A present-but-null
+    // `id` is still a request (legal, though unusual).
+    let Some(id) = req.id.clone() else {
+        debug!(method = %req.method, "received notification — no response emitted");
+        return None;
+    };
 
     debug!(method = %req.method, "handling request");
 
-    match req.method.as_str() {
+    Some(match req.method.as_str() {
         // MCP protocol handshake — return server capabilities.
         "initialize" => JsonRpcResponse::ok(
             id,
@@ -98,9 +108,6 @@ async fn handle_request(req: JsonRpcRequest) -> JsonRpcResponse {
                 }
             }),
         ),
-
-        // MCP notifications that require no response body.
-        "notifications/initialized" => JsonRpcResponse::ok(id, Value::Null),
 
         // Return the current tool catalog.
         "tools/list" => JsonRpcResponse::ok(
@@ -150,7 +157,7 @@ async fn handle_request(req: JsonRpcRequest) -> JsonRpcResponse {
             METHOD_NOT_FOUND,
             format!("method not found: {other}"),
         ),
-    }
+    })
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
@@ -185,13 +192,20 @@ async fn main() {
             continue;
         }
 
-        let response: JsonRpcResponse = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
+        let response: Option<JsonRpcResponse> = match serde_json::from_str::<JsonRpcRequest>(
+            trimmed,
+        ) {
             Ok(req) => handle_request(req).await,
-            Err(e) => JsonRpcResponse::err(
+            Err(e) => Some(JsonRpcResponse::err(
                 Value::Null,
                 -32700, // Parse error
                 format!("parse error: {e}"),
-            ),
+            )),
+        };
+
+        // JSON-RPC-2.0 notifications produce no output at all.
+        let Some(response) = response else {
+            continue;
         };
 
         let serialized = serde_json::to_string(&response).expect("response serialization failed");

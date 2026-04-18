@@ -132,6 +132,37 @@ fn full_mcp_session() {
     assert_eq!(pong["pong"], true, "wos_ping must return {{\"pong\": true}}");
 }
 
+/// JSON-RPC-2.0 §4.1 and MCP both forbid responses to notifications.
+/// A notification is a request WITHOUT an `id` field (not `id: null`).
+/// `notifications/initialized` is the canonical MCP post-handshake notification.
+#[test]
+fn notification_produces_no_response() {
+    let requests = vec![
+        // Notification — absence of `id` means no response expected.
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {}
+        }),
+        // Follow-up request WITH `id` — this must produce a response, and
+        // the response for it must be the ONLY line on stdout.
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "tools/list",
+            "params": {}
+        }),
+    ];
+
+    let responses = run_sequence(&requests);
+    assert_eq!(
+        responses.len(),
+        1,
+        "notification must produce zero responses; only the tools/list request should reply"
+    );
+    assert_eq!(responses[0]["id"], 42);
+}
+
 /// Unknown method returns a JSON-RPC method-not-found error.
 #[test]
 fn unknown_method_returns_error() {
