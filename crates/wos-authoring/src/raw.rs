@@ -350,19 +350,68 @@ impl RawWosProject {
         )))
     }
 
-    // ── AddActorDeontic handler (stub) ────────────────────────────────────
+    // ── AddActorDeontic handler ───────────────────────────────────────────
 
+    /// Append a deontic constraint under `x-wos-ai.deonticConstraints`.
+    ///
+    /// The extension is authored inline as `serde_json::Value` so this crate
+    /// does not need to depend on `wos-core::model::ai::AIIntegrationDocument`
+    /// for writes. Consumers that need typed access deserialize the exported
+    /// JSON through `wos-core`.
     fn apply_add_actor_deontic(
         &mut self,
         constraint_id: String,
-        _rule: String,
+        rule: String,
     ) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}"),
-            format!(
-                "AddActorDeontic('{constraint_id}') not yet implemented — lands in Task 4"
-            ),
-        ))
+        let ext = self
+            .doc
+            .extensions
+            .entry("x-wos-ai".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match ext.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai",
+                    "x-wos-ai extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        let constraints = root
+            .entry("deonticConstraints")
+            .or_insert_with(|| serde_json::json!([]));
+
+        let array = match constraints.as_array_mut() {
+            Some(array) => array,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai/deonticConstraints",
+                    "x-wos-ai.deonticConstraints exists but is not a JSON array",
+                ));
+            }
+        };
+
+        // Duplicate-id check: every entry should carry a unique `id`.
+        if array
+            .iter()
+            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(constraint_id.clone())))
+        {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}"),
+                format!("deontic constraint '{constraint_id}' already exists"),
+            ));
+        }
+
+        array.push(serde_json::json!({
+            "id": constraint_id.clone(),
+            "rule": rule,
+        }));
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddActorDeontic({constraint_id})"
+        )))
     }
 
     // ── SetTimer handler (stub) ───────────────────────────────────────────
@@ -804,6 +853,69 @@ mod tests {
             .expect_err("duplicate contract name must be rejected");
 
         assert!(err.message.contains("already exists"));
+    }
+
+    // ── AddActorDeontic ───────────────────────────────────────────────────
+
+    /// AddActorDeontic appends a constraint under `x-wos-ai.deonticConstraints`
+    /// and creates the extension scaffolding lazily.
+    #[test]
+    fn add_deontic_creates_extension_scaffolding() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActorDeontic {
+            constraint_id: "noAutoApprove".into(),
+            rule: "humans must review all orders".into(),
+        })
+        .expect("AddActorDeontic must succeed on empty project");
+
+        let snap = p.snapshot();
+        let ext = snap.extensions.get("x-wos-ai").expect("x-wos-ai must exist");
+        let constraints = ext["deonticConstraints"]
+            .as_array()
+            .expect("deonticConstraints must be an array");
+        assert_eq!(constraints.len(), 1);
+        assert_eq!(constraints[0]["id"], "noAutoApprove");
+        assert_eq!(constraints[0]["rule"], "humans must review all orders");
+    }
+
+    /// Duplicate constraint ids are rejected.
+    #[test]
+    fn add_deontic_duplicate_returns_error() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActorDeontic {
+            constraint_id: "c1".into(),
+            rule: "rule A".into(),
+        })
+        .unwrap();
+
+        let err = p
+            .dispatch(Command::AddActorDeontic {
+                constraint_id: "c1".into(),
+                rule: "rule B".into(),
+            })
+            .expect_err("duplicate constraint id must be rejected");
+
+        assert!(err.message.contains("already exists"));
+    }
+
+    /// Existing `x-wos-ai` entries are preserved across AddActorDeontic.
+    #[test]
+    fn add_deontic_preserves_sibling_keys() {
+        let mut p = make_project();
+        p.dispatch(Command::AddExtensionKey {
+            key: "x-wos-ai".into(),
+            value: serde_json::json!({ "agents": [{ "id": "A1" }] }),
+        })
+        .unwrap();
+        p.dispatch(Command::AddActorDeontic {
+            constraint_id: "c1".into(),
+            rule: "rule".into(),
+        })
+        .unwrap();
+
+        let ext = &p.snapshot().extensions["x-wos-ai"];
+        assert_eq!(ext["agents"].as_array().unwrap().len(), 1);
+        assert_eq!(ext["deonticConstraints"].as_array().unwrap().len(), 1);
     }
 
     // ── AddExtensionKey ───────────────────────────────────────────────────
