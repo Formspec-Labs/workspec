@@ -234,6 +234,14 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-041: Tested via inline JSON in the `ai041_*` unit tests in
+    // crates/wos-lint/tests/tier1_rules.rs (e.g.
+    // `ai041_fallback_chain_without_terminal_action_flagged`).
+    // The linked T3 fixture exists but is intentionally excluded from the
+    // conformance trace-parity harness (see the doc comment in
+    // crates/wos-conformance/tests/trace_parity.rs — the fixture has no
+    // `kernel` document and is lint-only), so the evidence is indirect.
+    // (See 2026-04-18 review.)
     RuleMetadata {
         id: "AI-041",
         tier: Tier::T1,
