@@ -1,5 +1,7 @@
 # WOS Verification Matrix
 
+> 🚨 **UNRECONCILED (2026-04-17).** This matrix claims 197 rules across T1/T2/T3. The code-side rule registry seeded at commit `1f8eae5` contains only 97 entries (91 wos-lint + 6 wos-conformance). The ~100-rule gap is expected to be rules that exist in prose here but are not yet reified in `crates/wos-lint/src/rules/registry.rs` / `crates/wos-conformance/src/rules.rs`. Reconciliation is §4.2 Task 2 of [`thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md`](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). Until then, treat the 197 count as an aspirational normative catalog, not a coverage metric.
+
 197 normative constraints from WOS specs that JSON Schema cannot enforce. Each constraint maps to one of three verification tiers:
 
 ```text

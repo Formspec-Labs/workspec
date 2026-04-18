@@ -1,7 +1,7 @@
 # WOS TODO
 
 **Last audited:** 2026-04-16
-**Counts:** 18 specs, 19 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 6 crates, 197 lint rules (197 tested, 0 untested)
+**Counts:** 18 specs, 19 schemas, 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 7 crates, 197 lint rules in `LINT-MATRIX.md` (🚨 **unreconciled**: code registry has 97 reified entries per commit `1f8eae5` — §4.2 Task 2 closes the ~100-rule gap)
 
 **Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md)
 
