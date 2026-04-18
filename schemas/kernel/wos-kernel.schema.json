@@ -230,7 +230,7 @@
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the initial state. Execution begins here when a workflow instance is created.",
+          "description": "Identifier of the state where execution begins when a new workflow instance is created. MUST match a key in the sibling `states` map. The entry point drives onEntry actions of the initial state (Kernel §4.1, §4.7) and pins the starting active configuration used by the deterministic evaluation algorithm (§4.2).",
           "examples": ["submitted", "intake"],
           "x-lm": {
             "critical": true,
@@ -242,12 +242,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Map of state identifiers to state definitions. At least two states (initial and one final) are needed for a meaningful workflow.",
+          "description": "Map of state identifiers to State definitions (Kernel §4.3). At least two states (the initial and at least one final) are needed for a meaningful workflow. Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.",
           "examples": [
             {
               "draft": { "type": "atomic", "transitions": [{ "event": "submit", "target": "review" }] },
               "review": { "type": "atomic", "tags": ["review"], "transitions": [{ "event": "approve", "target": "done" }] },
               "done": { "type": "final" }
+            },
+            {
+              "submitted": { "type": "atomic", "transitions": [{ "event": "approve", "target": "approved" }, { "event": "reject", "target": "rejected" }] },
+              "approved": { "type": "final" },
+              "rejected": { "type": "final" }
             }
           ],
           "x-lm": {
@@ -260,7 +265,13 @@
           "additionalProperties": {
             "$ref": "#/$defs/Milestone"
           },
-          "description": "Named conditions on case state that indicate meaningful progress (Kernel S4.13). Milestones are observable but do not affect lifecycle state."
+          "description": "Named conditions on case state that indicate meaningful progress (Kernel §4.13). Keys are milestone identifiers; values are Milestone objects whose FEL `condition` is evaluated against case state. Milestones are observable — they surface in provenance and audit views — but they do NOT affect lifecycle state directly. Use milestones when a caller needs to ask \"has the case crossed this point?\" without introducing a lifecycle branch.",
+          "examples": [
+            {
+              "applicationReceived": { "condition": "caseFile.application != null", "description": "Applicant submitted the form" },
+              "eligibilityDetermined": { "condition": "caseFile.eligibility != null" }
+            }
+          ]
         }
       }
     },
@@ -393,45 +404,65 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "One semantic tag identifier on this state. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel §4.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, `notification`, and `hold`.",
+            "examples": ["determination", "review", "hold"]
           },
-          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel S4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.",
+          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel §4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.",
           "examples": [["determination", "review"], ["intake"]]
         },
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Initial substate identifier. REQUIRED when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3)."
+          "description": "Initial substate identifier for a compound state (Kernel §4.3). REQUIRED when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). When the enclosing compound state is entered, execution proceeds to this substate unless a `historyState` override restores a prior configuration.",
+          "examples": ["drafting", "pendingReview"]
         },
         "states": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Substates within a compound state. REQUIRED (non-empty) when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3)."
+          "description": "Substates within a compound state (Kernel §4.3). REQUIRED (non-empty) when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). The compound state's `initialState` MUST match a key in this map.",
+          "examples": [
+            {
+              "drafting": { "type": "atomic", "transitions": [{ "event": "submit", "target": "reviewing" }] },
+              "reviewing": { "type": "atomic" }
+            }
+          ]
         },
         "regions": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Region"
           },
-          "description": "Named concurrent regions within a parallel state. REQUIRED (non-empty) when type = 'parallel'. MUST NOT appear on atomic, compound, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3, S4.4)."
+          "description": "Named concurrent regions within a parallel state (Kernel §4.3, §4.4, §4.8). REQUIRED (non-empty) when `type` = 'parallel'; MUST NOT appear on atomic, compound, or final states (enforced structurally by the allOf block on this State). Each region executes concurrently; the parallel state exits per the `cancellationPolicy`.",
+          "examples": [
+            {
+              "approvalTrack": { "initialState": "pending", "states": { "pending": { "type": "atomic" } } },
+              "auditTrack": { "initialState": "scheduled", "states": { "scheduled": { "type": "atomic" } } }
+            }
+          ]
         },
         "cancellationPolicy": {
           "type": "string",
           "enum": ["wait-all", "cancel-siblings", "fail-fast"],
           "default": "wait-all",
-          "description": "Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.",
+          "description": "Cancellation policy for parallel states (Kernel §4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.",
           "examples": ["wait-all", "cancel-siblings"]
         },
         "historyState": {
           "type": "string",
           "enum": ["shallow", "deep"],
-          "description": "History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State."
+          "description": "History state mode for compound states (Kernel §4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.",
+          "examples": ["shallow", "deep"]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this state."
+          "description": "Free-text description of this state's purpose within the workflow (e.g., what the case is waiting for, which actors act here). Consumed by documentation and audit tooling; not interpreted by the processor.",
+          "examples": [
+            "Awaiting manager approval of the submitted purchase order",
+            "Final state reached when the applicant has been found eligible"
+          ]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
@@ -449,14 +480,18 @@
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Initial state identifier for this parallel region."
+          "description": "Identifier of the state where this parallel region begins execution when the enclosing parallel state is entered (Kernel §4.4, §4.8). MUST match a key in this region's sibling `states` map.",
+          "examples": ["pending", "scheduled"]
         },
         "states": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "States within this parallel region."
+          "description": "States contained within this parallel region (Kernel §4.4). Each region carries its own independent statechart that runs concurrently with sibling regions. The region exits when it reaches a final state; the overall parallel state exits per its `cancellationPolicy`.",
+          "examples": [
+            { "pending": { "type": "atomic" }, "done": { "type": "final" } }
+          ]
         }
       }
     },
