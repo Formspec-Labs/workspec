@@ -185,9 +185,11 @@ fn unknown_method_returns_error() {
     assert_eq!(resp["error"]["code"], -32601); // METHOD_NOT_FOUND
 }
 
-/// Calling `tools/call` with an unknown tool name returns an internal error.
+/// Calling `tools/call` with an unknown tool name is a routing failure:
+/// per MCP, this is a JSON-RPC error with `-32602 INVALID_PARAMS` (the
+/// `name` parameter references a tool that does not exist).
 #[test]
-fn unknown_tool_name_returns_error() {
+fn unknown_tool_name_returns_invalid_params_error() {
     let requests = vec![serde_json::json!({
         "jsonrpc": "2.0",
         "id": 10,
@@ -203,5 +205,8 @@ fn unknown_tool_name_returns_error() {
 
     let resp = &responses[0];
     assert_eq!(resp["id"], 10);
-    assert!(resp["error"]["code"].as_i64().is_some());
+    assert_eq!(
+        resp["error"]["code"], -32602,
+        "unknown tool must map to INVALID_PARAMS, not INTERNAL_ERROR"
+    );
 }

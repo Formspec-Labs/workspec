@@ -1,8 +1,15 @@
 //! Typed error hierarchy for `wos-mcp`.
 //!
 //! `ToolError` — per-handler errors returned by individual tool functions.
-//! `DispatchError` — wraps `ToolError` with the tool name for the dispatch layer.
-//! `ServerError` — transport-level errors for the stdio JSON-RPC loop.
+//! `DispatchError` — classifies a failed dispatch call into:
+//!   * `UnknownTool` — the tool name does not exist (routing failure).
+//!   * `ToolFailed` — a known tool executed and returned an error.
+//!
+//! The distinction matters at the JSON-RPC boundary. Per the MCP spec an
+//! unknown tool is a JSON-RPC error (`-32602 INVALID_PARAMS`), while a
+//! tool-execution failure is returned as a *successful* JSON-RPC response
+//! with `result: { isError: true, content: [...] }`. `server.rs` relies on
+//! these variants to pick the right shape.
 
 use thiserror::Error;
 
@@ -17,18 +24,22 @@ pub enum ToolError {
     #[error("missing required argument: {0}")]
     MissingArgument(String),
 
-    /// The tool was called with an unknown tool name.
-    #[error("unknown tool: {0}")]
-    UnknownTool(String),
-
     /// An internal logic error occurred inside the tool.
     #[error("tool internal error: {0}")]
     Internal(String),
 }
 
-/// Error returned by `dispatch::dispatch` — wraps `ToolError` with the tool name.
+/// Error returned by `dispatch::dispatch`.
+///
+/// Two cases, deliberately separate so the transport can choose between
+/// "JSON-RPC error response" and "JSON-RPC success with isError=true":
 #[derive(Debug, Error)]
 pub enum DispatchError {
+    /// No handler is registered for the supplied tool name. Routing failure.
+    #[error("unknown tool: {0}")]
+    UnknownTool(String),
+
+    /// The tool was found and ran, but returned an error.
     #[error("tool '{tool}' failed: {source}")]
     ToolFailed {
         tool: String,

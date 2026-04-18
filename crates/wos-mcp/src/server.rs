@@ -73,7 +73,7 @@ impl JsonRpcResponse {
 
 // JSON-RPC-2.0 standard error codes
 const METHOD_NOT_FOUND: i32 = -32601;
-const INTERNAL_ERROR: i32 = -32603;
+const INVALID_PARAMS: i32 = -32602;
 
 // ── Routing ──────────────────────────────────────────────────────────────────
 
@@ -148,7 +148,25 @@ async fn handle_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
                         "content": [{"type": "text", "text": result.to_string()}]
                     }),
                 ),
-                Err(e) => JsonRpcResponse::err(id, INTERNAL_ERROR, e.to_string()),
+                // Unknown tool name: routing failure → JSON-RPC error.
+                // Per MCP spec, the `name` field points to a missing tool,
+                // which is a parameter-level fault (INVALID_PARAMS).
+                Err(e @ wos_mcp::errors::DispatchError::UnknownTool(_)) => {
+                    JsonRpcResponse::err(id, INVALID_PARAMS, e.to_string())
+                }
+                // Tool execution failure: per MCP spec, return a SUCCESSFUL
+                // JSON-RPC response whose `result` carries `isError: true`
+                // and the error message in the content array. This lets the
+                // client model tool failures separately from protocol faults.
+                Err(e @ wos_mcp::errors::DispatchError::ToolFailed { .. }) => {
+                    JsonRpcResponse::ok(
+                        id,
+                        serde_json::json!({
+                            "isError": true,
+                            "content": [{"type": "text", "text": e.to_string()}]
+                        }),
+                    )
+                }
             }
         }
 
