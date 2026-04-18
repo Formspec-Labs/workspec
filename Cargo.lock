@@ -1485,6 +1485,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wos-authoring"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "wos-conformance"
 version = "0.1.0"
 dependencies = [
@@ -1553,6 +1561,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wos-mcp"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "wos-runtime"
 version = "0.1.0"
 dependencies = [
@@ -1566,6 +1582,14 @@ dependencies = [
  "thiserror",
  "time",
  "wos-core",
+]
+
+[[package]]
+name = "wos-synth-spike"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

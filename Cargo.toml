@@ -6,6 +6,9 @@ members = [
     "crates/wos-runtime",
     "crates/wos-formspec-binding",
     "crates/wos-export",
+    "crates/wos-synth-spike",
+    "crates/wos-authoring",
+    "crates/wos-mcp",
 ]
 resolver = "3"
 
