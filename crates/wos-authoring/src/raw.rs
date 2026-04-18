@@ -181,12 +181,54 @@ impl RawWosProject {
         Ok(AppliedCommand::without_inverse(format!("RemoveState({id})")))
     }
 
-    // ── RenameState handler (stub) ────────────────────────────────────────
+    // ── RenameState handler ───────────────────────────────────────────────
 
+    /// Rename a top-level state and repoint every transition targeting it.
+    ///
+    /// Repoints `lifecycle.initialState` and every transition's `target` that
+    /// matched the old id. Preserves insertion order by rebuilding the state
+    /// map in place; `IndexMap` does not offer an in-place rename.
     fn apply_rename_state(&mut self, old_id: String, new_id: String) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            format!("/lifecycle/states/{old_id}"),
-            format!("RenameState('{old_id}' → '{new_id}') not yet implemented — lands in Task 4"),
+        if !self.doc.lifecycle.states.contains_key(&old_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/lifecycle/states/{old_id}"),
+                format!("state '{old_id}' not found"),
+            ));
+        }
+        if self.doc.lifecycle.states.contains_key(&new_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/lifecycle/states/{new_id}"),
+                format!("state '{new_id}' already exists"),
+            ));
+        }
+
+        // Preserve insertion order by draining and rebuilding.
+        let states = std::mem::take(&mut self.doc.lifecycle.states);
+        for (id, state) in states {
+            let key = if id == old_id { new_id.clone() } else { id };
+            self.doc.lifecycle.states.insert(key, state);
+        }
+
+        // Repoint every transition target in every state.
+        for state in self.doc.lifecycle.states.values_mut() {
+            for transition in &mut state.transitions {
+                if transition.target == old_id {
+                    transition.target = new_id.clone();
+                }
+            }
+        }
+
+        // Repoint the document's initial state if it was the renamed one.
+        if self.doc.lifecycle.initial_state == old_id {
+            self.doc.lifecycle.initial_state = new_id.clone();
+        }
+
+        Ok(AppliedCommand::with_inverse(
+            format!("RenameState({old_id} → {new_id})"),
+            Command::RenameState {
+                old_id: new_id,
+                new_id: old_id,
+            },
         ))
     }
 
@@ -874,6 +916,118 @@ mod tests {
             })
             .expect_err("duplicate contract name must be rejected");
 
+        assert!(err.message.contains("already exists"));
+    }
+
+    // ── RenameState ───────────────────────────────────────────────────────
+
+    /// RenameState swaps the id in the lifecycle map while preserving order.
+    #[test]
+    fn rename_state_updates_map_key() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "draft".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+
+        p.dispatch(Command::RenameState {
+            old_id: "draft".into(),
+            new_id: "submitted".into(),
+        })
+        .expect("RenameState must succeed");
+
+        let snap = p.snapshot();
+        assert!(!snap.lifecycle.states.contains_key("draft"));
+        assert!(snap.lifecycle.states.contains_key("submitted"));
+    }
+
+    /// RenameState repoints transitions that targeted the old id.
+    #[test]
+    fn rename_state_repoints_incoming_transitions() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "a".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.dispatch(Command::AddState {
+            id: "b".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.dispatch(Command::AddTransition {
+            from_state: "a".into(),
+            to_state: "b".into(),
+            guard: None,
+            event: Some("go".into()),
+        })
+        .unwrap();
+
+        p.dispatch(Command::RenameState {
+            old_id: "b".into(),
+            new_id: "c".into(),
+        })
+        .unwrap();
+
+        let transitions = &p.snapshot().lifecycle.states["a"].transitions;
+        assert_eq!(transitions[0].target, "c");
+    }
+
+    /// RenameState updates lifecycle.initialState when it matches.
+    #[test]
+    fn rename_state_repoints_initial_state() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "start".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.doc.lifecycle.initial_state = "start".into();
+
+        p.dispatch(Command::RenameState {
+            old_id: "start".into(),
+            new_id: "begin".into(),
+        })
+        .unwrap();
+
+        assert_eq!(p.snapshot().lifecycle.initial_state, "begin");
+    }
+
+    /// RenameState rejects an unknown old id.
+    #[test]
+    fn rename_state_unknown_old_id_errors() {
+        let mut p = make_project();
+        let err = p
+            .dispatch(Command::RenameState {
+                old_id: "ghost".into(),
+                new_id: "phantom".into(),
+            })
+            .expect_err("unknown state must be rejected");
+        assert!(err.message.contains("not found"));
+    }
+
+    /// RenameState rejects collisions with an existing state id.
+    #[test]
+    fn rename_state_collision_errors() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "a".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.dispatch(Command::AddState {
+            id: "b".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+
+        let err = p
+            .dispatch(Command::RenameState {
+                old_id: "a".into(),
+                new_id: "b".into(),
+            })
+            .expect_err("collision must be rejected");
         assert!(err.message.contains("already exists"));
     }
 
