@@ -2,7 +2,6 @@
 
 use axum::Router;
 use axum::http::{HeaderValue, Method, header};
-use socketioxide::layer::SocketIoLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
@@ -18,9 +17,8 @@ pub mod health;
 pub mod instances;
 pub mod tasks;
 
-pub fn router(state: AppState) -> (Router, SocketIoLayer) {
+pub fn router(state: AppState) -> Router {
     let cors = build_cors(&state.cfg.cors_origin);
-    let (io_layer, _io) = crate::realtime::build(state.clone());
 
     let api = Router::new()
         .merge(health_router())
@@ -38,12 +36,10 @@ pub fn router(state: AppState) -> (Router, SocketIoLayer) {
             crate::auth::middleware::attach_auth,
         ));
 
-    let app = Router::new()
+    Router::new()
         .nest("/api", api)
         .layer(TraceLayer::new_for_http())
-        .layer(cors);
-
-    (app, io_layer)
+        .layer(cors)
 }
 
 fn health_router() -> Router<AppState> {

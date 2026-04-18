@@ -10,7 +10,8 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
-use wos_server::{AppState, auth, http, services::AppServices, storage};
+use wos_server::runtime::AppRuntime;
+use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 
 async fn build_app_state() -> AppState {
     let cfg = Arc::new(ServerConfig {
@@ -32,17 +33,24 @@ async fn build_app_state() -> AppState {
     let storage = storage::build(&cfg).await.unwrap();
     let auth = auth::build(&cfg, storage.clone());
     let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await.unwrap());
+    let (_layer, io) = realtime::build_io_only();
+    let runtime = AppRuntime::build(
+        storage.clone(),
+        services.provenance.clone(),
+        services.bundle.clone(),
+        io,
+    );
     AppState {
         cfg,
         storage,
         auth,
         services,
+        runtime,
     }
 }
 
 fn app(state: AppState) -> axum::Router {
-    let (router, io_layer) = http::router(state);
-    router.layer(io_layer)
+    http::router(state)
 }
 
 #[tokio::test]

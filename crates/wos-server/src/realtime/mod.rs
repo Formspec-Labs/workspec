@@ -69,20 +69,24 @@ struct KernelRejected {
     issues: Option<serde_json::Value>,
 }
 
-pub fn build(state: AppState) -> (SocketIoLayer, SocketIo) {
+/// Build the Socket.IO layer + `SocketIo` handle without registering any
+/// namespaces. `lib.rs` needs a handle early so `AppRuntime::build` can
+/// inject it into the `TaskPresenter`; namespace handlers are attached
+/// afterwards via [`attach_namespaces`] once the full `AppState` exists.
+pub fn build_io_only() -> (SocketIoLayer, SocketIo) {
     let realtime = Arc::new(RealtimeState::default());
-
-    let (layer, io) = SocketIo::builder()
-        .with_state(state.clone())
+    SocketIo::builder()
         .with_state(realtime)
-        .build_layer();
+        .build_layer()
+}
 
+/// Register the server's namespace handlers on the given `SocketIo` handle.
+/// Must be called exactly once, after `AppState` is fully assembled.
+pub fn attach_namespaces(io: &SocketIo, state: AppState) {
     io.ns("/", move |socket: SocketRef| {
         let state = state.clone();
         async move { on_connect(socket, state).await }
     });
-
-    (layer, io)
 }
 
 async fn on_connect(socket: SocketRef, state: AppState) {
@@ -132,38 +136,42 @@ async fn on_connect(socket: SocketRef, state: AppState) {
         },
     );
 
+    let state_for_kernel = state.clone();
     socket.on(
         "kernel:update",
-        async |s: SocketRef, Data::<KernelUpdate>(body), SocketState::<AppState>(state)| {
-            let validation = validate_kernel(&body.kernel);
-            if !validation.is_valid {
-                let _ = s.emit(
-                    "kernel:update-rejected",
-                    &KernelRejected {
-                        reason: "validation_failed".into(),
-                        issues: serde_json::to_value(&validation.issues).ok(),
-                    },
-                );
-                return;
-            }
-            match state.services.bundle.replace(&body.url, body.kernel.clone()).await {
-                Ok(row) => {
-                    let envelope = KernelChanged {
-                        url: row.url,
-                        kernel: row.document,
-                    };
-                    let _ = s.broadcast().emit("kernel:changed", &envelope);
-                    let _ = s.emit("kernel:changed", &envelope);
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "kernel persist failed");
+        move |s: SocketRef, Data::<KernelUpdate>(body)| {
+            let state = state_for_kernel.clone();
+            async move {
+                let validation = validate_kernel(&body.kernel);
+                if !validation.is_valid {
                     let _ = s.emit(
                         "kernel:update-rejected",
                         &KernelRejected {
-                            reason: "persist_failed".into(),
-                            issues: None,
+                            reason: "validation_failed".into(),
+                            issues: serde_json::to_value(&validation.issues).ok(),
                         },
                     );
+                    return;
+                }
+                match state.services.bundle.replace(&body.url, body.kernel.clone()).await {
+                    Ok(row) => {
+                        let envelope = KernelChanged {
+                            url: row.url,
+                            kernel: row.document,
+                        };
+                        let _ = s.broadcast().emit("kernel:changed", &envelope);
+                        let _ = s.emit("kernel:changed", &envelope);
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "kernel persist failed");
+                        let _ = s.emit(
+                            "kernel:update-rejected",
+                            &KernelRejected {
+                                reason: "persist_failed".into(),
+                                issues: None,
+                            },
+                        );
+                    }
                 }
             }
         },

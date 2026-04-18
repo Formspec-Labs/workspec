@@ -11,6 +11,7 @@ pub mod error;
 pub mod export;
 pub mod http;
 pub mod realtime;
+pub mod runtime;
 pub mod seed;
 pub mod services;
 pub mod storage;
@@ -21,6 +22,7 @@ pub use error::{ApiError, ApiResult};
 use std::sync::Arc;
 
 use crate::auth::AuthHandle;
+use crate::runtime::AppRuntime;
 use crate::services::AppServices;
 use crate::storage::StorageHandle;
 
@@ -31,6 +33,7 @@ pub struct AppState {
     pub storage: StorageHandle,
     pub auth: AuthHandle,
     pub services: Arc<AppServices>,
+    pub runtime: AppRuntime,
 }
 
 /// Boot the server with the given config, wiring storage, auth, services, and
@@ -42,12 +45,28 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
     let auth = auth::build(&cfg, storage.clone());
     let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await?);
 
+    // Build the Socket.IO layer before AppRuntime so the TaskPresenter can
+    // broadcast task events.
+    let (io_layer, io) = realtime::build_io_only();
+
+    let app_runtime = AppRuntime::build(
+        storage.clone(),
+        services.provenance.clone(),
+        services.bundle.clone(),
+        io.clone(),
+    );
+
     let state = AppState {
         cfg: cfg.clone(),
         storage,
         auth,
         services,
+        runtime: app_runtime,
     };
+
+    // Now that the state exists, register the realtime namespace handlers
+    // (they need `AppState`).
+    realtime::attach_namespaces(&io, state.clone());
 
     if cfg.seed {
         if let Err(e) = seed::run(&state).await {
@@ -58,7 +77,7 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
     // Start the timer-polling task alongside the HTTP/WS server.
     let _timer_task = services::timer_task::spawn(state.clone());
 
-    let (router, io_layer) = http::router(state.clone());
+    let router = http::router(state.clone());
     let app = router.layer(io_layer);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", cfg.port)).await?;

@@ -12,8 +12,10 @@ use thiserror::Error;
 
 use crate::config::{ServerConfig, StorageKind};
 
+pub mod runtime_store;
 pub mod sqlite;
 
+pub use runtime_store::SqliteRuntimeStore;
 pub use sqlite::SqliteStorage;
 
 pub type StorageHandle = Arc<dyn Storage>;
