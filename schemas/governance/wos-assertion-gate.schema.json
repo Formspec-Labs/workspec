@@ -25,11 +25,7 @@
         "intent": "Document type marker for WOS Assertion Gate Library sidecar"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "url": {
       "type": "string",
       "format": "uri",
@@ -81,11 +77,7 @@
         "intent": "The collection of named, reusable assertion gates"
       }
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": { "pattern": "^x-" },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "AssertionDefinition": {
@@ -144,6 +136,26 @@
           "description": "Default rejection policy when this assertion fails."
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

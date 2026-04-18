@@ -26,11 +26,7 @@
         "intent": "Document type marker and version pin for WOS Integration Profile documents"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation and autocompletion."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetWorkflow": {
       "$ref": "#/$defs/TargetWorkflow",
       "description": "The WOS Kernel Document this profile targets. Specifies URL and compatible version range.",
@@ -83,13 +79,7 @@
         "intent": "The map of named integration bindings that the workflow can invoke"
       }
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^x-"
-      },
-      "description": "Extension data for this Integration Profile Document. Property names MUST begin with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "TargetWorkflow": {
@@ -259,13 +249,7 @@
           "description": "FEL expression evaluated against case state to produce an idempotency key (Integration Profile S7). Maps to Kernel S9.3.",
           "examples": ["caseFile.application.id"]
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": {
-            "pattern": "^x-"
-          },
-          "description": "Extension data for this binding. Property names MUST begin with 'x-'."
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
       "allOf": [
         {
@@ -593,6 +577,26 @@
           "description": "The CloudEvents id of the event that triggered this event. Enables causal chains."
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

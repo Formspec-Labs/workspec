@@ -24,11 +24,7 @@
   },
   "additionalProperties": false,
   "properties": {
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation and autocompletion."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "instanceId": {
       "type": "string",
       "format": "uri",
@@ -231,13 +227,7 @@
       "$ref": "#/$defs/VolumeCounters",
       "description": "Counters for AI Integration volume constraints (AI Integration S11). Present only when an AI Integration Document is attached. Tracks autonomous actions per hour/day for autonomy cap enforcement."
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^x-"
-      },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'. Implementations MAY use this for deployment-specific metadata (e.g., x-correlationId, x-tenantId, x-deploymentRegion)."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "TimerState": {
@@ -360,11 +350,7 @@
           "format": "date-time",
           "description": "ISO 8601 timestamp when the task state last changed."
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": { "pattern": "^x-" },
-          "description": "Extension data for this active task."
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
       "description": "Durable nonterminal task state for an active task."
     },
@@ -437,11 +423,7 @@
           "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
           "description": "Effective task impact level."
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": { "pattern": "^x-" },
-          "description": "Extension data for this task context."
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
       "description": "Presentation context for a Formspec-backed task.",
       "examples": [
@@ -762,6 +744,26 @@
         }
       },
       "description": "A single volume counter tracking autonomous actions within a time window."
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }
