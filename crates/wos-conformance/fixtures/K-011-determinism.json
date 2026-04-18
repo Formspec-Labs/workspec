@@ -5,6 +5,11 @@
   "documents": {
     "kernel": "fixtures/kernel/purchase-order-approval.json"
   },
+  "initial_case_state": {
+    "amount": 3000,
+    "orderId": "PO-2026-001",
+    "vendor": "Acme Corp"
+  },
   "event_sequence": [
     {
       "event": "approve",

@@ -1,6 +1,22 @@
 {
   "fixtureId": "K-011-determinism",
   "kernelVersion": "1.0",
-  "steps": [],
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "approve",
+        "sourceActor": "approver",
+        "payload": {
+          "amount": 3000,
+          "orderId": "PO-2026-001",
+          "vendor": "Acme Corp"
+        }
+      },
+      "stateBefore": "submitted",
+      "stateAfter": "approved",
+      "expectedStateAfter": "approved"
+    }
+  ],
   "outcome": "fail"
 }

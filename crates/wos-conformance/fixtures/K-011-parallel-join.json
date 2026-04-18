@@ -5,6 +5,12 @@
   "documents": {
     "kernel": "fixtures/kernel/benefits-adjudication.json"
   },
+  "initial_case_state": {
+    "application": { "isComplete": true, "applicantId": "APP-2026-001" },
+    "verification": { "status": "verified", "verifiedIncome": 28000 },
+    "reviewA": { "decision": "eligible", "notes": "Income within threshold" },
+    "reviewB": { "decision": "eligible", "notes": "Confirmed eligibility" }
+  },
   "event_sequence": [
     {
       "event": "applicationComplete",

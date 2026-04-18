@@ -1,6 +1,114 @@
 {
   "fixtureId": "K-046-timer-provenance",
   "kernelVersion": "1.0",
-  "steps": [],
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "applicationComplete",
+        "sourceActor": "intakeWorker",
+        "payload": {
+          "application": {
+            "isComplete": true
+          }
+        }
+      },
+      "stateBefore": "intake",
+      "stateAfter": "incomeVerification",
+      "expectedStateAfter": "adverseNotice",
+      "delta": {
+        "kind": "stateMismatch",
+        "expected": "adverseNotice",
+        "actual": "incomeVerification",
+        "cause": null
+      }
+    },
+    {
+      "stepIndex": 1,
+      "event": {
+        "name": "verificationComplete",
+        "sourceActor": "verificationSystem",
+        "payload": {
+          "verification": {
+            "status": "verified"
+          }
+        }
+      },
+      "stateBefore": "incomeVerification",
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "appeal",
+      "delta": {
+        "kind": "stateMismatch",
+        "expected": "appeal",
+        "actual": "eligibilityReview",
+        "cause": null
+      }
+    },
+    {
+      "stepIndex": 2,
+      "event": {
+        "name": "reviewAComplete",
+        "sourceActor": "caseworkerA",
+        "payload": {
+          "reviewA": {
+            "decision": "ineligible"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewA",
+      "stateAfter": "reviewADone"
+    },
+    {
+      "stepIndex": 3,
+      "event": {
+        "name": "reviewBComplete",
+        "sourceActor": "caseworkerB",
+        "payload": {
+          "reviewB": {
+            "decision": "ineligible"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewB",
+      "stateAfter": "reviewBDone"
+    },
+    {
+      "stepIndex": 4,
+      "event": {
+        "name": "$join",
+        "sourceActor": "caseworkerA",
+        "payload": {
+          "eligibility": {
+            "decision": "ineligible",
+            "reason": "income-exceeds-threshold"
+          }
+        }
+      },
+      "stateBefore": "eligibilityReview",
+      "stateAfter": "determination"
+    },
+    {
+      "stepIndex": 5,
+      "event": {
+        "name": "denied",
+        "sourceActor": "applicant",
+        "payload": {
+          "appeal": {
+            "filedAt": "2026-04-09T10:00:00Z"
+          }
+        }
+      },
+      "stateBefore": "determination",
+      "stateAfter": "adverseNotice"
+    },
+    {
+      "stepIndex": 6,
+      "event": {
+        "name": "appealFiled"
+      },
+      "stateBefore": "adverseNotice",
+      "stateAfter": "appeal"
+    }
+  ],
   "outcome": "fail"
 }

@@ -5,6 +5,14 @@
   "documents": {
     "kernel": "fixtures/kernel/benefits-adjudication.json"
   },
+  "initial_case_state": {
+    "application": { "isComplete": true },
+    "verification": { "status": "verified" },
+    "reviewA": { "decision": "ineligible" },
+    "reviewB": { "decision": "ineligible" },
+    "eligibility": { "decision": "ineligible", "reason": "income-exceeds-threshold" },
+    "appeal": { "filedAt": "2026-04-09T10:00:00Z" }
+  },
   "event_sequence": [
     {
       "event": "applicationComplete",

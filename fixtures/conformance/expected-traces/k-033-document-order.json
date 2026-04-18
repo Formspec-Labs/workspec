@@ -1,6 +1,20 @@
 {
   "fixtureId": "K-033-document-order",
   "kernelVersion": "1.0",
-  "steps": [],
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "approve",
+        "sourceActor": "approver",
+        "payload": {
+          "amount": 3000
+        }
+      },
+      "stateBefore": "pending",
+      "stateAfter": "fastApproved",
+      "expectedStateAfter": "fastApproved"
+    }
+  ],
   "outcome": "fail"
 }

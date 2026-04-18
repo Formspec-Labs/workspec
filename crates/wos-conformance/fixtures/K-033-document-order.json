@@ -5,6 +5,9 @@
   "documents": {
     "kernel": "inline"
   },
+  "initial_case_state": {
+    "amount": 3000
+  },
   "inline_documents": {
     "kernel": {
       "$wosKernel": "1.0",

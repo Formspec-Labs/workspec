@@ -96,10 +96,8 @@ fn trace_parity_k001_negative_final_transitions() {
     assert_trace_matches(&trace, "K-001-negative-final-transitions");
 }
 
-/// K-011-determinism: single approve event.
-///
-/// Without initial_case_state.amount the guard evaluates to false → no
-/// transition fires → outcome=fail, 0 steps (current engine behavior).
+/// K-011-determinism: single approve event with amount=3000 in case state.
+/// Fires submitted → approved; guard `caseFile.amount <= 50000` passes.
 #[test]
 fn trace_parity_k011_determinism() {
     let trace = run_t3_fixture("K-011-determinism.json");
@@ -139,4 +137,79 @@ fn trace_parity_k046_timer_provenance() {
 fn trace_parity_g030_hold_resume() {
     let trace = run_t3_fixture("G-030-hold-resume.json");
     assert_trace_matches(&trace, "G-030-hold-resume");
+}
+
+// ── Honest-behavior assertions ──────────────────────────────────────────────
+//
+// The parity tests above compare against committed goldens; they would pass
+// even if every fixture produced `{outcome: fail, steps: []}` because broken
+// state equals broken state. These tests pin the stronger property: each
+// happy-path T3 fixture must engage the runtime and emit at least as many
+// state-transition steps as the fixture declares under `expected_transitions`.
+// A fixture that fires zero steps means the guard-data path is broken — the
+// bug the 2026-04-18 review flagged. `outcome` is not asserted here because
+// several fixtures still have legacy-format `expected_provenance` entries
+// (keys `type`/`from`/`to` instead of `recordKind`/`fromState`/`toState`)
+// that keep `result.passed` false; that cleanup is tracked separately and
+// does not hide the runtime-engagement signal these tests protect.
+
+use wos_conformance::ConformanceFixture;
+
+fn read_fixture_json(fixture_filename: &str) -> String {
+    let workspace = workspace_root();
+    let fixture_path = workspace
+        .join("crates/wos-conformance/fixtures")
+        .join(fixture_filename);
+    std::fs::read_to_string(&fixture_path)
+        .unwrap_or_else(|e| panic!("could not read fixture '{fixture_filename}': {e}"))
+}
+
+fn assert_fixture_engages_runtime(fixture_filename: &str) {
+    let json = read_fixture_json(fixture_filename);
+    let fixture: ConformanceFixture = serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("fixture parse error '{fixture_filename}': {e}"));
+    let trace = run_t3_fixture(fixture_filename);
+
+    let expected_count = fixture.expected_transitions.len();
+    assert!(
+        expected_count > 0,
+        "fixture '{fixture_filename}' declares no expected_transitions; not a happy-path fixture"
+    );
+    assert!(
+        trace.steps.len() >= expected_count,
+        "fixture '{fixture_filename}' produced {} steps; expected at least {} \
+         (guard data-path mismatch — was the bug the 2026-04-18 review caught)",
+        trace.steps.len(),
+        expected_count
+    );
+}
+
+#[test]
+fn happy_path_k011_determinism_fires_its_transition() {
+    assert_fixture_engages_runtime("K-011-determinism.json");
+}
+
+#[test]
+fn happy_path_k011_parallel_join_fires_all_transitions() {
+    assert_fixture_engages_runtime("K-011-parallel-join.json");
+}
+
+#[test]
+fn happy_path_k020_provenance_fires_its_transitions() {
+    assert_fixture_engages_runtime("K-020-provenance-completeness.json");
+}
+
+#[test]
+fn happy_path_k033_document_order_fires_first_match() {
+    assert_fixture_engages_runtime("K-033-document-order.json");
+}
+
+#[test]
+fn happy_path_k046_timer_provenance_fires_its_transitions() {
+    assert_fixture_engages_runtime("K-046-timer-provenance.json");
+}
+
+#[test]
+fn happy_path_g030_hold_resume_fires_its_transitions() {
+    assert_fixture_engages_runtime("G-030-hold-resume.json");
 }

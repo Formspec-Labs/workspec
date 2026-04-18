@@ -5,6 +5,11 @@
   "documents": {
     "kernel": "fixtures/kernel/medicaid-redetermination.json"
   },
+  "initial_case_state": {
+    "application": { "isComplete": true },
+    "verification": { "status": "verified" },
+    "eligibility": { "decision": "eligible" }
+  },
   "event_sequence": [
     {
       "event": "applicationComplete",
