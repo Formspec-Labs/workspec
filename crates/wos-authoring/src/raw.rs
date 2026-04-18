@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use wos_core::{
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
-    model::kernel::{Actor, State, Transition},
+    model::kernel::{Actor, ContractReference, State, Transition},
 };
 
 use crate::{
@@ -319,7 +319,7 @@ impl RawWosProject {
         Ok(applied)
     }
 
-    // ── AddContract handler (stub) ────────────────────────────────────────
+    // ── AddContract handler ───────────────────────────────────────────────
 
     fn apply_add_contract(
         &mut self,
@@ -327,12 +327,27 @@ impl RawWosProject {
         binding: String,
         ref_uri: String,
     ) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            format!("/contracts/{name}"),
-            format!(
-                "AddContract('{name}', '{binding}', '{ref_uri}') not yet implemented — lands in Task 4"
-            ),
-        ))
+        if self.doc.contracts.contains_key(&name) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/contracts/{name}"),
+                format!("contract '{name}' already exists"),
+            ));
+        }
+
+        self.doc.contracts.insert(
+            name.clone(),
+            ContractReference {
+                binding,
+                reference: ref_uri,
+                description: None,
+                prefill_mapping_ref: None,
+                response_mapping_ref: None,
+            },
+        );
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddContract({name})"
+        )))
     }
 
     // ── AddActorDeontic handler (stub) ────────────────────────────────────
@@ -745,6 +760,50 @@ mod tests {
                 .expect("SetImpactLevel must succeed for every variant");
             assert_eq!(p.snapshot().impact_level, Some(level));
         }
+    }
+
+    // ── AddContract ───────────────────────────────────────────────────────
+
+    /// AddContract inserts a named reference into the contracts map.
+    #[test]
+    fn add_contract_appears_in_snapshot() {
+        let mut p = make_project();
+        p.dispatch(Command::AddContract {
+            name: "purchaseOrderForm".into(),
+            binding: "formspec".into(),
+            ref_uri: "urn:formspec:example.gov:po:1.0".into(),
+        })
+        .expect("AddContract must succeed");
+
+        let snap = p.snapshot();
+        let contract = snap
+            .contracts
+            .get("purchaseOrderForm")
+            .expect("contract must exist");
+        assert_eq!(contract.binding, "formspec");
+        assert_eq!(contract.reference, "urn:formspec:example.gov:po:1.0");
+    }
+
+    /// AddContract twice with the same name must fail.
+    #[test]
+    fn add_contract_duplicate_returns_error() {
+        let mut p = make_project();
+        p.dispatch(Command::AddContract {
+            name: "po".into(),
+            binding: "formspec".into(),
+            ref_uri: "urn:x:1".into(),
+        })
+        .unwrap();
+
+        let err = p
+            .dispatch(Command::AddContract {
+                name: "po".into(),
+                binding: "json-schema".into(),
+                ref_uri: "urn:x:2".into(),
+            })
+            .expect_err("duplicate contract name must be rejected");
+
+        assert!(err.message.contains("already exists"));
     }
 
     // ── AddExtensionKey key validation ────────────────────────────────────
