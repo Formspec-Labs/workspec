@@ -353,38 +353,108 @@ These are document-shape specs that are (correctly) not exposed as resources; th
 
 ---
 
-## Gaps prioritised by user value
+## Gap ranking — priority × complexity × tech-debt burden
 
-| Gap | Spec section | User value (1-5) | Effort to close | Why |
-|---|---|---|---|---|
-| Explanation assembly endpoint | Runtime §9 / Gov §3.3 | **5** | Medium | Legal-sufficiency gate for every adverse-decision workflow |
-| Legal-sufficiency disclosure on exports | Assurance §6 | **5** | Trivial | One-liner added to PROV-O / XES / OCEL headers; unlocks legal claims |
-| Pipeline validation endpoint | Gov §7 | **4** | Medium | Primary deontic-check mechanism; conformance suite needs it |
-| Policy-parameters as-of resolution | PolicyParam §1.3 | **4** | Low | Point of the sidecar; trivial date index over the stored values |
-| Integration correlation tokens | Integ §6 | **4** | Medium | Unblocks real async integrations |
-| Agent separation-of-duties enforcement | AI §3.7 | **4** | Low | `PermissiveAccessControl` → check actor on review-tagged transitions |
-| Chain-integrity verify endpoint | Kernel §5 | **3** | Trivial | `GET /provenance/verify` — already computed, just not surfaced |
-| Subject continuity-hash validation | Assurance §3 | **3** | Low | Add hash check to existing `/subjects/:ref/assurance-chain` |
-| Provenance attestation | Assurance §5 | **3** | Medium | Needs signing key management |
-| Calibration expiry enforcement | AI §5.3 | **3** | Low | Background job; autonomy cap already in evaluator |
-| Hold create / release CRUD | Gov §3.6 | **3** | Low | `governance_state.holds` exists on CaseInstance; needs endpoint |
-| Migration endpoint | Gov §2.9 | **2** | Medium | Rare feature |
-| Counterfactual explanation | Gov §3.4 | **2** | Large | Expensive; narrow XAI audience |
-| Real SMT verification | Advanced §6 | **2** | Large (external) | Z3 adapter; response shape already spec-correct |
-| SHACL validation | Semantic §4 | **2** | Medium | Overlaps with lint surface |
-| JSON-LD context endpoint | Semantic §3 | **2** | Trivial | Static-file serve |
-| Real drift detection | Drift §1.3 | **2** | Large (external) | Better: make drift a write-side endpoint |
-| SPARQL in-server | Semantic §6 | **1** | Large (external) | Export-to-external is the standard pattern |
-| Multi-step sessions | Advanced §5 | **1** | — | Spec overlap with kernel compound states |
-| Agent circuit breakers | Advanced §11 | **1** | — | Gateway concern, not server |
+Every gap scored on three independent axes. **Priority** is user impact × urgency. **Complexity** is effort to close. **Debt burden** is the compounding cost of deferring — an isolated addition scores 1; a gap where every additional day spreads workarounds across the codebase or ossifies breaking-change exposure scores 5.
 
-**Top 5 to close next** (value ≥ 4, effort ≤ medium):
+**Rubric.**
+- **Priority (P)**: 5 = blocks conformance or legal-sufficiency gate · 3 = real consumer asks exist · 1 = spec curiosity.
+- **Complexity (C)**: 1 = <1 hr · 2 = <1 day · 3 = 1-2 days · 4 = 3-5 days · 5 = multi-week or external adapter.
+- **Debt burden (D)**: 5 = every week of delay compounds (consumers build on absence, retrofit is breaking) · 3 = downstream reinvention starts · 1 = pure addition.
 
-1. **Legal-sufficiency disclosure on exports** — one line in `semantic_service.rs`, unblocks Assurance §6 conformance. 30-minute change.
-2. **Chain-integrity verify endpoint** — wrap the hash check in an HTTP handler. 1-hour change.
-3. **Policy-parameters as-of resolution** — iterate date-indexed values. 2-hour change.
-4. **Agent separation-of-duties enforcement** — tighten `AccessControl::can_transition` to reject agent actors on review-tagged transitions. 2-hour change.
-5. **Explanation assembly endpoint** — walk provenance + kernel, render narrative + reasoning + counterfactual stub. 1-day change.
+### Ranked table
+
+| Gap | Spec § | P | C | D | ROI |
+|---|---|---|---|---|---|
+| Agent separation-of-duties enforcement | AI §3.7 | 5 | 2 | **5** | **12.5** |
+| Legal-sufficiency disclosure on exports | Assurance §6 | 5 | 1 | 3 | **15.0** |
+| Explanation assembly endpoint | Runtime §9 / Gov §3.3 | 5 | 3 | **5** | **8.3** |
+| Pipeline validation endpoint | Gov §7 | 4 | 3 | **5** | 6.7 |
+| Policy-parameters as-of resolution | PolicyParam §1.3 | 4 | 2 | 3 | 6.0 |
+| Integration correlation tokens | Integ §6 | 4 | 3 | 4 | 5.3 |
+| Hold create / release CRUD | Gov §3.6 | 3 | 2 | 3 | 4.5 |
+| Chain-integrity verify endpoint | Kernel §5 | 4 | 1 | 1 | 4.0 |
+| Subject continuity-hash validation | Assurance §3 | 3 | 2 | 2 | 3.0 |
+| Calibration expiry enforcement | AI §5.3 | 3 | 2 | 2 | 3.0 |
+| JSON-LD context endpoint | Semantic §3 | 2 | 1 | 1 | 2.0 |
+| Provenance attestation | Assurance §5 | 3 | 3 | 2 | 2.0 |
+| SHACL validation | Semantic §4 | 2 | 3 | 2 | 1.3 |
+| Counterfactual explanation | Gov §3.4 | 2 | 4 | 2 | 1.0 |
+| Migration endpoint | Gov §2.9 | 2 | 3 | 1 | 0.7 |
+| Real SMT verification | Advanced §6 | 2 | 5 | 1 | 0.4 |
+| Real drift detection | Drift §1.3 | 2 | 5 | 4 | 1.6† |
+| Multi-step sessions | Advanced §5 | 1 | 3 | 3 | 1.0† |
+| SPARQL in-server | Semantic §6 | 1 | 5 | 1 | 0.2 |
+| Agent circuit breakers | Advanced §11 | 1 | 3 | 1 | 0.3 |
+
+_ROI = P × D / C. Higher = more value-per-effort._
+_† Row has a spec-side recommendation that should be resolved before implementation. See below._
+
+### Top three by debt burden
+
+These are the gaps where deferral **actively costs more every week**, independent of priority:
+
+1. **Agent separation-of-duties (AI §3.7)** — permissive behaviour is already shipped. Every new consumer builds expectations around "agent can self-review." Tightening later becomes a breaking change. Fix before more consumers land.
+2. **Explanation assembly (Runtime §9 / Gov §3.3 / Assurance §5)** — three specs normatively home the same concept. If each grows its own endpoint, future consolidation is a triple rewrite. Pick the home **now** and retire the other two claims at the spec level.
+3. **Pipeline validation (Gov §7)** — without a server-side gate evaluator, handler code hand-rolls assertion logic. Every month of delay scatters more bespoke assertion calls across the codebase.
+
+### Decision matrix (cross-tabulated)
+
+| Do now (high P, high D, low C) | Do when you can (high P, low D, low C) | Defer — spec change first | Defer indefinitely |
+|---|---|---|---|
+| Agent separation-of-duties | Legal-sufficiency disclosure | Multi-step sessions (delete) | SPARQL in-server |
+| Explanation assembly endpoint | Chain-integrity verify | Agent circuit breakers (delete) | Real SMT verification |
+| Pipeline validation endpoint | JSON-LD context | Real drift detection (pivot spec) | |
+| Integration correlation tokens | Policy as-of resolution | SHACL validation | |
+| Hold CRUD | Subject continuity-hash | | |
+| | Calibration expiry | | |
+
+### Recommended sequence
+
+**Week 1 — MUST-compliance + quick wins (~2 days total):**
+
+1. Legal-sufficiency disclosure on exports (30 min)
+2. Chain-integrity verify endpoint (1 hr)
+3. JSON-LD context endpoint (30 min)
+4. Agent separation-of-duties enforcement (2 hr) — **stops permissive drift**
+5. Policy-parameters as-of resolution (2 hr) — **unlocks the sidecar**
+
+**Week 2 — normative-home consolidation (~5 days total):**
+
+6. Pipeline validation endpoint (1 day)
+7. Explanation assembly endpoint (1 day) — **pick this as the single home**; retire the other two specs' parallel claims
+8. Hold CRUD (3 hr)
+9. Calibration expiry enforcement (3 hr)
+10. Subject continuity-hash validation (2 hr)
+
+**Week 3 — integration correctness (~3 days total):**
+
+11. Integration correlation tokens (1 day) — **do before more adapters land**
+12. Provenance attestation (1 day)
+13. Migration endpoint (1 day)
+
+**Don't build — propose spec change first:**
+
+- **Multi-step sessions** (Advanced §5) — propose deletion; kernel compound states cover it.
+- **Agent circuit breakers** (Advanced §11) — propose deletion; service-mesh concern.
+- **Real drift detection** (Drift §1.3) — propose flipping: processor *receives and stores* externally-produced reports rather than computing. Current spec obligates work the processor structurally can't do (no inference stream access).
+- **SHACL validation** (Semantic §4) — wait for a consumer ask; overlaps with existing lint surface.
+
+**Deferred indefinitely — non-load-bearing:**
+
+- **SPARQL in-server** (Semantic §6) — export-to-external is the standard pattern.
+- **Real SMT verification** (Advanced §6) — stub's spec-correct shape is durable; swap is transparent when a real consumer appears.
+
+### The three compounding costs of deferral
+
+1. **Ossified permissive behaviour.** Every day the server ships with `PermissiveAccessControl` allowing agents to self-review, more consumers depend on that behaviour. Closing this gap later is no longer additive — it's a breaking change that invalidates existing integrations. Cost doubles every month.
+
+2. **Three-way explanation schism.** Runtime §9 (explanation assembly), Gov §3.3 (due-process explanation), and Assurance §5 (attestation) all normatively home the same concept. If we grow three endpoints before picking one, consolidation becomes a triple rewrite with migration paths for three client sets. Cost is three independent implementations instead of one.
+
+3. **Integration-binding dispatch shape.** The `ExternalService::invoke` trait signature doesn't model correlation tokens today. Any adapter written against the current shape will need a breaking trait update when correlation lands. The longer we wait, the more adapters we invalidate. Cost is linear in the number of external adapters written between now and the fix.
+
+The remaining 17 gaps are **additive** — deferring them creates no compounding cost. They're pure feature work that can happen whenever there's a concrete consumer.
+
 
 ---
 
