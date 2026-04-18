@@ -208,7 +208,11 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this actor's role in the workflow."
+          "description": "Free-text description of this actor's role in the workflow (e.g., which tasks they perform, what decisions they make). Consumed by documentation and audit tooling; not interpreted by the processor.",
+          "examples": [
+            "Employee submitting a purchase order",
+            "Medical reviewer who evaluates clinical documentation"
+          ]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
@@ -681,13 +685,18 @@
           "additionalProperties": {
             "$ref": "#/$defs/FieldDefinition"
           },
-          "description": "Named fields with type declarations. Each field defines a typed data slot in the case state.",
+          "description": "Map of field names to FieldDefinition entries. Each entry defines one typed data slot in the case file — a named column in the case's typed data schema. Fields are append-only at the value level: every mutation is recorded in the case state history (Kernel §5.4), never overwritten in place. Field names MUST be unique within the case file; FEL expressions address them as `caseFile.<fieldName>` (Kernel §7.2).",
           "examples": [
             {
               "applicantName": { "type": "string" },
               "annualIncome": { "type": "number" },
               "applicationDate": { "type": "date" },
               "eligible": { "type": "boolean" }
+            },
+            {
+              "amount": { "type": "number", "description": "Purchase order amount in USD" },
+              "vendor": { "type": "string" },
+              "approvedBy": { "type": "string" }
             }
           ],
           "x-lm": {
@@ -716,7 +725,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Relationship type. Standard values: parent, child, sibling, related, supersedes. Extensible via x- prefixed values.",
+          "description": "Classifier for this cross-case relationship (Kernel §5.5). Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). The type is extensible via `x-`-prefixed vendor values; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata — they do NOT affect lifecycle evaluation.",
           "examples": ["parent", "child", "sibling", "related", "supersedes"],
           "x-lm": {
             "critical": true,
@@ -726,7 +735,7 @@
         "targetCase": {
           "type": "string",
           "format": "uri",
-          "description": "URI reference to the related case instance.",
+          "description": "URI reference to the related case instance. Typically a URN under the authoring organization's namespace; any resolvable URI scheme is permitted. The target case MAY reside in the same WOS deployment or in a federated one.",
           "examples": [
             "urn:wos:agency.gov:cases:BA-2026-001",
             "urn:wos:agency.gov:cases:BA-2026-001-appeal"
@@ -734,13 +743,14 @@
         },
         "relationship": {
           "type": "string",
-          "description": "Semantic label describing the relationship.",
+          "description": "Free-text semantic label describing the nature of the relationship beyond the coarse `type` classifier. Useful for human-oriented audit views and for domain-specific relationship taxonomies.",
           "examples": ["appeal-of", "household-member", "consolidated-with"]
         },
         "bidirectional": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the target case SHOULD also record the inverse relationship."
+          "description": "When `true`, the target case SHOULD also record the inverse relationship so the two cases are mutually discoverable. The kernel does not enforce the inverse link — it is an authoring guidance flag for binding implementations and tooling.",
+          "examples": [true, false]
         }
       }
     },
@@ -757,15 +767,20 @@
         "type": {
           "type": "string",
           "enum": ["string", "number", "integer", "boolean", "date", "datetime", "object", "array"],
-          "description": "Data type of this field.",
+          "description": "Primitive data type of this case-file field (Kernel §5.3). Used for structural validation of case-state values and for type-aware FEL evaluation. `date` and `datetime` carry ISO 8601 values; `object` and `array` are structurally unconstrained at the kernel layer — richer contracts attach via the contract mechanism (§11).",
           "examples": ["string", "number", "boolean"]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this field."
+          "description": "Free-text description of what this field represents (e.g., the source of its data, its units, who is expected to populate it). Consumed by documentation and authoring tooling; not interpreted by the processor.",
+          "examples": [
+            "Applicant's annual gross income in USD",
+            "Date the applicant signed the form"
+          ]
         },
         "default": {
-          "description": "Default value for this field."
+          "description": "Default value assigned to this field when a case instance is created and the field has not yet been explicitly set. If omitted, the field begins unset (null under FEL reads). The value MUST be consistent with the declared `type`.",
+          "examples": [0, false, "pending"]
         }
       }
     },
