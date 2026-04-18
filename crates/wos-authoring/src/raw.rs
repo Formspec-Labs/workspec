@@ -299,13 +299,24 @@ impl RawWosProject {
         Ok(AppliedCommand::without_inverse(format!("RemoveActor({id})")))
     }
 
-    // ── SetImpactLevel handler (stub) ─────────────────────────────────────
+    // ── SetImpactLevel handler ────────────────────────────────────────────
 
     fn apply_set_impact_level(&mut self, level: ImpactLevel) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            "/impactLevel",
-            format!("SetImpactLevel({level:?}) not yet implemented — lands in Task 4"),
-        ))
+        // Capture the prior level so undo can restore it exactly,
+        // including the absent-level case (None).
+        let prior = self.doc.impact_level;
+        self.doc.impact_level = Some(level);
+
+        // If there was a prior value, the inverse re-sets it; if there
+        // wasn't, we fall back to snapshot-based undo.
+        let applied = match prior {
+            Some(prev) => AppliedCommand::with_inverse(
+                format!("SetImpactLevel({level:?})"),
+                Command::SetImpactLevel { level: prev },
+            ),
+            None => AppliedCommand::without_inverse(format!("SetImpactLevel({level:?})")),
+        };
+        Ok(applied)
     }
 
     // ── AddContract handler (stub) ────────────────────────────────────────
@@ -699,6 +710,41 @@ mod tests {
             })
             .expect_err("unknown actor must be rejected");
         assert!(err.message.contains("not found"));
+    }
+
+    // ── SetImpactLevel ────────────────────────────────────────────────────
+
+    /// SetImpactLevel on a fresh project updates the top-level field from
+    /// its baseline value.
+    #[test]
+    fn set_impact_level_updates_document() {
+        let mut p = make_project();
+        // Baseline is Operational (from `make_project`).
+        p.dispatch(Command::SetImpactLevel {
+            level: ImpactLevel::RightsImpacting,
+        })
+        .expect("SetImpactLevel must succeed");
+
+        assert_eq!(
+            p.snapshot().impact_level,
+            Some(ImpactLevel::RightsImpacting)
+        );
+    }
+
+    /// SetImpactLevel accepts all four kernel §S6 variants.
+    #[test]
+    fn set_impact_level_accepts_all_variants() {
+        for level in [
+            ImpactLevel::RightsImpacting,
+            ImpactLevel::SafetyImpacting,
+            ImpactLevel::Operational,
+            ImpactLevel::Informational,
+        ] {
+            let mut p = make_project();
+            p.dispatch(Command::SetImpactLevel { level })
+                .expect("SetImpactLevel must succeed for every variant");
+            assert_eq!(p.snapshot().impact_level, Some(level));
+        }
     }
 
     // ── AddExtensionKey key validation ────────────────────────────────────
