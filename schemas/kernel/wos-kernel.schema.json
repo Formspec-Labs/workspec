@@ -242,7 +242,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Map of state identifiers to State definitions (Kernel §4.3). At least two states (the initial and at least one final) are needed for a meaningful workflow. Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.",
+          "description": "Map of state identifiers to State definitions (Kernel §4.3). Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.",
           "examples": [
             {
               "draft": { "type": "atomic", "transitions": [{ "event": "submit", "target": "review" }] },
@@ -619,8 +619,8 @@
           "examples": ["caseFile.status", "caseFile.approvedBy"]
         },
         "value": {
-          "description": "Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. The resolved value MUST be consistent with the declared type of the target case-file field.",
-          "examples": ["approved", 42, "caseFile.amount * 1.1"]
+          "description": "Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. Real kernel fixtures use template-interpolation form (`${event.actorId}`) to pull evaluation-context values; bare FEL MAY also be supported depending on the binding. The resolved value MUST be consistent with the declared type of the target case-file field.",
+          "examples": ["approved", 42, "${event.actorId}", "${caseFile.amount}"]
         },
         "eventType": {
           "type": "string",
