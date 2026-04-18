@@ -117,7 +117,12 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // G-052: verified by governance-complete profile execution over all G-* fixtures.
+    // G-052: verified by governance-complete profile execution over all G-*
+    // fixtures. The runtime selects fixtures via `rule.starts_with("G-")` in
+    // `meta::evaluate_governance_complete`, so every `g-*.json` fixture in
+    // `crates/wos-conformance/tests/fixtures/` participates. Listed exhaustively
+    // below so the registry reflects the full coverage set rather than a
+    // representative sample. (See 2026-04-18 review.)
     RuleMetadata {
         id: "G-052",
         tier: Tier::T3,
@@ -136,6 +141,14 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
             "crates/wos-conformance/tests/fixtures/g-019-override-immutable.json",
             "crates/wos-conformance/tests/fixtures/g-020-rejection-detail.json",
             "crates/wos-conformance/tests/fixtures/g-021-task-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-025-delegation-required.json",
+            "crates/wos-conformance/tests/fixtures/g-026-delegation-in-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-030-hold-timer-start.json",
+            "crates/wos-conformance/tests/fixtures/g-032-temporal-resolution.json",
+            "crates/wos-conformance/tests/fixtures/g-049-binding-type-neutral.json",
+            "crates/wos-conformance/tests/fixtures/g-054-resume-cancels-hold-timer.json",
+            "crates/wos-conformance/tests/fixtures/g-061-expired-calendar-ignored.json",
+            "crates/wos-conformance/tests/fixtures/g-064-notification-missing-variables.json",
         ],
         graduation: Graduation::Tested,
         spec_ref: None,
