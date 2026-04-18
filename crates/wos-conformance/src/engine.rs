@@ -496,6 +496,7 @@ impl WorkflowEngine {
                 provenance: submission_provenance,
                 created_task_ids: Vec::new(),
                 emitted_events: Vec::new(),
+                guard_evaluations: Vec::new(),
             });
         }
 

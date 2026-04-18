@@ -11,7 +11,7 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use chrono::DateTime;
 use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument, BusinessCalendarError};
-use wos_core::eval::{Evaluator, ObservedAction, ObservedTransition};
+use wos_core::eval::{Evaluator, GuardEvaluation, ObservedAction, ObservedTransition};
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
 };
@@ -65,6 +65,13 @@ pub struct DrainOnceResult {
     pub created_task_ids: Vec<String>,
     /// Event names emitted during the step.
     pub emitted_events: Vec<String>,
+    /// Guard expressions evaluated during this step (teaching signal, §5.3).
+    ///
+    /// Every transition whose `guard` was tested — pass or fail — contributes
+    /// one entry. Short-circuited false guards on transitions that did not
+    /// fire are included so conformance traces can surface "this guard
+    /// evaluated false" as the reason an expected transition didn't happen.
+    pub guard_evaluations: Vec<GuardEvaluation>,
 }
 
 /// Draft persistence result.
@@ -552,6 +559,7 @@ impl WosRuntime {
             provenance: Vec::new(),
             created_task_ids: Vec::new(),
             emitted_events: Vec::new(),
+            guard_evaluations: Vec::new(),
         };
 
         let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
@@ -582,6 +590,7 @@ impl WosRuntime {
             .process_event(&event.event, event.actor_id.as_deref(), event.data.as_ref())
             .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
         runtime_result.transitions = evaluator.transitions().to_vec();
+        runtime_result.guard_evaluations = evaluator.take_guard_evaluations();
 
         appended_provenance.extend(evaluator.provenance().records().to_vec());
         // Annotate any newly created timers with calendarVersion when a calendar
@@ -4516,5 +4525,152 @@ mod tests {
                 if message.contains("resolved to no value")
         ));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    // ── §5.3 teaching-signal: guard evaluations surface through DrainOnceResult ──
+
+    #[test]
+    fn drain_once_exposes_guard_evaluations() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:drain-guard-evals",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "submitted",
+                "states": {
+                    "submitted": {
+                        "type": "atomic",
+                        "transitions": [
+                            {
+                                "event": "approve",
+                                "target": "approved",
+                                "guard": "caseFile.amount < 100"
+                            },
+                            {
+                                "event": "approve",
+                                "target": "escalated",
+                                "guard": "caseFile.amount >= 100"
+                            }
+                        ]
+                    },
+                    "approved": { "type": "final" },
+                    "escalated": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel);
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-guards".to_string(),
+                definition_url: "urn:test:drain-guard-evals".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "amount": 250 })),
+            })
+            .unwrap();
+
+        runtime
+            .enqueue_event(
+                "case-guards",
+                PendingEvent {
+                    event: "approve".to_string(),
+                    actor_id: Some("approver".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-guards").unwrap();
+
+        // DrainOnceResult must carry both guard evaluations for this event:
+        // the first one blocked (amount < 100 = false), the second fired
+        // (amount >= 100 = true). Without both, §5.4's teaching signal has
+        // no way to show which guard the LLM's workflow expected to fire.
+        assert_eq!(
+            result.guard_evaluations.len(),
+            2,
+            "both guards evaluated on the `approve` event"
+        );
+        assert_eq!(result.guard_evaluations[0].target_state, "approved");
+        assert!(!result.guard_evaluations[0].result);
+        assert_eq!(result.guard_evaluations[1].target_state, "escalated");
+        assert!(result.guard_evaluations[1].result);
+        assert_eq!(
+            result.guard_evaluations[0].inputs,
+            serde_json::json!({ "caseFile": { "amount": 250 } })
+        );
+    }
+
+    #[test]
+    fn drain_once_guard_evaluations_scope_to_one_event() {
+        // Each drain_once must return only the guard evaluations observed
+        // during THAT event. A later drain on a second event must not leak
+        // the first event's records.
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:guard-scope",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "s1",
+                "states": {
+                    "s1": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "go",
+                            "target": "s2",
+                            "guard": "caseFile.ok = true"
+                        }]
+                    },
+                    "s2": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "next",
+                            "target": "s3",
+                            "guard": "caseFile.ok = true"
+                        }]
+                    },
+                    "s3": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel);
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-scope".to_string(),
+                definition_url: "urn:test:guard-scope".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "ok": true })),
+            })
+            .unwrap();
+        for name in ["go", "next"] {
+            runtime
+                .enqueue_event(
+                    "case-scope",
+                    PendingEvent {
+                        event: name.to_string(),
+                        actor_id: None,
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+        }
+
+        let first = runtime.drain_once("case-scope").unwrap();
+        let second = runtime.drain_once("case-scope").unwrap();
+
+        assert_eq!(first.guard_evaluations.len(), 1);
+        assert_eq!(first.guard_evaluations[0].event, "go");
+        assert_eq!(second.guard_evaluations.len(), 1);
+        assert_eq!(
+            second.guard_evaluations[0].event, "next",
+            "second drain only sees its own guard"
+        );
     }
 }
