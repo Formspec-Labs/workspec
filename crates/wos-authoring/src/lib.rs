@@ -21,7 +21,6 @@ pub mod diagnostics;
 pub mod project;
 pub mod raw;
 
-pub use command::Command;
 pub use diagnostics::AuthoringDiagnostic;
 pub use project::WosProject;
 pub use raw::{IWosProjectCore, RawWosProject};

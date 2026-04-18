@@ -50,11 +50,12 @@ impl AppliedCommand {
 
 /// All atomic document mutations.
 ///
-/// The enum is `pub` so that tests can construct variants directly.  It is not
-/// re-exported from the crate root; consumers interact via `RawWosProject`.
+/// `pub(crate)` so in-crate handlers and tests construct variants directly
+/// while external consumers (including `wos-mcp`) go through the intent-driven
+/// `WosProject` / `IWosProjectCore` seam — they never see `Command` itself.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum Command {
+pub(crate) enum Command {
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     /// Add a new top-level state.
