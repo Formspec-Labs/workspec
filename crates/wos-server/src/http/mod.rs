@@ -14,6 +14,7 @@ pub mod bundles;
 pub mod calendar;
 pub mod conformance;
 pub mod dashboard;
+pub mod deontic;
 pub mod governance;
 pub mod health;
 pub mod instances;
@@ -38,6 +39,7 @@ pub fn router(state: AppState) -> Router {
         .merge(conformance::routes())
         .merge(calendar::routes())
         .merge(notifications::routes())
+        .merge(deontic::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

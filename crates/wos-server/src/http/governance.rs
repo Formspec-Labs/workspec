@@ -26,7 +26,10 @@ pub fn routes() -> Router<AppState> {
             get(verification_report),
         )
         .route("/governance/{url}/equity-config", get(equity_config))
-        .route("/governance/{url}/delegations", get(delegations_list))
+        .route(
+            "/governance/{url}/delegations",
+            get(delegations_list).post(delegation_create),
+        )
         .route(
             "/governance/{url}/delegations/{id}",
             delete(delegation_revoke),
@@ -95,6 +98,17 @@ async fn delegations_list(
     Path(url): Path<String>,
 ) -> Json<Vec<DelegationEntryView>> {
     Json(s.services.governance.delegations(&url).await)
+}
+
+async fn delegation_create(
+    State(s): State<AppState>,
+    Path(url): Path<String>,
+    AuthCtx(ctx): AuthCtx,
+    Json(entry): Json<DelegationEntryView>,
+) -> ApiResult<Json<serde_json::Value>> {
+    require_role(&ctx, "Supervisor")?;
+    s.services.governance.create_delegation(&url, &entry).await?;
+    Ok(Json(serde_json::json!({ "ok": true, "id": entry.id })))
 }
 
 async fn delegation_revoke(

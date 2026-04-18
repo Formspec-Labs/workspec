@@ -11,6 +11,7 @@ pub mod bundle_service;
 pub mod calendar_service;
 pub mod conformance_service;
 pub mod dashboard_service;
+pub mod deontic_service;
 pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;

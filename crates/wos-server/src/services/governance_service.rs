@@ -218,6 +218,48 @@ impl GovernanceService {
         Ok(())
     }
 
+    /// `POST /api/governance/:url/delegations` — create or update a
+    /// delegation record. Writes to the `delegations` table (append or
+    /// upsert on existing id). Provenance of the delegation itself is
+    /// captured by the caller as a separate `RecordDelegation`-shaped
+    /// provenance entry in the target instance's chain.
+    pub async fn create_delegation(
+        &self,
+        workflow_url: &str,
+        entry: &crate::domain::DelegationEntryView,
+    ) -> crate::error::ApiResult<()> {
+        let row = crate::storage::DelegationRow {
+            id: entry.id.clone(),
+            workflow_url: workflow_url.to_string(),
+            delegator: entry.delegator.clone(),
+            delegate: entry.delegate.clone(),
+            scope: entry.scope.clone(),
+            authority: entry.authority.clone(),
+            legal_instrument: entry.legal_instrument.clone(),
+            start_date: chrono::DateTime::parse_from_rfc3339(&entry.start_date)
+                .map_err(|e| {
+                    crate::error::ApiError::BadRequest(format!(
+                        "invalid startDate: {e}"
+                    ))
+                })?
+                .with_timezone(&chrono::Utc),
+            end_date: entry
+                .end_date
+                .as_deref()
+                .map(|s| {
+                    chrono::DateTime::parse_from_rfc3339(s)
+                        .map(|t| t.with_timezone(&chrono::Utc))
+                })
+                .transpose()
+                .map_err(|e| {
+                    crate::error::ApiError::BadRequest(format!("invalid endDate: {e}"))
+                })?,
+            status: entry.status.clone(),
+        };
+        self.storage.upsert_delegation(&row).await?;
+        Ok(())
+    }
+
     pub async fn policy_versions(&self, workflow_url: &str) -> Vec<PolicyVersionView> {
         let Some(bundle) = self.bundle.full_bundle(workflow_url).await else {
             return Vec::new();
