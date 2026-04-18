@@ -1,5 +1,7 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, HeaderValue, header};
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Router;
 use serde::Deserialize;
@@ -13,6 +15,7 @@ use crate::domain::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::services::provenance_service::row_to_response;
+use crate::services::semantic_service::{ExportPayload, Format as ExportFormat, SemanticService};
 use crate::storage::InstanceQuery;
 
 pub fn routes() -> Router<AppState> {
@@ -20,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/instances", get(list).post(create))
         .route("/instances/{id}", get(get_one))
         .route("/instances/{id}/provenance", get(provenance))
+        .route("/instances/{id}/provenance/export", get(export_provenance))
         .route("/instances/{id}/transitions", get(transitions))
         .route("/instances/{id}/events", post(submit_event))
         .route("/instances/{id}/drain", post(drain))
@@ -120,6 +124,37 @@ async fn provenance(
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<ProvenanceResponse>>> {
     Ok(Json(s.services.provenance.list(&id).await?))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportQuery {
+    /// `prov-o` | `xes` | `ocel`. Defaults to `prov-o`.
+    #[serde(default)]
+    pub format: Option<ExportFormat>,
+    /// PROV-O IRI namespace prefix. Must end with `:` or `/`.
+    pub namespace: Option<String>,
+}
+
+/// `GET /api/instances/:id/provenance/export?format=prov-o|xes|ocel` —
+/// Semantic Profile export. Serves PROV-O as `application/ld+json`,
+/// XES as `application/xml`, OCEL as `application/json`.
+async fn export_provenance(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+    Query(q): Query<ExportQuery>,
+) -> ApiResult<impl IntoResponse> {
+    let format = q.format.unwrap_or(ExportFormat::ProvO);
+    let payload =
+        SemanticService::export(&s.services.provenance, &id, format, q.namespace).await?;
+    let ct = payload.content_type().to_string();
+    let body = payload.body();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_str(&ct).unwrap_or(HeaderValue::from_static("application/octet-stream")),
+    );
+    Ok((headers, body))
 }
 
 async fn transitions(
