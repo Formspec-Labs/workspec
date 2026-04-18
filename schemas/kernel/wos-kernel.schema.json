@@ -18,8 +18,8 @@
     "$wosKernel": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Kernel specification version. MUST be '1.0'. Identifies this document as a WOS Kernel Document and pins the specification version.",
-      "examples": ["1.0"],
+      "description": "WOS Kernel specification version marker. MUST be the literal string '1.0'. This marker is what identifies the surrounding JSON object as a WOS Kernel Document and pins it to the 1.0 line of the Kernel Specification; a processor selects the schema and evaluation semantics from this marker alone. Every Kernel Document MUST carry this key at the root (see Kernel §1, §2).",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker and version pin for WOS Kernel documents"
@@ -29,7 +29,7 @@
     "url": {
       "type": "string",
       "format": "uri",
-      "description": "Canonical URI identifier for this Kernel Document. Stable across versions -- the pair (url, version) SHOULD be globally unique.",
+      "description": "Canonical URI identifier for this Kernel Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Processors use this identifier for cross-document references (governance, correspondence metadata, integration profiles) and for instance-version pinning under Kernel §9.6. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
       "examples": [
         "https://agency.gov/workflows/benefits-adjudication",
         "https://procurement.example.gov/workflows/purchase-order-approval"
@@ -42,12 +42,12 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Kernel Document. SemVer is RECOMMENDED.",
+      "description": "Version string for this Kernel Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so that processors and governance layers can reason about compatibility. Instance versioning (Kernel §9.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
       "examples": ["1.0.0", "2025.1.0"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this workflow.",
+      "description": "Short human-readable name for this workflow, suitable for lists, navigation, and audit summaries. Not interpreted by the processor.",
       "examples": [
         "Purchase Order Approval",
         "Benefits Adjudication Workflow"
@@ -55,12 +55,17 @@
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of the workflow's purpose and scope."
+      "description": "Free-text description of this workflow's purpose, scope, and intended audience. Consumed by documentation tooling and LLM authoring agents; not interpreted by the processor.",
+      "examples": [
+        "Internal workflow for approving purchase orders under $50k; routed to a manager for approval or rejection.",
+        "Medicaid eligibility redetermination with appeal branch; rights-impacting, requires full due process."
+      ]
     },
     "status": {
       "type": "string",
       "enum": ["draft", "active", "retired"],
-      "description": "Workflow lifecycle state. Transitions: draft -> active -> retired."
+      "description": "Publication status of this workflow definition. 'draft' means the definition is being authored and SHOULD NOT instantiate production cases. 'active' means the definition is in effect and new instances MAY be created against it. 'retired' means no new instances SHOULD be created, though existing pinned instances continue executing. Transitions move forward: draft → active → retired.",
+      "examples": ["draft", "active", "retired"]
     },
     "impactLevel": {
       "type": "string",
@@ -120,7 +125,22 @@
       "additionalProperties": {
         "$ref": "#/$defs/ContractReference"
       },
-      "description": "Named contract references for typed data exchanges (Kernel S11). Maps contract names to contract references. Two bindings: Formspec (recommended) and JSON Schema (baseline)."
+      "description": "Named contract references for typed data exchanges in this workflow (Kernel §11). Each key is a contract name referenced from `createTask` actions via `contractRef`; each value is a ContractReference declaring the binding type (Formspec or JSON Schema) and the document URI. Contracts are the kernel's abstract validation interface — the processor delegates actual validation to a conformant contract processor.",
+      "examples": [
+        {
+          "purchaseOrder": {
+            "binding": "formspec",
+            "ref": "urn:formspec:example.gov:purchase-order:1.0.0",
+            "description": "Purchase order submission form"
+          }
+        },
+        {
+          "eligibility": {
+            "binding": "jsonSchema",
+            "ref": "https://agency.gov/schemas/eligibility.schema.json"
+          }
+        }
+      ]
     },
     "provenance": {
       "$ref": "#/$defs/ProvenanceConfig",
@@ -145,12 +165,17 @@
       "type": "integer",
       "minimum": 1,
       "default": 3,
-      "description": "Maximum cascade depth for relationship-triggered events ($related.*) before the processor halts generation (Kernel S4.10). Prevents unbounded cascading in cyclically related cases. Default: 3."
+      "description": "Maximum cascade depth for relationship-triggered events (`$related.*`) before the processor halts further generation (Kernel §4.10). A state change in case A may trigger a `$related.*` event in case B (depth 1), in case C (depth 2), and so on; beyond this cap the processor records a `relationshipDepthCapReached` provenance entry and stops. Prevents unbounded cascading in cyclically related cases. Default: 3.",
+      "examples": [3, 5]
     },
     "custodyHook": {
       "type": "object",
-      "description": "Custody posture declaration seam (S10.5). Opaque to the kernel; bindings populate this with declared posture semantics. A monolithic binding may declare a single posture; a distributed binding may declare a full Trust Profile object.",
-      "additionalProperties": true
+      "description": "Custody posture declaration seam (Kernel §10.5). The kernel treats this content as opaque — the concrete shape is supplied by the binding. A monolithic binding typically declares a single posture (e.g., who may read content, whether recovery requires the user, whether delegated compute exposes content); a distributed binding such as Trellis binds a full Trust Profile object here. When Governance (Layer 1) is adopted, changes to this object are recorded as canonical lifecycle facts.",
+      "additionalProperties": true,
+      "examples": [
+        { "posture": "provider-readable", "recoveryWithoutUser": false, "delegatedComputeExposesContent": false },
+        { "trustProfile": { "kind": "distributed", "custodians": ["urn:trellis:custodian:alpha", "urn:trellis:custodian:beta"] } }
+      ]
     },
     "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
