@@ -13,3 +13,4 @@ indexmap  = { version = "2", features = ["serde"] }
 
 [dev-dependencies]
 serde_json = "1"
+wos-core = { path = "../wos-core" }
