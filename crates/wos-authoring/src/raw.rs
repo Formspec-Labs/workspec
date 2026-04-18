@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use wos_core::{
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
-    model::kernel::{State, Transition},
+    model::kernel::{Actor, State, Transition},
 };
 
 use crate::{
@@ -238,13 +238,65 @@ impl RawWosProject {
         )))
     }
 
-    // ── AddActor handler (stub) ───────────────────────────────────────────
+    // ── AddActor / RemoveActor handlers ───────────────────────────────────
 
     fn apply_add_actor(&mut self, id: String, kind: ActorKind) -> CommandResult {
-        Err(AuthoringDiagnostic::error(
-            format!("/actors/{id}"),
-            format!("AddActor('{id}', {kind:?}) not yet implemented — lands in Task 4"),
+        if self.doc.actors.iter().any(|a| a.id == id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/actors/{id}"),
+                format!("actor '{id}' already exists"),
+            ));
+        }
+
+        self.doc.actors.push(Actor {
+            id: id.clone(),
+            kind,
+            description: None,
+            extensions: HashMap::new(),
+        });
+
+        Ok(AppliedCommand::with_inverse(
+            format!("AddActor({id})"),
+            Command::RemoveActor { id },
         ))
+    }
+
+    fn apply_remove_actor(&mut self, id: String) -> CommandResult {
+        let index = match self.doc.actors.iter().position(|a| a.id == id) {
+            Some(idx) => idx,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    format!("/actors/{id}"),
+                    format!("actor '{id}' not found"),
+                ));
+            }
+        };
+
+        // Warn (do not error) when the actor is referenced by any
+        // transition's `assignTo` action — authors may be mid-migration.
+        for (state_id, state) in &self.doc.lifecycle.states {
+            for transition in &state.transitions {
+                for (action_idx, action) in transition.actions.iter().enumerate() {
+                    if action.assign_to.as_deref() == Some(id.as_str()) {
+                        self.diagnostics.push(AuthoringDiagnostic::warning(
+                            format!(
+                                "/lifecycle/states/{state_id}/transitions/{}/actions/{action_idx}",
+                                transition.event
+                            ),
+                            format!(
+                                "action assigns to removed actor '{id}' \
+                                 on transition '{state_id}' --[{}]--> '{}'",
+                                transition.event, transition.target
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+
+        self.doc.actors.remove(index);
+
+        Ok(AppliedCommand::without_inverse(format!("RemoveActor({id})")))
     }
 
     // ── SetImpactLevel handler (stub) ─────────────────────────────────────
@@ -339,6 +391,7 @@ impl RawWosProject {
                 event,
             } => self.apply_add_transition(from_state, to_state, guard, event),
             Command::AddActor { id, kind } => self.apply_add_actor(id, kind),
+            Command::RemoveActor { id } => self.apply_remove_actor(id),
             Command::SetImpactLevel { level } => self.apply_set_impact_level(level),
             Command::AddContract {
                 name,
@@ -564,6 +617,88 @@ mod tests {
         let mut p = make_project();
         let result = p.redo();
         assert!(result.is_err(), "redo must return Err until Task 5");
+    }
+
+    // ── AddActor / RemoveActor ────────────────────────────────────────────
+
+    /// AddActor appends a human actor to the document.
+    #[test]
+    fn add_actor_human_appears_in_snapshot() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActor {
+            id: "approver".into(),
+            kind: ActorKind::Human,
+        })
+        .expect("AddActor must succeed on empty project");
+
+        let snap = p.snapshot();
+        assert_eq!(snap.actors.len(), 1);
+        assert_eq!(snap.actors[0].id, "approver");
+        assert_eq!(snap.actors[0].kind, ActorKind::Human);
+    }
+
+    /// AddActor for the system kind also works — kernel §S3 allows only
+    /// `human | system`. AI agents route through `x-wos-ai.agents`.
+    #[test]
+    fn add_actor_system_appears_in_snapshot() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActor {
+            id: "procurement".into(),
+            kind: ActorKind::System,
+        })
+        .unwrap();
+
+        let snap = p.snapshot();
+        assert_eq!(snap.actors[0].kind, ActorKind::System);
+    }
+
+    /// AddActor twice with the same id must fail.
+    #[test]
+    fn add_actor_duplicate_returns_error() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActor {
+            id: "approver".into(),
+            kind: ActorKind::Human,
+        })
+        .unwrap();
+
+        let err = p
+            .dispatch(Command::AddActor {
+                id: "approver".into(),
+                kind: ActorKind::Human,
+            })
+            .expect_err("duplicate AddActor must fail");
+
+        assert!(err.message.contains("already exists"));
+    }
+
+    /// RemoveActor drops the actor from the vector.
+    #[test]
+    fn remove_actor_drops_entry() {
+        let mut p = make_project();
+        p.dispatch(Command::AddActor {
+            id: "approver".into(),
+            kind: ActorKind::Human,
+        })
+        .unwrap();
+        p.dispatch(Command::RemoveActor {
+            id: "approver".into(),
+        })
+        .expect("RemoveActor must succeed");
+
+        assert!(p.snapshot().actors.is_empty());
+    }
+
+    /// RemoveActor for an unknown id errors.
+    #[test]
+    fn remove_actor_unknown_returns_error() {
+        let mut p = make_project();
+        let err = p
+            .dispatch(Command::RemoveActor {
+                id: "ghost".into(),
+            })
+            .expect_err("unknown actor must be rejected");
+        assert!(err.message.contains("not found"));
     }
 
     // ── AddExtensionKey key validation ────────────────────────────────────

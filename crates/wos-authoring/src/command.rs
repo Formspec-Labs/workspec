@@ -102,11 +102,24 @@ pub(crate) enum Command {
     // ── Actors ─────────────────────────────────────────────────────────────
 
     /// Add an actor declaration.
+    ///
+    /// AI agents are NOT actors — they live in `x-wos-ai.agents`. Custom
+    /// actor categories go through the `actorExtension` extension seam
+    /// (kernel §10.6), not new `ActorKind` variants.
     AddActor {
         /// Unique actor identifier.
         id: String,
         /// Actor kind (human or system).
         kind: ActorKind,
+    },
+
+    /// Remove an actor declaration by identifier.
+    ///
+    /// Emits a warning if the actor is referenced by any transition's
+    /// `assignTo` action; does not error (authoring may be mid-flight).
+    RemoveActor {
+        /// Identifier of the actor to remove.
+        id: String,
     },
 
     // ── Governance ─────────────────────────────────────────────────────────
@@ -164,9 +177,9 @@ pub(crate) enum Command {
 mod tests {
     use super::*;
 
-    /// Verify that each of the 10 Command variants can be constructed.
+    /// Verify that every Command variant can be constructed.
     #[test]
-    fn construct_all_ten_variants() {
+    fn construct_all_variants() {
         let _add_state = Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
@@ -189,6 +202,10 @@ mod tests {
         let _add_actor = Command::AddActor {
             id: "approver".into(),
             kind: ActorKind::Human,
+        };
+
+        let _remove_actor = Command::RemoveActor {
+            id: "approver".into(),
         };
 
         let _set_impact = Command::SetImpactLevel {
