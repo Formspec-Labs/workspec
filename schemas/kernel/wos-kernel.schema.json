@@ -508,8 +508,8 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Triggering event identifier.",
-          "examples": ["submit", "approve", "reject", "task.completed", "timeout"],
+          "description": "Identifier of the event that triggers this transition (Kernel §4.5, §4.6). When an event of this name arrives for an active state that owns this transition, the processor evaluates the (optional) guard; the first transition whose guard evaluates true in document order fires. Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define `$`-prefixed event names.",
+          "examples": ["submit", "approve", "reject", "task.completed", "$timeout.task"],
           "x-lm": {
             "critical": true,
             "intent": "The event that triggers this transition"
@@ -518,7 +518,7 @@
         "target": {
           "type": "string",
           "minLength": 1,
-          "description": "Target state identifier.",
+          "description": "Identifier of the destination state for this transition. MUST name a state declared somewhere in the lifecycle's `states` map (or a substate reachable by dotted path where the binding supports it). When the transition fires, the processor runs the source state's `onExit` actions, the transition's own `actions`, and the target state's `onEntry` actions in that order (Kernel §4.7). A Kernel Complete processor rejects undeclared targets (§13.3).",
           "examples": ["approved", "review", "completed"],
           "x-lm": {
             "critical": true,
@@ -545,14 +545,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "One semantic tag identifier on this transition. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel §4.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, and `notification`.",
+            "examples": ["determination", "adverse-decision"]
           },
-          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel S4.12).",
+          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel §4.12).",
           "examples": [["determination"], ["review", "quality-check"]]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of this transition."
+          "description": "Free-text explanation of this transition (e.g., which business condition it represents, who triggers it). Consumed by documentation and audit tooling; not interpreted by the processor.",
+          "examples": [
+            "Manager approves the purchase order (under $50k threshold)",
+            "Applicant withdraws the application before a decision is issued"
+          ]
         }
       }
     },
