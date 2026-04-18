@@ -376,12 +376,12 @@ impl RawWosProject {
         ))
     }
 
-    // ── AddExtensionKey handler (stub) ────────────────────────────────────
+    // ── AddExtensionKey handler ───────────────────────────────────────────
 
     fn apply_add_extension_key(
         &mut self,
         key: String,
-        _value: serde_json::Value,
+        value: serde_json::Value,
     ) -> CommandResult {
         if !key.starts_with("x-") {
             return Err(AuthoringDiagnostic::error(
@@ -389,12 +389,12 @@ impl RawWosProject {
                 format!("extension key '{key}' must start with 'x-'"),
             ));
         }
-        Err(AuthoringDiagnostic::error(
-            format!("/extensions/{key}"),
-            format!(
-                "AddExtensionKey('{key}') not yet implemented — lands in Task 4"
-            ),
-        ))
+
+        self.doc.extensions.insert(key.clone(), value);
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddExtensionKey({key})"
+        )))
     }
 }
 
@@ -806,7 +806,43 @@ mod tests {
         assert!(err.message.contains("already exists"));
     }
 
-    // ── AddExtensionKey key validation ────────────────────────────────────
+    // ── AddExtensionKey ───────────────────────────────────────────────────
+
+    /// AddExtensionKey stores arbitrary JSON under a compliant key.
+    #[test]
+    fn add_extension_key_stores_value() {
+        let mut p = make_project();
+        p.dispatch(Command::AddExtensionKey {
+            key: "x-custom-meta".into(),
+            value: serde_json::json!({ "owner": "procurement", "tier": 1 }),
+        })
+        .expect("x-prefixed extension must be accepted");
+
+        let snap = p.snapshot();
+        assert_eq!(
+            snap.extensions["x-custom-meta"]["owner"],
+            serde_json::json!("procurement")
+        );
+        assert_eq!(snap.extensions["x-custom-meta"]["tier"], 1);
+    }
+
+    /// Re-setting an existing extension key overwrites the prior value.
+    #[test]
+    fn add_extension_key_overwrites_existing() {
+        let mut p = make_project();
+        p.dispatch(Command::AddExtensionKey {
+            key: "x-flag".into(),
+            value: serde_json::json!(false),
+        })
+        .unwrap();
+        p.dispatch(Command::AddExtensionKey {
+            key: "x-flag".into(),
+            value: serde_json::json!(true),
+        })
+        .unwrap();
+
+        assert_eq!(p.snapshot().extensions["x-flag"], serde_json::json!(true));
+    }
 
     /// AddExtensionKey with a key that lacks the `x-` prefix is rejected before dispatch.
     #[test]
