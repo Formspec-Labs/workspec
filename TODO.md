@@ -96,7 +96,7 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 4. §4.2 Task 3 (CI fixture-link test) — ~2 hours; locks in the ratchet.
 5. wos-authoring Tasks 4-8 — remaining handlers, undo/redo, WosProject façade, README, integration test; now unblocked.
 
-**Missing / unknown references:** `ADR-0058 (wos-core-gap-analysis)` and `ADR-0057 (wos-core-implementation-boundary)` were cited from prior headers but do not exist at `../thoughts/adr/`. Status: unknown — either never authored, relocated, or inlined into other material. Resolve before next audit.
+**ADR references (resolved 2026-04-18):** `ADR-0057 (wos-core-implementation-boundary)` and `ADR-0058 (wos-core-gap-analysis)` live in `thoughts/archive/adr/` (implemented). Prior audit looked in active `thoughts/adr/` and incorrectly flagged them as missing. Citations in `enterprise-implementation-roadmap.md:257`, `thoughts/plans/2026-04-13-wos-runtime-crate.md:423`, `thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md:302`, and `specs/companions/runtime.md:51,:906` all resolve against the archive copies.
 
 **Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` are preserved per item as metadata — they inform relative weight within each tier but do not override cross-tier ordering.
 
@@ -286,8 +286,7 @@ Decisions locked; do not re-litigate.
 ## Open questions
 
 1. **Engine-adapter sequencing** — TODO §3 ↔ IDEA Deferred. Defer until first commercial request, or schedule now to validate runtime against production-shape workloads?
-2. **Broken ADR references** (ADR-0057, ADR-0058) — draft retroactively or delete?
-3. **Ontology-spec authoring ownership** — who drafts, when?
+2. **Ontology-spec authoring ownership** — who drafts, when?
 4. **Timer semantics** (#20). Wall-clock or business-days for `noticeGracePeriod` legal compliance? Business calendar reference opt-in or required?
 5. **Registry composition** (#21). Two L1 governance docs attaching rules to the same tag — declaration order, explicit priority, or conflict rejection?
 6. **Multi-instance design** (#32). Events, arrays, or both? Governance hooks per-instance vs. per-iteration.
