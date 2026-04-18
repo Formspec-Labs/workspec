@@ -2,7 +2,11 @@
 
 _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO surface on branch `claude/wos-spec-backend-y17wJ` as of commit `645fbd8`._
 
-> **Validation pass applied** (commit `d61b2af` → next). Three independent audits (spec citations, server surface, status grades + ROI math) flagged 6 citation errors, 1 path fabrication (`/api/kernels` → actual `/api/bundles`), 4 mis-graded rows, an unsorted "ranked" table, and 4 unfair critiques (multi-step sessions, circuit breakers, drift "impossible work", three-way explanation schism). All applied. The ranking now sorts by ROI; the chain-integrity rationale was corrected (helper exists but has zero callers; chain is built on write but never re-verified on read). The previously-claimed three-way explanation schism is downgraded to a contract+implementation pair (Runtime §9 + Gov §3.3 only); Assurance §5 attestation is a different concept.
+> **Validation pass applied** (commit `d61b2af` → `9a063ad`). Three independent audits flagged 6 citation errors, 1 path fabrication (`/api/kernels` → actual `/api/bundles`), 4 mis-graded rows, an unsorted "ranked" table, and 4 unfair critiques. All applied.
+>
+> **DI seam rework applied** (2026-04-18). Re-framed the gap list around Runtime §12 host-interface seams. Two seams are unwired (`ProvenanceSigner`, `ReportRenderer`) — both top-ROI. Three seams are wired-but-stubbed (`AccessControl` permissive, `ContractValidator` permissive, `ExternalService` echo) — tightening them to policy-composing impls is the bulk of envelope-stack readiness. The "provenance attestation" row was dropped from the ranking entirely: it's a consumer-injected plug via `ProvenanceSigner`, not a server gap. Runtime §15.7 ledger-gating enforcement (missed in the prior validation pass) was added as the `PolicyLayeredValidator` item. The `/explain` handler line-count drops from 1-day to ~2-hours once `ReportRenderer` is wired.
+>
+> Paired spec-side planning lives in [`../../TODO.md §4.7`](../../TODO.md) — three new spec items (#58 envelope status, #59 CloudEvent envelope-flow catalog, #60 envelope reference fixtures) plus cross-ref annotations on existing items (#2, #20, #30, #38, #40, #43) that serve envelope-stack composition once they land.
 
 **Methodology.** Walked each spec extracting every imperative observable (MUST statements on processor behaviour, enumerated operations, processor-obligation tables). Cross-referenced against `crates/wos-server/src/http/*.rs` routes, `realtime/mod.rs` events, and `runtime/mod.rs` methods. Schema files that define document shapes (not observables) are marked "spec-side" — they're consumed as validation inputs to `POST /api/lint/document`, not served as first-class resources.
 
@@ -28,7 +32,38 @@ _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO su
 | spec-side | 13 |
 | **total** | **68** |
 
-Kernel + runtime companion are mostly implemented (Runtime §12 has six of the spec's nine host interfaces). Governance L1 read-side and sidecar operations are solid. The gaps cluster in three places: (1) assurance attestation / continuity hash validation, (2) integration-profile real dispatch (currently echo) plus correlation tokens, (3) semantic profile's SHACL / SPARQL (triplestore adapter needed). Stubs are concentrated in advanced L3 (SMT verification, drift detection) — both require external adapters; their response shapes are spec-correct so consumers can integrate today.
+Kernel + runtime companion are mostly implemented (Runtime §12 has six of the spec's nine host interfaces wired). Governance L1 read-side and sidecar operations are solid. The gaps cluster in three places: (1) two unwired DI seams (`ProvenanceSigner`, `ReportRenderer`) that unblock attestation + explanation work, (2) integration-profile real dispatch (currently echo) plus correlation tokens, (3) semantic profile's SHACL / SPARQL (triplestore adapter needed). Stubs are concentrated in advanced L3 (SMT verification, drift detection) — both require external adapters; their response shapes are spec-correct so consumers can integrate today.
+
+---
+
+## DI seam status (Runtime §12 host interfaces)
+
+`wos-runtime` composes nine host-interface traits defined in `wos-core::traits`. The envelope-stack framing (`TODO.md §4.7`) shows that every "signing ceremony" or "attestation" concern reduces to wiring a seam — consumers inject their signer / renderer / identity adapter / policy engine, and WOS stays out of the primitive business. The table below is the authoritative map of what's wired.
+
+| Trait (`wos-core::traits`) | Server impl | Status | Envelope-stack use |
+|---|---|---|---|
+| `InstanceStore` | `storage::SqliteRuntimeStore` | wired (real) | ✓ |
+| `DocumentResolver` | `runtime::BundleServiceResolver` | wired (real) | ✓ |
+| `TaskPresenter` | `runtime::SocketIoTaskPresenter` | wired (real) | ✓ |
+| `EventQueue` | folded into `WosRuntime` internal queue | wired (real) | ✓ |
+| `AccessControl` | `runtime::PermissiveAccessControl` | wired (permissive stub) | **seam for separation-of-duties** — replace with `RoleBasedAccessControl` that honours Gov §7.2 / AI §1.5 |
+| `ExternalService` | `runtime::EchoExternalService` | wired (echo stub) | **seam for integration dispatch** — replace with `IntegrationDispatchService` reading bindings from resolver |
+| `ContractValidator` | `runtime::PermissiveValidator` | wired (permissive stub) | **seam for ledger-gating + signature-class enforcement** — replace with `PolicyLayeredValidator` that composes Formspec check + Runtime §15.7 gating + #43 class binding |
+| `ProvenanceSigner` | **not wired** | **unwired** | **seam for attestation** — consumers inject `Ed25519FileKeySigner` / HSM / cloud KMS / Formspec Respondent Ledger client |
+| `ReportRenderer` | **not wired** | **unwired** | **seam for explanation / COC / notice rendering** — consumers inject `JsonReportRenderer` (default) / `HtmlReportRenderer` / PDF |
+
+Two seams are unwired. Both unblock envelope-critical work:
+
+- Wiring `ProvenanceSigner` (default: `NoopSigner` with spec-correct envelope shape) closes the attestation axis. Consumers plug whatever signer they have.
+- Wiring `ReportRenderer` (default: `JsonReportRenderer`) turns the `/instances/:id/explain` endpoint from a 1-day build into a ~50-line handler once the Runtime §9.1 deterministic algorithm (TODO.md #2, §4.1 critical path) lands.
+
+Three seams are wired but stubbed. Tightening them from stub to policy-composing impl is the bulk of the envelope-stack server work:
+
+- `AccessControl` permissive → `RoleBasedAccessControl` with separation-of-duties enforcement
+- `ContractValidator` permissive → `PolicyLayeredValidator` with §15.7 ledger-gating + #43 signature-class check
+- `ExternalService` echo → `IntegrationDispatchService` with real binding dispatch
+
+**Framing consequence:** Every "build attestation" / "build explanation rendering" / "build identity proofing" concern the enterprise gap docs flag as a DocuSign-competitive requirement is a **seam composition** problem, not a net-new server module. The server's job is to accept the seam implementations consumers inject, enforce that they're wired for rights-impacting workflows, and stay out of the signing ceremony.
 
 ---
 
@@ -83,7 +118,7 @@ Spec: `specs/companions/runtime.md` — the behavioural contract between the pro
 | Runtime §9 Explanation | Explanation assembly | — | `GET /api/applicant/:id/determination` | partial | `applicant_service` already assembles rules-applied + milestones + AI disclosure for the applicant view. The dedicated `/instances/:id/explain` per Runtime §9.1's deterministic-algorithm contract is missing; due-process delivery (Gov §3.3) flows through the partial surface today. **User value: high** for adverse-decision workflows |
 | Runtime §10 Eval modes | Dry-run transitions | — | `GET /api/instances/:id/transitions` | full | Pure kernel walk |
 | Runtime §11 Multi-version coexistence | Instances pinned to definition version | — | `GET /api/instances/:id` | full | `definition_version` preserved on row |
-| Runtime §12 Host interfaces | InstanceStore / DocumentResolver / ContractValidator / ExternalService / AccessControl / ProvenanceSigner / ReportRenderer / EventQueue / TaskPresenter | — | via `runtime/` + `wos-runtime::store` impls | partial | Six of nine implemented (InstanceStore as `SqliteRuntimeStore`, DocumentResolver, ContractValidator/permissive, ExternalService/echo, AccessControl/permissive, TaskPresenter). ProvenanceSigner, ReportRenderer, EventQueue not yet hosted |
+| Runtime §12 Host interfaces | Nine DI seams (see DI seam status section above) | — | via `runtime/` + `wos-runtime::store` impls | partial | Six of nine wired — three stubbed (`AccessControl` permissive, `ExternalService` echo, `ContractValidator` permissive), two unwired (`ProvenanceSigner`, `ReportRenderer`), one folded into runtime (`EventQueue`). **Wiring the two unwired seams is the envelope-stack unlock** — see ranking below |
 | Runtime §Formspec Tasks | Present task | wos-case-instance | `task:assigned` event | full | Socket.IO broadcast |
 | Runtime §Formspec Tasks | Persist task draft | — | `POST /api/tasks/:id/draft` | full |  |
 | Runtime §Formspec Tasks | Submit task response | — | `POST /api/tasks/:id/response` | full | Returns `Completed`/`Failed`/`Rejected` |
@@ -365,41 +400,47 @@ Every gap scored on three independent axes. **Priority** is user impact × urgen
 
 ### Ranked table
 
-Sorted by ROI (= P × D / C; higher is more value-per-effort). Rescored relative to the pre-validation draft: Legal-sufficiency D 3 → 4 (every export shipped without disclosure compounds retrofit cost when attestation lands); Integration correlation D 4 → 5 (own document calls this breaking-change risk for every adapter); Chain-integrity D 1 → 2 (auditors hand-roll absent); Real drift P 2 → 3 (drift is the only behavioural surface for AI governance customers).
+Sorted by ROI (= P × D / C; higher is more value-per-effort). **DI seam rework applied** (2026-04-18): items that were framed as "build attestation" / "build explanation" / "build identity-proofing" are re-cast as seam wiring. Complexity collapses — what was 1-day builds are now ~1-hour seam hook-ups. "Provenance attestation" leaves the ranking entirely (it's a consumer-injected plug via `ProvenanceSigner`, not a server gap). Runtime §15.7 ledger-gating enforcement is added (was missed in prior drafts).
 
-| Gap | Spec § | P | C | D | ROI |
-|---|---|---|---|---|---|
-| Legal-sufficiency disclosure on exports | Assurance §6 | 5 | 1 | 4 | **20.0** |
-| Agent separation-of-duties enforcement | Gov §7.2 / AI §1.5 | 5 | 2 | 5 | **12.5** |
-| Chain-integrity verify endpoint | Kernel §8 | 4 | 1 | 2 | 8.0 |
-| Explanation assembly endpoint (full) | Runtime §9 / Gov §3.3 | 5 | 3 | 5 | 8.3 |
-| Pipeline validation endpoint | Gov §5.4 | 4 | 3 | 5 | 6.7 |
-| Integration correlation tokens | Integ §6 | 4 | 3 | 5 | 6.7 |
-| Policy-parameters as-of resolution | PolicyParam §1.3 | 4 | 2 | 3 | 6.0 |
-| Hold create / release CRUD | Gov §3.6 | 3 | 2 | 3 | 4.5 |
-| Subject continuity-hash validation | Assurance §3 | 3 | 2 | 2 | 3.0 |
-| Calibration expiry enforcement | AI §5.3 | 3 | 2 | 2 | 3.0 |
-| Real drift detection | Drift §1.3 | 3 | 5 | 4 | 2.4 |
-| JSON-LD context endpoint | Semantic §3 | 2 | 1 | 1 | 2.0 |
-| Provenance attestation | Assurance §5 | 3 | 3 | 2 | 2.0 |
-| SHACL validation | Semantic §4 | 2 | 3 | 2 | 1.3 |
-| Counterfactual explanation | Gov §3.4 | 2 | 4 | 2 | 1.0 |
-| Multi-step sessions | Advanced §5 | 2 | 3 | 3 | 2.0 |
-| Migration endpoint | Gov §2.9 | 2 | 3 | 1 | 0.7 |
-| Real SMT verification | Advanced §6 | 2 | 5 | 1 | 0.4 |
-| Agent circuit breakers | Advanced §11 | 2 | 3 | 1 | 0.7 |
-| SPARQL in-server | Semantic §6 | 1 | 5 | 1 | 0.2 |
+| Gap | Spec § | P | C | D | ROI | Shape |
+|---|---|---|---|---|---|---|
+| Wire `ProvenanceSigner` seam | Runtime §12.6 | 5 | 1 | 5 | **25.0** | Add `NoopSigner` + config; trait already in `wos-core::traits` |
+| Wire `ReportRenderer` seam | Runtime §12.7 | 5 | 1 | 5 | **25.0** | Add `JsonReportRenderer` + config; unblocks `/explain` |
+| Legal-sufficiency disclosure on exports | Assurance §6 | 5 | 1 | 4 | 20.0 | One-liner in `semantic_service.rs` |
+| `PolicyLayeredValidator` (§15.7 ledger-gating) | Runtime §15.7 | 5 | 2 | 5 | 12.5 | Replace `PermissiveValidator` with layered impl |
+| `RoleBasedAccessControl` (separation-of-duties) | Gov §7.2 / AI §1.5 | 5 | 2 | 5 | 12.5 | Replace `PermissiveAccessControl` |
+| Chain-integrity verify endpoint | Kernel §8 | 4 | 1 | 2 | 8.0 | Wrap existing `verify_chain` helper |
+| `/instances/:id/explain` handler | Runtime §9 / Gov §3.3 | 5 | 2 | 5 | 12.5 | ~50 lines once `ReportRenderer` is wired + #2 lands |
+| Event-idempotency on `POST /events` | Runtime §4.3 | 4 | 2 | 4 | 8.0 | `idempotency_token` on event queue |
+| Pipeline validation endpoint | Gov §5.4 | 4 | 3 | 5 | 6.7 | Depends on TODO #38 |
+| `IntegrationDispatchService` + correlation tokens | Integ §3, §6 | 4 | 3 | 5 | 6.7 | Replace `EchoExternalService` |
+| Policy-parameters as-of resolution | PolicyParam §1.3 | 4 | 2 | 3 | 6.0 | Date-indexed lookup |
+| Hold create / release CRUD | Gov §3.6 | 3 | 2 | 3 | 4.5 |  |
+| Subject continuity-hash validation | Assurance §3 | 3 | 2 | 2 | 3.0 | Extends existing `/assurance-chain` |
+| Calibration expiry enforcement | AI §5.3 | 3 | 2 | 2 | 3.0 | Background job |
+| Real drift detection (write-side) | Drift §1.3 | 3 | 5 | 4 | 2.4 | `POST /agents/:id/drift` for external detectors |
+| JSON-LD context endpoint | Semantic §3 | 2 | 1 | 1 | 2.0 | Static serve |
+| SHACL validation | Semantic §4 | 2 | 3 | 2 | 1.3 | Optional feature |
+| Counterfactual explanation | Gov §3.4 | 2 | 4 | 2 | 1.0 | Depends on FEL trace |
+| Multi-step sessions | Advanced §5 | 2 | 3 | 3 | 2.0 | Defer until consumer demand |
+| Migration endpoint | Gov §2.9 | 2 | 3 | 1 | 0.7 | Wrap `WosRuntime::migrate` |
+| Real SMT verification | Advanced §6 | 2 | 5 | 1 | 0.4 | External adapter; stub shape durable |
+| Agent circuit breakers | Advanced §11 | 2 | 3 | 1 | 0.7 | Defer |
+| SPARQL in-server | Semantic §6 | 1 | 5 | 1 | 0.2 | Defer indefinitely |
 
-Event-idempotency on `POST /api/instances/:id/events` (Runtime §4.3) was downgraded from "partial" to "none" during validation — added to the gap pool: P 4, C 2, D 4 → ROI 8.0. Goes alongside chain-integrity verify in week 1.
+**Rows dropped from prior ranking:**
+- **"Provenance attestation" (was ROI 2.0).** Not a server gap. The `ProvenanceSigner` seam exists in `wos-core::traits`; once wired (top row of new ranking), consumers inject whatever signer they have — Ed25519 local key, HSM, cloud KMS, or the Formspec Respondent Ledger (which provides the cryptographic checkpoint primitive per Formspec S13). The server's responsibility is seam composition, not attestation primitives.
 
 ### Top by debt burden (D = 5)
 
-These are the gaps where deferral **actively costs more every week**, independent of priority:
+Under the DI framing, every D=5 row is about **seam locks**: the longer a stubbed seam stays stubbed, the more consumers depend on the stub behaviour and the more breaking any tightening becomes.
 
-1. **Agent separation-of-duties (Gov §7.2 / AI §1.5).** Permissive behaviour is already shipped. Every new consumer builds expectations around "agent can self-review." Tightening later becomes a breaking change. Fix before more consumers land.
-2. **Explanation assembly (Runtime §9 + Gov §3.3).** Two specs (algorithm + delivery contract) normatively home this. Server has a partial surface via applicant-determination today; if we let it solidify there, the Runtime §9.1 deterministic-algorithm contract becomes a parallel implementation later. Pick the dedicated `/explain` endpoint now.
-3. **Pipeline validation (Gov §5.4).** Without a server-side gate evaluator, handler code hand-rolls assertion logic. Every month of delay scatters more bespoke assertion calls across the codebase.
-4. **Integration correlation (Integ §6).** `ExternalService::invoke` is already in adapters' hands; adding correlation later breaks the trait. The longer we wait, the more adapters we invalidate.
+1. **Wire `ProvenanceSigner` seam (Runtime §12.6).** Every day without a signer wired, the chain lacks externally-verifiable signatures and every consumer builds workarounds (signing provenance exports out-of-band). Cost compounds per consumer.
+2. **Wire `ReportRenderer` seam (Runtime §12.7).** Without it, explanation rendering scatters into ad-hoc handlers (the applicant-determination view is one; each new use case grows its own). Wiring the seam early means new use cases plug the existing renderer.
+3. **`PolicyLayeredValidator` — §15.7 ledger-gating enforcement.** Runtime §15.7 already obligates that rights-impacting + safety-impacting submits require Respondent Ledger evidence. The server's `PermissiveValidator` accepts anything. Every rights-impacting workflow deployed against the stub violates §15.7 silently. Cost: regulator-defensibility claim collapses.
+4. **`RoleBasedAccessControl` — separation-of-duties (Gov §7.2 / AI §1.5).** Permissive behaviour already shipped. Every new consumer builds on "agent can self-review." Tightening later is a breaking change.
+5. **Pipeline validation (Gov §5.4).** Without a server-side gate evaluator, handlers hand-roll assertion logic.
+6. **Integration correlation (Integ §6).** `ExternalService::invoke` is already in adapters' hands; adding correlation later is a trait-signature break.
 
 ### Decision matrix (cross-tabulated)
 
@@ -414,53 +455,67 @@ These are the gaps where deferral **actively costs more every week**, independen
 
 ### Recommended sequence
 
-**Week 1 — quick wins + tighten the easy compounding gaps (~1 day total):**
+Reordered around **DI seam wiring**: wire the two unwired seams first, then tighten the three stubbed ones, then land the endpoints that ride on them.
 
-1. Legal-sufficiency disclosure on exports (30 min) — emit a `wosDisclosure` block in PROV-O / XES / OCEL headers so the future attestation work doesn't require re-issuing exports.
-2. Chain-integrity verify endpoint (1 hr) — wrap the existing `verify_chain` helper.
-3. JSON-LD context endpoint (30 min) — static serve.
-4. Agent separation-of-duties enforcement (2 hr) — **stops permissive drift**; tighten `AccessControl::can_transition` on transitions whose source state has a `review`-tagged actor.
-5. Policy-parameters as-of resolution (2 hr) — date-indexed lookup over the policy-parameters sidecar.
-6. Event-idempotency on `POST /events` (2 hr) — accept an `idempotencyToken` in the request body, dedupe in `event_queue`.
+**Day 1 — wire the two unwired seams + easy disclosure wins (~3 hr total):**
 
-**Week 2 — full explanation + pipeline (~3 days total):**
+1. **Wire `ProvenanceSigner` seam** (~1 hr) — add `NoopSigner` with spec-correct `attestation` block shape; add `WOS_SIGNER=noop|ed25519-file|external` config switch; inject into `AppRuntime::build`.
+2. **Wire `ReportRenderer` seam** (~1 hr) — add `JsonReportRenderer` default; inject into `AppRuntime::build`.
+3. **Legal-sufficiency disclosure on exports** (~30 min) — emit `wosDisclosure` block in PROV-O / XES / OCEL headers per Assurance §6.
+4. **Chain-integrity verify endpoint** (~30 min) — wrap existing `verify_chain` helper.
 
-7. Pipeline validation endpoint (1 day) — `POST /api/governance/:url/validate-pipeline` with `{inputs}`; assertion evaluator returns `{passed, failures}`.
-8. Explanation assembly endpoint (1 day) — `GET /api/instances/:id/explain` per Runtime §9.1's deterministic algorithm; Gov §3.3 delivery contract is satisfied by selecting the explanation level from the instance's impact level. Existing applicant-determination view stays; new endpoint is the spec-shaped one.
-9. Hold CRUD (3 hr) — `POST /api/instances/:id/holds` + `DELETE …/:holdId`; route through runtime so provenance is consistent.
-10. Calibration expiry enforcement (3 hr) — background job; autonomy cap when calibration `validUntil` < now.
-11. Subject continuity-hash validation (2 hr) — extend `assurance_chain` response with `chainValid: bool`.
+**Day 2 — tighten the three stubbed seams (~1 day total):**
 
-**Week 3 — integration correctness + attestation (~3 days total):**
+5. **`PolicyLayeredValidator`** (~half day) — replace `PermissiveValidator`. Compose: Formspec contract check (delegate) + Runtime §15.7 ledger-gating policy (`impactLevel ∈ {rights-impacting, safety-impacting}` ⇒ require `respondentLedgerRef` on submit) + #43 signature-class check once spec lands.
+6. **`RoleBasedAccessControl`** (~half day) — replace `PermissiveAccessControl`. Separation-of-duties check on review-tagged transitions (reject when actor identity matches reviewed artifact's author); honour delegation chains per Gov §6.
 
-12. Integration correlation tokens (1 day) — **do before more adapters land**. Add `correlation_token: Option<String>` to `ExternalService::invoke` and `wos-runtime` callback registry.
-13. Provenance attestation (1 day) — Ed25519 signing path; emits attestation record with the legal-sufficiency disclosure block.
-14. Migration endpoint (1 day) — `POST /api/instances/:id/migrate` exposing `WosRuntime::migrate`.
+**Day 3 — endpoints that ride on the wired seams (~1 day total):**
 
-**Defer for product-fit signal:**
+7. **`/instances/:id/explain` handler** (~2 hr) — once `ReportRenderer` is wired and the Runtime §9.1 deterministic algorithm (TODO #2) exists, handler is ~50 lines: load provenance + kernel → run algorithm → pass to renderer.
+8. **Event-idempotency on `POST /events`** (~2 hr) — accept `idempotencyToken` in body, dedupe via `event_queue`.
+9. **Policy-parameters as-of resolution** (~2 hr) — date-indexed lookup.
+10. **JSON-LD context endpoint** (~30 min) — static serve.
+11. **Subject continuity-hash validation** (~2 hr) — extend `/assurance-chain` response.
 
-- **Real drift detection** (Drift §1.3) — add write-side `POST /api/agents/:id/drift` and have the GET serve the most-recent stored report. Skip until an external detector is in scope.
-- **Real SMT verification** (Advanced §6) — stub shape is durable; wait for a customer with a real proof obligation.
-- **SHACL validation** (Semantic §4) — defer until an RDF consumer asks; overlaps with the lint surface.
-- **Multi-step sessions** (Advanced §5) — defer; legitimate spec but narrow consumer set today (multi-step LLM reasoning chains).
-- **Agent circuit breakers** (Advanced §11) — defer; standalone-agent deployments will need it eventually.
+**Week 2 — integration-dispatch + auxiliary endpoints (~3 days total):**
+
+12. **`IntegrationDispatchService`** (~1 day) — replace `EchoExternalService`. Dispatch on `IntegrationBindingKind`; wire correlation tokens into the callback registry before more external adapters land (Integ §6).
+13. **Pipeline validation endpoint** (~1 day) — depends on TODO #38 `assertionId` resolution landing.
+14. **Hold CRUD** (~3 hr).
+15. **Calibration expiry enforcement** (~3 hr).
+16. **Migration endpoint** (~1 day).
+
+**Post-MVP / demand-gated:**
+
+- **Real drift detection (write-side)** — `POST /agents/:id/drift` for external detectors.
+- **Real SMT verification** — swap `NoopSolver` for Z3 when a consumer brings a proof obligation.
+- **SHACL validation** — defer until an RDF consumer asks.
+- **Multi-step sessions** — defer until consumer demand.
+- **Agent circuit breakers** — defer; standalone-agent deployments will need it eventually.
+- **Real `Ed25519FileKeySigner`** — the `ProvenanceSigner` seam is wired from Day 1 with `NoopSigner`; ship the Ed25519 reference impl behind a feature flag when a deployment needs externally-verifiable signatures.
 
 **Deferred indefinitely:**
 
-- **SPARQL in-server** (Semantic §6) — export-to-external is the standard pattern.
-- **Counterfactual explanation** (Gov §3.4) — narrow XAI audience.
+- **SPARQL in-server** — export-to-external is the standard pattern.
+- **Counterfactual explanation** — narrow XAI audience; depends on FEL-trace infrastructure that's not warranted yet.
 
-### The four compounding costs of deferral
+### The compounding costs of deferral (DI seams)
 
-1. **Ossified permissive behaviour.** Every day the server ships with `PermissiveAccessControl` allowing agents to self-review, more consumers depend on that behaviour. Closing this gap later is no longer additive — it's a breaking change that invalidates existing integrations. Cost doubles every month.
+Under the DI framing, the compounding costs cluster around seam state. A stubbed seam is worse than an unwired one: consumers build on the stub's behaviour; retrofitting the real impl then breaks them.
 
-2. **Explanation surface fragmentation.** Runtime §9.1 specifies a deterministic explanation algorithm; Gov §3.3 specifies what must be delivered (individualised / categorical / aggregate). The two are a contract+implementation pair, not duplication, but the partial surface today (applicant-determination) doesn't satisfy Runtime §9.1's algorithm contract. If consumers build against the partial surface, the dedicated `/explain` endpoint later becomes a migration path rather than an addition. Cost is one extra migration per consumer.
+1. **Unwired `ProvenanceSigner` seam.** Every day without a signer wired, consumers either: (a) sign provenance exports out-of-band (incompatible formats across consumers), or (b) skip signing (no externally-verifiable chain). Cost is linear in consumers; each migration to the real seam is a coordination with an external signing provider.
 
-3. **Integration-binding dispatch shape.** The `ExternalService::invoke` trait signature doesn't model correlation tokens today. Any adapter written against the current shape will need a breaking trait update when correlation lands. Cost is linear in the number of external adapters written between now and the fix.
+2. **Unwired `ReportRenderer` seam.** Without it, every new use case that needs rendered output (explanation assembly, COC, legal notices, audit certificates) either grows its own ad-hoc handler (fragmentation — the applicant-determination view is already one such) or is blocked. Wiring the seam early turns new use cases into "pass a payload to the injected renderer" one-liners.
 
-4. **Pipeline assertion scatter.** Without a server-side `validate-pipeline` endpoint, handlers and services hand-code assertion checks against governance rules. Every new check ossifies the pattern of bespoke assertion logic in handler code. Consolidation later means tracking down N inlined assertions and rerouting them through the gate evaluator.
+3. **Stubbed `PolicyLayeredValidator` (§15.7 ledger-gating).** The spec **already obligates** ledger gating for rights-impacting + safety-impacting workflows. Every such workflow deployed against `PermissiveValidator` is out of conformance silently. The longer this stubs, the more data is accumulated in violation of a MUST.
 
-The remaining 16 gaps are **additive** — deferring them creates no compounding cost. They're pure feature work that can happen whenever there's a concrete consumer.
+4. **Stubbed `RoleBasedAccessControl` (separation-of-duties).** Every consumer builds on "agent can self-review." Tightening is a breaking change per consumer.
+
+5. **Stubbed `IntegrationDispatchService` (`EchoExternalService`).** `ExternalService::invoke` signature doesn't model correlation tokens; adapters written against the current shape break on the real impl.
+
+6. **Pipeline assertion scatter.** Without a server-side `validate-pipeline` endpoint, handlers hand-code assertion checks.
+
+The remaining gaps are **additive** — deferring them creates no compounding cost. They're pure feature work that can happen whenever a concrete consumer arrives.
 
 
 ---
