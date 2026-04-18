@@ -14,6 +14,27 @@ pub enum SpikeError {
     #[error("Anthropic API error: {0}")]
     AnthropicApi(String),
 
+    /// The LLM produced JSON without a recognized `$wos*` document-type marker.
+    ///
+    /// This is the single most likely non-convergence failure mode — the model
+    /// emits structurally valid JSON that the linter cannot classify because no
+    /// `$wosKernel` / `$wosTheme` / etc. field is present.  Kept distinct from
+    /// [`SpikeError::LintFailure`] so callers can detect and surface it
+    /// specifically (e.g., tighten the generation prompt).
+    #[error(
+        "LLM output is missing a $wos* document-type marker \
+         (e.g. \"$wosKernel\": \"1.0\"): {0}"
+    )]
+    MissingWosMarker(String),
+
+    /// The lint pipeline itself failed for a reason other than a missing marker.
+    ///
+    /// Covers malformed JSON reaching the linter, filesystem errors from
+    /// `wos_lint::lint_project`, and any other [`wos_lint::LintError`] variant
+    /// that does not indicate a missing document-type marker.
+    #[error("lint pipeline error: {0}")]
+    LintFailure(String),
+
     /// The LLM produced output that is not parseable as JSON.
     #[error("JSON parse error after {iterations} iteration(s): {source}\nRaw attempt:\n{attempt}")]
     ParseJson {

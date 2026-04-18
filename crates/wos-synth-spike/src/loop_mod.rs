@@ -83,7 +83,7 @@ pub async fn synthesize(problem: &str, anthropic_key: &str) -> Result<Value, Spi
             .expect("re-serialising a parsed Value must not fail");
 
         let diagnostics = wos_lint::lint_document(&canonical)
-            .map_err(|e| SpikeError::AnthropicApi(format!("lint pipeline error: {e}")))?;
+            .map_err(classify_lint_error)?;
 
         // Collect only error-severity findings — warnings and info are fine.
         let errors: Vec<String> = diagnostics
@@ -156,6 +156,31 @@ async fn call_anthropic(api_key: &str, prompt: &str) -> Result<String, SpikeErro
     Ok(collected)
 }
 
+/// Sentinel substring produced by `wos_lint` when a document is parseable JSON
+/// but lacks any `$wos*` document-type marker.
+///
+/// `wos_lint::LintError` does not expose a distinct discriminant for this case
+/// — the condition is conveyed through the message string on
+/// [`wos_lint::LintError::Parse`].  Matching the substring is fragile but is
+/// the only available signal today; the spike accepts that coupling rather
+/// than upstreaming a new variant.  See TODO in wos-lint document.rs.
+const MISSING_MARKER_SENTINEL: &str = "no recognized $wos*";
+
+/// Map a [`wos_lint::LintError`] to the appropriate [`SpikeError`] variant.
+///
+/// Routes the missing-`$wos*`-marker case to [`SpikeError::MissingWosMarker`]
+/// and every other failure (malformed JSON reaching the linter, I/O errors)
+/// to [`SpikeError::LintFailure`].  Kept as a free function so the mapping
+/// can be unit-tested without running the full synthesis loop.
+fn classify_lint_error(err: wos_lint::LintError) -> SpikeError {
+    let message = err.to_string();
+    if message.contains(MISSING_MARKER_SENTINEL) {
+        SpikeError::MissingWosMarker(message)
+    } else {
+        SpikeError::LintFailure(message)
+    }
+}
+
 /// Remove markdown code fences from LLM output if present.
 ///
 /// The generation prompt instructs the model not to add fences, but some
@@ -202,5 +227,54 @@ mod tests {
     fn strip_fences_trims_surrounding_whitespace() {
         let input = "  \n  {\"key\": 1}  \n  ";
         assert_eq!(strip_fences(input), "{\"key\": 1}");
+    }
+
+    /// Feeding the linter a structurally valid JSON object with no `$wos*`
+    /// marker must classify as [`SpikeError::MissingWosMarker`], not as a
+    /// generic API or lint failure.  This is the dominant non-convergence
+    /// mode — a canned LLM response that looks plausible but skips the
+    /// discriminator field.
+    #[test]
+    fn classify_lint_error_routes_missing_marker() {
+        // Stand-in for a canned LLM response: valid JSON, valid root object,
+        // fields that look workflow-y, but no $wosKernel / $wosTheme / ...
+        let canned_llm_response = r#"{
+            "title": "Purchase order approval",
+            "lifecycle": {"initialState": "draft", "states": {}}
+        }"#;
+
+        let err = wos_lint::lint_document(canned_llm_response)
+            .expect_err("lint must fail when the document has no $wos* marker");
+
+        match classify_lint_error(err) {
+            SpikeError::MissingWosMarker(message) => {
+                assert!(
+                    message.contains("$wos"),
+                    "MissingWosMarker message should mention $wos*, got: {message}"
+                );
+            }
+            other => panic!(
+                "expected SpikeError::MissingWosMarker for a marker-less document, \
+                 got: {other:?}"
+            ),
+        }
+    }
+
+    /// Non-marker lint failures (e.g. malformed JSON reaching the linter)
+    /// must route to [`SpikeError::LintFailure`] so the missing-marker
+    /// channel stays specific.
+    #[test]
+    fn classify_lint_error_routes_generic_parse_failure() {
+        let err = wos_lint::lint_document("not json at all")
+            .expect_err("lint must fail on non-JSON input");
+
+        match classify_lint_error(err) {
+            SpikeError::LintFailure(_) => {}
+            SpikeError::MissingWosMarker(message) => panic!(
+                "malformed JSON should not be classified as a missing marker, \
+                 got message: {message}"
+            ),
+            other => panic!("expected SpikeError::LintFailure, got: {other:?}"),
+        }
     }
 }
