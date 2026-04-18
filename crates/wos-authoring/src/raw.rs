@@ -97,21 +97,41 @@ fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument 
 
 // ── RawWosProject ─────────────────────────────────────────────────────────────
 
+/// Maximum number of pre-command snapshots retained for undo.
+///
+/// A cap is required because every successful dispatch clones the full
+/// `KernelDocument`; memory grows linearly with history depth. 100 is
+/// generous for interactive LLM-driven authoring (repair loops rarely
+/// exceed 20 steps) while still being small enough to keep the working
+/// set bounded for fixture-heavy bench runs.
+const UNDO_DEPTH: usize = 100;
+
+/// A history entry pairs the command record with the pre-command snapshot.
+///
+/// Snapshot-based undo avoids the combinatorial complexity of inverting
+/// every command shape (rename across nested states, extension-map writes,
+/// etc.). Inverses recorded on `AppliedCommand` remain available for
+/// future optimizations but the canonical undo path restores the snapshot.
+#[derive(Debug, Clone)]
+struct HistoryEntry {
+    applied: AppliedCommand,
+    before: KernelDocument,
+}
+
 /// Low-level authoring core: owns a `KernelDocument` and drives it via commands.
 ///
-/// Handlers for `AddState` and `AddTransition` are fully implemented.
-/// The remaining eight command variants return `Err(AuthoringDiagnostic)` until
-/// their handlers land in Task 4.
-///
-/// Undo and redo return `Err` stubs; Task 5 replaces them with snapshot-based
-/// implementations.
+/// Undo and redo use snapshot-based restoration: every successful dispatch
+/// captures the pre-command document state onto `history`; `undo()` pops the
+/// latest entry and replaces the current document with its snapshot, moving
+/// the reverted entry onto `redo_stack`. A forward dispatch clears the redo
+/// stack so any branching authoring session starts a fresh history line.
 #[derive(Debug)]
 pub struct RawWosProject {
     doc: KernelDocument,
-    /// Applied commands (for future undo; stubs in Tasks 1-3).
-    history: Vec<AppliedCommand>,
-    /// Reverted commands pending redo.
-    redo_stack: Vec<AppliedCommand>,
+    /// Pre-command snapshots + applied-command records, capped at `UNDO_DEPTH`.
+    history: Vec<HistoryEntry>,
+    /// Entries reverted by `undo`, awaiting `redo`.
+    redo_stack: Vec<HistoryEntry>,
     diagnostics: Vec<AuthoringDiagnostic>,
 }
 
@@ -561,7 +581,15 @@ impl RawWosProject {
     ///
     /// `pub(crate)` because `Command` is an internal dispatch enum; external
     /// consumers interact with `WosProject` / `IWosProjectCore` helper methods.
+    ///
+    /// On success, captures the pre-command document onto `history` (bounded
+    /// by `UNDO_DEPTH`) and clears `redo_stack`. Failed commands leave both
+    /// stacks untouched — the document was never mutated.
     pub(crate) fn dispatch(&mut self, cmd: Command) -> CommandResult {
+        // Snapshot BEFORE mutation so undo can restore the exact prior state,
+        // including any fields the handler doesn't touch.
+        let before = self.doc.clone();
+
         let result = match cmd {
             Command::AddState { id, kind } => self.apply_add_state(id, kind),
             Command::RemoveState { id } => self.apply_remove_state(id),
@@ -594,8 +622,15 @@ impl RawWosProject {
         };
 
         if let Ok(ref applied) = result {
-            self.history.push(applied.clone());
-            // A new forward command clears the redo stack.
+            self.history.push(HistoryEntry {
+                applied: applied.clone(),
+                before,
+            });
+            // Cap memory: drop the oldest entry when we exceed the bound.
+            if self.history.len() > UNDO_DEPTH {
+                self.history.remove(0);
+            }
+            // A new forward command closes any open redo branch.
             self.redo_stack.clear();
         }
 
@@ -606,20 +641,45 @@ impl RawWosProject {
 // ── IWosProjectCore implementation ────────────────────────────────────────────
 
 impl IWosProjectCore for RawWosProject {
+    /// Reverse the most recent successful dispatch.
+    ///
+    /// Pops the top of `history`, swaps the pre-command snapshot into the
+    /// current document, and pushes a mirror entry onto `redo_stack` so
+    /// `redo` can re-apply the command. Returns `Err` if the history is
+    /// empty — the document is left untouched.
     fn undo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        // Stub — Task 5 replaces this with snapshot-based restoration.
-        Err(AuthoringDiagnostic::error(
-            "/",
-            "undo not yet implemented — lands in Task 5",
-        ))
+        let entry = self.history.pop().ok_or_else(|| {
+            AuthoringDiagnostic::error("/", "cannot undo: history is empty")
+        })?;
+
+        // Swap: restore the pre-command snapshot and remember the current
+        // state as the redo snapshot.
+        let current = std::mem::replace(&mut self.doc, entry.before);
+        self.redo_stack.push(HistoryEntry {
+            applied: entry.applied,
+            before: current,
+        });
+
+        Ok(())
     }
 
+    /// Re-apply the most recently reversed dispatch.
+    ///
+    /// Mirror of `undo`: pops `redo_stack`, swaps the forward snapshot into
+    /// the current document, and records the inverse entry on `history`.
+    /// Returns `Err` if the redo stack is empty.
     fn redo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        // Stub — Task 5 replaces this with snapshot-based restoration.
-        Err(AuthoringDiagnostic::error(
-            "/",
-            "redo not yet implemented — lands in Task 5",
-        ))
+        let entry = self.redo_stack.pop().ok_or_else(|| {
+            AuthoringDiagnostic::error("/", "cannot redo: redo stack is empty")
+        })?;
+
+        let current = std::mem::replace(&mut self.doc, entry.before);
+        self.history.push(HistoryEntry {
+            applied: entry.applied,
+            before: current,
+        });
+
+        Ok(())
     }
 
     fn snapshot(&self) -> KernelDocument {
@@ -628,6 +688,20 @@ impl IWosProjectCore for RawWosProject {
 
     fn diagnostics(&self) -> &[AuthoringDiagnostic] {
         &self.diagnostics
+    }
+}
+
+// ── Undo/redo introspection ───────────────────────────────────────────────────
+
+impl RawWosProject {
+    /// True if there is at least one entry on the undo stack.
+    pub fn can_undo(&self) -> bool {
+        !self.history.is_empty()
+    }
+
+    /// True if there is at least one entry on the redo stack.
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
     }
 }
 
@@ -788,22 +862,178 @@ mod tests {
         assert!(snap.lifecycle.states.is_empty());
     }
 
-    // ── undo/redo stubs ───────────────────────────────────────────────────
+    // ── undo / redo ───────────────────────────────────────────────────────
 
-    /// Undo returns Err until Task 5 implements it.
+    /// Undo on an empty history is an error (nothing to revert).
     #[test]
-    fn undo_returns_stub_error() {
+    fn undo_on_empty_history_errors() {
         let mut p = make_project();
+        assert!(!p.can_undo());
         let result = p.undo();
-        assert!(result.is_err(), "undo must return Err until Task 5");
+        assert!(result.is_err());
     }
 
-    /// Redo returns Err until Task 5 implements it.
+    /// Redo on an empty redo stack is an error.
     #[test]
-    fn redo_returns_stub_error() {
+    fn redo_on_empty_stack_errors() {
         let mut p = make_project();
+        assert!(!p.can_redo());
         let result = p.redo();
-        assert!(result.is_err(), "redo must return Err until Task 5");
+        assert!(result.is_err());
+    }
+
+    /// Undo reverses AddState.
+    #[test]
+    fn undo_reverses_add_state() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "draft".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        assert!(p.snapshot().lifecycle.states.contains_key("draft"));
+
+        p.undo().expect("undo must succeed after a dispatch");
+        assert!(!p.snapshot().lifecycle.states.contains_key("draft"));
+        assert!(p.can_redo());
+    }
+
+    /// Redo re-applies the undone command.
+    #[test]
+    fn redo_reapplies_undone_add_state() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "draft".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.undo().unwrap();
+        p.redo().expect("redo must succeed after an undo");
+        assert!(p.snapshot().lifecycle.states.contains_key("draft"));
+    }
+
+    /// A new forward dispatch clears the redo stack (no split-branch replays).
+    #[test]
+    fn forward_dispatch_clears_redo_stack() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "a".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.undo().unwrap();
+        assert!(p.can_redo());
+
+        // Forward motion on a different state id discards the redo branch.
+        p.dispatch(Command::AddState {
+            id: "b".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        assert!(!p.can_redo());
+    }
+
+    /// Property test: apply any sequence, undo all, state equals initial.
+    #[test]
+    fn undo_all_returns_to_initial_state() {
+        let mut p = make_project();
+        let initial = p.snapshot();
+
+        // Diverse batch covering multiple handler paths.
+        p.dispatch(Command::AddState {
+            id: "s1".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.dispatch(Command::AddActor {
+            id: "a1".into(),
+            kind: ActorKind::Human,
+        })
+        .unwrap();
+        p.dispatch(Command::SetImpactLevel {
+            level: ImpactLevel::RightsImpacting,
+        })
+        .unwrap();
+        p.dispatch(Command::AddContract {
+            name: "c1".into(),
+            binding: "formspec".into(),
+            ref_uri: "urn:x:1".into(),
+        })
+        .unwrap();
+        p.dispatch(Command::AddMilestone {
+            milestone_id: "m1".into(),
+            condition: "true".into(),
+        })
+        .unwrap();
+
+        while p.can_undo() {
+            p.undo().unwrap();
+        }
+
+        let final_snap = p.snapshot();
+        assert_eq!(final_snap.actors.len(), initial.actors.len());
+        assert_eq!(
+            final_snap.lifecycle.states.len(),
+            initial.lifecycle.states.len()
+        );
+        assert_eq!(final_snap.impact_level, initial.impact_level);
+        assert_eq!(
+            final_snap.contracts.len(),
+            initial.contracts.len()
+        );
+        assert_eq!(
+            final_snap.lifecycle.milestones.len(),
+            initial.lifecycle.milestones.len()
+        );
+    }
+
+    /// Property test: undo then redo equals the post-apply state.
+    #[test]
+    fn undo_then_redo_reproduces_post_apply_state() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "s1".into(),
+            kind: StateKind::Atomic,
+        })
+        .unwrap();
+        p.dispatch(Command::AddActor {
+            id: "a1".into(),
+            kind: ActorKind::Human,
+        })
+        .unwrap();
+        let after_apply_states = p.snapshot().lifecycle.states.len();
+        let after_apply_actors = p.snapshot().actors.len();
+
+        p.undo().unwrap();
+        p.undo().unwrap();
+        p.redo().unwrap();
+        p.redo().unwrap();
+
+        let snap = p.snapshot();
+        assert_eq!(snap.lifecycle.states.len(), after_apply_states);
+        assert_eq!(snap.actors.len(), after_apply_actors);
+    }
+
+    /// Failed dispatches do not touch the history stack.
+    #[test]
+    fn failed_dispatch_leaves_history_untouched() {
+        let mut p = make_project();
+        let _ = p
+            .dispatch(Command::AddState {
+                id: "s1".into(),
+                kind: StateKind::Atomic,
+            })
+            .unwrap();
+        let _ = p.dispatch(Command::AddState {
+            // Duplicate id — must fail.
+            id: "s1".into(),
+            kind: StateKind::Atomic,
+        });
+
+        // Only the first (successful) dispatch counted toward history.
+        p.undo().unwrap();
+        assert!(p.snapshot().lifecycle.states.is_empty());
+        assert!(!p.can_undo());
     }
 
     // ── AddActor / RemoveActor ────────────────────────────────────────────
