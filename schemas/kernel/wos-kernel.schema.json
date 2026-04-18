@@ -732,7 +732,11 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this milestone represents."
+          "description": "Free-text description of what this milestone represents (e.g., which business event it marks). Consumed by documentation and audit tooling; not interpreted by the processor.",
+          "examples": [
+            "Applicant submitted a complete intake form",
+            "Eligibility determination issued"
+          ]
         }
       }
     },
@@ -881,17 +885,29 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this contract's purpose."
+          "description": "Free-text description of this contract's purpose within the workflow. Consumed by documentation and authoring tooling; not interpreted by the processor.",
+          "examples": [
+            "Purchase order submission form completed by the requester",
+            "Applicant's annual eligibility renewal questionnaire"
+          ]
         },
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to prefill Formspec-backed tasks that use this contract. Prefer the same bidirectional Mapping document as responseMappingRef when the host supports Mapping Bidirectional."
+          "description": "URI of a Mapping document used to prefill Formspec-backed tasks that use this contract (Runtime Companion §S15). Prefer the same bidirectional Mapping document as `responseMappingRef` when the host supports Mapping Bidirectional.",
+          "examples": [
+            "urn:formspec:example.gov:purchase-order:prefill:1.0.0",
+            "https://agency.gov/mappings/eligibility-prefill.json"
+          ]
         },
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to project completed Formspec Responses into WOS case state. If absent, Runtime Companion S15 forbids automatic host-defined Response-to-case projection."
+          "description": "URI of a Mapping document used to project completed Formspec Responses into WOS case state (Runtime Companion §S15). If absent, Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.",
+          "examples": [
+            "urn:formspec:example.gov:purchase-order:response:1.0.0",
+            "https://agency.gov/mappings/eligibility-response.json"
+          ]
         }
       }
     },
@@ -928,7 +944,7 @@
         },
         "defaultTaskTimeout": {
           "type": "string",
-          "description": "Default timeout for human tasks as ISO 8601 duration.",
+          "description": "Default timeout for human tasks as an ISO 8601 duration (Kernel §9.7). Applied when a `createTask` action does not specify its own `deadline`; fires a `$timeout.task` event on expiry.",
           "examples": ["P7D", "P30D"]
         },
         "defaultServiceTimeout": {
@@ -939,13 +955,15 @@
         "compensable": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the workflow scope is compensable (Kernel S9.5). Enables the compensation seam."
+          "description": "When `true`, the workflow scope is compensable (Kernel §9.5). Enables the compensation seam so that Actions carrying a `compensatingAction` participate in semantically meaningful reversal. Detailed execution semantics (reverse ordering, pivot steps) live in the Lifecycle Detail companion.",
+          "examples": [true, false]
         },
         "instanceVersioning": {
           "type": "string",
           "enum": ["pinned", "migrateable"],
           "default": "pinned",
-          "description": "Instance versioning policy (Kernel S9.6). 'pinned': instance bound to creation-time definition version. 'migrateable': instance may be explicitly migrated to a newer version."
+          "description": "Instance versioning policy (Kernel §9.6). 'pinned' (default): each running instance stays bound to the (url, version) of the Kernel Document that created it. 'migrateable': instances MAY be explicitly migrated to a newer version via a recorded migration operation.",
+          "examples": ["pinned", "migrateable"]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
