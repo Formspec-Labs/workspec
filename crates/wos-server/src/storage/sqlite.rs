@@ -51,6 +51,11 @@ fn map_kernel(r: &SqliteRow) -> StorageResult<KernelRow> {
 }
 
 fn map_instance(r: &SqliteRow) -> StorageResult<InstanceRow> {
+    let aux_s: Option<String> = r.try_get("runtime_aux_json").ok();
+    let runtime_aux_json = match aux_s {
+        Some(s) if !s.is_empty() => serde_json::from_str(&s)?,
+        _ => serde_json::json!({}),
+    };
     Ok(InstanceRow {
         instance_id: r.try_get("instance_id")?,
         definition_url: r.try_get("definition_url")?,
@@ -58,6 +63,7 @@ fn map_instance(r: &SqliteRow) -> StorageResult<InstanceRow> {
         status: r.try_get("status")?,
         impact_level: r.try_get("impact_level")?,
         instance_json: serde_json::from_str(&r.try_get::<String, _>("instance_json")?)?,
+        runtime_aux_json,
         created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
         updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
     })
@@ -147,10 +153,11 @@ impl Storage for SqliteStorage {
 
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()> {
         let instance_json = serde_json::to_string(&row.instance_json)?;
+        let aux_json = serde_json::to_string(&row.runtime_aux_json)?;
         sqlx::query(
             "INSERT INTO instances (instance_id, definition_url, definition_version, status,
-               impact_level, instance_json, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+               impact_level, instance_json, runtime_aux_json, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&row.instance_id)
         .bind(&row.definition_url)
@@ -158,6 +165,7 @@ impl Storage for SqliteStorage {
         .bind(&row.status)
         .bind(&row.impact_level)
         .bind(&instance_json)
+        .bind(&aux_json)
         .bind(row.created_at)
         .bind(row.updated_at)
         .execute(&self.pool)
@@ -246,10 +254,11 @@ impl Storage for SqliteStorage {
         current.updated_at = Utc::now();
 
         let instance_json = serde_json::to_string(&current.instance_json)?;
+        let aux_json = serde_json::to_string(&current.runtime_aux_json)?;
         sqlx::query(
             "UPDATE instances SET
                definition_url = ?, definition_version = ?, status = ?,
-               impact_level = ?, instance_json = ?, updated_at = ?
+               impact_level = ?, instance_json = ?, runtime_aux_json = ?, updated_at = ?
              WHERE instance_id = ?",
         )
         .bind(&current.definition_url)
@@ -257,6 +266,7 @@ impl Storage for SqliteStorage {
         .bind(&current.status)
         .bind(&current.impact_level)
         .bind(&instance_json)
+        .bind(&aux_json)
         .bind(current.updated_at)
         .bind(&current.instance_id)
         .execute(&mut *tx)

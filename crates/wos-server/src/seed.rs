@@ -120,6 +120,7 @@ async fn seed_instances(state: &AppState) -> anyhow::Result<()> {
                 status: "active".into(),
                 impact_level: primary.impact_level.clone(),
                 instance_json: snapshot,
+                runtime_aux_json: serde_json::json!({}),
                 created_at: now,
                 updated_at: now,
             })

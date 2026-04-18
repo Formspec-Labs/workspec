@@ -70,6 +70,10 @@ pub struct InstanceRow {
     pub status: String,
     pub impact_level: String,
     pub instance_json: serde_json::Value,
+    /// Auxiliary `wos_runtime::RuntimeRecord` fields
+    /// (step_results, artifacts, replay_entries) serialised as JSON.
+    #[serde(default)]
+    pub runtime_aux_json: serde_json::Value,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

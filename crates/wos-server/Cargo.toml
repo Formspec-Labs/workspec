@@ -7,9 +7,12 @@ license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
 
 [dependencies]
-wos-core   = { path = "../wos-core" }
-wos-lint   = { path = "../wos-lint" }
-wos-export = { path = "../wos-export" }
+wos-core             = { path = "../wos-core" }
+wos-runtime          = { path = "../wos-runtime" }
+wos-lint             = { path = "../wos-lint" }
+wos-export           = { path = "../wos-export" }
+wos-conformance      = { path = "../wos-conformance" }
+wos-formspec-binding = { path = "../wos-formspec-binding" }
 fel-core.workspace = true
 
 axum         = { version = "0.8", features = ["macros", "ws"] }
