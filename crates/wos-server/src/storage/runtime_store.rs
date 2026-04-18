@@ -100,14 +100,14 @@ impl RuntimeStore for SqliteRuntimeStore {
         let storage = self.storage.clone();
         let id = instance_id.to_string();
         self.handle.block_on(async move {
-            let row = storage
-                .get_instance(&id)
-                .await
-                .map_err(storage_err)?
-                .ok_or_else(|| StoreError::NotFound(id.clone()))?;
+            let (row_opt, prov_rows) = tokio::try_join!(
+                storage.get_instance(&id),
+                storage.list_provenance(&id),
+            )
+            .map_err(storage_err)?;
+            let row = row_opt.ok_or_else(|| StoreError::NotFound(id.clone()))?;
             let instance: CaseInstance = serde_json::from_value(row.instance_json.clone())
                 .map_err(|e| StoreError::Failed(format!("deserialise instance: {e}")))?;
-            let prov_rows = storage.list_provenance(&id).await.map_err(storage_err)?;
             let provenance_log: Vec<ProvenanceRecord> = prov_rows
                 .iter()
                 .map(|r| serde_json::from_value::<ProvenanceRecord>(r.payload.clone()))

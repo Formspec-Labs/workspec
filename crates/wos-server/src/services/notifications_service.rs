@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{ApiError, ApiResult};
 use crate::services::bundle_service::BundleService;
+use crate::services::json_util::lookup_dotted;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,7 +105,7 @@ fn interpolate(template: &str, context: &serde_json::Value) -> String {
         let tail = &rest[start + 2..];
         if let Some(end) = tail.find('}') {
             let key = &tail[..end];
-            let value = lookup(context, key).unwrap_or_else(|| format!("${{{key}}}"));
+            let value = lookup_dotted(context, key).unwrap_or_else(|| format!("${{{key}}}"));
             out.push_str(&value);
             rest = &tail[end + 1..];
         } else {
@@ -115,18 +116,6 @@ fn interpolate(template: &str, context: &serde_json::Value) -> String {
     }
     out.push_str(rest);
     out
-}
-
-fn lookup(context: &serde_json::Value, key: &str) -> Option<String> {
-    let mut current = context;
-    for segment in key.split('.') {
-        current = current.get(segment)?;
-    }
-    match current {
-        serde_json::Value::String(s) => Some(s.clone()),
-        serde_json::Value::Null => None,
-        other => Some(other.to_string()),
-    }
 }
 
 fn extract_variables(template: &str) -> Vec<String> {

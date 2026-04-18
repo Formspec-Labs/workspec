@@ -34,14 +34,32 @@ impl InstanceService {
     /// Wrap a parsed instance in the server's `InstanceResponse` envelope.
     pub async fn to_response(&self, row: &InstanceRow) -> ApiResult<InstanceResponse> {
         let instance = Self::parse(row)?;
-        let definition_title = self
-            .bundle
-            .get(&row.definition_url)
+        self.envelope(instance, &row.definition_url, &row.impact_level)
             .await
-            .map(|k| k.title);
+    }
+
+    /// Build an `InstanceResponse` directly from a `CaseInstance` without a
+    /// storage round-trip. Useful when a handler already holds the instance
+    /// (e.g. just after `WosRuntime::create_instance`).
+    pub async fn from_instance(
+        &self,
+        instance: CaseInstance,
+        impact_level: &str,
+    ) -> ApiResult<InstanceResponse> {
+        let definition_url = instance.definition_url.clone();
+        self.envelope(instance, &definition_url, impact_level).await
+    }
+
+    async fn envelope(
+        &self,
+        instance: CaseInstance,
+        definition_url: &str,
+        impact_level: &str,
+    ) -> ApiResult<InstanceResponse> {
+        let definition_title = self.bundle.get(definition_url).await.map(|k| k.title);
         Ok(InstanceResponse {
             instance,
-            impact_level: row.impact_level.clone(),
+            impact_level: impact_level.to_string(),
             definition_title,
         })
     }

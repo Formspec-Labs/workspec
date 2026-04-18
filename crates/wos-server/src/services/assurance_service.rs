@@ -14,12 +14,53 @@ use uuid::Uuid;
 use crate::error::{ApiError, ApiResult};
 use crate::storage::{IdentityFactRow, StorageHandle};
 
+/// NIST 800-63 style assurance level. Invariant 6: independent of
+/// `DisclosurePosture` — the two fields are distinct dimensions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AssuranceLevel {
+    L1,
+    L2,
+    L3,
+    L4,
+}
+
+impl AssuranceLevel {
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Self::L1 => "l1",
+            Self::L2 => "l2",
+            Self::L3 => "l3",
+            Self::L4 => "l4",
+        }
+    }
+}
+
+/// Subject-disclosure posture. Invariant 6: independent of `AssuranceLevel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DisclosurePosture {
+    Open,
+    Minimal,
+    None,
+}
+
+impl DisclosurePosture {
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Minimal => "minimal",
+            Self::None => "none",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordFactRequest {
     pub subject_ref: String,
-    pub assurance_level: String,
-    pub disclosure_posture: String,
+    pub assurance_level: AssuranceLevel,
+    pub disclosure_posture: DisclosurePosture,
     pub fact: serde_json::Value,
 }
 
@@ -55,10 +96,10 @@ impl From<IdentityFactRow> for IdentityFactView {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeRequest {
-    pub new_assurance_level: String,
+    pub new_assurance_level: AssuranceLevel,
     /// Optional new disclosure posture; defaults to the prior row's posture.
     #[serde(default)]
-    pub new_disclosure_posture: Option<String>,
+    pub new_disclosure_posture: Option<DisclosurePosture>,
     pub basis: serde_json::Value,
 }
 
@@ -70,16 +111,12 @@ impl AssuranceService {
         instance_id: &str,
         req: RecordFactRequest,
     ) -> ApiResult<IdentityFactView> {
-        // Invariant 6 guard: the assurance level and disclosure posture must
-        // be independent fields and must not collide with a combined "level
-        // + posture" string.
-        validate_invariant_6(&req.assurance_level, &req.disclosure_posture)?;
         let row = IdentityFactRow {
             id: format!("urn:wos:identity-fact:{}", Uuid::new_v4()),
             instance_id: instance_id.to_string(),
             subject_ref: req.subject_ref,
-            assurance_level: req.assurance_level,
-            disclosure_posture: req.disclosure_posture,
+            assurance_level: req.assurance_level.as_wire().to_string(),
+            disclosure_posture: req.disclosure_posture.as_wire().to_string(),
             fact_json: req.fact,
             upgraded_from: None,
             created_at: Utc::now(),
@@ -99,13 +136,13 @@ impl AssuranceService {
             .ok_or(ApiError::NotFound)?;
         let new_posture = req
             .new_disclosure_posture
+            .map(|p| p.as_wire().to_string())
             .unwrap_or_else(|| prior.disclosure_posture.clone());
-        validate_invariant_6(&req.new_assurance_level, &new_posture)?;
         let row = IdentityFactRow {
             id: format!("urn:wos:identity-fact:{}", Uuid::new_v4()),
             instance_id: prior.instance_id.clone(),
             subject_ref: prior.subject_ref.clone(),
-            assurance_level: req.new_assurance_level,
+            assurance_level: req.new_assurance_level.as_wire().to_string(),
             disclosure_posture: new_posture,
             fact_json: req.basis,
             upgraded_from: Some(prior.id.clone()),
@@ -140,20 +177,3 @@ impl AssuranceService {
     }
 }
 
-fn validate_invariant_6(level: &str, posture: &str) -> ApiResult<()> {
-    // Levels: l1 | l2 | l3 | l4. Postures: open | minimal | none.
-    let valid_level = matches!(level.to_ascii_lowercase().as_str(), "l1" | "l2" | "l3" | "l4");
-    let valid_posture =
-        matches!(posture.to_ascii_lowercase().as_str(), "open" | "minimal" | "none");
-    if !valid_level {
-        return Err(ApiError::BadRequest(format!(
-            "invalid assuranceLevel `{level}` — expected one of L1..L4"
-        )));
-    }
-    if !valid_posture {
-        return Err(ApiError::BadRequest(format!(
-            "invalid disclosurePosture `{posture}` — expected one of open|minimal|none"
-        )));
-    }
-    Ok(())
-}

@@ -99,24 +99,18 @@ async fn create(
         .unwrap_or_else(|| format!("urn:wos:instance:{}", uuid::Uuid::new_v4()));
 
     let req = CreateInstanceRequest {
-        instance_id: instance_id.clone(),
+        instance_id,
         definition_url: body.definition_url,
         definition_version: version,
         initial_case_state: body.initial_case_state,
     };
-    let _inst = s
-        .runtime
-        .create_instance(req)
-        .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-
-    // Re-read the row to get the persisted + envelope-wrapped view.
-    let row = s
-        .storage
-        .get_instance(&instance_id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
-    Ok(Json(s.services.instance.to_response(&row).await?))
+    let instance = s.runtime.create_instance(req).await?;
+    Ok(Json(
+        s.services
+            .instance
+            .from_instance(instance, &kernel.impact_level)
+            .await?,
+    ))
 }
 
 async fn provenance(
@@ -188,12 +182,12 @@ async fn submit_event(
     s.runtime
         .enqueue_event(&id, envelope)
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
     let drain = s
         .runtime
         .drain_once(&id)
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
 
     let after = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
     let after_instance: wos_core::instance::CaseInstance =
@@ -244,7 +238,7 @@ async fn drain(
         .runtime
         .drain_until_idle(&id)
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
     Ok(Json(
         results
             .into_iter()

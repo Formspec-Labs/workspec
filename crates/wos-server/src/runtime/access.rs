@@ -1,8 +1,8 @@
-//! Permissive `AccessControl` impl for Phase 1 — allows every action.
-//!
-//! Real policy decisions (role-based transition gating, impact-level
-//! autonomy caps, delegation chain validation) are layered on in
-//! subsequent phases via `GovernanceService` and `AgentService`.
+//! Permissive `AccessControl` impl — allows every action. Role-based
+//! transition gating, impact-level autonomy caps, and delegation chain
+//! validation are enforced separately through `GovernanceService` and
+//! `AgentService`; once those feed decisions back through a real
+//! `AccessControl` impl, swap this out for a policy-backed one.
 
 use wos_core::model::governance::DelegationScope;
 use wos_core::traits::AccessControl;

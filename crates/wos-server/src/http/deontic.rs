@@ -5,7 +5,8 @@ use axum::Router;
 
 use crate::AppState;
 use crate::error::ApiResult;
-use crate::services::deontic_service::{DeonticService, ViolationView};
+use crate::domain::provenance::ProvenanceResponse;
+use crate::services::deontic_service::DeonticService;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
@@ -17,7 +18,7 @@ pub fn routes() -> Router<AppState> {
 async fn list_violations(
     State(s): State<AppState>,
     Path(id): Path<String>,
-) -> ApiResult<Json<Vec<ViolationView>>> {
+) -> ApiResult<Json<Vec<ProvenanceResponse>>> {
     Ok(Json(
         DeonticService::list(&s.services.provenance, &id).await?,
     ))

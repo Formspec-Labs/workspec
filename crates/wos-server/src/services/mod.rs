@@ -19,6 +19,7 @@ pub mod eval_service;
 pub mod governance_service;
 pub mod instance_service;
 pub mod integration_service;
+pub mod json_util;
 pub mod lint_service;
 pub mod notifications_service;
 pub mod provenance_service;

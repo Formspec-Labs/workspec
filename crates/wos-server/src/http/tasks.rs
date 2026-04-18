@@ -170,7 +170,7 @@ async fn persist_draft(
             req.idempotency_token.as_deref(),
         )
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
     Ok(Json(out.into()))
 }
 
@@ -188,7 +188,7 @@ async fn submit_response(
             req.idempotency_token.as_deref(),
         )
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
     Ok(Json(out.into()))
 }
 
@@ -200,6 +200,6 @@ async fn dismiss(
     s.runtime
         .dismiss_task(&task_id, &req.reason)
         .await
-        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        ?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }

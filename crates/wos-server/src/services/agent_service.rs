@@ -66,11 +66,50 @@ impl From<AgentRow> for AgentView {
     }
 }
 
+/// Agent operational lifecycle (AI §5.5 state machine).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LifecycleState {
+    Active,
+    Degraded,
+    Suspended,
+    Retired,
+}
+
+impl LifecycleState {
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Degraded => "degraded",
+            Self::Suspended => "suspended",
+            Self::Retired => "retired",
+        }
+    }
+}
+
+/// Agent deployment channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeploymentState {
+    Production,
+    Canary,
+    Shadow,
+}
+
+impl DeploymentState {
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Self::Production => "production",
+            Self::Canary => "canary",
+            Self::Shadow => "shadow",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LifecycleTransitionRequest {
-    /// `active` | `degraded` | `suspended` | `retired`.
-    pub target_state: String,
+    pub target_state: LifecycleState,
     pub reason: Option<String>,
 }
 
@@ -143,36 +182,39 @@ impl AgentService {
         id: &str,
         req: LifecycleTransitionRequest,
     ) -> ApiResult<AgentView> {
-        let mut agent = storage
-            .get_agent(id)
-            .await?
-            .ok_or(ApiError::NotFound)?;
-        validate_lifecycle_target(&req.target_state)?;
-        agent.status = req.target_state;
-        agent.updated_at = Utc::now();
-        if let Some(reason) = req.reason {
-            if let Some(obj) = agent.config_json.as_object_mut() {
-                obj.insert(
-                    "lastTransitionReason".into(),
-                    serde_json::Value::String(reason),
-                );
+        Self::mutate(storage, id, |agent| {
+            agent.status = req.target_state.as_wire().to_string();
+            if let Some(reason) = req.reason.as_deref() {
+                if let Some(obj) = agent.config_json.as_object_mut() {
+                    obj.insert(
+                        "lastTransitionReason".into(),
+                        serde_json::Value::String(reason.to_string()),
+                    );
+                }
             }
-        }
-        storage.upsert_agent(&agent).await?;
-        Ok(agent.into())
+            Ok(())
+        })
+        .await
     }
 
     pub async fn set_deployment(
         storage: &StorageHandle,
         id: &str,
-        target: &str,
+        target: DeploymentState,
     ) -> ApiResult<AgentView> {
-        let mut agent = storage
-            .get_agent(id)
-            .await?
-            .ok_or(ApiError::NotFound)?;
-        validate_deployment_state(target)?;
-        agent.deployment_state = target.to_string();
+        Self::mutate(storage, id, |agent| {
+            agent.deployment_state = target.as_wire().to_string();
+            Ok(())
+        })
+        .await
+    }
+
+    async fn mutate<F>(storage: &StorageHandle, id: &str, f: F) -> ApiResult<AgentView>
+    where
+        F: FnOnce(&mut AgentRow) -> ApiResult<()>,
+    {
+        let mut agent = storage.get_agent(id).await?.ok_or(ApiError::NotFound)?;
+        f(&mut agent)?;
         agent.updated_at = Utc::now();
         storage.upsert_agent(&agent).await?;
         Ok(agent.into())
@@ -220,20 +262,3 @@ impl AgentService {
     }
 }
 
-fn validate_lifecycle_target(s: &str) -> ApiResult<()> {
-    match s {
-        "active" | "degraded" | "suspended" | "retired" => Ok(()),
-        _ => Err(ApiError::BadRequest(format!(
-            "invalid lifecycle target `{s}` — expected active|degraded|suspended|retired"
-        ))),
-    }
-}
-
-fn validate_deployment_state(s: &str) -> ApiResult<()> {
-    match s {
-        "production" | "canary" | "shadow" => Ok(()),
-        _ => Err(ApiError::BadRequest(format!(
-            "invalid deploymentState `{s}` — expected production|canary|shadow"
-        ))),
-    }
-}

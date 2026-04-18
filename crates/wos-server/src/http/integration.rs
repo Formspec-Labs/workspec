@@ -5,7 +5,7 @@ use axum::Router;
 
 use crate::AppState;
 use crate::error::ApiResult;
-use crate::services::integration_service::{CloudEvent, InboundAck, IntegrationService};
+use crate::services::integration_service::{InboundAck, IntegrationService, WosInboundEvent};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -16,7 +16,7 @@ pub fn routes() -> Router<AppState> {
 
 async fn inbound(
     State(s): State<AppState>,
-    Json(ev): Json<CloudEvent>,
+    Json(ev): Json<WosInboundEvent>,
 ) -> ApiResult<Json<InboundAck>> {
     Ok(Json(IntegrationService::accept_inbound(&s, ev).await?))
 }

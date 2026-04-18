@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::error::{ApiError, ApiResult};
 use crate::services::bundle_service::BundleService;
+use crate::services::json_util::lookup_dotted;
 use crate::storage::{InstanceQuery, StorageHandle};
 
 // ── Verification (SMT stub) ────────────────────────────────────────
@@ -160,7 +161,7 @@ pub async fn evaluate_equity(
         std::collections::HashMap::new();
     for row in &page.items {
         let case_state = row.case_state();
-        let group = lookup_path(&case_state, &req.group_by_path).unwrap_or_else(|| "_".into());
+        let group = lookup_dotted(&case_state, &req.group_by_path).unwrap_or_else(|| "_".into());
         let positive = match &req.outcome_predicate {
             Some(_) => false, // expression eval stubbed — treat as false for now
             None => row.status == "completed",
@@ -195,19 +196,6 @@ pub async fn evaluate_equity(
         disparity,
         alert: disparity > 0.2,
     })
-}
-
-fn lookup_path(v: &serde_json::Value, path: &str) -> Option<String> {
-    let mut current = v;
-    for seg in path.split('.') {
-        current = current.get(seg)?;
-    }
-    match current {
-        serde_json::Value::String(s) => Some(s.clone()),
-        serde_json::Value::Number(n) => Some(n.to_string()),
-        serde_json::Value::Bool(b) => Some(b.to_string()),
-        _ => None,
-    }
 }
 
 // ── Constraint zones (DCR-style adaptive case management) ─────────

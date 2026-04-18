@@ -157,11 +157,11 @@ impl ApplicantService {
         runtime
             .enqueue_event(instance_id, envelope)
             .await
-            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+            ?;
         runtime
             .drain_once(instance_id)
             .await
-            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+            ?;
 
         // Mirror the appeal status into case_state so the applicant view
         // renders even without a dedicated appeal workflow in the kernel.

@@ -7,8 +7,8 @@ use serde::Deserialize;
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
 use crate::services::agent_service::{
-    AgentService, AgentView, DriftReport, LifecycleTransitionRequest, RegisterAgentRequest,
-    ToolInvocationCheck,
+    AgentService, AgentView, DeploymentState, DriftReport, LifecycleTransitionRequest,
+    RegisterAgentRequest, ToolInvocationCheck,
 };
 
 pub fn routes() -> Router<AppState> {
@@ -70,7 +70,7 @@ async fn canary(
     Path(id): Path<String>,
 ) -> ApiResult<Json<AgentView>> {
     Ok(Json(
-        AgentService::set_deployment(&s.storage, &id, "canary").await?,
+        AgentService::set_deployment(&s.storage, &id, DeploymentState::Canary).await?,
     ))
 }
 
@@ -79,7 +79,7 @@ async fn shadow(
     Path(id): Path<String>,
 ) -> ApiResult<Json<AgentView>> {
     Ok(Json(
-        AgentService::set_deployment(&s.storage, &id, "shadow").await?,
+        AgentService::set_deployment(&s.storage, &id, DeploymentState::Shadow).await?,
     ))
 }
 

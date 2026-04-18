@@ -1,5 +1,6 @@
-//! Permissive `ContractValidator` for Phase 1 (accepts any payload).
-//! A real `StaticFormspecProcessor` lands in Phase 2.
+//! Permissive `ContractValidator` — accepts any payload. Real
+//! `FormspecProcessor` validation lands when the binding crate exposes
+//! its processor API.
 
 use thiserror::Error;
 use wos_core::traits::{ContractValidator, ValidationResult};

@@ -48,6 +48,26 @@ pub enum ApiError {
     Other(#[from] anyhow::Error),
 }
 
+impl From<wos_runtime::RuntimeError> for ApiError {
+    fn from(e: wos_runtime::RuntimeError) -> Self {
+        use wos_runtime::RuntimeError as R;
+        use wos_runtime::store::StoreError;
+        match e {
+            R::Store(StoreError::NotFound(_)) => ApiError::NotFound,
+            R::TaskNotFound(_) | R::ContractNotFound(_) => ApiError::NotFound,
+            R::Store(StoreError::AlreadyExists(m)) => ApiError::Conflict(m),
+            R::Unauthorized(_) => ApiError::Forbidden,
+            R::InvalidResponseStatus(_)
+            | R::UnsupportedAction(_)
+            | R::UnsupportedBinding(_)
+            | R::UnsupportedBindingKind(_)
+            | R::MissingMetadata(_)
+            | R::ContractValidation(_) => ApiError::BadRequest(e.to_string()),
+            other => ApiError::ServiceUnavailable(other.to_string()),
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct ErrorBody<'a> {
     error: &'a str,
