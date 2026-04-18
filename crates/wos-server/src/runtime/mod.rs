@@ -20,7 +20,7 @@ use tokio::runtime::Handle;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, WosRuntime};
-use wos_runtime::{BindingRegistry, RuntimeError, SystemClock};
+use wos_runtime::{BindingRegistry, PersistDraftResult, RuntimeError, SystemClock, TaskSubmissionResult};
 
 use crate::services::bundle_service::BundleService;
 use crate::services::provenance_service::ProvenanceService;
@@ -151,6 +151,70 @@ impl AppRuntime {
         tokio::task::spawn_blocking(move || {
             let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
             guard.drain_until_idle(&id)
+        })
+        .await
+        .expect("wos-runtime blocking task panicked")
+    }
+
+    /// Persist a task draft. Matches `wos_runtime::WosRuntime::persist_task_draft`.
+    pub async fn persist_task_draft(
+        &self,
+        task_id: &str,
+        response: serde_json::Value,
+        actor_id: &str,
+        idempotency_token: Option<&str>,
+    ) -> Result<PersistDraftResult, RuntimeError> {
+        let inner = self.inner.clone();
+        let task_id = task_id.to_string();
+        let actor_id = actor_id.to_string();
+        let idempotency_token = idempotency_token.map(str::to_string);
+        tokio::task::spawn_blocking(move || {
+            let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
+            guard.persist_task_draft(
+                &task_id,
+                response,
+                &actor_id,
+                idempotency_token.as_deref(),
+            )
+        })
+        .await
+        .expect("wos-runtime blocking task panicked")
+    }
+
+    /// Submit a completed task response. Returns `Completed`, `Failed`,
+    /// or `Rejected` per `TaskSubmissionResult`.
+    pub async fn submit_task_response(
+        &self,
+        task_id: &str,
+        response: serde_json::Value,
+        actor_id: &str,
+        idempotency_token: Option<&str>,
+    ) -> Result<TaskSubmissionResult, RuntimeError> {
+        let inner = self.inner.clone();
+        let task_id = task_id.to_string();
+        let actor_id = actor_id.to_string();
+        let idempotency_token = idempotency_token.map(str::to_string);
+        tokio::task::spawn_blocking(move || {
+            let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
+            guard.submit_task_response(
+                &task_id,
+                response,
+                &actor_id,
+                idempotency_token.as_deref(),
+            )
+        })
+        .await
+        .expect("wos-runtime blocking task panicked")
+    }
+
+    /// Dismiss a pending task without advancing lifecycle state.
+    pub async fn dismiss_task(&self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
+        let inner = self.inner.clone();
+        let task_id = task_id.to_string();
+        let reason = reason.to_string();
+        tokio::task::spawn_blocking(move || {
+            let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
+            guard.dismiss_task(&task_id, &reason)
         })
         .await
         .expect("wos-runtime blocking task panicked")
