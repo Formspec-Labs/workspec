@@ -14,9 +14,9 @@ mod diagnostic;
 mod document;
 pub mod rules;
 
-pub use diagnostic::{Diagnostic, Severity};
+pub use diagnostic::{Diagnostic, LintDiagnostic, LintSeverity, Severity, SourceLocation, SuggestedFix, Tier};
 pub use document::{DocumentKind, WosDocument, WosProject};
-pub use rules::{all_lint_rules, Graduation, RuleMetadata, Tier};
+pub use rules::{all_lint_rules, Graduation, RuleMetadata};
 
 /// Lint a single WOS document (Tier 1 checks only).
 ///
