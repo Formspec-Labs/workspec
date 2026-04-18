@@ -1,9 +1,9 @@
 // Rust guideline compliant 2026-02-21
 
-//! Registry invariants: every implemented lint rule appears, and every
-//! rule starts at `Draft` with an empty `fixtures` slice. Promotions are
-//! the job of a follow-up plan — Task 1 of the rule-coverage plan is
-//! bootstrap only.
+//! Registry invariants: every implemented lint rule appears, and rules
+//! promoted past `Draft` carry at least one fixture link. The Task 1
+//! bootstrap test (every rule at Draft with empty fixtures) is superseded
+//! by Task 2, which backfills fixture links for rules with real evidence.
 
 use wos_lint::{all_lint_rules, Graduation};
 
@@ -16,28 +16,30 @@ fn all_lint_rules_registry_is_non_empty() {
 }
 
 #[test]
-fn every_rule_starts_at_draft_with_empty_fixtures() {
+fn every_non_draft_rule_has_at_least_one_fixture() {
+    let mut violations: Vec<&str> = Vec::new();
     for rule in all_lint_rules() {
-        assert_eq!(
-            rule.graduation,
-            Graduation::Draft,
-            "rule {} started at non-Draft graduation in Task 1 bootstrap",
-            rule.id
-        );
-        assert!(
-            rule.fixtures.is_empty(),
-            "rule {} has fixtures populated in Task 1 bootstrap",
-            rule.id
-        );
-        assert!(
-            rule.spec_ref.is_none(),
-            "rule {} has spec_ref populated in Task 1 bootstrap",
-            rule.id
-        );
-        assert!(
-            rule.suggested_fix.is_none(),
-            "rule {} has suggested_fix populated in Task 1 bootstrap",
-            rule.id
-        );
+        let is_draft = matches!(rule.graduation, Graduation::Draft);
+        if !is_draft && rule.fixtures.is_empty() {
+            violations.push(rule.id);
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "rules promoted past Draft but missing fixture links: {:?}",
+        violations
+    );
+}
+
+#[test]
+fn draft_rules_have_empty_fixtures() {
+    for rule in all_lint_rules() {
+        if matches!(rule.graduation, Graduation::Draft) {
+            assert!(
+                rule.fixtures.is_empty(),
+                "Draft rule {} must not have fixture links until promoted",
+                rule.id
+            );
+        }
     }
 }
