@@ -27,7 +27,7 @@ use crate::{
 /// and is the seam the forthcoming `WosProject` façade (Task 6) calls into.
 /// External consumers only see the intent-driven helper methods on
 /// `WosProject`, never `Command` itself.
-pub trait IWosProjectCore {
+pub(crate) trait IWosProjectCore {
     /// Reverse the last command.
     ///
     /// Returns `Err` until undo is fully implemented (Task 5).
@@ -126,7 +126,7 @@ struct HistoryEntry {
 /// the reverted entry onto `redo_stack`. A forward dispatch clears the redo
 /// stack so any branching authoring session starts a fresh history line.
 #[derive(Debug)]
-pub struct RawWosProject {
+pub(crate) struct RawWosProject {
     doc: KernelDocument,
     /// Pre-command snapshots + applied-command records, capped at `UNDO_DEPTH`.
     history: Vec<HistoryEntry>,
@@ -139,7 +139,7 @@ impl RawWosProject {
     /// Construct a minimal valid project with the given impact level and title.
     ///
     /// The document has no states, no actors, and no initial state yet.
-    pub fn new(impact_level: ImpactLevel, title: impl Into<String>) -> Self {
+    pub(crate) fn new(impact_level: ImpactLevel, title: impl Into<String>) -> Self {
         Self {
             doc: minimal_document(impact_level, title.into()),
             history: Vec::new(),
@@ -695,12 +695,12 @@ impl IWosProjectCore for RawWosProject {
 
 impl RawWosProject {
     /// True if there is at least one entry on the undo stack.
-    pub fn can_undo(&self) -> bool {
+    pub(crate) fn can_undo(&self) -> bool {
         !self.history.is_empty()
     }
 
     /// True if there is at least one entry on the redo stack.
-    pub fn can_redo(&self) -> bool {
+    pub(crate) fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 }
@@ -1511,6 +1511,63 @@ mod tests {
         .unwrap();
 
         assert_eq!(p.snapshot().extensions["x-flag"], serde_json::json!(true));
+    }
+
+    /// UNDO_DEPTH eviction: beyond 100 commands, the oldest snapshot drops.
+    /// An undo-to-exhaustion after 101 commands must surface exactly 100
+    /// reverts before `can_undo()` reports empty. The earliest command's
+    /// effects therefore become unreachable from the current doc — the
+    /// cap is a memory guard, not a fidelity guarantee.
+    #[test]
+    fn undo_depth_cap_evicts_oldest_entry() {
+        let mut p = make_project();
+        let depth = UNDO_DEPTH;
+
+        // Apply depth + 1 commands. Each AddState is distinct so the
+        // underlying dispatch actually mutates and pushes a history entry.
+        for i in 0..=depth {
+            p.dispatch(Command::AddState {
+                id: format!("s{i}"),
+                kind: StateKind::Atomic,
+            })
+            .expect("dispatch AddState");
+        }
+
+        // History is capped at depth; the oldest pre-empty snapshot was
+        // evicted when len exceeded UNDO_DEPTH.
+        assert_eq!(p.history.len(), depth, "history capped at UNDO_DEPTH");
+        assert!(
+            p.snapshot().lifecycle.states.contains_key(&format!("s0")),
+            "s0 is still in the document (only its history entry is dropped)"
+        );
+
+        // Undo should succeed exactly UNDO_DEPTH times, then stop.
+        let mut undo_count = 0;
+        while p.can_undo() {
+            p.undo().expect("undo");
+            undo_count += 1;
+            // Guard against runaway loops if the cap logic ever regresses.
+            assert!(undo_count <= depth + 1, "can_undo must stop at cap");
+        }
+        assert_eq!(
+            undo_count, depth,
+            "undo exhausts after exactly UNDO_DEPTH reverts"
+        );
+
+        // The earliest command (s0) cannot be undone — its pre-s0 snapshot
+        // was evicted. Verifies the intended cap behaviour: s0 remains
+        // in the document after full undo-exhaustion.
+        assert!(
+            p.snapshot().lifecycle.states.contains_key("s0"),
+            "s0 survives full undo-exhaustion because its history entry was evicted"
+        );
+        // But all later states s1..=s100 are reverted.
+        for i in 1..=depth {
+            assert!(
+                !p.snapshot().lifecycle.states.contains_key(&format!("s{i}")),
+                "s{i} reverted by undo"
+            );
+        }
     }
 
     /// AddExtensionKey with a key that lacks the `x-` prefix is rejected before dispatch.

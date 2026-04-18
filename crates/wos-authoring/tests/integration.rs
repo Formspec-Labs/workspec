@@ -114,9 +114,9 @@ fn authoring_session_round_trip_with_undo_redo() {
             .is_some(),
         "redo must have restored x-wos-timers"
     );
-    // Now re-author the deontic forward (the other redo slot was
-    // preserved, so re-invoking add_actor_deontic would be a new forward
-    // motion that first clears the redo branch).
+    // Redo the deontic (LIFO pop from the redo stack, restoring the
+    // last-undone operation). The redo stack retains its remaining
+    // entries; a later forward dispatch would be what clears it.
     project.redo().expect("redo deontic");
 
     // ── Upgrade the document to rights-impacting per §S6 ─────────────────

@@ -151,6 +151,15 @@ pub struct WosProject { /* private */ }
 | `add_deontic_constraint(constraint_id, rule) -> AuthoringResult` | Append a deontic constraint to `x-wos-ai.deonticConstraints`. Error if `constraint_id` already exists. |
 | `set_autonomy_level(agent_id, level) -> AuthoringResult` | Set the autonomy level on a declared AI agent. Error if `agent_id` not found. |
 
+**Milestone helpers (2, added 2026-04-18 during Task 4 implementation):**
+
+| Method | Description |
+|--------|-------------|
+| `add_milestone(id, fired_when) -> AuthoringResult` | Append a milestone declaration to `lifecycle.milestones` (Kernel §S4.13). `fired_when` is a FEL expression. Error if `id` already exists. |
+| `remove_milestone(id) -> AuthoringResult` | Remove a milestone declaration. Error if `id` not found. |
+
+These variants were added to round out the handler set for symmetry with the actor and contract pairs; kernel §S4.13 `lifecycle.milestones` is authorable like any other kernel top-level slot. Not part of §29b reactive-firing scope (which is a runtime-side concern tracked in TODO §4.4).
+
 **History helpers:**
 
 | Method | Description |
