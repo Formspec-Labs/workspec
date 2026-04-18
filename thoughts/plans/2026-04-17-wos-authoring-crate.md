@@ -121,7 +121,7 @@ pub struct WosProject { /* private */ }
 
 | Method | Description |
 |--------|-------------|
-| `add_actor(id, kind) -> AuthoringResult` | Add an actor declaration. `kind` is `ActorKind::Human`, `System`, or `Agent`. Error if `id` already exists. |
+| `add_actor(id, kind) -> AuthoringResult` | Add an actor declaration. `kind` is `ActorKind::Human` or `ActorKind::System` (the two variants kernel §S3 defines; the kernel schema's `type` enum is `["human", "system"]`). AI agents are modeled separately via `AgentDeclaration` under `x-wos-ai.agents` — see `add_ai_agent` — not as kernel actors. Custom actor categories route through the `actorExtension` seam (§10.6) rather than new kernel variants. Error if `id` already exists. |
 | `set_actor_description(actor_id, description) -> AuthoringResult` | Set the `description` field on an actor. Error if actor not found. |
 | `add_actor_extension(actor_id, key, value) -> AuthoringResult` | Set an `x-`prefixed extension key on an actor's extension map. Error if key does not start with `x-`. |
 | `remove_actor(actor_id) -> AuthoringResult` | Remove an actor. Warns (does not error) if the actor ID is referenced in any transition `assignTo` field. |
@@ -138,7 +138,7 @@ pub struct WosProject { /* private */ }
 
 | Method | Description |
 |--------|-------------|
-| `set_impact_level(level) -> AuthoringResult` | Set `impactLevel` on the document. `level` is `ImpactLevel::Operational`, `Significant`, `High`, or `Critical`. |
+| `set_impact_level(level) -> AuthoringResult` | Set `impactLevel` on the document. `level` is one of the four kernel §S6 variants: `ImpactLevel::RightsImpacting`, `SafetyImpacting`, `Operational`, or `Informational` (serialized kebab-case: `rights-impacting`, `safety-impacting`, `operational`, `informational`). |
 | `add_contract_reference(name, binding, ref_uri) -> AuthoringResult` | Insert a named entry into `contracts`. Error if `name` already exists. |
 | `add_due_process_path(state_id, path_config) -> AuthoringResult` | Set `x-wos-governance.dueProcess` on the document's extensions, scoped to a state. Appends; does not replace existing paths. |
 | `add_governance_assertion(assertion_id, condition, message) -> AuthoringResult` | Append an assertion to `x-wos-governance.assertionGates`. Error if `assertion_id` already exists. |
