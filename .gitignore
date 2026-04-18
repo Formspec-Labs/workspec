@@ -1,4 +1,5 @@
 /target
+**/target/
 .DS_Store
 
 # Generated LLM spec extractions (same role as Formspec *.llm.md; regenerate, do not hand-edit)

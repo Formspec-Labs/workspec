@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use fel_core::{evaluate, parse, types::FelValue};
+use fel_core::{ast::Expr, dependencies::extract_dependencies, evaluate, parse, types::FelValue};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -100,6 +100,13 @@ pub struct Evaluator {
     /// All actions executed during this evaluator lifetime.
     executed_actions: Vec<ObservedAction>,
 
+    /// Guard evaluations observed during this evaluator lifetime.
+    ///
+    /// Captures every guard expression tested — including those that
+    /// evaluated false and short-circuited their transition. Drained
+    /// per-event by `wos-runtime::drain_once`.
+    guard_evaluations: Vec<GuardEvaluation>,
+
     /// Saved history configurations keyed by compound state ID.
     ///
     /// When a compound state with `historyState` is exited, the active
@@ -117,6 +124,39 @@ pub struct ObservedTransition {
     pub to: String,
     /// Triggering event.
     pub event: String,
+}
+
+/// A single guard-expression evaluation observed during event processing.
+///
+/// Recorded every time the evaluator tests a transition's `guard` FEL
+/// expression — including short-circuited `false` evaluations on transitions
+/// that did not fire. Downstream consumers (the `wos-runtime` drain loop
+/// and `wos-conformance` trace builder) use these records to produce a
+/// teaching signal for LLM-authored workflows: when a fixture fails, the
+/// trace can show which guard evaluated false and against which inputs.
+///
+/// `guard_id` is synthesized from the transition's shape
+/// (`{source_state}->{target_state}:{event}`) — kernel transitions do not
+/// carry explicit guard identifiers today. `inputs` is a JSON subset of the
+/// evaluation context limited to the paths the guard expression actually
+/// references, preserving FEL namespace nesting (`caseFile.*` / `event.*`).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardEvaluation {
+    /// Synthesized identifier: `{source_state}->{target_state}:{event}`.
+    pub guard_id: String,
+    /// Source state of the transition whose guard was evaluated.
+    pub source_state: String,
+    /// Target state of the transition whose guard was evaluated.
+    pub target_state: String,
+    /// Event name that triggered the guard test.
+    pub event: String,
+    /// The raw FEL expression text.
+    pub expression: String,
+    /// Result of the expression (true fires the transition, false skips it).
+    pub result: bool,
+    /// Inputs actually read by the guard, nested by FEL namespace.
+    pub inputs: serde_json::Value,
 }
 
 /// An action executed by the evaluator during a single event step.
@@ -197,6 +237,7 @@ impl Evaluator {
             simulated_time_ms: 0,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
         };
         eval.enter_state(&initial, None, None)?;
@@ -245,6 +286,7 @@ impl Evaluator {
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            guard_evaluations: Vec::new(),
             history_store: instance.history_store.clone(),
         })
     }
@@ -296,6 +338,23 @@ impl Evaluator {
     /// Consume the executed-action log.
     pub fn take_executed_actions(&mut self) -> Vec<ObservedAction> {
         std::mem::take(&mut self.executed_actions)
+    }
+
+    /// All guard evaluations observed since the last `take_guard_evaluations`.
+    ///
+    /// Includes guards that evaluated false and short-circuited their
+    /// transition — the teaching-signal use case needs to see exactly which
+    /// guards the evaluator tested and against what inputs.
+    pub fn guard_evaluations(&self) -> &[GuardEvaluation] {
+        &self.guard_evaluations
+    }
+
+    /// Drain the guard-evaluation buffer.
+    ///
+    /// Called by `wos-runtime::drain_once` after each event step so that
+    /// `DrainOnceResult.guard_evaluations` scopes to the single drained event.
+    pub fn take_guard_evaluations(&mut self) -> Vec<GuardEvaluation> {
+        std::mem::take(&mut self.guard_evaluations)
     }
 
     /// The kernel document.
@@ -397,7 +456,13 @@ impl Evaluator {
                 if transition.event != event {
                     continue;
                 }
-                if !self.evaluate_guard(transition.guard.as_deref(), event_data)? {
+                if !self.evaluate_guard(
+                    transition.guard.as_deref(),
+                    event_data,
+                    active_state,
+                    &transition.target,
+                    event,
+                )? {
                     continue;
                 }
 
@@ -461,7 +526,13 @@ impl Evaluator {
                 if transition.event != event {
                     continue;
                 }
-                if !self.evaluate_guard(transition.guard.as_deref(), event_data)? {
+                if !self.evaluate_guard(
+                    transition.guard.as_deref(),
+                    event_data,
+                    &active,
+                    &transition.target,
+                    event,
+                )? {
                     continue;
                 }
 
@@ -842,10 +913,18 @@ impl Evaluator {
     // ── Guard evaluation ─────────────────────────────────────────
 
     /// Evaluate a FEL guard expression. Missing guard = always true.
+    ///
+    /// Records a [`GuardEvaluation`] on every call that actually tests a
+    /// guard expression (including `false` results). Missing guards are
+    /// not recorded — `None` means "no constraint" and carries no teaching
+    /// signal.
     fn evaluate_guard(
-        &self,
+        &mut self,
         guard: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        source_state: &str,
+        target_state: &str,
+        event: &str,
     ) -> Result<bool, EvalError> {
         let guard_expr = match guard {
             Some(g) => g,
@@ -859,7 +938,20 @@ impl Evaluator {
             .map_err(|e| EvalError::Guard(format!("parse error in '{guard_expr}': {e}")))?;
 
         let result = evaluate(&parsed, &env);
-        Ok(matches!(result.value, FelValue::Boolean(true)))
+        let passed = matches!(result.value, FelValue::Boolean(true));
+
+        let inputs = build_guard_inputs(&parsed, &self.case_state, event_data);
+        self.guard_evaluations.push(GuardEvaluation {
+            guard_id: format!("{source_state}->{target_state}:{event}"),
+            source_state: source_state.to_string(),
+            target_state: target_state.to_string(),
+            event: event.to_string(),
+            expression: guard_expr.to_string(),
+            result: passed,
+            inputs,
+        });
+
+        Ok(passed)
     }
 
     // ── Timer management ─────────────────────────────────────────
@@ -1333,6 +1425,112 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
     }
 
     ms
+}
+
+/// Extract the JSON subset actually referenced by a guard expression.
+///
+/// Walks FEL dependencies and produces a JSON object nested by namespace
+/// (`caseFile.*` / `event.*`). Paths not resolvable against the supplied
+/// state are omitted — the output is a lossy teaching-signal snapshot, not
+/// a complete evaluation context.
+fn build_guard_inputs(
+    expr: &Expr,
+    case_state: &HashMap<String, serde_json::Value>,
+    event_data: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let deps = extract_dependencies(expr);
+    let mut inputs = serde_json::Map::new();
+
+    for field_path in &deps.fields {
+        let (namespace, rest) = match field_path.split_once('.') {
+            Some((ns, rest)) => (ns, rest),
+            None => continue,
+        };
+
+        let root_value = match namespace {
+            "caseFile" => {
+                let (head, tail) = rest.split_once('.').map_or((rest, ""), |(h, t)| (h, t));
+                let value = case_state.get(head);
+                (value, tail)
+            }
+            "event" => {
+                let (head, tail) = rest.split_once('.').map_or((rest, ""), |(h, t)| (h, t));
+                let value = event_data
+                    .and_then(|ev| ev.as_object())
+                    .and_then(|obj| obj.get(head));
+                (value, tail)
+            }
+            _ => continue,
+        };
+
+        let (Some(top_value), tail) = root_value else {
+            continue;
+        };
+
+        let leaf_value = walk_json_path(top_value, tail);
+        let first_segment = rest.split_once('.').map_or(rest, |(h, _)| h);
+        insert_nested(&mut inputs, namespace, first_segment, tail, leaf_value);
+    }
+
+    serde_json::Value::Object(inputs)
+}
+
+/// Navigate dotted tail segments into a JSON value; returns the value itself
+/// if the tail is empty and `None` on any missing segment.
+fn walk_json_path<'a>(value: &'a serde_json::Value, tail: &str) -> Option<&'a serde_json::Value> {
+    if tail.is_empty() {
+        return Some(value);
+    }
+    let mut cursor = value;
+    for segment in tail.split('.') {
+        let obj = cursor.as_object()?;
+        cursor = obj.get(segment)?;
+    }
+    Some(cursor)
+}
+
+/// Insert `value` into `inputs[namespace][head][.tail...]`, preserving nesting.
+fn insert_nested(
+    inputs: &mut serde_json::Map<String, serde_json::Value>,
+    namespace: &str,
+    head: &str,
+    tail: &str,
+    value: Option<&serde_json::Value>,
+) {
+    let Some(value) = value else { return };
+    let ns_entry = inputs
+        .entry(namespace.to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    let Some(ns_map) = ns_entry.as_object_mut() else {
+        return;
+    };
+
+    if tail.is_empty() {
+        ns_map.insert(head.to_string(), value.clone());
+        return;
+    }
+
+    let head_entry = ns_map
+        .entry(head.to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    let Some(mut cursor) = head_entry.as_object_mut() else {
+        return;
+    };
+
+    let segments: Vec<&str> = tail.split('.').collect();
+    for (i, seg) in segments.iter().enumerate() {
+        if i == segments.len() - 1 {
+            cursor.insert(seg.to_string(), value.clone());
+        } else {
+            let next = cursor
+                .entry(seg.to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            let Some(next_map) = next.as_object_mut() else {
+                return;
+            };
+            cursor = next_map;
+        }
+    }
 }
 
 #[cfg(test)]
