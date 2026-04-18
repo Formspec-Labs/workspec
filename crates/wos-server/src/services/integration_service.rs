@@ -14,9 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
-use crate::runtime::AppRuntime;
 use crate::services::bundle_service::BundleService;
-use crate::storage::{InboundCloudEventRow, StorageHandle};
+use crate::storage::InboundCloudEventRow;
 
 /// CloudEvents 1.0 envelope (minimal subset).
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -137,10 +136,3 @@ impl IntegrationService {
     }
 }
 
-#[allow(dead_code)]
-fn _keep_runtime_import() -> Option<AppRuntime> {
-    None
-}
-
-#[allow(dead_code)]
-fn _keep_storage_import(_s: StorageHandle) {}

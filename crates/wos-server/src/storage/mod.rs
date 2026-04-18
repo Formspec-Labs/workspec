@@ -166,6 +166,23 @@ pub struct SessionRow {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentRow {
+    pub id: String,
+    pub workflow_url: String,
+    pub name: String,
+    pub kind: String,
+    pub version: String,
+    pub status: String,
+    pub autonomy: Option<String>,
+    pub confidence_floor: Option<f64>,
+    pub config_json: serde_json::Value,
+    pub deployment_state: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IdentityFactRow {
     pub id: String,
     pub instance_id: String,
@@ -236,6 +253,11 @@ pub trait Storage: Send + Sync + 'static {
     async fn list_delegations(&self, workflow_url: &str) -> StorageResult<Vec<DelegationRow>>;
     async fn upsert_delegation(&self, row: &DelegationRow) -> StorageResult<()>;
     async fn revoke_delegation(&self, workflow_url: &str, id: &str) -> StorageResult<()>;
+
+    // --- Agents (L2 AI governance) ---
+    async fn upsert_agent(&self, row: &AgentRow) -> StorageResult<()>;
+    async fn get_agent(&self, id: &str) -> StorageResult<Option<AgentRow>>;
+    async fn list_agents(&self, workflow_url: &str) -> StorageResult<Vec<AgentRow>>;
 
     // --- Identity facts (assurance) ---
     async fn insert_identity_fact(&self, row: &IdentityFactRow) -> StorageResult<()>;

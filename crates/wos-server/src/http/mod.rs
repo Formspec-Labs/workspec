@@ -7,6 +7,8 @@ use tower_http::trace::TraceLayer;
 
 use crate::AppState;
 
+pub mod advanced;
+pub mod agents;
 pub mod ai_chat;
 pub mod applicant;
 pub mod assurance;
@@ -44,6 +46,8 @@ pub fn router(state: AppState) -> Router {
         .merge(deontic::routes())
         .merge(assurance::routes())
         .merge(integration::routes())
+        .merge(agents::routes())
+        .merge(advanced::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

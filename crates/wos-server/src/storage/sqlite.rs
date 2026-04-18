@@ -6,9 +6,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use std::str::FromStr;
 
 use super::{
-    DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator, InstanceQuery,
-    InstanceRow, KernelRow, Page, ProvenanceRow, SessionRow, Storage, StorageError,
-    StorageResult, UserRow,
+    AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator,
+    InstanceQuery, InstanceRow, KernelRow, Page, ProvenanceRow, SessionRow, Storage,
+    StorageError, StorageResult, UserRow,
 };
 
 pub struct SqliteStorage {
@@ -80,6 +80,23 @@ fn map_provenance(r: &SqliteRow) -> StorageResult<ProvenanceRow> {
         payload: serde_json::from_str(&r.try_get::<String, _>("payload")?)?,
         hash: r.try_get("hash")?,
         previous_hash: r.try_get("previous_hash")?,
+    })
+}
+
+fn map_agent(r: &SqliteRow) -> StorageResult<AgentRow> {
+    Ok(AgentRow {
+        id: r.try_get("id")?,
+        workflow_url: r.try_get("workflow_url")?,
+        name: r.try_get("name")?,
+        kind: r.try_get("kind")?,
+        version: r.try_get("version")?,
+        status: r.try_get("status")?,
+        autonomy: r.try_get("autonomy")?,
+        confidence_floor: r.try_get("confidence_floor")?,
+        config_json: serde_json::from_str(&r.try_get::<String, _>("config_json")?)?,
+        deployment_state: r.try_get("deployment_state")?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
     })
 }
 
@@ -390,6 +407,59 @@ impl Storage for SqliteStorage {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn upsert_agent(&self, row: &AgentRow) -> StorageResult<()> {
+        let cfg = serde_json::to_string(&row.config_json)?;
+        sqlx::query(
+            "INSERT INTO agents (id, workflow_url, name, kind, version, status, autonomy,
+               confidence_floor, config_json, deployment_state, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               workflow_url = excluded.workflow_url,
+               name = excluded.name,
+               kind = excluded.kind,
+               version = excluded.version,
+               status = excluded.status,
+               autonomy = excluded.autonomy,
+               confidence_floor = excluded.confidence_floor,
+               config_json = excluded.config_json,
+               deployment_state = excluded.deployment_state,
+               updated_at = excluded.updated_at",
+        )
+        .bind(&row.id)
+        .bind(&row.workflow_url)
+        .bind(&row.name)
+        .bind(&row.kind)
+        .bind(&row.version)
+        .bind(&row.status)
+        .bind(&row.autonomy)
+        .bind(row.confidence_floor)
+        .bind(&cfg)
+        .bind(&row.deployment_state)
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_agent(&self, id: &str) -> StorageResult<Option<AgentRow>> {
+        let row = sqlx::query("SELECT * FROM agents WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.as_ref().map(map_agent).transpose()
+    }
+
+    async fn list_agents(&self, workflow_url: &str) -> StorageResult<Vec<AgentRow>> {
+        let rows = sqlx::query(
+            "SELECT * FROM agents WHERE workflow_url = ? ORDER BY name ASC",
+        )
+        .bind(workflow_url)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter().map(map_agent).collect()
     }
 
     async fn insert_identity_fact(&self, row: &IdentityFactRow) -> StorageResult<()> {

@@ -6,6 +6,8 @@ use std::sync::Arc;
 use crate::config::ServerConfig;
 use crate::storage::StorageHandle;
 
+pub mod advanced_service;
+pub mod agent_service;
 pub mod applicant_service;
 pub mod assurance_service;
 pub mod bundle_service;
