@@ -95,6 +95,8 @@ pub fn continuous_reevaluate(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
             return Ok(ContinuousEvalResult {
                 transitions_fired: total_fired,

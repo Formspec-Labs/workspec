@@ -7,6 +7,37 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Canonical case-file snapshot captured for a determination.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseFileSnapshot {
+    /// Case-file value observed at determination fire time.
+    pub value: serde_json::Value,
+
+    /// JCS-style canonical JSON representation of `value`.
+    pub jcs_canonical: String,
+
+    /// SHA-256 hex digest of `jcs_canonical`.
+    pub sha256: String,
+}
+
+impl CaseFileSnapshot {
+    /// Create a canonical snapshot from case state.
+    pub fn from_case_state(state: &serde_json::Value) -> Self {
+        let jcs_canonical = serde_json_canonicalizer::to_string(state)
+            .expect("serde_json::Value serializes to JCS");
+        let sha256 = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(jcs_canonical.as_bytes()))
+        };
+        Self {
+            value: state.clone(),
+            jcs_canonical,
+            sha256,
+        }
+    }
+}
+
 /// Provenance record type discriminator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -313,6 +344,14 @@ pub struct ProvenanceRecord {
     /// Tamper-detection digest for the outputs snapshot (SP §5.3, §6.3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_digest: Option<String>,
+
+    /// Semantic tags copied from the firing transition.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transition_tags: Vec<String>,
+
+    /// Case-file snapshot used by a determination-tagged transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub case_file_snapshot: Option<CaseFileSnapshot>,
 }
 
 impl ProvenanceRecord {
@@ -334,7 +373,25 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
+    }
+
+    /// Create a state transition record with transition tags and an optional
+    /// determination snapshot.
+    pub fn tagged_state_transition(
+        from: &str,
+        to: &str,
+        event: &str,
+        actor_id: Option<&str>,
+        transition_tags: &[String],
+        case_file_snapshot: Option<CaseFileSnapshot>,
+    ) -> Self {
+        let mut record = Self::state_transition(from, to, event, actor_id);
+        record.transition_tags = transition_tags.to_vec();
+        record.case_file_snapshot = case_file_snapshot;
+        record
     }
 
     /// Create an unmatched event record (Kernel S4.9).
@@ -355,6 +412,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -386,6 +445,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -411,6 +472,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -435,6 +498,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -459,6 +524,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -480,6 +547,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -501,6 +570,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -522,6 +593,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -543,6 +616,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -572,6 +647,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -596,6 +673,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -621,6 +700,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -658,6 +739,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 
@@ -686,6 +769,8 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         }
     }
 }
@@ -904,6 +989,115 @@ mod tests {
     }
 
     #[test]
+    fn case_file_snapshot_is_canonical_and_tamper_evident() {
+        let first = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "b": 2,
+            "a": {
+                "z": true,
+                "m": "stable"
+            }
+        }));
+        let second = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "a": {
+                "m": "stable",
+                "z": true
+            },
+            "b": 2
+        }));
+
+        assert_eq!(first.jcs_canonical, second.jcs_canonical);
+        assert_eq!(first.sha256, second.sha256);
+        assert_eq!(
+            first.jcs_canonical,
+            r#"{"a":{"m":"stable","z":true},"b":2}"#
+        );
+        assert_eq!(first.sha256.len(), 64);
+        assert!(first.sha256.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn case_file_snapshot_uses_rfc8785_number_canonicalization() {
+        let snapshot = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "b": 12e1,
+            "a": 1.0
+        }));
+
+        assert_eq!(snapshot.jcs_canonical, r#"{"a":1,"b":120}"#);
+    }
+
+    /// RFC 8785 §3.2.3 requires key ordering by UTF-16 code-unit values, not
+    /// by UTF-8 bytes. A supplementary-plane character like 🦀 (U+1F980)
+    /// encodes to UTF-16 as a surrogate pair starting at 0xD83E; a BMP char
+    /// in the private-use area like U+E000 encodes as a single unit 0xE000.
+    /// UTF-16 sort: 0xD83E < 0xE000 so 🦀 MUST sort BEFORE "\uE000".
+    /// UTF-8 byte sort: "\uE000" first byte 0xEE < 🦀 first byte 0xF0 would
+    /// reverse the order — if this test ever flips, the underlying
+    /// canonicalizer has silently drifted off RFC 8785.
+    #[test]
+    fn case_file_snapshot_sorts_keys_by_utf16_code_unit() {
+        let snapshot = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "\u{E000}": "private-use",
+            "\u{1F980}": "crab"
+        }));
+
+        let canonical = &snapshot.jcs_canonical;
+        let crab_pos = canonical.find("crab").expect("crab value present");
+        let private_pos = canonical.find("private-use").expect("pua value present");
+        assert!(
+            crab_pos < private_pos,
+            "RFC 8785 UTF-16 code-unit order requires 🦀 (U+1F980) to sort \
+             before U+E000, but got: {canonical}"
+        );
+    }
+
+    /// Control characters inside string values MUST use the JSON minimal
+    /// escape forms (`\n`, `\t`, `\r`, `\"`, `\\`) and `\u00XX` only when
+    /// no short form applies (RFC 8785 §3.2.2).
+    #[test]
+    fn case_file_snapshot_escapes_control_characters_minimally() {
+        let snapshot = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "k": "line1\nline2\ttab\u{0001}end"
+        }));
+
+        assert_eq!(
+            snapshot.jcs_canonical, r#"{"k":"line1\nline2\ttab\u0001end"}"#,
+            "control chars must use short forms where defined and \\u00XX \
+             otherwise"
+        );
+    }
+
+    /// RFC 8785 ES6 `ToString(Number)` canonicalization: exponents and
+    /// trailing zeros normalise to the shortest round-trip form.
+    #[test]
+    fn case_file_snapshot_canonicalises_floats_and_exponents() {
+        let snapshot = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "a": 1.0,
+            "b": 1.5e2,
+            "c": 0.1,
+        }));
+
+        assert_eq!(snapshot.jcs_canonical, r#"{"a":1,"b":150,"c":0.1}"#);
+    }
+
+    /// Belt-and-braces: the schema example `sha256` digest MUST match what
+    /// the Rust JCS path actually computes for `{"eligible":true,"income":17500}`.
+    /// A drift here means the schema example and the runtime disagree on
+    /// canonical output — a tamper-evidence break.
+    #[test]
+    fn schema_example_snapshot_digest_matches_runtime_output() {
+        let snapshot = CaseFileSnapshot::from_case_state(&serde_json::json!({
+            "eligible": true,
+            "income": 17500
+        }));
+
+        assert_eq!(snapshot.jcs_canonical, r#"{"eligible":true,"income":17500}"#);
+        assert_eq!(
+            snapshot.sha256,
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        );
+    }
+
+    #[test]
     fn deserializes_legacy_records_without_timestamp_field() {
         // Older fixtures predate the timestamp field; they must still load
         // and yield an empty timestamp the runtime can stamp on replay.
@@ -917,7 +1111,7 @@ mod tests {
         assert!(record.timestamp.is_empty());
     }
 
-    /// Confirm every constructor zero-initializes the eight new fields the
+    /// Confirm every constructor zero-initializes the enrichment fields the
     /// runtime / exporter is expected to populate later. The push-stamped
     /// design (documented for `timestamp`) extends to these fields: the
     /// construction site leaves them unset and a downstream pass fills them
@@ -933,6 +1127,8 @@ mod tests {
             assert!(record.outputs.is_empty());
             assert!(record.input_digest.is_none());
             assert!(record.output_digest.is_none());
+            assert!(record.transition_tags.is_empty());
+            assert!(record.case_file_snapshot.is_none());
         }
 
         assert_zero_defaults(&ProvenanceRecord::state_transition("a", "b", "ev", None));
@@ -966,18 +1162,25 @@ mod tests {
         ));
     }
 
-    /// All eight new fields round-trip through serde when populated.
+    /// All provenance enrichment fields round-trip through serde when populated.
     #[test]
-    fn round_trips_all_eight_new_fields() {
+    fn round_trips_provenance_enrichment_fields() {
         let mut record = ProvenanceRecord::state_transition("a", "b", "ev", Some("actor"));
         record.audit_layer = Some("reasoning".to_string());
         record.actor_type = Some("agent".to_string());
         record.lifecycle_state = Some("under-review".to_string());
         record.definition_version = Some("1.2.3".to_string());
-        record.inputs = vec!["entity:application".to_string(), "entity:evidence".to_string()];
+        record.inputs = vec![
+            "entity:application".to_string(),
+            "entity:evidence".to_string(),
+        ];
         record.outputs = vec!["entity:decision".to_string()];
         record.input_digest = Some("sha256:deadbeef".to_string());
         record.output_digest = Some("sha256:cafebabe".to_string());
+        record.transition_tags = vec!["determination".to_string()];
+        record.case_file_snapshot = Some(CaseFileSnapshot::from_case_state(
+            &serde_json::json!({ "decision": "denied" }),
+        ));
 
         let json = serde_json::to_string(&record).expect("serialize");
         let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
@@ -996,6 +1199,14 @@ mod tests {
         assert_eq!(restored.outputs, vec!["entity:decision".to_string()]);
         assert_eq!(restored.input_digest.as_deref(), Some("sha256:deadbeef"));
         assert_eq!(restored.output_digest.as_deref(), Some("sha256:cafebabe"));
+        assert_eq!(restored.transition_tags, vec!["determination".to_string()]);
+        assert_eq!(
+            restored
+                .case_file_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.jcs_canonical.as_str()),
+            Some(r#"{"decision":"denied"}"#)
+        );
     }
 
     #[test]

@@ -71,6 +71,8 @@ pub fn evaluate_deontic_constraints(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     });
 
     // Evaluate at three composition levels (AI S4.7).
@@ -135,6 +137,8 @@ pub fn evaluate_deontic_constraints(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         });
     }
 
@@ -168,6 +172,8 @@ pub fn evaluate_deontic_constraints(
                         outputs: Vec::new(),
                         input_digest: None,
                         output_digest: None,
+                        transition_tags: Vec::new(),
+                        case_file_snapshot: None,
                     });
                 }
             }
@@ -208,6 +214,8 @@ pub fn evaluate_deontic_constraints(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
     }
@@ -260,6 +268,8 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
         for prohib in &constraints.prohibitions {
@@ -283,6 +293,8 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
         for oblig in &constraints.obligations {
@@ -306,6 +318,8 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
         return;
@@ -365,6 +379,8 @@ fn evaluate_constraint_set(
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    transition_tags: Vec::new(),
+                    case_file_snapshot: None,
                 });
                 violations.push((perm.id.clone(), effective_action));
             }
@@ -410,6 +426,8 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
             violations.push((prohib.id.clone(), prohib.on_violation));
         }
@@ -446,6 +464,8 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
             violations.push((oblig.id.clone(), oblig.on_violation));
         }
@@ -488,6 +508,8 @@ fn handle_null_propagation(
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    transition_tags: Vec::new(),
+                    case_file_snapshot: None,
                 });
                 true
             }
@@ -516,6 +538,8 @@ fn handle_null_propagation(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
             true
         }
@@ -572,6 +596,8 @@ fn check_consistency(
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            transition_tags: Vec::new(),
+                            case_file_snapshot: None,
                         });
                     }
                 }
