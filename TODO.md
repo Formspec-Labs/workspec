@@ -1,15 +1,15 @@
 # WOS TODO
 
-**Last audited:** 2026-04-18 (session 2 close — §5.1 kernel tier 0 violations + wos-authoring Tasks 4-8 done + 4 review cycles closed inline)
+**Last audited:** 2026-04-18 (session 3 close — §5.1/§5.2/§5.3/§4.2 all major tasks complete + wos-mcp MVP at 22 tools + CI gates for schemas, LoadBearing, and rule-coverage all landed)
 
 **Snapshot**
 
 | Metric | Value |
 |---|---|
-| Specs / schemas | 18 specs · 19 schemas (kernel tier: 0 SCHEMA-DOC-001 violations) |
+| Specs / schemas | 18 specs · 21 schemas (all 18 production + 2 meta schemas: `conformance-trace`, `wos-lint-diagnostic`, `wos-mcp-tools` · 0 SCHEMA-DOC-001 violations across all) |
 | Fixtures | 41 document + 146 conformance (T3: 0 red / 146 green) |
-| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 2 v0 scaffolds (`wos-authoring` MVP @ 49 tests, `wos-mcp`) + 1 throwaway (`wos-synth-spike`) |
-| Lint matrix | 197 rules in `LINT-MATRIX.md` · 🚨 **unreconciled with code registry** (97 reified entries, ~100-rule gap). §4.2 Task 3 CI ratchet landed (`6e83cdf`); Tasks 4-7 open. |
+| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 3 v0/MVP (`wos-authoring` MVP @ 49 tests, `wos-mcp` MVP @ 22 tools + round-trip tested, `wos-synth-spike`) |
+| Lint matrix | 97 rules in `LINT-MATRIX.md` (regenerated from code registries; 197 aspirational → 97 code-registry reality). CI gates active: `schema_doc_zero_regression` (all 18 schemas), LoadBearing ≥2-fixture, rule-coverage ratchet. |
 
 **Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
@@ -17,17 +17,75 @@
 
 ## Next actionable work items (ordered by ROI)
 
-> Session 2 close 2026-04-18: all blockers cleared, §5.3 teaching signal end-to-end, cleanup-batch warnings fixed, §4.2 Task 3 CI ratchet landed, §5.1 kernel tier at 0 violations, wos-authoring MVP complete, 4 code-review cycles closed inline. Working tree clean; 41 commits on `main` this session.
+> Session 3 close 2026-04-18: ~50 commits landed across §5.1 schema audit (all tiers at 0 violations + CI gate), §5.3 trace CLI + schema publication, §4.2 coverage CLI + LINT-MATRIX regen + CI gates, §5.2 full rule migration + formatters + JSON schema + migration guide, and wos-mcp Tasks 3-6 (22 tools, round-trip tested). Working tree clean.
 
-1. **§5.1 companion tiers backfill** — next schema tiers after kernel (companions → governance → AI → profiles → sidecars → assurance → advanced). Use the kernel tier's 6-section commit shape as the template; reuse `crates/wos-lint/examples/count_schema_violations.rs` for per-schema delta measurement. ~1-2 days per tier.
-2. **wos-mcp Tasks 3-6** — now unblocked by `wos-authoring` MVP; expose document-management, lifecycle/actor, governance/AI, and validation/query tools over the JSON-RPC seam. Consumer is `WosProject` façade only.
-3. **§5.3 Tasks 4-5** — `wos-conformance explain` / `diff` CLI subcommands and `schemas/conformance/conformance-trace.schema.json` publication. Guard and policy payloads are populated so the CLI has real content to format.
-4. **§4.2 Tasks 4-7** — coverage CLI, LINT-MATRIX regen, CI gate for LoadBearing promotion, broader ratchet automation. Prerequisite for §4.4.
-5. **§5.2 Tasks 3-6** — 91-rule migration to structured LintDiagnostics, output formatters, JSON schema publication, migration doc. Largest task in the §5.2 plan.
+1. **§4.4 Split release trains** — now unblocked (§4.2 fully complete including coverage CLI, LINT-MATRIX reconciliation, and both CI gates). See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
+2. **§5.4 `wos-synth-core` + providers** — unblocked: both `wos-authoring` MVP and `wos-mcp` MVP are complete. See [plan](thoughts/plans/2026-04-16-wos-synth-crate.md).
+3. **§5.5 Synthesis benchmark (`wos-bench`)** — depends on §5.4. See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md).
+4. **v0 spike Tasks 4-5** — conformance gate + retrospective with plan propagation. Still pending from [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md).
+5. **§4.1 critical path items** — DRAFTS triage, #24a Facts Tier snapshot, #23 OverrideRecord, NoticeTemplate reconciliation, #2 adverse-decision notice, #20 typed events, #31 jurisdiction calendar. The structural infrastructure work is done; these architectural lock-in items are now the clear top priority on the §4 side.
 
 ---
 
-## 2026-04-18 Code review of 2026-04-17/18 parallel-agent batch
+## 2026-04-18 session 3 — parallel-agent close (~50 commits)
+
+Five concurrent work streams executing simultaneously; all 5 previous "Next actionable items" from session 2 complete. Aggregate: ~50 commits on `main`. Working tree clean at close.
+
+### §5.1 Schema description audit — all tiers at 0 violations
+
+Companions tier (18 violations → 0): 6 commits `4d88dfc` → `3384049` — lifecycle-detail, case-instance top-level, ActiveTask, FormspecTaskContext, ValidationOutcome/Compensation/PendingEvent, GovernanceState/Delegation/Hold/Volume.
+
+Governance tier (159 violations → 0): 4 commits `a9e400b` (assertion-gate, 17 → 0), `a62c30b` (policy-parameters, 23 → 0), `e0d2637` (due-process, 27 → 0), `18e7831` (workflow-governance, 92 → 0).
+
+AI tier (148 violations → 0): 3 commits `595e6f3` (agent-config, 35 → 0), `7339e99` (drift-monitor, 25 → 0), `4d22710` (ai-integration, 88 → 0).
+
+Profiles/sidecars/assurance/advanced (299 violations → 0): 8 commits — `4b530a7` (business-calendar, 14 → 0), `65e3acd` (notification-template, 16 → 0), `61cf062` (assurance, 13 → 0), `bdcb082` (semantic-profile, 28 → 0), `68b07b8` (integration-profile, 48 → 0), `39a7519` (verification-report, 26 → 0), `d42c25c` (equity-config, 32 → 0), `ccd1199` (advanced-governance, 122 → 0).
+
+CI gate: `3493f92` — `schema_doc_zero_regression` test walks `schemas/**/*.schema.json` and fails if any production schema has violations. Covers all 18 production schemas. `wos-mcp-tools.schema.json` was initially excluded, then backfilled (`a87cf30`) and added to the gate. A kernel schema (`wos-correspondence-metadata.schema.json`) had 17 latent violations discovered by the gate and fixed inline.
+
+Reviews: all tiers APPROVED (companions, governance, rest); minor nits all resolved inline.
+
+### §5.3 Trace-emitting conformance — Tasks 4-5 done
+
+Task 4 CLI subcommands `wos-conformance-explain` + `wos-conformance-diff` landed: `842c9ee` (library: trace rendering + diffing) + `09de276` (binaries). Review nits resolved: source_actor comparison added with new `DivergenceCause::ActorMismatch` variant (`103b6af`), whitespace normalized (`de3e848`), binary exit-code contract pinned via `assert_cmd` (`27c4f00`).
+
+Task 5 `schemas/conformance/conformance-trace.schema.json` published (`96c6acf`) with Python pytest validation of all 7 golden traces.
+
+### §4.2 Rule-coverage conformance — Tasks 4-7 done
+
+Task 4 `wos-rule-coverage` coverage library + binary: `6b51bb2` (library) + `ecd4218` (binary). Review nits resolved: `--help` exits 0 (`c5cb23f`), `path_is_referenced` tightened (`b160dee`), `is_expected_traces_path` hardened (`d1d7749`).
+
+Task 5 LINT-MATRIX regen tool landed + matrix regenerated from 197 aspirational rows → 97 code-registry reality: `082fa06` (--generate-matrix flag) + `e2be40a` (matrix regenerated).
+
+Task 6 LoadBearing ≥2-fixture CI gate: `e5eecee`.
+
+Task 7 promotion-candidate discovery + GitHub Actions workflow: `679bcd7`.
+
+### wos-mcp crate — Tasks 3-6 complete (22 tools, round-trip tested)
+
+Task 3 document management: `064099f` (new_kernel() + from_document() factory methods) + `1fdb321` (project registry + document-management tools). Post-review nits: `63c01c3` (dead dep, handler signatures, ai_agent_count TODO, path load test).
+
+Task 4 lifecycle/actor: `fb9cde8` (set_initial_state, add_actor_extension, richer add_state) + `4d66d0a` (lifecycle + actor tools). Post-review: `4bb411c` (self-loop transition count in apply_remove_state), `1e11940` (missing-arg vs. invalid-arg classification in require_*_arg helpers), `92741a0` (advertise Task 4 tools in tools/list discovery for 6 new tools).
+
+Tasks 5-6 governance/AI + validation/query + tool catalog: `3d6cb6c` (governance + AI authoring helpers in wos-authoring), `9a97ecf` (governance + AI tools), `09926aa` (validation + query tools + tool catalog schema), `f1a4537` (round-trip integration test). Post-review blocker: `307d55e` (`dueProcesePaths` → `dueProcessPaths` spec-fidelity rename, touched 7 files across wos-authoring + wos-mcp), plus `a23ddd1` (Engine error classification as Internal not InvalidArguments), `11065f6` (remove dead unwrap_or in wos_search constraint branch), `681cf21` (useless_format clippy warning + test intent clarification).
+
+Final state: 22 tools, round-trip test at `crates/wos-mcp/tests/round_trip.rs`, tool catalog schema `schemas/mcp/wos-mcp-tools.schema.json` at 0 SCHEMA-DOC-001 violations.
+
+### §5.2 Structured lint diagnostics — Tasks 3-6 done
+
+Task 3 rule migration (largest task): 92 unique rule IDs / 110 push sites migrated across `tier1.rs` (41 rules), `tier2.rs` (38 rules), `fel_analysis.rs` (12 rules), `schema_doc.rs` (1 rule). Commits: `0a25e4b` (Tier 1 migration), `d635a6d` (Tier 2 migration), `262ed7a` (FEL analysis migration), `220bee6` (SCHEMA-DOC-001 migration).
+
+Task 4 output formatters (text / JSON / SARIF 2.1.0): `ab89dae` (constructors + formatters, landed alongside Tasks 2-4 from prior session plus Task 3 migration was the main remaining work).
+
+Task 5 `schemas/lint/wos-lint-diagnostic.schema.json` published: `d2a3fc1`.
+
+Task 6 `crates/wos-lint/MIGRATION.md` migration guide: `5be48b8`.
+
+Plan status updated: `03d9768`.
+
+---
+
+## 2026-04-18 session 2 — code review of 2026-04-17/18 parallel-agent batch (6 APPROVE, 1 REQUEST CHANGES → resolved)
 
 Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 sonnet sub-agents executing v0 scopes of wos-authoring / wos-mcp / wos-synth-spike / §4.2 Task 2 / §5.1 Task 2 / §5.2 Tasks 1-2 / §5.3 Tasks 2-3. **Aggregate: 6 of 7 REQUEST CHANGES, 1 APPROVE (§5.1 triage).** Five real blockers across three work units, plus supporting warnings.
 
@@ -98,7 +156,7 @@ Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 so
 - ✅ **v0 spike warning fixes** — 3 commits `47677fa` + `e165dd7` + `add6796`: claude-sonnet-4-6 model bump; `SpikeError::MissingWosMarker` / `LintFailure` distinct variants; API-key guard rejects empty / whitespace-only. 15/15 tests green. Review-approved.
 - ✅ **§4.2 registry annotations** — 3 commits `d86f3df` + `f96f6c5` + `91602de`: K-EXT-002 (wos-lint tier2 inline evidence); AI-001 / AI-002 (indirect fixture linkage via batch number); G-052 (expanded to exhaustive 20-fixture listing). Review-approved.
 - ✅ **§4.2 Task 3 CI ratchet** — 2 commits `b203c29` + `6e83cdf`: `every_promoted_*_rule_has_executable_or_annotated_evidence` in both conformance and lint registry tests; AI-041 annotation added as a TDD discovery.
-- **COMP-001 companion drift lint rule** — unchanged, still blocked on §5.2 Task 3 structured diagnostics migration.
+- ✅ **COMP-001 companion drift lint rule blocker cleared** — §5.2 Task 3 rule migration landed in session 3; COMP-001 is now unblocked for implementation.
 
 ---
 
@@ -108,14 +166,14 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 
 - ✅ **§4.1 Extension fix** — 19 schemas patched at every nested level. §10.6 amended. K-EXT-002 lint rule landed (`5689d3c`) with review finding: linked fixtures not executed by harness. K-EXT-001 subsumed by schema `patternProperties`.
 - ✅ **§4.3 Precedence clause** — Added to both companions. COMP-001 drift-detection still pending (depends on §5.2 Task 3).
-- 🟡 **§4.2 Rule-coverage conformance** — [plan](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). **Task 1** (metadata registry, 97 entries) landed `1f8eae5`. **Task 2** (fixture-link backfill) landed `45e654d` + `bcaa294` — 7 promotions to `Tested` (K-001, AI-041, K-EXT-002, AI-001, AI-002, G-051, G-052). **Evidence-quality warnings addressed 2026-04-18** (`d86f3df` + `f96f6c5` + `91602de` + `b203c29`): K-EXT-002/AI-001/AI-002/G-052/AI-041 all carry inline-evidence or indirection annotations. **Task 3 CI ratchet landed 2026-04-18** (`6e83cdf`): every `Tested`/`LoadBearing` entry must have a resolvable executable fixture OR an annotation comment. **Tasks 4-7 pending**: coverage CLI, LINT-MATRIX regen, CI gate for LoadBearing promotion, broader ratchet automation. Prerequisite for §4.4.
-- 🔴 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. Depends on §4.2 full completion.
-- 🟡 **§5.1 Schema description audit** — [plan](thoughts/plans/2026-04-16-wos-schema-description-audit.md). **Task 1** (SCHEMA-DOC-001 lint rule + `lint_schema()` public fn) landed `03973e3`. **Task 2** (triage doc: 901 violations = ~56% backfill / ~44% reshape / <2% delete) landed `1e37b56`. **Task 3 reshape pre-pass landed 2026-04-18** (`34eafe7`): 30 `extensions` + 18 `$schema` property bodies across all 19 schemas consolidated into shared local `$defs/ExtensionsMap` and `$defs/JsonSchemaUri`; violation count 901 → 815 (-86, -9.5%). **Kernel tier backfill landed 2026-04-18** (`8f30886` + `bc064d5` + `c06cb40` + `5edb4ae` + `410b2d1` + `078c955` + review nits `29d1ef6`): 74 → 0 violations across 6 schema sections (top-level, actors/case-file, lifecycle, transitions, actions, contract/execution/milestone); purely additive (descriptions + examples, no structural change). New helper at `crates/wos-lint/examples/count_schema_violations.rs` for per-schema violation counts. Review verdict APPROVE WITH NITS (F1 Action.value examples + F3 Lifecycle.states interpretive prose fixed in `29d1ef6`; F2 completionEvent fixture round-trip deferred). **Remaining**: companions → governance → AI → profiles → sidecars → assurance → advanced tier backfills (~1-2 engineer-weeks remaining, down from ~2), then CI gate.
-- 🟡 **§5.2 Structured lint diagnostics** — [plan](thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md). **Tasks 1-2** (LintDiagnostic types + golden tests) landed `cfedab3` + `a71a154`. **`SuggestedFix::Custom` panic fixed 2026-04-18** (`0f6f049`) — converted tuple variant to struct variant `Custom { hint }` with serde round-trip test; plan sketch at Step 2.2 updated to match (`935dce9`). **Tasks 3-6 pending**: rule migration of 91 rules (biggest task in the plan), output formatters, JSON schema publication, migration doc.
-- 🟡 **§5.3 Trace-emitting conformance** — [plan](thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md). **Tasks 1-3** (ConformanceTrace type + runner emission + golden traces) landed across `bb1d323` → `d961c9f` → session-2 fixture repair → `b0b9ac5` + `95b88e9` + `b28f610` + `120086e` + `742373c`. Teaching signal fully operational: `guards_evaluated` + `policies_applied` populated; `Delta::GuardFalse` carries `guard_id` + `expression` + `inputs`. §5.4 repair prompts can consume it. **Tasks 4-5 pending**: `wos-conformance explain` / `diff` CLI subcommands; `schemas/conformance/conformance-trace.schema.json` publication.
+- ✅ **§4.2 Rule-coverage conformance** — [plan](thoughts/plans/2026-04-16-wos-rule-coverage-conformance.md). All 7 tasks done. **Task 1** (metadata registry, 97 entries) `1f8eae5`. **Task 2** (fixture-link backfill) `45e654d` + `bcaa294`. **Task 3** CI ratchet `6e83cdf`. **Task 4** coverage CLI `6b51bb2` + `ecd4218` + fixes `c5cb23f` + `b160dee` + `d1d7749`. **Task 5** LINT-MATRIX regen `082fa06` + `e2be40a` (197 → 97 reconciled rows). **Task 6** LoadBearing CI gate `e5eecee`. **Task 7** promotion-candidate discovery `679bcd7`. §4.4 is now unblocked.
+- 🔴 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. **§4.2 is now complete — this is unblocked.**
+- ✅ **§5.1 Schema description audit** — [plan](thoughts/plans/2026-04-16-wos-schema-description-audit.md). All tiers at 0 violations, CI gate live. **Task 1** `03973e3`. **Task 2** triage `1e37b56`. **Task 3** reshape pre-pass `34eafe7` (901 → 815). **Kernel tier** `8f30886` + `bc064d5` + `c06cb40` + `5edb4ae` + `410b2d1` + `078c955` + `29d1ef6` (74 → 0). **Companions** `4d88dfc` → `3384049` (118 → 0). **Governance** `a9e400b` + `a62c30b` + `e0d2637` + `18e7831` (159 → 0). **AI** `595e6f3` + `7339e99` + `4d22710` (148 → 0). **Profiles/sidecars/assurance/advanced** `4b530a7` + `65e3acd` + `61cf062` + `bdcb082` + `68b07b8` + `39a7519` + `d42c25c` + `ccd1199` (299 → 0). **CI gate** `3493f92` + `a87cf30` (mcp-tools backfill). 20 total schemas at 0 violations.
+- ✅ **§5.2 Structured lint diagnostics** — [plan](thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md). All 6 tasks done. **Tasks 1-2** `cfedab3` + `a71a154`. **Custom panic fix** `0f6f049`. **Task 2-4** (formatters: text/JSON/SARIF 2.1.0) `ab89dae`. **Task 3** rule migration — 92 rule IDs / 110 push sites: `0a25e4b` (Tier 1, 41 rules), `d635a6d` (Tier 2, 38 rules), `262ed7a` (FEL analysis, 12 rules), `220bee6` (SCHEMA-DOC-001, 1 rule). **Task 5** JSON schema `d2a3fc1`. **Task 6** migration guide `5be48b8`. Plan closed `03d9768`. COMP-001 companion drift lint rule now unblocked.
+- ✅ **§5.3 Trace-emitting conformance** — [plan](thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md). All 5 tasks done. **Tasks 1-3** (ConformanceTrace type + runner emission + golden traces) `bb1d323` → `d961c9f` → fixture repair → `b0b9ac5` + `95b88e9` + `b28f610` + `120086e` + `742373c`. Teaching signal fully operational: `guards_evaluated` + `policies_applied` populated; `Delta::GuardFalse` carries `guard_id` + `expression` + `inputs`. **Task 4** CLI subcommands `842c9ee` (library) + `09de276` (binaries) + `103b6af` (ActorMismatch) + `de3e848` (whitespace) + `27c4f00` (exit-code contract). **Task 5** conformance-trace schema `96c6acf`. §5.4 repair prompts can consume the full teaching signal end-to-end.
 - ✅ **`wos-authoring` crate MVP** — [plan](thoughts/plans/2026-04-17-wos-authoring-crate.md). **All 8 Tasks landed.** Tasks 1-3 (`a33094d` + `f9c879c` + `daec5b8`) + sealing (`9470b14` + `a42c281`) + Tasks 4-8 (12 commits `0a124ca` → `46fc45a`) + review nits (`d46e26c`). Final state: 13-variant `pub(crate)` Command enum; 10 handlers (AddState/AddTransition/AddActor/RemoveActor/SetImpactLevel/AddContract/AddExtensionKey/AddActorDeontic/SetTimer/RenameState/AddMilestone/RemoveMilestone); snapshot-based undo/redo with `UNDO_DEPTH = 100` eviction cap (tested); public `WosProject` façade over private `RawWosProject`; README; end-to-end integration test covering guarded fork + multi-domain compose + undo/redo interleave + save→load roundtrip. 49 unit + 1 integration tests; `cargo check --tests` warning-clean. Public surface: only `WosProject`, `AuthoringResult`, `AuthoringDiagnostic`, `Severity`, and re-exported kernel enums. Review verdict APPROVE WITH NITS — F1-F4 (pub(crate) sealing, UNDO_DEPTH test, comment correction, plan milestone backfill) fixed in `d46e26c`. Unblocks wos-mcp Task 3 (can now safely depend on `WosProject`) and §5.4 synth-core.
-- 🟡 **`wos-mcp` crate** — [plan](thoughts/plans/2026-04-17-wos-mcp-crate.md). **Tasks 1-2** landed `cde0b04` + `53eb25f`: hand-rolled JSON-RPC-2.0 stdio + in-process dispatch + `wos_ping` + ProjectRegistry stub. **All 6 hygiene warnings addressed 2026-04-18**: notifications suppressed (`bf86853`), JSON-RPC error codes correct (`d6377ce`), dead `ServerError` removed (`732f848`), test timeout + stderr capture (`68f5d26`), handler signature aligned to plan (`5394d15`), rust-mcp-sdk TODO with feature-flag analysis (`e1530d9`), server.rs header retraction (`ef0da3c`). 7 tests green, zero warnings. **Tasks 3-6 pending**: document-management tools, lifecycle/actor tools, governance/AI tools, validation/query tools, tool-catalog schema. Depends on wos-authoring Tasks 4+.
-- 🔴 **§5.4 `wos-synth-core` + providers** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). Four-crate split per ADR 0065. Depends on wos-authoring + wos-mcp landing.
+- ✅ **`wos-mcp` crate** — [plan](thoughts/plans/2026-04-17-wos-mcp-crate.md). All 6 tasks done. 22 tools, round-trip test at `crates/wos-mcp/tests/round_trip.rs`. **Tasks 1-2** `cde0b04` + `53eb25f` + hygiene pass `bf86853` + `d6377ce` + `732f848` + `68f5d26` + `5394d15` + `e1530d9` + `ef0da3c`. **Task 3** `064099f` + `1fdb321` + nits `63c01c3`. **Task 4** `fb9cde8` + `4d66d0a` + fixes `4bb411c` + `1e11940` + `92741a0`. **Tasks 5-6** `3d6cb6c` + `9a97ecf` + `09926aa` + `f1a4537` + post-review `307d55e` (spec-fidelity rename) + `a23ddd1` + `11065f6` + `681cf21`. Tool catalog schema `schemas/mcp/wos-mcp-tools.schema.json` at 0 violations.
+- 🔴 **§5.4 `wos-synth-core` + providers** — [plan](thoughts/plans/2026-04-16-wos-synth-crate.md). Four-crate split per ADR 0065. **wos-authoring MVP + wos-mcp MVP both complete — this is unblocked.**
 - 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Depends on wos-synth-core.
 - ✅ **§5.6 Repositioning docs** — README + POSITIONING lead with Claim A / Claim B framing.
 - ✅ **§8 Open questions** — all 6 resolved 2026-04-17; doc archived at `thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md`.
