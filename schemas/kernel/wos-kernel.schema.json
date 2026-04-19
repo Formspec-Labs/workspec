@@ -737,6 +737,13 @@
             "Applicant submitted a complete intake form",
             "Eligibility determination issued"
           ]
+        },
+        "triggerMode": {
+          "type": "string",
+          "enum": ["writeSettled"],
+          "default": "writeSettled",
+          "description": "When the processor evaluates this milestone's condition (Kernel §4.13). `writeSettled` (the default and only currently defined mode) means the condition is evaluated after every durable case-state write — i.e., once the write has been persisted and is observable to subsequent reads. Each milestone fires at most once per case instance: once the condition has evaluated true and a `MilestoneFired` provenance record has been appended, the milestone id is recorded on the case instance and never re-evaluated. Future modes (e.g., reactive event-based firing) will extend this enum without changing existing semantics.",
+          "examples": ["writeSettled"]
         }
       }
     },

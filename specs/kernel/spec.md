@@ -259,6 +259,9 @@ Milestones are named conditions on case state that, when satisfied, indicate mea
 |----------|------|----------|-------------|
 | `condition` | string (FEL) | REQUIRED | FEL expression evaluated against case state. |
 | `description` | string | OPTIONAL | Human-readable description. |
+| `triggerMode` | enum | OPTIONAL | When the processor evaluates the condition. Defaults to `writeSettled`. |
+
+**Trigger semantics (`triggerMode: writeSettled`).** A processor MUST evaluate every un-fired milestone's `condition` after each durable case-state write — once the write has been persisted and is observable to subsequent reads. A milestone fires at most once per case instance: once `condition` evaluates true and a `MilestoneFired` provenance record has been appended (carrying `{"milestoneId": <id>}`), the milestone id is recorded on the case instance and never re-evaluated. Multiple milestones firing from a single write MUST be appended to provenance in lexicographic milestone-id order so the stream is deterministic. Future trigger modes (e.g., reactive event-based firing per §4.13 Future Work) will extend the enum without altering `writeSettled` semantics.
 
 ### 4.14 History States
 
