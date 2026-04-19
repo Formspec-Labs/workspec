@@ -6,11 +6,13 @@ use std::error::Error as StdError;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
+use chrono::DateTime;
 use semver::{Version, VersionReq};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-use chrono::DateTime;
-use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument, BusinessCalendarError};
+use wos_core::business_calendar::{
+    next_business_moment, BusinessCalendarDocument, BusinessCalendarError,
+};
 use wos_core::eval::{Evaluator, GuardEvaluation, ObservedAction, ObservedTransition};
 use wos_core::instance::{
     ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
@@ -30,8 +32,8 @@ use crate::integration_handlers::{
 };
 use crate::milestones::evaluate_milestones;
 use crate::store::{
-    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
-    StoreError, TaskArtifact, TaskArtifactKind,
+    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StoreError, TaskArtifact,
+    TaskArtifactKind,
 };
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
@@ -471,7 +473,10 @@ impl WosRuntime {
             annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
         }
         // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
+        annotate_timer_created_with_convergence_error(
+            &mut appended_provenance,
+            &convergence_error_ids,
+        );
         let actions = evaluator.take_executed_actions();
         let (created_task_ids, emitted_events, runtime_provenance) =
             self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
@@ -609,7 +614,10 @@ impl WosRuntime {
         let (timer_states, convergence_error_ids) =
             timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
+        annotate_timer_created_with_convergence_error(
+            &mut appended_provenance,
+            &convergence_error_ids,
+        );
         record.instance.timers = timer_states;
         record.instance.history_store = evaluator.history_store().clone();
         record.instance.updated_at = now_iso.clone();
@@ -636,6 +644,8 @@ impl WosRuntime {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
 
@@ -668,13 +678,10 @@ impl WosRuntime {
         // already set `event` correctly in their constructors and the
         // field is load-bearing there (see `ProvenanceRecord::state_transition`).
         for prov_record in &mut appended_provenance {
-            if prov_record.event.is_none()
-                && prov_record.record_kind.is_policy_application()
-            {
+            if prov_record.event.is_none() && prov_record.record_kind.is_policy_application() {
                 prov_record.event = Some(drained_event_name.clone());
             }
         }
-
         populate_provenance_record_fields(
             &mut appended_provenance,
             &kernel,
@@ -1173,6 +1180,8 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            transition_tags: Vec::new(),
+                            case_file_snapshot: None,
                         });
                     } else {
                         provenance.push(ProvenanceRecord {
@@ -1196,6 +1205,8 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            transition_tags: Vec::new(),
+                            case_file_snapshot: None,
                         });
                     }
 
@@ -1223,6 +1234,8 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            transition_tags: Vec::new(),
+                            case_file_snapshot: None,
                         });
                     }
                 }
@@ -1250,7 +1263,15 @@ impl WosRuntime {
             service: self.service.as_ref(),
             validator: self.validator.as_ref(),
         };
-        dispatch_integration_binding(&ctx, record, kernel, observed, service_ref, binding, now_iso)
+        dispatch_integration_binding(
+            &ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
+        )
     }
 
     fn validate_integration_profile_target(
@@ -1626,7 +1647,7 @@ fn business_deadline_ms(
         i64::try_from(timer.duration_ms)
             .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
     );
-  
+
     match next_business_moment(start_utc, duration, calendar) {
         Ok(result) => {
             let result_ms = u64::try_from(result.timestamp_millis())
@@ -2100,6 +2121,8 @@ fn compensation_provenance(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         });
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::CompensationScopeBoundary,
@@ -2117,6 +2140,8 @@ fn compensation_provenance(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         });
     } else if visited.len() == 2 {
         if let Some((from, _)) = fail_transition {
@@ -2145,6 +2170,8 @@ fn compensation_provenance(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
     }
@@ -2241,6 +2268,8 @@ mod tests {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             },
         ];
 
@@ -2375,6 +2404,274 @@ mod tests {
     }
 
     #[test]
+    fn determination_transition_emits_case_file_snapshot() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "review",
+                "states": {
+                    "review": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decide",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+        let case_state = serde_json::json!({
+            "applicantId": "A-123",
+            "income": 17500,
+            "eligible": true
+        });
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-determination".to_string(),
+                definition_url: "urn:test:determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(case_state.clone()),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-determination",
+                PendingEvent {
+                    event: "decide".to_string(),
+                    actor_id: Some("reviewer".to_string()),
+                    data: None,
+                    timestamp: "2026-04-19T00:00:00Z".to_string(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-determination").unwrap();
+        let transition = result
+            .provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::StateTransition)
+            .expect("state transition provenance");
+        let snapshot = transition
+            .case_file_snapshot
+            .as_ref()
+            .expect("determination transition captures case state");
+
+        assert_eq!(snapshot.value, case_state);
+        assert_eq!(
+            snapshot.jcs_canonical,
+            r#"{"applicantId":"A-123","eligible":true,"income":17500}"#
+        );
+        assert_eq!(snapshot.sha256.len(), 64);
+    }
+
+    #[test]
+    fn recursive_join_determination_uses_current_transition_case_state() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:join-determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "parallelReview",
+                "states": {
+                    "parallelReview": {
+                        "type": "parallel",
+                        "regions": {
+                            "human": {
+                                "initialState": "humanReview",
+                                "states": {
+                                    "humanReview": {
+                                        "type": "atomic",
+                                        "transitions": [{
+                                            "event": "completeReview",
+                                            "target": "humanDone",
+                                            "actions": [{
+                                                "action": "setData",
+                                                "path": "caseFile.reviewScore",
+                                                "value": 100
+                                            }]
+                                        }]
+                                    },
+                                    "humanDone": { "type": "final" }
+                                }
+                            },
+                            "system": {
+                                "initialState": "systemDone",
+                                "states": {
+                                    "systemDone": { "type": "final" }
+                                }
+                            }
+                        },
+                        "transitions": [{
+                            "event": "$join",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-join-determination".to_string(),
+                definition_url: "urn:test:join-determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "reviewScore": 0 })),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-join-determination",
+                PendingEvent {
+                    event: "completeReview".to_string(),
+                    actor_id: Some("reviewer".to_string()),
+                    data: None,
+                    timestamp: "2026-04-19T00:00:00Z".to_string(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-join-determination").unwrap();
+        let join_transition = result
+            .provenance
+            .iter()
+            .find(|record| {
+                record.record_kind == ProvenanceKind::StateTransition
+                    && record.from_state.as_deref() == Some("parallelReview")
+                    && record.to_state.as_deref() == Some("decided")
+            })
+            .expect("join determination transition provenance");
+        let snapshot = join_transition
+            .case_file_snapshot
+            .as_ref()
+            .expect("join determination captures case state");
+
+        assert_eq!(snapshot.value, serde_json::json!({ "reviewScore": 100 }));
+        assert_eq!(snapshot.jcs_canonical, r#"{"reviewScore":100}"#);
+    }
+
+    /// Finding 3 regression: each determination-tagged transition in a
+    /// single drain MUST capture its own pre-transition case-state snapshot.
+    /// An earlier design draft hoisted the snapshot to a single pre-drain
+    /// capture reused for every record — this test fails that shape and
+    /// forces the per-transition capture wired through `Evaluator`.
+    #[test]
+    fn each_determination_transition_captures_its_own_snapshot() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:multi-determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "firstReview",
+                "states": {
+                    "firstReview": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decideFirst",
+                            "target": "secondReview",
+                            "tags": ["determination"],
+                            "actions": [{
+                                "action": "setData",
+                                "path": "caseFile.firstOutcome",
+                                "value": "approved"
+                            }]
+                        }]
+                    },
+                    "secondReview": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decideSecond",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-multi-determination".to_string(),
+                definition_url: "urn:test:multi-determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "firstOutcome": "pending" })),
+            })
+            .unwrap();
+        for event in ["decideFirst", "decideSecond"] {
+            runtime
+                .enqueue_event(
+                    "case-multi-determination",
+                    PendingEvent {
+                        event: event.to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: None,
+                        timestamp: "2026-04-19T00:00:00Z".to_string(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+        }
+
+        let mut snapshots = Vec::new();
+        loop {
+            let result = runtime.drain_once("case-multi-determination").unwrap();
+            for record in &result.provenance {
+                if record.record_kind == ProvenanceKind::StateTransition {
+                    if let Some(snapshot) = record.case_file_snapshot.as_ref() {
+                        snapshots.push((
+                            record.from_state.clone().unwrap_or_default(),
+                            snapshot.jcs_canonical.clone(),
+                        ));
+                    }
+                }
+            }
+            if result.provenance.is_empty() {
+                break;
+            }
+        }
+
+        assert_eq!(
+            snapshots.len(),
+            2,
+            "two determination transitions must each emit a snapshot"
+        );
+        assert_eq!(
+            snapshots[0],
+            (
+                "firstReview".to_string(),
+                r#"{"firstOutcome":"pending"}"#.to_string()
+            ),
+            "first determination snapshot is pre-mutation"
+        );
+        assert_eq!(
+            snapshots[1],
+            (
+                "secondReview".to_string(),
+                r#"{"firstOutcome":"approved"}"#.to_string()
+            ),
+            "second determination snapshot reflects the mutation from the first transition"
+        );
+    }
+
+    #[test]
     fn inputs_outputs_set_for_case_state_mutation() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::case_state_mutation(
@@ -2457,8 +2754,8 @@ mod tests {
         )];
         populate_provenance_record_fields(&mut object_records, &kernel, "1.0.0");
         let object_output = &object_records[0].outputs[0];
-        let round_trip: serde_json::Value = serde_json::from_str(object_output)
-            .expect("object output must be valid JSON");
+        let round_trip: serde_json::Value =
+            serde_json::from_str(object_output).expect("object output must be valid JSON");
         assert_eq!(round_trip, object_value, "object output must round-trip");
 
         // Array → same round-trip contract.
@@ -2471,8 +2768,8 @@ mod tests {
         )];
         populate_provenance_record_fields(&mut array_records, &kernel, "1.0.0");
         let array_output = &array_records[0].outputs[0];
-        let round_trip: serde_json::Value = serde_json::from_str(array_output)
-            .expect("array output must be valid JSON");
+        let round_trip: serde_json::Value =
+            serde_json::from_str(array_output).expect("array output must be valid JSON");
         assert_eq!(round_trip, array_value, "array output must round-trip");
     }
 
@@ -2523,12 +2820,8 @@ mod tests {
             "1.0.0",
             serde_json::json!([{ "id": "reviewer", "type": "human" }]),
         );
-        let mut record = ProvenanceRecord::state_transition(
-            "Draft",
-            "Submitted",
-            "submit",
-            Some("reviewer"),
-        );
+        let mut record =
+            ProvenanceRecord::state_transition("Draft", "Submitted", "submit", Some("reviewer"));
         record.audit_layer = Some("reasoning".to_string());
         record.actor_type = Some("agent".to_string());
         record.lifecycle_state = Some("Preset".to_string());

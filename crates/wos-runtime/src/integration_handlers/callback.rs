@@ -44,10 +44,10 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::{IntegrationBindingHandler, next_outbound_event_id};
 use super::request_response::{
     InvocationContext, apply_output_binding, build_event_data_from_binding,
 };
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 
 /// Three-way classification of a callback binding invocation.
 enum CallbackInvocationKind {
@@ -109,10 +109,7 @@ fn classify_invocation(
     if data.get("id").and_then(|v| v.as_str()).is_none() {
         return CallbackInvocationKind::Outbound;
     }
-    let subject = data
-        .get("subject")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let subject = data.get("subject").and_then(|v| v.as_str()).unwrap_or("");
     if pending.contains_key(subject) {
         CallbackInvocationKind::InboundCorrelated
     } else {
@@ -140,8 +137,7 @@ fn handle_outbound(
         &outbound_event_id,
     );
 
-    let event_data =
-        build_event_data_from_binding(binding, kernel, observed, &record.instance)?;
+    let event_data = build_event_data_from_binding(binding, kernel, observed, &record.instance)?;
 
     let envelope = CloudEvent {
         id: outbound_event_id.clone(),
@@ -218,6 +214,8 @@ fn handle_outbound(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     };
 
     Ok(vec![pending_provenance])
@@ -259,7 +257,10 @@ fn handle_inbound(
     record.instance.pending_callbacks.remove(&subject);
 
     // Apply output binding using the envelope's data payload.
-    let event_data = envelope.data.clone().unwrap_or_else(|| serde_json::json!({}));
+    let event_data = envelope
+        .data
+        .clone()
+        .unwrap_or_else(|| serde_json::json!({}));
     let updates = apply_output_binding(
         &mut record.instance.case_state,
         &binding.output_binding,
@@ -289,6 +290,8 @@ fn handle_inbound(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         });
     }
 
@@ -314,6 +317,8 @@ fn handle_inbound(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     });
 
     Ok(provenance)
@@ -329,13 +334,8 @@ fn compute_subject(
     binding_id: &str,
     outbound_event_id: &str,
 ) -> String {
-    if let Some(template) = binding
-        .extensions
-        .get("subject")
-        .and_then(|v| v.as_str())
-    {
+    if let Some(template) = binding.extensions.get("subject").and_then(|v| v.as_str()) {
         return template.to_string();
     }
     format!("{instance_id}:{binding_id}:{outbound_event_id}")
 }
-

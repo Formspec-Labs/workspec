@@ -9,15 +9,15 @@
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
-use wos_core::eval::{ObservedAction};
+use wos_core::EvalContext;
+use wos_core::eval::ObservedAction;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
-use wos_core::EvalContext;
 
 use crate::integration::{IntegrationBinding, IntegrationBindingKind, IntegrationContractRef};
 use crate::milestones::evaluate_milestones;
-use crate::runtime::{RuntimeError, InvokeServicesDyn, ValidateContractsDyn};
+use crate::runtime::{InvokeServicesDyn, RuntimeError, ValidateContractsDyn};
 use crate::store::{RuntimeRecord, StepResultRecord};
 
 use super::{IntegrationBindingHandler, value_to_idempotency_key};
@@ -98,6 +98,8 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
@@ -123,6 +125,8 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
 
@@ -163,6 +167,8 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
 
@@ -233,6 +239,8 @@ pub(crate) fn validate_integration_contract(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     }))
 }
 
@@ -675,7 +683,8 @@ pub(crate) fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, R
                     token
                         .strip_prefix('"')
                         .and_then(|inner| inner.strip_suffix('"'))
-                }) {
+                })
+            {
                 // Quoted key: ['key'] or ["key"]
                 JsonPathSegment::Key(unescape_json_path_key(quoted))
             } else if token.contains(':') {

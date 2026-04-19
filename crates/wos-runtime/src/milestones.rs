@@ -11,10 +11,10 @@ use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use serde_json::json;
+use wos_core::EvalContext;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
-use wos_core::EvalContext;
 
 /// Evaluate all un-fired milestones against `post_state`.
 ///
@@ -70,6 +70,8 @@ pub fn evaluate_milestones(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
             });
         }
     }
@@ -104,9 +106,7 @@ fn milestone_condition_true(
 ///
 /// Returns `None` when the state is not an object (should never happen in
 /// well-formed instances, but we defend here rather than panic).
-fn case_state_as_map(
-    case_state: &serde_json::Value,
-) -> Option<HashMap<String, serde_json::Value>> {
+fn case_state_as_map(case_state: &serde_json::Value) -> Option<HashMap<String, serde_json::Value>> {
     case_state
         .as_object()
         .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -130,9 +130,7 @@ mod tests {
     use std::collections::HashSet;
 
     /// Build a minimal kernel document with the given milestones by deserializing JSON.
-    fn kernel_with_milestones(
-        milestones: &serde_json::Value,
-    ) -> KernelDocument {
+    fn kernel_with_milestones(milestones: &serde_json::Value) -> KernelDocument {
         let kernel_json = serde_json::json!({
             "$wosKernel": "1.0",
             "lifecycle": {

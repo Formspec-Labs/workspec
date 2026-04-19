@@ -16,8 +16,8 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::{IntegrationBindingHandler, next_outbound_event_id};
 use super::request_response::{InvocationContext, build_event_data_from_binding};
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 
 /// Handler for outbound CloudEvent emission bindings.
 pub(crate) struct EventEmitHandler;
@@ -103,6 +103,8 @@ impl IntegrationBindingHandler for EventEmitHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
 
         Ok(vec![provenance])
@@ -121,11 +123,7 @@ fn compute_subject(
     binding_id: &str,
     outbound_event_id: &str,
 ) -> String {
-    if let Some(template) = binding
-        .extensions
-        .get("subject")
-        .and_then(|v| v.as_str())
-    {
+    if let Some(template) = binding.extensions.get("subject").and_then(|v| v.as_str()) {
         return template.to_string();
     }
     format!("{instance_id}:{binding_id}:{outbound_event_id}")

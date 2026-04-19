@@ -95,15 +95,8 @@ impl IntegrationBindingHandler for ArazzoHandler {
         let mut step_outputs: HashMap<String, serde_json::Value> = HashMap::new();
 
         for step in &steps {
-            let (step_result_prov, step_output) = execute_step(
-                ctx,
-                record,
-                kernel,
-                observed,
-                step,
-                &step_outputs,
-                now_iso,
-            );
+            let (step_result_prov, step_output) =
+                execute_step(ctx, record, kernel, observed, step, &step_outputs, now_iso);
             let step_provenance = step_result_prov;
 
             match step_output {
@@ -141,6 +134,8 @@ impl IntegrationBindingHandler for ArazzoHandler {
                                 outputs: Vec::new(),
                                 input_digest: None,
                                 output_digest: None,
+                                transition_tags: Vec::new(),
+                                case_file_snapshot: None,
                             });
                         }
                     }
@@ -192,6 +187,8 @@ impl IntegrationBindingHandler for ArazzoHandler {
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    transition_tags: Vec::new(),
+                    case_file_snapshot: None,
                 });
             }
         }
@@ -218,7 +215,10 @@ fn execute_step(
     step: &ArazzoStepSpec,
     step_context: &HashMap<String, serde_json::Value>,
     now_iso: &str,
-) -> (Vec<ProvenanceRecord>, Result<serde_json::Value, RuntimeError>) {
+) -> (
+    Vec<ProvenanceRecord>,
+    Result<serde_json::Value, RuntimeError>,
+) {
     let start = Instant::now();
     let mut step_provenance = Vec::new();
 
@@ -338,6 +338,8 @@ fn execute_step(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     });
 
     (step_provenance, Ok(step_result.output))
@@ -426,6 +428,8 @@ fn arazzo_step_record(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
     }
 }
 
