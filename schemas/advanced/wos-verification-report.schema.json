@@ -15,8 +15,8 @@
     "$wosVerificationReport": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Verification Report specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Verification Report specification version. MUST be '1.0'. Identifies this document as a WOS Verification Report provenance artifact and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Verification Report sidecar"
@@ -26,15 +26,20 @@
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document whose constraints were verified. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document whose constraints were verified. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars. Used by tooling to cross-reference this report with the governing advanced governance document.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/appeals-processing"],
       "x-lm": { "critical": true, "intent": "Binds this report to the verified workflow" }
     },
-    "version": { "type": "string", "minLength": 1 },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this Verification Report document. Typically matches the advanced governance document version that was verified. SemVer is RECOMMENDED.",
+      "examples": ["1.0.0"]
+    },
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "description": "When the verification was performed.",
+      "description": "ISO 8601 date-time when the SMT verification run was performed. Recorded for audit trail purposes; reports are immutable after this timestamp.",
       "examples": ["2026-04-09T14:30:00Z"]
     },
     "solver": {
@@ -74,18 +79,18 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Solver name.",
+          "description": "Name of the SMT solver or verification tool that produced these results. Recorded for reproducibility and audit. Standard solvers: Z3, CVC5. Custom verifiers MUST use a unique name.",
           "examples": ["Z3", "CVC5", "custom-wos-verifier"]
         },
         "version": {
           "type": "string",
           "minLength": 1,
-          "description": "Solver version.",
+          "description": "Version of the SMT solver or verification tool. Combined with 'name' to form a complete tool identification for audit and reproducibility purposes.",
           "examples": ["4.13.0", "1.1.0"]
         },
         "timeout": {
           "type": "string",
-          "description": "Solver timeout per constraint.",
+          "description": "Maximum time the solver is allowed per constraint before recording an 'inconclusive' result. ISO 8601 duration. Balances thoroughness against CI/CD pipeline time budgets.",
           "examples": ["PT30S", "PT5M"]
         }
       }
@@ -103,7 +108,7 @@
         "constraintRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to the deontic constraint that was verified.",
+          "description": "Reference to the deontic constraint id in the AI Integration Document that was subject to SMT verification. Must match a constraintRef declared in the advanced governance verifiableConstraints list (Advanced S8.1).",
           "examples": ["noFinalDenial", "outputFieldScope"],
           "x-lm": {
             "critical": true,
@@ -126,11 +131,13 @@
         },
         "solverTimeMs": {
           "type": "integer",
-          "description": "Time the solver spent on this constraint in milliseconds."
+          "description": "Wall-clock time in milliseconds the solver spent on this constraint. Useful for identifying performance bottlenecks and tuning timeout thresholds.",
+          "examples": [42, 1500]
         },
         "notes": {
           "type": "string",
-          "description": "Additional notes from the verification process."
+          "description": "Additional notes from the verification process explaining the result, including which verifiable subset restrictions apply or why the result is inconclusive.",
+          "examples": ["Constraint holds for all possible input combinations within declared finite domains."]
         }
       }
     },
@@ -145,12 +152,13 @@
       "properties": {
         "inputs": {
           "type": "object",
-          "description": "Input values that violate the constraint.",
+          "description": "Mapping of input field paths to values that constitute a counterexample — a concrete assignment that causes the constraint to be violated. Used to reproduce and debug the unsafe case.",
           "examples": [{ "output.eligible": false, "instance.impactLevel": "rights-impacting" }]
         },
         "explanation": {
           "type": "string",
-          "description": "Human-readable explanation of why this input violates the constraint."
+          "description": "Human-readable explanation of why this input assignment violates the constraint. Describes the logical path from the counterexample inputs to the constraint violation.",
+          "examples": ["When output.eligible is false and impactLevel is rights-impacting, the noFinalDenial prohibition is violated because no human review step precedes the denial."]
         }
       }
     },
@@ -163,11 +171,35 @@
       },
       "additionalProperties": false,
       "properties": {
-        "totalConstraints": { "type": "integer", "minimum": 0 },
-        "provenSafe": { "type": "integer", "minimum": 0 },
-        "provenUnsafe": { "type": "integer", "minimum": 0 },
-        "inconclusive": { "type": "integer", "minimum": 0 },
-        "totalSolverTimeMs": { "type": "integer" }
+        "totalConstraints": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of constraints that were submitted for verification in this run. Equal to the sum of provenSafe, provenUnsafe, and inconclusive.",
+          "examples": [5, 12]
+        },
+        "provenSafe": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of constraints that were formally proven to hold for all possible inputs within the declared finite domains and verifiable subset restrictions.",
+          "examples": [4, 10]
+        },
+        "provenUnsafe": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of constraints for which a counterexample was found. These constraints do NOT hold and MUST be reviewed and addressed before deployment.",
+          "examples": [0, 1]
+        },
+        "inconclusive": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of constraints where the solver timed out or the constraint used constructs outside the verifiable subset. Inconclusive results require manual review.",
+          "examples": [1, 0]
+        },
+        "totalSolverTimeMs": {
+          "type": "integer",
+          "description": "Total wall-clock time in milliseconds the solver spent across all constraints in this run. Sum of all per-constraint solverTimeMs values.",
+          "examples": [250, 4800]
+        }
       }
     }
   ,
