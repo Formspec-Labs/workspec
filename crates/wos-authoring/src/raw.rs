@@ -14,7 +14,7 @@ use wos_core::{
 
 use crate::{
     command::{AppliedCommand, Command, CommandResult},
-    diagnostics::{AuthoringDiagnostic, Severity},
+    diagnostics::AuthoringDiagnostic,
 };
 
 // ── Trait ─────────────────────────────────────────────────────────────────────
@@ -209,10 +209,16 @@ impl RawWosProject {
             .map(|s| s.transitions.len())
             .unwrap_or(0);
 
-        // Remove dangling inbound transitions from all other states that
-        // target the removed state, and count them.
+        // Remove dangling inbound transitions from all *other* states that
+        // target the removed state, and count them.  Deliberately skips the
+        // removed state itself — its outgoing transitions (including any
+        // self-loops) are already captured in `outgoing_count` above; pruning
+        // them here would double-count every self-loop in `total_removed`.
         let mut inbound_removed: usize = 0;
-        for src_state in self.doc.lifecycle.states.values_mut() {
+        for (src_id, src_state) in self.doc.lifecycle.states.iter_mut() {
+            if src_id == &id {
+                continue;
+            }
             let before = src_state.transitions.len();
             src_state.transitions.retain(|t| t.target != id);
             inbound_removed += before - src_state.transitions.len();
@@ -800,6 +806,7 @@ impl RawWosProject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostics::Severity;
 
     fn make_project() -> RawWosProject {
         RawWosProject::new(ImpactLevel::Operational, "Test Project")
@@ -1236,6 +1243,45 @@ mod tests {
             })
             .expect_err("unknown actor must be rejected");
         assert!(err.message.contains("not found"));
+    }
+
+    // ── RemoveState self-loop counting ────────────────────────────────────
+
+    /// A state with only a self-loop must report exactly 1 transition removed,
+    /// not 2.  The self-loop is an outgoing transition and must not be
+    /// double-counted as an inbound transition from "another" state.
+    #[test]
+    fn remove_state_self_loop_counts_once() {
+        let mut p = make_project();
+
+        p.dispatch(Command::AddState {
+            id: "loop".into(),
+            kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        })
+        .unwrap();
+
+        // Add a self-loop: loop → loop.
+        p.dispatch(Command::AddTransition {
+            from_state: "loop".into(),
+            to_state: "loop".into(),
+            guard: None,
+            event: Some("retry".into()),
+        })
+        .unwrap();
+
+        // Remove the state.  The label must mention "1 transition removed",
+        // not "2 transitions removed".
+        let applied = p
+            .dispatch(Command::RemoveState { id: "loop".into() })
+            .expect("RemoveState must succeed");
+
+        assert!(
+            applied.label.contains("1 transition"),
+            "self-loop must be counted exactly once; label was: {:?}",
+            applied.label
+        );
     }
 
     // ── SetImpactLevel ────────────────────────────────────────────────────
