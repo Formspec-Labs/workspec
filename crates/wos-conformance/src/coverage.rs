@@ -401,15 +401,23 @@ fn is_expected_traces_path_buf(path: &Path) -> bool {
     })
 }
 
-/// Return true when `rel` matches any path in `referenced` — exact or
-/// suffix match (to handle paths stored with different leading segments).
+/// Return true when `rel` matches any path in `referenced`.
+///
+/// Matching rules (applied in order):
+/// 1. Exact equality of the normalized paths.
+/// 2. The registry entry ends with `rel` (rule stores a longer prefix-anchored
+///    path such as `fixtures/kernel/foo.json`; `rel` is the workspace-relative
+///    form which is already `fixtures/…` so this handles store-relative vs
+///    workspace-relative skew).
+///
+/// The reverse arm (`rel.ends_with(r)`) is intentionally absent: a bare
+/// filename in a rule entry must not silently match every workspace path
+/// that happens to share that filename, which would hide orphans.
 fn path_is_referenced(rel: &str, referenced: &HashSet<String>) -> bool {
     if referenced.contains(rel) {
         return true;
     }
-    // Allow a suffix match: a rule may store `fixtures/kernel/foo.json` and
-    // the walked path may be `fixtures/kernel/foo.json` relative to workspace.
-    referenced.iter().any(|r| r.ends_with(rel) || rel.ends_with(r))
+    referenced.iter().any(|r| r.ends_with(rel))
 }
 
 /// Extract and normalise the filename stem (lower-case, hyphens only).
@@ -985,5 +993,44 @@ mod tests {
             candidates.is_empty(),
             "Tested rules must not appear as promotion candidates"
         );
+    }
+
+    // ── path_is_referenced ────────────────────────────────────────────────
+
+    #[test]
+    fn path_referenced_exact_match() {
+        let mut set = HashSet::new();
+        set.insert("fixtures/kernel/k-001.json".to_string());
+        assert!(path_is_referenced("fixtures/kernel/k-001.json", &set));
+    }
+
+    #[test]
+    fn path_referenced_registry_entry_is_longer_prefix() {
+        // Rule stores path with a leading segment the walked path doesn't have.
+        // r.ends_with(rel) should still match.
+        let mut set = HashSet::new();
+        set.insert("crates/wos-conformance/fixtures/kernel/k-001.json".to_string());
+        assert!(path_is_referenced("fixtures/kernel/k-001.json", &set));
+    }
+
+    #[test]
+    fn path_referenced_bare_filename_does_not_match_longer_workspace_path() {
+        // A bare filename in the registry must NOT match an unrelated workspace
+        // path that merely ends in the same filename.  This is the regression
+        // guarded by dropping the `rel.ends_with(r)` arm.
+        let mut set = HashSet::new();
+        set.insert("k-001.json".to_string());
+        assert!(
+            !path_is_referenced("fixtures/kernel/k-001.json", &set),
+            "bare filename must not match a longer workspace-relative path"
+        );
+    }
+
+    #[test]
+    fn path_referenced_no_cross_name_match() {
+        // Completely different filenames must not match.
+        let mut set = HashSet::new();
+        set.insert("fixtures/kernel/k-002.json".to_string());
+        assert!(!path_is_referenced("fixtures/kernel/k-001.json", &set));
     }
 }
