@@ -14,24 +14,50 @@
       "type": "object",
       "description": "Subject continuity reference (S3).",
       "properties": {
-        "reference": { "type": "string" },
-        "scope": { "type": "string", "enum": ["instance", "case", "tenant", "deployment"] }
+        "reference": {
+          "type": "string",
+          "description": "The persistent subject identifier linking this instance to prior interactions. Enables a processor to re-identify the same legal person across workflow instances without a fresh assurance ceremony (Assurance S3.2).",
+          "examples": ["urn:agency.gov:subject:SSN-encrypted:abc123", "urn:agency.gov:subject:case:2025-001-99999"]
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["instance", "case", "tenant", "deployment"],
+          "description": "Continuity scope: how broadly this reference is trusted. 'instance': single workflow run. 'case': all runs under the same case identifier. 'tenant': all workflows within one agency tenant. 'deployment': entire WOS deployment.",
+          "examples": ["case", "tenant"]
+        }
       },
       "required": ["reference", "scope"]
     },
     "disclosurePosture": {
       "type": "string",
       "enum": ["anonymous", "pseudonymous", "identified", "public"],
-      "description": "Disclosure posture — independent of assuranceLevel per Invariant 6 (S4)."
+      "description": "Disclosure posture — independent of assuranceLevel per Invariant 6 (S4). 'anonymous': no identifying information. 'pseudonymous': token only. 'identified': real identity verified. 'public': public record.",
+      "examples": ["identified", "pseudonymous"]
     },
     "attestation": {
       "type": "object",
       "description": "Provider-neutral attestation (S5).",
       "properties": {
-        "subject": { "type": "string" },
-        "predicate": { "type": "string" },
-        "basis": { "type": "string" },
-        "validityScope": { "type": "string" }
+        "subject": {
+          "type": "string",
+          "description": "The entity about whom the attestation is made. Typically the subject reference URI or a WOS actor identifier for the claimant (Assurance S5.1).",
+          "examples": ["urn:agency.gov:subject:case:2025-001-99999", "urn:wos:actor:human:caseworker-7"]
+        },
+        "predicate": {
+          "type": "string",
+          "description": "The claim being asserted about the subject. Use a URI from a controlled vocabulary when possible (Assurance S5.2). Describes what property or capability is being attested.",
+          "examples": ["https://wos-spec.org/assurance/predicates/identity-verified", "urn:agency:attestation:income-reported"]
+        },
+        "basis": {
+          "type": "string",
+          "description": "The evidentiary or procedural basis for this attestation. Describes how the claim was established: self-assertion, document verification, in-person check, or third-party corroboration (Assurance S5.3).",
+          "examples": ["self-assertion", "document-verification:passport", "in-person:USPS-notary"]
+        },
+        "validityScope": {
+          "type": "string",
+          "description": "Scope and duration for which this attestation is considered valid. When omitted, validity is implementation-defined. May be a time range, a workflow-phase identifier, or a case-level scope string.",
+          "examples": ["P90D", "case-lifetime", "2025-fiscal-year"]
+        }
       },
       "required": ["subject", "predicate", "basis"]
     }
