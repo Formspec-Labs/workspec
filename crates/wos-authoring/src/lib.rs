@@ -35,3 +35,6 @@ pub use project::{AuthoringResult, WosProject};
 // Re-export the kernel types callers pass to `WosProject` helpers so they
 // don't need a direct `wos-core` dependency for ergonomic authoring code.
 pub use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind};
+
+// Re-export model types needed by wos-mcp's query tools for graph generation.
+pub use wos_core::model::kernel::{Actor, State, Transition};

@@ -127,6 +127,96 @@ pub async fn dispatch(
                     source,
                 })
         }
+        // ── Governance / AI tools (Task 5) ────────────────────────────────
+        "wos_add_due_process_path" => {
+            tools::wos_add_due_process_path(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_assertion_gate" => {
+            tools::wos_add_assertion_gate(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_set_impact_level" => {
+            tools::wos_set_impact_level(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_ai_agent" => {
+            tools::wos_add_ai_agent(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_deontic_constraint" => {
+            tools::wos_add_deontic_constraint(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        // ── Validation / query tools (Task 6) ────────────────────────────
+        "wos_lint" => {
+            tools::wos_lint(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_run_conformance" => {
+            tools::wos_run_conformance(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_preview_state_graph" => {
+            tools::wos_preview_state_graph(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_search" => {
+            tools::wos_search(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_list_projects" => {
+            tools::wos_list_projects(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_close_project" => {
+            tools::wos_close_project(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
         other => Err(DispatchError::UnknownTool(other.to_string())),
     }
 }
