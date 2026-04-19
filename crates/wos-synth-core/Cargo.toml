@@ -16,3 +16,4 @@ async-trait     = "0.1"
 
 [dev-dependencies]
 pollster = "0.4"
+jsonschema = "0.46"

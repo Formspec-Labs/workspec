@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/synth/wos-synth-trace.schema.json",
+  "title": "WOS Synth Trace",
+  "description": "Structured execution trace emitted by the wos-synth synthesis loop. Records every iteration of the generate-then-repair loop the LLM authoring engine ran for a single document: the model's raw attempt, the lint findings observed against it, the conformance verdict (when a fixture was supplied), and the per-call token costs. The CLI's `wos-synth explain` command consumes this artifact, downstream tooling (wos-bench, regression dashboards) parses it for cost and convergence analysis, and external consumers may use it to replay or diff synthesis runs across model or prompt versions. The Rust authority for this shape is `wos-synth-core::trace::SynthTrace`; a drift test (`crates/wos-synth-core/tests/trace_schema_drift.rs`) keeps this schema and the Rust types aligned.",
+  "$ref": "#/$defs/SynthTrace",
+  "$comment": "The root delegates to $defs/SynthTrace so the same definition is reachable both as the top-level document type and from sibling definitions (SynthOutcomeConverged.trace, SynthOutcomeUnconverged.trace).",
+  "$defs": {
+    "SynthTrace": {
+      "type": "object",
+      "description": "Full record of a synthesis loop run — the iteration list plus per-run cost totals. Mirrors `wos-synth-core::trace::SynthTrace`.",
+      "required": [
+        "iterations",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_cache_read_tokens"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
+          "examples": ["https://wos-spec.org/schemas/synth/wos-synth-trace.schema.json"]
+        },
+        "iterations": {
+          "type": "array",
+          "description": "Ordered sequence of loop iterations, in execution order. The first entry is iteration 0 (the initial generation call); subsequent entries are repair attempts. Empty array is permitted only when the loop never ran (constructed but unused trace); a real run always produces at least one record.",
+          "items": { "$ref": "#/$defs/IterationRecord" },
+          "examples": [[]]
+        },
+        "total_input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of input_tokens across every iteration in the trace. Maintained by the Rust producer (SynthTrace::push) so consumers can read total cost without re-summing the iterations array. Used by wos-bench for cost regression alerting and by `wos-synth explain` for the run summary line.",
+          "examples": [0, 1542]
+        },
+        "total_output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of output_tokens across every iteration in the trace. Together with total_input_tokens and total_cache_read_tokens, this gives the full per-document cost profile. Output tokens dominate cost on most providers; a high value indicates either verbose model output or many repair iterations.",
+          "examples": [0, 487]
+        },
+        "total_cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of cache_read_tokens across every iteration in the trace. Reflects how many tokens the provider served from prompt cache rather than re-billing as input. A healthy synthesis loop with stable cache anchors converges this value toward total_input_tokens on repair iterations; large divergence indicates the prompter is invalidating its cache.",
+          "examples": [0, 1320]
+        }
+      },
+      "patternProperties": {
+        "^x-": {
+          "description": "Vendor extension fields reserved for downstream tooling. The `x-` prefix prevents collision with future spec-defined properties.",
+          "examples": [{"x-run-id": "abc123"}]
+        }
+      }
+    },
+    "IterationRecord": {
+      "type": "object",
+      "description": "One entry of the synthesis loop: the LLM produced an attempt, the tool context linted it (and optionally checked conformance), and the loop recorded the result before deciding whether to repair, converge, or give up at the iteration cap.",
+      "required": [
+        "index",
+        "attempt",
+        "lint_findings",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position of this iteration in the loop. Index 0 is the initial generation; index N>0 is a repair attempt produced after the previous iteration's lint findings were fed back into the prompt.",
+          "examples": [0, 1, 2]
+        },
+        "attempt": {
+          "type": "string",
+          "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations — the trace must preserve exactly what the model produced so failures can be reproduced.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\"}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{}}}"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Verbatim model output — the load-bearing teaching signal for diagnosing why the loop did not converge"
+          }
+        },
+        "lint_findings": {
+          "type": "array",
+          "description": "Lint findings observed against this iteration's attempt. Empty array means the attempt passed all lint rules (clean). Non-empty entries are fed back into the next repair prompt so the model can correct the document.",
+          "items": { "$ref": "#/$defs/LintFinding" },
+          "examples": [[]]
+        },
+        "conformance": {
+          "$ref": "#/$defs/ConformanceVerdict"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens billed as fresh input on the LLM call that produced this iteration's attempt. Distinct from cache_read_tokens, which accounts for cached prefix tokens the provider re-served at a discount.",
+          "examples": [120, 1500]
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens the provider billed for the model's response on this iteration. The size of `attempt` in tokens (provider-tokenizer-dependent, so not directly comparable to character length).",
+          "examples": [80, 450]
+        },
+        "cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens served from prompt cache on this iteration. Anthropic and other providers return this value separately from input_tokens so callers can track cache hit ratio. Zero is normal for the first iteration; subsequent repair iterations should approach the size of the cached prompt prefix.",
+          "examples": [0, 1320]
+        }
+      }
+    },
+    "LintFinding": {
+      "type": "object",
+      "description": "One lint finding the synthesis loop will ask the model to repair on the next iteration. Mirrors `wos-synth-core::tool_context::LintFinding` (intentionally a distinct shape from the published wos-lint-diagnostic schema, which serves a different consumer surface).",
+      "required": ["rule_id", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "Stable identifier of the lint rule that produced this finding (e.g. K-001, G-027, AI-024). Matches an entry in LINT-MATRIX.md. The repair prompt cites this id so the model can map the message back to the rule's documentation.",
+          "examples": ["K-001", "G-027", "AI-024"]
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the problem. The synthesis loop forwards this string verbatim into the repair prompt so the model gets the rule author's explanation rather than just the rule id. Should be a complete sentence that makes sense without surrounding context.",
+          "examples": [
+            "state 'approved' has no outbound transition and is not terminal",
+            "actor 'reviewer' references undefined permission 'approve'"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional JSON Pointer (RFC 6901) anchoring the finding to a specific node in the attempt document. Absent when the finding is whole-document scoped. The pointer is computed against the attempt as parsed JSON, so it may not be present on iterations where the attempt failed to parse.",
+          "examples": ["/states/approved", "/lifecycle/transitions/2"]
+        },
+        "suggested_fix": {
+          "type": "string",
+          "description": "Optional pre-rendered remediation hint the rule's author wrote (e.g. 'add property at /foo', 'rename X -> Y'). Surfaced in the repair prompt so the model receives the rule's machine-readable suggestion alongside the human-readable message.",
+          "examples": [
+            "add property at /states/approved/type with value 'terminal'",
+            "rename actor 'reviewr' to 'reviewer'"
+          ]
+        },
+        "related_docs": {
+          "type": "array",
+          "description": "Optional list of spec section anchors or matrix entries that explain this rule. The synthesis loop joins these into the repair prompt so the model can ground its fix in the spec rather than guessing. Empty array is omitted from the serialized form.",
+          "items": {
+            "type": "string",
+            "description": "A single reference string, typically a relative file path with a fragment anchor pointing to the relevant spec section or matrix row.",
+            "examples": [
+              "specs/kernel/spec.md#S4.2",
+              "LINT-MATRIX.md#K-023"
+            ]
+          },
+          "examples": [
+            ["specs/kernel/spec.md#S4.2", "LINT-MATRIX.md#K-023"],
+            []
+          ]
+        }
+      }
+    },
+    "Severity": {
+      "type": "string",
+      "enum": ["error", "warning", "info"],
+      "description": "Severity bucket the loop uses to decide whether the document is repair-worthy. Only `error` blocks convergence; `warning` and `info` are recorded in the trace but do not trigger another repair iteration. The loop converges when zero `error` findings remain (and conformance, if checked, passes).",
+      "examples": ["error", "warning", "info"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Drives loop convergence — only `error` severities trigger repair iterations"
+      }
+    },
+    "ConformanceVerdict": {
+      "type": "object",
+      "description": "Optional conformance result attached to an iteration when the caller supplied a fixture. Absent (the iteration record's `conformance` field is omitted) when no fixture was supplied — the loop then converges on lint cleanliness alone.",
+      "required": ["passed", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean",
+          "description": "True when the conformance harness reported the fixture passed end-to-end against this iteration's attempt; false otherwise. The synthesis loop treats `false` as a blocker just like an error-severity lint finding: another repair iteration is triggered (or the loop gives up at the cap).",
+          "examples": [true, false]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable summary of the conformance result, suitable for inclusion in a repair prompt. On failure, the summary should describe the divergence in enough detail for the model to diagnose and fix the document. On pass, a brief affirmative line is sufficient.",
+          "examples": [
+            "fixture passed all 7 steps",
+            "step 3: expected state 'approved', got 'rejected' (guard 'reviewed->approved:decide' evaluated false)"
+          ]
+        }
+      }
+    },
+    "SynthOutcome": {
+      "description": "Result of running the synthesis loop to completion. A discriminated union tagged by the `outcome` field: `converged` when the loop produced a clean document within the iteration cap, `unconverged` when the cap was hit with errors still present. Mirrors the Rust `wos-synth-core::synth_loop::SynthOutcome` enum (serde tag `outcome`, snake_case variants).",
+      "oneOf": [
+        { "$ref": "#/$defs/SynthOutcomeConverged" },
+        { "$ref": "#/$defs/SynthOutcomeUnconverged" }
+      ],
+      "examples": [
+        {
+          "outcome": "converged",
+          "document": "{\"$wosKernel\":\"1.0\"}",
+          "trace": {
+            "iterations": [],
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cache_read_tokens": 0
+          }
+        }
+      ]
+    },
+    "SynthOutcomeConverged": {
+      "type": "object",
+      "description": "Outcome variant: the loop produced a document that cleared all error-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
+      "required": ["outcome", "document", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "const": "converged",
+          "description": "Discriminant identifying this outcome variant. Always the literal string 'converged'. Consumers switch on this field to choose between the converged and unconverged response shapes without inspecting other fields.",
+          "examples": ["converged", "converged"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tagged-union discriminant — consumers must read this before any other field to determine the outcome shape"
+          }
+        },
+        "document": {
+          "type": "string",
+          "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved — this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\"}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The synthesis output — the actual artifact the caller asked the loop to produce"
+          }
+        },
+        "trace": {
+          "$ref": "#/$defs/SynthTrace"
+        }
+      }
+    },
+    "SynthOutcomeUnconverged": {
+      "type": "object",
+      "description": "Outcome variant: the loop hit the iteration cap with error-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
+      "required": ["outcome", "last_attempt", "last_findings", "trace"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "const": "unconverged",
+          "description": "Discriminant identifying this outcome variant. Always the literal string 'unconverged'. Consumers switch on this field to choose between the converged and unconverged response shapes without inspecting other fields.",
+          "examples": ["unconverged", "unconverged"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tagged-union discriminant — consumers must read this before any other field to determine the outcome shape"
+          }
+        },
+        "last_attempt": {
+          "type": "string",
+          "description": "The most recent document the loop produced before giving up at the iteration cap. Preserved as raw JSON text (see SynthOutcomeConverged.document for the rationale) so callers can inspect or feed it into a follow-up repair pipeline.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\",\"broken\":true}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{}}"
+          ]
+        },
+        "last_findings": {
+          "type": "array",
+          "description": "Lint findings still outstanding against `last_attempt` when the loop gave up. Identical in shape to IterationRecord.lint_findings; surfaced at the outcome level for callers that only care about the final state and do not want to walk the trace.",
+          "items": { "$ref": "#/$defs/LintFinding" },
+          "examples": [[]]
+        },
+        "trace": {
+          "$ref": "#/$defs/SynthTrace"
+        }
+      }
+    }
+  }
+}
