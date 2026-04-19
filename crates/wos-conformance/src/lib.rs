@@ -19,6 +19,7 @@ mod provenance;
 pub mod rules;
 pub mod stubs;
 pub mod trace;
+pub mod coverage;
 
 pub use engine::WorkflowEngine;
 pub use fixture::{
