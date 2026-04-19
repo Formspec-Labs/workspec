@@ -85,7 +85,7 @@ const INVALID_PARAMS: i32 = -32602;
 ///
 /// Per JSON-RPC-2.0 §4.1 and MCP spec, notifications MUST NOT receive a
 /// response — the server silently consumes them.
-async fn handle_request(registry: &ProjectRegistry, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
     // Notification detection: absence of `id` field is the JSON-RPC-2.0
     // signal that the client does not want a response. A present-but-null
     // `id` is still a request (legal, though unusual).
@@ -124,6 +124,49 @@ async fn handle_request(registry: &ProjectRegistry, req: JsonRpcRequest) -> Opti
                             "type": "object",
                             "properties": {},
                             "required": []
+                        }
+                    },
+                    {
+                        "name": "wos_create_kernel",
+                        "description": "Create a new empty WOS kernel project. Returns {\"project_id\": \"<uuid>\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {},
+                            "required": []
+                        }
+                    },
+                    {
+                        "name": "wos_load_document",
+                        "description": "Parse and register a WOS kernel document from inline JSON text or a file path. Returns {\"project_id\": \"<uuid>\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "json": { "type": "string", "description": "WOS kernel document as a JSON string." },
+                                "path": { "type": "string", "description": "Path to a WOS kernel JSON file." }
+                            },
+                            "required": []
+                        }
+                    },
+                    {
+                        "name": "wos_export_document",
+                        "description": "Serialize a registered project back to a JSON string. Returns {\"document\": \"<json-string>\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." }
+                            },
+                            "required": ["project_id"]
+                        }
+                    },
+                    {
+                        "name": "wos_describe_document",
+                        "description": "Return summary counts for a registered project: state_count, transition_count, actor_count, impact_level, ai_agent_count.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." }
+                            },
+                            "required": ["project_id"]
                         }
                     }
                 ]
@@ -204,10 +247,9 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    // One registry per process; Task 3 will populate it with `WosProject`
-    // entries. Held behind a plain `&` borrow — the stdio loop is
-    // single-threaded, so no locking is needed yet.
-    let registry = ProjectRegistry::new();
+    // One registry per process. The stdio loop is single-threaded so a plain
+    // mutable reference suffices — no locking needed.
+    let mut registry = ProjectRegistry::new();
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -230,7 +272,7 @@ async fn main() {
         let response: Option<JsonRpcResponse> = match serde_json::from_str::<JsonRpcRequest>(
             trimmed,
         ) {
-            Ok(req) => handle_request(&registry, req).await,
+            Ok(req) => handle_request(&mut registry, req).await,
             Err(e) => Some(JsonRpcResponse::err(
                 Value::Null,
                 -32700, // Parse error

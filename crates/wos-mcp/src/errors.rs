@@ -28,6 +28,18 @@ pub enum ToolError {
     #[error("missing required argument: {0}")]
     MissingArgument(String),
 
+    /// A referenced project was not found in the registry.
+    #[error("project not found: {0}")]
+    ProjectNotFound(String),
+
+    /// The registry cannot hold any more projects (cap is 20).
+    #[error("too many open projects (maximum is 20)")]
+    TooManyProjects,
+
+    /// Document validation failed — first diagnostic message included.
+    #[error("validation failed: {0}")]
+    ValidationFailed(String),
+
     /// An internal logic error occurred inside the tool.
     #[error("tool internal error: {0}")]
     Internal(String),

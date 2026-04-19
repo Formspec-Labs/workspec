@@ -10,10 +10,10 @@ use crate::registry::ProjectRegistry;
 ///
 /// The `registry` and `project_id` arguments are part of the shared
 /// handler signature from the plan; `wos_ping` is a project-less tool
-/// and ignores them. Keeping the signature aligned now means Task 3
-/// handlers plug in without reshaping call sites.
+/// and ignores them. The registry is `&mut` for signature uniformity with
+/// mutating handlers — `wos_ping` itself does not write to it.
 pub async fn ping(
-    _registry: &ProjectRegistry,
+    _registry: &mut ProjectRegistry,
     _project_id: &str,
     _args: serde_json::Value,
 ) -> Result<serde_json::Value, ToolError> {
