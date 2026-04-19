@@ -19,8 +19,8 @@
     "$wosPolicyParameters": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Policy Parameter Config specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "Document type marker identifying this as a WOS Policy Parameter Config sidecar document (Governance S13). MUST be the string '1.0'. Processors use this field to dispatch to the policy parameter resolver; its absence means the document is not a recognized Policy Parameter Config.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Policy Parameter Config sidecar"
@@ -30,8 +30,11 @@
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document these parameters apply to.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document these policy parameters apply to. Must match the Kernel Document's url field exactly. Processors MUST reject a Policy Parameter Config whose targetWorkflow does not match the url of the Kernel Document being loaded (Governance S13.2).",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://procurement.example.gov/workflows/purchase-order-approval"
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Binds this sidecar to its parent kernel workflow"
@@ -40,24 +43,25 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Policy Parameter Config document.",
-      "examples": ["2026.1.0"]
+      "description": "Semantic version of this Policy Parameter Config document. Useful for audit trails — allows workflows to pin a specific parameter set for reproducibility.",
+      "examples": ["2026.1.0", "1.0.0"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this parameter configuration.",
-      "examples": ["Benefits Program Parameters FY2025-2026"]
+      "description": "Human-readable name for this parameter configuration. Displayed in tooling and governance dashboards.",
+      "examples": ["Benefits Program Parameters FY2025-2026", "Procurement Thresholds and Deadlines 2026"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of this parameter set."
+      "description": "Human-readable description of this parameter set's purpose and coverage. Intended for authors and auditors.",
+      "examples": ["Date-indexed eligibility thresholds and benefit rates for the benefits adjudication workflow.", "Annual procurement thresholds and deadline parameters for purchase-order approval workflows."]
     },
     "parameters": {
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/ParameterDefinition"
       },
-      "description": "Named parameters with date-indexed values. Parameter names become available in the evaluation context under 'parameters.[name]'.",
+      "description": "Named parameters with date-indexed values. Parameter names become available in the evaluation context under 'parameters.[name]'. Each parameter resolves to the value in effect on the case's resolution date (Governance S13.3).",
       "examples": [
         {
           "eligibilityThreshold": {
@@ -68,6 +72,19 @@
             "values": [
               { "effectiveDate": "2025-01-01", "value": 35000 },
               { "effectiveDate": "2026-01-01", "value": 38000 }
+            ]
+          }
+        },
+        {
+          "appealDeadlineDays": {
+            "description": "Number of days to file an appeal after adverse decision notice",
+            "type": "integer",
+            "unit": "days",
+            "resolutionDateRef": "caseFile.adverseDecisionDate",
+            "authority": "APA 5 USC 554",
+            "values": [
+              { "effectiveDate": "2020-01-01", "value": 30 },
+              { "effectiveDate": "2025-06-01", "value": 45 }
             ]
           }
         }
@@ -82,7 +99,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/RegulatoryBinding"
       },
-      "description": "Named regulatory version bindings with date-indexed document references. Binding names become available in the evaluation context under 'parameters.[name]', resolved to the effective URI for the case's resolution date.",
+      "description": "Named regulatory version bindings with date-indexed document references. Binding names become available in the evaluation context under 'parameters.[name]', resolved to the effective URI for the case's resolution date. Ensures the case uses the form or service that was in effect at the time of the case event, not today (Governance S13.4).",
       "examples": [
         {
           "eligibilityForm": {
@@ -93,6 +110,18 @@
             "values": [
               { "effectiveDate": "2025-01-01", "value": "https://agency.gov/forms/eligibility/v2.1" },
               { "effectiveDate": "2025-09-01", "value": "https://agency.gov/forms/eligibility/v3.0" }
+            ]
+          }
+        },
+        {
+          "incomeVerificationService": {
+            "id": "incomeVerificationService",
+            "description": "Decision service endpoint for automated income verification",
+            "resolutionDateRef": "caseFile.eligibility.determinationDate",
+            "bindingType": "service",
+            "values": [
+              { "effectiveDate": "2025-01-01", "value": "https://agency.gov/services/income-verification/v1.0" },
+              { "effectiveDate": "2025-07-01", "value": "https://agency.gov/services/income-verification/v1.2" }
             ]
           }
         }
@@ -117,24 +146,24 @@
       "properties": {
         "description": {
           "type": "string",
-          "description": "Human-readable description of this parameter.",
-          "examples": ["Maximum household income for program eligibility"]
+          "description": "Human-readable description of what this parameter represents and how it is used in eligibility or decision logic.",
+          "examples": ["Maximum household income for program eligibility", "Number of days to file an appeal after adverse decision notice"]
         },
         "type": {
           "type": "string",
           "enum": ["number", "integer", "string", "boolean"],
-          "description": "Parameter value type.",
-          "examples": ["number", "integer"]
+          "description": "JSON value type of this parameter's values. Determines how the resolved value is typed in the evaluation context.",
+          "examples": ["number", "integer", "string"]
         },
         "unit": {
           "type": "string",
-          "description": "Unit of measure.",
+          "description": "Unit of measure for this parameter's values, used in tooling and documentation only (not enforced by the processor).",
           "examples": ["USD", "days", "percent"]
         },
         "resolutionDateRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Case state field path that provides the resolution date. Different parameters MAY resolve against different dates.",
+          "description": "Case state field path that supplies the resolution date for this parameter. The processor looks up the most recent values entry on or before this date (Governance S13.3). Different parameters within the same document MAY use different resolution dates — e.g., eligibility thresholds resolve against applicationDate while appeal deadlines resolve against adverseDecisionDate.",
           "examples": ["caseFile.applicationDate", "caseFile.adverseDecisionDate", "caseFile.appealFilingDate"],
           "x-lm": {
             "critical": true,
@@ -143,7 +172,7 @@
         },
         "authority": {
           "type": "string",
-          "description": "Regulatory or statutory authority for this parameter.",
+          "description": "Regulatory or statutory authority establishing this parameter's existence and legal basis. Used for audit documentation.",
           "examples": ["42 USC 1396a", "APA 5 USC 554"]
         },
         "values": {
@@ -180,16 +209,16 @@
         "effectiveDate": {
           "type": "string",
           "format": "date",
-          "description": "Date this value becomes effective (ISO 8601 date).",
+          "description": "ISO 8601 date on which this value becomes effective. The resolver picks the entry with the most recent effectiveDate that is on or before the resolution date.",
           "examples": ["2025-01-01", "2025-07-01", "2026-01-01"]
         },
         "value": {
-          "description": "The parameter value effective from this date until the next entry."
+          "description": "The parameter value effective from this date until the next entry's effectiveDate. Type is unconstrained here but MUST match the ParameterDefinition.type declared on the parent parameter."
         },
         "authority": {
           "type": "string",
-          "description": "Specific authority for this value change.",
-          "examples": ["Public Law 118-XXX", "Annual COLA adjustment"]
+          "description": "Specific regulatory or statutory authority for this individual value change. Used in audit traces and explanation generation.",
+          "examples": ["Public Law 118-XXX", "Annual COLA adjustment", "FY2026 appropriations"]
         }
       }
     },
@@ -211,13 +240,13 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this binding controls.",
+          "description": "Human-readable description of what versioned document or service this binding controls. Used in tooling and audit documentation.",
           "examples": ["Formspec Definition for the eligibility determination form", "Decision service endpoint for income verification"]
         },
         "resolutionDateRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Case state field path that provides the resolution date. Uses the same mechanism as ParameterDefinition.resolutionDateRef.",
+          "description": "Case state field path that supplies the resolution date for this binding. Uses the same mechanism as ParameterDefinition.resolutionDateRef: the resolver picks the most recent values entry on or before this date (Governance S13.4). Different bindings MAY use different resolution dates within the same document.",
           "examples": ["caseFile.applicationDate", "caseFile.eligibility.determinationDate"],
           "x-lm": {
             "critical": true,
@@ -236,7 +265,7 @@
         },
         "authority": {
           "type": "string",
-          "description": "Regulatory or statutory authority for this binding.",
+          "description": "Regulatory or statutory authority establishing this binding's existence and legal basis. Used in audit documentation and explanation generation.",
           "examples": ["Agency directive 2024-03", "OMB Circular A-130"]
         },
         "values": {
@@ -272,13 +301,13 @@
         "effectiveDate": {
           "type": "string",
           "format": "date",
-          "description": "Date this binding becomes effective (ISO 8601 date).",
+          "description": "ISO 8601 date on which this document version becomes the binding reference. The resolver picks the most recent entry on or before the resolution date.",
           "examples": ["2025-01-01", "2025-09-01", "2026-01-01"]
         },
         "value": {
           "type": "string",
           "format": "uri",
-          "description": "URI of the document version effective from this date until the next entry.",
+          "description": "URI of the versioned document or service endpoint that is the binding reference from this effectiveDate until the next entry's effectiveDate.",
           "examples": [
             "https://agency.gov/forms/eligibility/v2.1",
             "https://agency.gov/services/income-verification/v1.2"
@@ -286,7 +315,7 @@
         },
         "authority": {
           "type": "string",
-          "description": "Specific authority for this version change.",
+          "description": "Specific regulatory or statutory authority for this individual version change. Used in audit traces and explanation generation.",
           "examples": ["Agency directive 2025-07", "Regulatory update per Public Law 118-XXX"]
         }
       }
