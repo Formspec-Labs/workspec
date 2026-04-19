@@ -637,6 +637,268 @@ impl RawWosProject {
         )))
     }
 
+    // ── AddDueProcessPath handler ─────────────────────────────────────────
+
+    /// Write a due-process path under `x-wos-governance.dueProcesePaths`.
+    ///
+    /// Creates the `x-wos-governance` extension object lazily; preserves
+    /// any sibling keys (e.g. `assertionGates`) that already exist.
+    fn apply_add_due_process_path(
+        &mut self,
+        path_id: String,
+        description: String,
+        steps: Vec<String>,
+    ) -> CommandResult {
+        let gov = self
+            .doc
+            .extensions
+            .entry("x-wos-governance".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match gov.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-governance",
+                    "x-wos-governance extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        let paths = root
+            .entry("dueProcesePaths")
+            .or_insert_with(|| serde_json::json!({}));
+
+        let paths_map = match paths.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-governance/dueProcesePaths",
+                    "dueProcesePaths exists but is not a JSON object",
+                ));
+            }
+        };
+
+        if paths_map.contains_key(&path_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-governance/dueProcesePaths/{path_id}"),
+                format!("due-process path '{path_id}' already exists"),
+            ));
+        }
+
+        paths_map.insert(
+            path_id.clone(),
+            serde_json::json!({
+                "description": description,
+                "steps": steps,
+            }),
+        );
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddDueProcessPath({path_id})"
+        )))
+    }
+
+    // ── AddAssertionGate handler ──────────────────────────────────────────
+
+    /// Write an assertion gate under `x-wos-governance.assertionGates`.
+    ///
+    /// Creates the `x-wos-governance` extension object lazily; preserves
+    /// any sibling keys that already exist.
+    fn apply_add_assertion_gate(
+        &mut self,
+        gate_id: String,
+        assertion: String,
+        transition: String,
+    ) -> CommandResult {
+        let gov = self
+            .doc
+            .extensions
+            .entry("x-wos-governance".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match gov.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-governance",
+                    "x-wos-governance extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        let gates = root
+            .entry("assertionGates")
+            .or_insert_with(|| serde_json::json!({}));
+
+        let gates_map = match gates.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-governance/assertionGates",
+                    "assertionGates exists but is not a JSON object",
+                ));
+            }
+        };
+
+        if gates_map.contains_key(&gate_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-governance/assertionGates/{gate_id}"),
+                format!("assertion gate '{gate_id}' already exists"),
+            ));
+        }
+
+        gates_map.insert(
+            gate_id.clone(),
+            serde_json::json!({
+                "assertion": assertion,
+                "transition": transition,
+            }),
+        );
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddAssertionGate({gate_id})"
+        )))
+    }
+
+    // ── AddAiAgent handler ────────────────────────────────────────────────
+
+    /// Register an AI agent under `x-wos-ai.agents`.
+    ///
+    /// Creates the `x-wos-ai` extension object lazily; preserves any
+    /// sibling keys (e.g. `deonticConstraints`) that already exist.
+    fn apply_add_ai_agent(
+        &mut self,
+        agent_id: String,
+        role: String,
+        model: String,
+        capabilities: Vec<String>,
+    ) -> CommandResult {
+        let ext = self
+            .doc
+            .extensions
+            .entry("x-wos-ai".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match ext.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai",
+                    "x-wos-ai extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        let agents = root
+            .entry("agents")
+            .or_insert_with(|| serde_json::json!([]));
+
+        let array = match agents.as_array_mut() {
+            Some(arr) => arr,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai/agents",
+                    "x-wos-ai.agents exists but is not a JSON array",
+                ));
+            }
+        };
+
+        if array
+            .iter()
+            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(agent_id.clone())))
+        {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-ai/agents/{agent_id}"),
+                format!("AI agent '{agent_id}' already exists"),
+            ));
+        }
+
+        array.push(serde_json::json!({
+            "id": agent_id.clone(),
+            "role": role,
+            "model": model,
+            "capabilities": capabilities,
+        }));
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddAiAgent({agent_id})"
+        )))
+    }
+
+    // ── AddDeonticConstraint handler ──────────────────────────────────────
+
+    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
+    ///
+    /// `modality` must be one of `must`, `must_not`, or `may`.
+    fn apply_add_deontic_constraint(
+        &mut self,
+        constraint_id: String,
+        target: String,
+        modality: String,
+        action: String,
+    ) -> CommandResult {
+        if !matches!(modality.as_str(), "must" | "must_not" | "may") {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}/modality"),
+                format!(
+                    "invalid modality '{modality}'; expected must | must_not | may"
+                ),
+            ));
+        }
+
+        let ext = self
+            .doc
+            .extensions
+            .entry("x-wos-ai".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+
+        let root = match ext.as_object_mut() {
+            Some(map) => map,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai",
+                    "x-wos-ai extension exists but is not a JSON object",
+                ));
+            }
+        };
+
+        let constraints = root
+            .entry("deonticConstraints")
+            .or_insert_with(|| serde_json::json!([]));
+
+        let array = match constraints.as_array_mut() {
+            Some(arr) => arr,
+            None => {
+                return Err(AuthoringDiagnostic::error(
+                    "/extensions/x-wos-ai/deonticConstraints",
+                    "x-wos-ai.deonticConstraints exists but is not a JSON array",
+                ));
+            }
+        };
+
+        if array
+            .iter()
+            .any(|entry| entry.get("id") == Some(&serde_json::Value::String(constraint_id.clone())))
+        {
+            return Err(AuthoringDiagnostic::error(
+                format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}"),
+                format!("deontic constraint '{constraint_id}' already exists"),
+            ));
+        }
+
+        array.push(serde_json::json!({
+            "id": constraint_id.clone(),
+            "target": target,
+            "modality": modality,
+            "action": action,
+        }));
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddDeonticConstraint({constraint_id})"
+        )))
+    }
+
     // ── AddExtensionKey handler ───────────────────────────────────────────
 
     fn apply_add_extension_key(
@@ -714,6 +976,28 @@ impl RawWosProject {
             } => self.apply_add_milestone(milestone_id, condition),
             Command::RemoveMilestone { milestone_id } => self.apply_remove_milestone(milestone_id),
             Command::SetTimer { timer_id, duration } => self.apply_set_timer(timer_id, duration),
+            Command::AddDueProcessPath {
+                path_id,
+                description,
+                steps,
+            } => self.apply_add_due_process_path(path_id, description, steps),
+            Command::AddAssertionGate {
+                gate_id,
+                assertion,
+                transition,
+            } => self.apply_add_assertion_gate(gate_id, assertion, transition),
+            Command::AddAiAgent {
+                agent_id,
+                role,
+                model,
+                capabilities,
+            } => self.apply_add_ai_agent(agent_id, role, model, capabilities),
+            Command::AddDeonticConstraint {
+                constraint_id,
+                target,
+                modality,
+                action,
+            } => self.apply_add_deontic_constraint(constraint_id, target, modality, action),
             Command::AddExtensionKey { key, value } => self.apply_add_extension_key(key, value),
         };
 

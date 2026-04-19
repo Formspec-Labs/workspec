@@ -226,7 +226,73 @@ impl WosProject {
         })
     }
 
+    // ── Governance ────────────────────────────────────────────────────────
+
+    /// Record a due-process path under `x-wos-governance.dueProcesePaths`.
+    pub fn add_due_process_path(
+        &mut self,
+        path_id: impl Into<String>,
+        description: impl Into<String>,
+        steps: Vec<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddDueProcessPath {
+            path_id: path_id.into(),
+            description: description.into(),
+            steps,
+        })
+    }
+
+    /// Add an assertion gate under `x-wos-governance.assertionGates`.
+    pub fn add_assertion_gate(
+        &mut self,
+        gate_id: impl Into<String>,
+        assertion: impl Into<String>,
+        transition: impl Into<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddAssertionGate {
+            gate_id: gate_id.into(),
+            assertion: assertion.into(),
+            transition: transition.into(),
+        })
+    }
+
     // ── AI integration ────────────────────────────────────────────────────
+
+    /// Register an AI agent under `x-wos-ai.agents`.
+    ///
+    /// AI agents are NOT actors (kernel §S3); they live in `x-wos-ai.agents`.
+    pub fn add_ai_agent(
+        &mut self,
+        agent_id: impl Into<String>,
+        role: impl Into<String>,
+        model: impl Into<String>,
+        capabilities: Vec<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddAiAgent {
+            agent_id: agent_id.into(),
+            role: role.into(),
+            model: model.into(),
+            capabilities,
+        })
+    }
+
+    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
+    ///
+    /// `modality` must be `"must"`, `"must_not"`, or `"may"`.
+    pub fn add_deontic_constraint(
+        &mut self,
+        constraint_id: impl Into<String>,
+        target: impl Into<String>,
+        modality: impl Into<String>,
+        action: impl Into<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddDeonticConstraint {
+            constraint_id: constraint_id.into(),
+            target: target.into(),
+            modality: modality.into(),
+            action: action.into(),
+        })
+    }
 
     /// Append a deontic constraint under `x-wos-ai.deonticConstraints`.
     pub fn add_actor_deontic(

@@ -199,6 +199,56 @@ pub(crate) enum Command {
         duration: String,
     },
 
+    // ── Governance ─────────────────────────────────────────────────────────
+
+    /// Record a due-process path under `x-wos-governance.dueProcesePaths`.
+    AddDueProcessPath {
+        /// Unique path identifier.
+        path_id: String,
+        /// Human-readable description of the due-process path.
+        description: String,
+        /// Ordered list of step identifiers.
+        steps: Vec<String>,
+    },
+
+    /// Add an assertion gate to `x-wos-governance.assertionGates`.
+    AddAssertionGate {
+        /// Unique gate identifier.
+        gate_id: String,
+        /// FEL assertion that must hold.
+        assertion: String,
+        /// Lifecycle transition event this gate guards.
+        transition: String,
+    },
+
+    // ── AI integration ─────────────────────────────────────────────────────
+
+    /// Register an AI agent under `x-wos-ai.agents`.
+    AddAiAgent {
+        /// Unique agent identifier.
+        agent_id: String,
+        /// Role description.
+        role: String,
+        /// Model identifier string (e.g. "claude-3-5-sonnet").
+        model: String,
+        /// Capability strings (e.g. ["read_case_file", "submit_review"]).
+        capabilities: Vec<String>,
+    },
+
+    /// Append a structured deontic constraint under `x-wos-ai.deonticConstraints`.
+    ///
+    /// Replaces `AddActorDeontic` for new MCP tooling. `modality` ∈ `must | must_not | may`.
+    AddDeonticConstraint {
+        /// Constraint identifier.
+        constraint_id: String,
+        /// Actor or scope this constraint targets.
+        target: String,
+        /// Deontic modality: "must", "must_not", or "may".
+        modality: String,
+        /// Action description.
+        action: String,
+    },
+
     // ── Extensions ─────────────────────────────────────────────────────────
 
     /// Set an `x-`-prefixed extension key on the document.
@@ -291,6 +341,32 @@ mod tests {
             actor_id: "reviewer".into(),
             key: "x-department".into(),
             value: serde_json::json!("finance"),
+        };
+
+        let _add_due_process = Command::AddDueProcessPath {
+            path_id: "appealPath".into(),
+            description: "Standard appeal process".into(),
+            steps: vec!["review".into(), "hearing".into()],
+        };
+
+        let _add_gate = Command::AddAssertionGate {
+            gate_id: "incomeCheck".into(),
+            assertion: "caseFile.income > 0".into(),
+            transition: "approve".into(),
+        };
+
+        let _add_ai_agent = Command::AddAiAgent {
+            agent_id: "reviewBot".into(),
+            role: "Automated reviewer".into(),
+            model: "claude-3-5-sonnet".into(),
+            capabilities: vec!["read_case_file".into()],
+        };
+
+        let _add_deontic = Command::AddDeonticConstraint {
+            constraint_id: "mustNotAutoApprove".into(),
+            target: "ai-agents".into(),
+            modality: "must_not".into(),
+            action: "auto-approve".into(),
         };
     }
 
