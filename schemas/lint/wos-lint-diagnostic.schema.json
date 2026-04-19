@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://wos-spec.org/schemas/lint/wos-lint-diagnostic.schema.json",
+  "title": "WOS Lint Diagnostic",
+  "description": "Schema for a single structured diagnostic emitted by wos-lint. Stable JSON serialization consumed by LLM authoring loops, downstream tooling, and CI pipelines.",
+  "type": "object",
+  "required": ["ruleId", "severity", "tier", "path", "message"],
+  "properties": {
+    "ruleId": {
+      "type": "string",
+      "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN (e.g. K-001, G-037, AI-024). Callers switch on this field to suppress, escalate, or route diagnostics.",
+      "examples": ["K-001", "G-037", "AI-024", "SCHEMA-DOC-001"],
+      "x-lm": { "critical": true }
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["error", "warning", "info"],
+      "description": "Diagnostic severity level. 'error' means the document is non-conformant. 'warning' means a likely mistake requiring review. 'info' is an informational suggestion with no conformance impact.",
+      "examples": ["error", "warning", "info"],
+      "x-lm": { "critical": true }
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["T1", "T2", "T3"],
+      "description": "Verification tier that produced this diagnostic. T1 is single-document structural checks (wos-lint). T2 is cross-document resolution and FEL AST analysis (wos-lint --project). T3 is dynamic runtime conformance (wos-conformance).",
+      "examples": ["T1", "T2", "T3"],
+      "x-lm": { "critical": true }
+    },
+    "path": {
+      "type": "string",
+      "description": "JSONPath expression pointing to the offending node in the source document. Always starts with '$.' for document-scoped diagnostics. Used by consumers to highlight the exact location in an editor or diff view.",
+      "examples": ["$.states.approved", "$.lifecycle.transitions[2]", "$.actors.reviewer.permissions"],
+      "x-lm": { "critical": true }
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable prose describing what is wrong and why. Should be a complete sentence that makes sense without additional context. LLM repair loops read this field to decide how to fix the document.",
+      "examples": [
+        "state 'approved' has no outbound transition and is not terminal",
+        "actor 'reviewer' declares permission 'approve' but no transition requires that permission"
+      ],
+      "x-lm": { "critical": true }
+    },
+    "suggestedFix": {
+      "type": "object",
+      "description": "Machine-readable remediation proposal. Present only when the rule can deterministically propose a fix. Absent when the rule detects a problem but cannot determine the correct resolution.",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["add-property", "remove-property", "replace-value", "rename", "custom"],
+          "description": "Discriminant that identifies which fix variant this object represents. Consumers switch on this field to apply the fix without inspecting other fields.",
+          "examples": ["add-property", "remove-property", "replace-value", "rename", "custom"]
+        },
+        "path": {
+          "type": "string",
+          "description": "JSONPath to the node that should be added, removed, or replaced. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
+          "examples": ["$.states.approved.type", "$.lifecycle.transitions[0].guard"]
+        },
+        "value": {
+          "description": "Replacement or new value to write at the indicated path. Required for add-property and replace-value kinds. The type matches the expected JSON type of the target field.",
+          "examples": ["terminal", true, 42]
+        },
+        "from": {
+          "type": "string",
+          "description": "Current identifier name for rename fixes. The rename kind changes a key or value from this name to the value in the 'to' field.",
+          "examples": ["submited", "approvall"]
+        },
+        "to": {
+          "type": "string",
+          "description": "Target identifier name for rename fixes. Replaces the current name identified in the 'from' field after the rename is applied.",
+          "examples": ["submitted", "approval"]
+        },
+        "hint": {
+          "type": "string",
+          "description": "Free-form remediation hint for custom fixes where none of the structured variants apply. Written as a human-readable instruction for editors and LLM repair loops.",
+          "examples": [
+            "Add at least one terminal state to the lifecycle before declaring transitions.",
+            "Declare the actor in the top-level 'actors' map before referencing it in a transition."
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "relatedDocs": {
+      "type": "array",
+      "description": "Spec sections, LINT-MATRIX entries, or ADRs related to this diagnostic. Consumers render these as links in IDE tooltips or CI annotations. Empty array when the rule has no external references.",
+      "items": {
+        "type": "string",
+        "description": "A single reference string, typically a relative file path with a fragment anchor pointing to the relevant spec section or matrix row.",
+        "examples": [
+          "specs/kernel/spec.md#S4.2",
+          "LINT-MATRIX.md#K-023",
+          "thoughts/adr/0042-terminal-state-invariant.md"
+        ]
+      },
+      "examples": [
+        ["specs/kernel/spec.md#S4.2", "LINT-MATRIX.md#K-023"],
+        []
+      ]
+    },
+    "source": {
+      "type": "object",
+      "description": "File location of the offending JSON node. Present when lint runs against a file on disk. Absent when linting an in-memory tree (e.g., from wos-mcp or programmatic API calls).",
+      "required": ["document", "line", "column"],
+      "properties": {
+        "document": {
+          "type": "string",
+          "description": "Path or URL of the source document being linted. May be a relative path from the project root, an absolute path, or a remote URL depending on how the linter was invoked.",
+          "examples": ["workflow.json", "projects/acme/kernel.json", "https://example.com/wos/v1/kernel"]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line number of the offending JSON node within the source document. Used by editors and CI tools to jump to the exact location in the file.",
+          "examples": [42, 1, 107]
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based column number of the offending JSON node within the source document. Combined with 'line' to provide a precise character offset for editor integrations.",
+          "examples": [5, 1, 22]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-": {
+      "description": "Extension fields reserved for downstream tooling. Prefix x- prevents collision with future spec properties.",
+      "examples": [{"x-editor-highlight": "red"}]
+    }
+  }
+}
