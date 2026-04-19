@@ -45,7 +45,8 @@
           {
             "action": "startTimer",
             "timerId": "statutory-response-deadline",
-            "duration": "P20BD",
+            "x-durationNote": "Calendar-day fallback for `P20BD` (20 business days) until the businessCalendar sidecar binding lands and the runtime can honor business-day semantics; see TODO §4.1 / business-calendar work.",
+            "duration": "P20D",
             "event": "deadline.exceeded"
           },
           {
@@ -406,7 +407,8 @@
   },
   "execution": {
     "workflowTimeout": "P1Y",
-    "defaultTaskTimeout": "P20BD",
+    "x-defaultTaskTimeoutNote": "Calendar-day fallback for `P20BD` (20 business days); business-day semantics TBD when the businessCalendar sidecar binding lands.",
+    "defaultTaskTimeout": "P20D",
     "instanceVersioning": "pinned"
   }
 }

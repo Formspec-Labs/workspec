@@ -236,7 +236,7 @@ impl Evaluator {
             case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
-            simulated_time_ms: 0,
+            simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
             guard_evaluations: Vec::new(),
@@ -1331,13 +1331,7 @@ fn index_states_recursive(
 
         if state.kind == StateKind::Parallel {
             for (rname, region) in &state.regions {
-                index_states_recursive(
-                    &region.states,
-                    Some(name),
-                    Some(rname),
-                    Some(name),
-                    index,
-                );
+                index_states_recursive(&region.states, Some(name), Some(rname), Some(name), index);
             }
         }
     }
@@ -1399,13 +1393,19 @@ pub fn parse_iso_duration_to_ms(duration: &str) -> Result<u64, &str> {
         None => (rest, ""),
     };
 
-    let ms = parse_duration_segment(date_part, false) + parse_duration_segment(time_part, true);
+    let date_ms = parse_duration_segment(date_part, false).map_err(|_| duration)?;
+    let time_ms = parse_duration_segment(time_part, true).map_err(|_| duration)?;
 
-    Ok(ms)
+    Ok(date_ms + time_ms)
 }
 
 /// Parse a date or time segment of an ISO 8601 duration string.
-fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
+///
+/// Returns `Err(())` when the segment contains an unknown unit letter
+/// (e.g., `B` in `P20BD`). Silently accepting unknown units would let a
+/// `startTimer` with an unrecognized duration fire at 0ms, which is worse
+/// than a loud parse failure.
+fn parse_duration_segment(segment: &str, is_time: bool) -> Result<u64, ()> {
     const MS_PER_SECOND: u64 = 1_000;
     const MS_PER_MINUTE: u64 = 60 * MS_PER_SECOND;
     const MS_PER_HOUR: u64 = 60 * MS_PER_MINUTE;
@@ -1430,7 +1430,7 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
                     'H' => MS_PER_HOUR,
                     'M' => MS_PER_MINUTE,
                     'S' => MS_PER_SECOND,
-                    _ => 0,
+                    _ => return Err(()),
                 }
             } else {
                 match ch {
@@ -1438,7 +1438,7 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
                     'M' => MS_PER_MONTH,
                     'W' => 7 * MS_PER_DAY,
                     'D' => MS_PER_DAY,
-                    _ => 0,
+                    _ => return Err(()),
                 }
             };
 
@@ -1453,7 +1453,7 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
         }
     }
 
-    ms
+    Ok(ms)
 }
 
 /// Extract the JSON subset actually referenced by a guard expression.
@@ -1494,17 +1494,13 @@ fn build_guard_inputs(
             _ => continue,
         };
 
-        let Some(top_value) = root_value else { continue };
+        let Some(top_value) = root_value else {
+            continue;
+        };
 
         let tail = rest.split_once('.').map_or("", |(_, t)| t);
         let leaf_value = walk_json_path(top_value, tail);
-        insert_nested(
-            &mut inputs,
-            namespace,
-            lookup_head,
-            tail,
-            leaf_value,
-        );
+        insert_nested(&mut inputs, namespace, lookup_head, tail, leaf_value);
     }
 
     serde_json::Value::Object(inputs)
@@ -1625,5 +1621,16 @@ mod tests {
     #[test]
     fn parse_iso_duration_invalid() {
         assert!(parse_iso_duration_to_ms("invalid").is_err());
+    }
+
+    #[test]
+    fn parse_iso_duration_rejects_unknown_units() {
+        // `BD` (business-day) is not an ISO 8601 unit. Silently treating it as
+        // 0ms means a kernel `startTimer` with `duration: "P20BD"` fires
+        // immediately — the caller has no way to know the input was malformed.
+        // The parser MUST surface an error so callers can emit an
+        // `invalid_duration` provenance record instead of booking a 0ms timer.
+        assert!(parse_iso_duration_to_ms("P20BD").is_err());
+        assert!(parse_iso_duration_to_ms("PT5Q").is_err());
     }
 }
