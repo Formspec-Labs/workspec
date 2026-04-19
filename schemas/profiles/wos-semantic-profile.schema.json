@@ -19,8 +19,8 @@
     "$wosSemanticProfile": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Semantic Profile specification version. MUST be '1.0'. Identifies this document as a WOS Semantic Profile Document and pins the specification version.",
-      "examples": ["1.0"],
+      "description": "WOS Semantic Profile specification version. MUST be '1.0'. Identifies this document as a WOS Semantic Profile Document and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker and version pin for WOS Semantic Profile documents"
@@ -44,11 +44,13 @@
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this semantic profile."
+      "description": "Human-readable name for this semantic profile. Displayed in tooling and provenance exports when identifying the semantic layer for this workflow.",
+      "examples": ["Benefits Adjudication Semantic Profile v1.0"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of the semantic profile's purpose and scope."
+      "description": "Human-readable description of the semantic profile's purpose and scope. Documents which vocabularies, shape graphs, and export formats are configured.",
+      "examples": ["Adds NIEM human services linked data semantics, SHACL validation, and OCEL 2.0 process mining export to the benefits adjudication workflow."]
     },
     "context": {
       "$ref": "#/$defs/ContextConfiguration",
@@ -87,8 +89,8 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "Canonical URL of the target WOS Kernel Document.",
-          "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+          "description": "Canonical URL of the target WOS Kernel Document. The semantic processor resolves the JSON-LD context, SHACL shapes, PROV-O namespace, and process mining configuration from this profile when the kernel document URI matches this value exactly.",
+          "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/appeals-processing"],
           "x-lm": {
             "critical": true,
             "intent": "Identifies the kernel workflow this profile provides linked data semantics for"
@@ -114,8 +116,8 @@
         "contextUrl": {
           "type": "string",
           "format": "uri",
-          "description": "URL of the JSON-LD @context document to apply to WOS documents. The normative WOS context is published at https://wos-spec.org/context/{version}.",
-          "examples": ["https://wos-spec.org/context/1.0.0"],
+          "description": "URL of the JSON-LD @context document to apply to WOS documents. The normative WOS context is published at https://wos-spec.org/context/{version}. Custom deployments may publish their own context extending the base WOS context.",
+          "examples": ["https://wos-spec.org/context/1.0.0", "https://agency.gov/context/benefits-wos-1.0.0.jsonld"],
           "x-lm": {
             "critical": true,
             "intent": "URL of the JSON-LD context document that maps WOS properties to RDF IRIs"
@@ -125,7 +127,7 @@
           "type": "string",
           "minLength": 1,
           "description": "Version of the context document. Synchronized with the WOS specification version. A semantic processor MUST reject a context document whose major version it does not support.",
-          "examples": ["1.0.0"],
+          "examples": ["1.0.0", "1.1.0"],
           "x-lm": {
             "critical": true,
             "intent": "Context document version for compatibility checking"
@@ -135,7 +137,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": "Namespace IRI for this prefix. MUST be a valid absolute URI that serves as the base IRI for terms in the named vocabulary. Appended to prefix declarations in the JSON-LD @context.",
+            "examples": ["https://release.niem.gov/niem/domains/humanServices/5.2/", "http://hl7.org/fhir/"]
           },
           "description": "Additional namespace prefix-to-IRI mappings beyond the base WOS context. Keys are namespace prefixes, values are namespace IRIs.",
           "examples": [
@@ -173,7 +177,7 @@
         "namespace": {
           "type": "string",
           "format": "uri",
-          "description": "Namespace IRI for this vocabulary.",
+          "description": "Namespace IRI for this vocabulary. Used as the base IRI for terms from this vocabulary in the JSON-LD @context expansion. MUST be a resolvable or well-known absolute URI.",
           "examples": [
             "https://release.niem.gov/niem/domains/humanServices/5.2/",
             "http://hl7.org/fhir/"
@@ -181,7 +185,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this vocabulary's purpose and scope."
+          "description": "Human-readable description of this vocabulary's purpose and scope. Documents which domain concepts are covered and why this vocabulary was selected for semantic interoperability.",
+          "examples": ["NIEM 5.2 Human Services domain vocabulary for case and benefit terminology."]
         }
       }
     },
@@ -199,7 +204,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": "URI of a SHACL shape graph document. The semantic processor fetches and applies each shape graph during validation. The normative WOS shapes are at https://wos-spec.org/shapes/1.0.0.",
+            "examples": ["https://wos-spec.org/shapes/1.0.0", "https://agency.gov/shapes/benefits-domain.ttl"]
           },
           "minItems": 1,
           "description": "URIs of SHACL shape graphs to apply when validating WOS documents as RDF. The standard WOS shapes (SP-01 through SP-08) are published at https://wos-spec.org/shapes/1.0.0.",
@@ -215,13 +222,15 @@
           "type": "string",
           "enum": ["violation", "warning", "info"],
           "default": "violation",
-          "description": "Minimum severity for reported SHACL violations. 'violation': only sh:Violation results. 'warning': sh:Violation and sh:Warning. 'info': all results."
+          "description": "Minimum severity for reported SHACL violations. 'violation': only sh:Violation results. 'warning': sh:Violation and sh:Warning. 'info': all results including sh:Info.",
+          "examples": ["violation", "warning"]
         },
         "scope": {
           "type": "string",
           "enum": ["definition", "provenance", "all"],
           "default": "all",
-          "description": "What to validate with SHACL shapes. 'definition': the workflow definition only. 'provenance': provenance records only. 'all': both definition and provenance."
+          "description": "What to validate with SHACL shapes. 'definition': the workflow definition only. 'provenance': provenance records only. 'all': both definition and provenance.",
+          "examples": ["all", "provenance"]
         }
       }
     },
@@ -238,8 +247,8 @@
         "provenanceNamespace": {
           "type": "string",
           "format": "uri",
-          "description": "Base namespace for minting provenance IRIs in the PROV-O output graph. Record identifiers are appended to this namespace to form Activity IRIs.",
-          "examples": ["https://agency.gov/provenance/benefits/"],
+          "description": "Base namespace for minting provenance IRIs in the PROV-O output graph. Record identifiers are appended to this namespace to form Activity IRIs. All prov:Activity and prov:Entity IRIs in the exported graph use this as their base.",
+          "examples": ["https://agency.gov/provenance/benefits/", "https://agency.gov/provenance/appeals/"],
           "x-lm": {
             "critical": true,
             "intent": "Base IRI namespace for PROV-O provenance graph output"
@@ -249,7 +258,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": "RDF type IRI for this WOS actor type in the PROV-O output graph. Must be a valid absolute URI that is a subclass of prov:Agent or a recognized PROV-O agent type.",
+            "examples": ["http://www.w3.org/ns/prov#Person", "http://www.w3.org/ns/prov#SoftwareAgent"]
           },
           "description": "Customized mapping of WOS actor types to PROV-O Agent subclass IRIs. Keys are WOS actor types ('human', 'system', 'agent'), values are RDF type IRIs. Defaults: human -> prov:Person, system -> prov:SoftwareAgent, agent -> wos:AIAgent.",
           "examples": [
@@ -273,19 +284,22 @@
               "type": "string",
               "format": "uri",
               "default": "https://wos-spec.org/ns/ReasoningBundle",
-              "description": "RDF type IRI for Reasoning tier prov:Bundle instances."
+              "description": "RDF type IRI for Reasoning tier prov:Bundle instances in the PROV-O graph output. Overrides the default wos:ReasoningBundle type for agency-specific PROV-O vocabulary.",
+              "examples": ["https://wos-spec.org/ns/ReasoningBundle", "https://agency.gov/ns/ReasoningBundle"]
             },
             "counterfactual": {
               "type": "string",
               "format": "uri",
               "default": "https://wos-spec.org/ns/CounterfactualBundle",
-              "description": "RDF type IRI for Counterfactual tier prov:Bundle instances."
+              "description": "RDF type IRI for Counterfactual tier prov:Bundle instances in the PROV-O graph output. Overrides the default wos:CounterfactualBundle type for agency-specific PROV-O vocabulary.",
+              "examples": ["https://wos-spec.org/ns/CounterfactualBundle", "https://agency.gov/ns/CounterfactualBundle"]
             },
             "narrative": {
               "type": "string",
               "format": "uri",
               "default": "https://wos-spec.org/ns/NarrativeBundle",
-              "description": "RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false."
+              "description": "RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false. Overrides the default wos:NarrativeBundle type for agency-specific vocabulary.",
+              "examples": ["https://wos-spec.org/ns/NarrativeBundle", "https://agency.gov/ns/NarrativeBundle"]
             }
           },
           "description": "Customized mapping of WOS provenance tiers to PROV-O Bundle type IRIs."
@@ -306,7 +320,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["xes", "ocel"]
+            "enum": ["xes", "ocel"],
+            "description": "Process mining export format identifier. 'xes': IEEE XES (Std 1849-2016) for compatibility with legacy process mining tools. 'ocel': OCEL 2.0 object-centric event log for modern multi-object process mining.",
+            "examples": ["xes", "ocel"]
           },
           "minItems": 1,
           "uniqueItems": true,
@@ -335,7 +351,9 @@
         "objectTypes": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "A WOS case file item type name to include as an OCEL object type in the object-centric event log. Corresponds to a top-level key under caseFile in the workflow's case state.",
+            "examples": ["application", "eligibility"]
           },
           "description": "For OCEL export: WOS object types (case file item types) to include in the object-centric event log. When omitted, all case file item types are included.",
           "examples": [
