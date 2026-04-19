@@ -20,8 +20,8 @@
     "$wosBusinessCalendar": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Business Calendar specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Business Calendar specification version. MUST be '1.0'. Identifies this document as a WOS Business Calendar Config sidecar and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Business Calendar Config sidecar"
@@ -31,8 +31,8 @@
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this business calendar applies to.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document this business calendar applies to. The processor loads this sidecar when the kernel document's URI matches. When multiple calendars target the same workflow, the most recently effective one wins (Governance S10.3).",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/appeals-processing"],
       "x-lm": {
         "critical": true,
         "intent": "Binds this sidecar to its parent kernel workflow"
@@ -41,17 +41,18 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Business Calendar Config document.",
+      "description": "Version of this Business Calendar Config document. SemVer is RECOMMENDED. Increment when the holiday list or work-week configuration changes.",
       "examples": ["1.0.0"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this business calendar.",
+      "description": "Human-readable name for this business calendar. Displayed in provenance audit trails and error messages when calendar validation fails.",
       "examples": ["Federal Government Business Calendar FY2025-2026"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of this business calendar."
+      "description": "Human-readable description of this business calendar. Documents which jurisdiction's holidays and work-week rules are encoded.",
+      "examples": ["US Federal government business calendar for fiscal year 2025-2026, covering standard federal holidays and Monday-Friday work week."]
     },
     "timezone": {
       "type": "string",
@@ -67,7 +68,9 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        "description": "A day-of-week name (lowercase). A calendar date is a business day only when its day-of-week appears in workWeek and the date is not in the holidays list.",
+        "examples": ["monday", "friday"]
       },
       "minItems": 1,
       "uniqueItems": true,
@@ -137,7 +140,7 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Human-readable holiday name.",
+          "description": "Human-readable holiday name displayed in provenance audit trails and SLA calculation logs. Used to identify which holiday caused a business-day adjustment.",
           "examples": ["New Year's Day", "Martin Luther King Jr. Day", "Memorial Day", "Independence Day", "Labor Day", "Veterans Day", "Thanksgiving Day", "Christmas Day"]
         },
         "date": {
@@ -160,7 +163,8 @@
         "observed": {
           "type": "boolean",
           "default": false,
-          "description": "Whether this entry is an observed date rather than the actual holiday. When a fixed-date holiday falls on a non-working day, a separate entry with 'observed: true' marks the actual day off."
+          "description": "Whether this entry is an observed date rather than the actual holiday. When a fixed-date holiday falls on a non-working day, a separate entry with 'observed: true' marks the actual day off.",
+          "examples": [true, false]
         }
       }
     },
@@ -177,7 +181,7 @@
         "start": {
           "type": "string",
           "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-          "description": "Start of the operating period (HH:MM in 24-hour format). The operating period is [start, end) -- inclusive of start, exclusive of end.",
+          "description": "Start of the operating period (HH:MM in 24-hour format, interpreted in the calendar's timezone). The operating period is [start, end) — inclusive of start, exclusive of end. Hour-based SLA counters only accumulate time within this window.",
           "examples": ["08:00", "08:30", "09:00"],
           "x-lm": {
             "critical": true,
@@ -187,7 +191,7 @@
         "end": {
           "type": "string",
           "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-          "description": "End of the operating period (HH:MM in 24-hour format). MUST be after 'start'.",
+          "description": "End of the operating period (HH:MM in 24-hour format, interpreted in the calendar's timezone). MUST be strictly after 'start'. Hour-based SLA counters stop accumulating at this time each business day and resume at 'start' the next business day.",
           "examples": ["17:00", "16:30", "18:00"],
           "x-lm": {
             "critical": true,
