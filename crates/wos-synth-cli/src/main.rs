@@ -1,0 +1,266 @@
+//! `wos-synth` binary — generate WOS documents from plain-English problems.
+//!
+//! Three subcommands today:
+//!
+//! - `generate` — run the synthesis loop against the Anthropic API.
+//! - `dry-run` — run the loop with a mock prompter (no network); useful for
+//!   smoke-testing the wiring in CI without an API key.
+//! - `explain` — render a saved synth-trace JSON as a human-readable transcript.
+//!
+//! `ANTHROPIC_API_KEY` must be set for `generate`; `dry-run` ignores it.
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
+use wos_synth_core::{
+    synthesize, DirectToolContext, Layer, Prompter, SynthOutcome, SynthTrace,
+};
+
+#[derive(Parser, Debug)]
+#[command(name = "wos-synth", version, about = "WOS LLM synthesis loop")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Generate a WOS document from a plain-English problem statement.
+    Generate {
+        /// Path to the problem statement (markdown or plain text).
+        #[arg(long)]
+        problem: PathBuf,
+        /// Which WOS layer to target.
+        #[arg(long, value_enum, default_value_t = LayerArg::Kernel)]
+        layer: LayerArg,
+        /// Output path for the synthesized JSON document.
+        #[arg(long)]
+        output: PathBuf,
+        /// Optional path to write the synth trace JSON.
+        #[arg(long)]
+        trace: Option<PathBuf>,
+        /// Maximum loop iterations including the initial generation.
+        #[arg(long, default_value_t = 5)]
+        max_iterations: u32,
+    },
+    /// Run the loop with a deterministic mock prompter (no network).
+    DryRun {
+        #[arg(long)]
+        problem: PathBuf,
+        #[arg(long, value_enum, default_value_t = LayerArg::Kernel)]
+        layer: LayerArg,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Render a saved trace as a human-readable transcript.
+    Explain {
+        /// Path to a previously written trace JSON.
+        trace: PathBuf,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum LayerArg {
+    Kernel,
+    Governance,
+    Ai,
+    Advanced,
+}
+
+impl From<LayerArg> for Layer {
+    fn from(arg: LayerArg) -> Self {
+        match arg {
+            LayerArg::Kernel => Layer::Kernel,
+            LayerArg::Governance => Layer::Governance,
+            LayerArg::Ai => Layer::Ai,
+            LayerArg::Advanced => Layer::Advanced,
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    let cli = Cli::parse();
+    match run(cli).await {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+async fn run(cli: Cli) -> anyhow_lite::Result<ExitCode> {
+    match cli.command {
+        Command::Generate {
+            problem,
+            layer,
+            output,
+            trace,
+            max_iterations,
+        } => {
+            let api_key = require_env("ANTHROPIC_API_KEY")?;
+            let provider = wos_synth_anthropic::AnthropicPrompter::new(api_key);
+            run_loop(
+                &provider,
+                &problem,
+                layer.into(),
+                &output,
+                trace.as_deref(),
+                max_iterations,
+            )
+            .await
+        }
+        Command::DryRun {
+            problem,
+            layer,
+            output,
+        } => {
+            let mock = wos_synth_mock::MockPrompter::new();
+            // Canned: first call returns a minimal valid kernel doc.
+            mock.expect(
+                "Problem statement",
+                r#"{"$wosKernel":"1.0","title":"dry-run","status":"draft","impactLevel":"informational","caseFile":{"fields":{}},"actors":[{"id":"a","type":"system"}],"lifecycle":{"initialState":"start","states":{"start":{"type":"final"}}}}"#,
+            );
+            run_loop(&mock, &problem, layer.into(), &output, None, 1).await
+        }
+        Command::Explain { trace } => {
+            let raw = std::fs::read_to_string(&trace)
+                .map_err(|e| anyhow_lite::err(format!("reading {}: {e}", trace.display())))?;
+            let parsed: SynthTrace = serde_json::from_str(&raw)
+                .map_err(|e| anyhow_lite::err(format!("parsing trace: {e}")))?;
+            print_trace(&parsed);
+            Ok(ExitCode::SUCCESS)
+        }
+    }
+}
+
+async fn run_loop(
+    provider: &dyn Prompter,
+    problem_path: &PathBuf,
+    layer: Layer,
+    output: &PathBuf,
+    trace_path: Option<&std::path::Path>,
+    max_iterations: u32,
+) -> anyhow_lite::Result<ExitCode> {
+    let problem = std::fs::read_to_string(problem_path)
+        .map_err(|e| anyhow_lite::err(format!("reading {}: {e}", problem_path.display())))?;
+    let tools = DirectToolContext::new();
+
+    eprintln!("synthesizing {layer:?} document from {}", problem_path.display());
+
+    let outcome = synthesize(provider, &tools, &problem, layer, max_iterations)
+        .await
+        .map_err(|e| anyhow_lite::err(format!("loop error: {e}")))?;
+
+    match outcome {
+        SynthOutcome::Converged { document, trace } => {
+            std::fs::write(output, &document).map_err(|e| {
+                anyhow_lite::err(format!("writing {}: {e}", output.display()))
+            })?;
+            if let Some(path) = trace_path {
+                let trace_json = serde_json::to_string_pretty(&trace)
+                    .expect("trace serialisation cannot fail");
+                std::fs::write(path, trace_json).map_err(|e| {
+                    anyhow_lite::err(format!("writing trace {}: {e}", path.display()))
+                })?;
+            }
+            eprintln!(
+                "converged in {} iteration(s); wrote {}",
+                trace.iterations.len(),
+                output.display()
+            );
+            Ok(ExitCode::SUCCESS)
+        }
+        SynthOutcome::Unconverged {
+            last_attempt,
+            last_findings,
+            trace,
+        } => {
+            std::fs::write(output, &last_attempt).map_err(|e| {
+                anyhow_lite::err(format!("writing {}: {e}", output.display()))
+            })?;
+            if let Some(path) = trace_path {
+                let trace_json = serde_json::to_string_pretty(&trace)
+                    .expect("trace serialisation cannot fail");
+                std::fs::write(path, trace_json).map_err(|e| {
+                    anyhow_lite::err(format!("writing trace {}: {e}", path.display()))
+                })?;
+            }
+            eprintln!(
+                "DID NOT CONVERGE after {} iteration(s); {} finding(s) remain",
+                trace.iterations.len(),
+                last_findings.len(),
+            );
+            for f in &last_findings {
+                eprintln!(
+                    "  [{rule}] {sev:?}: {msg}",
+                    rule = f.rule_id,
+                    sev = f.severity,
+                    msg = f.message
+                );
+            }
+            Ok(ExitCode::from(2))
+        }
+    }
+}
+
+fn print_trace(trace: &SynthTrace) {
+    println!(
+        "synth-trace: {} iteration(s); tokens in/out/cache = {}/{}/{}",
+        trace.iterations.len(),
+        trace.total_input_tokens,
+        trace.total_output_tokens,
+        trace.total_cache_read_tokens,
+    );
+    for iter in &trace.iterations {
+        println!(
+            "  iter {idx}: {n} finding(s); tokens in/out/cache = {ti}/{to}/{tc}",
+            idx = iter.index,
+            n = iter.lint_findings.len(),
+            ti = iter.input_tokens,
+            to = iter.output_tokens,
+            tc = iter.cache_read_tokens,
+        );
+        for f in &iter.lint_findings {
+            println!(
+                "    [{rule}] {sev:?}: {msg}",
+                rule = f.rule_id,
+                sev = f.severity,
+                msg = f.message
+            );
+        }
+    }
+}
+
+fn require_env(name: &str) -> anyhow_lite::Result<String> {
+    match std::env::var(name) {
+        Ok(value) if !value.trim().is_empty() => Ok(value),
+        _ => Err(anyhow_lite::err(format!(
+            "{name} is not set or is empty; export it before running"
+        ))),
+    }
+}
+
+/// Tiny `anyhow`-shaped error used by `main` so we don't pull `anyhow` in.
+mod anyhow_lite {
+    use std::fmt;
+
+    #[derive(Debug)]
+    pub struct Error(String);
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+
+    impl std::error::Error for Error {}
+
+    pub type Result<T> = std::result::Result<T, Error>;
+
+    pub fn err(message: impl Into<String>) -> Error {
+        Error(message.into())
+    }
+}

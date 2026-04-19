@@ -7,6 +7,10 @@ members = [
     "crates/wos-formspec-binding",
     "crates/wos-export",
     "crates/wos-synth-spike",
+    "crates/wos-synth-core",
+    "crates/wos-synth-mock",
+    "crates/wos-synth-anthropic",
+    "crates/wos-synth-cli",
     "crates/wos-authoring",
     "crates/wos-mcp",
 ]
