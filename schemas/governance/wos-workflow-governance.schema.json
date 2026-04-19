@@ -262,10 +262,13 @@
         },
         "noticeGracePeriod": {
           "type": "string",
-          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'.",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'. MUST match the supported ISO 8601 duration grammar (for example, `P30D`, `PT12H`, or `P2W`). As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar; statutory deadlines like FOIA's 20-business-day response use this form.",
           "examples": [
             "P30D",
-            "P14D"
+            "P14D",
+            "PT12H",
+            "P20BD"
           ]
         },
         "noticeTemplateRef": {
@@ -299,6 +302,7 @@
     },
     "AppealMechanism": {
       "type": "object",
+      "required": ["reviewerConstraint"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -314,18 +318,32 @@
         },
         "appealWindow": {
           "type": "string",
-          "description": "ISO 8601 duration defining the filing window during which an appeal can be submitted after notice of adverse decision is received.",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration defining the filing window during which an appeal can be submitted after notice of adverse decision is received. MUST match the supported ISO 8601 duration grammar, for example `P30D`, `P60D`, or `PT12H`. As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar.",
           "examples": [
             "P30D",
-            "P60D"
+            "P60D",
+            "P20BD"
           ]
         },
         "reviewerConstraint": {
           "type": "string",
-          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5).",
+          "enum": [
+            "independentFromOriginal",
+            "differentUnit",
+            "differentAgency",
+            "externalPanel"
+          ],
+          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5). Values mirror `AppealRouting.independenceConstraint` in the Due Process Config sidecar so processors can apply a single independence policy across both authoring inputs and runtime routing. `independentFromOriginal`: reviewer is any actor distinct from the original decision-maker. `differentUnit`: reviewer is in a different organizational unit. `differentAgency`: reviewer is in a different agency. `externalPanel`: reviewer is an external panel (e.g., administrative law judge).",
           "examples": [
-            "independentFromOriginal"
-          ]
+            "independentFromOriginal",
+            "differentUnit",
+            "externalPanel"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Closes the appeal-reviewer independence vocabulary so structurally-invalid documents fail at schema validation rather than during downstream linting"
+          }
         },
         "reviewerRoles": {
           "type": "array",
@@ -364,10 +382,16 @@
         },
         "continuationScope": {
           "type": "string",
-          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending.",
+          "enum": [
+            "currentLevel",
+            "reducedLevel",
+            "emergencyOnly"
+          ],
+          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
           "examples": [
             "currentLevel",
-            "reducedLevel"
+            "reducedLevel",
+            "emergencyOnly"
           ]
         }
       }
@@ -1255,7 +1279,7 @@
         },
         "conditions": {
           "type": "string",
-          "description": "Additional FEL expression that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true.",
+          "description": "FEL expression (Runtime Companion §8.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.",
           "examples": [
             "caseFile.programType = 'supplemental'"
           ]
@@ -1286,12 +1310,29 @@
       "properties": {
         "holdType": {
           "type": "string",
-          "description": "Reason for the hold. Standard values: pending-applicant-response, pending-external-verification, pending-legal-review, pending-legislation, pending-related-case, voluntary-hold, legal-hold. Extensible via x- prefixed values. Note: legal-hold has distinct semantics per S7.15 -- it has no event-based resumeTrigger, survives terminal workflow states, and blocks data destruction/retention expiry regardless of ordinary workflow state.",
+          "oneOf": [
+            {
+              "enum": [
+                "pending-applicant-response",
+                "pending-external-verification",
+                "pending-legal-review",
+                "pending-legislation",
+                "pending-related-case",
+                "voluntary-hold",
+                "legal-hold"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Reason for the hold. MUST be one of the seven standard values OR an `x-` prefixed vendor extension. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`, `legal-hold`. Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$` (e.g., `x-acme-pending-tribal-review`). Note: `legal-hold` has distinct semantics per S7.15 -- it has no event-based `resumeTrigger`, survives terminal workflow states, and blocks data destruction/retention expiry regardless of ordinary workflow state; `resumeTrigger` and `timeoutAction` are NOT required when `holdType` is `legal-hold`.",
           "examples": [
             "pending-applicant-response",
             "pending-external-verification",
             "pending-legislation",
-            "legal-hold"
+            "legal-hold",
+            "x-acme-pending-tribal-review"
           ],
           "x-lm": {
             "critical": true,
@@ -1300,11 +1341,13 @@
         },
         "expectedDuration": {
           "type": "string",
-          "description": "Expected ISO 8601 duration of this hold, or 'indefinite' for holds with no expected end time. When the duration expires without the resumeTrigger firing, the processor applies the timeoutAction.",
+          "pattern": "^(indefinite|P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?))$",
+          "description": "Expected ISO 8601 duration of this hold, or the literal string 'indefinite' for holds with no expected end time. When the duration expires without the resumeTrigger firing, the processor applies the timeoutAction. As a WOS extension, the `P<N>BD` form denotes N business days resolved against an attached Business Calendar sidecar.",
           "examples": [
             "P30D",
             "P14D",
-            "indefinite"
+            "indefinite",
+            "P20BD"
           ]
         },
         "resumeTrigger": {

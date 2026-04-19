@@ -802,8 +802,22 @@
       "properties": {
         "type": {
           "type": "string",
-          "description": "Classifier for this cross-case relationship (Kernel §5.5). Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). The type is extensible via `x-`-prefixed vendor values; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata — they do NOT affect lifecycle evaluation.",
-          "examples": ["parent", "child", "sibling", "related", "supersedes"],
+          "oneOf": [
+            {
+              "enum": [
+                "parent",
+                "child",
+                "sibling",
+                "related",
+                "supersedes"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Classifier for this cross-case relationship (Kernel §5.5). MUST be one of the five standard values OR an `x-` prefixed vendor extension. Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$`; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata — they do NOT affect lifecycle evaluation. The schema enum mirrors lint rule K-048 so invalid relationship vocabulary fails at schema validation rather than only at lint time.",
+          "examples": ["parent", "child", "sibling", "related", "supersedes", "x-acme-consolidated-with"],
           "x-lm": {
             "critical": true,
             "intent": "Classifies the nature of the cross-case relationship"

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/kernel/provenance-record/1.0",
+  "title": "WOS Kernel Provenance Log Document",
+  "description": "A WOS Kernel Provenance Log export document per Kernel §8 (Provenance). Carries an append-only array of Facts-tier provenance records emitted by runtime execution. State-transition records whose transitionTags include 'determination' MUST carry a caseFileSnapshot so notices, appeals, and override reviews can reproduce the exact factual basis used by the decision. This schema is the canonical validation target for provenance log exports -- kernel documents themselves do not embed the log.",
+  "type": "object",
+  "required": ["provenanceLog"],
+  "additionalProperties": false,
+  "properties": {
+    "provenanceLog": {
+      "type": "array",
+      "description": "Ordered sequence of Facts-tier provenance records emitted during a workflow run. Records are append-only and their order matches emission order; consumers MUST preserve ordering when re-exporting.",
+      "examples": [
+        [
+          {
+            "recordKind": "stateTransition",
+            "timestamp": "2026-04-19T12:00:00Z",
+            "actorId": "caseworker",
+            "fromState": "review",
+            "toState": "decided",
+            "event": "decide",
+            "transitionTags": ["determination"],
+            "caseFileSnapshot": {
+              "value": { "income": 17500, "eligible": true },
+              "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+              "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+            }
+          }
+        ]
+      ],
+      "items": { "$ref": "#/$defs/FactsTierRecord" }
+    }
+  },
+  "$defs": {
+    "FactsTierRecord": {
+      "type": "object",
+      "description": "A WOS Facts-tier provenance record emitted by runtime execution. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
+      "examples": [
+        {
+          "recordKind": "stateTransition",
+          "timestamp": "2026-04-19T12:00:00Z",
+          "actorId": "caseworker",
+          "fromState": "review",
+          "toState": "decided",
+          "event": "decide",
+          "transitionTags": ["determination"],
+          "caseFileSnapshot": {
+            "value": { "income": 17500, "eligible": true },
+            "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+            "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": true,
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. For determination snapshot enforcement, the relevant value is 'stateTransition'. Other record kinds MAY also carry caseFileSnapshot for implementation-specific diagnostics.",
+          "examples": ["stateTransition", "caseStateMutation"]
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory.",
+          "examples": [["determination"], ["review"]],
+          "items": {
+            "type": "string",
+            "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
+            "examples": ["determination", "review"]
+          }
+        },
+        "caseFileSnapshot": { "$ref": "#/$defs/CaseFileSnapshot" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": { "const": "stateTransition" },
+              "transitionTags": {
+                "contains": { "const": "determination" }
+              }
+            },
+            "required": ["recordKind", "transitionTags"]
+          },
+          "then": {
+            "required": ["caseFileSnapshot"]
+          }
+        }
+      ]
+    },
+    "CaseFileSnapshot": {
+      "type": "object",
+      "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export.",
+      "examples": [
+        {
+          "value": { "income": 17500, "eligible": true },
+          "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+          "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        }
+      ],
+      "required": ["value", "jcsCanonical", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires. This value may be an object, array, string, number, boolean, or null depending on the processor's case-state representation.",
+          "examples": [{ "income": 17500, "eligible": true }]
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
+          "examples": ["{\"eligible\":true,\"income\":17500}"]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical. This digest links the human-readable snapshot to tamper-evident exports without requiring downstream systems to reserialize value.",
+          "examples": ["b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"]
+        }
+      }
+    }
+  }
+}
