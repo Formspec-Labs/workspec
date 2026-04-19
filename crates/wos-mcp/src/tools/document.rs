@@ -101,7 +101,7 @@ fn resolve_json_text(args: &Value) -> Result<String, ToolError> {
 ///
 /// Returns `{"document": "<json-string>"}`.
 pub async fn wos_export_document(
-    registry: &ProjectRegistry,
+    registry: &mut ProjectRegistry,
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
@@ -131,7 +131,7 @@ pub async fn wos_export_document(
 /// }
 /// ```
 pub async fn wos_describe_document(
-    registry: &ProjectRegistry,
+    registry: &mut ProjectRegistry,
     _project_id: &str,
     args: Value,
 ) -> Result<Value, ToolError> {
@@ -166,6 +166,7 @@ pub async fn wos_describe_document(
     // authored via add_extension_key or a companion AIIntegrationDocument.
     // Deontic constraints (x-wos-ai.deonticConstraints) are separate and not
     // counted here.
+    // TODO(wos-mcp): replace with typed AIIntegrationDocument accessor once it lands.
     let ai_agent_count = doc
         .extensions
         .get("x-wos-ai")
@@ -239,7 +240,7 @@ mod tests {
             .unwrap();
         let pid = result["project_id"].as_str().unwrap().to_string();
 
-        let export = wos_export_document(&registry, "", json!({ "project_id": pid }))
+        let export = wos_export_document(&mut registry, "", json!({ "project_id": pid }))
             .await
             .unwrap();
 
@@ -252,9 +253,9 @@ mod tests {
 
     #[tokio::test]
     async fn export_document_unknown_project_errors() {
-        let registry = ProjectRegistry::new();
+        let mut registry = ProjectRegistry::new();
         let err = wos_export_document(
-            &registry,
+            &mut registry,
             "",
             json!({ "project_id": "00000000-0000-0000-0000-000000000000" }),
         )
@@ -265,8 +266,8 @@ mod tests {
 
     #[tokio::test]
     async fn export_document_missing_project_id_errors() {
-        let registry = ProjectRegistry::new();
-        let err = wos_export_document(&registry, "", json!({}))
+        let mut registry = ProjectRegistry::new();
+        let err = wos_export_document(&mut registry, "", json!({}))
             .await
             .unwrap_err();
         assert!(matches!(err, ToolError::MissingArgument(_)));
@@ -282,7 +283,7 @@ mod tests {
             .unwrap();
         let pid = result["project_id"].as_str().unwrap().to_string();
 
-        let desc = wos_describe_document(&registry, "", json!({ "project_id": pid }))
+        let desc = wos_describe_document(&mut registry, "", json!({ "project_id": pid }))
             .await
             .unwrap();
 
@@ -306,7 +307,7 @@ mod tests {
 
         let pid = registry.insert(project).unwrap().to_string();
 
-        let desc = wos_describe_document(&registry, "", json!({ "project_id": pid }))
+        let desc = wos_describe_document(&mut registry, "", json!({ "project_id": pid }))
             .await
             .unwrap();
 
@@ -328,7 +329,7 @@ mod tests {
             .unwrap();
         let pid = create_result["project_id"].as_str().unwrap().to_string();
 
-        let export_result = wos_export_document(&registry, "", json!({ "project_id": &pid }))
+        let export_result = wos_export_document(&mut registry, "", json!({ "project_id": &pid }))
             .await
             .unwrap();
         let doc_json = export_result["document"].as_str().unwrap();
@@ -389,5 +390,43 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ToolError::ValidationFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn load_document_path_branch_registers_project() {
+        // Write a valid kernel document to a temp file and load it via the
+        // {"path": "..."} branch of wos_load_document.
+        let kernel_json = serde_json::json!({
+            "$wosKernel": "1.0",
+            "title": "path-loaded workflow",
+            "impactLevel": "operational",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" },
+                    "closed": { "type": "final" }
+                }
+            }
+        })
+        .to_string();
+
+        let tmp = tempfile::NamedTempFile::new().expect("create temp file");
+        std::fs::write(tmp.path(), &kernel_json).expect("write kernel json to temp file");
+
+        let mut registry = ProjectRegistry::new();
+        let result = wos_load_document(
+            &mut registry,
+            "",
+            json!({ "path": tmp.path().to_str().expect("valid utf-8 path") }),
+        )
+        .await
+        .unwrap();
+
+        let pid = result["project_id"].as_str().expect("must have project_id");
+        assert!(!pid.is_empty());
+
+        let project = registry.get(pid).expect("project must be registered");
+        let doc = project.snapshot();
+        assert_eq!(doc.title.as_deref(), Some("path-loaded workflow"));
     }
 }

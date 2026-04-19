@@ -2691,13 +2691,13 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",
  "wos-authoring",
- "wos-core",
  "wos-lint",
 ]
 
