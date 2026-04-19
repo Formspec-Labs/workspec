@@ -19,8 +19,8 @@
     "$wosDriftMonitor": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Drift Monitor Config specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Drift Monitor Config specification version marker. MUST be '1.0'. Identifies this document as a WOS Drift Monitor Config sidecar and pins the schema version. Processors MUST reject documents with an unrecognized value. See AI Integration §9.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Drift Monitor Config sidecar"
@@ -30,8 +30,8 @@
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this monitor applies to.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document whose AI agents this monitor tracks. MUST match the 'url' property of the target Kernel Document. Processors use this to correlate drift events with the correct workflow governance and invoke demotion rules when thresholds are crossed. See AI Integration §9.",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/grants-review"],
       "x-lm": {
         "critical": true,
         "intent": "Binds this sidecar to the monitored workflow"
@@ -40,12 +40,13 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Drift Monitor Config document.",
-      "examples": ["1.0.0"]
+      "description": "Version of this Drift Monitor Config document. RECOMMENDED to use semantic versioning (major.minor.patch) so monitoring configuration changes are independently tracked in audit records.",
+      "examples": ["1.0.0", "2.3.1"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this drift monitor configuration."
+      "description": "Human-readable name for this drift monitor configuration. Displayed in administrative dashboards and alert notifications so operators can quickly identify which monitor fired.",
+      "examples": ["Benefits Adjudication Drift Monitor", "Grants Review AI Monitoring Config"]
     },
     "monitors": {
       "type": "array",
@@ -80,12 +81,12 @@
         "agentRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Agent identifier to monitor.",
+          "description": "Agent identifier to monitor. MUST match the 'id' of an AgentDeclaration in the target AI Integration Document. All metric evaluations and alert thresholds defined under this monitor apply exclusively to this agent's invocations.",
           "examples": ["documentExtractor", "eligibilityScreener"]
         },
         "evaluationWindow": {
           "type": "string",
-          "description": "ISO 8601 duration of the evaluation window.",
+          "description": "ISO 8601 duration of the rolling evaluation window over which metrics are computed. Longer windows smooth short-term variance; shorter windows detect rapid drift earlier. Set shorter windows for high-impact agents.",
           "examples": ["P30D", "P7D"]
         },
         "metrics": {
@@ -118,13 +119,14 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Metric name.",
+          "description": "Logical name for this metric, used to reference the metric in alert threshold conditions (e.g., 'extractionAccuracy < 0.90'). Choose a name that clearly identifies what is being measured so alert conditions are self-documenting.",
           "examples": ["accuracy", "agreementRate", "confidenceDistribution", "modificationRate", "outputDistribution"]
         },
         "method": {
           "type": "string",
           "enum": ["psi", "ks", "chi2", "accuracy", "custom"],
-          "description": "Statistical method for drift detection. 'psi': Population Stability Index. 'ks': Kolmogorov-Smirnov test. 'chi2': Chi-squared test. 'accuracy': accuracy against human-reviewed ground truth. 'custom': implementation-defined method."
+          "description": "Statistical method for drift detection. 'psi': Population Stability Index. 'ks': Kolmogorov-Smirnov test. 'chi2': Chi-squared test. 'accuracy': accuracy against human-reviewed ground truth. 'custom': implementation-defined method.",
+          "examples": ["accuracy", "psi"]
         },
         "threshold": {
           "type": "number",
@@ -145,7 +147,8 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Whether rubber-stamp detection is active."
+          "description": "Whether rubber-stamp detection monitoring is active for this agent. When true, the monitor tracks reviewer engagement metrics (minReviewTime and maxAgreementRate) and generates alerts when reviewers appear to approve agent outputs without meaningful scrutiny.",
+          "examples": [true, false]
         },
         "minReviewTime": {
           "type": "string",
@@ -156,7 +159,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Agreement rate above which reviewer engagement is flagged.",
+          "description": "Agreement rate above which reviewer engagement is flagged as potentially declining. When a reviewer agrees with the agent more than this fraction of the time within the evaluationWindow, the pattern is reported for oversight review.",
           "examples": [0.95, 0.98]
         },
         "evaluationWindow": {
@@ -179,22 +182,29 @@
         "condition": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression or metric condition that triggers the alert.",
+          "description": "FEL expression or metric condition that triggers the alert. References metric names defined in the parent AgentMonitor.metrics array. When the expression evaluates to true the threshold is considered crossed and the configured action fires.",
           "examples": ["accuracy < 0.90", "psi > 0.25"]
         },
         "severity": {
           "type": "string",
           "enum": ["info", "warning", "critical"],
-          "description": "Alert severity level."
+          "description": "Alert severity level that controls urgency of notification routing and escalation. 'critical' thresholds SHOULD include an automatic governance action such as 'demoteToAssistive' or 'suspend'.",
+          "examples": ["critical", "warning"]
         },
         "action": {
           "type": "string",
           "enum": ["notify", "demoteToAssistive", "demoteToManual", "suspend"],
-          "description": "Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations."
+          "description": "Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations.",
+          "examples": ["demoteToAssistive", "notify"]
         },
         "notifyRoles": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Role identifier to notify when this alert threshold is crossed. MUST match a role declared in the governance document's actorRegistry or a well-known WOS role identifier.",
+            "examples": ["systemAdministrator", "programDirector"]
+          },
           "description": "Roles to notify when this threshold is crossed.",
           "examples": [["systemAdministrator", "programDirector"]]
         }
@@ -212,30 +222,31 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Whether the shadow/canary/production deployment sequence is enforced."
+          "description": "Whether the shadow/canary/production deployment sequence is enforced for this workflow. When true, new agent versions MUST progress through shadow and canary phases before receiving full production traffic.",
+          "examples": [true, false]
         },
         "shadowDuration": {
           "type": "string",
-          "description": "ISO 8601 duration of the shadow phase.",
+          "description": "ISO 8601 duration of the shadow phase, during which the new agent version runs in parallel with the production version but its outputs are not used to make decisions. Drift metrics are collected to verify readiness for canary promotion.",
           "examples": ["P14D", "P7D"]
         },
         "canaryPercentage": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Fraction of invocations routed to the canary version.",
+          "description": "Fraction of live invocations routed to the canary version during the canary phase. The remainder continues using the current production version. Start conservatively (0.05) and increase only after monitoring confirms acceptable metrics.",
           "examples": [0.05, 0.1]
         },
         "canaryDuration": {
           "type": "string",
-          "description": "ISO 8601 duration of the canary phase.",
+          "description": "ISO 8601 duration of the canary phase, during which the new version handles a small percentage of real traffic. At end of canary phase, metrics are reviewed before full promotion to production.",
           "examples": ["P7D", "P14D"]
         },
         "canaryReviewSamplingRate": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Elevated review sampling rate during the canary phase.",
+          "description": "Elevated human review sampling rate applied to canary invocations during the canary phase. Set to 1.0 (100% sampling) for rights-impacting workflows to ensure maximum oversight while evaluating the new model version.",
           "examples": [0.5, 1.0]
         }
       }
