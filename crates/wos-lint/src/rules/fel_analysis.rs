@@ -35,7 +35,7 @@ use fel_core::{
 };
 use serde_json::Value;
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosDocument, WosProject};
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ use crate::document::{DocumentKind, WosDocument, WosProject};
 // ---------------------------------------------------------------------------
 
 /// Run all FEL AST analysis checks across every document in the project.
-pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     for doc in project.documents() {
         match doc.kind {
             DocumentKind::Kernel => check_kernel_fel(doc, diagnostics),
@@ -61,7 +61,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 /// Check FEL in a Kernel document (K-012, K-013, K-017, K-019).
-fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(states) = doc
         .value
         .pointer("/lifecycle/states")
@@ -73,7 +73,7 @@ fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// Check FEL in a WorkflowGovernance document (G-043).
-fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(delegations) = doc.value.get("delegations").and_then(Value::as_array) {
         for (i, delegation) in delegations.iter().enumerate() {
             let base_path = format!("/delegations/{i}");
@@ -83,7 +83,7 @@ fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// Check FEL in an AI Integration document (AI-024).
-fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(agents) = doc.value.get("agents").and_then(Value::as_object) {
         for (agent_name, agent) in agents {
             let base_path = format!("/agents/{agent_name}");
@@ -93,7 +93,7 @@ fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>
 }
 
 /// Check FEL in an Advanced Governance document (AG-010 through AG-014).
-fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(constraints) = doc
         .value
         .get("verifiableConstraints")
@@ -111,7 +111,7 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagno
 }
 
 /// Check FEL in an Assertion Library document (G-042).
-fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(assertions) = doc.value.get("assertions").and_then(Value::as_array) {
         for (i, assertion) in assertions.iter().enumerate() {
             let path = format!("/assertions/{i}/expression");
@@ -130,7 +130,7 @@ fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnost
 fn check_states_fel(
     states: &serde_json::Map<String, Value>,
     path_prefix: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (state_name, state) in states {
         let state_path = format!("{path_prefix}/{state_name}");
@@ -163,11 +163,11 @@ fn check_states_fel(
 }
 
 /// K-012 + K-017 + K-019: Parse a guard expression and run structural checks.
-fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     let expr = match parse(expr_str) {
         Ok(e) => e,
         Err(err) => {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "K-012",
                 path,
                 format!("guard expression is not valid FEL: {err}"),
@@ -184,7 +184,7 @@ fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diag
 }
 
 /// K-013: Milestone condition fields must be valid FEL.
-fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
+fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(milestones) = root
         .pointer("/lifecycle/milestones")
         .and_then(Value::as_array)
@@ -208,7 +208,7 @@ fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
 fn check_delegation_conditions(
     delegation: &Value,
     base_path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(conditions) = delegation.get("conditions").and_then(Value::as_array) else {
         return;
@@ -227,7 +227,7 @@ fn check_delegation_conditions(
 // ---------------------------------------------------------------------------
 
 /// AI-024: Escalation conditions must be valid FEL that references `@agent` context.
-fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(escalation) = agent.get("escalation") else {
         return;
     };
@@ -242,7 +242,7 @@ fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut
             let expr = match parse(expr_str) {
                 Ok(e) => e,
                 Err(err) => {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "AI-024",
                         &path,
                         format!("escalation condition is not valid FEL: {err}"),
@@ -252,7 +252,7 @@ fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut
             };
 
             if !references_agent_context(&expr) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "AI-024",
                     &path,
                     "escalation condition should reference @agent context",
@@ -294,13 +294,13 @@ fn parse_finite_domain_declarations(value: Option<&Value>) -> HashMap<String, ()
 fn check_smt_expression(
     expr_str: &str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
     finite_domain_paths: &HashMap<String, ()>,
 ) {
     let expr = match parse(expr_str) {
         Ok(e) => e,
         Err(err) => {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "AG-010",
                 path,
                 format!("verifiable constraint is not valid FEL: {err}"),
@@ -335,10 +335,10 @@ fn check_expression_syntax(
     rule_id: &'static str,
     expr_str: &str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if let Err(err) = parse(expr_str) {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             rule_id,
             path,
             format!("expression is not valid FEL: {err}"),
@@ -360,13 +360,13 @@ fn check_no_related_case_refs(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         match e {
             Expr::FieldRef { name, .. } => {
                 if name.as_deref().is_some_and(is_related_case_name) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -379,7 +379,7 @@ fn check_no_related_case_refs(
             }
             Expr::ContextRef { name, .. } => {
                 if is_related_case_name(name) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -399,7 +399,7 @@ fn check_no_related_case_refs(
                         // We only warn if the base is a field ref without its own name,
                         // meaning it could be a bare `$` dereferencing into relatedCase.
                         if matches!(inner.as_ref(), Expr::FieldRef { name: None, .. }) {
-                            diagnostics.push(Diagnostic::error(
+                            diagnostics.push(LintDiagnostic::t2_error(
                                 rule_id,
                                 path,
                                 format!(
@@ -439,14 +439,14 @@ fn check_only_builtin_functions(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
             if !builtin_names.contains(name.as_str()) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     rule_id,
                     path,
                     format!(
@@ -470,7 +470,7 @@ fn check_no_recursive_let(
     outer_names: &mut HashSet<String>,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     match expr {
         Expr::LetBinding { name, value, body } => {
@@ -482,7 +482,7 @@ fn check_no_recursive_let(
             self_set.insert(name.clone());
 
             if let_value_references_name(value, &self_set) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t2_error(
                     rule_id,
                     path,
                     format!("let binding '{name}' references itself recursively"),
@@ -527,12 +527,12 @@ fn check_finite_quantifiers(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, args } = e {
             if (name == "every" || name == "some") && args.len() != 2 {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     rule_id,
                     path,
                     format!(
@@ -555,7 +555,7 @@ fn check_linear_arithmetic(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         if let Expr::BinaryOp { op, left, right } = e {
@@ -565,7 +565,7 @@ fn check_linear_arithmetic(
 
                 if left_has_var && right_has_var {
                     let op_symbol = if *op == BinaryOp::Mul { "*" } else { "/" };
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -602,14 +602,14 @@ fn check_no_extension_functions(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
             if !builtin_names.contains(name.as_str()) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t2_error(
                     rule_id,
                     path,
                     format!(
@@ -634,7 +634,7 @@ fn check_no_extension_functions(
 fn check_finite_domain_equality(
     expr: &Expr,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
     finite_paths: &HashMap<String, ()>,
 ) {
     let mut warned_path_pairs: HashSet<(String, String)> = HashSet::new();
@@ -662,7 +662,7 @@ fn check_finite_domain_equality(
                 if skip_duplicate {
                     return false;
                 }
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "AG-010",
                     path,
                     "`==` or `!=` compares two non-literal field or context accesses; use a \
@@ -881,7 +881,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::diagnostic::Severity;
+    use crate::diagnostic::LintSeverity;
     use crate::document::{DocumentKind, WosDocument};
     use serde_json::json;
 
@@ -934,7 +934,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-012" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "K-012" && d.severity == LintSeverity::Error),
             "expected K-012 error, got: {diag:?}"
         );
     }
@@ -985,7 +985,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-017" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "K-017" && d.severity == LintSeverity::Error),
             "expected K-017 error, got: {diag:?}"
         );
     }
@@ -1042,7 +1042,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-019" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "K-019" && d.severity == LintSeverity::Warning),
             "expected K-019 warning, got: {diag:?}"
         );
     }
@@ -1150,7 +1150,7 @@ mod tests {
         check_ai_integration_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AI-024" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AI-024" && d.severity == LintSeverity::Warning),
             "expected AI-024 warning, got: {diag:?}"
         );
     }
@@ -1226,7 +1226,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "AG-013" && d.severity == LintSeverity::Error),
             "expected AG-013 error, got: {diag:?}"
         );
     }
@@ -1261,7 +1261,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "AG-014" && d.severity == LintSeverity::Error),
             "expected AG-014 error, got: {diag:?}"
         );
     }
@@ -1297,7 +1297,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1315,7 +1315,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1333,7 +1333,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1351,7 +1351,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1368,7 +1368,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning, got: {diag:?}"
         );
     }
@@ -1385,7 +1385,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning for !=, got: {diag:?}"
         );
     }
@@ -1402,7 +1402,7 @@ mod tests {
         );
         let n = diag
             .iter()
-            .filter(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning)
+            .filter(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning)
             .count();
         assert_eq!(n, 1, "expected one deduped AG-010 warning, got: {diag:?}");
     }
@@ -1417,7 +1417,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1431,7 +1431,7 @@ mod tests {
         check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &decls);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning, got: {diag:?}"
         );
     }
@@ -1459,7 +1459,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
