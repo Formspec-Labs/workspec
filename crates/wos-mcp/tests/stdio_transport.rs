@@ -341,9 +341,19 @@ fn every_advertised_tool_has_a_dispatch_handler() {
 
     assert!(!names.is_empty(), "tools/list must return at least one tool");
 
-    // Call each tool with an empty arguments object. We expect either success
-    // or a ToolFailed error — but NOT UnknownTool (-32602) since all names
-    // were taken from the advertised catalog.
+    // Call each tool with an empty arguments object.
+    //
+    // Acceptable outcomes:
+    //   - A successful result (`result` field present, no `error` field).
+    //   - A tool-execution failure indicated by `isError: true` inside `result`
+    //     (e.g., missing required arguments). These are application-level errors
+    //     returned through the normal result channel, NOT JSON-RPC protocol errors.
+    //
+    // Unacceptable outcome:
+    //   - A JSON-RPC protocol error (`error` field present). That would mean the
+    //     server returned INVALID_PARAMS / UnknownTool for a name that was just
+    //     advertised — a catalog–dispatch mismatch. `isError: true` in the result
+    //     is fine; a top-level `error` field is not.
     let call_requests: Vec<serde_json::Value> = names
         .iter()
         .enumerate()

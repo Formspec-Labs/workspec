@@ -196,7 +196,7 @@ fn build_dot_graph(doc: &wos_authoring::KernelDocument) -> String {
 
     if !doc.lifecycle.initial_state.is_empty() {
         let sid = sanitize_dot_id(&doc.lifecycle.initial_state);
-        lines.push(format!("  __start__ [shape=point];"));
+        lines.push("  __start__ [shape=point];".to_string());
         lines.push(format!("  __start__ -> {};", sid));
     }
 
