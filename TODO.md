@@ -1,9 +1,29 @@
 # WOS TODO
 
 **Last audited:** 2026-04-18 (session 2 close — §5.1 kernel tier 0 violations + wos-authoring Tasks 4-8 done + 4 review cycles closed inline)
-**Counts:** 18 specs, 19 schemas (kernel at 0 SCHEMA-DOC-001 violations), 41 document fixtures + 146 conformance fixtures (0 T3 red, 146 green), 7 crates (wos-core, wos-lint, wos-conformance, wos-runtime, wos-formspec-binding, wos-export) plus 2 v0 scaffolds (wos-authoring MVP complete with 49 tests, wos-mcp) and 1 throwaway (wos-synth-spike), 197 lint rules in `LINT-MATRIX.md` (🚨 **unreconciled**: code registry has 97 reified entries per commit `1f8eae5`; 7 rules promoted to `Tested` + AI-041 annotation update per commits `45e654d` + `bcaa294` + `b203c29`; §4.2 Task 3 CI ratchet landed per `6e83cdf`; §4.2 Tasks 4-7 still open on the ~100-rule gap)
 
-**Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+**Snapshot**
+
+| Metric | Value |
+|---|---|
+| Specs / schemas | 18 specs · 19 schemas (kernel tier: 0 SCHEMA-DOC-001 violations) |
+| Fixtures | 41 document + 146 conformance (T3: 0 red / 146 green) |
+| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 2 v0 scaffolds (`wos-authoring` MVP @ 49 tests, `wos-mcp`) + 1 throwaway (`wos-synth-spike`) |
+| Lint matrix | 197 rules in `LINT-MATRIX.md` · 🚨 **unreconciled with code registry** (97 reified entries, ~100-rule gap). §4.2 Task 3 CI ratchet landed (`6e83cdf`); Tasks 4-7 open. |
+
+**Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+
+---
+
+## Next actionable work items (ordered by ROI)
+
+> Session 2 close 2026-04-18: all blockers cleared, §5.3 teaching signal end-to-end, cleanup-batch warnings fixed, §4.2 Task 3 CI ratchet landed, §5.1 kernel tier at 0 violations, wos-authoring MVP complete, 4 code-review cycles closed inline. Working tree clean; 41 commits on `main` this session.
+
+1. **§5.1 companion tiers backfill** — next schema tiers after kernel (companions → governance → AI → profiles → sidecars → assurance → advanced). Use the kernel tier's 6-section commit shape as the template; reuse `crates/wos-lint/examples/count_schema_violations.rs` for per-schema delta measurement. ~1-2 days per tier.
+2. **wos-mcp Tasks 3-6** — now unblocked by `wos-authoring` MVP; expose document-management, lifecycle/actor, governance/AI, and validation/query tools over the JSON-RPC seam. Consumer is `WosProject` façade only.
+3. **§5.3 Tasks 4-5** — `wos-conformance explain` / `diff` CLI subcommands and `schemas/conformance/conformance-trace.schema.json` publication. Guard and policy payloads are populated so the CLI has real content to format.
+4. **§4.2 Tasks 4-7** — coverage CLI, LINT-MATRIX regen, CI gate for LoadBearing promotion, broader ratchet automation. Prerequisite for §4.4.
+5. **§5.2 Tasks 3-6** — 91-rule migration to structured LintDiagnostics, output formatters, JSON schema publication, migration doc. Largest task in the §5.2 plan.
 
 ---
 
@@ -13,21 +33,27 @@ Seven parallel semi-formal code reviews on the 14-commit batch delivered by 7 so
 
 ### Blockers (ordered by damage if not fixed)
 
-> **2026-04-18 status update (session 2 — second close-out pass):** ALL FIVE blockers now cleared AND subsequent code-review follow-ups landed. Blocker 1 (§5.3 teaching signal) closed in four commits `b0b9ac5` + `95b88e9` + `b28f610` + `120086e`: Evaluator captures GuardEvaluation records including short-circuited false guards; DrainOnceResult.guard_evaluations plumbs them through runtime; TraceStep.guards_evaluated populated with per-step matching; Delta::GuardFalse enriched when an expected transition's guard blocks; TraceStep.policies_applied synthesized from governance/AI provenance kinds carrying ruleId/policyId. Seven goldens regenerated (purely additive). Type alignment: wos-conformance::trace::GuardEvaluation is now a re-export of wos_core::eval::GuardEvaluation (single source of truth; source_state / target_state / event fields added to carry the teaching signal).
->
-> **Post-review follow-up fixes (commit `742373c`)** addressed the semi-formal-review REQUEST CHANGES verdict on the §5.3 batch: (a) **blocker fixed** — `policies_applied` was silently empty on all real fixtures because governance constructors set `event: None` and the trace extractor filtered on event match; runtime::drain_once now stamps the drain's event onto policy-kind records via a new canonical `ProvenanceKind::is_policy_application()` method; (b) policy-id extractor widened from `ruleId`/`policyId` to also include `constraintId` (what governance actually emits) / `id` / `tool`, with fallback to the record_kind's camelCase name for aggregate records (DeonticResolution etc.); (c) `Delta::GuardFalse` carries `expression` for disambiguation when two transitions share `(from, target, event)`; (d) `build_guard_inputs` handles `[*]` wildcard paths (guards using `every()` / `some()`); (e) stale "opaque wos_runtime" docstring replaced; (f) `DrainOnceResult` struct-literal uses `..Default::default()`. Four new tests including end-to-end AI-014 governance fixture that would have been red before the stamping fix.
->
-> **Cleanup-review follow-up nits (commit `ef0da3c`)**: `wos-lint::document` got the TODO comment that `wos-synth-spike::loop_mod::MISSING_MARKER_SENTINEL` references; `wos-mcp/src/server.rs` header no longer asserts rust-mcp-sdk is "too heavy" (points at the Cargo.toml TODO which documents the corrected feature analysis).
->
-> **§4.2 Task 3 ratchet landed (commits `b203c29` + `6e83cdf`)**: `every_promoted_*_rule_has_executable_or_annotated_evidence` test added to both `crates/wos-conformance/tests/rule_registry.rs` and `crates/wos-lint/tests/rule_registry.rs`. For every `Tested`/`LoadBearing` entry the test requires either a resolvable executable fixture or an evidence-annotation comment (mirroring AI-004 / AI-050 / K-EXT-002 / G-052 pattern). AI-041 evidence annotation added as a TDD discovery. §5.3 trace emission is a usable teaching signal for §5.4 repair prompts. Full prior session summary:
->
-> **Earlier in session:** blockers 2, 3, 4, 5 cleared across eight commits (`0f6f049`, `9470b14`, `0f7e27b`, `0b61e96`, `ddd25d3`, `56369bf`, `a42c281`, `935dce9`). Summary:
->
-> - **§5.2 Custom variant:** `SuggestedFix::Custom(String)` → `Custom { hint: String }` with round-trip test; §5.2 plan sketch updated to match.
-> - **wos-authoring Command sealing:** enum is `pub(crate)`, `lib.rs` re-export dropped, `dispatch` moved off the public `IWosProjectCore` trait onto an inherent `pub(crate)` method on `RawWosProject`, and `AppliedCommand::inverse` / `with_inverse` tightened to `pub(crate)`. `cargo check -p wos-authoring --tests` now runs with zero warnings. Close of the session-review Finding 1 follow-up.
-> - **wos-authoring plan realignment:** `ActorKind::Agent` removed (kernel schema defines only `human | system`; AI agents route through `x-wos-ai.agents`; custom actor kinds through the §10.6 `actorExtension` seam); `ImpactLevel` variants realigned to the real `RightsImpacting | SafetyImpacting | Operational | Informational` set.
-> - **T3 fixture repair (two passes):** (a) six happy-path fixtures got `initial_case_state` bridges so guards actually evaluate; (b) the same six had `expected_provenance` migrated from legacy `type`/`from`/`to` keys to serde's `recordKind`/`fromState`/`toState` shape, and K-046 + G-030's sparse `expected_transitions` expanded to the full real sequences. All six happy-path goldens now `outcome: pass` with honest step counts (1, 5, 2, 1, 7, 12); K-001 correctly stays `fail/0` as a negative lint fixture. Six new `happy_path_*` tests assert runtime engagement + outcome=Pass.
-> - **Semi-formal review:** all five review items (three findings + two observations) closed this session; verdict APPROVE.
+> **Status (session 2 close, 2026-04-18):** ALL FIVE blockers cleared + post-review follow-ups + cleanup-review nits landed. §5.3 teaching signal end-to-end. Verdict on the follow-up review: APPROVE.
+
+**Blockers cleared**
+
+- **Blocker 1 — §5.3 teaching signal** (`b0b9ac5` + `95b88e9` + `b28f610` + `120086e`, follow-up `742373c`). Evaluator now captures `GuardEvaluation` records (including short-circuited false guards); `DrainOnceResult.guard_evaluations` plumbs them through runtime; `TraceStep.guards_evaluated` populated per step; `Delta::GuardFalse` enriched when an expected transition's guard blocks; `TraceStep.policies_applied` synthesized from governance/AI provenance via canonical `ProvenanceKind::is_policy_application()`. Single source of truth: `wos-conformance::trace::GuardEvaluation` re-exports `wos_core::eval::GuardEvaluation` (with `source_state` / `target_state` / `event` fields added to carry the teaching signal). Seven goldens regenerated (additive).
+- **Blocker 2 — §5.2 `SuggestedFix::Custom` panic** (`0f6f049`, plan synced `935dce9`). Tuple variant `Custom(String)` converted to struct variant `Custom { hint: String }` with serde round-trip test.
+- **Blocker 3 — wos-authoring `Command` visibility** (`9470b14` + `a42c281`). Enum sealed `pub(crate)`; `lib.rs` re-export dropped; `dispatch` moved onto inherent `pub(crate)` method of `RawWosProject`; `AppliedCommand::inverse` / `with_inverse` tightened. `cargo check -p wos-authoring --tests` warning-clean. Closes the prior session-review Finding 1.
+- **Blocker 4 — wos-authoring plan used fictitious enum variants.** Plan realigned to real `ActorKind = Human | System` (AI agents route through `x-wos-ai.agents`; custom kinds through §10.6 `actorExtension` seam) and real `ImpactLevel = RightsImpacting | SafetyImpacting | Operational | Informational`.
+- **Blocker 5 — §5.3 T3 fixture data-path mismatch** (6 happy-path fixtures across two passes: `0f7e27b` + `0b61e96` + `ddd25d3` + `56369bf`). (a) `initial_case_state` bridges added so guards evaluate; (b) `expected_provenance` migrated from legacy `type`/`from`/`to` to serde `recordKind`/`fromState`/`toState`; K-046 + G-030 `expected_transitions` expanded to full sequences. All six happy-path goldens now `outcome: pass` with honest step counts (1, 5, 2, 1, 7, 12); K-001 correctly stays `fail/0` as a negative lint fixture. Six new `happy_path_*` tests assert runtime engagement + `outcome=Pass`.
+
+**Follow-up fixes from the post-blocker review cycles**
+
+- **`742373c` — §5.3 semi-formal-review fixes.** (a) `policies_applied` was silently empty on real fixtures because governance constructors set `event: None` and the trace extractor filtered on event match; runtime `drain_once` now stamps the drain's event onto policy-kind records. (b) Policy-id extractor widened from `ruleId`/`policyId` to also include `constraintId` (what governance actually emits), `id`, `tool`, with camelCase-kind fallback for aggregate records (DeonticResolution etc.). (c) `Delta::GuardFalse` carries `expression` for disambiguation when two transitions share `(from, target, event)`. (d) `build_guard_inputs` handles `[*]` wildcard paths (guards using `every()` / `some()`). (e) Stale "opaque wos_runtime" docstring replaced. (f) `DrainOnceResult` struct-literal uses `..Default::default()`. Four new tests including end-to-end AI-014 governance fixture that would have been red before the stamping fix.
+- **`ef0da3c` — cleanup-review nits.** `wos-lint::document` got the TODO comment that `wos-synth-spike::loop_mod::MISSING_MARKER_SENTINEL` references. `wos-mcp/src/server.rs` header no longer asserts rust-mcp-sdk is "too heavy" — points at the `Cargo.toml` TODO with the corrected feature-flag analysis.
+- **`b203c29` + `6e83cdf` — §4.2 Task 3 CI ratchet.** `every_promoted_*_rule_has_executable_or_annotated_evidence` test added to both `crates/wos-conformance/tests/rule_registry.rs` and `crates/wos-lint/tests/rule_registry.rs`: every `Tested`/`LoadBearing` entry requires a resolvable executable fixture OR an evidence-annotation comment (mirroring AI-004 / AI-050 / K-EXT-002 / G-052 pattern). AI-041 evidence annotation added as a TDD discovery.
+
+**What this unblocks**
+
+- §5.4 repair prompts now have a real teaching signal (guards + policies are populated end-to-end).
+- §4.2 `Tested` → `LoadBearing` promotions are now CI-gated.
+- wos-mcp Tasks 3-6 can safely depend on the sealed `WosProject` façade.
 
 1. 🚨 **§5.3 teaching-signal is absent.** `ConformanceTrace.guards_evaluated` and `policies_applied` are hardcoded to `Vec::new()` at `crates/wos-conformance/src/lib.rs:189-190`. `Delta::GuardFalse` and `Delta::PolicyOverride` variants are dead code — no construction path. The stated purpose of trace-emitting conformance (LLM learns "your guard G-02 failed because policy P-11 applied…") is absent. Requires `wos-runtime::DrainOnceResult` to carry per-step guard evaluation records; runtime is native Rust and modifiable (the agent incorrectly framed it as "opaque WASM"). **Without this, §5.4 repair prompts cannot use traces as a teaching signal.**
 2. 🚨 **§5.3 golden traces are degenerate.** All 7 committed goldens under `fixtures/conformance/expected-traces/` are `{outcome: fail, steps: []}` because the T3 fixtures have a `data.amount` (event payload) vs `caseFile.amount` (guard expression) data-path mismatch. The parity regression test asserts "broken state equals broken state" → zero regression coverage. Fix: repair the T3 fixtures (add `initial_case_state` or `setData` bridge actions), re-capture goldens, only then commit as baseline.
@@ -96,39 +122,17 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 - ✅ **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). 6 commits (`793e2e8` through `59bf25b`); 72 pytest cases pass, 2 skip, 1 xfail. Meta-validity + fixture validity + spec-example validity + negative fixtures + CI gate.
 - 🟡 **v0 spike** — [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md). **Tasks 1-3** landed `26c7eaa` + `d2bb234` + `58fb369`: 529 LOC across 4 files (under 800 cap), lint-driven repair loop, 9 unit tests green. **All 3 warnings fixed 2026-04-18**: model bumped to `claude-sonnet-4-6` (`47677fa`); `SpikeError::MissingWosMarker` / `LintFailure` distinct variants with classifier tests (`e165dd7`); API-key guard rejects empty / whitespace-only (`add6796`); upstream `wos-lint::document` got a TODO pointing at the sentinel-substring fragility (`ef0da3c`). 15/15 tests green. **Tasks 4-5 pending**: conformance gate + retrospective with plan propagation.
 
-**Next actionable work items (ordered by ROI):**
-
-> Session 2 close 2026-04-18: all blockers cleared, §5.3 teaching signal end-to-end, cleanup-batch warnings fixed, §4.2 Task 3 CI ratchet landed, §5.1 kernel tier at 0 violations, wos-authoring MVP complete, 4 code-review cycles closed inline. Working tree clean; 41 commits on `main` this session.
-
-1. §5.1 companion tiers backfill — next schema tiers after kernel (companions → governance → AI → profiles → sidecars → assurance → advanced). Use the kernel tier's 6-section commit shape as the template; reuse `crates/wos-lint/examples/count_schema_violations.rs` for per-schema delta measurement. ~1-2 days per tier.
-2. wos-mcp Tasks 3-6 — now unblocked by `wos-authoring` MVP; expose document-management, lifecycle/actor, governance/AI, and validation/query tools over the JSON-RPC seam. Consumer is `WosProject` façade only.
-3. §5.3 Tasks 4-5 — `wos-conformance explain` / `diff` CLI subcommands and `schemas/conformance/conformance-trace.schema.json` publication. Guard and policy payloads are populated so the CLI has real content to format.
-4. §4.2 Tasks 4-7 — coverage CLI, LINT-MATRIX regen, CI gate for LoadBearing promotion, broader ratchet automation. Prerequisite for §4.4.
-5. §5.2 Tasks 3-6 — 91-rule migration to structured LintDiagnostics, output formatters, JSON schema publication, migration doc. Largest task in the §5.2 plan.
-
-**ADR references (resolved 2026-04-18):** `ADR-0057 (wos-core-implementation-boundary)` and `ADR-0058 (wos-core-gap-analysis)` live in `thoughts/archive/adr/` (implemented). Prior audit looked in active `thoughts/adr/` and incorrectly flagged them as missing. Citations in `enterprise-implementation-roadmap.md:257`, `thoughts/plans/2026-04-13-wos-runtime-crate.md:423`, `thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md:302`, and `specs/companions/runtime.md:51,:906` all resolve against the archive copies.
-
-**Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` are preserved per item as metadata — they inform relative weight within each tier but do not override cross-tier ordering.
-
-**Score definitions (0–10 scale):**
-
-- **Imp** — **Importance.** How much does this item move the project forward (architectural leverage, first-adopter enablement, civil-rights/compliance weight). Higher = do it.
-- **Cx** — **Complexity.** How much real work (design + implementation + test) this takes. Higher = bigger lift.
-- **Debt** — **Architectural tech debt if deferred.** How much extra rework lands later if we don't do it now. Higher = cheaper now than later. Confined-scope fixes score low; load-bearing foundational items (0/N fixtures, unclosed escape hatches) score high.
-
-**Score validation (2026-04-16).** Scores audited in parallel by four code-scout agents against live schemas, specs, crates, and fixtures. Adjustments applied: DRAFTS Debt 7→5, #24a Cx 3→4, #20 Cx 6→7, #46 Cx 2→3, #39 Cx 2→1, #12 Cx 2→3, #56 Debt 3→2, #35 Debt 5→4, #40 Debt 5→4, #30 Cx 4→5, #28 Debt 3→2, Assertion-Library merge Cx 3→2, #22 Cx 6→4, #48 Debt 4→6, #51 Debt 3→5. Factual corrections applied to #22 (runtime.rs lives in wos-runtime at 4451 lines, not wos-core at 3821; binding-inversion already landed), #28 (inputDigest/outputDigest already wired through export crate, not prose-only), #56 (continuous_reevaluate has 4 in-crate test callers, not "dead code").
-
 ---
 
 ## 1 — Reference implementation blockers
 
-> §1 closed 2026-04-14 — see Completed.
+> §1 closed 2026-04-14 — see [COMPLETED.md](COMPLETED.md).
 
 ---
 
 ## 2 — Foundational (zero external dependencies)
 
-- [x] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. Landed 2026-04-15 — see Completed.
+- [x] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. Landed 2026-04-15 — see [COMPLETED.md § Provenance export](COMPLETED.md#provenance-export-pe).
 - [ ] **Ontology field identity** *(design not started — do not sequence as active work)* — `ontology-spec.md` does not exist. Informs AI integration, cross-document alignment, and regulatory specs in §6, but cannot be scheduled until the spec is drafted. Prerequisite design work: JSON-LD `@context` decision (see Deferred #9), semantic-field-identity protocol, cross-document alignment mechanism. Move to active only once a draft exists.
 
 ---
@@ -146,6 +150,18 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 ## 4 — Active backlog (priority-ordered)
 
 Previously split across "schema closures" and "behavioral specs." Collapsed and re-sorted 2026-04-16 by cost-to-defer + first-adopter enablement.
+
+### Priority logic and scoring rubric
+
+**Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` are preserved per item as metadata — they inform relative weight within each tier but do not override cross-tier ordering.
+
+**Score definitions (0–10 scale):**
+
+- **Imp** — **Importance.** How much does this item move the project forward (architectural leverage, first-adopter enablement, civil-rights/compliance weight). Higher = do it.
+- **Cx** — **Complexity.** How much real work (design + implementation + test) this takes. Higher = bigger lift.
+- **Debt** — **Architectural tech debt if deferred.** How much extra rework lands later if we don't do it now. Higher = cheaper now than later. Confined-scope fixes score low; load-bearing foundational items (0/N fixtures, unclosed escape hatches) score high.
+
+**Score validation (2026-04-16).** Scores audited in parallel by four code-scout agents against live schemas, specs, crates, and fixtures. Adjustments applied: DRAFTS Debt 7→5, #24a Cx 3→4, #20 Cx 6→7, #46 Cx 2→3, #39 Cx 2→1, #12 Cx 2→3, #56 Debt 3→2, #35 Debt 5→4, #40 Debt 5→4, #30 Cx 4→5, #28 Debt 3→2, Assertion-Library merge Cx 3→2, #22 Cx 6→4, #48 Debt 4→6, #51 Debt 3→5. Factual corrections applied to #22 (runtime.rs lives in wos-runtime at 4451 lines, not wos-core at 3821; binding-inversion already landed), #28 (inputDigest/outputDigest already wired through export crate, not prose-only), #56 (continuous_reevaluate has 4 in-crate test callers, not "dead code").
 
 ### 4.1 — Critical path (lock-in + usable)
 
@@ -297,125 +313,29 @@ Decisions locked; do not re-litigate.
 
 1. **Engine-adapter sequencing** — TODO §3 ↔ IDEA Deferred. Defer until first commercial request, or schedule now to validate runtime against production-shape workloads?
 2. **Ontology-spec authoring ownership** — who drafts, when?
-4. **Timer semantics** (#20). Wall-clock or business-days for `noticeGracePeriod` legal compliance? Business calendar reference opt-in or required?
-5. **Registry composition** (#21). Two L1 governance docs attaching rules to the same tag — declaration order, explicit priority, or conflict rejection?
-6. **Multi-instance design** (#32). Events, arrays, or both? Governance hooks per-instance vs. per-iteration.
-7. **Version migration declaration surface** (#3). Kernel carries governance version or each case? `tenant`-scope behavioral contract?
-8. **Canonical forms.** Enforce "simple sequential workflow MUST be expressed as compound state with ordered children, not flat atomic sequence"?
-9. **Defeasibility layer** (#25). `workflow-governance` or distinct companion? Priority encoding? Compose with `sourceAuthority` AND Integration Profile §11.2.
-10. **Case-field policy vs. L2 `Right`** (#26b). Compose or supersede? Hold policy interaction. Assurance Invariant 6 independence.
-11. **Cancellation region semantics** (#27). Set or predicate? Event / guard / explicit action? Compensation run / skip / author's choice?
-12. **`ExternalArtifactRef` shape** (#28). 9th case-field type or `$def`? Retrieval contract — sync / deferred / action-body?
-13. **Task suspension reducibility** (#30). Always reducible to `holdType: task-suspended`, or independent task state needed?
-14. **Equity expression language** (#36). FEL extension, restricted DSL, or FEL + windowing?
-15. **Assurance-level composition** (#43). Minimum floor per impact level, disclosure-only, or implementation-defined?
-16. **JSON-LD authoring surface** (Deferred #9). Should `@context` land in authoring or stay export-only?
-17. **#29b firing mechanism.** Event-based (enqueue synthetic event) or guard-based (`$milestone.*` FEL boolean)?
+3. **Timer semantics** (#20). Wall-clock or business-days for `noticeGracePeriod` legal compliance? Business calendar reference opt-in or required?
+4. **Registry composition** (#21). Two L1 governance docs attaching rules to the same tag — declaration order, explicit priority, or conflict rejection?
+5. **Multi-instance design** (#32). Events, arrays, or both? Governance hooks per-instance vs. per-iteration.
+6. **Version migration declaration surface** (#3). Kernel carries governance version or each case? `tenant`-scope behavioral contract?
+7. **Canonical forms.** Enforce "simple sequential workflow MUST be expressed as compound state with ordered children, not flat atomic sequence"?
+8. **Defeasibility layer** (#25). `workflow-governance` or distinct companion? Priority encoding? Compose with `sourceAuthority` AND Integration Profile §11.2.
+9. **Case-field policy vs. L2 `Right`** (#26b). Compose or supersede? Hold policy interaction. Assurance Invariant 6 independence.
+10. **Cancellation region semantics** (#27). Set or predicate? Event / guard / explicit action? Compensation run / skip / author's choice?
+11. **`ExternalArtifactRef` shape** (#28). 9th case-field type or `$def`? Retrieval contract — sync / deferred / action-body?
+12. **Task suspension reducibility** (#30). Always reducible to `holdType: task-suspended`, or independent task state needed?
+13. **Equity expression language** (#36). FEL extension, restricted DSL, or FEL + windowing?
+14. **Assurance-level composition** (#43). Minimum floor per impact level, disclosure-only, or implementation-defined?
+15. **JSON-LD authoring surface** (Deferred #9). Should `@context` land in authoring or stay export-only?
+16. **#29b firing mechanism.** Event-based (enqueue synthetic event) or guard-based (`$milestone.*` FEL boolean)?
 
 ---
 
 ## Completed
 
-**Specs and schemas**
+Closed-out work items are archived in [`COMPLETED.md`](COMPLETED.md). New completions should be appended there, not tracked here.
 
-- [x] Kernel spec (S4.2, S4.10, S9.2) — concurrency, cascade depth, async actions.
-- [x] Governance spec (S6.2) — source authority ranking.
-- [x] Runtime companion (S5.3, S10, S12, S14) — parallel provenance, convergence cap, EventQueue interface.
-- [x] Formspec integration gaps — version pinning, changelog migration, semantic contracts.
-- [x] LINT-MATRIX rule count reconciled (197 total; I-001 added in NB.2).
-- [x] Kernel schema — `evaluationMode`, `maxRelationshipEventDepth`.
-- [x] Governance schema — `scope`, `sourceAuthority`, `ruleId`.
-- [x] Case Instance schema — `pendingEvents`, `governanceState`, `volumeCounters`.
+---
 
-**Normative features (from IDEA_SCRATCH Shipped)**
+## Notes
 
-- [x] **Null behavior on deontic constraints** (formerly IDEA #11) — `nullBehavior` on Permission/Prohibition/Obligation with impact-level defaults. `ai-integration.md §4.2-4.5 + §5`; `NullBehavior` `$def`.
-- [x] **Arazzo integration sequences** (formerly IDEA #14) — Multi-step API orchestration via Arazzo references. `integration.md §3.5`; fixtures `INT-ARAZZO-001..003`. (See NB.4.)
-- [x] **Non-HTTP tool invocation** (formerly IDEA #15) — `tool` binding kind (`command-line`, `batch-file`, `database-procedure`, `graph-query`). `integration.md §3.6`; fixtures `INT-TOOL-001..002`. (See NB.4.)
-- [x] **Assist Governance Proxy** (formerly IDEA #16) — Deontic constraint enforcement on Formspec Assist tool calls. `ai-integration.md §14`; schema `AssistGovernanceProxy`. Stabilizes with Assist layer upstream.
-
-**wos-core and runtime capabilities**
-
-- [x] Typed deserialization — Kernel, Governance, AI fixtures round-trip.
-- [x] Evaluator — deterministic algorithm from S2.
-- [x] Host traits — nine interfaces in `traits/mod.rs`.
-- [x] `instance.rs`, `explain.rs`.
-- [x] Conformance harness wired to runtime (`WosRuntime` / evaluator path as landed).
-- [x] T3 fixtures batches 1–17 (102) and batch 16 processor meta-rules.
-- [x] Inline conformance documents — `run_fixture` and fixture parse checks support `documents.* = "inline"`.
-- [x] Timer region scoping and tolerance validation.
-- [x] `deontic.rs`, `autonomy.rs`, `confidence.rs`, `event_handler.rs`, `eval_mode.rs`, `explain.rs` behavior.
-
-**wos-lint**
-
-- [x] T1/T2 on typed models (`KernelDocument`, `KernelCollections`).
-- [x] Typed state-tree walks (replaced manual tag/event collection).
-- [x] G-027 sub-delegation depth via typed models.
-- [x] T1-TESTS (G-058, G-059, G-062, G-065), T1-K009, CM-001, T2-GAPS (G-060, G-063).
-- [x] LINT-COVERAGE — 197 of 197 rules covered (see LINT-MATRIX.md; I-001 added in NB.2).
-
-**Conformance harness hygiene**
-
-- [x] **CONF-META-MOVE** — Move `observe_proxy_behavior` / `observe_assist_governance_proxy` into `wos-core/src/proxy.rs`.
-- [x] **CONF-AI050-DIFF** — `differential_check_passed` computed from actual severity + violation-id comparison instead of hard-coded `true`.
-- [x] **CONF-AI004-EVIDENCE** — `observe_delegated_formspec_evaluation` sets `full_response_envelope_validated` from `validation_result.valid`.
-- [x] **CONF-PROFILE-DEDUP** — `tests/profile_conformance.rs` now delegates to `run_profile_against_fixtures` in `meta.rs`.
-- [x] **CONF-RUNTIME-POLICY** — Move deontic, autonomy, confidence, event-handler, and DCR fixture policy into `wos_runtime::ReferenceCompanionPolicy`; conformance only selects/configures it.
-- [x] **CONF-RUNTIME-PROVENANCE** — Emit compensation, lifecycle/case separation, and history-cleared provenance from `wos-runtime` / `wos-core`; conformance asserts observed provenance instead of synthesizing it.
-- [x] **CONF-EVENT-IDENTITY** — Runtime drain results report the processed event token; fixture draining no longer stops on event name alone.
-- [x] **CONF-IDEMPOTENCY-SCOPE** — Scope reference companion idempotency tracking per instance.
-- [x] **CONF-STORE-API** — Remove `InMemoryStore` from the conformance public API; engine uses `wos_runtime::InMemoryStore`.
-- [x] **CONF-STUB-TESTS** — Document inline stub tests as harness verification, not spec behavior.
-- [x] **CONF-BINDING-DOC** — Document `ConformanceBinding`: intentionally permissive, `compute_case_mutation` returns `None`.
-
-**Documentation**
-
-- [x] `wos-spec/README.md`, root `context.md` WOS section, `wos-core/README.md`, `WOS-IMPLEMENTATION-STATUS.md`.
-
-**Conformance profiles**
-
-- [x] Governance Basic/Complete aggregate tests.
-- [x] Agent Registration / Confidence Framework aggregate tests.
-
-**SMT / static analysis**
-
-- [x] AG010 finite-domain AST analysis, `finiteDomainDeclarations` in schema/linter, FEL filter rejection.
-
-**Formspec coprocessor**
-
-- [x] FEL `every`/`some` in Formspec core.
-- [x] Runtime Companion S15 interface and reference in-memory runtime path.
-- [x] `wos-formspec-binding` — adapter surface plus prefill, validation, and mapping tests.
-- [x] S15.3 pin re-validation on replay paths — `wos-formspec-binding::FormspecBinding::revalidate_submission` recomputes pin equality fresh on every replay/audit/review call.
-
-**Coprocessor version discipline (S15)**
-
-- [x] S15.1 — register `FormspecBinding` alongside `ConformanceBinding`; real binding path exercised in conformance (61132c1).
-- [x] S15.2 — author S15 validation fixtures through real `wos-formspec-binding` path; all 6 fixtures green (b0f3306).
-- [x] S15.3 — delete `ConformanceBinding`; pin re-validation enforced on replay paths (0283740 + 0a3c369). `StubValidator` retained for service-invocation contract validation (`contract_outcomes` fixture field), which is a separate code path from the task-binding adapter.
-
-**Kernel/runtime semantics (KS)**
-
-- [x] KS.1 — DeepHistory + ShallowHistory state semantics with conformance fixtures (D1 depth-1, D2 depth-2 + parallel-exit, D3 depth-3); `wos-core` capture/restore (c78848c).
-- [x] KS.2 — Milestone firing with pinned ordering (data write durable → `MilestoneFired` → reactive transitions evaluated); 5 conformance fixtures K-M-001 through K-M-005 (521bd54).
-
-**Business calendar (BC)**
-
-- [x] BC.1 — Business Calendar SLA runtime integration: lazy deadline evaluation at check time, `calendarVersion` snapshot, `DidNotConverge` error on convergence failure; 4 fixtures G-S10-001 through G-S10-004 green (c93052f).
-
-**Provenance export (PE)**
-
-- [x] PE.1 — `wos-export` crate: PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); `timestamp` added to `ProvenanceRecord`; 3 SP-EXPORT-* conformance fixtures green (9daf447, 7cedfae, d8fbcf0, 7cd3cd3, 3ed010e, bd4e52f, b55b67e). Known limitations: higher-tier PROV-O bundles (§5.4) not emitted; OCEL events link to instance object only (per-case-file-item E2O links deferred); SHACL validation out of scope.
-- [x] PE.2 — `ProvenanceRecord` schema extension + full SP §5.3/§5.5/§6.3 emission (2026-04-16, branch `feat/provenance-export` at `0fb895d` — unmerged). Eight optional SP-mandated fields added to `ProvenanceRecord`: `audit_layer`, `actor_type`, `lifecycle_state`, `definition_version`, `inputs`, `outputs`, `input_digest`, `output_digest`. Runtime populates all eight at stamp time via new `populate_provenance_record_fields` helper (wired at all 9 append sites; 1:1 with `provenance_log.push`/`.extend` invariant verified). Exporters emit the full §5.3/§5.5/§6.3 mappings: PROV-O `prov:used`/`prov:wasGeneratedBy` Entity nodes, `wos:atLifecycleState`, `wos:definitionVersion`, §5.5 actor-type subclass pairs (`[prov:Person, wos:HumanAgent]` / `[prov:SoftwareAgent, wos:SystemAgent]` / `[prov:SoftwareAgent, wos:AIAgent]`); XES `org:group`, repeated-key `wos:input`/`wos:output`, trace-level `wos:definitionVersion`, `wos:lifecycleState`, per-event digests; OCEL uniform `eventTypes` schema + indexed `inputs.{i}`/`outputs.{i}` scalar attrs (OCEL 2.0 compliance — no array-valued attributes). §6.5 Facts-tier filter applied uniformly via shared `is_facts_tier` helper; exhaustive `audit_layer_for_kind` match (93/93 variants) compile-gates future tier additions. New SP-EXPORT-004 fixture locks the filter. SHA-256 digests via new `sha2` crate dep. 407 tests passing, zero TODO(spec-upstream) markers remaining. Four rounds of semi-formal code review; all findings addressed (da20e80, d33b3ef, 32e453f, d86709b + 10 findings-fix commits: 8f3583a, 8cf6802, 0357b26, 1c86299, 418c0f9, 5ee7291, 2809393, 0f2a4a0, b735923, 0fb895d). Known limitations remaining: higher-tier PROV-O bundle wrapping (§5.4 — requires export API redesign to accept tier-discriminated output); OCEL case-file-item objects + per-item E2O/O2O links (§6.4 — requires case state snapshot protocol); SHACL validation (needs RDF library dependency); `ActorKind::Agent` mapping (`actor_type = "agent"`) pending AI Integration agent-registry threading through runtime context. Follow-up plan at `thoughts/plans/2026-04-16-wos-provenance-record-schema-extension.md`.
-
-**Integration Profile binding kinds (NB)**
-
-- [x] NB.1 — typed `IntegrationBindingKind` enum + `IntegrationBindingHandler` trait; replaced stringly-typed dispatch (f017910).
-- [x] NB.2 — outputBinding RFC 9535 profile pinned (wildcard + slice; filter/recursive-descent rejected); lint rule I-001; spec §3.3.1 (e6e916d).
-- [x] NB.3 — CloudEvents bindings (`event-emit`, `event-consume`, `callback`) with subject correlation `{instanceId}:{bindingId}:{invocationId}`; full envelope captured in provenance; 6 fixtures INT-EMIT/CONSUME/CALLBACK-001–003 (75c8b21).
-- [x] NB.4 — Arazzo, tool, and policy-engine bindings; `PolicyDecision` normalized to `{decision, reasons, obligations}`; 7 fixtures INT-ARAZZO/TOOL/POLICY-001–004 (d79c02b).
-
-**Security / architecture docs**
-
-- [x] Runtime S13 isolation conformance guidance.
-- [x] AI-004 / AI-050 behavioral verification strategy (ARCH-AI004).
+**ADR references (resolved 2026-04-18).** `ADR-0057 (wos-core-implementation-boundary)` and `ADR-0058 (wos-core-gap-analysis)` live in `thoughts/archive/adr/` (implemented). A prior audit looked only in active `thoughts/adr/` and incorrectly flagged them as missing. Citations in `enterprise-implementation-roadmap.md:257`, `thoughts/plans/2026-04-13-wos-runtime-crate.md:423`, `thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md:302`, and `specs/companions/runtime.md:51,:906` all resolve against the archive copies. No action pending — retained here so future audits don't re-raise the same flag.
