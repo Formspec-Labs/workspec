@@ -99,7 +99,12 @@ pub async fn wos_run_conformance(
         .unwrap_or(".");
 
     let (result, trace) = wos_conformance::run_fixture_with_trace(fixture_json, base_dir)
-        .map_err(|e| ToolError::InvalidArguments(format!("conformance error: {e}")))?;
+        .map_err(|e| match e {
+            wos_conformance::ConformanceError::Engine(_) => {
+                ToolError::Internal(format!("conformance engine error: {e}"))
+            }
+            _ => ToolError::InvalidArguments(format!("conformance error: {e}")),
+        })?;
 
     let trace_value = serde_json::to_value(&trace)
         .map_err(|e| ToolError::Internal(format!("trace serialization failed: {e}")))?;
