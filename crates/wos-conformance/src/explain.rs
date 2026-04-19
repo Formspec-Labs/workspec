@@ -240,17 +240,35 @@ pub enum DivergenceCause {
     /// A state value on a step differs.
     #[serde(rename = "state-mismatch")]
     StateMismatch { expected: String, actual: String },
+    /// The `source_actor` field on a step differs.
+    ///
+    /// `source_actor` is normative for governance/audit use cases: a trace
+    /// where states match but actors differ represents a real divergence (e.g.
+    /// a human-approver step was fulfilled by an AI agent). `event.payload` is
+    /// intentionally NOT compared — payload contents are often optional,
+    /// environment-specific, or noisy, and are not load-bearing for the
+    /// state-machine conformance signal.
+    #[serde(rename = "actor-mismatch")]
+    ActorMismatch { expected: String, actual: String },
 }
 
 /// Compare an expected trace against an actual trace and return the first
 /// divergence, or [`TraceDiffResult::Match`] if they are equivalent.
 ///
 /// Comparison is structural: fixture_id, outcome, step count, and per-step
-/// (state_before, state_after, event.name) are checked in order. Guards and
-/// policies are intentionally NOT compared field-by-field; if the states
-/// match, runtime internals are considered non-normative for diff purposes.
-/// This matches the teaching-signal contract: the spec asserts on *what*
-/// happened (states), not *how* (which internal guard fired).
+/// (state_before, state_after, event.name, source_actor) are checked in order.
+/// Guards and policies are intentionally NOT compared field-by-field; if the
+/// states match, runtime internals are considered non-normative for diff
+/// purposes. This matches the teaching-signal contract: the spec asserts on
+/// *what* happened (states), not *how* (which internal guard fired).
+///
+/// `source_actor` IS compared because actor identity is normative for
+/// governance/audit use cases: matching states with mismatched actors
+/// constitutes a real behavioral divergence.
+///
+/// `event.payload` is intentionally NOT compared — payload contents are often
+/// optional, environment-specific, or noisy, and are not load-bearing for the
+/// state-machine conformance signal.
 ///
 /// When the actual step has a `Delta::GuardFalse`, that guard detail is
 /// surfaced in the `cause` field so a repair prompt gets it directly.
@@ -373,6 +391,37 @@ pub fn diff_traces(expected: &ConformanceTrace, actual: &ConformanceTrace) -> Tr
                 )),
             });
         }
+
+        // source_actor mismatch — normative for governance/audit.
+        if exp_step.event.source_actor != act_step.event.source_actor {
+            let expected_actor = exp_step
+                .event
+                .source_actor
+                .clone()
+                .unwrap_or_else(|| "(none)".to_string());
+            let actual_actor = act_step
+                .event
+                .source_actor
+                .clone()
+                .unwrap_or_else(|| "(none)".to_string());
+            return TraceDiffResult::Divergence(TraceDivergence {
+                differs_at_step: Some(step_num),
+                expected_state: Some(exp_step.state_after.clone()),
+                actual_state: Some(act_step.state_after.clone()),
+                cause: Some(DivergenceCause::ActorMismatch {
+                    expected: expected_actor.clone(),
+                    actual: actual_actor.clone(),
+                }),
+                suggested_hypothesis: format!(
+                    "step {step_num} was fulfilled by actor `{actual_actor}` \
+                     but expected `{expected_actor}`; \
+                     check actor assignment or delegation rules",
+                ),
+                detail: Some(format!(
+                    "source_actor: expected `{expected_actor}`, got `{actual_actor}`"
+                )),
+            });
+        }
     }
 
     TraceDiffResult::Match
@@ -423,6 +472,11 @@ fn render_divergence(div: &TraceDivergence) -> String {
             }
             DivergenceCause::StateMismatch { expected, actual } => {
                 out.push_str(&format!("    kind:     state-mismatch\n"));
+                out.push_str(&format!("    expected: {expected}\n"));
+                out.push_str(&format!("    actual:   {actual}\n"));
+            }
+            DivergenceCause::ActorMismatch { expected, actual } => {
+                out.push_str(&format!("    kind:     actor-mismatch\n"));
                 out.push_str(&format!("    expected: {expected}\n"));
                 out.push_str(&format!("    actual:   {actual}\n"));
             }
@@ -763,6 +817,48 @@ mod tests {
             matches!(result, TraceDiffResult::Divergence(_)),
             "expected divergence on id mismatch"
         );
+    }
+
+    /// Two traces identical except source_actor → ActorMismatch divergence.
+    ///
+    /// Actor identity is normative for governance/audit use cases. Matching
+    /// states with mismatched actors is a real behavioral divergence and must
+    /// not silently pass.
+    #[test]
+    fn diff_traces_source_actor_mismatch_surfaces_actor_mismatch_cause() {
+        let mut expected_step = make_step(0, "submitted", "approved", "approve");
+        expected_step.event.source_actor = Some("human-approver".to_string());
+
+        let mut actual_step = make_step(0, "submitted", "approved", "approve");
+        actual_step.event.source_actor = Some("ai-agent".to_string());
+
+        let expected = make_trace("K-ACTOR", Outcome::Pass, vec![expected_step]);
+        let actual = make_trace("K-ACTOR", Outcome::Pass, vec![actual_step]);
+
+        let result = diff_traces(&expected, &actual);
+        match result {
+            TraceDiffResult::Divergence(div) => {
+                assert_eq!(div.differs_at_step, Some(1), "step number should be 1-based");
+                match &div.cause {
+                    Some(DivergenceCause::ActorMismatch { expected, actual }) => {
+                        assert_eq!(expected, "human-approver");
+                        assert_eq!(actual, "ai-agent");
+                    }
+                    other => panic!("expected ActorMismatch cause, got {other:?}"),
+                }
+                assert!(
+                    div.suggested_hypothesis.contains("ai-agent"),
+                    "hypothesis should name the actual actor: {}",
+                    div.suggested_hypothesis
+                );
+                assert!(
+                    div.suggested_hypothesis.contains("human-approver"),
+                    "hypothesis should name the expected actor: {}",
+                    div.suggested_hypothesis
+                );
+            }
+            TraceDiffResult::Match => panic!("expected Divergence on actor mismatch"),
+        }
     }
 
     // ── render_diff ───────────────────────────────────────────────────────────
