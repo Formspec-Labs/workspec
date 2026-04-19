@@ -541,6 +541,224 @@ pub fn render_json(report: &CoverageReport) -> Result<String, serde_json::Error>
     serde_json::to_string_pretty(report)
 }
 
+/// Render the unified rule registry as a regenerated `LINT-MATRIX.md`.
+///
+/// The output has the same header shape as the current `LINT-MATRIX.md` and
+/// lists every rule from both registries in id-sorted order. Each row includes:
+/// `rule-id | tier | graduation | category | summary | fixture evidence`.
+///
+/// `commit_sha` is embedded in the regeneration header comment; pass the
+/// value of the `WOS_REGEN_COMMIT` environment variable (or `git rev-parse HEAD`)
+/// from the caller.
+pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
+    let mut out = String::new();
+
+    // ── File header ────────────────────────────────────────────────────────
+    let t1_count = report
+        .rules
+        .iter()
+        .filter(|r| r.tier == "T1")
+        .count();
+    let t2_count = report
+        .rules
+        .iter()
+        .filter(|r| r.tier == "T2")
+        .count();
+    let t3_count = report
+        .rules
+        .iter()
+        .filter(|r| r.tier == "T3")
+        .count();
+
+    out.push_str("# WOS Verification Matrix\n");
+    out.push('\n');
+    out.push_str(&format!(
+        "> **Regenerated from code registries** (commit `{commit_sha}`). \
+         {total} rules across {t1} T1 / {t2} T2 / {t3} T3 \
+         ({lb} LoadBearing, {stable} Stable, {tested} Tested, {draft} Draft).\
+         \n",
+        commit_sha = commit_sha,
+        total = report.summary.total,
+        t1 = t1_count,
+        t2 = t2_count,
+        t3 = t3_count,
+        lb = report.summary.load_bearing,
+        stable = report.summary.stable,
+        tested = report.summary.tested,
+        draft = report.summary.draft,
+    ));
+    out.push('\n');
+
+    // Box diagram.
+    out.push_str("```text\n");
+    out.push_str(&format!(
+        "┌─────────────────────────────────────────────────────────────────┐\n\
+         │  Tier 1: wos-lint (static)           {t1:>3} rules                  │\n\
+         │  Single-document structural checks. Pattern matching and graph  │\n\
+         │  walks over the JSON document tree. No parsing, no cross-doc.   │\n\
+         ├─────────────────────────────────────────────────────────────────┤\n\
+         │  Tier 2: wos-lint --project (cross)  {t2:>3} rules                  │\n\
+         │  Multi-document resolution + FEL AST analysis. Loads a project  │\n\
+         │  directory, resolves cross-references, parses FEL expressions.  │\n\
+         ├─────────────────────────────────────────────────────────────────┤\n\
+         │  Tier 3: wos-conformance (dynamic)   {t3:>3} rules                  │\n\
+         │  Event-driven test fixtures. Feeds event sequences through      │\n\
+         │  WosRuntime, asserts on observed state transitions, provenance  │\n\
+         │  records, timer behavior, compensation ordering, and autonomy.  │\n\
+         └─────────────────────────────────────────────────────────────────┘\n",
+        t1 = t1_count,
+        t2 = t2_count,
+        t3 = t3_count,
+    ));
+    out.push_str("```\n");
+    out.push('\n');
+
+    // Graduation ladder legend.
+    out.push_str("**Graduation ladder:**\n\n");
+    out.push_str("| Tier | Meaning |\n");
+    out.push_str("|------|---------|\n");
+    out.push_str("| `draft` | No executable fixture linked yet |\n");
+    out.push_str("| `tested` | ≥1 executable fixture exercises this rule |\n");
+    out.push_str("| `stable` | Tested + unchanged across ≥3 consecutive releases |\n");
+    out.push_str("| `load_bearing` | Removing breaks ≥2 executable fixtures (spec_ref + suggested_fix required) |\n");
+    out.push('\n');
+
+    // ── Per-section tables (by category, T1 → T2 → T3) ────────────────────
+    // Group rules by (tier-order, category).
+    let tier_order = |tier: &str| match tier {
+        "T1" => 0u8,
+        "T2" => 1,
+        "T3" => 2,
+        _ => 3,
+    };
+
+    let mut sorted_rules = report.rules.clone();
+    sorted_rules.sort_by(|a, b| {
+        tier_order(&a.tier)
+            .cmp(&tier_order(&b.tier))
+            .then(a.id.cmp(&b.id))
+    });
+
+    // Build per-tier sections.
+    for tier_label in &["T1", "T2", "T3"] {
+        let tier_rules: Vec<&RuleEntry> = sorted_rules
+            .iter()
+            .filter(|r| r.tier.as_str() == *tier_label)
+            .collect();
+        if tier_rules.is_empty() {
+            continue;
+        }
+
+        let tier_heading = match *tier_label {
+            "T1" => "Tier 1 — Static Single-Document Rules (`wos-lint`)",
+            "T2" => "Tier 2 — Cross-Document + FEL AST Rules (`wos-lint --project`)",
+            "T3" => "Tier 3 — Dynamic Runtime Rules (`wos-conformance`)",
+            _ => "Other Rules",
+        };
+
+        out.push_str(&format!("## {}\n\n", tier_heading));
+        out.push_str("| ID | Category | Graduation | Summary | Fixture evidence |\n");
+        out.push_str("|-----|----------|------------|---------|------------------|\n");
+
+        for rule in &tier_rules {
+            let fixture_cell = if rule.fixtures.is_empty() {
+                "—".to_string()
+            } else {
+                rule.fixtures
+                    .iter()
+                    .map(|f| {
+                        // Show just the filename for brevity.
+                        std::path::Path::new(f)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(f.as_str())
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            out.push_str(&format!(
+                "| `{}` | {} | {} | {} | {} |\n",
+                rule.id,
+                rule.category,
+                rule.graduation,
+                escape_pipe(&rule.summary),
+                fixture_cell,
+            ));
+        }
+        out.push('\n');
+
+        // Per-tier counts.
+        let lb = tier_rules.iter().filter(|r| r.graduation == "load_bearing").count();
+        let stable = tier_rules.iter().filter(|r| r.graduation == "stable").count();
+        let tested = tier_rules.iter().filter(|r| r.graduation == "tested").count();
+        let draft = tier_rules.iter().filter(|r| r.graduation == "draft").count();
+        out.push_str(&format!(
+            "**{tier_label} total: {total}** ({lb} LoadBearing, {stable} Stable, \
+             {tested} Tested, {draft} Draft)\n\n---\n\n",
+            tier_label = tier_label,
+            total = tier_rules.len(),
+            lb = lb,
+            stable = stable,
+            tested = tested,
+            draft = draft,
+        ));
+    }
+
+    // ── Summary table ──────────────────────────────────────────────────────
+    out.push_str("## Summary\n\n");
+    out.push_str("| Tier | Total | LoadBearing | Stable | Tested | Draft |\n");
+    out.push_str("|------|-------|-------------|--------|--------|-------|\n");
+
+    for tier_label in &["T1", "T2", "T3"] {
+        let tier_rules: Vec<&RuleEntry> = sorted_rules
+            .iter()
+            .filter(|r| r.tier.as_str() == *tier_label)
+            .collect();
+        if tier_rules.is_empty() {
+            continue;
+        }
+        let lb = tier_rules.iter().filter(|r| r.graduation == "load_bearing").count();
+        let stable = tier_rules.iter().filter(|r| r.graduation == "stable").count();
+        let tested = tier_rules.iter().filter(|r| r.graduation == "tested").count();
+        let draft = tier_rules.iter().filter(|r| r.graduation == "draft").count();
+        out.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} |\n",
+            tier_label,
+            tier_rules.len(),
+            lb,
+            stable,
+            tested,
+            draft,
+        ));
+    }
+    // Grand total row.
+    out.push_str(&format!(
+        "| **Total** | **{}** | **{}** | **{}** | **{}** | **{}** |\n",
+        report.summary.total,
+        report.summary.load_bearing,
+        report.summary.stable,
+        report.summary.tested,
+        report.summary.draft,
+    ));
+    out.push('\n');
+
+    if !report.duplicate_ids.is_empty() {
+        out.push_str(&format!(
+            "> **WARNING:** {} duplicate rule id(s) found (first wins): {}\n\n",
+            report.duplicate_ids.len(),
+            report.duplicate_ids.join(", "),
+        ));
+    }
+
+    out
+}
+
+/// Escape pipe characters in a markdown table cell.
+fn escape_pipe(s: &str) -> String {
+    s.replace('|', "\\|")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
