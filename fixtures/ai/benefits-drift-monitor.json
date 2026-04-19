@@ -37,6 +37,7 @@
           "condition": "extractionAccuracy < 0.90",
           "severity": "critical",
           "action": "demoteToAssistive",
+          "policyRef": "demoteToAssistiveOnDegradedAccuracy",
           "notifyRoles": ["systemAdministrator", "programDirector"]
         },
         {

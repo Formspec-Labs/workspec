@@ -216,7 +216,7 @@
     },
     "DemotionRule": {
       "type": "object",
-      "required": ["condition", "targetLevel"],
+      "required": ["id", "condition", "targetLevel"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -224,6 +224,16 @@
       },
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for this demotion rule, unique within the parent AutonomyPolicy.demotion array. MUST match the pattern of a JSON object key (no whitespace). Drift Monitor AlertThreshold entries reference this id via 'policyRef' to invoke this rule's structured demotion (condition / targetLevel / pendingRecalibration) instead of the implementation-defined 'action' enum. Audit records cite this id so operators know exactly which demotion rule fired.",
+          "examples": ["demoteOnLowAccuracy", "demoteOnConsecutiveOverrides"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Stable id so Drift Monitor AlertThreshold.policyRef can resolve this rule"
+          }
+        },
         "condition": {
           "type": "string",
           "minLength": 1,

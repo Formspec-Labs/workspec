@@ -194,8 +194,18 @@
         "action": {
           "type": "string",
           "enum": ["notify", "demoteToAssistive", "demoteToManual", "suspend"],
-          "description": "Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations.",
+          "description": "Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations. When 'policyRef' is also present, the named DemotionRule's structured semantics (condition / targetLevel / pendingRecalibration) take precedence over this enum's implementation-defined behavior; this field then serves as a human-readable hint and a fallback when the ref cannot be resolved.",
           "examples": ["demoteToAssistive", "notify"]
+        },
+        "policyRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a DemotionRule.id declared in an Agent Config sidecar that targets the same workflow as this monitor. When present, the named DemotionRule fires with its full structured semantics (condition / targetLevel / pendingRecalibration / description) instead of the implementation-defined 'action' enum. The ref MUST resolve to a DemotionRule.id reachable through an Agent Config whose targetAgent matches this monitor's parent agentRef; an unresolvable ref MUST emit a configuration warning in provenance and fall back to the 'action' enum behavior. Audit records cite the resolved DemotionRule.id so operators know exactly which named rule fired.",
+          "examples": ["demoteOnLowAccuracy", "demoteOnConsecutiveOverrides"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Binds an AlertThreshold to a named, structured DemotionRule in an Agent Config sidecar"
+          }
         },
         "notifyRoles": {
           "type": "array",

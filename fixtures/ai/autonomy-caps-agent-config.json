@@ -22,6 +22,7 @@
     ],
     "demotion": [
       {
+        "id": "demoteOnLowAccuracyOrViolation",
         "condition": "agent.calibration.accuracy < 0.85 or agent.recentViolations > 0",
         "targetLevel": "assistive",
         "pendingRecalibration": true,

@@ -73,6 +73,18 @@ Autonomy policies define conditions under which the agent's autonomy level is dy
 | `demotion` | array of DemotionRule | OPTIONAL | Conditions under which autonomy is automatically reduced. |
 | `maxAutonomy` | enum | OPTIONAL | Maximum autonomy level this agent may reach. |
 
+#### 1.4.1 Demotion Rule
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `id` | string | REQUIRED | Stable identifier, unique within the parent `demotion` array. Referenced by Drift Monitor `AlertThreshold.policyRef` (see WOS Drift Monitor §1.4.1). |
+| `condition` | string | REQUIRED | FEL expression evaluated against agent operational state and case data. |
+| `targetLevel` | enum | REQUIRED | `supervisory`, `assistive`, or `manual`. |
+| `pendingRecalibration` | boolean | OPTIONAL | When `true`, agent stays demoted until recalibration meets escalation conditions. |
+| `description` | string | OPTIONAL | Human-readable rationale included in audit records. |
+
+A Drift Monitor `AlertThreshold` MAY reference a DemotionRule by `id` via `policyRef`. When it does, the named rule's structured semantics fire instead of the implementation-defined `action` enum, and the resolved `id` appears in the `autonomyDemotion` provenance record.
+
 ### 1.5 Action Overrides
 
 Per-action autonomy and constraint overrides for specific workflow actions.
