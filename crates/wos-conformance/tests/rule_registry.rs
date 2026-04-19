@@ -10,11 +10,20 @@
 //! the conformance harness actually runs, or carry an explicit evidence
 //! annotation explaining the indirection (mirrors the AI-004 / AI-050 /
 //! K-EXT-002 pattern — the 2026-04-18 review evidence-quality warnings).
+//!
+//! Task 6 of §4.2 adds the LoadBearing gate: ≥2 executable fixtures required.
+//!
+//! Task 7 of §4.2 adds promotion-candidate discovery: surfaces Draft rules
+//! that already have discoverable fixture evidence. Does NOT fail the suite —
+//! writes a report to `target/rule-coverage-promotion-candidates.txt`.
 
 use std::path::{Path, PathBuf};
 
-use wos_conformance::rules::all_rules;
-use wos_lint::{Graduation, RuleMetadata};
+use wos_conformance::{
+    coverage::{compute_coverage, EvidenceMatchKind},
+    rules::all_rules,
+};
+use wos_lint::{all_lint_rules, Graduation, RuleMetadata};
 
 #[test]
 fn all_conformance_rules_registry_is_non_empty() {
@@ -303,4 +312,73 @@ fn append_rs_files(dir: &Path, buffer: &mut String) {
             buffer.push('\n');
         }
     }
+}
+
+// ── Promotion-candidate discovery (§4.2 Task 7) ─────────────────────────────
+
+/// Report Draft rules that have discoverable fixture evidence — but do NOT fail.
+///
+/// Runs `compute_coverage` over both registries and writes promotion candidates
+/// to `target/rule-coverage-promotion-candidates.txt`. When run with `--nocapture`
+/// the candidates also print to stdout so CI job logs surface them directly.
+///
+/// This test intentionally does not assert — it is purely a data-collection
+/// step. CI wires the output file into a PR annotation (see
+/// `.github/workflows/rule-coverage.yml`). The failing gates are in
+/// `every_promoted_conformance_rule_has_executable_or_annotated_evidence`
+/// (Tested/Stable) and `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures`
+/// (LoadBearing).
+#[test]
+fn discover_and_report_promotion_candidates() {
+    let registries: &[&'static [wos_lint::RuleMetadata]] = &[all_lint_rules(), all_rules()];
+    let fixtures_dir = workspace_root().join("fixtures");
+    let report = compute_coverage(registries, Some(&fixtures_dir));
+
+    if report.promotion_candidates.is_empty() {
+        println!("promotion-candidate discovery: no Draft rules with discoverable fixtures");
+        return;
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(format!(
+        "# Promotion candidates — {} Draft rule(s) with discoverable fixture evidence",
+        report.promotion_candidates.len()
+    ));
+    lines.push(String::new());
+    lines.push(
+        "Promote these rules to `Tested` in their registry entry once evidence is confirmed."
+            .to_string(),
+    );
+    lines.push(String::new());
+
+    for candidate in &report.promotion_candidates {
+        for ev in &candidate.evidence {
+            let kind_label = match ev.match_kind {
+                EvidenceMatchKind::FilenameStem => "filename-stem",
+                EvidenceMatchKind::RuleField => "rule-field",
+            };
+            lines.push(format!(
+                "  {} → {} [{}]",
+                candidate.rule_id, ev.fixture_path, kind_label
+            ));
+        }
+    }
+
+    let report_text = lines.join("\n") + "\n";
+
+    // Print to stdout so `cargo test -- --nocapture` surfaces it in CI logs.
+    print!("{}", report_text);
+
+    // Write to target/ so CI can read the file as an artifact.
+    let target_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|ws| ws.join("target"))
+        .unwrap_or_else(|| PathBuf::from("target"));
+    let out_path = target_dir.join("rule-coverage-promotion-candidates.txt");
+    // Ignore write errors — the test must never fail due to filesystem issues.
+    if let Ok(()) = std::fs::create_dir_all(&target_dir) {
+        let _ = std::fs::write(&out_path, &report_text);
+    }
+    // No assert: this test is purely observational.
 }

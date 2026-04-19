@@ -1,0 +1,75 @@
+name: WOS rule coverage
+
+on:
+  pull_request:
+    paths:
+      - "crates/wos-lint/**"
+      - "crates/wos-conformance/**"
+      - "fixtures/**"
+      - ".github/workflows/rule-coverage.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/wos-lint/**"
+      - "crates/wos-conformance/**"
+      - "fixtures/**"
+      - ".github/workflows/rule-coverage.yml"
+
+jobs:
+  rule-coverage:
+    name: rule coverage gates + promotion-candidate discovery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run rule registry tests (wos-lint)
+        run: cargo test -p wos-lint --test rule_registry -- --nocapture
+
+      - name: Run rule registry tests (wos-conformance)
+        run: cargo test -p wos-conformance --test rule_registry -- --nocapture
+
+      - name: Upload promotion-candidate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rule-coverage-promotion-candidates
+          path: target/rule-coverage-promotion-candidates.txt
+          if-no-files-found: ignore
+
+      - name: Annotate PR with promotion candidates
+        if: github.event_name == 'pull_request' && hashFiles('target/rule-coverage-promotion-candidates.txt') != ''
+        run: |
+          echo "## Promotion candidates" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following Draft rules have discoverable fixture evidence." >> $GITHUB_STEP_SUMMARY
+          echo "Consider promoting them to \`Tested\` in the registry." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat target/rule-coverage-promotion-candidates.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify LINT-MATRIX.md is up to date
+        env:
+          WOS_REGEN_COMMIT: ${{ github.sha }}
+        run: |
+          cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix --matrix-out /tmp/LINT-MATRIX-fresh.md
+          if ! diff -q LINT-MATRIX.md /tmp/LINT-MATRIX-fresh.md > /dev/null 2>&1; then
+            echo "LINT-MATRIX.md is stale. Run: cargo run -p wos-conformance --bin wos-rule-coverage -- --generate-matrix" >&2
+            diff LINT-MATRIX.md /tmp/LINT-MATRIX-fresh.md || true
+            exit 1
+          fi
+          echo "LINT-MATRIX.md is up to date."
