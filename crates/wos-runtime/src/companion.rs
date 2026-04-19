@@ -117,7 +117,13 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
                         ProvenanceKind::AutonomyViolation | ProvenanceKind::ToolViolation
                     )
                 });
-                provenance.extend(autonomy_result.provenance);
+                let mut autonomy_provenance = autonomy_result.provenance;
+                if let Some(policy_ref) =
+                    resolve_drift_demotion_policy_ref(actor_id, data, &self.companion_docs)
+                {
+                    annotate_autonomy_demotion_policy_ref(&mut autonomy_provenance, &policy_ref);
+                }
+                provenance.extend(autonomy_provenance);
 
                 let confidence_result = confidence::evaluate_confidence(ai_doc, actor_id, data);
                 if confidence_result.requires_escalation && effective_event.is_some() {
@@ -166,6 +172,95 @@ impl CompanionPolicy for ReferenceCompanionPolicy {
             event
         });
         Ok(RuntimeEventDecision { event, provenance })
+    }
+}
+
+fn resolve_drift_demotion_policy_ref(
+    actor_id: &str,
+    data: &serde_json::Value,
+    companion_docs: &HashMap<String, serde_json::Value>,
+) -> Option<String> {
+    let policy_ref = data
+        .get("driftAlert")
+        .and_then(|drift| drift.get("policyRef"))
+        .and_then(serde_json::Value::as_str)?;
+    if !drift_monitor_declares_policy_ref(actor_id, policy_ref, companion_docs) {
+        return None;
+    }
+    if !agent_config_declares_demotion_rule(actor_id, policy_ref, companion_docs) {
+        return None;
+    }
+    Some(policy_ref.to_string())
+}
+
+fn drift_monitor_declares_policy_ref(
+    actor_id: &str,
+    policy_ref: &str,
+    companion_docs: &HashMap<String, serde_json::Value>,
+) -> bool {
+    companion_docs.values().any(|doc| {
+        doc.get("$wosDriftMonitor").is_some()
+            && doc
+                .get("monitors")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|monitors| {
+                    monitors.iter().any(|monitor| {
+                        monitor.get("agentRef").and_then(serde_json::Value::as_str)
+                            == Some(actor_id)
+                            && monitor
+                                .get("alertThresholds")
+                                .and_then(serde_json::Value::as_array)
+                                .is_some_and(|thresholds| {
+                                    thresholds.iter().any(|threshold| {
+                                        threshold
+                                            .get("policyRef")
+                                            .and_then(serde_json::Value::as_str)
+                                            == Some(policy_ref)
+                                    })
+                                })
+                    })
+                })
+    })
+}
+
+fn agent_config_declares_demotion_rule(
+    actor_id: &str,
+    policy_ref: &str,
+    companion_docs: &HashMap<String, serde_json::Value>,
+) -> bool {
+    companion_docs.values().any(|doc| {
+        doc.get("$wosAgentConfig").is_some()
+            && doc.get("targetAgent").and_then(serde_json::Value::as_str) == Some(actor_id)
+            && doc
+                .pointer("/autonomyPolicy/demotion")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|rules| {
+                    rules.iter().any(|rule| {
+                        rule.get("id").and_then(serde_json::Value::as_str) == Some(policy_ref)
+                    })
+                })
+    })
+}
+
+fn annotate_autonomy_demotion_policy_ref(records: &mut [ProvenanceRecord], policy_ref: &str) {
+    for record in records {
+        if record.record_kind != ProvenanceKind::AutonomyDemotion {
+            continue;
+        }
+        let data = record
+            .data
+            .get_or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+        let Some(object) = data.as_object_mut() else {
+            continue;
+        };
+        object.insert(
+            "policyRef".to_string(),
+            serde_json::Value::String(policy_ref.to_string()),
+        );
+        object.insert(
+            "demotionRuleId".to_string(),
+            serde_json::Value::String(policy_ref.to_string()),
+        );
     }
 }
 
@@ -251,6 +346,8 @@ impl ReferenceCompanionPolicy {
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    transition_tags: Vec::new(),
+                    case_file_snapshot: None,
                 });
             }
         }
@@ -306,6 +403,8 @@ impl ReferenceCompanionPolicy {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         });
     }
 }

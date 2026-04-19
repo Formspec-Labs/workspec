@@ -10,6 +10,7 @@
 //! This crate covers Tier 3 of the WOS Verification Matrix (98 rules).
 //! See `LINT-MATRIX.md` for the complete constraint catalog.
 
+pub mod coverage;
 mod engine;
 pub mod explain;
 mod fixture;
@@ -19,24 +20,23 @@ mod provenance;
 pub mod rules;
 pub mod stubs;
 pub mod trace;
-pub mod coverage;
 
 pub use engine::WorkflowEngine;
+pub use explain::{
+    DivergenceCause, TraceDiffResult, TraceDivergence, diff_traces, render_diff, render_trace,
+};
 pub use fixture::{
     ConformanceFixture, ContractOutcome, EventEntry, ExpectedTransition, TaskSubmission,
 };
 pub use meta::{
+    AI_CONFIDENCE_BATCHES, AI_REGISTRATION_BATCHES, AssistGovernanceProxyEvidence, ClaimStatus,
+    ClaimVerification, DelegatedFormspecEvaluationEvidence, GOVERNANCE_BASIC_RULES,
+    ProcessorClaims, ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest,
     observe_delegated_formspec_evaluation, run_profile_against_fixtures,
-    validate_ai_family_batch_coverage, verify_processor_manifest, AssistGovernanceProxyEvidence,
-    ClaimStatus, ClaimVerification, DelegatedFormspecEvaluationEvidence, ProcessorClaims,
-    ProcessorConformanceReport, ProcessorEvidence, ProcessorManifest, AI_CONFIDENCE_BATCHES,
-    AI_REGISTRATION_BATCHES, GOVERNANCE_BASIC_RULES,
+    validate_ai_family_batch_coverage, verify_processor_manifest,
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{StubService, StubValidator};
-pub use explain::{
-    diff_traces, render_diff, render_trace, DivergenceCause, TraceDiffResult, TraceDivergence,
-};
 pub use trace::{
     ConformanceTrace, Delta, Event, GuardEvaluation, Outcome, PolicyApplication, TraceStep,
 };
@@ -151,7 +151,10 @@ pub fn run_fixture_with_trace(
 /// kernel document after `run_fixture` completes, the version defaults to
 /// `"unknown"` — callers that need the exact kernel version should read it
 /// directly from the kernel document before calling this function.
-fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceResult) -> ConformanceTrace {
+fn build_trace_from_result(
+    fixture: &ConformanceFixture,
+    result: &ConformanceResult,
+) -> ConformanceTrace {
     // Use a synthetic kernel version derived from fixture metadata. The engine
     // does not return kernel metadata through `ConformanceResult`, so we use
     // "1.0" as the stable conformance-harness sentinel. Real version info is
@@ -216,10 +219,7 @@ fn build_trace_from_result(fixture: &ConformanceFixture, result: &ConformanceRes
                     .event_sequence
                     .get(idx)
                     .and_then(|e| e.actor.clone()),
-                payload: fixture
-                    .event_sequence
-                    .get(idx)
-                    .and_then(|e| e.data.clone()),
+                payload: fixture.event_sequence.get(idx).and_then(|e| e.data.clone()),
             },
             state_before: transition.from.clone(),
             state_after: transition.to.clone(),
@@ -414,8 +414,8 @@ mod runner_trace_tests {
     #[test]
     fn trace_purchase_order_simple_two_transitions() {
         let (json, base_dir) = read_test_fixture("purchase-order-simple.json");
-        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
-            .expect("run_fixture_with_trace failed");
+        let (result, trace) =
+            run_fixture_with_trace(&json, &base_dir).expect("run_fixture_with_trace failed");
 
         assert!(result.passed, "fixture must pass: {:?}", result.failures);
         assert_eq!(trace.steps.len(), 2, "expected exactly 2 trace steps");
@@ -447,8 +447,8 @@ mod runner_trace_tests {
     #[test]
     fn trace_purchase_order_reject_resubmit_four_transitions() {
         let (json, base_dir) = read_test_fixture("purchase-order-reject-resubmit.json");
-        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
-            .expect("run_fixture_with_trace failed");
+        let (result, trace) =
+            run_fixture_with_trace(&json, &base_dir).expect("run_fixture_with_trace failed");
 
         assert!(result.passed, "fixture must pass: {:?}", result.failures);
         assert_eq!(trace.steps.len(), 4, "expected exactly 4 trace steps");
@@ -471,8 +471,8 @@ mod runner_trace_tests {
         let (json, base_dir) = read_test_fixture("medicaid-happy-path.json");
         let fixture: ConformanceFixture = serde_json::from_str(&json).unwrap();
 
-        let (result, trace) = run_fixture_with_trace(&json, &base_dir)
-            .expect("run_fixture_with_trace failed");
+        let (result, trace) =
+            run_fixture_with_trace(&json, &base_dir).expect("run_fixture_with_trace failed");
 
         assert!(result.passed, "fixture must pass: {:?}", result.failures);
         assert_eq!(
@@ -509,6 +509,8 @@ mod runner_trace_tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
         // Non-policy kind: must be filtered out.
         let state_transition = ProvenanceRecord {
@@ -527,6 +529,8 @@ mod runner_trace_tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
         // Different event: must be filtered out.
         let other_event = ProvenanceRecord {
@@ -545,6 +549,8 @@ mod runner_trace_tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
 
         let provenance = vec![matching, state_transition, other_event];
@@ -588,6 +594,8 @@ mod runner_trace_tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
         let applied = policy_applications_for_event(&[bypass], "approve");
         assert_eq!(applied.len(), 1);
@@ -619,6 +627,8 @@ mod runner_trace_tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
         };
         let applied = policy_applications_for_event(&[resolution], "determined");
         assert_eq!(applied.len(), 1);
@@ -633,7 +643,10 @@ mod runner_trace_tests {
     #[test]
     fn slugify_converts_ids_to_safe_slugs() {
         assert_eq!(slugify("K-011-determinism"), "k-011-determinism");
-        assert_eq!(slugify("AI-041-negative-fallback-cycle"), "ai-041-negative-fallback-cycle");
+        assert_eq!(
+            slugify("AI-041-negative-fallback-cycle"),
+            "ai-041-negative-fallback-cycle"
+        );
         assert_eq!(slugify("K-011-parallel-join"), "k-011-parallel-join");
         // Non-alphanumeric characters other than hyphen collapse to a single hyphen.
         assert_eq!(slugify("foo_bar.baz"), "foo-bar-baz");

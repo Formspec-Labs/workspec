@@ -118,13 +118,13 @@ fn trace_parity_k011_determinism() {
 fn teaching_signal_populates_policies_applied_on_governance_fixture() {
     use wos_conformance::run_fixture_with_trace;
     let workspace = workspace_root();
-    let fixture_path = workspace
-        .join("crates/wos-conformance/tests/fixtures/ai-014-most-restrictive-wins.json");
+    let fixture_path =
+        workspace.join("crates/wos-conformance/tests/fixtures/ai-014-most-restrictive-wins.json");
     let fixture_json = std::fs::read_to_string(&fixture_path)
         .unwrap_or_else(|e| panic!("could not read ai-014 fixture: {e}"));
     let fixture_dir = fixture_path.parent().unwrap().to_str().unwrap();
-    let (_result, trace) = run_fixture_with_trace(&fixture_json, fixture_dir)
-        .expect("engine ran ai-014 fixture");
+    let (_result, trace) =
+        run_fixture_with_trace(&fixture_json, fixture_dir).expect("engine ran ai-014 fixture");
 
     // ai-014 produces 0 expected transitions (all guards block through
     // violations); the trace walks observed transitions. If the runtime
@@ -147,7 +147,11 @@ fn teaching_signal_populates_policies_applied_on_governance_fixture() {
         assert!(
             has_resolution,
             "ai-014 trace step(s) should carry deonticResolution in policies_applied; got: {:?}",
-            trace.steps.iter().map(|s| &s.policies_applied).collect::<Vec<_>>()
+            trace
+                .steps
+                .iter()
+                .map(|s| &s.policies_applied)
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -164,7 +168,7 @@ fn teaching_signal_populates_policies_applied_on_governance_fixture() {
 /// `caseFile.amount <= 50000` evaluates false; that's the teachable moment.
 #[test]
 fn guard_false_delta_surfaces_blocking_guard_id() {
-    use wos_conformance::{run_fixture_with_trace, Delta};
+    use wos_conformance::{Delta, run_fixture_with_trace};
     let kernel_path = workspace_root()
         .join("fixtures/kernel/purchase-order-approval.json")
         .canonicalize()
@@ -287,6 +291,23 @@ fn trace_parity_g030_hold_resume() {
     assert_trace_matches(&trace, "G-030-hold-resume");
 }
 
+/// AI-AUTO-001: escalation-expiry revocation emits autonomyDemotion provenance
+/// while the kernel still routes the `triaged` event to `review`.
+#[test]
+fn trace_parity_ai_auto_001_escalation_expiry_revocation() {
+    let trace = run_t3_fixture("AI-AUTO-001-escalation-expiry-revocation.json");
+    assert_trace_matches(&trace, "AI-AUTO-001-escalation-expiry-revocation");
+}
+
+/// AI-AUTO-002: drift-alert-triggered demotion reroutes the event through
+/// `escalated` (so the kernel routes to `humanTriage`) and pairs an
+/// autonomyDemotion record with a driftReclassification record.
+#[test]
+fn trace_parity_ai_auto_002_drift_alert_demotion() {
+    let trace = run_t3_fixture("AI-AUTO-002-drift-alert-demotion.json");
+    assert_trace_matches(&trace, "AI-AUTO-002-drift-alert-demotion");
+}
+
 // ── Honest-behavior assertions ──────────────────────────────────────────────
 //
 // The parity tests above compare against committed goldens; they would pass
@@ -364,4 +385,14 @@ fn happy_path_k046_timer_provenance_fires_its_transitions() {
 #[test]
 fn happy_path_g030_hold_resume_fires_its_transitions() {
     assert_fixture_engages_runtime("G-030-hold-resume.json");
+}
+
+#[test]
+fn happy_path_ai_auto_001_escalation_expiry_revocation_fires_its_transition() {
+    assert_fixture_engages_runtime("AI-AUTO-001-escalation-expiry-revocation.json");
+}
+
+#[test]
+fn happy_path_ai_auto_002_drift_alert_demotion_fires_its_transition() {
+    assert_fixture_engages_runtime("AI-AUTO-002-drift-alert-demotion.json");
 }

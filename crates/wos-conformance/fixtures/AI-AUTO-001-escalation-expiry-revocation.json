@@ -1,0 +1,40 @@
+{
+  "id": "AI-AUTO-001-escalation-expiry-revocation",
+  "rule": "AI-AUTO-001",
+  "description": "Escalation-expiry revocation path: when an agent's elevated autonomy expires (escalationExpiry elapsed), the next invocation MUST emit an autonomyDemotion provenance record carrying trigger='escalation-expiry' and effectiveAt='next-invocation'. Pairs with AI-028 (humanOverride-triggered demotion) and AC-001 (calibration-expiry cap) to close the autonomy-lifecycle revocation matrix (AI S5.5).",
+  "documents": {
+    "kernel": "fixtures/kernel/autonomy-caps.json",
+    "ai": "fixtures/ai/autonomy-caps-ai.json",
+    "agent-config": "fixtures/ai/autonomy-caps-agent-config.json"
+  },
+  "initial_case_state": {},
+  "event_sequence": [
+    {
+      "event": "triaged",
+      "actor": "triageAgent",
+      "data": {
+        "output": {
+          "action": "categorize",
+          "category": "benefits"
+        },
+        "triggerDemotion": "escalation-expiry"
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "triage", "to": "review", "event": "triaged" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "autonomyDemotion",
+      "data": {
+        "agentId": "triageAgent",
+        "from": "autonomous",
+        "to": "assistive",
+        "trigger": "escalation-expiry",
+        "effectiveAt": "next-invocation"
+      }
+    }
+  ],
+  "expected_errors": []
+}

@@ -97,6 +97,39 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-AUTO-001: Escalation-expiry revocation emits an autonomyDemotion
+    // provenance record on the next invocation (AI S5.5). Verified by the
+    // trace-parity + happy-path tests in `tests/trace_parity.rs`. Pairs with
+    // AI-028 (humanOverride trigger) and AC-001 (calibration-expiry cap)
+    // to close the autonomy-lifecycle revocation matrix.
+    RuleMetadata {
+        id: "AI-AUTO-001",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Escalation expiry MUST revoke elevated autonomy and emit an autonomyDemotion record (AI S5.5).",
+        fixtures: &[
+            "crates/wos-conformance/fixtures/AI-AUTO-001-escalation-expiry-revocation.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
+    // AI-AUTO-002: Drift-alert-triggered demotion produces both an
+    // autonomyDemotion record and a driftReclassification record, and the
+    // runtime reroutes the event through `escalated` so the kernel lands on
+    // the human-review state (AI S5.5; DriftMonitor AlertThreshold→DemotionRule
+    // binding). Verified by the trace-parity + happy-path tests in
+    // `tests/trace_parity.rs`.
+    RuleMetadata {
+        id: "AI-AUTO-002",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Drift-alert thresholds with action=demoteToAssistive MUST emit autonomyDemotion + driftReclassification and reroute the event through escalation (AI S5.5).",
+        fixtures: &["crates/wos-conformance/fixtures/AI-AUTO-002-drift-alert-demotion.json"],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
     // G-051: verified by governance-basic profile execution over G-002, G-006, G-007, G-010,
     // G-016, G-017, and G-018 fixtures in the conformance test suite.
     RuleMetadata {

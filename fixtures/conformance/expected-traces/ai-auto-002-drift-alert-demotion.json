@@ -1,0 +1,29 @@
+{
+  "fixtureId": "AI-AUTO-002-drift-alert-demotion",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "escalated",
+        "sourceActor": "triageAgent",
+        "payload": {
+          "driftAlert": {
+            "policyRef": "demoteOnLowAccuracyOrViolation",
+            "severity": "critical",
+            "type": "extractionAccuracy"
+          },
+          "output": {
+            "action": "categorize",
+            "category": "benefits"
+          },
+          "triggerDemotion": "drift-alert"
+        }
+      },
+      "stateBefore": "triage",
+      "stateAfter": "humanTriage",
+      "expectedStateAfter": "humanTriage"
+    }
+  ],
+  "outcome": "pass"
+}

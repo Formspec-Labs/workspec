@@ -841,8 +841,8 @@ fn all_fixtures_parse_and_resolve() {
         }
         let json = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-        let fixture: wos_conformance::ConformanceFixture = serde_json::from_str(&json)
-            .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+        let fixture: wos_conformance::ConformanceFixture =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
         // Verify document paths resolve relative to the fixture directory.
         let base = path.parent().unwrap().to_str().unwrap();
         for (role, doc_path) in &fixture.documents {
@@ -966,7 +966,10 @@ fn kh_d2_deep_across_boundary() {
     let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
 
     if !result.passed {
-        panic!("K-H-D2-deep-across-boundary FAILED:\n{}", result.failures.join("\n"));
+        panic!(
+            "K-H-D2-deep-across-boundary FAILED:\n{}",
+            result.failures.join("\n")
+        );
     }
 
     let cleared_count = result
@@ -1001,7 +1004,10 @@ fn kh_d2_shallow_across_boundary() {
     let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
 
     if !result.passed {
-        panic!("K-H-D2-shallow-across-boundary FAILED:\n{}", result.failures.join("\n"));
+        panic!(
+            "K-H-D2-shallow-across-boundary FAILED:\n{}",
+            result.failures.join("\n")
+        );
     }
 
     let cleared_count = result
@@ -1208,10 +1214,7 @@ fn i002_outputbinding_wildcard_extracts_array() {
     let result = run_fixture(&fixture_json, &base_dir).expect("run_fixture failed");
 
     if !result.passed {
-        panic!(
-            "I-002 FAILED:\n{}",
-            result.failures.join("\n")
-        );
+        panic!("I-002 FAILED:\n{}", result.failures.join("\n"));
     }
 
     // Verify the dataMapping provenance record carries the correct updatedPaths.
