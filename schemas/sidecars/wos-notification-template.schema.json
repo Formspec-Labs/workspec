@@ -19,8 +19,8 @@
     "$wosNotificationTemplate": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Notification Template specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Notification Template specification version. MUST be '1.0'. Identifies this document as a WOS Notification Template Config sidecar and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Notification Template Config sidecar"
@@ -30,8 +30,8 @@
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this notification template config applies to.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document this notification template config applies to. The processor resolves notificationTemplateRef and noticeTemplateRef lookups against the template collection in this sidecar when the kernel URI matches (Governance S12.2, S3.1).",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/appeals-processing"],
       "x-lm": {
         "critical": true,
         "intent": "Binds this sidecar to its parent kernel workflow"
@@ -40,7 +40,7 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Notification Template Config document.",
+      "description": "Version of this Notification Template Config document. SemVer is RECOMMENDED. Increment when template content, variables, or delivery channel configuration changes.",
       "examples": ["1.0.0"]
     },
     "title": {
@@ -50,7 +50,8 @@
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of this notification template collection."
+      "description": "Human-readable description of this notification template collection. Documents which governance events these templates cover and their regulatory authority.",
+      "examples": ["Benefits adjudication notification templates covering adverse decisions, hold notices, and appeal acknowledgments per APA requirements."]
     },
     "templates": {
       "type": "object",
@@ -68,6 +69,16 @@
               { "id": "determination", "contentType": "structured", "content": "Your application for {{programName}} has been {{determination}}." },
               { "id": "reasons", "contentType": "structured", "content": "Reason(s): {{reasonCodes}}" },
               { "id": "appealRights", "contentType": "appeal-rights", "content": "You have the right to appeal this decision." }
+            ]
+          }
+        },
+        {
+          "holdNotification": {
+            "category": "hold-notification",
+            "description": "Case hold notice sent when processing is paused pending additional information",
+            "sections": [
+              { "id": "holdReason", "contentType": "structured", "content": "Your case {{caseId}} has been placed on hold. Reason: {{holdReason}}" },
+              { "id": "requiredAction", "contentType": "action-required", "content": "Please submit {{requiredDocuments}} within {{responseDeadline}}." }
             ]
           }
         }
@@ -109,8 +120,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of when this template is used.",
-          "examples": ["Notice of adverse benefits determination sent to applicant"]
+          "description": "Human-readable description of when this template is used and what regulatory obligation it satisfies. Referenced in audit logs.",
+          "examples": ["Notice of adverse benefits determination sent to applicant per APA adverse decision notice requirements."]
         },
         "subject": {
           "type": "string",
@@ -142,7 +153,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Variable name that must be present in the rendering context. Matches a {{variableName}} placeholder used in section content strings.",
+            "examples": ["caseId", "applicantName"]
           },
           "description": "Variables that MUST be present in the rendering context. If any required variable is missing, the processor MUST NOT send the notification and MUST record the failure in provenance.",
           "examples": [["caseId", "applicantName", "determination", "reasonCodes", "appealDeadline"]]
@@ -151,14 +164,16 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["postal", "email", "portal", "sms", "in-app"]
+            "enum": ["postal", "email", "portal", "sms", "in-app"],
+            "description": "A delivery channel identifier. 'postal': physical mail. 'email': electronic mail. 'portal': government web portal. 'sms': text message. 'in-app': in-application notification.",
+            "examples": ["postal", "email"]
           },
           "description": "Channels through which this notification can be delivered. 'postal': physical mail. 'email': electronic mail. 'portal': web portal notification. 'sms': text message. 'in-app': in-application notification. When absent, delivery channel is implementation-defined.",
           "examples": [["postal", "email", "portal"]]
         },
         "localeRef": {
           "type": "string",
-          "description": "Reference to a locale-specific variant of this template.",
+          "description": "BCP 47 language tag reference to a locale-specific variant of this template. When the recipient's locale matches, the localized template is used instead of the default.",
           "examples": ["es-US", "zh-Hans"]
         },
         "authority": {
@@ -182,12 +197,12 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Section identifier. MUST be unique within the template.",
+          "description": "Section identifier unique within the template. Used in audit logs and accessibility anchors. Referenced by condition expressions to target specific sections.",
           "examples": ["determination", "reasons", "appealRights", "appealInstructions", "contactInfo"]
         },
         "title": {
           "type": "string",
-          "description": "Section heading displayed in the rendered notification.",
+          "description": "Section heading displayed in the rendered notification. Rendered as a visible heading above the section content in postal, email, and portal output.",
           "examples": ["Decision", "Reason(s) for This Decision", "Your Right to Appeal", "How to File an Appeal"]
         },
         "contentType": {
@@ -212,7 +227,8 @@
         "required": {
           "type": "boolean",
           "default": true,
-          "description": "Whether this section MUST appear in the rendered notification. Default: true."
+          "description": "Whether this section MUST appear in the rendered notification. Default: true. For adverse-decision templates, due-process sections (determination, reasons, appealRights) MUST be required.",
+          "examples": [true, false]
         },
         "condition": {
           "type": "string",
