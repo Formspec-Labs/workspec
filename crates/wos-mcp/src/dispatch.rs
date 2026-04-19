@@ -79,6 +79,54 @@ pub async fn dispatch(
                     source,
                 })
         }
+        "wos_add_state" => {
+            tools::wos_add_state(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_transition" => {
+            tools::wos_add_transition(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_set_initial_state" => {
+            tools::wos_set_initial_state(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_remove_state" => {
+            tools::wos_remove_state(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_actor" => {
+            tools::wos_add_actor(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
+        "wos_add_actor_extension" => {
+            tools::wos_add_actor_extension(registry, project_id, args)
+                .await
+                .map_err(|source| DispatchError::ToolFailed {
+                    tool: tool_name.to_string(),
+                    source,
+                })
+        }
         other => Err(DispatchError::UnknownTool(other.to_string())),
     }
 }
@@ -174,5 +222,101 @@ mod tests {
         assert!(desc["actor_count"].is_number());
         assert!(desc["impact_level"].is_string());
         assert!(desc["ai_agent_count"].is_number());
+    }
+
+    /// Plan §4.6 round-trip: create → add 3 states → add 2 transitions →
+    /// set initial state → export → parse → assert 3 states and 2 transitions.
+    #[tokio::test]
+    async fn lifecycle_round_trip() {
+        let mut registry = ProjectRegistry::new();
+
+        // Step 1: create kernel.
+        let create = dispatch(&mut registry, "wos_create_kernel", "", serde_json::json!({}))
+            .await
+            .unwrap();
+        let pid = create["project_id"].as_str().unwrap().to_string();
+
+        // Step 2: add three states.
+        for state_id in ["draft", "review", "approved"] {
+            dispatch(
+                &mut registry,
+                "wos_add_state",
+                &pid,
+                serde_json::json!({ "project_id": &pid, "state_id": state_id }),
+            )
+            .await
+            .unwrap();
+        }
+
+        // Step 3: add two transitions.
+        dispatch(
+            &mut registry,
+            "wos_add_transition",
+            &pid,
+            serde_json::json!({
+                "project_id": &pid,
+                "from": "draft",
+                "to": "review",
+                "trigger": "submit"
+            }),
+        )
+        .await
+        .unwrap();
+
+        dispatch(
+            &mut registry,
+            "wos_add_transition",
+            &pid,
+            serde_json::json!({
+                "project_id": &pid,
+                "from": "review",
+                "to": "approved",
+                "trigger": "approve"
+            }),
+        )
+        .await
+        .unwrap();
+
+        // Step 4: set initial state.
+        dispatch(
+            &mut registry,
+            "wos_set_initial_state",
+            &pid,
+            serde_json::json!({ "project_id": &pid, "state_id": "draft" }),
+        )
+        .await
+        .unwrap();
+
+        // Step 5: export and parse.
+        let export = dispatch(
+            &mut registry,
+            "wos_export_document",
+            &pid,
+            serde_json::json!({ "project_id": &pid }),
+        )
+        .await
+        .unwrap();
+        let doc_json = export["document"].as_str().unwrap();
+        let doc: serde_json::Value = serde_json::from_str(doc_json).unwrap();
+
+        // Step 6: assert three states.
+        let states = doc["lifecycle"]["states"].as_object().unwrap();
+        assert_eq!(states.len(), 3, "expected 3 states");
+        assert!(states.contains_key("draft"));
+        assert!(states.contains_key("review"));
+        assert!(states.contains_key("approved"));
+
+        // Assert two transitions (one per source state that has them).
+        let draft_transitions = doc["lifecycle"]["states"]["draft"]["transitions"]
+            .as_array()
+            .unwrap();
+        let review_transitions = doc["lifecycle"]["states"]["review"]["transitions"]
+            .as_array()
+            .unwrap();
+        assert_eq!(draft_transitions.len(), 1);
+        assert_eq!(review_transitions.len(), 1);
+
+        // Assert initial state is set.
+        assert_eq!(doc["lifecycle"]["initialState"], "draft");
     }
 }
