@@ -48,6 +48,15 @@ pub struct LintFinding {
     /// Optional JSON pointer / path the finding is anchored to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Pre-rendered suggested fix (`add property at /foo`, `rename X → Y`, etc.).
+    /// Surfaced in the repair prompt so the LLM gets the rule's machine-readable
+    /// remediation, not just the human-readable message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_fix: Option<String>,
+    /// Spec sections or matrix entries that explain this rule. Joined into
+    /// the repair prompt so the model can ground its fix.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub related_docs: Vec<String>,
 }
 
 /// Severity buckets the loop distinguishes.

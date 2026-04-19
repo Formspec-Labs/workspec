@@ -98,14 +98,21 @@ pub fn build_repair_prompt(
         .enumerate()
         .map(|(i, f)| {
             let path = f.path.as_deref().unwrap_or("(no path)");
-            format!(
+            let mut entry = format!(
                 "{idx}. [{rule}] {sev:?} at {path}: {msg}",
                 idx = i + 1,
                 rule = f.rule_id,
                 sev = f.severity,
                 path = path,
                 msg = f.message,
-            )
+            );
+            if let Some(fix) = &f.suggested_fix {
+                entry.push_str(&format!("\n   suggested fix: {fix}"));
+            }
+            if !f.related_docs.is_empty() {
+                entry.push_str(&format!("\n   related: {}", f.related_docs.join(", ")));
+            }
+            entry
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -161,12 +168,16 @@ mod tests {
                 severity: Severity::Error,
                 message: "missing initialState".into(),
                 path: Some("/lifecycle".into()),
+                suggested_fix: Some("add property at /lifecycle/initialState: \"start\"".into()),
+                related_docs: vec!["Kernel §4.2".into()],
             },
             LintFinding {
                 rule_id: "K-007".into(),
                 severity: Severity::Error,
                 message: "transition missing event".into(),
                 path: None,
+                suggested_fix: None,
+                related_docs: vec![],
             },
         ];
         let (_sys, user, _) =
@@ -175,5 +186,8 @@ mod tests {
         assert!(user.contains("2. [K-007]"));
         assert!(user.contains("missing initialState"));
         assert!(user.contains("$wosKernel"));
+        // Suggested fix and related docs reach the prompt (Finding 5).
+        assert!(user.contains("suggested fix: add property at /lifecycle/initialState"));
+        assert!(user.contains("related: Kernel §4.2"));
     }
 }

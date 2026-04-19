@@ -45,11 +45,32 @@ impl ToolContext for DirectToolContext {
 
 fn into_finding(diag: wos_lint::LintDiagnostic) -> LintFinding {
     let path = if diag.path.is_empty() { None } else { Some(diag.path.clone()) };
+    let suggested_fix = diag.suggested_fix.as_ref().map(render_suggested_fix);
     LintFinding {
         rule_id: diag.rule_id.to_string(),
         severity: map_severity(diag.severity),
         message: diag.message.clone(),
         path,
+        suggested_fix,
+        related_docs: diag.related_docs.clone(),
+    }
+}
+
+fn render_suggested_fix(fix: &wos_lint::SuggestedFix) -> String {
+    match fix {
+        wos_lint::SuggestedFix::AddProperty { path, value } => {
+            format!("add property at {path}: {value}")
+        }
+        wos_lint::SuggestedFix::RemoveProperty { path } => {
+            format!("remove property at {path}")
+        }
+        wos_lint::SuggestedFix::ReplaceValue { path, value } => {
+            format!("replace value at {path} with {value}")
+        }
+        wos_lint::SuggestedFix::Rename { from, to } => {
+            format!("rename `{from}` → `{to}`")
+        }
+        wos_lint::SuggestedFix::Custom { hint } => hint.clone(),
     }
 }
 

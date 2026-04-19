@@ -868,6 +868,7 @@
       }
     },
     "OverrideRecord": {
+      "$comment": "This $def is intentionally unreachable from the document root. It is a shape-catalog entry: processors and provenance writers consume it out-of-band when serializing override events to the audit log. There is no top-level `overrideRecords` array in this schema by design — overrides are runtime data, not authoring inputs. The 1:1 mapping to OverrideAuthority policy switches is documented in the description and enforced by processors, not by JSON Schema. See thoughts/plans/ for any future work that would plumb this into a typed provenance container.",
       "type": "object",
       "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted).",
       "required": ["rationale", "authorityVerification", "supportingEvidence"],
@@ -971,7 +972,12 @@
     },
     "EvidenceReference": {
       "type": "object",
-      "description": "Reference to a supporting-evidence artifact cited by an `OverrideRecord` (Governance S7.3 item 3). The reference may point to a case-file field, an external document, or a structured fact. At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable.",
+      "description": "Reference to a supporting-evidence artifact cited by an `OverrideRecord` (Governance S7.3 item 3). The reference may point to a case-file field, an external document, or a structured fact. At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable; this is structurally enforced by the `anyOf` constraint.",
+      "required": ["kind"],
+      "anyOf": [
+        { "required": ["caseFieldPath"] },
+        { "required": ["uri"] }
+      ],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"

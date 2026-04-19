@@ -69,8 +69,14 @@ impl Prompter for AnthropicPrompter {
         // headers and stay out of the regular prompt billing.
         let composed_system = compose_system_prompt(system, cache_anchors);
 
+        // Collect chunks into a Mutex<String>; we read it out via mem::take
+        // after the await so we never depend on the SDK dropping every Arc
+        // clone of the streaming closure on time. Earlier revisions used
+        // Arc::try_unwrap here, which silently discarded paid completions
+        // whenever the SDK held a closure clone past .await — see code
+        // review Finding 2.
         let collected: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-        let collector = Arc::clone(&collected);
+        let collector_for_callback = Arc::clone(&collected);
 
         Client::new()
             .auth(&self.api_key)
@@ -84,22 +90,28 @@ impl Prompter for AnthropicPrompter {
             .build()
             .map_err(|e| PrompterError::ProviderRejected(e.to_string()))?
             .execute(move |chunk| {
-                let collector = Arc::clone(&collector);
+                let collector = Arc::clone(&collector_for_callback);
                 async move {
-                    collector.lock().unwrap().push_str(&chunk);
+                    if let Ok(mut guard) = collector.lock() {
+                        guard.push_str(&chunk);
+                    }
                 }
             })
             .await
             .map_err(|e| PrompterError::Transport(e.to_string()))?;
 
-        let text = Arc::try_unwrap(collected)
-            .map_err(|_| {
-                PrompterError::EmptyResponse(
-                    "callback retained collector reference".into(),
-                )
-            })?
-            .into_inner()
-            .unwrap();
+        // Pull the collected text out of the mutex without consuming the
+        // Arc — any straggler closures still alive will see an empty string,
+        // which is harmless because their writes happened before the await
+        // returned.
+        let text = match collected.lock() {
+            Ok(mut guard) => std::mem::take(&mut *guard),
+            Err(poisoned) => {
+                // A chunk callback panicked. Recover what was captured
+                // before the panic so we don't lose the partial completion.
+                std::mem::take(&mut *poisoned.into_inner())
+            }
+        };
 
         if text.trim().is_empty() {
             return Err(PrompterError::EmptyResponse(

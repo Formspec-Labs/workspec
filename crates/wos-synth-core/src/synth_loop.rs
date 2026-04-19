@@ -122,16 +122,33 @@ async fn repair(
 }
 
 /// Strip optional ```` ```json ```` / ```` ``` ```` fences the model may add.
+///
+/// Handles four shapes the model emits in practice:
+///   1. ` ```json\n{...}\n``` ` (canonical fenced code block)
+///   2. ` ```\n{...}\n``` ` (no language tag)
+///   3. ` ```json{...}``` ` (single-line, no whitespace — the prior
+///      implementation silently retained the literal `json` token here)
+///   4. bare `{...}` (no fence)
 fn strip_fences(text: &str) -> &str {
     let trimmed = text.trim();
-    for prefix in ["```json\n", "```json\r\n", "```\n", "```\r\n", "```"] {
-        if let Some(inner) = trimmed.strip_prefix(prefix) {
-            if let Some(body) = inner.strip_suffix("```") {
-                return body.trim();
-            }
-        }
-    }
-    trimmed
+
+    let Some(inner) = trimmed.strip_prefix("```") else {
+        return trimmed;
+    };
+    let Some(body) = inner.strip_suffix("```") else {
+        // Open fence without close — treat the whole string as content.
+        return trimmed;
+    };
+
+    // After the opening ``` the model may include a language tag (`json`,
+    // `javascript`, `wos`, ...) optionally followed by whitespace.
+    let body = body.trim();
+    let language_stripped = body
+        .strip_prefix("json")
+        .or_else(|| body.strip_prefix("JSON"))
+        .unwrap_or(body);
+
+    language_stripped.trim()
 }
 
 #[cfg(test)]
@@ -140,11 +157,15 @@ mod tests {
     use crate::prompter::{CacheAnchor, PrompterError};
     use crate::tool_context::{ConformanceVerdict, ToolError};
     use async_trait::async_trait;
+    use std::collections::VecDeque;
     use std::sync::Mutex;
 
-    /// Test prompter that returns a queue of canned responses in order.
+    /// Test prompter that returns a FIFO queue of canned responses.
+    ///
+    /// FIFO (`pop_front`) so test bodies read in chronological order — the
+    /// first declared response is what the loop sees on its first call.
     struct ScriptedPrompter {
-        responses: Mutex<Vec<String>>,
+        responses: Mutex<VecDeque<String>>,
     }
 
     impl ScriptedPrompter {
@@ -167,7 +188,7 @@ mod tests {
                 .responses
                 .lock()
                 .unwrap()
-                .pop()
+                .pop_front()
                 .ok_or_else(|| PrompterError::UnexpectedPrompt("queue empty".into()))?;
             Ok(Completion {
                 text: next,
@@ -178,15 +199,15 @@ mod tests {
         }
     }
 
-    /// Test ToolContext with a queue of finding sets.
+    /// Test ToolContext with a FIFO queue of finding sets.
     struct ScriptedTools {
-        finding_sets: Mutex<Vec<Vec<LintFinding>>>,
+        finding_sets: Mutex<VecDeque<Vec<LintFinding>>>,
     }
 
     impl ScriptedTools {
         fn new(sets: Vec<Vec<LintFinding>>) -> Self {
             Self {
-                finding_sets: Mutex::new(sets),
+                finding_sets: Mutex::new(sets.into()),
             }
         }
     }
@@ -198,7 +219,7 @@ mod tests {
                 .finding_sets
                 .lock()
                 .unwrap()
-                .pop()
+                .pop_front()
                 .unwrap_or_default())
         }
 
@@ -213,15 +234,20 @@ mod tests {
             severity: Severity::Error,
             message: "test".into(),
             path: None,
+            suggested_fix: None,
+            related_docs: vec![],
         }
     }
 
     #[test]
     fn converges_when_repair_succeeds() {
-        // Provider returns: dirty doc first, clean doc second. Stack pops LIFO.
-        let provider = ScriptedPrompter::new(vec![r#"{"$wosKernel":"1.0","clean":true}"#, r#"{"$wosKernel":"1.0","dirty":true}"#]);
-        // Tool: errors on iter 0 (popped second), clean on iter 1 (popped first).
-        let tools = ScriptedTools::new(vec![vec![], vec![err("K-001")]]);
+        // Iter 0: dirty doc + lint error → triggers repair.
+        // Iter 1: clean doc + no lint findings → converged.
+        let provider = ScriptedPrompter::new(vec![
+            r#"{"$wosKernel":"1.0","dirty":true}"#,
+            r#"{"$wosKernel":"1.0","clean":true}"#,
+        ]);
+        let tools = ScriptedTools::new(vec![vec![err("K-001")], vec![]]);
 
         let outcome = pollster::block_on(synthesize(&provider, &tools, "test problem", Layer::Kernel, 5))
             .expect("loop should not error");
@@ -275,5 +301,51 @@ mod tests {
             }
             other => panic!("expected converged, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn strip_fences_handles_canonical_form() {
+        assert_eq!(
+            strip_fences("```json\n{\"a\":1}\n```"),
+            r#"{"a":1}"#
+        );
+    }
+
+    #[test]
+    fn strip_fences_handles_no_newline_after_language_tag() {
+        // Single-line fenced block — the prior implementation silently
+        // retained the literal `json` token. Repaired by Finding 4.
+        assert_eq!(
+            strip_fences("```json{\"a\":1}```"),
+            r#"{"a":1}"#
+        );
+    }
+
+    #[test]
+    fn strip_fences_handles_uppercase_language_tag() {
+        assert_eq!(
+            strip_fences("```JSON\n{\"a\":1}\n```"),
+            r#"{"a":1}"#
+        );
+    }
+
+    #[test]
+    fn strip_fences_handles_no_language_tag() {
+        assert_eq!(
+            strip_fences("```\n{\"a\":1}\n```"),
+            r#"{"a":1}"#
+        );
+    }
+
+    #[test]
+    fn strip_fences_passes_through_bare_json() {
+        assert_eq!(strip_fences("{\"a\":1}"), r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn strip_fences_passes_through_unclosed_fence() {
+        // Open fence without close — return as-is rather than corrupting.
+        let input = "```json\n{\"a\":1}";
+        assert_eq!(strip_fences(input), input);
     }
 }

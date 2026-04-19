@@ -580,6 +580,7 @@ impl RawWosProject {
             Milestone {
                 condition,
                 description: None,
+                trigger_mode: None,
             },
         );
 

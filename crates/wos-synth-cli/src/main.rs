@@ -208,20 +208,16 @@ async fn run_loop(
 
 fn print_trace(trace: &SynthTrace) {
     println!(
-        "synth-trace: {} iteration(s); tokens in/out/cache = {}/{}/{}",
+        "synth-trace: {} iteration(s); tokens in/out/cache = {}",
         trace.iterations.len(),
-        trace.total_input_tokens,
-        trace.total_output_tokens,
-        trace.total_cache_read_tokens,
+        format_token_totals(trace),
     );
     for iter in &trace.iterations {
         println!(
-            "  iter {idx}: {n} finding(s); tokens in/out/cache = {ti}/{to}/{tc}",
+            "  iter {idx}: {n} finding(s); tokens in/out/cache = {tokens}",
             idx = iter.index,
             n = iter.lint_findings.len(),
-            ti = iter.input_tokens,
-            to = iter.output_tokens,
-            tc = iter.cache_read_tokens,
+            tokens = format_iteration_tokens(iter.input_tokens, iter.output_tokens, iter.cache_read_tokens),
         );
         for f in &iter.lint_findings {
             println!(
@@ -234,6 +230,32 @@ fn print_trace(trace: &SynthTrace) {
     }
 }
 
+/// Render token totals for the trace summary line.
+///
+/// When at least one iteration ran but every total is zero, the underlying
+/// provider almost certainly does not surface usage metadata (today, the
+/// Anthropic streaming-callback SDK does not). Print "unknown" so the user
+/// does not assume the binary is broken.
+fn format_token_totals(trace: &SynthTrace) -> String {
+    let totals_zero = trace.total_input_tokens == 0
+        && trace.total_output_tokens == 0
+        && trace.total_cache_read_tokens == 0;
+    if totals_zero && !trace.iterations.is_empty() {
+        return "unknown (provider does not report)".into();
+    }
+    format!(
+        "{}/{}/{}",
+        trace.total_input_tokens, trace.total_output_tokens, trace.total_cache_read_tokens
+    )
+}
+
+fn format_iteration_tokens(input: u64, output: u64, cache: u64) -> String {
+    if input == 0 && output == 0 && cache == 0 {
+        return "unknown".into();
+    }
+    format!("{input}/{output}/{cache}")
+}
+
 fn require_env(name: &str) -> anyhow_lite::Result<String> {
     match std::env::var(name) {
         Ok(value) if !value.trim().is_empty() => Ok(value),
@@ -243,7 +265,14 @@ fn require_env(name: &str) -> anyhow_lite::Result<String> {
     }
 }
 
-/// Tiny `anyhow`-shaped error used by `main` so we don't pull `anyhow` in.
+/// Tiny `anyhow`-shaped error used by `main`.
+///
+/// Intentionally not `anyhow` itself: the binary's error surface is six
+/// `format!` calls; pulling a 12K-LOC dependency for that is not free in
+/// build time, and the binary's reach (CLI distribution to government
+/// users) makes dependency footprint visible. Six call sites do not earn a
+/// dependency. If the surface ever crosses ~30 sites or starts needing
+/// chained context, swap to `anyhow` — by then the cost-benefit flips.
 mod anyhow_lite {
     use std::fmt;
 
