@@ -33,6 +33,7 @@ wos-lint = { path = "../wos-lint" }
 wos-runtime = { path = "../wos-runtime" }
 
 [dev-dependencies]
+assert_cmd = "2"
 insta = { version = "1", features = ["json"] }
 quick-xml = "0.36"
 tempfile = "3"
