@@ -109,6 +109,50 @@ fn is_promoted(rule: &RuleMetadata) -> bool {
     )
 }
 
+// ── LoadBearing promotion gate (§4.2 Task 6) ────────────────────────────────
+
+/// A rule promoted to `LoadBearing` MUST have ≥2 executable fixtures.
+///
+/// `LoadBearing` rules are production-critical and require multi-fixture
+/// coverage. A single fixture is insufficient — it means one breakage scenario
+/// covers what should be a broad foundation. Without this gate, marking a rule
+/// `LoadBearing` is just a rename with no coverage improvement.
+///
+/// For each `LoadBearing` rule the test counts resolvable `fixture_links` —
+/// paths that point to real `.json` files under the workspace. Annotation-only
+/// rules (empty fixtures slice) never qualify for `LoadBearing` and will fail
+/// with a clear "0 of ≥2 required" message.
+#[test]
+fn every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures() {
+    let workspace = workspace_root();
+    let mut violations: Vec<String> = Vec::new();
+
+    for rule in all_rules() {
+        if !matches!(rule.graduation, Graduation::LoadBearing) {
+            continue;
+        }
+        let executable_count = rule
+            .fixtures
+            .iter()
+            .filter(|path| workspace.join(path).is_file())
+            .count();
+        if executable_count < 2 {
+            violations.push(format!(
+                "{}: LoadBearing but only {executable_count} of ≥2 required executable fixtures; \
+                 listed fixtures: [{}]",
+                rule.id,
+                rule.fixtures.join(", "),
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "LoadBearing promotion gate — rules must have ≥2 executable fixtures:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 fn rule_has_executable_fixture(
     rule: &RuleMetadata,
     workspace: &Path,
