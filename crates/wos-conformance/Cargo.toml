@@ -6,6 +6,22 @@ description = "Dynamic conformance test runner for WOS workflows"
 license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
 
+[[bin]]
+name = "wos-conformance-explain"
+path = "src/bin/wos-conformance-explain.rs"
+
+[[bin]]
+name = "wos-conformance-diff"
+path = "src/bin/wos-conformance-diff.rs"
+
+[[bin]]
+name = "wos-conformance-report"
+path = "src/bin/wos-conformance-report.rs"
+
+[[bin]]
+name = "gen-golden-traces"
+path = "src/bin/gen-golden-traces.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

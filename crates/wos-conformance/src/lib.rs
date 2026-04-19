@@ -11,6 +11,7 @@
 //! See `LINT-MATRIX.md` for the complete constraint catalog.
 
 mod engine;
+pub mod explain;
 mod fixture;
 pub mod formspec_processor;
 mod meta;
@@ -32,6 +33,9 @@ pub use meta::{
 };
 pub use provenance::{ProvenanceKind, ProvenanceRecord};
 pub use stubs::{StubService, StubValidator};
+pub use explain::{
+    diff_traces, render_diff, render_trace, DivergenceCause, TraceDiffResult, TraceDivergence,
+};
 pub use trace::{
     ConformanceTrace, Delta, Event, GuardEvaluation, Outcome, PolicyApplication, TraceStep,
 };
