@@ -55,6 +55,11 @@ fn main() -> ExitCode {
 fn run() -> Result<u8, String> {
     let options = CliOptions::parse(std::env::args().skip(1))?;
 
+    // --help prints to stdout and exits 0 (user-requested, not an error).
+    if options.help_requested {
+        return Ok(EXIT_OK);
+    }
+
     let registries: &[&'static [wos_lint::RuleMetadata]] = &[all_lint_rules(), all_rules()];
     let fixtures_dir = options
         .fixtures_dir
@@ -142,6 +147,8 @@ struct CliOptions {
     generate_matrix: bool,
     /// Override output path when --generate-matrix is set.
     matrix_out: Option<String>,
+    /// Set when --help/-h is seen; causes run() to return Ok(0) immediately.
+    help_requested: bool,
 }
 
 impl CliOptions {
@@ -163,7 +170,12 @@ impl CliOptions {
                     opts.matrix_out =
                         Some(read_value(&mut args, "--matrix-out")?);
                 }
-                "--help" | "-h" => return Err(usage_message()),
+                "--help" | "-h" => {
+                    // Print to stdout (not stderr) — help is not an error.
+                    println!("{}", usage_message());
+                    opts.help_requested = true;
+                    return Ok(opts);
+                }
                 _ if arg.starts_with('-') => {
                     return Err(format!(
                         "unknown option '{}'\n\n{}",

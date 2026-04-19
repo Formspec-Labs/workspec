@@ -1,7 +1,7 @@
 // Rust guideline compliant 2026-04-18
 
-//! Exit-code contract tests for `wos-conformance-explain` and
-//! `wos-conformance-diff` binaries.
+//! Exit-code contract tests for `wos-conformance-explain`,
+//! `wos-conformance-diff`, and `wos-rule-coverage` binaries.
 //!
 //! Pins the three defined exit codes for each binary:
 //!   0  happy path (explain: pass fixture; diff: traces match)
@@ -134,6 +134,38 @@ fn diff_diverging_traces_exits_1_and_prints_divergence() {
 fn diff_no_args_exits_2() {
     Command::cargo_bin("wos-conformance-diff")
         .unwrap()
+        .assert()
+        .code(2);
+}
+
+// ── wos-rule-coverage ─────────────────────────────────────────────────────────
+
+/// --help → exit 0 (user-requested, not a usage error).
+#[test]
+fn rule_coverage_help_exits_0() {
+    Command::cargo_bin("wos-rule-coverage")
+        .unwrap()
+        .arg("--help")
+        .assert()
+        .code(0);
+}
+
+/// -h → exit 0 (short alias for --help).
+#[test]
+fn rule_coverage_help_short_exits_0() {
+    Command::cargo_bin("wos-rule-coverage")
+        .unwrap()
+        .arg("-h")
+        .assert()
+        .code(0);
+}
+
+/// Unknown flag → exit 2 (usage error).
+#[test]
+fn rule_coverage_unknown_flag_exits_2() {
+    Command::cargo_bin("wos-rule-coverage")
+        .unwrap()
+        .arg("--not-a-real-flag")
         .assert()
         .code(2);
 }
