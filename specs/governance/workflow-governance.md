@@ -320,7 +320,7 @@ When a reviewer overrides a prior decision, the override MUST include:
 2. **Authority verification** confirming the reviewer has override authority.
 3. **Supporting evidence** referenced by the rationale.
 
-Override records are immutable provenance entries.
+The runtime record shape is the `OverrideRecord` `$def` in the [Workflow Governance schema](../../schemas/governance/wos-workflow-governance.schema.json) (`#/$defs/OverrideRecord`). Each accepted override appends one OverrideRecord to provenance; records are immutable. The three required fields (`rationale`, `authorityVerification`, `supportingEvidence`) correspond to the three switches on `OverrideAuthority`: when a switch is `true`, the corresponding field MUST be non-empty in every emitted record.
 
 ### 7.4 Governance Attachment
 

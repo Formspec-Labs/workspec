@@ -839,6 +839,7 @@
     },
     "OverrideAuthority": {
       "type": "object",
+      "description": "Policy controlling what an override action MUST capture (Governance S7.3). The corresponding runtime record shape is defined by `OverrideRecord` in this schema; processors emit one OverrideRecord per accepted override as immutable provenance.",
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -849,20 +850,156 @@
         "requireStructuredRationale": {
           "type": "boolean",
           "default": true,
-          "description": "When true, overrides MUST include structured rationale (Governance S7.3).",
+          "description": "When true, overrides MUST include structured rationale (Governance S7.3). The rationale is captured in `OverrideRecord.rationale`.",
           "examples": [true, false]
         },
         "requireAuthorityVerification": {
           "type": "boolean",
           "default": true,
-          "description": "When true, the processor MUST verify the overriding actor has override authority before accepting the override (Governance S7.3).",
+          "description": "When true, the processor MUST verify the overriding actor has override authority before accepting the override (Governance S7.3). The verification is captured in `OverrideRecord.authorityVerification`.",
           "examples": [true, false]
         },
         "requireSupportingEvidence": {
           "type": "boolean",
           "default": false,
-          "description": "When true, overrides MUST reference supporting evidence documents or citations. Provides an additional audit trail beyond the structured rationale.",
+          "description": "When true, overrides MUST reference supporting evidence documents or citations. The references are captured in `OverrideRecord.supportingEvidence`.",
           "examples": [true, false]
+        }
+      }
+    },
+    "OverrideRecord": {
+      "type": "object",
+      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted).",
+      "required": ["rationale", "authorityVerification", "supportingEvidence"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "rationale": {
+          "type": "object",
+          "description": "Structured rationale explaining the basis for the override (Governance S7.3 item 1). The rationale MUST be human-readable and MAY cite regulatory authorities, prior cases, or factual findings. The shape is intentionally permissive — agencies declare their own rationale fields under `extensions` — but `summary` is REQUIRED so the audit trail always carries a one-line explanation.",
+          "required": ["summary"],
+          "patternProperties": {
+            "^x-": {
+              "$comment": "Vendor extensions per Kernel spec §10.6"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-line human-readable explanation of why the override was issued. Surfaced in audit reports and adverse-decision notices.",
+              "examples": [
+                "New medical evidence submitted on 2026-03-14 invalidates prior denial.",
+                "Reviewer determined original decision applied wrong regulatory section."
+              ]
+            },
+            "regulatoryCitations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A single regulatory citation string. Format is intentionally free-form so authors can cite statutes, regulations, agency policy, or operational manuals using each authority source's native citation style.",
+                "examples": ["20 CFR 416.1488", "POMS DI 27505.001"]
+              },
+              "description": "Optional citations to the regulatory authorities, statutes, or policies that support the override. Each entry is a free-form citation string.",
+              "examples": [
+                ["20 CFR 416.1488", "POMS DI 27505.001"]
+              ]
+            },
+            "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+          }
+        },
+        "authorityVerification": {
+          "type": "object",
+          "description": "Record of how the overriding actor's authority was verified (Governance S7.3 item 2). Captures who verified, when, and against which authority source. Processors that verify automatically (e.g., role lookup) MUST still emit this record so the audit trail is complete.",
+          "required": ["actorId", "method", "verifiedAt"],
+          "patternProperties": {
+            "^x-": {
+              "$comment": "Vendor extensions per Kernel spec §10.6"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Identifier of the actor whose authority was verified — the actor issuing the override.",
+              "examples": ["reviewer-alice", "supervisor-007"]
+            },
+            "method": {
+              "type": "string",
+              "enum": ["roleAssignment", "delegationGrant", "supervisorAttestation", "externalAuthority"],
+              "description": "How authority was verified. `roleAssignment`: actor's role grants override authority. `delegationGrant`: a Delegation document grants this actor override authority for the case. `supervisorAttestation`: a supervisor explicitly attested. `externalAuthority`: an out-of-band authority source (e.g., HR system) confirmed.",
+              "examples": ["roleAssignment", "delegationGrant"]
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 timestamp recording when authority verification completed. Surfaced in audit trails and used to establish ordering when multiple verifications occur.",
+              "examples": ["2026-03-14T15:42:00Z"]
+            },
+            "authoritySource": {
+              "type": "string",
+              "description": "Identifier of the authority source consulted (e.g., role registry id, delegation document URI, attestation record id).",
+              "examples": ["role-registry/v2#senior-reviewer", "delegations/2026-014"]
+            },
+            "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+          }
+        },
+        "supportingEvidence": {
+          "type": "array",
+          "description": "Documents or facts referenced by the rationale (Governance S7.3 item 3). MUST be present (possibly empty) so consumers can rely on the field's existence; MUST be non-empty when `OverrideAuthority.requireSupportingEvidence` is true.",
+          "items": { "$ref": "#/$defs/EvidenceReference" }
+        },
+        "overriddenDecisionRef": {
+          "type": "string",
+          "description": "Pointer to the prior decision being overridden — typically a provenance record id or case-file path. Optional but strongly recommended so the audit trail can reconstruct the override chain.",
+          "examples": ["provenance/2026-03-14T09:11:00Z/Determination#42"]
+        },
+        "newDeterminationRef": {
+          "type": "string",
+          "description": "Pointer to the new determination produced by the override — typically a provenance record id. Auditors use this together with `overriddenDecisionRef` to reconstruct the override chain.",
+          "examples": ["provenance/2026-03-14T15:42:00Z/Determination#88"]
+        },
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+      }
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "description": "Reference to a supporting-evidence artifact cited by an `OverrideRecord` (Governance S7.3 item 3). The reference may point to a case-file field, an external document, or a structured fact. At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable.",
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["caseField", "document", "fact", "externalRecord"],
+          "description": "What this reference points to. `caseField`: a field within the case file. `document`: a referenceable document (form, attachment). `fact`: a structured factual finding. `externalRecord`: data from an integrated external system.",
+          "examples": ["caseField", "document"]
+        },
+        "caseFieldPath": {
+          "type": "string",
+          "description": "JSON pointer / dotted path into the case file (used when `kind` is `caseField`).",
+          "examples": ["/medical/recentEvidence/2026-03-14"]
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the external document or record (used when `kind` is `document` or `externalRecord`).",
+          "examples": ["https://agency.gov/cases/12345/attachments/MED-007.pdf"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short human-readable description of what this evidence shows. Surfaced in audit reports.",
+          "examples": ["Updated medical assessment from treating physician dated 2026-03-14."]
         }
       }
     },
