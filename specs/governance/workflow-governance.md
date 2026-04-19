@@ -149,6 +149,8 @@ This is a legal and due process requirement that predates AI. It exists because 
 
 When the appeal mechanism's `continuationOfServices` property is `true`, the workflow MUST include topology that freezes adverse impacts and maintains current service levels during the appeal window. This is a structural workflow requirement, not a policy preference.
 
+The exact services maintained — and for how long — are declared by `AppealMechanism.continuationPolicyRef`, which resolves to a `ContinuationPolicy.id` in the targeted Due Process Config sidecar (`schemas/governance/wos-due-process.schema.json`). The processor MUST resolve the reference against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document. An unresolvable reference MUST emit a configuration warning in provenance; the processor MAY then fall back to the looser `AppealMechanism.continuationScope` string when present, or to implementation-defined behavior. When `continuationOfServices` is true and neither `continuationPolicyRef` nor `continuationScope` resolves, the processor MUST emit a configuration error — silently shipping a workflow that promises continuation without specifying its scope is a due-process failure.
+
 ### 3.7 Governance Attachment
 
 Due process requirements attach to transitions tagged `adverse-decision` via the `lifecycleHook` seam (Kernel S10.4). When a transition tagged `adverse-decision` fires, the processor MUST enforce the due process policy declared in the Workflow Governance Document.

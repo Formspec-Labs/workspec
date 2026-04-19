@@ -131,7 +131,7 @@
     },
     "ContinuationPolicy": {
       "type": "object",
-      "required": ["decisionType", "scope"],
+      "required": ["id", "decisionType", "scope"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -139,6 +139,16 @@
       },
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this continuation policy within the Due Process Config. Referenced by `AppealMechanism.continuationPolicyRef` in the parent governance document so an appeal that turns on `continuationOfServices: true` resolves to this exact policy (Governance §3.6).",
+          "examples": ["benefitTerminationContinuation", "benefitReductionContinuation"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifier referenced by AppealMechanism.continuationPolicyRef to bind an appeal to a specific continuation-of-service policy"
+          }
+        },
         "decisionType": {
           "type": "string",
           "description": "Type of adverse decision this continuation-of-service policy applies to. Matches the workflow's adverse decision classification vocabulary.",

@@ -349,8 +349,18 @@
         "continuationOfServices": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6). Prevents deprivation of benefits while appeal is pending.",
+          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6). Prevents deprivation of benefits while appeal is pending. The exact services maintained are defined by `continuationPolicyRef` when present, or by `continuationScope` as a fallback.",
           "examples": [true, false]
+        },
+        "continuationPolicyRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance §3.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long — replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
+          "examples": ["benefitTerminationContinuation", "benefitReductionContinuation"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+          }
         },
         "continuationScope": {
           "type": "string",
