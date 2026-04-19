@@ -45,13 +45,6 @@
       "description": "Semantic version of this Due Process Config document. Useful for audit trails — allows governance documents to pin a specific due process configuration.",
       "examples": ["1.0.0", "2025.3.0"]
     },
-    "noticeTemplates": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/NoticeTemplate"
-      },
-      "description": "Templates for adverse decision notices."
-    },
     "explanationTemplates": {
       "type": "array",
       "items": {
@@ -73,46 +66,6 @@
     "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
-    "NoticeTemplate": {
-      "type": "object",
-      "required": ["id", "title", "sections"],
-      "patternProperties": {
-        "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
-        }
-      },
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Unique identifier for this notice template within the Due Process Config. Referenced by AdverseDecisionPolicy.noticeTemplateRef in the parent governance document.",
-          "examples": ["adverseDecisionNotice", "appealAcknowledgment"]
-        },
-        "title": {
-          "type": "string",
-          "description": "Notice title displayed to the recipient. Used as the document heading in rendered notice output.",
-          "examples": ["Notice of Adverse Determination", "Acknowledgment of Appeal Filing"]
-        },
-        "sections": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1, "description": "Named section that MUST appear in notices generated from this template.", "examples": ["determination", "factualBasis", "appealRights", "deadline"] },
-          "description": "Named sections that MUST appear in notices generated from this template. Section names are workflow-defined; the processor validates that each section is present in the rendered output.",
-          "examples": [["determination", "factualBasis", "appealRights", "deadline"], ["summary", "regulatoryBasis", "nextSteps"]]
-        },
-        "formspecDefinitionRef": {
-          "type": "string",
-          "format": "uri",
-          "description": "Optional URI reference to a Formspec Definition that provides structured rendering for this notice. When present, the processor uses the Formspec form as the layout for the notice.",
-          "examples": ["https://agency.gov/forms/notices/adverse-decision/v1.0", "https://agency.gov/forms/notices/appeal-ack/v2.0"]
-        },
-        "description": {
-          "type": "string",
-          "description": "Human-readable description of when this notice template is used and what it communicates to the recipient.",
-          "examples": ["Sent to applicants before an adverse benefits determination takes effect, per APA notice requirements.", "Acknowledgment sent when an appeal is filed, confirming receipt and continuation of services."]
-        }
-      }
-    },
     "ExplanationTemplate": {
       "type": "object",
       "required": ["id", "level"],
