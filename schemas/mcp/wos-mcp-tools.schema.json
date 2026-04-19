@@ -15,19 +15,32 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Tool identifier used in tools/call requests."
+            "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly.",
+            "examples": ["wos_ping", "wos_add_state"]
           },
           "description": {
             "type": "string",
-            "description": "Human-readable description of the tool's purpose."
+            "description": "Human-readable explanation of what the tool does and what it returns, shown to LLM clients in the tools/list response.",
+            "examples": [
+              "Health-check tool. Returns {\"pong\": true}.",
+              "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}."
+            ]
           },
           "inputSchema": {
             "type": "object",
-            "description": "JSON Schema describing the arguments object."
+            "description": "JSON Schema (draft-07) describing the arguments object accepted by this tool. Used by MCP clients to validate call arguments before sending.",
+            "examples": [
+              {"type": "object", "properties": {}, "required": []},
+              {"type": "object", "required": ["project_id"], "properties": {"project_id": {"type": "string"}}}
+            ]
           },
           "outputSchema": {
             "type": "object",
-            "description": "JSON Schema describing the successful result object (optional)."
+            "description": "JSON Schema describing the successful result object returned inside the MCP tools/call `result.content[0].text` field (optional).",
+            "examples": [
+              {"type": "object", "required": ["pong"], "properties": {"pong": {"type": "boolean"}}},
+              {"type": "object", "required": ["project_id"], "properties": {"project_id": {"type": "string"}}}
+            ]
           }
         },
         "additionalProperties": false

@@ -3,12 +3,8 @@
 //! CI gate: every production schema in `schemas/**/*.schema.json` MUST have
 //! zero `SCHEMA-DOC-001` violations.
 //!
-//! All 20 production schemas reached 0 violations as of 2026-04-18.
-//! One schema is temporarily excluded pending a fix from the wos-mcp agent:
-//!
-//!   - `schemas/mcp/wos-mcp-tools.schema.json` — 7 violations outstanding;
-//!     the wos-mcp Tasks 5-6 agent is responsible for zeroing this schema.
-//!     Remove it from `EXCLUDED_SCHEMAS` once that agent lands the fix.
+//! All 21 production schemas (including `schemas/mcp/wos-mcp-tools.schema.json`)
+//! reached 0 violations as of 2026-04-18.
 //!
 //! To diagnose a failure, run:
 //!   cargo run -p wos-lint --example count_schema_violations -- <path> --list
@@ -20,11 +16,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Each entry is a workspace-relative path. Remove an entry once the owning
 /// agent lands its fix and the schema reaches 0 violations.
-const EXCLUDED_SCHEMAS: &[&str] = &[
-    // TODO(wos-mcp agent): 7 SCHEMA-DOC-001 violations in wos-mcp-tools.schema.json.
-    // Remove this exclusion once the wos-mcp Tasks 5-6 agent fixes the schema.
-    "schemas/mcp/wos-mcp-tools.schema.json",
-];
+const EXCLUDED_SCHEMAS: &[&str] = &[];
 
 #[test]
 fn all_production_schemas_have_zero_schema_doc_violations() {
