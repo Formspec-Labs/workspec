@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `ccd11994570f8ad311f1e53a74d49462f437cad1`). 97 rules across 35 T1 / 56 T2 / 6 T3 (0 LoadBearing, 0 Stable, 7 Tested, 90 Draft).
+> **Regenerated from code registries** (commit `6d27e60ef2faff48a83f26ec92ba008d3b095919`). 100 rules across 35 T1 / 56 T2 / 9 T3 (0 LoadBearing, 0 Stable, 10 Tested, 90 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -12,7 +12,7 @@
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 3: wos-conformance (dynamic)     6 rules                  │
+│  Tier 3: wos-conformance (dynamic)     9 rules                  │
 │  Event-driven test fixtures. Feeds event sequences through      │
 │  WosRuntime, asserts on observed state transitions, provenance  │
 │  records, timer behavior, compensation ordering, and autonomy.  │
@@ -145,10 +145,13 @@
 | `AI-002` | AI | tested | Processor MUST implement the confidence framework (AI S7). | ai-034-confidence-report-required.json, ai-035-calibrated-confidence.json, ai-036-confidence-below-floor.json |
 | `AI-004` | AI | draft | Processor MUST delegate Formspec evaluation to a conformant processor. | — |
 | `AI-050` | AI | draft | Assist Governance Proxy MUST NOT modify conformance requirements. | — |
+| `AI-AUTO-001` | AI-AUTO | tested | Escalation expiry MUST revoke elevated autonomy and emit an autonomyDemotion record (AI S5.5). | AI-AUTO-001-escalation-expiry-revocation.json |
+| `AI-AUTO-002` | AI-AUTO | tested | Drift-alert thresholds with action=demoteToAssistive MUST emit autonomyDemotion + driftReclassification and reroute the event through escalation (AI S5.5). | AI-AUTO-002-drift-alert-demotion.json |
 | `G-051` | G | tested | Governance Basic processor MUST enforce due process and review protocols. | g-002-notice-before-adverse.json, g-006-appeal-independent-reviewer.json, g-007-appeal-provenance.json, g-010-independent-first.json, g-016-review-sampling.json, g-017-reviewer-separation.json, g-018-override-rationale.json |
 | `G-052` | G | tested | Governance Complete processor MUST enforce all normative sections. | g-002-notice-before-adverse.json, g-006-appeal-independent-reviewer.json, g-007-appeal-provenance.json, g-010-independent-first.json, g-012-pipeline-stage-provenance.json, g-013-weakest-link-risk.json, g-016-review-sampling.json, g-017-reviewer-separation.json, g-018-override-rationale.json, g-019-override-immutable.json, g-020-rejection-detail.json, g-021-task-provenance.json, g-025-delegation-required.json, g-026-delegation-in-provenance.json, g-030-hold-timer-start.json, g-032-temporal-resolution.json, g-049-binding-type-neutral.json, g-054-resume-cancels-hold-timer.json, g-061-expired-calendar-ignored.json, g-064-notification-missing-variables.json |
+| `K-DET-001` | K-DET | tested | Determination-tagged transitions MUST emit the pre-transition case-file snapshot in Facts-tier provenance. | k-det-001-determination-snapshot.json |
 
-**T3 total: 6** (0 LoadBearing, 0 Stable, 4 Tested, 2 Draft)
+**T3 total: 9** (0 LoadBearing, 0 Stable, 7 Tested, 2 Draft)
 
 ---
 
@@ -158,6 +161,6 @@
 |------|-------|-------------|--------|--------|-------|
 | T1 | 35 | 0 | 0 | 2 | 33 |
 | T2 | 56 | 0 | 0 | 1 | 55 |
-| T3 | 6 | 0 | 0 | 4 | 2 |
-| **Total** | **97** | **0** | **0** | **7** | **90** |
+| T3 | 9 | 0 | 0 | 7 | 2 |
+| **Total** | **100** | **0** | **0** | **10** | **90** |
 
