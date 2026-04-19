@@ -18,8 +18,9 @@
     "$wosWorkflowGovernance": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Workflow Governance specification version. MUST be '1.0'. Identifies this document as a WOS Workflow Governance Document.",
+      "description": "Document type marker identifying this as a WOS Workflow Governance Document (Governance S1.2). MUST be the string '1.0'. Processors use this field to dispatch to the governance document parser; its absence means the document is not a recognized Workflow Governance Document. Layer 1 governs human and hybrid workflows independently of AI involvement.",
       "examples": [
+        "1.0",
         "1.0"
       ],
       "x-lm": {
@@ -44,18 +45,21 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Workflow Governance Document.",
+      "description": "Semantic version of this Workflow Governance Document. Useful for audit trails and change management.",
       "examples": [
-        "1.0.0"
+        "1.0.0",
+        "2026.1.0"
       ]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this governance configuration."
+      "description": "Human-readable name for this Workflow Governance Document. Displayed in tooling and governance dashboards.",
+      "examples": ["Benefits Adjudication Governance", "Purchase Order Approval Governance"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of the governance requirements."
+      "description": "Human-readable description of the governance requirements and scope of this document. Intended for governance authors and auditors.",
+      "examples": ["Governance for the benefits adjudication workflow — due process, review protocols, income verification pipeline.", "Governance for purchase-order approval — separation of duties, delegation, and audit tier for procurement decisions."]
     },
     "dueProcess": {
       "$ref": "#/$defs/DueProcess",
@@ -169,7 +173,8 @@
       "type": "integer",
       "minimum": 0,
       "default": 1,
-      "description": "Maximum sub-delegation chain levels (Governance S11.5). 1 (default): direct delegation only, no sub-delegation. 2: one level of sub-delegation allowed. 0: delegation enforcement disabled entirely."
+      "description": "Maximum sub-delegation chain levels (Governance S11.5). 1 (default): direct delegation only, no sub-delegation. 2: one level of sub-delegation allowed. 0: delegation enforcement disabled entirely.",
+      "examples": [1, 2]
     },
     "holdPolicies": {
       "type": "array",
@@ -196,10 +201,10 @@
       "type": "object",
       "description": "Schema upgrade lifecycle operation (S2.9).",
       "properties": {
-        "priorVersion": { "type": "string" },
-        "newVersion": { "type": "string" },
-        "migrationMechanism": { "type": "string", "enum": ["formspec-changelog", "custom-map", "declared-equivalence"] },
-        "scope": { "type": "string", "enum": ["instance", "workflow", "tenant"] }
+        "priorVersion": { "type": "string", "description": "The governance document schema version being migrated away from. Used by the migration processor to identify the source format.", "examples": ["1.0", "1.1"] },
+        "newVersion": { "type": "string", "description": "The governance document schema version being migrated to. The processor validates the migrated document against this version's schema.", "examples": ["1.1", "2.0"] },
+        "migrationMechanism": { "type": "string", "enum": ["formspec-changelog", "custom-map", "declared-equivalence"], "description": "Mechanism used to transform the governance document from priorVersion to newVersion (S2.9). 'formspec-changelog': apply Formspec changelog transformations. 'custom-map': use a custom field mapping. 'declared-equivalence': assert the two versions are structurally equivalent — no transformation needed.", "examples": ["formspec-changelog", "declared-equivalence"] },
+        "scope": { "type": "string", "enum": ["instance", "workflow", "tenant"], "description": "Scope of the schema upgrade operation (S2.9). 'instance': upgrade a single case instance. 'workflow': upgrade all active instances of this workflow. 'tenant': upgrade all instances across the tenant.", "examples": ["workflow", "tenant"] }
       },
       "required": ["priorVersion", "newVersion", "migrationMechanism", "scope"]
     },
@@ -240,7 +245,8 @@
         "noticeRequired": {
           "type": "boolean",
           "default": false,
-          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure."
+          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure.",
+          "examples": [true, false]
         },
         "noticeTiming": {
           "type": "string",
@@ -264,7 +270,8 @@
         },
         "noticeTemplateRef": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for notice formatting."
+          "description": "Reference to a Notification Template sidecar for notice formatting.",
+          "examples": ["adverseDecisionNotice", "benefitTerminationNotice"]
         },
         "explanationLevel": {
           "type": "string",
@@ -281,7 +288,8 @@
         "counterfactualRequired": {
           "type": "boolean",
           "default": false,
-          "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'."
+          "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'.",
+          "examples": [true, false]
         },
         "appealMechanism": {
           "$ref": "#/$defs/AppealMechanism",
@@ -301,11 +309,12 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "When true, an appeal pathway is available for adverse decisions."
+          "description": "When true, an appeal pathway is available for adverse decisions. When false, no appeal mechanism is configured and adverse decisions are final at the workflow level.",
+          "examples": [true, false]
         },
         "appealWindow": {
           "type": "string",
-          "description": "ISO 8601 duration for the appeal filing window.",
+          "description": "ISO 8601 duration defining the filing window during which an appeal can be submitted after notice of adverse decision is received.",
           "examples": [
             "P30D",
             "P60D"
@@ -322,25 +331,33 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Role identifier eligible to review appeals under this mechanism.",
+            "examples": ["humanAdjudicator", "appealAdjudicator", "independentReviewer"]
           },
-          "description": "Roles eligible to review appeals.",
+          "description": "Roles eligible to review appeals. The processor uses this list to validate reviewer assignments during appeal routing.",
           "examples": [
             [
               "humanAdjudicator"
+            ],
+            [
+              "appealAdjudicator",
+              "seniorCaseworker"
             ]
           ]
         },
         "continuationOfServices": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6)."
+          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6). Prevents deprivation of benefits while appeal is pending.",
+          "examples": [true, false]
         },
         "continuationScope": {
           "type": "string",
-          "description": "Scope of service continuation during appeal.",
+          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending.",
           "examples": [
-            "currentLevel"
+            "currentLevel",
+            "reducedLevel"
           ]
         }
       }
@@ -362,7 +379,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Semantic transition tag that this protocol binding will match against kernel transitions and states.",
+            "examples": ["review", "determination", "adverse-decision"]
           },
           "minItems": 1,
           "description": "Semantic transition tags this protocol binding matches (Governance S4.3). Matches any transition or state in the kernel that carries any of these tags.",
@@ -390,7 +409,9 @@
               "calibratedConfidence",
               "dualBlind",
               "unassisted"
-            ]
+            ],
+            "description": "A specific review protocol to apply at the matched transitions (Governance S4.1).",
+            "examples": ["independentFirst", "dualBlind", "considerOpposite"]
           },
           "minItems": 1,
           "description": "Review protocols to apply (Governance S4.1). Multiple protocols MAY be combined.",
@@ -410,7 +431,8 @@
         },
         "transitionOverride": {
           "type": "string",
-          "description": "Optional: target a specific transition by identifier instead of by tag. Overrides tag-based matching for this binding."
+          "description": "Optional transition identifier to target directly instead of using tag-based matching. When present, this binding applies only to the named transition, overriding the tags array for matching purposes.",
+          "examples": ["submitDetermination", "escalateToDirector"]
         },
         "scope": {
           "type": "string",
@@ -421,7 +443,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of why this protocol combination was chosen."
+          "description": "Human-readable explanation of why this protocol combination was chosen and what it is intended to prevent. Used in governance documentation and audit reports.",
+          "examples": ["All determination steps use dual-blind protocol to prevent anchoring bias.", "Appeal reviews use independent-first plus consider-opposite to ensure genuine reconsideration."]
         }
       }
     },
@@ -441,7 +464,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique pipeline identifier.",
+          "description": "Unique pipeline identifier within this governance document. Referenced by lifecycle hooks to attach the pipeline to specific workflow states or transitions.",
           "examples": [
             "income-verification",
             "document-extraction"
@@ -457,7 +480,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable pipeline description."
+          "description": "Human-readable description of what this pipeline validates and when it is invoked. Used in governance documentation and audit reports.",
+          "examples": ["Validates income data from the external verification service before eligibility determination.", "Extracts and verifies key fields from submitted documents using assertion-gate checks."]
         }
       }
     },
@@ -477,7 +501,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique stage identifier within this pipeline.",
+          "description": "Unique stage identifier within this pipeline. Referenced in logs, audit traces, and by referenceStage in Assertion nodes for consistency checking.",
           "examples": [
             "extract",
             "validate",
@@ -525,7 +549,7 @@
             "holdPendingData",
             "failWithExplanation"
           ],
-          "description": "What happens when this stage fails (Governance S8.1).",
+          "description": "Action taken when this stage's validation fails (Governance S8.1). Applies to all assertions in this stage unless overridden at the assertion level.",
           "examples": [
             "retryWithCorrections",
             "escalateToSupervisor"
@@ -533,7 +557,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable stage description."
+          "description": "Human-readable description of what this stage does and why it is included in the pipeline. Used in audit reports and tooling.",
+          "examples": ["Validate income data against the income verification contract.", "Apply arithmetic and source-grounding assertion gates to extracted income fields."]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
@@ -561,11 +586,11 @@
             "cross-document",
             "temporal"
           ],
-          "description": "Assertion gate type (Governance S5.4).",
+          "description": "Assertion gate type determining the verification method applied to the data (Governance S5.4). 'source-grounded': checks that extracted field values appear verbatim in referenced source documents. 'arithmetic': validates that a FEL expression over numeric fields holds. 'range': checks that a value falls within declared bounds. 'consistency': asserts agreement between two pipeline stages or fields. 'format': structural or pattern validation. 'cross-document': checks consistency across multiple documents. 'temporal': validates date/time relationships.",
           "examples": [
             "source-grounded",
             "arithmetic",
-            "range"
+            "temporal"
           ],
           "x-lm": {
             "critical": true,
@@ -574,9 +599,10 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this assertion checks.",
+          "description": "Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.",
           "examples": [
-            "Extracted income values must appear in the source pay stub"
+            "Extracted income values must appear in the source pay stub",
+            "Total income must equal the sum of wage, investment, and other income components"
           ]
         },
         "expression": {
@@ -591,14 +617,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Field path relative to the pipeline data context that this assertion verifies.",
+            "examples": ["applicantIncome", "employerName", "filingDate"]
           },
-          "description": "Fields subject to this assertion. Used with source-grounded and consistency types.",
+          "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
             [
               "applicantIncome",
               "filingDate",
               "dependentCount"
+            ],
+            [
+              "wageIncome",
+              "employerName"
             ]
           ]
         },
@@ -617,7 +649,8 @@
             "holdPendingData",
             "failWithExplanation"
           ],
-          "description": "Override rejection policy for this specific assertion."
+          "description": "Override rejection policy for this specific assertion. Supersedes the enclosing stage's rejectionPolicy when present.",
+          "examples": ["retryWithCorrections", "escalateToSupervisor"]
         }
       }
     },
@@ -653,17 +686,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Transition tag that triggers the Reasoning tier requirement.",
+            "examples": ["determination", "adverse-decision"]
           },
           "default": [
             "determination"
           ],
-          "description": "Transition tags that require Reasoning tier records."
+          "description": "Transition tags that require Reasoning tier records. Any transition carrying one of these tags MUST produce a Reasoning tier record (Governance S6.2)."
         },
         "requireDecisionRequirements": {
           "type": "boolean",
           "default": false,
-          "description": "When true, Reasoning tier records MUST include decision requirements declarations."
+          "description": "When true, Reasoning tier records MUST include decision requirements declarations (Governance S6.3).",
+          "examples": [true, false]
         }
       }
     },
@@ -680,17 +716,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Transition tag that triggers the Counterfactual tier requirement.",
+            "examples": ["adverse-decision", "determination"]
           },
           "default": [
             "adverse-decision"
           ],
-          "description": "Transition tags that require Counterfactual tier records."
+          "description": "Transition tags that require Counterfactual tier records. Any transition carrying one of these tags MUST produce a Counterfactual tier record (Governance S6.4)."
         },
         "requireProtectedCharacteristics": {
           "type": "boolean",
           "default": true,
-          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics."
+          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics — confirming the decision is independent of any protected class (Governance S6.4).",
+          "examples": [true, false]
         }
       }
     },
@@ -747,7 +786,8 @@
             "stratified"
           ],
           "default": "random",
-          "description": "Sampling method."
+          "description": "Sampling method for selecting decisions to review (Governance S7.1). 'random': select decisions randomly at the specified rate. 'stratified': sample proportionally across strata (e.g., decision type, actor, impact level).",
+          "examples": ["random", "stratified"]
         },
         "scope": {
           "type": "string",
@@ -756,7 +796,8 @@
             "actor"
           ],
           "default": "workflow",
-          "description": "Sampling scope: per-workflow or per-actor."
+          "description": "Sampling scope for the quality review program (Governance S7.1). 'workflow': the rate applies across all decisions in the workflow. 'actor': the rate applies independently per actor.",
+          "examples": ["workflow", "actor"]
         }
       }
     },
@@ -787,9 +828,12 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Role identifier excluded from reviewing its own category of work under separation of duties.",
+            "examples": ["intakeWorker", "dataEntryClerk", "initialReviewer"]
           },
-          "description": "Roles excluded from reviewing their own category of work."
+          "description": "Roles excluded from reviewing their own category of work. Actors holding these roles cannot review decisions they made in the same instance (or globally, per scope).",
+          "examples": [["intakeWorker"], ["dataEntryClerk", "intakeWorker"]]
         }
       }
     },
@@ -805,17 +849,20 @@
         "requireStructuredRationale": {
           "type": "boolean",
           "default": true,
-          "description": "When true, overrides MUST include structured rationale (Governance S7.3)."
+          "description": "When true, overrides MUST include structured rationale (Governance S7.3).",
+          "examples": [true, false]
         },
         "requireAuthorityVerification": {
           "type": "boolean",
           "default": true,
-          "description": "When true, the processor MUST verify the overriding actor has override authority."
+          "description": "When true, the processor MUST verify the overriding actor has override authority before accepting the override (Governance S7.3).",
+          "examples": [true, false]
         },
         "requireSupportingEvidence": {
           "type": "boolean",
           "default": false,
-          "description": "When true, overrides MUST reference supporting evidence."
+          "description": "When true, overrides MUST reference supporting evidence documents or citations. Provides an additional audit trail beyond the structured rationale.",
+          "examples": [true, false]
         }
       }
     },
@@ -835,7 +882,7 @@
         "pattern": {
           "type": "string",
           "minLength": 1,
-          "description": "Task pattern name.",
+          "description": "Task pattern name identifying this category of work in the task catalog. Used in the verifiability matrix and in audit reports (Governance S9.1).",
           "examples": [
             "fieldExtraction",
             "completenessCheck",
@@ -857,7 +904,7 @@
         },
         "verificationMethod": {
           "type": "string",
-          "description": "How verification is performed, if verifiable.",
+          "description": "How verification is performed for this task pattern when verifiable is 'yes' or 'partially'. Describes the independent check that can validate the task's output.",
           "examples": [
             "source-grounding",
             "recomputation",
@@ -866,7 +913,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this task pattern."
+          "description": "Human-readable description of this task pattern and what it involves. Used in verifiability matrix documentation and governance reports.",
+          "examples": ["Extract field values from submitted documents using OCR and structured parsing.", "Verify income data against source documents and arithmetic constraints."]
         }
       }
     },
@@ -892,7 +940,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique delegation identifier.",
+          "description": "Unique delegation identifier within this governance document. Referenced in audit traces and by sub-delegation chains when maxDelegationDepth > 1.",
           "examples": [
             "directorToCaseworker",
             "commissionerToDirector"
@@ -901,7 +949,7 @@
         "delegator": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor reference of the authority granting the delegation.",
+          "description": "Actor identifier of the role or individual granting the delegated authority. Must correspond to an actor defined in the Kernel Document or actor registry.",
           "examples": [
             "divisionDirector",
             "commissioner"
@@ -910,7 +958,7 @@
         "delegate": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor reference receiving the delegated authority.",
+          "description": "Actor identifier of the role or individual receiving the delegated authority. The processor verifies the acting actor matches this reference when authority is exercised.",
           "examples": [
             "seniorCaseworker",
             "divisionDirector"
@@ -949,37 +997,44 @@
         "effectiveDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation becomes active."
+          "description": "ISO 8601 date on which this delegation becomes active. Before this date, the processor MUST NOT honor this delegation.",
+          "examples": ["2026-01-01", "2025-07-01"]
         },
         "expirationDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation expires."
+          "description": "ISO 8601 date on which this delegation expires. After this date, the processor MUST NOT honor this delegation.",
+          "examples": ["2026-12-31", "2027-06-30"]
         },
         "revocable": {
           "type": "boolean",
           "default": true,
-          "description": "Whether the delegation can be revoked."
+          "description": "Whether this delegation can be revoked before its expiration date (Governance S11.4). Default: true. When false, the delegation is irrevocable until expirationDate.",
+          "examples": [true, false]
         },
         "revokedDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation was revoked, if applicable."
+          "description": "ISO 8601 date on which this delegation was revoked. When set, the processor MUST treat the delegation as expired from this date forward.",
+          "examples": ["2026-03-15", "2025-11-01"]
         },
         "allowsSubDelegation": {
           "type": "boolean",
           "default": false,
-          "description": "Whether this delegation permits the delegate to further sub-delegate authority (Governance S11.5). Default: false."
+          "description": "Whether this delegation permits the delegate to further sub-delegate authority (Governance S11.5). Default: false.",
+          "examples": [false, true]
         },
         "quorumCount": {
           "type": "integer",
           "minimum": 2,
-          "description": "Minimum distinct authorities required for delegation to take effect (S4.9). Omit for single-authority delegation."
+          "description": "Minimum distinct authorities required for delegation to take effect (S4.9). Omit for single-authority delegation.",
+          "examples": [2, 3]
         },
         "quorumPool": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Eligible authority principal IDs (S4.9). Required when quorumCount is set."
+          "items": { "type": "string", "description": "Principal ID of an authority eligible to contribute to the quorum.", "examples": ["commissioner", "deputyCommissioner", "chiefCounsel"] },
+          "description": "Eligible authority principal IDs forming the quorum pool (S4.9). Required when quorumCount is set.",
+          "examples": [["commissioner", "deputyCommissioner"], ["chiefCounsel", "deputyDirector", "commissioner"]]
         }
       }
     },
@@ -1001,13 +1056,19 @@
               "safety-impacting",
               "operational",
               "informational"
-            ]
+            ],
+            "description": "Impact level for which the delegate may exercise the delegated authority.",
+            "examples": ["operational", "informational"]
           },
-          "description": "Impact levels this delegation covers.",
+          "description": "Impact levels this delegation covers. The delegate may only exercise authority for cases at these impact levels.",
           "examples": [
             [
               "operational",
               "informational"
+            ],
+            [
+              "rights-impacting",
+              "safety-impacting"
             ]
           ]
         },
@@ -1015,13 +1076,18 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Case type identifier for which the delegate may exercise the delegated authority.",
+            "examples": ["standard-application", "renewal", "emergency-request"]
           },
-          "description": "Case types this delegation covers.",
+          "description": "Case types this delegation covers. The delegate may only exercise authority for cases of these types.",
           "examples": [
             [
               "standard-application",
               "renewal"
+            ],
+            [
+              "emergency-request"
             ]
           ]
         },
@@ -1036,7 +1102,7 @@
         },
         "conditions": {
           "type": "string",
-          "description": "Additional FEL expression narrowing the delegation scope.",
+          "description": "Additional FEL expression that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true.",
           "examples": [
             "caseFile.programType = 'supplemental'"
           ]
@@ -1081,7 +1147,7 @@
         },
         "expectedDuration": {
           "type": "string",
-          "description": "ISO 8601 duration or the string 'indefinite'.",
+          "description": "Expected ISO 8601 duration of this hold, or 'indefinite' for holds with no expected end time. When the duration expires without the resumeTrigger firing, the processor applies the timeoutAction.",
           "examples": [
             "P30D",
             "P14D",
@@ -1091,7 +1157,7 @@
         "resumeTrigger": {
           "type": "string",
           "minLength": 1,
-          "description": "Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule.",
+          "description": "Event name that resumes the case from this hold. The processor listens for this event and resumes the case when it fires — this is NOT a FEL condition polled on a schedule (Governance S12.1).",
           "examples": [
             "applicantResponse",
             "verificationComplete",
@@ -1117,7 +1183,8 @@
         },
         "notificationTemplateRef": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for hold notifications."
+          "description": "Reference to a Notification Template sidecar for hold notifications. When present, the processor sends a notification using this template when the hold begins.",
+          "examples": ["holdNotificationTemplate", "pendingApplicantResponseNotice"]
         },
         "scope": {
           "type": "string",
@@ -1128,7 +1195,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this hold policy."
+          "description": "Human-readable description of this hold policy and its regulatory or procedural basis. Used in tooling and audit documentation.",
+          "examples": ["Hold pending applicant response to information request — 30-day window per APA 5 USC 554.", "Legal hold — no event-based resume; survives terminal workflow states and blocks data retention expiry."]
         }
       }
     },
@@ -1155,7 +1223,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable summary of the rule."
+          "description": "Human-readable summary of what this rule requires or prohibits. Used in explanation assembly and audit documentation.",
+          "examples": ["Annual renewal of eligibility required for continued benefit receipt.", "Adverse decisions require individualized written notice at least 30 days before effective date."]
         },
         "sourceAuthority": {
           "type": "string",
@@ -1178,7 +1247,7 @@
         },
         "citation": {
           "type": "string",
-          "description": "Formal citation to the authoritative source.",
+          "description": "Formal citation to the authoritative source document for this rule, in standard legal citation format.",
           "examples": [
             "42 CFR \u00a7 435.916",
             "OMB M-24-10 \u00a73.1"
