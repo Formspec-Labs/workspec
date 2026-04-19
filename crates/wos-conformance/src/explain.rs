@@ -129,11 +129,10 @@ fn render_delta_reason(delta: &Delta) -> String {
             inputs,
         } => {
             let inputs_str = compact_json(inputs);
-            format!(
-                "      reason:   guard `{guard_id}` evaluated false\n\
-                 \t\t  expression: `{expression}`\n\
-                 \t\t  inputs:     {inputs_str}\n"
-            )
+            let mut out = format!("      reason:   guard `{guard_id}` evaluated false\n");
+            out.push_str(&format!("                expression: `{expression}`\n"));
+            out.push_str(&format!("                inputs:     {inputs_str}\n"));
+            out
         }
         Delta::StateMismatch {
             expected,
@@ -153,11 +152,10 @@ fn render_delta_reason(delta: &Delta) -> String {
             expected_without_policy,
             actual_with_policy,
         } => {
-            format!(
-                "      reason:   policy `{policy_id}` changed outcome\n\
-                 \t\t  without policy: {expected_without_policy}\n\
-                 \t\t  with policy:    {actual_with_policy}\n"
-            )
+            let mut out = format!("      reason:   policy `{policy_id}` changed outcome\n");
+            out.push_str(&format!("                without policy: {expected_without_policy}\n"));
+            out.push_str(&format!("                with policy:    {actual_with_policy}\n"));
+            out
         }
     }
 }
