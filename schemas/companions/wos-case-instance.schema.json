@@ -712,7 +712,10 @@
         "reviewState": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Runtime state for review protocols (Governance S4). Keyed by review protocol binding identifier. Tracks which reviews are pending, completed, and their outcomes."
+          "description": "Runtime state for review protocols (Governance S4). Keyed by review protocol binding identifier. Tracks which reviews are pending, completed, and their outcomes.",
+          "examples": [
+            { "dualBlindReview": { "status": "pending", "reviewers": ["reviewer-a", "reviewer-b"] } }
+          ]
         }
       },
       "description": "Runtime governance state maintained across events. Separate from case state (which tracks business data) and provenance (which is append-only)."
@@ -730,31 +733,37 @@
         "delegatorId": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor who delegated authority."
+          "description": "Identifier of the actor who granted this delegation. Must be an actor with the relevant authority at the time of granting.",
+          "examples": ["supervisor-789", "program-director-001"]
         },
         "delegateId": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor who received delegated authority."
+          "description": "Identifier of the actor who received the delegated authority. This actor may act on behalf of the delegator within the declared scope.",
+          "examples": ["reviewer-agency-456", "deputy-director-002"]
         },
         "scope": {
           "type": "string",
-          "description": "Scope of the delegation (Governance S11.3). May be a transition tag, state identifier, or FEL expression."
+          "description": "Scope of the delegation (Governance S11.3). May be a transition tag, state identifier, or FEL expression.",
+          "examples": ["eligibility.income-check", "review", "tag:sla-critical"]
         },
         "authority": {
           "type": "string",
           "enum": ["signing", "determination", "review", "override"],
-          "description": "Type of authority delegated (Governance S11.2)."
+          "description": "Type of authority delegated (Governance S11.2). Determines which governed transitions the delegate may trigger.",
+          "examples": ["signing", "determination"]
         },
         "grantedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the delegation was granted."
+          "description": "ISO 8601 timestamp when this delegation was recorded by the governance system.",
+          "examples": ["2026-04-09T08:00:00Z", "2026-04-10T14:30:00Z"]
         },
         "expiresAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry."
+          "description": "ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry.",
+          "examples": ["2026-04-30T23:59:59Z", "2026-05-15T00:00:00Z"]
         }
       },
       "description": "A currently active delegation of authority from one actor to another."
@@ -777,21 +786,25 @@
         "startedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the hold began."
+          "description": "ISO 8601 timestamp when this hold was placed on the instance by the governance system.",
+          "examples": ["2026-04-09T09:00:00Z", "2026-04-11T14:00:00Z"]
         },
         "expectedEnd": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the hold is expected to end (startedAt + expectedDuration). Absent for indefinite holds."
+          "description": "ISO 8601 timestamp when the hold is expected to end (startedAt + expectedDuration). Absent for indefinite holds.",
+          "examples": ["2026-04-16T09:00:00Z", "2026-04-25T17:00:00Z"]
         },
         "resumeTrigger": {
           "type": "string",
           "minLength": 1,
-          "description": "Event name that will resume the case from this hold."
+          "description": "Event name that, when received, will lift this hold and allow the instance to resume normal processing.",
+          "examples": ["applicantDocumentsReceived", "externalVerificationComplete"]
         },
         "holdState": {
           "type": "string",
-          "description": "The lifecycle state the instance was in when the hold started."
+          "description": "The lifecycle state the instance was in when the hold started. Stored to verify state has not changed on hold removal.",
+          "examples": ["review.initial", "eligibility.income-check"]
         }
       },
       "description": "A currently active hold on the workflow instance."
@@ -810,14 +823,20 @@
           "additionalProperties": {
             "$ref": "#/$defs/VolumeCounter"
           },
-          "description": "Per-agent hourly autonomous action counters. Keyed by agent actor ID."
+          "description": "Per-agent hourly autonomous action counters. Keyed by agent actor ID.",
+          "examples": [
+            { "agent-triage-001": { "count": 12, "windowStart": "2026-04-09T14:00:00Z" } }
+          ]
         },
         "daily": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/VolumeCounter"
           },
-          "description": "Per-agent daily autonomous action counters. Keyed by agent actor ID."
+          "description": "Per-agent daily autonomous action counters. Keyed by agent actor ID.",
+          "examples": [
+            { "agent-triage-001": { "count": 47, "windowStart": "2026-04-09T00:00:00Z" } }
+          ]
         }
       },
       "description": "Tracks autonomous action counts for AI volume constraint enforcement (AI Integration S11). Counters reset at the start of each hour/day (UTC)."
@@ -835,12 +854,14 @@
         "count": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of autonomous actions in the current window."
+          "description": "Number of autonomous actions taken by this agent in the current counting window. Compared to the cap declared in the AI Integration Document.",
+          "examples": [0, 12, 47]
         },
         "windowStart": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp of the current counting window start."
+          "description": "ISO 8601 timestamp marking the start of the current counting window. Resets each hour (hourly) or each UTC midnight (daily).",
+          "examples": ["2026-04-09T14:00:00Z", "2026-04-09T00:00:00Z"]
         }
       },
       "description": "A single volume counter tracking autonomous actions within a time window."
