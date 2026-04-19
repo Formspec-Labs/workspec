@@ -148,6 +148,18 @@ impl RawWosProject {
         }
     }
 
+    /// Wrap an already-deserialized `KernelDocument`.
+    ///
+    /// The document becomes the initial state with an empty undo/redo history.
+    pub(crate) fn from_document(document: KernelDocument) -> Self {
+        Self {
+            doc: document,
+            history: Vec::new(),
+            redo_stack: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
     // ── AddState handler ──────────────────────────────────────────────────
 
     fn apply_add_state(&mut self, id: String, kind: StateKind) -> CommandResult {

@@ -51,6 +51,26 @@ impl WosProject {
         }
     }
 
+    /// Construct an empty kernel with sensible authoring defaults.
+    ///
+    /// Uses `ImpactLevel::Operational` and a generic title. Callers that need
+    /// a specific impact level or title should use [`WosProject::new`] directly.
+    /// This factory exists so `wos-mcp` can create projects without picking
+    /// an impact level upfront — governance tools set the level later.
+    pub fn new_kernel() -> Self {
+        Self::new(ImpactLevel::Operational, "New WOS Workflow")
+    }
+
+    /// Load a project from an already-deserialized `KernelDocument`.
+    ///
+    /// The document becomes the initial state. The undo/redo history starts
+    /// empty — no commands were applied to reach this state.
+    pub fn from_document(document: KernelDocument) -> Self {
+        Self {
+            core: RawWosProject::from_document(document),
+        }
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────
 
     /// Add a top-level state. Errors if the id already exists.
