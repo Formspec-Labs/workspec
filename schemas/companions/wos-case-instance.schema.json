@@ -303,59 +303,77 @@
         "taskId": {
           "type": "string",
           "minLength": 1,
-          "description": "Stable processor task identifier."
+          "description": "Stable processor-assigned identifier for this task. Used for idempotent event routing, provenance correlation, and delegation references.",
+          "examples": ["task-1", "task-intake-2026-04-09"]
         },
         "taskRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to the task definition or task pattern."
+          "description": "Reference to the task definition, task pattern, or human-readable label identifying this task's type within the workflow.",
+          "examples": ["complete-intake", "technical-review", "eligibility-determination"]
         },
         "status": {
           "type": "string",
           "enum": ["created", "assigned", "claimed", "delegated", "escalated"],
-          "description": "Current nonterminal task status. Completed, failed, and skipped tasks leave activeTasks and remain in provenance."
+          "description": "Current nonterminal task status. Completed, failed, and skipped tasks leave activeTasks and remain in provenance.",
+          "examples": ["created", "claimed"]
         },
         "assignedActor": {
           "type": "string",
-          "description": "Actor assigned to complete the task."
+          "description": "Identifier of the actor assigned to complete this task. Set by createTask; may change on delegation or escalation.",
+          "examples": ["applicant-123", "reviewer-agency-456", "supervisor-789"]
         },
         "contractRef": {
           "type": "string",
-          "description": "Kernel contract map key used by this task."
+          "description": "Key into the Kernel Document's contracts map identifying which contract governs this task (Kernel S7.2).",
+          "examples": ["intakeApplication", "technicalReview", "eligibilityDetermination"]
         },
         "binding": {
           "type": "string",
           "enum": ["formspec", "jsonSchema"],
-          "description": "Contract binding type for this task when backed by a contract."
+          "description": "Contract binding type for this task when backed by a contract. Drives which renderer the task delivery layer invokes.",
+          "examples": ["formspec", "jsonSchema"]
         },
         "definitionUrl": {
           "type": "string",
           "format": "uri",
-          "description": "Formspec Definition URL for Formspec-backed tasks."
+          "description": "Formspec Definition URL for Formspec-backed tasks. Pinned at task creation; must match response.definitionUrl on submission.",
+          "examples": ["https://agency.gov/forms/intake", "urn:formspec:benefits-intake:2.0"]
         },
         "definitionVersion": {
           "type": "string",
-          "description": "Pinned Formspec Definition version for Formspec-backed tasks."
+          "description": "Pinned Formspec Definition version for Formspec-backed tasks. Must match response.definitionVersion on submission.",
+          "examples": ["1.0.0", "2025.3.0"]
         },
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to prefill the task response."
+          "description": "URI of the Mapping document used to prefill the task form from current case state before rendering.",
+          "examples": [
+            "https://agency.gov/mappings/intake-prefill",
+            "urn:wos:mapping:benefits-intake-prefill:1.0"
+          ]
         },
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to project the completed task response into case state."
+          "description": "URI of the Mapping document used to project a completed task Response back into case state on submission.",
+          "examples": [
+            "https://agency.gov/mappings/intake-response",
+            "urn:wos:mapping:benefits-intake-response:1.0"
+          ]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
-          "description": "Task deadline."
+          "description": "Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.",
+          "examples": ["2026-04-20T17:00:00Z", "2026-05-01T00:00:00Z"]
         },
         "impactLevel": {
           "type": "string",
           "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
-          "description": "Effective task impact level. Defaults to the Kernel impactLevel when absent."
+          "description": "Effective task impact level. Defaults to the Kernel impactLevel when absent.",
+          "examples": ["rights-impacting", "operational"]
         },
         "context": {
           "$ref": "#/$defs/FormspecTaskContext",
@@ -368,12 +386,14 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the task was created."
+          "description": "ISO 8601 timestamp when this task was created by the processor's createTask action.",
+          "examples": ["2026-04-09T14:00:00Z", "2026-04-11T08:30:00Z"]
         },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the task state last changed."
+          "description": "ISO 8601 timestamp when this task's state last changed (assignment, claim, escalation, or partial save).",
+          "examples": ["2026-04-09T14:05:00Z", "2026-04-11T09:15:00Z"]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
