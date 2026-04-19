@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos.dev/schemas/conformance/conformance-trace.schema.json",
+  "title": "WOS Conformance Trace",
+  "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, kernel version, the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history.",
+  "type": "object",
+  "required": ["fixtureId", "kernelVersion", "steps", "outcome"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
+      "examples": ["https://wos.dev/schemas/conformance/conformance-trace.schema.json"]
+    },
+    "fixtureId": {
+      "type": "string",
+      "description": "Unique identifier for the conformance fixture that produced this trace. Matches the fixture filename stem (e.g. 'K-011-determinism'). Used by explain/diff tooling to correlate traces across runs and by LLM repair agents to select the fixture definition when diagnosing a failure.",
+      "examples": ["K-011-determinism", "G-030-hold-resume"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Fixture identity key that links the trace to its fixture definition"
+      }
+    },
+    "kernelVersion": {
+      "type": "string",
+      "description": "WOS Kernel specification version the runner evaluated the fixture against. Matches the '$wosKernel' marker in the kernel document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
+      "examples": ["1.0", "1.1"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Pins the trace to the kernel spec version used for evaluation"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered sequence of event-processing steps executed during the fixture run. Each step corresponds to one event dispatched to the kernel evaluator. The array is empty when the fixture validates a structural property (e.g. a negative fixture that must reject at load time).",
+      "items": { "$ref": "#/$defs/TraceStep" },
+      "examples": [[]]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["pass", "fail", "error"],
+      "description": "Final result of the conformance run: 'pass' means every step matched expectations; 'fail' means at least one step produced a state mismatch or unexpected guard result; 'error' means the runner itself encountered an unhandled exception (e.g. invalid fixture JSON, kernel panic). LLM repair prompts MUST treat 'fail' and 'error' differently — 'fail' points to kernel logic bugs; 'error' points to fixture or tooling issues.",
+      "examples": ["pass", "fail"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Top-level conformance verdict used for pass/fail reporting and regression gating"
+      }
+    }
+  },
+  "$defs": {
+    "TraceStep": {
+      "type": "object",
+      "description": "A single event-processing step in the conformance run. Records the event dispatched, the state transition observed, optional guard evaluations and policy applications that occurred, and an optional delta explaining any mismatch.",
+      "required": ["stepIndex", "event", "stateBefore", "stateAfter"],
+      "additionalProperties": false,
+      "properties": {
+        "stepIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different kernel versions.",
+          "examples": [0, 1]
+        },
+        "event": {
+          "$ref": "#/$defs/Event"
+        },
+        "stateBefore": {
+          "type": "string",
+          "description": "Active state label(s) before the event was dispatched. For a simple linear machine this is a single state name (e.g. 'intake'). Recorded as a string serialization of the kernel's active configuration at the start of the step.",
+          "examples": ["intake", "submitted"]
+        },
+        "stateAfter": {
+          "type": "string",
+          "description": "Active state label(s) after the event was fully processed and all entry/exit actions have run. The runner records the actual observed state, which is compared against expectedStateAfter when present to determine pass/fail.",
+          "examples": ["eligibilityReview", "approved"]
+        },
+        "expectedStateAfter": {
+          "type": "string",
+          "description": "State label(s) the fixture author declared as the expected outcome for this step. Present only when the fixture explicitly asserts a post-step state. When absent the runner records the transition but does not assert correctness for this step.",
+          "examples": ["eligibilityReview", "approved"]
+        },
+        "guardsEvaluated": {
+          "type": "array",
+          "description": "Guard expressions evaluated by the kernel during this step, in document order. Each entry records whether the guard fired or was skipped, enabling diff tooling to identify which guard blocked an expected transition.",
+          "items": { "$ref": "#/$defs/GuardEvaluation" },
+          "examples": [[]]
+        },
+        "policiesApplied": {
+          "type": "array",
+          "description": "Governance policies applied during this step, in application order. Present only when at least one policy changed the step's outcome. Used by diff tooling to distinguish kernel-logic failures from policy-override failures.",
+          "items": { "$ref": "#/$defs/PolicyApplication" },
+          "examples": [[]]
+        },
+        "delta": {
+          "$ref": "#/$defs/Delta"
+        }
+      }
+    },
+    "Event": {
+      "type": "object",
+      "description": "The event dispatched to the kernel evaluator for this step. Contains the event name, the actor that sent it (if known), and an optional payload of case data that was merged into the case file before guard evaluation.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose 'on' value matches this name.",
+          "examples": ["applicationComplete", "$timeout.state"]
+        },
+        "sourceActor": {
+          "type": "string",
+          "description": "Identifier of the actor or system that sent this event (e.g. 'caseworker', 'verificationSystem'). Optional; absent when the event is a synthetic lifecycle signal such as '$join' that has no external origin.",
+          "examples": ["caseworker", "verificationSystem"]
+        },
+        "payload": {
+          "description": "Arbitrary JSON payload carried by the event, merged into the case file before guard evaluation. The payload shape is kernel-document-specific. Absent or null when the event carries no data.",
+          "examples": [{"application": {"isComplete": true}}, {}]
+        }
+      }
+    },
+    "GuardEvaluation": {
+      "type": "object",
+      "description": "The runtime observation of a single guard expression evaluation. Recorded for every guard the kernel tests during a step, regardless of whether it fired. The inputs field is scoped to the paths the FEL expression actually read, making it a compact teaching signal for LLM-assisted repair.",
+      "required": ["guardId", "sourceState", "targetState", "event", "expression", "result", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "guardId": {
+          "type": "string",
+          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple — use the expression field to disambiguate. The id is stable across runs of the same kernel version.",
+          "examples": [
+            "intake->eligibilityReview:applicationComplete",
+            "submitted->approved:approve"
+          ]
+        },
+        "sourceState": {
+          "type": "string",
+          "description": "Source state of the transition whose guard was evaluated. Matches the 'from' state in the kernel lifecycle topology.",
+          "examples": ["intake", "submitted"]
+        },
+        "targetState": {
+          "type": "string",
+          "description": "Target state of the transition whose guard was evaluated. Matches the 'to' state in the kernel lifecycle topology.",
+          "examples": ["eligibilityReview", "approved"]
+        },
+        "event": {
+          "type": "string",
+          "description": "Event name that triggered this guard test. Matches the event.name of the enclosing TraceStep.",
+          "examples": ["applicationComplete", "approve"]
+        },
+        "expression": {
+          "type": "string",
+          "description": "Raw FEL expression text declared in the kernel document for this transition. The load-bearing teaching signal: when guardId is ambiguous (two transitions sharing the same source/target/event triple), expression uniquely identifies which guard blocked the expected path.",
+          "examples": [
+            "caseFile.application.isComplete = true",
+            "caseFile.amount <= 50000"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "FEL expression text — primary teaching signal for LLM repair when a guard blocks an expected transition"
+          }
+        },
+        "result": {
+          "type": "boolean",
+          "description": "True if the guard expression evaluated to a truthy value and the transition fired; false if it evaluated to falsy and the transition was skipped.",
+          "examples": [true, false]
+        },
+        "inputs": {
+          "description": "Subset of the evaluation context actually read by the guard expression, keyed by FEL namespace (e.g. 'caseFile', 'event'). Scoped to referenced paths only so the payload is compact and focused on the data that determined the guard result.",
+          "examples": [{"caseFile": {"application": {"isComplete": true}}}, {"caseFile": {"amount": 3000}}]
+        }
+      }
+    },
+    "PolicyApplication": {
+      "type": "object",
+      "description": "A governance policy applied during a step, recorded when the policy changed or enforced the step outcome. Contains the policy identifier and the parameter bindings resolved at evaluation time.",
+      "required": ["policyId", "parameterBindings"],
+      "additionalProperties": false,
+      "properties": {
+        "policyId": {
+          "type": "string",
+          "description": "Identifier of the governance policy applied (e.g. 'P-01'). Matches the 'id' of a policy entry in the kernel document's governance layer. Used by diff tooling to correlate policy effects across runs.",
+          "examples": ["P-01", "P-11"]
+        },
+        "parameterBindings": {
+          "description": "JSON object containing the resolved parameter bindings passed to the policy at evaluation time. Shape is policy-specific.",
+          "examples": [{"limit": 10}, {"threshold": 50000}]
+        }
+      }
+    },
+    "Delta": {
+      "description": "Discriminated union describing why a step deviated from expectations. The 'kind' field identifies the variant. Present only when the step produced a detectable mismatch. Three variants are defined: 'stateMismatch' (actual post-step state differs from expected), 'guardFalse' (a guard evaluated false when it should have fired), 'policyOverride' (a policy changed the expected outcome).",
+      "oneOf": [
+        { "$ref": "#/$defs/DeltaStateMismatch" },
+        { "$ref": "#/$defs/DeltaGuardFalse" },
+        { "$ref": "#/$defs/DeltaPolicyOverride" }
+      ],
+      "examples": [
+        {"kind": "stateMismatch", "expected": "approved", "actual": "rejected", "cause": "guard false"}
+      ]
+    },
+    "DeltaStateMismatch": {
+      "type": "object",
+      "description": "Delta variant: the actual state after the step differs from the state the fixture author declared as expected. The 'cause' field is an optional human-readable hint about why the mismatch occurred.",
+      "required": ["kind", "expected", "actual"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "stateMismatch",
+          "description": "Discriminant identifying this delta as a state mismatch. Always the literal string 'stateMismatch'.",
+          "examples": ["stateMismatch"]
+        },
+        "expected": {
+          "type": "string",
+          "description": "The state label the fixture declared as the expected post-step state.",
+          "examples": ["approved", "eligibilityReview"]
+        },
+        "actual": {
+          "type": "string",
+          "description": "The state label the kernel evaluator actually transitioned into.",
+          "examples": ["rejected", "intake"]
+        },
+        "cause": {
+          "type": "string",
+          "description": "Optional human-readable explanation of why the mismatch occurred. Populated by the runner when it can diagnose the root cause (e.g. 'guard false on all outgoing transitions').",
+          "examples": ["guard false", "no matching transition for event"]
+        }
+      }
+    },
+    "DeltaGuardFalse": {
+      "type": "object",
+      "description": "Delta variant: a guard expression evaluated false when the fixture expected it to fire. This is the primary teaching signal for LLM-assisted repair — the expression and inputs fields together give the repair agent everything it needs to identify and fix the FEL expression that blocked the expected transition.",
+      "required": ["kind", "guardId", "expression", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "guardFalse",
+          "description": "Discriminant identifying this delta as a guard-false event. Always the literal string 'guardFalse'.",
+          "examples": ["guardFalse"]
+        },
+        "guardId": {
+          "type": "string",
+          "description": "Synthesized guard identifier in the form '{sourceState}->{targetState}:{event}' that identifies the transition whose guard evaluated false. See GuardEvaluation.guardId for disambiguation notes.",
+          "examples": [
+            "reviewed->approved:decide",
+            "submitted->approved:approve"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the blocked transition — primary key for LLM repair targeting"
+          }
+        },
+        "expression": {
+          "type": "string",
+          "description": "The raw FEL expression text that evaluated false. Together with inputs, this is the complete teaching signal: the repair agent can read the expression, see what inputs it received, and determine what change to the kernel document will make it evaluate true.",
+          "examples": [
+            "caseFile.benefit_amount <= caseFile.income_limit",
+            "caseFile.amount <= 50000"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "FEL expression that evaluated false — repair agents use this to identify the specific guard to fix"
+          }
+        },
+        "inputs": {
+          "description": "The evaluation context (scoped to referenced paths) at the moment the guard evaluated false. Keyed by FEL namespace (e.g. 'caseFile'). Together with expression, allows a repair agent to reproduce the failure without re-running the full fixture.",
+          "examples": [
+            {"caseFile": {"benefit_amount": 520, "income_limit": 500}},
+            {"caseFile": {"amount": 75000}}
+          ]
+        }
+      }
+    },
+    "DeltaPolicyOverride": {
+      "type": "object",
+      "description": "Delta variant: a governance policy applied during this step changed the outcome from what the kernel logic alone would have produced. Records what the outcome would have been without the policy and what it became after the policy applied.",
+      "required": ["kind", "policyId", "expectedWithoutPolicy", "actualWithPolicy"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "policyOverride",
+          "description": "Discriminant identifying this delta as a policy-override event. Always the literal string 'policyOverride'.",
+          "examples": ["policyOverride"]
+        },
+        "policyId": {
+          "type": "string",
+          "description": "Identifier of the governance policy that changed the outcome. Matches PolicyApplication.policyId in the same step's policiesApplied array.",
+          "examples": ["P-11", "P-01"]
+        },
+        "expectedWithoutPolicy": {
+          "type": "string",
+          "description": "The state the kernel evaluator would have transitioned into if the named policy had not been applied.",
+          "examples": ["approved", "active"]
+        },
+        "actualWithPolicy": {
+          "type": "string",
+          "description": "The state the kernel evaluator actually transitioned into after the policy was applied.",
+          "examples": ["rejected", "suspended"]
+        }
+      }
+    }
+  }
+}
