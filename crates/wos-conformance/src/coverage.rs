@@ -388,9 +388,14 @@ fn normalize_path(path: &str) -> String {
         .to_string()
 }
 
-/// Return true when a relative path sits inside the expected-traces subtree.
+/// Return true when a relative path sits inside the `expected-traces/`
+/// directory.
+///
+/// Checks that `expected-traces` appears as a whole directory segment (i.e.,
+/// `/expected-traces/` or the path starts with `expected-traces/`), so a file
+/// named `expected-traces-sample.json` is **not** excluded.
 fn is_expected_traces_path(rel: &str) -> bool {
-    rel.contains("expected-traces")
+    rel.starts_with("expected-traces/") || rel.contains("/expected-traces/")
 }
 
 fn is_expected_traces_path_buf(path: &Path) -> bool {
@@ -926,6 +931,27 @@ mod tests {
             orphans.is_empty(),
             "expected-traces files must not appear in orphan list; got: {orphans:?}"
         );
+    }
+
+    // ── is_expected_traces_path ───────────────────────────────────────────
+
+    #[test]
+    fn expected_traces_dir_segment_is_excluded() {
+        // File inside an expected-traces/ directory must be excluded.
+        assert!(is_expected_traces_path(
+            "fixtures/conformance/expected-traces/k-001.json"
+        ));
+        // Path that starts with the directory name directly.
+        assert!(is_expected_traces_path("expected-traces/k-001.json"));
+    }
+
+    #[test]
+    fn expected_traces_filename_substring_is_not_excluded() {
+        // A file whose name merely contains "expected-traces" as a substring
+        // (not as a directory segment) must NOT be excluded.
+        assert!(!is_expected_traces_path(
+            "fixtures/docs/expected-traces-sample.json"
+        ));
     }
 
     // ── promotion candidate detection ─────────────────────────────────────
