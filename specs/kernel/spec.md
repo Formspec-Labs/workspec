@@ -408,11 +408,27 @@ Every provenance record MUST include:
 | `action` | string | REQUIRED | What action was performed. |
 | `inputs` | object | OPTIONAL | Input data for the action. |
 | `outputs` | object | OPTIONAL | Output data from the action. |
+| `transitionTags` | array | REQUIRED for state-transition records with tagged transitions, OPTIONAL otherwise | Semantic tags copied from the firing transition. |
+| `caseFileSnapshot` | object | REQUIRED for `determination` transitions, OPTIONAL otherwise | Canonical snapshot of the case-file state used by the determination. |
 | `inputDigest` | string | OPTIONAL | Cryptographic digest of inputs for tamper detection. |
 | `outputDigest` | string | OPTIONAL | Cryptographic digest of outputs for tamper detection. |
 | `definitionVersion` | string | REQUIRED | Version of the Kernel Document governing this action. |
 | `lifecycleState` | string | REQUIRED | Lifecycle state at the time of the action. |
 | `extensions` | object | OPTIONAL | Extension data. All keys MUST be prefixed with `x-`. |
+
+#### 8.2.1 Snapshot Semantics
+
+When a transition tagged `determination` fires, the processor MUST copy the transition's semantic tags into `transitionTags` on the Facts-tier state-transition record and capture the current case-file state in `caseFileSnapshot` immediately before any transition action or post-transition action mutates the case file. The snapshot records the facts the determination was made from, not the values produced by the determination.
+
+`caseFileSnapshot` MUST contain:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `value` | JSON value | REQUIRED | The case-file state observed at transition fire time. |
+| `jcsCanonical` | string | REQUIRED | Canonical JSON representation of `value` using JCS (RFC 8785) canonicalization semantics. |
+| `sha256` | string | REQUIRED | Lowercase SHA-256 hex digest of `jcsCanonical`. |
+
+Identical case-file state at determination fire time MUST produce byte-identical `jcsCanonical` values and identical `sha256` values. Governance adverse-decision notices (Governance §3.2) and override records (Governance §7.3) use this snapshot as the deterministic factual basis for later explanation, appeal, and audit.
 
 ### 8.3 Tamper Detection
 

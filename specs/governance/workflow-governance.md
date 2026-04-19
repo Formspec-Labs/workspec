@@ -537,10 +537,10 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `holdType` | enum | REQUIRED | The reason for the hold. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`. Extensible via `x-` prefixed values. |
+| `holdType` | enum | REQUIRED | The reason for the hold. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`, `legal-hold`. Extensible via `x-` prefixed values. |
 | `expectedDuration` | string | REQUIRED | ISO 8601 duration or the string `"indefinite"`. |
-| `resumeTrigger` | string | REQUIRED | Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule. |
-| `timeoutAction` | enum | REQUIRED | Action when `expectedDuration` expires without the resume trigger: `escalate`, `auto-resume`, or `cancel`. |
+| `resumeTrigger` | string | REQUIRED except `legal-hold` | Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule. `legal-hold` has no event-based resume trigger and is released only by an explicit legal-hold-release fact. |
+| `timeoutAction` | enum | REQUIRED except `legal-hold` | Action when `expectedDuration` expires without the resume trigger: `escalate`, `auto-resume`, or `cancel`. `legal-hold` has no timeout action. |
 | `notificationTemplateRef` | string | OPTIONAL | Reference to a Notification Template sidecar for hold notifications. |
 | `description` | string | OPTIONAL | Human-readable description of this hold policy. |
 
@@ -554,6 +554,7 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 | `pending-legislation` | indefinite | `legislationEnacted` | N/A |
 | `pending-related-case` | indefinite | `relatedCaseResolved` | N/A |
 | `voluntary-hold` | P90D | `holdReleased` | `auto-resume` |
+| `legal-hold` | indefinite | N/A | N/A |
 
 ### 12.4 Interaction with Timers
 
