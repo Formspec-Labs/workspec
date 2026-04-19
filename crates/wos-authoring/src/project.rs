@@ -74,17 +74,53 @@ impl WosProject {
     // ── Lifecycle ─────────────────────────────────────────────────────────
 
     /// Add a top-level state. Errors if the id already exists.
+    ///
+    /// `label` is stored as the state's `description`. `metadata` is stored
+    /// under `state.extensions["x-meta"]`. Both are optional.
     pub fn add_state(&mut self, id: impl Into<String>, kind: StateKind) -> AuthoringResult {
         self.core.dispatch(Command::AddState {
             id: id.into(),
             kind,
+            description: None,
+            metadata: None,
         })
     }
 
-    /// Remove a top-level state. Emits a warning (collected in diagnostics)
-    /// for each dangling transition targeting the removed state.
+    /// Add a top-level state with an optional human-readable label and metadata.
+    ///
+    /// Equivalent to `add_state` when both optional args are `None`.
+    pub fn add_state_described(
+        &mut self,
+        id: impl Into<String>,
+        kind: StateKind,
+        label: Option<String>,
+        metadata: Option<serde_json::Value>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddState {
+            id: id.into(),
+            kind,
+            description: label,
+            metadata,
+        })
+    }
+
+    /// Remove a top-level state and all transitions that point to it.
+    ///
+    /// Unlike the earlier warn-only behavior, inbound transitions from other
+    /// states that target the removed state are pruned atomically with the
+    /// state deletion. The `AppliedCommand` label encodes the count of
+    /// transitions removed for audit purposes.
     pub fn remove_state(&mut self, id: impl Into<String>) -> AuthoringResult {
         self.core.dispatch(Command::RemoveState { id: id.into() })
+    }
+
+    /// Set the document-level initial state.
+    ///
+    /// Errors if `state_id` does not exist in `lifecycle.states`.
+    pub fn set_initial_state(&mut self, state_id: impl Into<String>) -> AuthoringResult {
+        self.core.dispatch(Command::SetInitialState {
+            state_id: state_id.into(),
+        })
     }
 
     /// Rename a top-level state, repointing all incoming transitions and
@@ -151,6 +187,22 @@ impl WosProject {
     /// any transition action.
     pub fn remove_actor(&mut self, id: impl Into<String>) -> AuthoringResult {
         self.core.dispatch(Command::RemoveActor { id: id.into() })
+    }
+
+    /// Set an extension key on a specific actor (kernel §10.6 actorExtension).
+    ///
+    /// `key` must begin with `x-`. Errors if the actor does not exist.
+    pub fn add_actor_extension(
+        &mut self,
+        actor_id: impl Into<String>,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddActorExtension {
+            actor_id: actor_id.into(),
+            key: key.into(),
+            value,
+        })
     }
 
     // ── Governance ────────────────────────────────────────────────────────

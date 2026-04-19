@@ -69,12 +69,25 @@ pub(crate) enum Command {
         id: String,
         /// Atomic, compound, parallel, or final.
         kind: StateKind,
+        /// Optional human-readable description stored on the state.
+        description: Option<String>,
+        /// Optional metadata stored under `state.extensions.x-meta`.
+        metadata: Option<serde_json::Value>,
     },
 
     /// Remove a top-level state by identifier.
+    ///
+    /// Also removes any outgoing transitions from other states that target
+    /// the removed state, preventing dangling references.
     RemoveState {
         /// Identifier of the state to remove.
         id: String,
+    },
+
+    /// Set the document-level initial state identifier.
+    SetInitialState {
+        /// State identifier to make the initial state.
+        state_id: String,
     },
 
     /// Rename a top-level state.
@@ -120,6 +133,16 @@ pub(crate) enum Command {
     RemoveActor {
         /// Identifier of the actor to remove.
         id: String,
+    },
+
+    /// Set an extension key on a specific actor (kernel §10.6 actorExtension).
+    AddActorExtension {
+        /// Identifier of the actor to annotate.
+        actor_id: String,
+        /// Extension key; must begin with `x-`.
+        key: String,
+        /// JSON value to store.
+        value: serde_json::Value,
     },
 
     // ── Governance ─────────────────────────────────────────────────────────
@@ -199,6 +222,12 @@ mod tests {
         let _add_state = Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        };
+
+        let _set_initial_state = Command::SetInitialState {
+            state_id: "draft".into(),
         };
 
         let _remove_state = Command::RemoveState { id: "draft".into() };
@@ -257,6 +286,12 @@ mod tests {
             key: "x-custom-meta".into(),
             value: serde_json::json!({ "owner": "procurement" }),
         };
+
+        let _add_actor_ext = Command::AddActorExtension {
+            actor_id: "reviewer".into(),
+            key: "x-department".into(),
+            value: serde_json::json!("finance"),
+        };
     }
 
     /// Verify that a Command serializes to the expected JSON structure.
@@ -265,6 +300,8 @@ mod tests {
         let cmd = Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         };
 
         let json = serde_json::to_value(&cmd).expect("serialization must succeed");

@@ -162,7 +162,13 @@ impl RawWosProject {
 
     // ── AddState handler ──────────────────────────────────────────────────
 
-    fn apply_add_state(&mut self, id: String, kind: StateKind) -> CommandResult {
+    fn apply_add_state(
+        &mut self,
+        id: String,
+        kind: StateKind,
+        description: Option<String>,
+        metadata: Option<serde_json::Value>,
+    ) -> CommandResult {
         if self.doc.lifecycle.states.contains_key(&id) {
             return Err(AuthoringDiagnostic::error(
                 format!("/lifecycle/states/{id}"),
@@ -170,7 +176,12 @@ impl RawWosProject {
             ));
         }
 
-        self.doc.lifecycle.states.insert(id.clone(), empty_state(kind));
+        let mut state = empty_state(kind);
+        state.description = description;
+        if let Some(meta) = metadata {
+            state.extensions.insert("x-meta".to_owned(), meta);
+        }
+        self.doc.lifecycle.states.insert(id.clone(), state);
 
         Ok(AppliedCommand::with_inverse(
             format!("AddState({id})"),
@@ -188,29 +199,51 @@ impl RawWosProject {
             ));
         }
 
-        // Warn about dangling transitions that target the removed state.
-        for (src_id, src_state) in &self.doc.lifecycle.states {
-            for transition in &src_state.transitions {
-                if transition.target == id {
-                    self.diagnostics.push(AuthoringDiagnostic {
-                        command_index: None,
-                        severity: Severity::Warning,
-                        path: format!(
-                            "/lifecycle/states/{src_id}/transitions/{}",
-                            transition.event
-                        ),
-                        message: format!(
-                            "transition from '{src_id}' on '{event}' targets removed state '{id}'",
-                            event = transition.event
-                        ),
-                    });
-                }
-            }
+        // Count outgoing transitions from the state being removed (they
+        // disappear with the state).
+        let outgoing_count = self
+            .doc
+            .lifecycle
+            .states
+            .get(&id)
+            .map(|s| s.transitions.len())
+            .unwrap_or(0);
+
+        // Remove dangling inbound transitions from all other states that
+        // target the removed state, and count them.
+        let mut inbound_removed: usize = 0;
+        for src_state in self.doc.lifecycle.states.values_mut() {
+            let before = src_state.transitions.len();
+            src_state.transitions.retain(|t| t.target != id);
+            inbound_removed += before - src_state.transitions.len();
         }
+
+        let total_removed = outgoing_count + inbound_removed;
 
         self.doc.lifecycle.states.shift_remove(&id);
 
-        Ok(AppliedCommand::without_inverse(format!("RemoveState({id})")))
+        Ok(AppliedCommand::without_inverse(format!(
+            "RemoveState({id}); removed {total_removed} transitions"
+        )))
+    }
+
+    // ── SetInitialState handler ───────────────────────────────────────────
+
+    fn apply_set_initial_state(&mut self, state_id: String) -> CommandResult {
+        if !self.doc.lifecycle.states.contains_key(&state_id) {
+            return Err(AuthoringDiagnostic::error(
+                format!("/lifecycle/initialState"),
+                format!("state '{state_id}' does not exist; add it before setting as initial"),
+            ));
+        }
+
+        let prior = self.doc.lifecycle.initial_state.clone();
+        self.doc.lifecycle.initial_state = state_id.clone();
+
+        Ok(AppliedCommand::with_inverse(
+            format!("SetInitialState({state_id})"),
+            Command::SetInitialState { state_id: prior },
+        ))
     }
 
     // ── RenameState handler ───────────────────────────────────────────────
@@ -371,6 +404,40 @@ impl RawWosProject {
         self.doc.actors.remove(index);
 
         Ok(AppliedCommand::without_inverse(format!("RemoveActor({id})")))
+    }
+
+    // ── AddActorExtension handler ─────────────────────────────────────────
+
+    fn apply_add_actor_extension(
+        &mut self,
+        actor_id: String,
+        key: String,
+        value: serde_json::Value,
+    ) -> CommandResult {
+        if !key.starts_with("x-") {
+            return Err(AuthoringDiagnostic::error(
+                format!("/actors/{actor_id}/extensions/{key}"),
+                format!("extension key '{key}' must start with 'x-'"),
+            ));
+        }
+
+        let actor = self
+            .doc
+            .actors
+            .iter_mut()
+            .find(|a| a.id == actor_id)
+            .ok_or_else(|| {
+                AuthoringDiagnostic::error(
+                    format!("/actors/{actor_id}"),
+                    format!("actor '{actor_id}' not found"),
+                )
+            })?;
+
+        actor.extensions.insert(key.clone(), value);
+
+        Ok(AppliedCommand::without_inverse(format!(
+            "AddActorExtension({actor_id}, {key})"
+        )))
     }
 
     // ── SetImpactLevel handler ────────────────────────────────────────────
@@ -603,8 +670,14 @@ impl RawWosProject {
         let before = self.doc.clone();
 
         let result = match cmd {
-            Command::AddState { id, kind } => self.apply_add_state(id, kind),
+            Command::AddState {
+                id,
+                kind,
+                description,
+                metadata,
+            } => self.apply_add_state(id, kind, description, metadata),
             Command::RemoveState { id } => self.apply_remove_state(id),
+            Command::SetInitialState { state_id } => self.apply_set_initial_state(state_id),
             Command::RenameState { old_id, new_id } => self.apply_rename_state(old_id, new_id),
             Command::AddTransition {
                 from_state,
@@ -614,6 +687,11 @@ impl RawWosProject {
             } => self.apply_add_transition(from_state, to_state, guard, event),
             Command::AddActor { id, kind } => self.apply_add_actor(id, kind),
             Command::RemoveActor { id } => self.apply_remove_actor(id),
+            Command::AddActorExtension {
+                actor_id,
+                key,
+                value,
+            } => self.apply_add_actor_extension(actor_id, key, value),
             Command::SetImpactLevel { level } => self.apply_set_impact_level(level),
             Command::AddContract {
                 name,
@@ -737,6 +815,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .expect("AddState must succeed on an empty project");
 
@@ -755,6 +835,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .expect("first AddState must succeed");
 
@@ -762,6 +844,8 @@ mod tests {
             .dispatch(Command::AddState {
                 id: "draft".into(),
                 kind: StateKind::Compound,
+                description: None,
+                metadata: None,
             })
             .expect_err("duplicate AddState must return an error diagnostic");
 
@@ -782,11 +866,15 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "submitted".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddState {
             id: "approved".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
 
@@ -817,6 +905,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "approved".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
 
@@ -844,6 +934,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "submitted".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
 
@@ -901,6 +993,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         assert!(p.snapshot().lifecycle.states.contains_key("draft"));
@@ -917,6 +1011,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.undo().unwrap();
@@ -931,6 +1027,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "a".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.undo().unwrap();
@@ -940,6 +1038,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "b".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         assert!(!p.can_redo());
@@ -955,6 +1055,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "s1".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddActor {
@@ -1006,6 +1108,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "s1".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddActor {
@@ -1034,12 +1138,16 @@ mod tests {
             .dispatch(Command::AddState {
                 id: "s1".into(),
                 kind: StateKind::Atomic,
+                description: None,
+                metadata: None,
             })
             .unwrap();
         let _ = p.dispatch(Command::AddState {
             // Duplicate id — must fail.
             id: "s1".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         });
 
         // Only the first (successful) dispatch counted toward history.
@@ -1218,6 +1326,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "draft".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
 
@@ -1239,11 +1349,15 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "a".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddState {
             id: "b".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddTransition {
@@ -1271,6 +1385,8 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "start".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.doc.lifecycle.initial_state = "start".into();
@@ -1304,11 +1420,15 @@ mod tests {
         p.dispatch(Command::AddState {
             id: "a".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
         p.dispatch(Command::AddState {
             id: "b".into(),
             kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
         })
         .unwrap();
 
@@ -1541,6 +1661,8 @@ mod tests {
             p.dispatch(Command::AddState {
                 id: format!("s{i}"),
                 kind: StateKind::Atomic,
+                description: None,
+                metadata: None,
             })
             .expect("dispatch AddState");
         }
