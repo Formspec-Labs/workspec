@@ -412,61 +412,85 @@
         "taskId": {
           "type": "string",
           "minLength": 1,
-          "description": "Processor task identifier. Stable for idempotency and provenance."
+          "description": "Processor-assigned task identifier. Stable for idempotency, provenance, and delegation lookups throughout the task lifecycle.",
+          "examples": ["task-1", "task-intake-2026-04-09"]
         },
         "instanceId": {
           "type": "string",
           "format": "uri",
-          "description": "WOS CaseInstance identifier."
+          "description": "Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance.",
+          "examples": [
+            "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
+            "https://agency.gov/cases/2026/12345"
+          ]
         },
         "contractRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Kernel contract map key used by the task."
+          "description": "Key into the Kernel Document's contracts map governing this task's form definition and response schema.",
+          "examples": ["intakeApplication", "technicalReview", "eligibilityDetermination"]
         },
         "definitionUrl": {
           "type": "string",
           "format": "uri",
-          "description": "Formspec Definition URL. Must match response.definitionUrl."
+          "description": "Formspec Definition URL. Pinned at task creation time; must match response.definitionUrl to pass envelope validation.",
+          "examples": ["https://agency.gov/forms/intake", "urn:formspec:benefits-intake:2.0"]
         },
         "definitionVersion": {
           "type": "string",
           "minLength": 1,
-          "description": "Pinned Formspec Definition version. Must match response.definitionVersion."
+          "description": "Pinned Formspec Definition version. Must match response.definitionVersion to pass envelope validation.",
+          "examples": ["1.0.0", "2025.3.0"]
         },
         "binding": {
           "type": "string",
           "const": "formspec",
-          "description": "Task binding discriminator."
+          "description": "Task binding discriminator. Always 'formspec' in FormspecTaskContext — identifies this context shape as requiring Formspec rendering.",
+          "examples": ["formspec"]
         },
         "assignedActor": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor assigned by the createTask action."
+          "description": "Actor assigned to complete this task, as set by the createTask action. The form renderer uses this to authorize task access.",
+          "examples": ["applicant-123", "reviewer-agency-456"]
         },
         "prefillData": {
           "type": "object",
-          "description": "Host-provided initial values for rendering."
+          "description": "Host-provided initial field values pre-populated into the form before the actor sees it. Applied after prefillMappingRef if both are present.",
+          "examples": [
+            { "applicantName": "Jane Doe", "income": 42000 },
+            { "vendorId": "V-8821", "contractAmount": 150000 }
+          ]
         },
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to prefill the Response."
+          "description": "URI of the Mapping document used to derive prefill field values from current case state before rendering the form.",
+          "examples": [
+            "https://agency.gov/mappings/intake-prefill",
+            "urn:wos:mapping:benefits-intake-prefill:1.0"
+          ]
         },
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "Mapping document used to project a completed Response into case state."
+          "description": "URI of the Mapping document used to project a completed Formspec Response into case state on task completion.",
+          "examples": [
+            "https://agency.gov/mappings/intake-response",
+            "urn:wos:mapping:benefits-intake-response:1.0"
+          ]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
-          "description": "Task deadline."
+          "description": "Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.",
+          "examples": ["2026-04-20T17:00:00Z", "2026-05-01T00:00:00Z"]
         },
         "impactLevel": {
           "type": "string",
           "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
-          "description": "Effective task impact level."
+          "description": "Effective task impact level. Drives UI warnings and access-control enforcement in the Formspec renderer.",
+          "examples": ["rights-impacting", "operational"]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
