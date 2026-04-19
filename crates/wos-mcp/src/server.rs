@@ -168,6 +168,87 @@ async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> 
                             },
                             "required": ["project_id"]
                         }
+                    },
+                    {
+                        "name": "wos_add_state",
+                        "description": "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "state_id": { "type": "string", "description": "Unique state identifier." },
+                                "kind": { "type": "string", "enum": ["atomic", "compound", "parallel", "final"], "description": "State kind; defaults to atomic." },
+                                "label": { "type": "string", "description": "Optional human-readable description stored on the state." },
+                                "metadata": { "type": "object", "description": "Optional metadata stored under state.extensions.x-meta." }
+                            },
+                            "required": ["project_id", "state_id"]
+                        }
+                    },
+                    {
+                        "name": "wos_add_transition",
+                        "description": "Add a transition between two existing states. Returns {\"from\": \"...\", \"to\": \"...\", \"trigger\": \"...\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "from": { "type": "string", "description": "Source state identifier." },
+                                "to": { "type": "string", "description": "Target state identifier." },
+                                "trigger": { "type": "string", "description": "Optional event name that fires the transition." },
+                                "guard": { "type": "string", "description": "Optional FEL guard expression." }
+                            },
+                            "required": ["project_id", "from", "to"]
+                        }
+                    },
+                    {
+                        "name": "wos_set_initial_state",
+                        "description": "Set the lifecycle initial state for a registered project. The state must already exist. Returns {\"state_id\": \"...\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "state_id": { "type": "string", "description": "Identifier of an existing state to set as initial." }
+                            },
+                            "required": ["project_id", "state_id"]
+                        }
+                    },
+                    {
+                        "name": "wos_remove_state",
+                        "description": "Remove a state and all transitions referencing it. Returns {\"state_id\": \"...\", \"transitions_removed\": N}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "state_id": { "type": "string", "description": "Identifier of the state to remove." }
+                            },
+                            "required": ["project_id", "state_id"]
+                        }
+                    },
+                    {
+                        "name": "wos_add_actor",
+                        "description": "Declare a human or system actor on a registered project. Returns {\"actor_id\": \"...\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "actor_id": { "type": "string", "description": "Unique actor identifier." },
+                                "kind": { "type": "string", "enum": ["human", "system"], "description": "Actor kind; defaults to human." }
+                            },
+                            "required": ["project_id", "actor_id"]
+                        }
+                    },
+                    {
+                        "name": "wos_add_actor_extension",
+                        "description": "Attach an x-prefixed extension key to an existing actor (kernel §10.6). Returns {\"actor_id\": \"...\", \"key\": \"...\"}.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "project_id": { "type": "string", "description": "UUID of the open project." },
+                                "actor_id": { "type": "string", "description": "Identifier of an existing actor." },
+                                "key": { "type": "string", "description": "Extension key; must start with x-." },
+                                "value": { "description": "JSON value to store under the extension key." }
+                            },
+                            "required": ["project_id", "actor_id", "key", "value"]
+                        }
                     }
                 ]
             }),

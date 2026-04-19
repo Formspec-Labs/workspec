@@ -250,3 +250,49 @@ fn unknown_tool_name_returns_invalid_params_error() {
         "unknown tool must map to INVALID_PARAMS, not INTERNAL_ERROR"
     );
 }
+
+/// `tools/list` must advertise exactly 11 tools: 5 pre-Task-4 plus the 6
+/// Task-4 lifecycle and actor tools.  Any regression in the list manifest
+/// (adding or removing a tool without updating this count) is caught here.
+#[test]
+fn tools_list_advertises_eleven_tools() {
+    let requests = vec![serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 20,
+        "method": "tools/list",
+        "params": {}
+    })];
+
+    let responses = run_sequence(&requests);
+    assert_eq!(responses.len(), 1);
+
+    let tools = responses[0]["result"]["tools"]
+        .as_array()
+        .expect("tools must be an array");
+
+    let names: Vec<&str> = tools
+        .iter()
+        .filter_map(|t| t["name"].as_str())
+        .collect();
+
+    assert_eq!(
+        names.len(),
+        11,
+        "tools/list must advertise exactly 11 tools; got: {names:?}"
+    );
+
+    // Verify all 6 Task-4 tools are present by name.
+    for expected in [
+        "wos_add_state",
+        "wos_add_transition",
+        "wos_set_initial_state",
+        "wos_remove_state",
+        "wos_add_actor",
+        "wos_add_actor_extension",
+    ] {
+        assert!(
+            names.contains(&expected),
+            "tools/list must include '{expected}'; got: {names:?}"
+        );
+    }
+}
