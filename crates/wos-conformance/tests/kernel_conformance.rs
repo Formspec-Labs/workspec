@@ -811,6 +811,12 @@ fn k047_relationship_isolation() {
     assert_fixture_passes("k-047-relationship-isolation.json");
 }
 
+/// K-DET-001: Determination transitions carry the pre-transition case-file snapshot.
+#[test]
+fn kdet001_determination_snapshot() {
+    assert_fixture_passes("k-det-001-determination-snapshot.json");
+}
+
 // ── Fixture parse validation ────────────────────────────────────
 
 /// Validate that all fixture JSON files parse as `ConformanceFixture` and that

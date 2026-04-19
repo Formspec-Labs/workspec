@@ -154,6 +154,16 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    RuleMetadata {
+        id: "K-DET-001",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Determination-tagged transitions MUST emit the pre-transition case-file snapshot in Facts-tier provenance.",
+        fixtures: &["crates/wos-conformance/tests/fixtures/k-det-001-determination-snapshot.json"],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
 ];
 
 #[cfg(test)]

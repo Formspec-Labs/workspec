@@ -1,0 +1,41 @@
+{
+  "id": "K-DET-001-determination-snapshot",
+  "rule": "K-DET-001",
+  "description": "Determination-tagged transitions MUST emit a canonical pre-transition case-file snapshot in the Facts tier (Kernel S8.2.1).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/due-process.json",
+    "governance": "../../../../fixtures/governance/due-process-governance.json"
+  },
+  "initial_case_state": {
+    "determination": "pending"
+  },
+  "event_sequence": [
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "pendingDetermination",
+      "to": "adverseNotice",
+      "event": "denied"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "record_kind": "stateTransition",
+      "fromState": "pendingDetermination",
+      "toState": "adverseNotice",
+      "event": "denied",
+      "transitionTags": ["determination", "adverse-decision"],
+      "caseFileSnapshot": {
+        "value": {
+          "determination": "pending"
+        },
+        "jcsCanonical": "{\"determination\":\"pending\"}",
+        "sha256": "9c84b9f37f292be68d24c9865cb0a93337d3fb8bc6261563e9513ee13a3c9e81"
+      }
+    }
+  ]
+}
