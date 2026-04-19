@@ -187,11 +187,18 @@ pub async fn wos_describe_document(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Extract the `project_id` string from the args object.
+///
+/// Returns `MissingArgument` when the key is absent.
+/// Returns `InvalidArguments` when the key exists but is not a non-empty string,
+/// so callers can distinguish a missing field from a type mismatch.
 fn require_project_id(args: &Value) -> Result<&str, ToolError> {
-    args.get("project_id")
-        .and_then(Value::as_str)
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| ToolError::MissingArgument("project_id".to_string()))
+    match args.get("project_id") {
+        None => Err(ToolError::MissingArgument("project_id".to_string())),
+        Some(v) => v
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ToolError::InvalidArguments("'project_id' must be a non-empty string".to_string())),
+    }
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -337,6 +344,34 @@ mod tests {
         // Re-parse to verify the exported JSON is a valid kernel document.
         let doc: serde_json::Value = serde_json::from_str(doc_json).unwrap();
         assert_eq!(doc["$wosKernel"], json!("1.0"));
+    }
+
+    // ── require_project_id error classification ───────────────────────────
+
+    /// Absent `project_id` key must produce `MissingArgument`.
+    #[tokio::test]
+    async fn missing_project_id_gives_missing_argument_error() {
+        let mut registry = ProjectRegistry::new();
+        let err = wos_export_document(&mut registry, "", json!({}))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ToolError::MissingArgument(_)),
+            "absent project_id must yield MissingArgument; got {err:?}"
+        );
+    }
+
+    /// `project_id` present but wrong type must produce `InvalidArguments`.
+    #[tokio::test]
+    async fn wrong_type_project_id_gives_invalid_arguments_error() {
+        let mut registry = ProjectRegistry::new();
+        let err = wos_export_document(&mut registry, "", json!({ "project_id": 123 }))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ToolError::InvalidArguments(_)),
+            "wrong-type project_id must yield InvalidArguments; got {err:?}"
+        );
     }
 
     // ── wos_load_document ─────────────────────────────────────────────────

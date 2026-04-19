@@ -142,12 +142,19 @@ pub async fn wos_remove_state(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Extract a required string argument from the args object.
+/// Extract a required non-empty string argument from the args object.
+///
+/// Returns `MissingArgument` when the key is absent.
+/// Returns `InvalidArguments` when the key exists but is not a non-empty string,
+/// so callers can distinguish a missing field from a type mismatch.
 fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolError> {
-    args.get(key)
-        .and_then(Value::as_str)
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| ToolError::MissingArgument(key.to_string()))
+    match args.get(key) {
+        None => Err(ToolError::MissingArgument(key.to_string())),
+        Some(v) => v
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))),
+    }
 }
 
 /// Parse the optional `kind` argument to `StateKind`, defaulting to `Atomic`.
@@ -403,6 +410,37 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, ToolError::InvalidArguments(_)));
+    }
+
+    // ── require_string_arg error classification ───────────────────────────
+
+    /// Absent key must produce `MissingArgument`, not `InvalidArguments`.
+    #[tokio::test]
+    async fn missing_project_id_gives_missing_argument_error() {
+        let mut registry = ProjectRegistry::new();
+        // No project_id in args at all.
+        let err = wos_add_state(&mut registry, "", json!({ "state_id": "s1" }))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ToolError::MissingArgument(_)),
+            "absent key must yield MissingArgument; got {err:?}"
+        );
+    }
+
+    /// Present key with wrong type must produce `InvalidArguments`, not
+    /// `MissingArgument`.
+    #[tokio::test]
+    async fn wrong_type_project_id_gives_invalid_arguments_error() {
+        let mut registry = ProjectRegistry::new();
+        // project_id is a number, not a string.
+        let err = wos_add_state(&mut registry, "", json!({ "project_id": 42, "state_id": "s1" }))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ToolError::InvalidArguments(_)),
+            "wrong-type key must yield InvalidArguments; got {err:?}"
+        );
     }
 
     // ── Test helpers ──────────────────────────────────────────────────────
