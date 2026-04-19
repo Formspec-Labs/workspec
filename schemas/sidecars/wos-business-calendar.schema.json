@@ -124,6 +124,20 @@
       "description": "Date this calendar expires (ISO 8601 date). A processor MUST ignore an expired calendar and fall back to wall-clock time.",
       "examples": ["2026-09-30"]
     },
+    "appliesWhen": {
+      "type": "string",
+      "minLength": 1,
+      "description": "FEL expression evaluated against the case file to determine whether this calendar applies to a given case. Multi-jurisdiction workflows declare one calendar per jurisdiction and use this expression to route a case to the right one (Business Calendar §7.1). Evaluated whenever an SLA or temporal-parameter resolution requires a calendar; calendars whose expression evaluates false are excluded from composition. When absent, the calendar applies unconditionally to every case targeting the same workflow — equivalent to `appliesWhen: 'true'`. The expression sees the same evaluation context as governance FEL expressions: case-file fields, lifecycle state, actor metadata. See Kernel §7 for FEL grammar.",
+      "examples": [
+        "applicant.jurisdiction == 'US-NY'",
+        "applicant.address.state == 'CA'",
+        "case.region == 'federal' or case.region == 'dc'"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Routes a case to the right calendar in multi-jurisdiction workflows by FEL expression"
+      }
+    },
     "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
