@@ -18,8 +18,8 @@
     "$wosAssertionLibrary": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Assertion Gate Library specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "Document type marker identifying this as a WOS Assertion Gate Library sidecar document (Governance S5.1). MUST be the string '1.0'. Processors use this field to dispatch to the assertion library parser; its absence means the document is not a recognized Assertion Gate Library.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Assertion Gate Library sidecar"
@@ -29,23 +29,24 @@
     "url": {
       "type": "string",
       "format": "uri",
-      "description": "Canonical URI identifier for this library.",
-      "examples": ["https://agency.gov/assertion-libraries/income-verification"]
+      "description": "Canonical URI that uniquely identifies this assertion library. Used to reference the library from pipeline stages and governance documents.",
+      "examples": ["https://agency.gov/assertion-libraries/income-verification", "https://agency.gov/assertion-libraries/document-extraction"]
     },
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this library document.",
-      "examples": ["1.0.0"]
+      "description": "Semantic version of this assertion library document. Allows pipelines to pin a specific library version for reproducibility.",
+      "examples": ["1.0.0", "2025.3.1"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this assertion library.",
+      "description": "Human-readable name for this assertion library. Displayed in tooling and governance dashboards.",
       "examples": ["Income Verification Assertions", "Document Extraction Assertions"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of this library's purpose."
+      "description": "Human-readable description of this library's purpose and the domain it covers. Used in tooling and governance documentation.",
+      "examples": ["Reusable assertion gates for income verification pipelines — arithmetic, source-grounding, and temporal checks.", "Assertion gates for AI-assisted document extraction, covering format, consistency, and cross-document checks."]
     },
     "assertions": {
       "type": "array",
@@ -93,14 +94,14 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique assertion identifier. Referenced by pipeline stages.",
+          "description": "Unique assertion identifier within this library. Referenced by assertion-gate pipeline stages to include this assertion by name rather than inline.",
           "examples": ["incomeSourceGrounded", "totalIncomeArithmetic", "filingDateRange"]
         },
         "type": {
           "type": "string",
           "enum": ["source-grounded", "arithmetic", "range", "consistency", "format", "cross-document", "temporal"],
-          "description": "Assertion gate type (Governance S5.4).",
-          "examples": ["source-grounded", "arithmetic"],
+          "description": "Assertion gate type determining the verification method applied to the data (Governance S5.4). 'source-grounded': checks that extracted field values appear verbatim in referenced source documents. 'arithmetic': validates that a FEL expression over numeric fields holds. 'range': checks that a value falls within declared bounds. 'consistency': asserts agreement between two pipeline stages or fields. 'format': structural or pattern validation. 'cross-document': checks consistency across multiple documents. 'temporal': validates date/time relationships.",
+          "examples": ["source-grounded", "arithmetic", "temporal"],
           "x-lm": {
             "critical": true,
             "intent": "Determines the verification method for this assertion"
@@ -109,7 +110,7 @@
         "expression": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression defining the assertion constraint.",
+          "description": "FEL expression defining the assertion constraint. Evaluated in the pipeline's data context; MUST evaluate to a boolean. Required for arithmetic, range, and temporal assertion types.",
           "examples": [
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
@@ -117,23 +118,25 @@
         },
         "fields": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Fields subject to this assertion.",
-          "examples": [["applicantIncome", "filingDate"]]
+          "items": { "type": "string", "minLength": 1, "description": "Field path relative to the pipeline data context that this assertion verifies.", "examples": ["applicantIncome", "employerName", "filingDate"] },
+          "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
+          "examples": [["applicantIncome", "filingDate"], ["wageIncome", "employerName", "filingDate"]]
         },
         "referenceStage": {
           "type": "string",
-          "description": "Reference to a pipeline stage for consistency checking."
+          "description": "Reference to a prior pipeline stage whose output is compared for consistency checking. Used with consistency and cross-document assertion types.",
+          "examples": ["extract", "normalize"]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this assertion checks.",
-          "examples": ["Extracted income values must appear in the source pay stub document"]
+          "description": "Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.",
+          "examples": ["Extracted income values must appear in the source pay stub document", "Total income must equal the sum of wage, investment, and other income components"]
         },
         "rejectionPolicy": {
           "type": "string",
           "enum": ["retryWithCorrections", "escalateToSupervisor", "holdPendingData", "failWithExplanation"],
-          "description": "Default rejection policy when this assertion fails."
+          "description": "Default rejection policy when this assertion fails. Overrides the enclosing stage's rejectionPolicy for this specific assertion.",
+          "examples": ["retryWithCorrections", "escalateToSupervisor"]
         }
       }
     }
