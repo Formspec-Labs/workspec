@@ -251,11 +251,12 @@ fn unknown_tool_name_returns_invalid_params_error() {
     );
 }
 
-/// `tools/list` must advertise exactly 11 tools: 5 pre-Task-4 plus the 6
-/// Task-4 lifecycle and actor tools.  Any regression in the list manifest
-/// (adding or removing a tool without updating this count) is caught here.
+/// `tools/list` must advertise exactly 22 tools:
+///   1 ping + 4 document + 4 lifecycle + 2 actor + 5 gov/AI + 6 validation/query.
+/// Any regression in the list manifest (adding or removing a tool without
+/// updating this count) is caught here.
 #[test]
-fn tools_list_advertises_eleven_tools() {
+fn tools_list_advertises_twenty_two_tools() {
     let requests = vec![serde_json::json!({
         "jsonrpc": "2.0",
         "id": 20,
@@ -277,22 +278,99 @@ fn tools_list_advertises_eleven_tools() {
 
     assert_eq!(
         names.len(),
-        11,
-        "tools/list must advertise exactly 11 tools; got: {names:?}"
+        22,
+        "tools/list must advertise exactly 22 tools; got {}: {names:?}",
+        names.len()
     );
 
-    // Verify all 6 Task-4 tools are present by name.
+    // Verify all Task-5 governance/AI tools are present.
     for expected in [
-        "wos_add_state",
-        "wos_add_transition",
-        "wos_set_initial_state",
-        "wos_remove_state",
-        "wos_add_actor",
-        "wos_add_actor_extension",
+        "wos_add_due_process_path",
+        "wos_add_assertion_gate",
+        "wos_set_impact_level",
+        "wos_add_ai_agent",
+        "wos_add_deontic_constraint",
     ] {
         assert!(
             names.contains(&expected),
             "tools/list must include '{expected}'; got: {names:?}"
+        );
+    }
+
+    // Verify all Task-6 validation/query tools are present.
+    for expected in [
+        "wos_lint",
+        "wos_run_conformance",
+        "wos_preview_state_graph",
+        "wos_search",
+        "wos_list_projects",
+        "wos_close_project",
+    ] {
+        assert!(
+            names.contains(&expected),
+            "tools/list must include '{expected}'; got: {names:?}"
+        );
+    }
+}
+
+/// Verify that every tool name in `tools/list` has a registered dispatch handler.
+///
+/// This test calls every tool by name with deliberately invalid arguments (an
+/// empty object). The expected outcome is either a successful result OR a
+/// `ToolFailed` error — but never `UnknownTool` (which maps to INVALID_PARAMS
+/// at the JSON-RPC layer). An INVALID_PARAMS error for a tool that was
+/// advertised in `tools/list` is a catalog-dispatch mismatch.
+#[test]
+fn every_advertised_tool_has_a_dispatch_handler() {
+    // First collect all tool names from tools/list.
+    let list_requests = vec![serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {}
+    })];
+    let list_responses = run_sequence(&list_requests);
+    let tools = list_responses[0]["result"]["tools"]
+        .as_array()
+        .expect("tools must be an array");
+
+    let names: Vec<String> = tools
+        .iter()
+        .filter_map(|t| t["name"].as_str().map(str::to_string))
+        .collect();
+
+    assert!(!names.is_empty(), "tools/list must return at least one tool");
+
+    // Call each tool with an empty arguments object. We expect either success
+    // or a ToolFailed error — but NOT UnknownTool (-32602) since all names
+    // were taken from the advertised catalog.
+    let call_requests: Vec<serde_json::Value> = names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": i + 100,
+                "method": "tools/call",
+                "params": {
+                    "name": name,
+                    "arguments": {}
+                }
+            })
+        })
+        .collect();
+
+    let call_responses = run_sequence(&call_requests);
+    assert_eq!(call_responses.len(), names.len());
+
+    for (name, response) in names.iter().zip(call_responses.iter()) {
+        // A JSON-RPC level error (error field present) for a tool that exists
+        // would mean UnknownTool: catalog–dispatch mismatch.
+        assert!(
+            response["error"].is_null(),
+            "tool '{name}' is advertised in tools/list but returns a JSON-RPC error \
+             (UnknownTool / catalog–dispatch mismatch): {}",
+            response["error"]
         );
     }
 }
