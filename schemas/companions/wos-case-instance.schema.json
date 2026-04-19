@@ -285,7 +285,8 @@
         },
         "scopeState": {
           "type": "string",
-          "description": "The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4)."
+          "description": "The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4).",
+          "examples": ["review", "eligibility.income-check"]
         }
       },
       "description": "Captures the state of a pending durable timer."
@@ -523,24 +524,39 @@
       "properties": {
         "envelopeValid": {
           "type": "boolean",
-          "description": "Whether the Response envelope validated against Formspec response.schema.json."
+          "description": "Whether the Response envelope validated against Formspec response.schema.json.",
+          "examples": [true, false]
         },
         "pinMatch": {
           "type": "boolean",
-          "description": "Whether response.definitionUrl and response.definitionVersion matched the task pin."
+          "description": "Whether response.definitionUrl and response.definitionVersion matched the task pin.",
+          "examples": [true, false]
         },
         "definitionValid": {
           "type": "boolean",
-          "description": "Whether Formspec Definition validation over response.data passed."
+          "description": "Whether Formspec Definition validation over response.data passed.",
+          "examples": [true, false]
         },
         "errors": {
           "type": "array",
-          "items": { "type": "object" },
+          "items": {
+            "type": "object",
+            "description": "A single WOS-level validation error object with at least a 'message' field. May include 'code' and 'path' for machine-readable diagnosis.",
+            "examples": [
+              { "message": "response.definitionUrl does not match task pin", "code": "PIN_MISMATCH" }
+            ]
+          },
           "description": "WOS-level validation errors, including envelope and pin errors."
         },
         "validationResults": {
           "type": "array",
-          "items": { "type": "object" },
+          "items": {
+            "type": "object",
+            "description": "A single Formspec-shaped ValidationResult entry from Definition validation, with at minimum a 'severity' and 'message' field (Formspec ValidationResult spec).",
+            "examples": [
+              { "severity": "error", "message": "income is required", "path": "income" }
+            ]
+          },
           "description": "Formspec-shaped ValidationResult entries from Definition validation."
         }
       },
@@ -573,7 +589,8 @@
         "scopeId": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the compensable scope this log belongs to."
+          "description": "Identifier of the compensable scope this log belongs to. Matches a compensableScope state identifier in the Kernel Document (Lifecycle Detail S5).",
+          "examples": ["incomeVerification", "eligibilityReview", "disbursement"]
         },
         "entries": {
           "type": "array",
@@ -598,20 +615,27 @@
         "actionId": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the original action that completed."
+          "description": "Identifier of the original Kernel action that completed and was recorded for potential compensation.",
+          "examples": ["verify-income-action", "notify-vendor-action", "create-disbursement-action"]
         },
         "actionType": {
           "type": "string",
-          "description": "Type of the original action (e.g., invokeService, setData)."
+          "description": "Type of the original action that completed (e.g., invokeService, setData, createTask). Matches a Kernel action type (Kernel S9.2).",
+          "examples": ["invokeService", "setData", "createTask"]
         },
         "compensatingAction": {
           "type": "object",
-          "description": "The compensating action to execute during backward recovery. Structure matches a Kernel Action (Kernel S9.2)."
+          "description": "The compensating action to execute during backward recovery in reverse entry order. Structure matches a Kernel Action (Kernel S9.2).",
+          "examples": [
+            { "type": "invokeService", "serviceRef": "cancelIncomeVerification" },
+            { "type": "invokeService", "serviceRef": "reversePayment", "params": { "transactionId": "TXN-001" } }
+          ]
         },
         "completedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp when the original action completed."
+          "description": "ISO 8601 timestamp when the original action completed and was logged for compensation purposes.",
+          "examples": ["2026-04-09T14:35:00Z", "2026-04-10T10:22:00Z"]
         },
         "output": {
           "description": "Persisted output of the original action, available to the compensating action."
@@ -632,25 +656,32 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Event name matching a transition's event property.",
+          "description": "Event name matching a transition's event property in the Kernel Document. May also be a kernel-generated event like '$timeout.task' (Kernel S9.1).",
           "examples": ["documentSubmitted", "approve", "reject"]
         },
         "actorId": {
           "type": "string",
-          "description": "Identifier of the actor who submitted this event."
+          "description": "Identifier of the actor who submitted this event. Used for audit trails and role-based transition guards.",
+          "examples": ["applicant-123", "reviewer-agency-456", "system-scheduler"]
         },
         "data": {
           "type": "object",
-          "description": "Event payload, available in the evaluation context as 'event' (Kernel S7.2)."
+          "description": "Arbitrary event payload, available in guard expression evaluation context as 'event' (Kernel S7.2). Structure is workflow-specific.",
+          "examples": [
+            { "documentType": "income-verification" },
+            { "outcome": "approved", "comments": "All criteria met" }
+          ]
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
-          "description": "ISO 8601 timestamp of event submission."
+          "description": "ISO 8601 timestamp when this event was enqueued by the actor or system component.",
+          "examples": ["2026-04-09T16:00:00Z", "2026-04-10T09:15:30Z"]
         },
         "idempotencyToken": {
           "type": "string",
-          "description": "Token for exactly-once delivery deduplication (Runtime Companion S4.3)."
+          "description": "Opaque token for exactly-once delivery deduplication (Runtime Companion S4.3). The processor rejects duplicate events with the same token.",
+          "examples": ["evt-a1b2c3d4", "req-2026-04-09-0042"]
         }
       },
       "description": "An event enqueued for processing but not yet consumed by the evaluation engine."
