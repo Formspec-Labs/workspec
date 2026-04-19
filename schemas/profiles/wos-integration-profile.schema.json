@@ -19,8 +19,8 @@
     "$wosIntegrationProfile": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Integration Profile specification version. MUST be '1.0'. Identifies this document as a WOS Integration Profile Document and pins the specification version.",
-      "examples": ["1.0"],
+      "description": "WOS Integration Profile specification version. MUST be '1.0'. Identifies this document as a WOS Integration Profile Document and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker and version pin for WOS Integration Profile documents"
@@ -49,11 +49,13 @@
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this integration profile."
+      "description": "Human-readable name for this integration profile. Displayed in tooling and provenance when tracing which profile resolved an invokeService binding.",
+      "examples": ["Benefits Adjudication Integration Profile v1.0"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of the integration profile's purpose and scope."
+      "description": "Human-readable description of the integration profile's purpose and scope. Documents which external systems are connected and which integration patterns are used.",
+      "examples": ["Declares Arazzo sequences for eligibility checks, request-response bindings for income verification, and an OPA policy engine bridge for entitlement decisions."]
     },
     "bindings": {
       "type": "object",
@@ -71,6 +73,15 @@
             "type": "request-response",
             "interface": { "$ref": "https://api.example.gov/background-checks/openapi.yaml" },
             "operation": "performCheck"
+          }
+        },
+        {
+          "eligibilityPolicy": {
+            "type": "policy-engine",
+            "engineType": "opa",
+            "endpoint": "https://policy.agency.gov/v1/data/benefits/eligibility",
+            "contextMapping": { "householdSize": "caseFile.application.householdSize" },
+            "decisionMapping": { "permitPath": "$.result.allow" }
           }
         }
       ],
@@ -95,7 +106,7 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "Canonical URI of the target WOS Kernel Document.",
+          "description": "Canonical URI of the target WOS Kernel Document. The integration processor resolves service bindings from this profile when the kernel document's URI matches this value at invocation time.",
           "examples": ["https://agency.gov/workflows/benefits-adjudication"]
         },
         "compatibleVersions": {
@@ -127,7 +138,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this integration binding."
+          "description": "Human-readable description of this integration binding and the external system it connects to. Recorded in provenance when the binding is invoked.",
+          "examples": ["Calls the federal income verification REST API and maps the verified income to the case file."]
         },
         "interface": {
           "$ref": "#/$defs/InterfaceRef",
@@ -136,13 +148,14 @@
         "operation": {
           "type": "string",
           "minLength": 1,
-          "description": "Operation ID within the referenced OpenAPI document. Required for request-response and callback bindings."
+          "description": "Operation ID within the referenced OpenAPI document. Required for request-response and callback bindings. Must match the operationId in the referenced OpenAPI spec.",
+          "examples": ["performEligibilityCheck", "verifyIncome"]
         },
         "arazzoRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI reference to the Arazzo document. Required for arazzo-sequence bindings.",
-          "examples": ["urn:agency.gov:arazzo:eligibility-check:1.0.0"],
+          "description": "URI reference to the Arazzo document that defines the multi-step API sequence. Required for arazzo-sequence bindings. The processor invokes the referenced Arazzo workflow and maps outputs back to case state via outputBinding (Integration Profile S3.4).",
+          "examples": ["urn:agency.gov:arazzo:eligibility-check:1.0.0", "urn:agency.gov:arazzo:income-verification:2.0.0"],
           "x-lm": {
             "critical": true,
             "intent": "References the Arazzo workflow document for multi-step API orchestration"
@@ -154,7 +167,7 @@
         },
         "engineType": {
           "type": "string",
-          "description": "Policy engine type (Integration Profile S8.2). Standard types: xacml, opa, cedar. Custom types use x- prefix.",
+          "description": "Policy engine type (Integration Profile S8.2). Determines the request/response wire format and evaluation semantics. Standard types: 'xacml' (OASIS XACML 3.0), 'opa' (Open Policy Agent), 'cedar' (AWS Cedar). Custom types MUST use x- prefix.",
           "examples": ["xacml", "opa", "cedar"],
           "x-lm": {
             "critical": true,
@@ -170,9 +183,12 @@
         "contextMapping": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "FEL expression or case state path whose evaluated value is passed as the engine parameter named by this map key.",
+            "examples": ["caseFile.application.householdSize", "caseFile.application.annualIncome"]
           },
-          "description": "Maps WOS evaluation context fields to policy engine request parameters. Keys are engine-specific parameter names; values are FEL expressions or case state paths. Required for policy-engine bindings."
+          "description": "Maps WOS evaluation context fields to policy engine request parameters. Keys are engine-specific parameter names; values are FEL expressions or case state paths. Required for policy-engine bindings.",
+          "examples": [{ "householdSize": "caseFile.application.householdSize", "programCode": "caseFile.application.programCode" }]
         },
         "decisionMapping": {
           "$ref": "#/$defs/DecisionMapping",
@@ -187,7 +203,8 @@
         "callbackEventType": {
           "type": "string",
           "minLength": 1,
-          "description": "CloudEvents type attribute value of the expected callback event. Required for callback bindings."
+          "description": "CloudEvents type attribute value of the expected callback event. Required for callback bindings. The processor listens for events with this type and routes them using the correlation rules.",
+          "examples": ["gov.agency.documents.received", "gov.agency.verification.completed"]
         },
         "correlation": {
           "type": "array",
@@ -200,9 +217,12 @@
         "dataMapping": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "FEL expression or case state path that produces the value for the event data field named by this map key.",
+            "examples": ["caseFile.application.id", "instance.id"]
           },
-          "description": "Maps case state paths to event data fields. Keys are event data field names; values are FEL expressions or case state paths. Used with event-emit bindings."
+          "description": "Maps case state paths to event data fields. Keys are event data field names; values are FEL expressions or case state paths. Used with event-emit bindings.",
+          "examples": [{ "caseId": "caseFile.application.id", "programCode": "caseFile.application.programCode" }]
         },
         "channel": {
           "type": "string",
@@ -212,16 +232,22 @@
         "inputMapping": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "FEL expression or case state path that provides the value for the service/tool input parameter named by this map key.",
+            "examples": ["caseFile.application.ssn", "caseFile.application.dateOfBirth"]
           },
-          "description": "Maps case state paths to service/tool input parameters. Keys are parameter names; values are FEL expressions or case state paths."
+          "description": "Maps case state paths to service/tool input parameters. Keys are parameter names; values are FEL expressions or case state paths.",
+          "examples": [{ "ssn": "caseFile.application.ssn", "householdSize": "caseFile.application.householdSize" }]
         },
         "outputBinding": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "JSON Path expression into the service/tool response whose value is written to the case state path named by this map key.",
+            "examples": ["$.verifiedIncome", "$.result.eligible"]
           },
-          "description": "Maps service/tool output to case state paths. Keys are case state paths; values are JSON Path expressions into the response."
+          "description": "Maps service/tool output to case state paths. Keys are case state paths; values are JSON Path expressions into the response.",
+          "examples": [{ "caseFile.verifiedIncome": "$.income.annualAmount", "caseFile.verificationStatus": "$.status" }]
         },
         "requestContract": {
           "$ref": "#/$defs/ContractRef",
@@ -241,7 +267,7 @@
         },
         "timeout": {
           "type": "string",
-          "description": "Maximum time to wait for a response. ISO 8601 duration.",
+          "description": "Maximum time to wait for a response before the invocation is considered failed. ISO 8601 duration. The processor MUST record a timeout failure in provenance when exceeded.",
           "examples": ["PT30S", "PT5M", "PT30M"]
         },
         "idempotencyKeyExpression": {
@@ -330,7 +356,7 @@
         "$ref": {
           "type": "string",
           "format": "uri",
-          "description": "URI reference to an OpenAPI document.",
+          "description": "URI reference to the OpenAPI document describing the external service interface. The processor uses this document to construct requests and validate responses.",
           "examples": ["https://api.example.gov/background-checks/openapi.yaml"]
         }
       }
@@ -348,7 +374,7 @@
       "properties": {
         "method": {
           "type": "string",
-          "description": "Invocation method. Standard methods: command-line, batch-file, database-procedure, graph-query. Custom methods use x- prefix.",
+          "description": "Invocation method for non-HTTP tool bindings (Integration Profile S3.6.1). Standard methods: 'command-line' (OS command), 'batch-file' (batch script), 'database-procedure' (stored procedure), 'graph-query' (SPARQL/Cypher). Custom methods MUST use x- prefix.",
           "examples": ["command-line", "database-procedure", "graph-query"],
           "x-lm": {
             "critical": true,
@@ -358,13 +384,15 @@
         "command": {
           "type": "string",
           "minLength": 1,
-          "description": "The command, procedure name, or query to execute.",
+          "description": "The command, stored procedure name, or query string to execute. Interpreted according to the 'method' field. FEL placeholders are not supported in command itself — use 'arguments' for dynamic values.",
           "examples": ["/opt/legacy/eligibility-check", "CALL sp_check_eligibility"]
         },
         "arguments": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "A single command argument string. FEL expressions enclosed in {{ }} delimiters are evaluated against case state before invocation and substituted inline.",
+            "examples": ["--ssn", "{{ caseFile.application.ssn }}"]
           },
           "description": "Ordered command arguments. FEL expressions in {{ }} delimiters are evaluated against case state before invocation.",
           "examples": [["--ssn", "{{ caseFile.application.ssn }}", "--household-size", "{{ caseFile.application.householdSize }}"]]
@@ -442,7 +470,7 @@
         "permitPath": {
           "type": "string",
           "minLength": 1,
-          "description": "JSON Path expression into the engine's response that evaluates to a boolean indicating 'permit'.",
+          "description": "JSON Path expression into the policy engine's response document that evaluates to a boolean. When the resolved value is truthy, the decision is 'permit'. The processor maps this to a WOS governance decision (Integration Profile S8.3).",
           "examples": ["$.result.allow", "$.decision.authorized"],
           "x-lm": {
             "critical": true,
@@ -451,21 +479,23 @@
         },
         "denyPath": {
           "type": "string",
-          "description": "JSON Path expression for explicit 'deny'. If omitted, deny is inferred as the negation of permit."
+          "description": "JSON Path expression for explicit 'deny' in the engine response. If omitted, deny is inferred as the negation of the permitPath value. Use when the engine returns separate permit and deny fields.",
+          "examples": ["$.result.deny", "$.decision.rejected"]
         },
         "reasonPath": {
           "type": "string",
-          "description": "JSON Path expression for the engine's human-readable reason. Recorded in provenance.",
+          "description": "JSON Path expression for the engine's human-readable reason string. Recorded in provenance to support audit and explanation requirements.",
           "examples": ["$.result.reason"]
         },
         "obligationsPath": {
           "type": "string",
-          "description": "JSON Path expression for obligations attached to the decision (XACML obligation pattern).",
+          "description": "JSON Path expression for obligations attached to the decision (XACML obligation pattern). Obligations are recorded in provenance and may be mapped to governance actions.",
           "examples": ["$.result.obligations"]
         },
         "indeterminatePath": {
           "type": "string",
-          "description": "JSON Path expression for 'indeterminate' (engine could not decide). When present and truthy, the decision is indeterminate. If omitted, indeterminate is not possible -- results are always permit or deny."
+          "description": "JSON Path expression for 'indeterminate' outcome (engine could not decide). When present and truthy, the decision is indeterminate. If omitted, results are always permit or deny with no indeterminate state.",
+          "examples": ["$.result.indeterminate", "$.decision.error"]
         }
       }
     },
@@ -490,12 +520,13 @@
           "type": "string",
           "enum": ["fixed", "linear", "exponential"],
           "default": "fixed",
-          "description": "Backoff strategy between retries. 'fixed': constant interval. 'linear': interval grows linearly. 'exponential': interval doubles each retry."
+          "description": "Backoff strategy between retries. 'fixed': constant interval. 'linear': interval grows linearly. 'exponential': interval doubles each retry.",
+          "examples": ["fixed", "exponential"]
         },
         "initialInterval": {
           "type": "string",
           "default": "PT1S",
-          "description": "Initial interval between retries. ISO 8601 duration.",
+          "description": "Initial wait interval between the first and second invocation attempt. ISO 8601 duration. For exponential backoff, subsequent intervals double from this base.",
           "examples": ["PT1S", "PT5S", "PT10S"]
         },
         "maxInterval": {
@@ -528,7 +559,8 @@
         "maxCores": {
           "type": "integer",
           "minimum": 1,
-          "description": "Maximum CPU cores. Implementation-defined enforcement."
+          "description": "Maximum CPU cores to allocate for this tool invocation. Enforcement is implementation-defined. Processors SHOULD log a warning when the limit is exceeded.",
+          "examples": [1, 4]
         }
       }
     },
@@ -541,8 +573,8 @@
         "wosinstanceid": {
           "type": "string",
           "format": "uri",
-          "description": "The workflow instance identifier.",
-          "examples": ["urn:agency.gov:instance:2025-001-12345"],
+          "description": "The unique URI identifier of the running workflow instance. Used by consuming systems to route events to the correct workflow instance and to correlate inbound callback events. MUST be globally unique across all tenants (Integration Profile S5.1).",
+          "examples": ["urn:agency.gov:instance:2025-001-12345", "urn:agency.gov:instance:2026-042-98765"],
           "x-lm": {
             "critical": true,
             "intent": "Unique identifier of the running workflow instance for event routing"
@@ -551,30 +583,34 @@
         "wosdefid": {
           "type": "string",
           "format": "uri",
-          "description": "The workflow definition identifier (kernel document URL).",
+          "description": "The workflow definition identifier. The canonical URL of the WOS Kernel Document that governs this workflow instance. Used by event consumers to dispatch events to the correct processor.",
           "examples": ["https://agency.gov/workflows/benefits-adjudication"]
         },
         "wosdefversion": {
           "type": "string",
           "minLength": 1,
-          "description": "The workflow definition version (kernel document version).",
+          "description": "The version of the WOS Kernel Document governing this workflow instance. Combined with wosdefid to form an exact version reference for audit and replay.",
           "examples": ["1.0.0"]
         },
         "wosstate": {
           "type": "string",
-          "description": "The current lifecycle state at the time of event emission."
+          "description": "The current lifecycle state of the workflow instance at the time of event emission. Helps consumers filter events by workflow phase without fetching full instance state.",
+          "examples": ["active", "on-hold"]
         },
         "wostaskid": {
           "type": "string",
-          "description": "The task identifier, if the event relates to a task."
+          "description": "The identifier of the task that triggered this event, if applicable. Correlates the event to a specific task within the workflow's task list for traceability.",
+          "examples": ["task-eligibility-review", "task-document-verification"]
         },
         "woscorrelationkey": {
           "type": "string",
-          "description": "The primary business correlation key for the workflow instance."
+          "description": "The primary business correlation key for this workflow instance. A stable business identifier (e.g., application ID, case number) that persists across retries and replays for operational correlation.",
+          "examples": ["APP-2025-001-12345", "CASE-2025-98765"]
         },
         "woscausationeventid": {
           "type": "string",
-          "description": "The CloudEvents id of the event that triggered this event. Enables causal chains."
+          "description": "The CloudEvents id attribute of the event that causally triggered this event. Enables construction of causal chains for audit trails and replay analysis.",
+          "examples": ["550e8400-e29b-41d4-a716-446655440000", "7f9e8d1c-3a2b-4f5e-8c6d-9e0f1a2b3c4d"]
         }
       }
     }
