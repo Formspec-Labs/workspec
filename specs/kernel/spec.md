@@ -43,6 +43,7 @@ This specification defines the orchestration kernel: the minimal substrate that 
 3. **Sidecars are pure metadata.** They enrich without affecting processing.
 4. **Provenance grows upward.** Layer 0 records facts. Each higher layer adds interpretive structure. Lower layers are never modified.
 5. **Complexity is opt-in.** Kernel-only is a valid deployment.
+6. **Every normative claim is testable.** A behavior described in normative prose MUST be reducible to a conformance test, a lint rule, or a schema constraint that a processor can pass or fail. Prose that no test can falsify is design intent, not specification — and is moved to non-normative commentary or deleted. This principle applies recursively to higher-layer companions: see Governance §6.1 and AI Integration §1.2 for layer-specific obligations.
 
 ### 1.3 Scope
 

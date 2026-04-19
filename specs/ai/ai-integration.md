@@ -49,6 +49,7 @@ This specification encodes these findings as structural requirements. The agent 
 2. **Constraints are external to the agent.** The WOS Processor enforces governance. The agent cannot weaken its own constraints.
 3. **Graceful degradation is mandatory.** Every workflow MUST function without any agent participation.
 4. **Formspec-as-validator.** Agent output is untrusted input validated against the same Formspec contract a human would submit against.
+5. **Every normative claim is testable** (inherited from Kernel §1.2 Design Goal 6). Every AI-specific obligation in this spec — deontic constraint enforcement, autonomy-cap enforcement, confidence-decay semantics, fallback-chain execution, drift detection, assurance composition — MUST reduce to a conformance test or lint rule. An AI behavior that no test can falsify is not a governance guarantee. Authors adding a new AI obligation MUST also add the corresponding test artifact.
 
 ### 1.3 Scope
 

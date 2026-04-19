@@ -240,6 +240,8 @@ This section is normative.
 
 Structured audit extends the kernel's Facts tier (Kernel S8) with two interpretive tiers. These tiers serve human decisions as much as any future AI decisions.
 
+Audit claims must be **testable** in the sense of Kernel §1.2 Design Goal 6 (verifiability): every normative Reasoning or Counterfactual tier requirement in this section MUST either (a) be enforceable by schema constraint, (b) produce a lint rule that rejects documents violating it, or (c) reduce to a conformance fixture demonstrating compliant vs. non-compliant behavior. Prose describing audit shape without a corresponding test is not normative — it belongs in the companion or in non-normative commentary. Authors adding a new audit obligation here MUST also add the corresponding test artifact.
+
 ### 6.2 Reasoning Tier
 
 The Reasoning tier records how a decision was reached:
