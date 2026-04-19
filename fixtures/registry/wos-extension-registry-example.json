@@ -1,0 +1,83 @@
+{
+  "$wosExtensionRegistry": "1.0",
+  "$schema": "https://wos-spec.org/schemas/extension-registry/1.0",
+  "version": "1.0.0",
+  "title": "WOS Core Extension Registry — Reference",
+  "description": "Reference example registry cataloging the six kernel seams (Kernel §10) plus a Trellis distributed-trust custody profile entry. Demonstrates lifecycle, composition, vendor prefix, and replacedBy fields. Not a normative WOS Working Group registry — illustrative only.",
+  "entries": [
+    {
+      "seam": "kernel.actorExtension.agent",
+      "kind": "actor-extension",
+      "lifecycle": "stable",
+      "description": "AI Integration registers the `agent` actor type with model-endpoint, autonomy-level, and provenance-narrative requirements (AI Integration §3). Binds to kernel actorExtension seam.",
+      "specRef": "https://wos-spec.org/specs/ai-integration#3-agent-actor",
+      "schemaRef": "https://wos-spec.org/schemas/ai-integration/1.0#/$defs/AgentActorDeclaration",
+      "composition": "merge",
+      "since": "1.0.0"
+    },
+    {
+      "seam": "kernel.contractHook.formspec",
+      "kind": "contract-hook",
+      "lifecycle": "stable",
+      "description": "Formspec is the recommended contract binding for human task contracts and the agent-output validator pattern (Kernel §10.2, §11.2).",
+      "specRef": "https://wos-spec.org/specs/kernel#11-2-conformant-bindings",
+      "composition": "replace",
+      "since": "1.0.0"
+    },
+    {
+      "seam": "kernel.contractHook.jsonSchema",
+      "kind": "contract-hook",
+      "lifecycle": "deprecated",
+      "description": "Baseline JSON Schema contract binding. Structural validation only — no reactive behavior or cross-field rules. Superseded by the Formspec binding for any deployment that needs cross-field validation.",
+      "specRef": "https://wos-spec.org/specs/kernel#11-2-conformant-bindings",
+      "since": "1.0.0",
+      "deprecatedSince": "1.0.0",
+      "replacedBy": "kernel.contractHook.formspec"
+    },
+    {
+      "seam": "ai.provenanceLayer.narrative",
+      "kind": "provenance-layer",
+      "lifecycle": "stable",
+      "description": "Layer 2 narrative tier carries model-generated explanations. MUST be marked non-authoritative; downstream tooling MUST NOT use narrative entries as evidence (AI Integration §7.4).",
+      "specRef": "https://wos-spec.org/specs/ai-integration#7-4-narrative-tier",
+      "composition": "augment",
+      "since": "1.0.0"
+    },
+    {
+      "seam": "governance.lifecycleHook.tagBased",
+      "kind": "lifecycle-hook",
+      "lifecycle": "stable",
+      "description": "Governance attaches review and SLA rules to transitions by semantic tag (e.g., all transitions tagged `determination` require dual-blind review). Tag-based mode is the default and applies across the workflow without naming specific transitions.",
+      "specRef": "https://wos-spec.org/specs/workflow-governance#4-rules-by-tag",
+      "composition": "augment",
+      "since": "1.0.0"
+    },
+    {
+      "seam": "x-trellis.custodyHook.distributed",
+      "kind": "custody-hook",
+      "lifecycle": "stable",
+      "description": "Trellis distributed-trust profile cataloged at the kernel custodyHook seam. Declares custodian set, recovery-without-user policy, and delegated-compute exposure policy. Closes the open `custodyHook` escape by anchoring a typed, vendor-versioned profile to the seam.",
+      "specRef": "https://trellis-spec.org/specs/trust-profile#2-distributed",
+      "schemaRef": "https://trellis-spec.org/schemas/trust-profile/1.0#/$defs/DistributedTrustProfile",
+      "vendorPrefix": "x-trellis-",
+      "composition": "merge",
+      "since": "1.0.0",
+      "examples": [
+        {
+          "kind": "distributed",
+          "custodians": ["urn:trellis:custodian:alpha", "urn:trellis:custodian:beta"],
+          "recoveryWithoutUser": false,
+          "delegatedComputeExposesContent": false
+        }
+      ]
+    },
+    {
+      "seam": "x-acme.tenantId",
+      "kind": "vendor-extension",
+      "lifecycle": "stable",
+      "description": "Acme tenant identifier attached to actor declarations and provenance entries to scope multi-tenant deployments. Single-string opaque identifier; lint tooling validates the prefix only.",
+      "vendorPrefix": "x-acme-tenant-",
+      "since": "1.0.0"
+    }
+  ]
+}
