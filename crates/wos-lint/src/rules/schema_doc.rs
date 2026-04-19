@@ -23,7 +23,7 @@
 
 use serde_json::Value;
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::LintDiagnostic;
 
 /// Rule identifier.
 pub const RULE_ID: &str = "SCHEMA-DOC-001";
@@ -41,13 +41,13 @@ const CRITICAL_EXAMPLES_MIN: usize = 2;
 /// violations for every leaf property.
 ///
 /// The caller is expected to have already parsed the schema file.
-pub fn check_schema(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     walk(root, "", diagnostics);
 }
 
 /// Recurse into a schema node. `pointer` is the JSON Pointer to `node`
 /// within the containing schema document.
-fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(obj) = node.as_object() else {
         return;
     };
@@ -135,7 +135,7 @@ fn is_leaf(obj: &serde_json::Map<String, Value>) -> bool {
 fn check_leaf(
     obj: &serde_json::Map<String, Value>,
     pointer: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let is_critical = obj
         .get("x-lm")
@@ -154,7 +154,7 @@ fn check_leaf(
     };
 
     if description.is_empty() {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             RULE_ID,
             pointer.to_string(),
             format!(
@@ -163,7 +163,7 @@ fn check_leaf(
             ),
         ));
     } else if description_len < description_min {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             RULE_ID,
             pointer.to_string(),
             format!(
@@ -180,7 +180,7 @@ fn check_leaf(
         .unwrap_or(0);
 
     if examples_count < examples_min {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             RULE_ID,
             pointer.to_string(),
             format!(
@@ -201,10 +201,10 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn lint(schema: Value) -> Vec<Diagnostic> {
+    fn lint(schema: Value) -> Vec<LintDiagnostic> {
         let mut diagnostics = Vec::new();
         check_schema(&schema, &mut diagnostics);
-        diagnostics.sort();
+        diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(b.rule_id)));
         diagnostics
     }
 
