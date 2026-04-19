@@ -19,7 +19,7 @@ use crate::instance::CaseInstance;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
 };
-use crate::provenance::{ProvenanceLog, ProvenanceRecord};
+use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
 
 /// Active state configuration tracking leaf states.
@@ -124,6 +124,8 @@ pub struct ObservedTransition {
     pub to: String,
     /// Triggering event.
     pub event: String,
+    /// Semantic tags declared on the transition.
+    pub tags: Vec<String>,
 }
 
 /// A single guard-expression evaluation observed during event processing.
@@ -468,10 +470,11 @@ impl Evaluator {
 
                 self.fire_transition(
                     active_state,
-                    &transition.target.clone(),
+                    &transition.target,
                     event,
                     actor,
-                    &transition.actions.clone(),
+                    &transition.actions,
+                    &transition.tags,
                     event_data,
                 )?;
                 return Ok(true);
@@ -537,6 +540,7 @@ impl Evaluator {
                 }
 
                 let target = transition.target.clone();
+                let case_file_snapshot = self.case_file_snapshot_for_transition(&transition.tags);
 
                 // Execute onExit.
                 self.execute_on_exit_actions(&active, actor, event_data)?;
@@ -554,10 +558,17 @@ impl Evaluator {
                     from: active.clone(),
                     to: target.clone(),
                     event: event.to_string(),
+                    tags: transition.tags.clone(),
                 });
-                self.provenance.push(ProvenanceRecord::state_transition(
-                    &active, &target, event, actor,
-                ));
+                self.provenance
+                    .push(ProvenanceRecord::tagged_state_transition(
+                        &active,
+                        &target,
+                        event,
+                        actor,
+                        &transition.tags,
+                        case_file_snapshot,
+                    ));
 
                 self.apply_parallel_cancellation_policy(
                     parallel_id,
@@ -729,8 +740,11 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         actions: &[Action],
+        tags: &[String],
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        let case_file_snapshot = self.case_file_snapshot_for_transition(tags);
+
         self.execute_on_exit_actions(source, actor, event_data)?;
 
         for action in actions {
@@ -743,16 +757,31 @@ impl Evaluator {
         self.exit_state_and_descendants(source);
         self.enter_state(target, actor, event_data)?;
 
-        self.provenance.push(ProvenanceRecord::state_transition(
-            source, target, event, actor,
-        ));
+        self.provenance
+            .push(ProvenanceRecord::tagged_state_transition(
+                source,
+                target,
+                event,
+                actor,
+                tags,
+                case_file_snapshot,
+            ));
         self.transitions.push(ObservedTransition {
             from: source.to_string(),
             to: target.to_string(),
             event: event.to_string(),
+            tags: tags.to_vec(),
         });
 
         Ok(())
+    }
+
+    fn case_file_snapshot_for_transition(&self, tags: &[String]) -> Option<CaseFileSnapshot> {
+        if tags.iter().any(|tag| tag == "determination") {
+            Some(CaseFileSnapshot::from_case_state(&self.case_state_json()))
+        } else {
+            None
+        }
     }
 
     // ── Action execution ─────────────────────────────────────────
