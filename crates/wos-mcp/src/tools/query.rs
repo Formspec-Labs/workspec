@@ -331,16 +331,15 @@ pub async fn wos_search(
 
         "constraint" => {
             // Search deontic constraints under x-wos-ai.deonticConstraints.
-            let empty_arr = serde_json::json!([]);
-            let constraints = doc
+            let constraints: Vec<Value> = doc
                 .extensions
                 .get("x-wos-ai")
                 .and_then(|v| v.get("deonticConstraints"))
-                .unwrap_or(&empty_arr);
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
 
             constraints
-                .as_array()
-                .unwrap_or(&vec![])
                 .iter()
                 .filter(|c| {
                     let id = c.get("id").and_then(Value::as_str).unwrap_or("");
