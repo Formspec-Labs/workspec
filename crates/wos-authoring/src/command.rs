@@ -201,7 +201,7 @@ pub(crate) enum Command {
 
     // ── Governance ─────────────────────────────────────────────────────────
 
-    /// Record a due-process path under `x-wos-governance.dueProcesePaths`.
+    /// Record a due-process path under `x-wos-governance.dueProcessPaths`.
     AddDueProcessPath {
         /// Unique path identifier.
         path_id: String,

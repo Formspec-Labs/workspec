@@ -319,7 +319,7 @@ async fn full_round_trip_with_10_plus_tool_calls() {
 
     let gov = &extensions["x-wos-governance"];
     assert!(
-        gov["dueProcesePaths"]["appealPath"]["description"].is_string(),
+        gov["dueProcessPaths"]["appealPath"]["description"].is_string(),
         "governance due-process path must be stored under extensions[x-wos-governance]; \
          extensions: {extensions}"
     );

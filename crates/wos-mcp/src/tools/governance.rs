@@ -20,7 +20,7 @@ use crate::registry::ProjectRegistry;
 
 // ── wos_add_due_process_path ──────────────────────────────────────────────────
 
-/// Record a due-process path under `x-wos-governance.dueProcesePaths`.
+/// Record a due-process path under `x-wos-governance.dueProcessPaths`.
 ///
 /// Args:
 /// ```json
@@ -267,8 +267,8 @@ mod tests {
 
         let doc = registry.get(&pid).unwrap().snapshot();
         let gov = &doc.extensions["x-wos-governance"];
-        assert_eq!(gov["dueProcesePaths"]["appealPath"]["description"], "Standard appeal process");
-        let steps = gov["dueProcesePaths"]["appealPath"]["steps"].as_array().unwrap();
+        assert_eq!(gov["dueProcessPaths"]["appealPath"]["description"], "Standard appeal process");
+        let steps = gov["dueProcessPaths"]["appealPath"]["steps"].as_array().unwrap();
         assert_eq!(steps.len(), 3);
     }
 

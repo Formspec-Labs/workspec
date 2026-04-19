@@ -639,7 +639,7 @@ impl RawWosProject {
 
     // ── AddDueProcessPath handler ─────────────────────────────────────────
 
-    /// Write a due-process path under `x-wos-governance.dueProcesePaths`.
+    /// Write a due-process path under `x-wos-governance.dueProcessPaths`.
     ///
     /// Creates the `x-wos-governance` extension object lazily; preserves
     /// any sibling keys (e.g. `assertionGates`) that already exist.
@@ -666,22 +666,22 @@ impl RawWosProject {
         };
 
         let paths = root
-            .entry("dueProcesePaths")
+            .entry("dueProcessPaths")
             .or_insert_with(|| serde_json::json!({}));
 
         let paths_map = match paths.as_object_mut() {
             Some(map) => map,
             None => {
                 return Err(AuthoringDiagnostic::error(
-                    "/extensions/x-wos-governance/dueProcesePaths",
-                    "dueProcesePaths exists but is not a JSON object",
+                    "/extensions/x-wos-governance/dueProcessPaths",
+                    "dueProcessPaths exists but is not a JSON object",
                 ));
             }
         };
 
         if paths_map.contains_key(&path_id) {
             return Err(AuthoringDiagnostic::error(
-                format!("/extensions/x-wos-governance/dueProcesePaths/{path_id}"),
+                format!("/extensions/x-wos-governance/dueProcessPaths/{path_id}"),
                 format!("due-process path '{path_id}' already exists"),
             ));
         }

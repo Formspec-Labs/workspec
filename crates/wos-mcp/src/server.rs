@@ -253,7 +253,7 @@ async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> 
                     // ── Task 5: Governance + AI tools ─────────────────────────────────
                     {
                         "name": "wos_add_due_process_path",
-                        "description": "Record a due-process path under x-wos-governance.dueProcesePaths. Returns {\"path_id\": \"...\"}.",
+                        "description": "Record a due-process path under x-wos-governance.dueProcessPaths. Returns {\"path_id\": \"...\"}.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {

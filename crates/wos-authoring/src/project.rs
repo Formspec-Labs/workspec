@@ -228,7 +228,7 @@ impl WosProject {
 
     // ── Governance ────────────────────────────────────────────────────────
 
-    /// Record a due-process path under `x-wos-governance.dueProcesePaths`.
+    /// Record a due-process path under `x-wos-governance.dueProcessPaths`.
     pub fn add_due_process_path(
         &mut self,
         path_id: impl Into<String>,
