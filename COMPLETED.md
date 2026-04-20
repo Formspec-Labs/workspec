@@ -146,3 +146,63 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 - [x] **v0 spike Tasks 4–5** (`f6320c2` + `a80e37d`) — Task 4 conformance smoke-test gate: after lint passes, wraps the synthesized kernel in a minimal inline `ConformanceFixture` (empty `event_sequence`, empty `expected_transitions`) and calls `wos_conformance::run_fixture`; one repair round granted; budget-aware; `SpikeError::ConformanceFailure` isolates conformance-phase failures. Task 5 retrospective at `thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md` with plan propagations appended inline to `wos-synth-crate`, `wos-synthesis-benchmark`, `wos-mcp-crate` plans. Key findings: `wos-conformance` has no `run(&doc)` entry point (fixture wrapper required); `ToolContext` shipped without spike counter-example → provisional; structured repair-prompt with `rule_id` + `suggested_fix` + `spec_ref` recommended before `wos-bench` measures convergence; live Anthropic iteration counts (Q-V0-1..4) flagged as follow-up. Spike disposition: keep-with-deletion-horizon (2–3 months). 17 unit tests green.
 - [x] **§4.3a K-049 / AI-057 review follow-ups filed + refined** (`64962ea` + `4ceddb7`) — background `semi-formal-code-review` agent ran over `0d17f9f` + `4fd32e3` + `19ad643`. Verdict APPROVE with 9 findings; Finding 1 (K-049 missing entry/exit actions) fixed in `2c6a2e2`; Findings 6/8/9 OBSERVATION-only. Remaining 4 filed as §4.3a items in TODO, then refined via parallel spec-expert + wos-expert consultations into six concrete work items: **#F2** structured `Vec<Segment>` path comparison under Core §3.6.4 reachability; **#F3a** K-049 message reword + `$continuous` fixture; **#F3b** ADR + rewrite `eval.rs:412-421` post-mutation re-scan to match Runtime §10.3; **#F4** AI-058 boolean-AST-root allowlist lint + upstream Formspec §3.8.1 normativity gap filing; **#F5a** kernel `$defs/ProvenanceOutcome` enum (closes both `preconditionNotSatisfied` and `convergenceCapReached` MUSTs in one schema change); **#F5b** AI schema `if/then` enforcement. Cross-cutting drift surfaced: `ProvenanceKind::ConvergenceCapReached` missing from `crates/wos-core/src/provenance.rs:44` despite being named as a `recordKind` in `runtime.md:517`.
 - [x] **Validation at close** — `cargo test --workspace` (63 test binaries, 0 failures). SCHEMA-DOC-001 zero-regression gate passes. Python `python3 -m pytest tests/ -q` 121 passed / 11 skipped / 1 xfailed.
+
+## Session 8 (2026-04-20) — 8-agent parallel dispatch (~23 commits)
+
+Largest parallel dispatch to date. Three batches: (1) uncommitted session-6 work committed + review-finding fixes; (2) eight concurrent agents on disjoint file sets; (3) four concurrent semi-formal code reviews.
+
+### §4.1 #2 Deterministic adverse-decision notice — commit-split of uncommitted session-6 work (4 commits)
+
+- [x] **`02ca0c1` style(runtime): rustfmt import-sort + assert! macro wrap** — split rustfmt churn out of the semantic commit per review Finding 6.
+- [x] **`a041433` feat(runtime): thread current_time_ms + now_iso through drain context** — adds `now_ms: u64` + `now_iso: String` to `RuntimeEventContext`, populated once per drain from `self.clock.now_ms()`. No silent-zero path; missing populates surface at compile time. Prerequisite for the adverse-decision emitter's deterministic timestamps.
+- [x] **`25026dd` feat(runtime): deterministic adverse-decision notice emission (§4.1 #2)** — `ReferenceCompanionPolicy::deterministic_adverse_decision_notice_input` + `AdverseDecisionNoticeInput`. Digest `7c6c9f04…f8a749` verified via both Rust + Python JCS implementations. Schema `if/then` requires `noticeTemplateRef` when `noticeRequired: true` (closes F8). Resolver returns typed `NoticeTemplateResolution` enum; audit signal surfaces as `resolvedTemplateKey` / `templateResolution` on the emitted record (closes F4). Spec §3.2 enumerates "transition-firing-timestamp" as a determining input (closes F3). Fixture `initial_case_state` cleaned up to realistic pre-transition state (closes F7). Two new unit tests pin `humanReadable` byte-identity under a fixed clock (closes F2).
+- [x] **`abe3c76` fix(synth): strip non-JSON fence language tags; render per-iteration conformance in explain** — §5.4 synth review follow-up: `strip_fence_language` heuristic + `render_trace` pure function.
+
+### §4.3a K-049 / AI-057 review follow-ups — 5 of 6 closed (8 commits)
+
+- [x] **#F3a K-049 message reword + `$continuous` fixture** (`e15bd80`) — diagnostic now spec-faithful; `$continuous`-event fixture added.
+- [x] **#F4 AI-058 boolean-AST-root lint** (`8855591`) — `is_boolean_shaped(&Expr)` pub(super) in `fel_analysis.rs`; 3 unit tests.
+- [x] **#F5a Kernel `$defs/ProvenanceOutcome`** (`2d890d3`) — open-enum with `preconditionNotSatisfied` + `convergenceCapReached` reserved, `^x-` vendor pattern; optional `outcome` on `FactsTierRecord`; Rust `ProvenanceKind::ConvergenceCapReached` variant. Closes both §3.3.1 and §10.3 MUSTs in one schema change.
+- [x] **#F2 K-049 structured-path reachability** (`ee05cec`) — `Vec<Segment>` + `reaches()` per Core §3.6.4; 2 regression fixtures; 10 new tests (`normalize_setdata_path` helpers + cycle regressions).
+- [x] **#F5b AI schema `if/then` preconditionNotSatisfied** (`ae3589f`) — `CapabilityInvocationRecord` $def enforces `outcome = "preconditionNotSatisfied"` when `data.invocationBlocked: true`.
+- [x] **LINT-MATRIX regen** (`d46d172`) — 102 → 103 rules; T2 Tested 2 → 3 (AI-058 added); K-049 stays Tested pending F3b-driven LoadBearing promotion.
+- **#F3b ADR 0059 drafted** (`fcd2c19`) — Runtime §10.3 conformance plan; 5 tasks, ~3-5 engineer-days; preconditions satisfied by F5a. Implementation deferred.
+
+### §4.4 Release trains Tasks 1-3 (4 commits)
+
+- [x] **`78283ae` docs(release-trains): stream path mapping (§4.4 Task 1)** — `RELEASE-STREAMS.md`: kernel / governance / ai / advanced with paths, cadence, stability; sidecar attribution (lint/conformance/rule-coverage follow kernel); tag convention.
+- [x] **`2c53f62` docs(changelogs): four per-stream changelog files (§4.4 Task 2)** — seeded with stability commitments per stream (kernel/governance semver-strict, ai pre-1.0, advanced research).
+- [x] **`49de6c0` docs(release-trains): COMPATIBILITY-MATRIX + README pointer (§4.4 Task 3)** — `COMPATIBILITY-MATRIX.md` with `1.0.x / 1.0.x / 0.5.x / 0.1.x` row, `x-` known-broken convention, vendor-claim pattern.
+- [x] **`9aee9be` docs(todo): mark §4.4 as partial after Tasks 1-3** — TODO state updated.
+
+### §4.4 #40 Task SLA authoring surface (3 commits)
+
+- [x] **`8b466fa` feat(governance): Task SLA authoring schema** — four OPTIONAL properties on `TaskPattern` (`slaDefinitions`, `warningThresholds`, `breachPolicy`, `escalationChain`) + four supporting `$def`s.
+- [x] **`bc5de5f` docs(governance): Task SLA authoring spec subsection** — §10.4 + §10.4.5 future-work lint deferrals.
+- [x] **`130a51e` test(schemas): contract tests for Task SLA shape** — 27 parametrized tests + happy-path fixture.
+
+### §4.4 #38 Assertion Library cross-document reference protocol (3 commits)
+
+- [x] **`77695eb` feat(governance): Assertion Library cross-document reference shape** — `AssertionReference` / `AssertionInlineUse` / `AssertionUse` three-$def `oneOf` split.
+- [x] **`f862d1f` docs(governance): Assertion Library cross-reference protocol** — new spec §2.3/§2.4 with resolution semantics + G-064 design sketch.
+- [x] **`21e9195` test(schemas): AssertionReference shape contract** — 12 tests covering hybrid-mix rejection + URI validation + `assertionId` pattern.
+
+### §4.6 #45 Sidecar normative-contract audit (1 commit)
+
+- [x] **`9900e39` docs(reviews): sidecar normative-contract audit** — 9 sidecars audited against CONVENTIONS.md (Step 0 + Structure / Semantics / Composition rubric). Verdict: 3 KEEP / 3 MERGE / 3 RESHAPE / 0 RETIRE. Ratifies the §4.5 three-merge plan. Six open questions filed for user verdict.
+
+### Plans + ADR (2 commits)
+
+- [x] **`6cad36e` docs(plans): draft implementation plan for #20 typed event meta-vocabulary** — 9 sections, 10 ordered tasks, grep-verified fixture counts (185 files / 844 occurrences), four open questions (OQ1 `$join` + OQ4 vendor kinds are load-bearing blockers).
+- [x] **`fcd2c19` docs(adr): continuous-mode post-mutation re-scan driver (F3b)** — ADR 0059. All preconditions satisfied; 5-task implementation plan; READY TO EXECUTE.
+
+### Semi-formal review pass (4 parallel reviews)
+
+- [x] **Review A — wos-lint cluster** (F3a + F4 + F2): APPROVE WITH FOLLOW-UPS. 1 WARNING (AI-058 allowlist drift — missing `every`/`some`/`boolean`, bogus `isBoolean`) + 1 NIT (guard-walker short-circuit regression test) + observations. Filed in TODO §4.3b as #F4a + #F2a.
+- [x] **Review B — schema cluster** (F5a + F5b): APPROVE WITH FOLLOW-UPS. 3 WARNINGs: F5b's `CapabilityInvocationRecord` is orphan `$def` with no composer (#F5d); F5a Rust emission not wired (`ProvenanceRecord` lacks `outcome` field; runtime still emits `CaseStateMutation`) (#F5c, rolls into F3b Task 3); vendor-extension regex drift from lowercase-kebab convention (#F5e).
+- [x] **Review D — #40 Task SLA**: APPROVE WITH FOLLOW-UPS. 2 WARNINGs + 2 NITs: `expectedDuration` `indefinite` semantics (#40a); `startEvent` pattern allows `$continuous` (#40b); `EscalationStep.id` drift (#40c); enum-rejection test gaps.
+- [x] **Review H — #38 Assertion Library**: APPROVE WITH FOLLOW-UPS. 3 WARNINGs: stale `.llm.md` regen (#38a); TODO #38 text stale (fixed inline); "one-line $ref" adoption claim understated — adoption requires cross-schema `$ref` plumbing or duplicate $defs (#38b; G+H concur the §4.5 merge is the natural landing).
+
+### Validation at close
+
+Final state: `cargo test --workspace` 1002+ passed / 0 failed · SCHEMA-DOC-001 zero-regression gate green · `pytest tests/schemas/ -q` 171 passed / 11 skipped / 1 xfailed (+50 vs session 7). 103 LINT-MATRIX rules (AI-058 added). All eight parallel agents + all four parallel reviews landed on disjoint file sets without conflict — validates the parallel-agent dispatch discipline from `thoughts/practices/2026-04-17-parallel-agent-dispatch.md`.
