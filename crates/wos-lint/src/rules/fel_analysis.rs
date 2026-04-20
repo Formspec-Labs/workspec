@@ -29,6 +29,7 @@
 //! WOS enumeration field or listed in `finiteDomainDeclarations`.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use fel_core::{
     ast::{BinaryOp, Expr, PathSegment, UnaryOp},
@@ -188,32 +189,27 @@ pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
     }
 }
 
-/// Hard-coded set of Core FEL builtins whose return type is boolean.
+/// Set of Core FEL builtins whose return type is boolean.
 ///
-/// Matches the `specs/ai/ai-integration.md` §3.3.1 typing list and the
-/// §4.3a #F4 consult decision. Kept in sync with
-/// `fel_core::builtin_function_catalog` by convention — adding a new
-/// boolean-returning builtin there requires adding it here as well.
+/// Derived at first use from `fel_core::builtin_function_catalog()` by
+/// filtering entries whose signature string ends with `-> boolean`. This
+/// keeps AI-058 honest against spec drift: adding a new boolean-returning
+/// builtin in `fel-core` immediately makes it allowlisted here, and a
+/// name like `isBoolean` that never existed in the catalog correctly
+/// fails the check.
+///
+/// See `specs/ai/ai-integration.md` §3.3.1 and Core §4.3.1 / §5.2.1 for
+/// the boolean-slot typing obligation this predicate enforces.
+static BOOLEAN_RETURNING_BUILTINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    builtin_function_catalog()
+        .iter()
+        .filter(|entry| entry.signature.trim_end().ends_with("-> boolean"))
+        .map(|entry| entry.name)
+        .collect()
+});
+
 fn is_boolean_returning_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "empty"
-            | "present"
-            | "selected"
-            | "isNumber"
-            | "isString"
-            | "isDate"
-            | "isNull"
-            | "isBoolean"
-            | "contains"
-            | "startsWith"
-            | "endsWith"
-            | "matches"
-            | "valid"
-            | "relevant"
-            | "readonly"
-            | "required"
-    )
+    BOOLEAN_RETURNING_BUILTINS.contains(name)
 }
 
 /// Check FEL in an Advanced Governance document (AG-010 through AG-014).
@@ -1425,6 +1421,81 @@ mod tests {
         );
         let mut diag = Vec::new();
         check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    /// Helper: run AI-058 over a single precondition string; return the
+    /// diagnostics that fired. Keeps the per-builtin allowlist tests compact.
+    fn run_ai058(precondition: &str) -> Vec<LintDiagnostic> {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": [precondition]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        diag
+    }
+
+    // --- §4.3b #F4a: AI-058 allowlist derives from fel-core catalog ---
+    //
+    // These four tests pin the bugs Review A surfaced: the old hand-rolled
+    // allowlist omitted `every`, `some`, and the `boolean(any)` cast, and
+    // listed a bogus `isBoolean` that does not exist in `fel-core`.
+
+    #[test]
+    fn ai058_every_builtin_is_clean() {
+        // `every(array, predicate) -> boolean` — aggregate builtin that was
+        // missing from the pre-§4.3b hand-rolled allowlist (extensions.rs:114).
+        let diag = run_ai058("every(caseFile.flags, $ = true)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_some_builtin_is_clean() {
+        // `some(array, predicate) -> boolean` — also missing from the old
+        // allowlist (extensions.rs:120).
+        let diag = run_ai058("some(caseFile.flags, $ = true)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_boolean_cast_is_clean() {
+        // `boolean(any) -> boolean` — the cast builtin (extensions.rs:378)
+        // that was absent from the old allowlist.
+        let diag = run_ai058("boolean(caseFile.flag)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_is_boolean_is_not_a_builtin() {
+        // Behavior change introduced by §4.3b #F4a: `isBoolean` was in the
+        // old hand-rolled allowlist but does not exist in `fel-core`
+        // (grep-verified). The new catalog-derived predicate correctly
+        // refuses it, so AI-058 now fires on a bare `isBoolean(...)` call.
+        let diag = run_ai058("isBoolean(caseFile.flag)");
         assert!(
             diag.iter()
                 .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
