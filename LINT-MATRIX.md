@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `2730ac8393f5b074db04fba0acb3a167e676454b`). 102 rules across 35 T1 / 58 T2 / 9 T3 (0 LoadBearing, 0 Stable, 11 Tested, 91 Draft).
+> **Regenerated from code registries** (commit `ee05cec1b54543c0df9e0179bc1aeee258723fc9`). 103 rules across 35 T1 / 59 T2 / 9 T3 (0 LoadBearing, 0 Stable, 12 Tested, 91 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -8,7 +8,7 @@
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   58 rules                  │
+│  Tier 2: wos-lint --project (cross)   59 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -95,6 +95,7 @@
 | `AI-046` | AI | draft | `rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`. | — |
 | `AI-056` | AI | draft | Autonomy is an action-site property, not an agent property. | — |
 | `AI-057` | AI | draft | Capability `preconditions` entries MUST be valid FEL. | — |
+| `AI-058` | AI | tested | Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion). | — |
 | `DM-002` | DM | draft | Rights/safety workflows SHOULD follow shadow/canary/production sequence. | — |
 | `G-001` | G | draft | Due process MUST be enforced for `rights-impacting` or `safety-impacting` kernels. | — |
 | `G-003` | G | draft | Notice MUST include specific determination, reason codes, and appeal instructions. | — |
@@ -135,7 +136,7 @@
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 
-**T2 total: 58** (0 LoadBearing, 0 Stable, 2 Tested, 56 Draft)
+**T2 total: 59** (0 LoadBearing, 0 Stable, 3 Tested, 56 Draft)
 
 ---
 
@@ -162,7 +163,7 @@
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
 | T1 | 35 | 0 | 0 | 2 | 33 |
-| T2 | 58 | 0 | 0 | 2 | 56 |
+| T2 | 59 | 0 | 0 | 3 | 56 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **102** | **0** | **0** | **11** | **91** |
+| **Total** | **103** | **0** | **0** | **12** | **91** |
 
