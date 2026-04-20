@@ -149,3 +149,23 @@ def test_outcome_accepts_lowercase_vendor_extension(schema):
     assert errors == [], (
         f"Lowercase-kebab vendor extensions must still be accepted: {errors}"
     )
+
+
+def test_outcome_rejects_bare_x_prefix(schema):
+    """Review B Finding 5: the vendor-extension pattern
+    `^x-[a-z][a-z0-9-]*$` requires at least one lowercase letter after
+    `x-`. A bare `x-` with no trailing identifier MUST be rejected --
+    otherwise the collision-avoidance guarantee collapses into an empty
+    sentinel that any future reserved literal could shadow."""
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = {
+        "recordKind": "stateTransition",
+        "outcome": "x-",
+    }
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, (
+        "A bare `x-` prefix with no vendor-specific suffix must be rejected "
+        "so the collision-avoidance guarantee stays meaningful."
+    )

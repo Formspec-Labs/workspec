@@ -111,3 +111,51 @@ def test_unblocked_invocation_without_outcome_is_accepted(schema):
     assert errors == [], (
         f"A successful capability invocation must validate without outcome: {errors}"
     )
+
+
+def test_absent_invocation_blocked_not_required_outcome(schema):
+    """Review B Finding 5: when `data.invocationBlocked` is absent, the
+    if branch's `required: ["invocationBlocked"]` on the `data` subschema
+    does not match, so the then branch does not apply. A capability-
+    invocation record with no `invocationBlocked` flag MUST therefore
+    validate without carrying an `outcome` -- otherwise the MUST would
+    over-fire on records that predate the precondition gate."""
+    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    record = {
+        "recordKind": "capabilityInvocation",
+        "data": {
+            "capabilityId": "documentExtraction",
+        },
+    }
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors == [], (
+        "A capability-invocation record without `data.invocationBlocked` "
+        f"must validate without `outcome`: {errors}"
+    )
+
+
+def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(schema):
+    """Review B Finding 5: the if-guard is keyed on
+    `recordKind == "capabilityInvocation"` AND `data.invocationBlocked == true`.
+    A record with a DIFFERENT recordKind that happens to carry
+    `data.invocationBlocked: true` MUST NOT be forced to
+    `outcome = "preconditionNotSatisfied"` -- the MUST is scoped to the
+    AI §3.3.1 capability-invocation path, not every provenance record
+    whose payload reuses the field name."""
+    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    record = {
+        "recordKind": "stateTransition",
+        "data": {
+            "invocationBlocked": True,
+        },
+    }
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors == [], (
+        "A record with a non-`capabilityInvocation` recordKind must "
+        f"validate without `outcome` even when its data reuses the "
+        f"invocationBlocked field: {errors}"
+    )
