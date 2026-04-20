@@ -20,17 +20,28 @@ Working backlog for the Workflow Orchestration Standard specification suite. Ses
 
 ## Do next
 
-Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR. Scores `[Imp / Cx / Debt]` on a 0-10 scale.
+Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
-1. **#F3b Runtime §10.3 conformance** `[7 / 4 / 5]` — rewrite `crates/wos-core/src/eval.rs:412-421` as a post-mutation re-scan matching Runtime §10.3. ADR [0059](thoughts/adr/0059-continuous-mode-post-mutation-rescan.md). Task 3 closed out-of-band (`a683c03`); Tasks 1, 2, 4, 5 remain (~2-3 engineer-days). **Gate: none — ready to execute.**
-2. **#20 Typed event meta-vocabulary** `[8 / 7 / 6]` — replace `Transition.event: string` with a 5-kind typed union. Plan: [2026-04-20](thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md). 185 fixtures / 844 occurrences to migrate; ~8-10 engineer-days. **Gate: user decision on OQ1 (`$join` disposition) + OQ4 (vendor-kind extension shape) — see Open questions.**
-3. **§4.5 Structural merges** `[Cx 2 + 2 + 3]` — three merges ratified by the 2026-04-20 [sidecar audit](thoughts/reviews/2026-04-20-sidecar-contract-audit.md): assertion-library → workflow-governance, verification-report → advanced-governance (Output Artifacts), due-process-config residue → workflow-governance. See Backlog § Structural merges. **Gate: user decision — one PR or three?**
-4. **§4.4 Release trains Tasks 4-5** — Changesets tooling + GitHub Actions release workflow. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-release-trains.md). Tasks 1-3 landed session 8. **Gate: none.**
-5. **§5.5 `wos-bench` synthesis benchmark** — live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). **Gate: none.**
+**Scoring note.** On this project dev time is cheap relative to architectural drift, so ordering uses **`Imp × Debt`**; Cx is preserved as a scheduling dimension (how many engineer-days) but does not change priority. On a pre-1.0 spec under rapid iteration, Debt values should trend **up** between sessions as downstream code calcifies around loose shapes — scores are re-audited when the rank shifts. Scores are `[Imp / Cx / Debt]` on a 0-10 scale; **the number in parentheses after each item is `Imp × Debt`**.
+
+1. **#20 Typed event meta-vocabulary** `[8 / 7 / 8]` (**64**) — replace `Transition.event: string` with a 5-kind typed union. Debt raised 6 → 8: 185 fixtures / 844 occurrences already in the tree, plus every synth / bench / export / analyzer now building against the loose string shape — the surface calcifies daily. Plan: [2026-04-20](thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md). ~8-10 engineer-days. **Gate: ~10-min user decision on OQ1 (`$join` disposition) + OQ4 (vendor-kind extension shape). The gate is not a scheduling delay — it is a cheap decision blocking a large debt burn-down.**
+2. **#48 Merkle provenance chains** `[6 / 6 / 8]` (**48**) — hash-chained tamper-evident logs via Assurance `provenanceLayer` seam. Debt raised 6 → 8: PROV-O / XES / OCEL exports shipped 2026-04-15 without hash hooks; every adopter of those formats now consumes unlinkable output, and retrofit requires versioning three export surfaces simultaneously and forcing migration on current adopters. **Gate: none.**
+3. **#F3b Runtime §10.3 conformance** `[7 / 4 / 6]` (**42**) — rewrite `crates/wos-core/src/eval.rs:412-421` as a post-mutation re-scan matching Runtime §10.3. Debt raised 5 → 6: every day continuous-mode ships with spec-drift, any user who tries it builds assumptions against the ad-hoc `$continuous` sentinel the spec never defined. ADR [0059](thoughts/adr/0059-continuous-mode-post-mutation-rescan.md). Task 3 closed out-of-band (`a683c03`); Tasks 1, 2, 4, 5 remain (~2-3 engineer-days). **Gate: none — ready to execute.**
+4. **Cross-reference shape ADR** `[6 / 2 / 6]` (**36**) — `calendarRef` (URI) vs `templateRef` (plain string key) vs `escalationChainRef` (local id) vs `assertionRef` (URI) already diverged across four schemas; Reviews B + D flagged session 9. Pure design debt — every new schema lands with the drift until an ADR pins the convention. **Gate: none — draft takes ~2 hours.**
+5. **§4.5 Structural merges** — three merges ratified by the 2026-04-20 [sidecar audit](thoughts/reviews/2026-04-20-sidecar-contract-audit.md); highest Imp × Debt is assertion-library → workflow-governance `[4 / 2 / 5]` (**20**, debt raised 3 → 5 — every day deferred, more cross-schema `$ref` patterns entrench). See Backlog § Structural merges. **Gate: user decision — one PR or three?**
+
+*Dropped from Do next at revised ordering:* §4.4 Release trains Tasks 4-5 (Imp × Debt = 15) and §5.5 `wos-bench` (18) — both still open and ready, live in Backlog.
 
 ---
 
 ## Backlog
+
+### Release + benchmarking
+
+Fell out of Do next only because `Imp × Debt` put other items higher; both are ready-to-execute with no gate.
+
+- **§4.4 Release trains Tasks 4-5** `[5 / 4 / 3]` (**15**) — Changesets tooling + GitHub Actions release workflow. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-release-trains.md). Tasks 1-3 landed session 8.
+- **§5.5 `wos-bench` synthesis benchmark** `[6 / 5 / 3]` (**18**) — live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md).
 
 ### Behavior + authoring surface
 
@@ -44,7 +55,7 @@ Normal feature work. Schedule once the critical path clears.
 - **#43 Assurance × impact-level composition** `[6 / 5 / 4]` — minimum Assurance floor for AI-assisted rights-impacting determinations?
 - **#30 WS-HumanTask lifecycle completion** `[5 / 5 / 2]` — task-level `Suspended`, distinct `Cancelled`, explicit `Return` with rework counter.
 - **#27 Cancellation regions** `[4 / 6 / 3]` — YAWL-style named regions, distinct from existing `cancellationPolicy` join policy.
-- **#28 Claim-check artifact references** `[4 / 4 / 2]` — typed `ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }` with integrity-check at retrieval. `inputDigest`/`outputDigest` already wired through `wos-export`.
+- **#28 Claim-check artifact references** `[4 / 4 / 5]` (**20**, debt raised 2 → 5: without the typed wrapper, every consumer builds field-by-field integrity checks ad-hoc; normalization later = every consumer refactors) — typed `ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }` with integrity-check at retrieval. `inputDigest`/`outputDigest` already wired through `wos-export`.
 - **#29b Milestone reactive transition firing (GSM-style)** `[6 / 5 / 2]` — ships after #29a (landed session 4).
 - **#3 Policy-based migration routing** `[5 / 6 / 2]` — `migrationPolicy: grandfather | migrateAll | migrateByState | expression`. `tenant`-scope behavioral contract is an open sub-question.
 
@@ -52,7 +63,7 @@ Normal feature work. Schedule once the critical path clears.
 
 All three ratified by the 2026-04-20 sidecar audit. See Do next item 3 for decision.
 
-- **Assertion Library → Workflow Governance** `[4 / 2 / 3]` — absorb as "Named Assertions". `AssertionUse` seam already landed session 8; merge is mechanical.
+- **Assertion Library → Workflow Governance** `[4 / 2 / 5]` (**20**, debt raised 3 → 5: every day deferred, more cross-schema `$ref` patterns get entrenched instead of simple in-document refs) — absorb as "Named Assertions". `AssertionUse` seam already landed session 8; merge is mechanical.
 - **Verification Report → Advanced Governance** `[3 / 2 / 2]` — it's a processor **output**, miscategorized as a sidecar.
 - **Due Process Config partial merge → Workflow Governance** `[5 / 3 / 4]` — residual `independenceConstraint` / `appealRouting` / `continuationPolicies` duplicate Governance §3.1/§3.5.
 - **M-1 Drift Monitor + Agent Config — BLOCKED.** `fixtures/ai/benefits-drift-monitor.json` ships standalone; ship #37 standalone binding instead.
@@ -62,16 +73,14 @@ All three ratified by the 2026-04-20 sidecar audit. See Do next item 3 for decis
 
 Organizational debt; first adopter won't notice. Schedule opportunistically when the relevant code is already being touched.
 
-- **#22a ProvenanceKind tier-typing** `[4 / 4 / 3]` — tier-typed record per `audit_layer`. Consider bundling with F3b Tasks 1-2 (both touch `provenance.rs`).
-- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (4451 lines) split along action-kind dispatch; CI fence.
-- **Cross-reference shape ADR** — `calendarRef` (URI) vs `templateRef` (plain string key) vs `escalationChainRef` (local id) vs `assertionRef` (URI) diverge. Surfaced by session-9 Reviews B + D. Pin the convention in a standalone ADR before the next cross-ref lands.
+- **#22a ProvenanceKind tier-typing** `[4 / 4 / 5]` (**20**, debt raised 3 → 5: "Debt lowered 5→3 post-PE.2" was premature — PE.2 catches tier-variance at the *variant* level, not the *payload shape*; payload shape is what breaks when tier-typing lands) — tier-typed record per `audit_layer`. Consider bundling with F3b Tasks 1-2 (both touch `provenance.rs`).
+- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` (**15**) — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (4451 lines) split along action-kind dispatch; CI fence.
 
 ### Audit + evidence products
 
-Build on the stable provenance export surface.
+Build on the stable provenance export surface. #48 promoted to Do next under the `Imp × Debt` ordering.
 
-- **#48 Merkle provenance chains** `[6 / 6 / 6]` — hash-chained tamper-evident logs via Assurance `provenanceLayer` seam. **Debt raised:** PROV-O / XES / OCEL exports shipped without hash hooks; every format consumer now reads unlinkable output.
-- **#52 Simulation trace format** `[4 / 3 / 2]` — normative replay contract + conformance fixtures. Event log format already shipped via `wos-export::xes`.
+- **#52 Simulation trace format** `[4 / 3 / 2]` (**8**) — normative replay contract + conformance fixtures. Event log format already shipped via `wos-export::xes`.
 
 ### Regulatory
 
