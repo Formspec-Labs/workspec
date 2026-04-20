@@ -145,6 +145,7 @@ fn observe_proxy_behavior(
         None,
         &HashMap::new(),
         &mut seen_idempotency_keys,
+        None,
     );
 
     let violation_ids = deontic_result

@@ -4,9 +4,79 @@
   "description": "Affected individual MUST receive notice before the adverse decision takes effect (WG S3.2). Notice must be sent before denial becomes final.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/due-process.json",
-    "governance": "../../../../fixtures/governance/due-process-governance.json"
+    "governance": "inline",
+    "notificationTemplate": "inline"
   },
-  "initial_case_state": {},
+  "inline_documents": {
+    "governance": {
+      "$wosWorkflowGovernance": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+      "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+      "version": "1.0.0",
+      "title": "Due Process Governance Test",
+      "dueProcess": {
+        "adverseDecisionPolicy": {
+          "noticeRequired": true,
+          "noticeTiming": "beforeEffective",
+          "noticeGracePeriod": "P30D",
+          "noticeTemplateRef": "adverseDecisionNotice",
+          "explanationLevel": "individualized",
+          "counterfactualRequired": true,
+          "appealMechanism": {
+            "enabled": true,
+            "appealWindow": "P30D",
+            "reviewerConstraint": "independentFromOriginal",
+            "reviewerRoles": ["appealReviewer"],
+            "continuationOfServices": true,
+            "continuationScope": "currentLevel"
+          }
+        }
+      }
+    },
+    "notificationTemplate": {
+      "$wosNotificationTemplate": "1.0",
+      "$schema": "https://wos-spec.org/schemas/notification-template/1.0",
+      "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+      "version": "1.0.0",
+      "templates": {
+        "adverseDecisionNotice": {
+          "category": "adverse-decision",
+          "subject": "Notice of decision for case {{caseId}}",
+          "sections": [
+            {
+              "id": "determination",
+              "title": "Decision",
+              "contentType": "structured",
+              "content": "Your case moved to {{determination}}."
+            },
+            {
+              "id": "reasons",
+              "title": "Reasons",
+              "contentType": "structured",
+              "content": "Reason codes: {{reasonCodes}}."
+            },
+            {
+              "id": "appealRights",
+              "title": "Appeal rights",
+              "contentType": "appeal-rights",
+              "content": "You may appeal within {{appealWindow}}. File with {{appealBody}}."
+            },
+            {
+              "id": "appealInstructions",
+              "title": "How to appeal",
+              "contentType": "action-required",
+              "content": "Submit your appeal before {{appealDeadline}}."
+            }
+          ],
+          "requiredVariables": ["caseId", "determination", "reasonCodes", "appealWindow", "appealBody", "appealDeadline"]
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "applicationId": "APP-2026-0042",
+    "eligibilityEvidence": "below-threshold"
+  },
   "event_sequence": [
     { "event": "denied", "actor": "caseworker" }
   ],
@@ -14,6 +84,21 @@
     { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
   ],
   "expected_provenance": [
-    { "record_kind": "noticeSent", "data": { "timing": "beforeEffective", "type": "adverse-decision" } }
+    {
+      "record_kind": "noticeSent",
+      "data": {
+        "source": "deterministic",
+        "timing": "beforeEffective",
+        "type": "adverse-decision",
+        "snapshotSha256": "7c6c9f0425dd8135fe6bbe81f876ddc1a6c5478bec3967dec1a40c93a6f8a749",
+        "templateRef": "adverseDecisionNotice",
+        "machineReadable": {
+          "kind": "adverseDecisionNotice",
+          "facts": {
+            "snapshotSha256": "7c6c9f0425dd8135fe6bbe81f876ddc1a6c5478bec3967dec1a40c93a6f8a749"
+          }
+        }
+      }
+    }
   ]
 }

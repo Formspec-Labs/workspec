@@ -273,7 +273,7 @@
         },
         "noticeTemplateRef": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for notice formatting.",
+          "description": "Reference to a Notification Template sidecar for deterministic adverse-decision notice formatting. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.",
           "examples": ["adverseDecisionNotice", "benefitTerminationNotice"]
         },
         "explanationLevel": {
@@ -298,6 +298,15 @@
           "$ref": "#/$defs/AppealMechanism",
           "description": "Appeal mechanism configuration (Governance S3.5)."
         }
+      },
+      "if": {
+        "properties": {
+          "noticeRequired": { "const": true }
+        },
+        "required": ["noticeRequired"]
+      },
+      "then": {
+        "required": ["noticeTemplateRef"]
       }
     },
     "AppealMechanism": {

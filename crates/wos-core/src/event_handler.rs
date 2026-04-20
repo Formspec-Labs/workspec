@@ -7,7 +7,39 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::provenance::{ProvenanceKind, ProvenanceRecord};
+use crate::provenance::{CaseFileSnapshot, ProvenanceKind, ProvenanceRecord};
+
+/// Deterministic adverse-decision notice input.
+#[derive(Debug, Clone)]
+pub struct AdverseDecisionNoticeInput {
+    /// Source lifecycle state of the adverse transition.
+    pub from_state: String,
+    /// Target lifecycle state of the adverse transition.
+    pub to_state: String,
+    /// Triggering event.
+    pub event: String,
+    /// Transition tags copied from the kernel transition.
+    pub transition_tags: Vec<String>,
+    /// Facts-tier snapshot captured before the transition takes effect.
+    pub case_file_snapshot: CaseFileSnapshot,
+    /// Governance notice timing.
+    pub timing: String,
+    /// Minimum notice grace period.
+    pub grace_period: Option<String>,
+    /// Notification Template key declared by the governance policy
+    /// (`noticeTemplateRef`). `None` when the policy did not pin a key.
+    pub template_ref: Option<String>,
+    /// Notification Template key actually selected. Differs from `template_ref`
+    /// when the processor fell back to the first category=`adverse-decision`
+    /// template in the bundle.
+    pub resolved_template_key: Option<String>,
+    /// How the processor resolved the template: `"explicit"`, `"categoryFallback"`, or `"notFound"`.
+    pub template_resolution_source: String,
+    /// Rendered human notice text.
+    pub human_readable: String,
+    /// Structured appeal details.
+    pub appeal: serde_json::Value,
+}
 
 /// Result from event handler evaluation.
 pub struct EventHandlerResult {
@@ -31,12 +63,21 @@ pub fn evaluate_event(
     governance: Option<&serde_json::Value>,
     companions: &HashMap<String, serde_json::Value>,
     seen_idempotency_keys: &mut HashSet<String>,
+    adverse_notice: Option<&AdverseDecisionNoticeInput>,
 ) -> EventHandlerResult {
     let mut prov = Vec::new();
     let mut requires_escalation = false;
     let mut blocked = false;
 
-    evaluate_due_process(event, actor, data, governance, &mut prov, &mut blocked);
+    evaluate_due_process(
+        event,
+        actor,
+        data,
+        governance,
+        adverse_notice,
+        &mut prov,
+        &mut blocked,
+    );
     evaluate_pipeline(event, data, &mut prov);
     evaluate_compensation(event, data, &mut prov);
     evaluate_delegation(event, actor, data, &mut prov);
@@ -64,6 +105,7 @@ fn evaluate_due_process(
     actor: &str,
     data: &serde_json::Value,
     governance: Option<&serde_json::Value>,
+    adverse_notice: Option<&AdverseDecisionNoticeInput>,
     prov: &mut Vec<ProvenanceRecord>,
     blocked: &mut bool,
 ) {
@@ -71,12 +113,25 @@ fn evaluate_due_process(
 
     // G-002: Notice before adverse decision
     if event == "denied" && has_due_process {
+        if let Some(notice) = adverse_notice {
+            prov.push(mk(
+                ProvenanceKind::NoticeSent,
+                deterministic_notice_payload(notice),
+            ));
+        } else {
+            *blocked = true;
+            prov.push(mk(
+                ProvenanceKind::ConsistencyViolation,
+                serde_json::json!({
+                    "reason": "deterministic-adverse-notice-unavailable",
+                    "event": event,
+                }),
+            ));
+        }
+    } else if let Some(notice) = adverse_notice {
         prov.push(mk(
             ProvenanceKind::NoticeSent,
-            serde_json::json!({
-                "timing": "beforeEffective",
-                "type": "adverse-decision",
-            }),
+            deterministic_notice_payload(notice),
         ));
     }
 
@@ -202,6 +257,41 @@ fn evaluate_due_process(
             ));
         }
     }
+}
+
+fn deterministic_notice_payload(notice: &AdverseDecisionNoticeInput) -> serde_json::Value {
+    serde_json::json!({
+        "source": "deterministic",
+        "timing": notice.timing,
+        "type": "adverse-decision",
+        "snapshotSha256": notice.case_file_snapshot.sha256,
+        "templateRef": notice.template_ref,
+        "resolvedTemplateKey": notice.resolved_template_key,
+        "templateResolution": notice.template_resolution_source,
+        "machineReadable": {
+            "kind": "adverseDecisionNotice",
+            "decision": {
+                "event": notice.event,
+                "fromState": notice.from_state,
+                "toState": notice.to_state,
+                "transitionTags": notice.transition_tags,
+            },
+            "facts": {
+                "snapshotSha256": notice.case_file_snapshot.sha256,
+                "jcsCanonical": notice.case_file_snapshot.jcs_canonical,
+                "value": notice.case_file_snapshot.value,
+            },
+            "notice": {
+                "timing": notice.timing,
+                "gracePeriod": notice.grace_period,
+                "templateRef": notice.template_ref,
+                "resolvedTemplateKey": notice.resolved_template_key,
+                "templateResolution": notice.template_resolution_source,
+            },
+            "appeal": notice.appeal,
+        },
+        "humanReadable": notice.human_readable,
+    })
 }
 
 // ── Batch 7: Pipeline ───────────────────────────────────────────────
