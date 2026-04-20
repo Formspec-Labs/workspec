@@ -90,6 +90,71 @@
           "then": {
             "required": ["caseFileSnapshot"]
           }
+        },
+        { "$ref": "#/$defs/CapabilityInvocationRecord" }
+      ]
+    },
+    "CapabilityInvocationRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. Every provenance log validated against this kernel schema participates in the MUST via `FactsTierRecord.allOf`; records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "examples": [
+        {
+          "recordKind": "capabilityInvocation",
+          "data": { "invocationBlocked": true, "capabilityId": "documentExtraction" },
+          "outcome": "preconditionNotSatisfied"
+        },
+        {
+          "recordKind": "capabilityInvocation",
+          "data": { "invocationBlocked": false, "capabilityId": "documentExtraction" }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
+          "examples": ["capabilityInvocation", "capabilityInvocation"]
+        },
+        "data": {
+          "type": "object",
+          "description": "Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
+          "examples": [
+            { "invocationBlocked": true, "capabilityId": "documentExtraction" },
+            { "invocationBlocked": false, "capabilityId": "eligibilityScreener" }
+          ],
+          "properties": {
+            "invocationBlocked": {
+              "type": "boolean",
+              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration §3.3.1). The processor MUST then fall through to the fallback chain (AI §8). False (or absent) means the capability was invoked.",
+              "examples": [true, false],
+              "x-lm": {
+                "critical": true,
+                "intent": "Signal that a capability precondition blocked agent invocation; pairs with outcome=preconditionNotSatisfied to distinguish declarative gates from agent failures"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": { "const": "capabilityInvocation" },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "invocationBlocked": { "const": true }
+                },
+                "required": ["invocationBlocked"]
+              }
+            },
+            "required": ["recordKind", "data"]
+          },
+          "then": {
+            "required": ["outcome"],
+            "properties": {
+              "outcome": { "const": "preconditionNotSatisfied" }
+            }
+          }
         }
       ]
     },

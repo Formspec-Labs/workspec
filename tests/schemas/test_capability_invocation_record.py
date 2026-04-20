@@ -1,9 +1,14 @@
-"""AI schema ``CapabilityInvocationRecord`` if/then regression tests.
+"""Kernel-schema ``CapabilityInvocationRecord`` if/then regression tests.
 
-Validates the §4.3a #F5b if/then branch in
-``schemas/ai/wos-ai-integration.schema.json`` that enforces
+Validates the §4.3b #F5d if/then branch in
+``schemas/kernel/wos-provenance-record.schema.json`` that enforces
 ``outcome: "preconditionNotSatisfied"`` whenever a capability-invocation
 record carries ``data.invocationBlocked: true`` (AI Integration §3.3.1).
+
+The $def was relocated from the AI schema into the kernel provenance
+schema so every conformant provenance log participates in the MUST via
+``FactsTierRecord.allOf``, not only logs from workflows that separately
+attach an AI Integration document.
 """
 
 from __future__ import annotations
@@ -15,12 +20,14 @@ import pytest
 from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-AI_SCHEMA = WOS_SPEC_ROOT / "schemas" / "ai" / "wos-ai-integration.schema.json"
+PROVENANCE_SCHEMA = (
+    WOS_SPEC_ROOT / "schemas" / "kernel" / "wos-provenance-record.schema.json"
+)
 
 
 @pytest.fixture(scope="module")
 def schema() -> dict:
-    return json.loads(AI_SCHEMA.read_text())
+    return json.loads(PROVENANCE_SCHEMA.read_text())
 
 
 def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:

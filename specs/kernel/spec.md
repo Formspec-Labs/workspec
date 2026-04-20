@@ -442,6 +442,8 @@ The optional `outcome` field records why the processor completed (or declined to
 
 The canonical schema definition is `$defs/ProvenanceOutcome` in `wos-provenance-record.schema.json`. Processors that emit outcome values outside this reserved set MUST prefix them with `x-` (see Kernel §10.6 extensions).
 
+The `preconditionNotSatisfied` outcome pairs with the `capabilityInvocation` record-kind discriminator (AI Integration §3.3.1): when a record carries `recordKind: "capabilityInvocation"` with `data.invocationBlocked: true`, the `outcome` field MUST be `preconditionNotSatisfied`. This pairing is enforced at schema-validation time via `$defs/CapabilityInvocationRecord` in `wos-provenance-record.schema.json`, which `FactsTierRecord` composes via `allOf` so that every conformant provenance log participates in the MUST regardless of whether an AI Integration document is also attached to the workflow.
+
 ### 8.3 Tamper Detection
 
 The optional `inputDigest` and `outputDigest` fields provide lightweight tamper detection. When present, a conformant processor SHOULD verify the digest matches the referenced data. The digest algorithm is implementation-defined but MUST be recorded in the provenance record's extensions.
