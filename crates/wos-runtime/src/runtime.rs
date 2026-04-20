@@ -124,6 +124,10 @@ pub struct RuntimeEventContext {
     pub instance: CaseInstance,
     /// Event dequeued for processing.
     pub event: PendingEvent,
+    /// Runtime clock at the start of event processing.
+    pub now_ms: u64,
+    /// RFC 3339 rendering of `now_ms`.
+    pub now_iso: String,
 }
 
 /// Companion-policy decision for a runtime event.
@@ -572,6 +576,8 @@ impl WosRuntime {
             kernel: kernel.clone(),
             instance: record.instance.clone(),
             event,
+            now_ms,
+            now_iso: now_iso.clone(),
         })?;
         appended_provenance.extend(decision.provenance);
 
