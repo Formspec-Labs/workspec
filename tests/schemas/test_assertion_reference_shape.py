@@ -175,6 +175,43 @@ class TestAssertionReferenceShape:
             "and MUST fail validation."
         )
 
+    def test_assertion_ref_rejects_empty_string(self, schema):
+        validator = _validator_for_def(schema, "AssertionReference")
+        doc = {"assertionRef": ""}
+
+        errors = list(validator.iter_errors(doc))
+
+        assert errors, (
+            "An empty `assertionRef` carries no resolution target. The schema "
+            "applies `minLength: 1` so the empty string MUST be rejected at "
+            "authoring time rather than slipping through as a silent no-op."
+        )
+
+    def test_assertion_ref_rejects_null(self, schema):
+        validator = _validator_for_def(schema, "AssertionReference")
+        doc = {"assertionRef": None}
+
+        errors = list(validator.iter_errors(doc))
+
+        assert errors, (
+            "`assertionRef` is typed `string`; a JSON null is a type mismatch "
+            "and MUST be rejected. Nullable reference keys would contradict "
+            "the §2.1 either-or contract."
+        )
+
+    def test_assertion_ref_rejects_relative_fragment(self, schema):
+        validator = _validator_for_def(schema, "AssertionReference")
+        doc = {"assertionRef": "#localFrag"}
+
+        errors = list(validator.iter_errors(doc))
+
+        assert errors, (
+            "`format: uri` requires an absolute URI with a scheme. A bare "
+            "fragment like `#localFrag` is a URI reference, not a URI, and "
+            "cannot identify a library — it MUST be rejected so references "
+            "always point at a resolvable library entry."
+        )
+
 
 class TestAssertionInlineUseIdentifierPattern:
     def test_inline_assertion_id_pattern_mismatch_is_rejected(self, schema):
