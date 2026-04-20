@@ -22,14 +22,162 @@
 
 use std::collections::{HashMap, HashSet};
 
-use fel_core::parse;
+use fel_core::{
+    ast::{Expr, PathSegment as FelPathSegment},
+    parse,
+};
 use wos_core::model::kernel::{
     Action, ActionKind, EvaluationMode, KernelDocument, Region, State, Transition,
 };
 
 use crate::diagnostic::LintDiagnostic;
 
-use super::fel_analysis::{simple_access_path_string, walk_expr};
+use super::fel_analysis::walk_expr;
+
+// ---------------------------------------------------------------------------
+// Structured case-file paths
+// ---------------------------------------------------------------------------
+
+/// One segment of a structured case-file path, normalized from either a
+/// raw `setData.action.path` string or a FEL access-chain AST subtree.
+///
+/// Matches the first-class dep-graph vertex shapes enumerated in Core §3.6.1
+/// (lines 1388-1409): named properties, indexed slots, and `[*]` wildcards.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Segment {
+    Dot(String),
+    Index(usize),
+    Wildcard,
+}
+
+/// Parse a raw `setData.action.path` (e.g. `"caseFile.items[0].x"`) into the
+/// structured segment form used for reachability comparison.
+///
+/// Unparseable input degrades to a single `Segment::Dot(raw)` so comparison
+/// stays conservative rather than dropping the write entirely.
+fn normalize_setdata_path(raw: &str) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let mut chars = raw.chars().peekable();
+    let mut current = String::new();
+
+    while let Some(&ch) = chars.peek() {
+        match ch {
+            '.' => {
+                chars.next();
+                if !current.is_empty() {
+                    segments.push(Segment::Dot(std::mem::take(&mut current)));
+                }
+            }
+            '[' => {
+                if !current.is_empty() {
+                    segments.push(Segment::Dot(std::mem::take(&mut current)));
+                }
+                chars.next();
+                let mut inside = String::new();
+                while let Some(&next) = chars.peek() {
+                    if next == ']' {
+                        break;
+                    }
+                    inside.push(next);
+                    chars.next();
+                }
+                if chars.peek() != Some(&']') {
+                    return vec![Segment::Dot(raw.to_string())];
+                }
+                chars.next(); // consume ']'
+                if inside == "*" {
+                    segments.push(Segment::Wildcard);
+                } else if let Ok(n) = inside.parse::<usize>() {
+                    segments.push(Segment::Index(n));
+                } else {
+                    return vec![Segment::Dot(raw.to_string())];
+                }
+            }
+            _ => {
+                current.push(ch);
+                chars.next();
+            }
+        }
+    }
+    if !current.is_empty() {
+        segments.push(Segment::Dot(current));
+    }
+
+    if segments.is_empty() {
+        vec![Segment::Dot(raw.to_string())]
+    } else {
+        segments
+    }
+}
+
+/// Walk a FEL access-chain expression (`FieldRef` / `ContextRef` /
+/// `PostfixAccess`) and produce a structured path. Returns `None` for any
+/// non-access shape (literal, binary op, function call, etc.).
+fn path_from_fel(expr: &Expr) -> Option<Vec<Segment>> {
+    match expr {
+        Expr::FieldRef {
+            name,
+            path: segments,
+        } => {
+            let root = name.as_deref()?;
+            let mut out = vec![Segment::Dot(root.to_string())];
+            append_segments(&mut out, segments);
+            Some(out)
+        }
+        Expr::ContextRef { name, tail, .. } => {
+            let mut out = vec![Segment::Dot(name.clone())];
+            for part in tail {
+                out.push(Segment::Dot(part.clone()));
+            }
+            Some(out)
+        }
+        Expr::PostfixAccess {
+            expr: inner,
+            path: segments,
+        } => {
+            let mut out = path_from_fel(inner)?;
+            append_segments(&mut out, segments);
+            Some(out)
+        }
+        _ => None,
+    }
+}
+
+fn append_segments(out: &mut Vec<Segment>, segments: &[FelPathSegment]) {
+    for seg in segments {
+        match seg {
+            FelPathSegment::Dot(part) => out.push(Segment::Dot(part.clone())),
+            FelPathSegment::Index(n) => out.push(Segment::Index(*n)),
+            FelPathSegment::Wildcard => out.push(Segment::Wildcard),
+        }
+    }
+}
+
+/// §3.6.4 reachability: does a write to `write` invalidate a read of `read`?
+///
+/// Returns true when:
+///   - the paths compare equal segment-by-segment,
+///   - at any aligned position one side is `Wildcard` and the other is any
+///     non-empty segment (wildcard set-cover),
+///   - `write` is a strict prefix of `read` (writing `a` invalidates `a.b.c`),
+///   - `read` is a strict prefix of `write` (reading `a` is affected by writing `a.b`).
+fn reaches(write: &[Segment], read: &[Segment]) -> bool {
+    let n = write.len().min(read.len());
+    for i in 0..n {
+        let w = &write[i];
+        let r = &read[i];
+        if matches!(w, Segment::Wildcard) || matches!(r, Segment::Wildcard) {
+            continue;
+        }
+        if w != r {
+            return false;
+        }
+    }
+    // Prefix-or-equal along the overlapping positions; strict prefix on
+    // either side is still a reach (writing a parent invalidates a child
+    // read; reading a parent is affected by writing a child).
+    true
+}
 
 /// Run K-049 against a typed kernel document.
 pub(super) fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
@@ -53,21 +201,20 @@ pub(super) fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnosti
         &mut nodes,
     );
 
-    // Build per-path write-index so cycle edges are O(writes × reads) not O(n²).
-    let mut writers_by_path: HashMap<String, Vec<usize>> = HashMap::new();
-    for (i, node) in nodes.iter().enumerate() {
-        for path in &node.writes {
-            writers_by_path.entry(path.clone()).or_default().push(i);
-        }
-    }
-
+    // Adjacency edges use §3.6.4 reachability (`reaches`), which is not a
+    // hash-equality relation — wildcard and prefix matches mean two distinct
+    // segment vectors can still be joined. We iterate writes × reads per
+    // transition-pair; `n` is bounded by transition count so O(n²) is fine
+    // in practice and keeps the graph-build loop obvious.
     let mut adjacency: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
-    for (j, node) in nodes.iter().enumerate() {
+    for (j, reader) in nodes.iter().enumerate() {
         let mut edges: HashSet<usize> = HashSet::new();
-        for path in &node.reads {
-            if let Some(writers) = writers_by_path.get(path) {
-                for &i in writers {
-                    edges.insert(i);
+        for read_path in &reader.reads {
+            for (i, writer) in nodes.iter().enumerate() {
+                for write_path in &writer.writes {
+                    if reaches(write_path, read_path) {
+                        edges.insert(i);
+                    }
                 }
             }
         }
@@ -105,9 +252,9 @@ struct TransitionNode {
     /// JSON-pointer-shaped path to the transition (for diagnostics).
     path: String,
     /// Case-file paths the guard reads (empty when no guard).
-    reads: HashSet<String>,
+    reads: HashSet<Vec<Segment>>,
     /// Case-file paths the `setData` actions write.
-    writes: HashSet<String>,
+    writes: HashSet<Vec<Segment>>,
 }
 
 fn collect_transitions(
@@ -199,8 +346,8 @@ fn build_node(
 
 /// Per-state index of `setData` paths written by `onEntry` / `onExit`.
 struct StateWrites {
-    on_entry: HashSet<String>,
-    on_exit: HashSet<String>,
+    on_entry: HashSet<Vec<Segment>>,
+    on_exit: HashSet<Vec<Segment>>,
 }
 
 fn collect_state_writes(
@@ -220,27 +367,36 @@ fn collect_state_writes(
     }
 }
 
-fn collect_setdata_paths(actions: &[Action], out: &mut HashSet<String>) {
+fn collect_setdata_paths(actions: &[Action], out: &mut HashSet<Vec<Segment>>) {
     for action in actions {
         if action.action == ActionKind::SetData {
             if let Some(p) = &action.path {
-                out.insert(p.clone());
+                out.insert(normalize_setdata_path(p));
             }
         }
     }
 }
 
-/// Parse a guard expression and collect every simple dotted field/context path
+/// Parse a guard expression and collect every structured field/context path
 /// it references. Returns an empty set on parse failure — K-012 already reports
-/// unparseable guards.
-fn extract_read_paths(guard: &str) -> HashSet<String> {
+/// unparseable guards. Non-access shapes (literals, operator trees, function
+/// calls) contribute nothing: only access chains are cycle-relevant.
+///
+/// When the walker sees a node that resolves to a structured path (the
+/// outermost node of an access chain), it emits the full path and stops
+/// descending into that subtree. Without the short-circuit, a reference
+/// like `caseFile.input` would also produce the stem `caseFile` as a
+/// second path via the inner `FieldRef` node, which would then over-match
+/// against any write into `caseFile.*` under §3.6.4 prefix reachability.
+fn extract_read_paths(guard: &str) -> HashSet<Vec<Segment>> {
     let Ok(expr) = parse(guard) else {
         return HashSet::new();
     };
-    let mut paths: HashSet<String> = HashSet::new();
+    let mut paths: HashSet<Vec<Segment>> = HashSet::new();
     walk_expr(&expr, &mut |node| {
-        if let Some(p) = simple_access_path_string(node) {
+        if let Some(p) = path_from_fel(node) {
             paths.insert(p);
+            return true; // stop descending into this access chain
         }
         false
     });
@@ -646,6 +802,157 @@ mod tests {
         check(&kernel, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].rule_id, "K-049");
+    }
+
+    #[test]
+    fn k049_flags_cycle_through_indexed_paths() {
+        // Guard reads `caseFile.items[0].x`; setData writes the same indexed
+        // slot. Pre-structured-path implementation matched these on string
+        // equality and missed the relation when indices changed. Now the
+        // reachability comparator handles equal-index segments directly.
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": {
+                "fields": {
+                    "items": {
+                        "type": "array",
+                        "items": { "type": "object", "properties": { "x": { "type": "number" } } }
+                    }
+                }
+            },
+            "lifecycle": {
+                "initialState": "idle",
+                "states": {
+                    "idle": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "$continuous",
+                            "target": "idle",
+                            "guard": "caseFile.items[0].x > 0",
+                            "actions": [{
+                                "action": "setData",
+                                "path": "caseFile.items[0].x",
+                                "value": 1
+                            }]
+                        }]
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].rule_id, "K-049");
+    }
+
+    #[test]
+    fn k049_flags_cycle_through_wildcard() {
+        // Guard reads `caseFile.items[*].y` — wildcard must reach the
+        // indexed write to `caseFile.items[3].y` (§3.6.4 set-cover).
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": {
+                "fields": {
+                    "items": {
+                        "type": "array",
+                        "items": { "type": "object", "properties": { "y": { "type": "number" } } }
+                    }
+                }
+            },
+            "lifecycle": {
+                "initialState": "idle",
+                "states": {
+                    "idle": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "$continuous",
+                            "target": "idle",
+                            "guard": "sum(caseFile.items[*].y) > 0",
+                            "actions": [{
+                                "action": "setData",
+                                "path": "caseFile.items[3].y",
+                                "value": 1
+                            }]
+                        }]
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].rule_id, "K-049");
+    }
+
+    // --- normalize_setdata_path unit tests ---
+
+    #[test]
+    fn normalize_plain_dotted_path() {
+        assert_eq!(
+            normalize_setdata_path("caseFile.value"),
+            vec![Segment::Dot("caseFile".into()), Segment::Dot("value".into())]
+        );
+    }
+
+    #[test]
+    fn normalize_indexed_and_wildcard() {
+        assert_eq!(
+            normalize_setdata_path("caseFile.items[0].x"),
+            vec![
+                Segment::Dot("caseFile".into()),
+                Segment::Dot("items".into()),
+                Segment::Index(0),
+                Segment::Dot("x".into()),
+            ]
+        );
+        assert_eq!(
+            normalize_setdata_path("caseFile.items[*].x"),
+            vec![
+                Segment::Dot("caseFile".into()),
+                Segment::Dot("items".into()),
+                Segment::Wildcard,
+                Segment::Dot("x".into()),
+            ]
+        );
+    }
+
+    // --- reaches() unit tests ---
+
+    #[test]
+    fn reaches_wildcard_matches_index() {
+        let write = normalize_setdata_path("caseFile.items[3].y");
+        let read = normalize_setdata_path("caseFile.items[*].y");
+        assert!(reaches(&write, &read));
+        assert!(reaches(&read, &write));
+    }
+
+    #[test]
+    fn reaches_distinct_indices_do_not_match() {
+        let write = normalize_setdata_path("caseFile.items[0].y");
+        let read = normalize_setdata_path("caseFile.items[1].y");
+        assert!(!reaches(&write, &read));
+    }
+
+    #[test]
+    fn reaches_prefix_write_invalidates_deeper_read() {
+        let write = normalize_setdata_path("caseFile.items");
+        let read = normalize_setdata_path("caseFile.items[0].y");
+        assert!(reaches(&write, &read));
+    }
+
+    #[test]
+    fn reaches_prefix_read_affected_by_deeper_write() {
+        let write = normalize_setdata_path("caseFile.items[0].y");
+        let read = normalize_setdata_path("caseFile.items");
+        assert!(reaches(&write, &read));
     }
 
     #[test]
