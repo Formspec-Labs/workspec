@@ -13,9 +13,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use wos_synth_core::{
-    synthesize, DirectToolContext, Layer, Prompter, SynthOutcome, SynthTrace,
-};
+use wos_synth_core::{synthesize, DirectToolContext, Layer, Prompter, SynthOutcome, SynthTrace};
 
 #[derive(Parser, Debug)]
 #[command(name = "wos-synth", version, about = "WOS LLM synthesis loop")]
@@ -148,7 +146,10 @@ async fn run_loop(
         .map_err(|e| anyhow_lite::err(format!("reading {}: {e}", problem_path.display())))?;
     let tools = DirectToolContext::new();
 
-    eprintln!("synthesizing {layer:?} document from {}", problem_path.display());
+    eprintln!(
+        "synthesizing {layer:?} document from {}",
+        problem_path.display()
+    );
 
     let outcome = synthesize(provider, &tools, &problem, layer, max_iterations)
         .await
@@ -156,12 +157,11 @@ async fn run_loop(
 
     match outcome {
         SynthOutcome::Converged { document, trace } => {
-            std::fs::write(output, &document).map_err(|e| {
-                anyhow_lite::err(format!("writing {}: {e}", output.display()))
-            })?;
+            std::fs::write(output, &document)
+                .map_err(|e| anyhow_lite::err(format!("writing {}: {e}", output.display())))?;
             if let Some(path) = trace_path {
-                let trace_json = serde_json::to_string_pretty(&trace)
-                    .expect("trace serialisation cannot fail");
+                let trace_json =
+                    serde_json::to_string_pretty(&trace).expect("trace serialisation cannot fail");
                 std::fs::write(path, trace_json).map_err(|e| {
                     anyhow_lite::err(format!("writing trace {}: {e}", path.display()))
                 })?;
@@ -178,12 +178,11 @@ async fn run_loop(
             last_findings,
             trace,
         } => {
-            std::fs::write(output, &last_attempt).map_err(|e| {
-                anyhow_lite::err(format!("writing {}: {e}", output.display()))
-            })?;
+            std::fs::write(output, &last_attempt)
+                .map_err(|e| anyhow_lite::err(format!("writing {}: {e}", output.display())))?;
             if let Some(path) = trace_path {
-                let trace_json = serde_json::to_string_pretty(&trace)
-                    .expect("trace serialisation cannot fail");
+                let trace_json =
+                    serde_json::to_string_pretty(&trace).expect("trace serialisation cannot fail");
                 std::fs::write(path, trace_json).map_err(|e| {
                     anyhow_lite::err(format!("writing trace {}: {e}", path.display()))
                 })?;
@@ -207,26 +206,49 @@ async fn run_loop(
 }
 
 fn print_trace(trace: &SynthTrace) {
-    println!(
+    print!("{}", render_trace(trace));
+}
+
+fn render_trace(trace: &SynthTrace) -> String {
+    let mut out = String::new();
+    use std::fmt::Write as _;
+
+    writeln!(
+        out,
         "synth-trace: {} iteration(s); tokens in/out/cache = {}",
         trace.iterations.len(),
         format_token_totals(trace),
-    );
+    )
+    .expect("writing to string cannot fail");
     for iter in &trace.iterations {
-        println!(
-            "  iter {idx}: {n} finding(s); tokens in/out/cache = {tokens}",
+        writeln!(
+            out,
+            "  iter {idx}: {n} finding(s); conformance = {conformance}; tokens in/out/cache = {tokens}",
             idx = iter.index,
             n = iter.lint_findings.len(),
+            conformance = format_conformance(iter.conformance.as_ref()),
             tokens = format_iteration_tokens(iter.input_tokens, iter.output_tokens, iter.cache_read_tokens),
-        );
+        )
+        .expect("writing to string cannot fail");
         for f in &iter.lint_findings {
-            println!(
+            writeln!(
+                out,
                 "    [{rule}] {sev:?}: {msg}",
                 rule = f.rule_id,
                 sev = f.severity,
                 msg = f.message
-            );
+            )
+            .expect("writing to string cannot fail");
         }
+    }
+    out
+}
+
+fn format_conformance(conformance: Option<&wos_synth_core::ConformanceVerdict>) -> String {
+    match conformance {
+        Some(verdict) if verdict.passed => format!("pass: {}", verdict.summary),
+        Some(verdict) => format!("fail: {}", verdict.summary),
+        None => "not run".to_string(),
     }
 }
 
@@ -291,5 +313,50 @@ mod anyhow_lite {
 
     pub fn err(message: impl Into<String>) -> Error {
         Error(message.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wos_synth_core::{ConformanceVerdict, IterationRecord, LintFinding, Severity, SynthTrace};
+
+    #[test]
+    fn render_trace_includes_iteration_conformance() {
+        let mut trace = SynthTrace::new();
+        trace.push(IterationRecord {
+            index: 0,
+            attempt: r#"{"$wosKernel":"1.0"}"#.to_string(),
+            lint_findings: vec![LintFinding {
+                rule_id: "K-001".to_string(),
+                severity: Severity::Error,
+                message: "missing terminal state".to_string(),
+                path: None,
+                suggested_fix: None,
+                related_docs: vec![],
+            }],
+            conformance: Some(ConformanceVerdict {
+                passed: false,
+                summary: "step 1 diverged".to_string(),
+            }),
+            input_tokens: 1,
+            output_tokens: 2,
+            cache_read_tokens: 3,
+        });
+        trace.push(IterationRecord {
+            index: 1,
+            attempt: r#"{"$wosKernel":"1.0"}"#.to_string(),
+            lint_findings: vec![],
+            conformance: None,
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+        });
+
+        let rendered = render_trace(&trace);
+
+        assert!(rendered.contains("conformance = fail: step 1 diverged"));
+        assert!(rendered.contains("conformance = not run"));
+        assert!(rendered.contains("[K-001] Error: missing terminal state"));
     }
 }

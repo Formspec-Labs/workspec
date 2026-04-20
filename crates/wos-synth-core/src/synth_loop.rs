@@ -83,8 +83,7 @@ pub async fn synthesize(
             });
         }
 
-        let (next_attempt, next_completion) =
-            repair(provider, &attempt, &findings, layer).await?;
+        let (next_attempt, next_completion) = repair(provider, &attempt, &findings, layer).await?;
         attempt = next_attempt;
         completion = next_completion;
     }
@@ -121,13 +120,12 @@ async fn repair(
     Ok((text, completion))
 }
 
-/// Strip optional ```` ```json ```` / ```` ``` ```` fences the model may add.
+/// Strip optional fenced-code wrappers the model may add.
 ///
 /// Handles four shapes the model emits in practice:
 ///   1. ` ```json\n{...}\n``` ` (canonical fenced code block)
 ///   2. ` ```\n{...}\n``` ` (no language tag)
-///   3. ` ```json{...}``` ` (single-line, no whitespace — the prior
-///      implementation silently retained the literal `json` token here)
+///   3. ` ```wos\n{...}\n``` ` (non-JSON language tag)
 ///   4. bare `{...}` (no fence)
 fn strip_fences(text: &str) -> &str {
     let trimmed = text.trim();
@@ -143,12 +141,32 @@ fn strip_fences(text: &str) -> &str {
     // After the opening ``` the model may include a language tag (`json`,
     // `javascript`, `wos`, ...) optionally followed by whitespace.
     let body = body.trim();
-    let language_stripped = body
-        .strip_prefix("json")
-        .or_else(|| body.strip_prefix("JSON"))
-        .unwrap_or(body);
+    let language_stripped = strip_fence_language(body);
 
     language_stripped.trim()
+}
+
+fn strip_fence_language(body: &str) -> &str {
+    let Some(first) = body.chars().next() else {
+        return body;
+    };
+    if first == '{' || first == '[' {
+        return body;
+    }
+
+    let Some(json_start) = body.find(['{', '[']) else {
+        return body;
+    };
+    let language = body[..json_start].trim();
+    if language.is_empty()
+        || language
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '+'))
+    {
+        return &body[json_start..];
+    }
+
+    body
 }
 
 #[cfg(test)]
@@ -223,7 +241,10 @@ mod tests {
                 .unwrap_or_default())
         }
 
-        async fn run_conformance(&self, _doc: &str) -> Result<Option<ConformanceVerdict>, ToolError> {
+        async fn run_conformance(
+            &self,
+            _doc: &str,
+        ) -> Result<Option<ConformanceVerdict>, ToolError> {
             Ok(None)
         }
     }
@@ -249,8 +270,14 @@ mod tests {
         ]);
         let tools = ScriptedTools::new(vec![vec![err("K-001")], vec![]]);
 
-        let outcome = pollster::block_on(synthesize(&provider, &tools, "test problem", Layer::Kernel, 5))
-            .expect("loop should not error");
+        let outcome = pollster::block_on(synthesize(
+            &provider,
+            &tools,
+            "test problem",
+            Layer::Kernel,
+            5,
+        ))
+        .expect("loop should not error");
 
         match outcome {
             SynthOutcome::Converged { document, trace } => {
@@ -263,12 +290,8 @@ mod tests {
 
     #[test]
     fn unconverged_when_cap_hit() {
-        let provider = ScriptedPrompter::new(vec![
-            r#"{"a":4}"#,
-            r#"{"a":3}"#,
-            r#"{"a":2}"#,
-            r#"{"a":1}"#,
-        ]);
+        let provider =
+            ScriptedPrompter::new(vec![r#"{"a":4}"#, r#"{"a":3}"#, r#"{"a":2}"#, r#"{"a":1}"#]);
         let tools = ScriptedTools::new(vec![
             vec![err("K-001")],
             vec![err("K-001")],
@@ -305,36 +328,29 @@ mod tests {
 
     #[test]
     fn strip_fences_handles_canonical_form() {
-        assert_eq!(
-            strip_fences("```json\n{\"a\":1}\n```"),
-            r#"{"a":1}"#
-        );
+        assert_eq!(strip_fences("```json\n{\"a\":1}\n```"), r#"{"a":1}"#);
     }
 
     #[test]
     fn strip_fences_handles_no_newline_after_language_tag() {
         // Single-line fenced block — the prior implementation silently
         // retained the literal `json` token. Repaired by Finding 4.
-        assert_eq!(
-            strip_fences("```json{\"a\":1}```"),
-            r#"{"a":1}"#
-        );
+        assert_eq!(strip_fences("```json{\"a\":1}```"), r#"{"a":1}"#);
     }
 
     #[test]
     fn strip_fences_handles_uppercase_language_tag() {
-        assert_eq!(
-            strip_fences("```JSON\n{\"a\":1}\n```"),
-            r#"{"a":1}"#
-        );
+        assert_eq!(strip_fences("```JSON\n{\"a\":1}\n```"), r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn strip_fences_handles_non_json_language_tag() {
+        assert_eq!(strip_fences("```wos\n{\"a\":1}\n```"), r#"{"a":1}"#);
     }
 
     #[test]
     fn strip_fences_handles_no_language_tag() {
-        assert_eq!(
-            strip_fences("```\n{\"a\":1}\n```"),
-            r#"{"a":1}"#
-        );
+        assert_eq!(strip_fences("```\n{\"a\":1}\n```"), r#"{"a":1}"#);
     }
 
     #[test]
