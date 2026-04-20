@@ -94,20 +94,15 @@
       ]
     },
     "ProvenanceOutcome": {
+      "type": "string",
       "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration §3.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime §10.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
-      "examples": ["preconditionNotSatisfied", "convergenceCapReached"],
-      "anyOf": [
+      "examples": ["preconditionNotSatisfied", "convergenceCapReached", "x-vendor-quota-exceeded"],
+      "oneOf": [
         {
-          "type": "string",
-          "enum": ["preconditionNotSatisfied", "convergenceCapReached"],
-          "description": "Reserved outcome literal recognised across all WOS tiers. Current reserved values cover AI Integration §3.3.1 capability-precondition blocking and Runtime §10.3 continuous-mode convergence-cap halting.",
-          "examples": ["preconditionNotSatisfied", "convergenceCapReached"]
+          "enum": ["preconditionNotSatisfied", "convergenceCapReached"]
         },
         {
-          "type": "string",
-          "pattern": "^x-[a-zA-Z][a-zA-Z0-9-]*$",
-          "description": "Vendor-extension outcome literal. Authors MUST prefix with `x-` (Kernel §10.6) to avoid future collisions with reserved values added in later WOS versions.",
-          "examples": ["x-vendor-quota-exceeded", "x-acme-tenant-paused"]
+          "pattern": "^x-[a-z][a-z0-9-]*$"
         }
       ],
       "x-wos": { "open-enum": true }
