@@ -160,6 +160,47 @@ class TestSlaDefinitionExpectedDuration:
             "unlike HoldPolicy, SLAs have no semantic for open-ended windows"
         )
 
+    def test_start_event_rejects_dollar_prefix(self, schema):
+        """startEvent MUST reject `$`-prefixed reserved kernel event names
+        (e.g. `$continuous`, `$join`, `$timeout.*`) — those are not valid
+        clock origins for an SLA (Review D #40b)."""
+        v = _validator_for_def(schema, "SlaDefinition")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "firstResponse",
+                    "expectedDuration": "PT4H",
+                    "calendarType": "wall-clock",
+                    "startAt": "custom-event",
+                    "startEvent": "$continuous",
+                }
+            )
+        )
+        assert errors, (
+            "SlaDefinition.startEvent='$continuous' must fail — the "
+            "kernel event-name grammar forbids $-prefixed reserved names"
+        )
+
+    def test_start_event_rejects_whitespace(self, schema):
+        """startEvent MUST reject names containing whitespace or other
+        characters outside the kernel event-name grammar (Review D #40b)."""
+        v = _validator_for_def(schema, "SlaDefinition")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "firstResponse",
+                    "expectedDuration": "PT4H",
+                    "calendarType": "wall-clock",
+                    "startAt": "custom-event",
+                    "startEvent": "hello world",
+                }
+            )
+        )
+        assert errors, (
+            "SlaDefinition.startEvent='hello world' must fail — "
+            "whitespace is outside `^[a-zA-Z][a-zA-Z0-9_-]*$`"
+        )
+
     def test_custom_event_requires_start_event(self, schema):
         """startAt = custom-event MUST require a startEvent."""
         v = _validator_for_def(schema, "SlaDefinition")

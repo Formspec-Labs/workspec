@@ -1169,7 +1169,8 @@
         "startEvent": {
           "type": "string",
           "minLength": 1,
-          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. Event-name resolution against the target kernel is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and the reserved `$`-prefixed kernel event names (`$continuous`, `$join`, `$timeout.*`) — those are not valid clock origins. Event-name *resolution* against the target kernel is still deferred to a future T2 lint (tracked alongside G-023 / G-063).",
           "examples": ["applicantResponseReceived", "caseReadyForReview"]
         }
       },
