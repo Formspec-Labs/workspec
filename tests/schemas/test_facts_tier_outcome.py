@@ -111,3 +111,41 @@ def test_outcome_is_optional(schema):
     assert errors == [], (
         f"outcome is OPTIONAL; a record without it must still validate: {errors}"
     )
+
+
+def test_outcome_rejects_uppercase_vendor_extension(schema):
+    """The vendor-extension regex is aligned with the sibling convention
+    (`^x-[a-z][a-z0-9-]*$`) used at `wos-kernel.schema.json:816` and
+    `wos-workflow-governance.schema.json:1527`. Uppercase-containing
+    literals like `x-Acme-Foo` that an earlier (drifted) permissive
+    regex `^x-[a-zA-Z][a-zA-Z0-9-]*$` would have accepted MUST be
+    rejected so outcome vocabulary stays lowercase-kebab like the rest
+    of the WOS vendor-extension surface (§4.3b #F5e)."""
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = {
+        "recordKind": "stateTransition",
+        "outcome": "x-Acme-Foo",
+    }
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors, (
+        "Uppercase-containing vendor-extension outcomes must be rejected "
+        "so the outcome literal vocabulary stays lowercase-kebab."
+    )
+
+
+def test_outcome_accepts_lowercase_vendor_extension(schema):
+    """Lowercase-kebab vendor-extension outcomes continue to validate
+    under the aligned regex."""
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = {
+        "recordKind": "stateTransition",
+        "outcome": "x-acme-foo",
+    }
+
+    errors = list(validator.iter_errors(record))
+
+    assert errors == [], (
+        f"Lowercase-kebab vendor extensions must still be accepted: {errors}"
+    )
