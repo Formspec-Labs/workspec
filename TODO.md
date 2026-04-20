@@ -1,244 +1,142 @@
 # WOS TODO
 
-**Last audited:** 2026-04-20 (session 9 close — 4-agent parallel sweep addressing EVERY review finding from sessions 6/7/8; 19 commits; F3b Task 3 landed out-of-band; all §4.3b follow-ups closed)
+Working backlog for the Workflow Orchestration Standard specification suite. Session narratives and all closed items live in [COMPLETED.md](COMPLETED.md); this file indexes only active work, open decisions, and parked/deferred items.
 
-**Snapshot**
+**Last audited:** 2026-04-20 (post session 9).
 
-| Metric | Value |
+## Snapshot
+
+| Health | Value |
 |---|---|
-| Specs / schemas | 20 specs · 25 schemas (21 production + 4 meta: conformance / lint / mcp / synth) · 0 SCHEMA-DOC-001 violations across all (`all_production_schemas_have_zero_schema_doc_violations` CI gate) |
-| Fixtures | 53 document + 150 conformance (147 top-level + 3 export); session 8-9 added 2 K-049 regression fixtures (indexed + wildcard cycles) + 1 SLA authoring happy-path + 1 assertion-library reference fixture |
-| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 6 MVP (`wos-authoring` @ 50 tests, `wos-mcp` @ 22 tools, **`wos-synth-core` @ 13 tests, `wos-synth-mock` @ 3, `wos-synth-anthropic` @ 2, `wos-synth-cli`** — DIP invariant verified empty `cargo tree -p wos-synth-core --edges normal \| grep -E 'reqwest\|tokio\|anthropic'`) + 1 spike (`wos-synth-spike` @ 17 tests, keep-with-deletion-horizon) |
-| Lint matrix | 103 rules in `LINT-MATRIX.md` (35 T1 · 59 T2 · 9 T3 · 12 Tested · 91 Draft; AI-058 allowlist now derives from `fel_core::builtin_function_catalog()` filtering on `→ boolean` signatures) |
-| Rust tests | `cargo test --workspace` — 1012 passed / 0 failed (+10 vs session 8: includes `convergence_cap_emits_dedicated_kind_and_outcome_field` regression + 9 new wos-lint tests) |
-| Python tests | `pytest tests/schemas/` — 188 passed / 11 skipped / 1 xfailed (+17 vs session 8: +4 ProvenanceOutcome edge cases + 8 Task SLA + 3 AssertionReference + 2 CapabilityInvocationRecord) |
-| CI gates | `schema_doc_zero_regression` (all 21 production schemas) · `every_promoted_*_rule_has_executable_or_annotated_evidence` (Tested/LoadBearing) · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
+| Specs / schemas | 20 specs · 25 schemas · 0 SCHEMA-DOC-001 violations |
+| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) · 6 MVP (`wos-authoring`, `wos-mcp`, `wos-synth-core/-mock/-anthropic/-cli`) · 1 spike (`wos-synth-spike`, keep-with-deletion-horizon) |
+| Tests | `cargo test --workspace` 1012 green · `pytest tests/schemas/` 188 / 11 skipped / 1 xfailed · `npm run docs:check` exit 0 |
+| Lint matrix | 103 rules (35 T1 · 59 T2 · 9 T3 · 12 Tested · 91 Draft) |
+| CI gates | `schema_doc_zero_regression` · `every_promoted_*_rule_has_executable_or_annotated_evidence` · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
-**Links:** [Core extraction plan](thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+**Navigation:** [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
 ---
 
-## Next actionable work items (ordered by ROI)
+## Do next
 
-> Session 9 landed 2026-04-20 (19 commits across 4 parallel agents addressing **every** review finding from sessions 6/7/8). F3b Task 3 closed out-of-band by Agent B (`a683c03` emits `ProvenanceKind::ConvergenceCapReached` with `outcome` field); `CapabilityInvocationRecord` moved from AI schema to kernel provenance schema (closes #F5d composition story); AI-058 allowlist now catalog-driven (closes #F4a false positives on `every`/`some`/`boolean`). All §4.3b items ✅.
+Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR. Scores `[Imp / Cx / Debt]` on a 0-10 scale.
 
-1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. **Plan drafted** (`6cad36e`, `thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md`). **Load-bearing open questions:** OQ1 (`$join` disposition) and OQ4 (vendor-kind extension shape) block Task 1. **Actual fixture count: 185 files / 844 occurrences**. ~8-10 engineer-days after OQ1/OQ4 resolved.
-2. **§4.3a #F3b Runtime §10.3 conformance** `[Imp 7 / Cx 6 / Debt 5]` — ADR 0059 (`fcd2c19`). **Task 3 landed out-of-band** (`a683c03`). Remaining: Tasks 1-2-4-5 (scaffold re-scan, flip default + migration, add 3 unit tests, K-049 LoadBearing promotion). ~2-3 engineer-days remaining. READY TO EXECUTE.
-3. **§4.4 Release trains Tasks 4-5** — Changesets tooling + GitHub Actions release workflow. Tasks 1-3 foundation landed session 8. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
-4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete. See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
-5. **§4.5 Structural merges** — G's §4.6 #45 audit ratifies three: assertion-library → workflow-governance (Cx 2; H's `AssertionUse` seam + §4.3b #38b prose make adoption cheaper); verification-report → advanced-governance "Output Artifacts" (Cx 2); due-process-config 3-section residue → workflow-governance (Cx 3). Decision needed: one PR or three?
-
----
-
-## Recent session log
-
-Full session-by-session narratives (sessions 2–7) live in [COMPLETED.md](COMPLETED.md). Summary of the closed sessions:
-
-- **Session 9 (2026-04-20, 19 commits, 4-agent parallel sweep)** — addressed **every** review finding from sessions 6/7/8: AI-058 allowlist catalog-driven (+3 `NullCoalesce` admission + guard-walker + adversarial path tests); `CapabilityInvocationRecord` $def moved to kernel + `ProvenanceOutcome` shape normalization; Task SLA 40a/b/c + 4 enum negatives; Assertion Library adoption prose + edge-case tests + `configuration error` glossary. F3b Task 3 closed out-of-band.
-- **Session 8 (2026-04-20, ~23 commits, 8-agent parallel dispatch)** — §4.1 #2 review fixes committed; §4.3a F2/F3a/F4/F5a/F5b all landed; §4.4 release trains Tasks 1-3 + #40 Task SLA + #38 Assertion Library cross-doc refs; §4.6 #45 sidecar audit delivered; #20 typed events plan; F3b ADR 0059. Four semi-formal code reviews of the session's work.
-- **Session 7 (2026-04-20, 8 commits)** — DRAFTS triage; K-049 continuous-mode cycle detection; capability preconditions + AI-057; v0 spike Tasks 4–5; review Finding 1 fix; §4.3a follow-ups filed + expert-refined.
-- **Session 6 (2026-04-20)** — §5.4 Task 7 synth-trace schema; §4.1 #2 deterministic adverse-decision notice; §4.2 #21/#37/#39; §4.3 #13/#57.
-- **Session 5 (2026-04-19, 10 commits)** — §4.2 #37 / #46 / §4.1 #24a closure.
-- **Session 4 (2026-04-18, 7 commits)** — wos-synth four-crate scaffold + §4.1 chain unblocking.
-- **Session 3 (2026-04-18, ~50 commits)** — parallel-agent close: §5.1 schema description audit, §5.2 structured lint diagnostics, §5.3 trace-emitting conformance, §4.2 rule coverage, wos-mcp Tasks 3–6.
-- **Session 2 (2026-04-18)** — code-review closeout of the 2026-04-17/18 parallel-agent batch.
+1. **#F3b Runtime §10.3 conformance** `[7 / 4 / 5]` — rewrite `crates/wos-core/src/eval.rs:412-421` as a post-mutation re-scan matching Runtime §10.3. ADR [0059](thoughts/adr/0059-continuous-mode-post-mutation-rescan.md). Task 3 closed out-of-band (`a683c03`); Tasks 1, 2, 4, 5 remain (~2-3 engineer-days). **Gate: none — ready to execute.**
+2. **#20 Typed event meta-vocabulary** `[8 / 7 / 6]` — replace `Transition.event: string` with a 5-kind typed union. Plan: [2026-04-20](thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md). 185 fixtures / 844 occurrences to migrate; ~8-10 engineer-days. **Gate: user decision on OQ1 (`$join` disposition) + OQ4 (vendor-kind extension shape) — see Open questions.**
+3. **§4.5 Structural merges** `[Cx 2 + 2 + 3]` — three merges ratified by the 2026-04-20 [sidecar audit](thoughts/reviews/2026-04-20-sidecar-contract-audit.md): assertion-library → workflow-governance, verification-report → advanced-governance (Output Artifacts), due-process-config residue → workflow-governance. See Backlog § Structural merges. **Gate: user decision — one PR or three?**
+4. **§4.4 Release trains Tasks 4-5** — Changesets tooling + GitHub Actions release workflow. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-release-trains.md). Tasks 1-3 landed session 8. **Gate: none.**
+5. **§5.5 `wos-bench` synthesis benchmark** — live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective. Plan: [2026-04-16](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). **Gate: none.**
 
 ---
 
-## Active work items (2026-04-20 session 9 close)
+## Backlog
 
-Legend: 🟡 partial · 🔴 not started · 🚨 has blocker from review
+### Behavior + authoring surface
 
-Items still open. All landed work is in [COMPLETED.md](COMPLETED.md). **All review follow-ups from sessions 6/7/8 are closed** (§4.3b swept 2026-04-20).
+Normal feature work. Schedule once the critical path clears.
 
-- 🔴 **§4.1 #20 Typed event meta-vocabulary** — plan drafted (`6cad36e`). Load-bearing open questions (OQ1 `$join` disposition, OQ4 vendor-kind shape) must be resolved before Task 1. ~8-10 engineer-days once unblocked. 185 fixtures / 844 occurrences to migrate.
-- 🟡 **§4.3a #F3b Runtime §10.3 conformance** — ADR 0059 (`fcd2c19`). **Task 3 landed out-of-band** (`a683c03`, session 9). Remaining: Tasks 1-2-4-5 (scaffold re-scan, flip default, 3 unit tests, K-049 LoadBearing promotion). ~2-3 engineer-days. READY TO EXECUTE.
-- 🟡 **§4.4 Split release trains** — Tasks 1-3 landed; Tasks 4-5 (Changesets tooling + release workflow) open. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
-- 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
-- 🔴 **§4.5 Structural merges** — G's #45 audit ratifies three merges (see §4.5). Needs user decision: one PR or three?
-- 🔴 **§4.2 #22a ProvenanceKind tier-typing** — lock-in pressure relieved by PE.2's exhaustive match; remaining value is data-shape cleanliness. Part of the broader #22 crate split (§4.6). Consider bundling with remaining F3b Tasks 1-2 which also touch provenance.rs.
-- 🔴 **Cross-reference shape ADR candidate** — surfaced across Reviews B + D: `calendarRef` (URI) vs `templateRef` (plain string key) vs `escalationChainRef` (local id) vs `assertionRef` (URI) use inconsistent shapes. Worth a separate ADR pinning conventions before the next cross-ref lands. Low urgency; land naturally alongside §4.5 merges.
+- **#26a `AccessControl.canRead` enforcement semantics** `[6 / 3 / 4]` — normative processor behavior on `canRead → false`: redact / null / raise / skip. Prerequisite to #26b.
+- **#26b `caseFieldPolicy` schema** `[6 / 6 / 4]` — per-field read/write scopes by actor role.
+- **#36 Equity RemediationTrigger expression language** `[6 / 4 / 4]` — FEL extension vs. restricted DSL vs. FEL + windowing. Prerequisite to #35.
+- **#35 Equity Config enforcement semantics** `[7 / 5 / 4]` — processor obligations for `RemediationTrigger.action`; wire `DisparityMethod` to runtime.
+- **#24b + #25 joint design** `[#24b 7/6/4 · #25 6/7/6]` — Reasoning tier rule-firing trace + Catala-style defeasibility. Must compose with `sourceAuthority` rank (§6.2) + Integration Profile §11.2.
+- **#43 Assurance × impact-level composition** `[6 / 5 / 4]` — minimum Assurance floor for AI-assisted rights-impacting determinations?
+- **#30 WS-HumanTask lifecycle completion** `[5 / 5 / 2]` — task-level `Suspended`, distinct `Cancelled`, explicit `Return` with rework counter.
+- **#27 Cancellation regions** `[4 / 6 / 3]` — YAWL-style named regions, distinct from existing `cancellationPolicy` join policy.
+- **#28 Claim-check artifact references** `[4 / 4 / 2]` — typed `ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }` with integrity-check at retrieval. `inputDigest`/`outputDigest` already wired through `wos-export`.
+- **#29b Milestone reactive transition firing (GSM-style)** `[6 / 5 / 2]` — ships after #29a (landed session 4).
+- **#3 Policy-based migration routing** `[5 / 6 / 2]` — `migrationPolicy: grandfather | migrateAll | migrateByState | expression`. `tenant`-scope behavioral contract is an open sub-question.
 
----
+### Structural merges (§4.5)
 
-## 1 — Reference implementation blockers
+All three ratified by the 2026-04-20 sidecar audit. See Do next item 3 for decision.
 
-> §1 closed 2026-04-14 — see [COMPLETED.md](COMPLETED.md).
+- **Assertion Library → Workflow Governance** `[4 / 2 / 3]` — absorb as "Named Assertions". `AssertionUse` seam already landed session 8; merge is mechanical.
+- **Verification Report → Advanced Governance** `[3 / 2 / 2]` — it's a processor **output**, miscategorized as a sidecar.
+- **Due Process Config partial merge → Workflow Governance** `[5 / 3 / 4]` — residual `independenceConstraint` / `appealRouting` / `continuationPolicies` duplicate Governance §3.1/§3.5.
+- **M-1 Drift Monitor + Agent Config — BLOCKED.** `fixtures/ai/benefits-drift-monitor.json` ships standalone; ship #37 standalone binding instead.
+- **M-2 Notification Template + Due Process Config — REJECTED.** 4 non-due-process categories.
 
----
+### Hygiene / refactors
 
-## 2 — Foundational (zero external dependencies)
+Organizational debt; first adopter won't notice. Schedule opportunistically when the relevant code is already being touched.
 
-- [x] **Provenance export** — Serialize internal provenance to W3C PROV-O, OCEL 2.0, IEEE 1849 XES. Landed 2026-04-15 — see [COMPLETED.md § Provenance export](COMPLETED.md#provenance-export-pe).
-- [ ] **Ontology field identity** *(design not started — do not sequence as active work)* — `ontology-spec.md` does not exist. Informs AI integration, cross-document alignment, and regulatory specs in §6, but cannot be scheduled until the spec is drafted. Prerequisite design work: JSON-LD `@context` decision (see Deferred #9), semantic-field-identity protocol, cross-document alignment mechanism. Move to active only once a draft exists.
+- **#22a ProvenanceKind tier-typing** `[4 / 4 / 3]` — tier-typed record per `audit_layer`. Consider bundling with F3b Tasks 1-2 (both touch `provenance.rs`).
+- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (4451 lines) split along action-kind dispatch; CI fence.
+- **Cross-reference shape ADR** — `calendarRef` (URI) vs `templateRef` (plain string key) vs `escalationChainRef` (local id) vs `assertionRef` (URI) diverge. Surfaced by session-9 Reviews B + D. Pin the convention in a standalone ADR before the next cross-ref lands.
 
----
+### Audit + evidence products
 
-## 3 — Engine adapters (open question — sequencing unresolved)
+Build on the stable provenance export surface.
 
-> **Status:** sequencing unresolved. TODO previously placed engine adapters as a near-term priority; IDEA_SCRATCH #49 marked them Defer with trigger "first commercial deployment requesting a specific adapter." No arbitrating document. Items kept in the backlog below but **not** scheduled until this question is resolved.
+- **#48 Merkle provenance chains** `[6 / 6 / 6]` — hash-chained tamper-evident logs via Assurance `provenanceLayer` seam. **Debt raised:** PROV-O / XES / OCEL exports shipped without hash hooks; every format consumer now reads unlinkable output.
+- **#52 Simulation trace format** `[4 / 3 / 2]` — normative replay contract + conformance fixtures. Event log format already shipped via `wos-export::xes`.
 
-- [ ] **#49a Camunda 8 Worker** `[Imp 5 / Cx 8 / Debt 3]` — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
-- [ ] **#49b Temporal Workflow** `[Imp 5 / Cx 8 / Debt 3]` — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
-- [ ] **#49c AWS Step Functions** `[Imp 5 / Cx 8 / Debt 3]` — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
+### Regulatory
 
----
+External-deadline-driven; watch for compliance escalation.
 
-## 4 — Active backlog (priority-ordered)
+- **#50 EU AI Act alignment** `[7 / 5 / 4]` — Art. 13-14 alignment spec, draft → 1.0.0.
+- **#53 OMB M-24-10 compliance** `[6 / 4 / 3]` — process-documentation-shaped; overlaps Assurance + impact-level plumbing.
 
-Previously split across "schema closures" and "behavioral specs." Collapsed and re-sorted 2026-04-16 by cost-to-defer + first-adopter enablement.
+### Interoperability + speculative
 
-### Priority logic and scoring rubric
+Pick up once §§2-6 stabilize.
 
-**Priority logic (2026-04-16 re-sort).** Two goals drive order: (A) reduce architectural lock-in while it's still cheap, (B) make WOS immediately usable by a first real adopter. Items are ranked by cost-to-defer, not cost-to-do. Cheap-and-cheap-forever items are bundled separately so they don't crowd the critical path. The prior Urgency formula from IDEA_SCRATCH (`(Imp+Debt)/Cx`) is retired — it over-rewarded low-Cx regression-prevention items. Scores `[Imp/Cx/Debt]` are preserved per item as metadata — they inform relative weight within each tier but do not override cross-tier ordering.
-
-**Score definitions (0–10 scale):**
-
-- **Imp** — **Importance.** How much does this item move the project forward (architectural leverage, first-adopter enablement, civil-rights/compliance weight). Higher = do it.
-- **Cx** — **Complexity.** How much real work (design + implementation + test) this takes. Higher = bigger lift.
-- **Debt** — **Architectural tech debt if deferred.** How much extra rework lands later if we don't do it now. Higher = cheaper now than later. Confined-scope fixes score low; load-bearing foundational items (0/N fixtures, unclosed escape hatches) score high.
-
-**Score validation (2026-04-16).** Scores audited in parallel by four code-scout agents against live schemas, specs, crates, and fixtures. Adjustments applied: DRAFTS Debt 7→5, #24a Cx 3→4, #20 Cx 6→7, #46 Cx 2→3, #39 Cx 2→1, #12 Cx 2→3, #56 Debt 3→2, #35 Debt 5→4, #40 Debt 5→4, #30 Cx 4→5, #28 Debt 3→2, Assertion-Library merge Cx 3→2, #22 Cx 6→4, #48 Debt 4→6, #51 Debt 3→5. Factual corrections applied to #22 (runtime.rs lives in wos-runtime at 4451 lines, not wos-core at 3821; binding-inversion already landed), #28 (inputDigest/outputDigest already wired through export crate, not prose-only), #56 (continuous_reevaluate has 4 in-crate test callers, not "dead code").
-
-### 4.1 — Critical path (lock-in + usable)
-
-Items that get materially more expensive if deferred, or that block a first real adopter. The critical-path items closed in sessions 4–7 (DRAFTS triage, #24a Facts-Tier snapshot, #23 OverrideRecord, NoticeTemplate reconciliation, #2 deterministic adverse-decision notice, #31 jurisdiction-aware calendar) are archived in [COMPLETED.md](COMPLETED.md). One item remains:
-
-- [ ] **#20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union `{ kind: "timer" | "message" | "signal" | "condition" | "error", ... }`. No `named` wrapper; no escape hatch. Co-type `Action.event` for `startTimer`. Closes kernel's last load-bearing openness. Migration surface is ~175 fixtures containing `"event":` strings (docs + conformance; larger than originally framed); plus schema + Rust model + K-007 lint promotion to schema validation. DRAFTS triage complete (2026-04-20) — unblocked. **Needs a design decision on the 5-kind taxonomy and migration strategy before implementation.**
-
-### 4.2 — Next (mostly closed — #22a is the only open item)
-
-Five of six §4.2 items landed across sessions 4–6 (#21, #37, #39, #29a, #46 — see [COMPLETED.md](COMPLETED.md)). Only #22a remains:
-
-- [ ] **#22a ProvenanceKind tier-typing** `[Imp 4 / Cx 4 / Debt 3]` *(extracted from #22; re-scored 2026-04-16 post-PE.2)* — Replace the 93-variant `ProvenanceKind` monolith enum (`crates/wos-core/src/provenance.rs`) with a tier-typed record (kernel / governance / ai / advanced). **Debt lowered 5→3:** PE.2 added the `audit_layer` field and an exhaustive `audit_layer_for_kind` match, so new variants must now explicitly declare their tier at compile time — the "ossification" pressure is partly relieved. Remaining value is data-shape cleanliness: separating record payloads by tier so each tier's struct carries only the fields it can populate. Still load-bearing for the broader #22 crate split but no longer urgent. The rest of #22 (directory split, runtime.rs split, CI fence) remains organizational and stays in §4.6.
-
-### 4.3 — Cheap batch — **complete** (2026-04-20)
-
-Low-cost, low-risk batch. All items landed; details in [COMPLETED.md](COMPLETED.md). Summary:
-
-- **#34** — covered by `SCHEMA-DOC-001` + `schema_doc_zero_regression` CI gate (no separate gate needed).
-- **#57** — `a1100fe` assurance schema `x-lm.critical` coverage.
-- **#13** — `31a0e21` verifiability test principle (Kernel §1.2 + Governance §6.1 + AI §1.2).
-- **#12** — `19ad643` capability preconditions (schema + spec §3.3.1 + wos-core model + AI-057 lint).
-- **#56** — `4fd32e3` + `2c6a2e2` K-049 continuous-mode cycle detection.
-- **#42** — session 5 via AI-AUTO-001 + AI-AUTO-002 (escalation-expiry revocation + drift-alert demotion).
-
-### 4.3a — K-049 / AI-057 review follow-ups — **5 of 6 closed** (2026-04-20)
-
-Opened after the 2026-04-20 semi-formal review of `4fd32e3` + `19ad643`. Five of six items landed during session 8's 8-agent dispatch; only #F3b remains (ADR done, implementation not yet started). Details of closed items in [COMPLETED.md](COMPLETED.md).
-
-- [x] **#F2 K-049 structured-path comparison** — `ee05cec`. `Vec<Segment>` + `reaches()` §3.6.4 reachability; 2 regression fixtures (indexed + wildcard); helper unit tests.
-- [x] **#F3a K-049 message reword + `$continuous` fixture** — `e15bd80`. Message is spec-faithful; `$continuous`-event fixture added.
-- [ ] **#F3b Runtime §10.3 conformance — rewrite `eval.rs` post-mutation re-scan driver** `[Imp 7 / Cx 6 / Debt 5]` — **ADR 0059 landed `fcd2c19`**. All preconditions satisfied (F5a's `ProvenanceOutcome` enum + `ProvenanceKind::ConvergenceCapReached` variant both exist). 5 tasks, ~3-5 engineer-days. Ready to execute. See `thoughts/adr/0059-continuous-mode-post-mutation-rescan.md`.
-- [x] **#F4 AI-058 boolean-AST-root lint** — `8855591`. `is_boolean_shaped(&Expr)` `pub(super)` in `fel_analysis.rs` for reuse; 3 unit tests.
-- [x] **#F5a Kernel `$defs/ProvenanceOutcome`** — `2d890d3`. Open-enum with reserved literals + `x-` vendor pattern; optional `outcome` on `FactsTierRecord`; Rust `ProvenanceKind::ConvergenceCapReached` variant.
-- [x] **#F5b AI schema `if/then`** — `ae3589f`. `CapabilityInvocationRecord` $def enforces `outcome = "preconditionNotSatisfied"` when `data.invocationBlocked: true`.
-
-### 4.3b — Session-8 review follow-ups — **all closed** (2026-04-20 session 9)
-
-Session 9's 4-agent parallel sweep addressed every finding. Details in [COMPLETED.md](COMPLETED.md) Session 9. Summary:
-
-- **Review A (wos-lint):** F4a (allowlist catalog-driven) / F2a (short-circuit test) / F3 / F4 (NullCoalesce) / F5 / F6 / F8 all ✅. 6 commits.
-- **Review B (schemas):** F5c (F3b Task 3 out-of-band) / F5d (moved to kernel) / F5e (regex) / F4 (shape simplified) / F5 / F6 / F7 all ✅. 6 commits.
-- **Review D (#40 SLA):** 40a / 40b / 40c / F3 / F4 / F5 all ✅. 4 commits.
-- **Review H (#38 Assertion):** 38a / 38b / F4 / F5 / F6 / F7 / F8 / F9 all ✅. 3 commits.
-
-Surfaced for follow-up (not blocking):
-
-- **Cross-reference shape conventions ADR** — schemas now carry `calendarRef` (URI), `templateRef` (plain string key), `escalationChainRef` (local id), `assertionRef` (URI) with divergent shapes. Reviews B + D flagged; worth a standalone ADR pinning the convention. Promoted to "Active work items" list above.
-
-### 4.4 — Behavioral backlog (after §4.1–§4.3 stabilize)
-
-Specifies processor behavior, governance semantics, or runtime obligations. Not usability-critical, not foundational lock-in — schedule once the critical path and cheap batch have landed. Dependencies noted where they exist.
-
-- [ ] **#26a `AccessControl.canRead` enforcement semantics** `[Imp 6 / Cx 3 / Debt 4]` — Specify normative processor behavior on `canRead(actorId, fieldPath) → false`: redact / return `null` / raise error / skip action. Conformance fixtures per branch. Interface exists as pure stub today (defaults `true`, zero call sites). **Prerequisite to #26b.**
-- [ ] **#26b `caseFieldPolicy` schema** `[Imp 6 / Cx 6 / Debt 4]` — `caseFieldPolicy` `$def` in workflow-governance schema; per-field read/write scopes by actor role. Governance-layer.
-- [ ] **#36 Equity RemediationTrigger expression language** `[Imp 6 / Cx 4 / Debt 4]` — FEL extension vs. restricted DSL vs. FEL + windowing. **Prerequisite to #35.**
-- [ ] **#35 Equity Config enforcement semantics** `[Imp 7 / Cx 5 / Debt 4]` — Specify processor obligations for `RemediationTrigger.action`; wire `DisparityMethod` to runtime per `ReportingSchedule`; define "suspended workflow" behaviorally. Applies to human AND AI decisions. Runtime seam partially in place (`ProvenanceKind::EquityAlert`, lifecycle emission in `event_handler.rs`); behavioral enforcement still absent.
-- [ ] **#24b + #25 joint design** *(rule-firing trace + defeasibility)* `[#24b: 7/6/4 · #25: 6/7/6]` — Reasoning Tier gains ordered rule list, intermediate state, outcome; Catala-style default logic with declared rule priorities. Load-bearing coupling — evaluation order requires defeasibility answer. Must compose with `sourceAuthority` rank (§6.2) and Integration Profile §11.2 ("restrict, never relax").
-- [ ] **#43 Assurance × impact-level composition rule** `[Imp 6 / Cx 5 / Debt 4]` — Specify whether a minimum Assurance level is required for AI-assisted determinations at `rights-impacting` impact. Respect Invariant 6.
-- [x] **#38 Assertion Library cross-document reference protocol** — session 8 (`77695eb` + `f862d1f` + `21e9195`). `AssertionReference` / `AssertionInlineUse` / `AssertionUse` three-$def split in `wos-assertion-gate.schema.json`; hybrid-mix rejection via `oneOf` + `additionalProperties: false`; spec §2.3 resolution semantics; G-064 designed but not implemented. **Follow-ups in §4.3b:** #38a stale `.llm.md` regen, #38b cross-schema `$ref` plumbing claim needs honest framing.
-- [x] **#40 Task SLA authoring surface** — session 8 (`8b466fa` + `bc5de5f` + `130a51e`). Four OPTIONAL properties on `TaskPattern` (`slaDefinitions`, `warningThresholds`, `breachPolicy`, `escalationChain`); §10.4 spec subsection; 27-case contract test file; happy-path fixture. **Follow-ups in §4.3b:** #40a `expectedDuration` `indefinite` semantics, #40b `startEvent` pattern, #40c `EscalationStep.id` ↔ `escalationChainRef` drift.
-- [ ] **#30 WS-HumanTask lifecycle completion** `[Imp 5 / Cx 5 / Debt 2]` — Extend 8-state model: task-level `Suspended`, distinct `Cancelled` terminal, explicit `Return` with rework counter, group-forwarding distinct from person-delegation.
-- [ ] **#27 Cancellation regions** `[Imp 4 / Cx 6 / Debt 3]` — YAWL-style named region spanning arbitrary structural levels, fireable as a unit. Distinct from existing `cancellationPolicy` join policy.
-- [ ] **#28 Claim-check artifact references** `[Imp 4 / Cx 4 / Debt 2]` — Typed `ExternalArtifactRef { uri, contentHash, hashAlgorithm, mediaType }` as case-field value with normative integrity-check at retrieval. `inputDigest`/`outputDigest` fields are already wired through `ProvenanceRecord` and the export crate (`wos-export/src/{ocel,xes,prov_o}.rs`); remaining work is the `ExternalArtifactRef` type and population/retrieval contract.
-- [ ] **#29b Milestone reactive transition firing (GSM-style)** `[Imp 6 / Cx 5 / Debt 2]` — `MilestoneFired` enqueues event, or `$milestone.*` FEL boolean for guards. Ships after #29a.
-- [ ] **#3 Policy-based migration routing** `[Imp 5 / Cx 6 / Debt 2]` — `migrationPolicy` enum: `grandfather | migrateAll | migrateByState | expression`. Composes with Governance §2.9. **Open sub-questions:** `tenant`-scope behavioral contract undefined (0 code matches); version pinning on provenance records.
-
-### 4.5 — Structural merges (schema consolidation)
-
-Ratified by G's §4.6 #45 sidecar audit (`9900e39`, 2026-04-20) — see `thoughts/reviews/2026-04-20-sidecar-contract-audit.md`. All three merges below: KEEP verdict withdrawn, MERGE verdict confirmed by the Step-0 + three-question rubric. Schedule alongside whichever critical-path item naturally touches them.
-
-- [ ] **Assertion Library → Workflow Governance** `[Imp 4 / Cx 2 / Debt 3]` — Absorb as "Named Assertions" section. #38 shape-layer already landed (session 8) via the `AssertionUse` seam, so the merge is purely mechanical file-move: the three `$def`s travel into `workflow-governance.schema.json`, consumers drop the cross-schema `$ref` problem entirely. Audit + H's Review Finding 9: `AssertionUse` seam makes this merge CHEAPER, not harder. **Prerequisite:** cross-schema `$ref` plumbing decision (#38b) — merging avoids the decision.
-- [ ] **Verification Report → Advanced Governance** `[Imp 3 / Cx 2 / Debt 2]` — Audit confirms: it's a processor **output**, not input — miscategorised as a sidecar. CONVENTIONS.md is written for input-carrying sidecars. Absorb as "Output Artifacts" section of Advanced Governance.
-- [ ] **Due Process Config partial merge → Workflow Governance** `[Imp 5 / Cx 3 / Debt 4]` — Audit confirms: post-NoticeTemplate reconciliation, residual `independenceConstraint` / `appealRouting` / `continuationPolicies` duplicate Governance §3.1/§3.5 structurally. Absorb.
-- **M-1 Drift Monitor + Agent Config — BLOCKED.** Merge blocked by `fixtures/ai/benefits-drift-monitor.json` shipping standalone. Ship #37 standalone binding instead; reconsider merge if fixture is revised.
-- **M-2 Notification Template + Due Process Config — REJECTED.** 4 non-due-process categories. Ship #39 standalone linkage instead.
-
-**Open from audit (user verdict needed):**
-
-1. Ship the three §4.5 merges as one PR (audit recommendation: one PR, treat as a single schema-consolidation pass) or three discrete PRs?
-2. Extract a shared `targetedLookupRef` `$def` across `calendarRef` / `templateRef` / `escalationChainRef` / `assertionRef` now, or let it emerge organically?
-
-### 4.6 — Engineering hygiene (deprioritized)
-
-Organizational debt, not architectural. First adopter won't notice. Schedule when the relevant code is actively being touched for another reason.
-
-- [ ] **#22 Crate split along tier boundaries** `[Imp 5 / Cx 3 / Debt 3]` *(ProvenanceKind tier-typing extracted to §4.2 as #22a)* — Split `wos-core` → `wos-kernel | wos-governance | wos-ai | wos-advanced`. Split `wos-runtime/src/runtime.rs` (now 4451 lines, up from 3821) along action-kind dispatch. Add CI dependency fence. Remaining scope is purely organizational; first adopter won't notice. **Note:** `wos-formspec-binding → wos-runtime` inversion is already landed (`wos-formspec-binding/Cargo.toml:10-13`); `runtime.rs` lives in `wos-runtime`, not `wos-core`.
-- [x] **#45 Sidecar normative-contract audit** — session 8 (`9900e39`). 9 sidecars audited: 3 KEEP / 3 MERGE / 3 RESHAPE / 0 RETIRE. Six open questions filed for user verdict. Report at `thoughts/reviews/2026-04-20-sidecar-contract-audit.md`. Audit ratifies the three §4.5 merges.
+- **SCXML interoperability** `[3 / 6 / 2]` — bidirectional WOS ↔ SCXML mapping (currently informative only).
+- **#51 Statutory deadline chains** `[4 / 7 / 5]` — interdependent government deadlines + automated legal consequences. Must compose with #31 business calendars + #20 typed events.
 
 ---
 
-## 5 — Audit and evidence products
+## Blocked / needs decision
 
-Build on the stable provenance export surface from §2. Schedule after §4.1 lands.
+Items that can't move without a verdict or an external trigger.
 
-- [ ] **#48 Merkle provenance chains** `[Imp 6 / Cx 6 / Debt 6]` — Cryptographic hash-chaining for tamper-evident logs. Attaches via Assurance `provenanceLayer` seam. Hash-chaining only initially; full SCITT / RFC 9162 transparency-service integration as later ADR. **Debt raised:** PROV-O / XES / OCEL exports shipped 2026-04-15 without hash-chain hooks — every adopter of those formats now consumes unlinkable output; retrofitting means versioning three export surfaces simultaneously.
-- [ ] **#52 Simulation trace format** `[Imp 4 / Cx 3 / Debt 2]` — Normative replay semantics for simulation runs. Event log format is XES (already shipped via `wos-export::xes`). Remaining work: normative replay contract + conformance fixtures.
+### Engine adapters — sequencing unresolved
 
----
+TODO §3 previously scheduled engine adapters as near-term priority; IDEA_SCRATCH #49 marks them Defer with trigger "first commercial deployment requesting a specific adapter." No arbitrating document.
 
-## 6 — Regulatory alignment
+- **#49a Camunda 8 Worker** `[5 / 8 / 3]` — BPMN target; broadest external fixture diversity.
+- **#49b Temporal Workflow** `[5 / 8 / 3]` — natural fit with WOS evaluator determinism.
+- **#49c AWS Step Functions** `[5 / 8 / 3]` — broadest commercial reach; narrowest semantic fit.
 
-External-deadline-driven. Benefits from ontology (§2) landing first.
+### Ontology field identity
 
-- [ ] **#50 EU AI Act alignment** `[Imp 7 / Cx 5 / Debt 4]` — Art. 13–14 alignment spec: draft → 1.0.0. Watchlist — external compliance deadlines can force escalation.
-- [ ] **#53 OMB M-24-10 compliance** `[Imp 6 / Cx 4 / Debt 3]` — Compliance support spec: draft → 1.0.0. Narrower than EU AI Act; overlaps existing assurance / impact-level plumbing. More process-documentation-shaped than structural, so Debt is lower.
+`ontology-spec.md` does not exist. Informs AI integration, cross-document alignment, and §6 regulatory specs. Prerequisite design: JSON-LD `@context` decision, semantic-field-identity protocol, cross-document alignment. Move to active only once a draft exists.
 
----
+### Sidecar-audit open questions (2026-04-20)
 
-## 7 — Interoperability and speculative research
+From the 2026-04-20 [sidecar audit](thoughts/reviews/2026-04-20-sidecar-contract-audit.md); need user verdict.
 
-Pick up when §§2–6 stabilize.
-
-- [ ] **SCXML interoperability** `[Imp 3 / Cx 6 / Debt 2]` — Bidirectional WOS ↔ SCXML mapping (currently informative only).
-- [ ] **#51 Statutory deadline chains** `[Imp 4 / Cx 7 / Debt 5]` — Interdependent government deadlines and automated legal consequences. Architecturally expensive — wrong abstraction here is expensive. **Debt raised:** once #31 jurisdiction-aware calendars and #20 typed events land, deadline chains must compose with both; deferring past those without at least a sketch risks an incompatible construct.
+1. Ship the three §4.5 merges as one PR (audit's recommendation) or three?
+2. Extract a shared `targetedLookupRef` `$def` across the four divergent cross-ref shapes now, or let it emerge organically alongside §4.5?
 
 ---
 
 ## Deferred (with triggers)
 
-Items captured but not active; re-score when the named trigger fires.
+Captured but not active; re-score when the trigger fires.
 
-| IDEA # | Item | Imp | Cx | Debt | Trigger |
-|---|---|---:|---:|---:|---|
-| #1 | Agent Behavioral Attestations | 2 | 7 | 1 | SLSA-style AI-agent attestation ecosystem matures OR specific deployment demands capability attestation. |
-| #4 | Tripartite Object Model | 2 | 9 | 3 | Activity-definition reuse across workflows becomes a real pattern. |
-| #6 | Typed Patch Operations | 1 | 8 | 0 | Authoring tool ships structural edits. |
-| #7 | OCEL 2.0 Object-Centric Case Model | 2 | 9 | 5 | Multi-object mutation patterns emerge, or flat→OCEL export shows systematic semantic loss. |
-| #9 | JSON-LD Export Surface | 5 | 5 | 3 | `ontology-spec.md` drafts begin OR shipped PROV-O export pulls `@context` into authoring. |
-| #32 | Multi-Instance Iteration | 6 | 7 | 5 | #20 lands. Highest-priority deferred item. |
-| #33 | Inclusive-OR / Event-Choice / Boundary Events | 3 | 5 | 2 | Authoring frustration with workarounds (externally observable signal). |
+| IDEA # | Item | Imp/Cx/Debt | Trigger |
+|---|---|---|---|
+| #1 | Agent Behavioral Attestations | 2/7/1 | SLSA-style AI-agent attestation ecosystem matures. |
+| #4 | Tripartite Object Model | 2/9/3 | Activity-definition reuse across workflows becomes a real pattern. |
+| #6 | Typed Patch Operations | 1/8/0 | Authoring tool ships structural edits. |
+| #7 | OCEL 2.0 Object-Centric Case Model | 2/9/5 | Multi-object mutation emerges, or flat→OCEL export shows systematic loss. |
+| #9 | JSON-LD Export Surface | 5/5/3 | Ontology spec drafts begin OR shipped PROV-O pulls `@context` into authoring. |
+| #32 | Multi-Instance Iteration | 6/7/5 | #20 lands. Highest-priority deferred item. |
+| #33 | Inclusive-OR / Event-Choice / Boundary Events | 3/5/2 | Authoring frustration with workarounds (externally observable signal). |
 
 ---
 
 ## Future specs (trigger-gated)
 
 | Spec | Description | Trigger |
-|------|-------------|---------|
-| Batch Operations | Parallel case instantiation, bulk state transitions | Sustained deployments above 100 cases/minute |
-| Federation Profile | Cross-org trust, signed provenance | Second organization adopts WOS |
-| Learning Profile | Retraining governance | Long-lived AI agents need retraining policy |
+|---|---|---|
+| Batch Operations | Parallel case instantiation, bulk state transitions | Sustained deployments above 100 cases/minute. |
+| Federation Profile | Cross-org trust, signed provenance | Second organization adopts WOS. |
+| Learning Profile | Retraining governance | Long-lived AI agents need retraining policy. |
 
 ---
 
@@ -248,51 +146,35 @@ Decisions locked; do not re-litigate.
 
 | IDEA # | Item | Reason |
 |---|---|---|
-| #5 | DAG Processing Model | Contradicts axis 4 (append-only event-stream folding). Reactive re-evaluation explicitly rejected. |
+| #5 | DAG Processing Model | Contradicts axis 4 (append-only event-stream folding); reactive re-evaluation explicitly rejected. |
 | #8 | FEL Conformance Profiles | Kernel §7.4 rejects grammar extensions. |
-| #10 | WCOS + FEEL | Rename + DMN-expression-language both abandoned. |
-| #17 | SHACL | Existing Rust lint (55 T2 rules) covers cross-doc validation; SHACL would duplicate. Shipped PROV-O is JSON-LD; if output-shape validation is needed, scope a dedicated item — don't resurrect SHACL wholesale. |
+| #10 | WCOS + FEEL | Rename + DMN expression language both abandoned. |
+| #17 | SHACL | Existing Rust lint (55 T2 rules) covers cross-doc validation; shipped PROV-O is JSON-LD. |
 | #18 | Minimal Governance Envelope | Strip lifecycle from kernel → doc that cannot be understood in isolation. |
 | #19 | FEEL Expression Language | FEL is purpose-built; FEEL carries DMN assumptions. |
-| — | BPMN Parity as Authoring Goal | Export target, not authoring surface. Topology rejected; event taxonomy adopted normatively via #20. |
+| — | BPMN Parity as Authoring Goal | Export target, not authoring surface. Event taxonomy adopted normatively via #20. |
 
 ---
 
 ## Parked
 
-- [ ] Full lifecycle soundness verification (e.g. linear-time logic). Advanced Governance SMT is the path.
-- [ ] JSON Patch for fine-grained provenance.
-- [ ] FEEL-to-FEL migration guide — on-demand, write when first DMN shop asks.
+- Full lifecycle soundness verification (e.g. linear-time logic). Advanced Governance SMT is the path.
+- JSON Patch for fine-grained provenance.
+- FEEL-to-FEL migration guide — on-demand, write when first DMN shop asks.
 
 ---
 
-## Open questions
+## Open architectural questions
 
-1. **Engine-adapter sequencing** — TODO §3 ↔ IDEA Deferred. Defer until first commercial request, or schedule now to validate runtime against production-shape workloads?
-2. **Ontology-spec authoring ownership** — who drafts, when?
-3. **Timer semantics** (#20). Wall-clock or business-days for `noticeGracePeriod` legal compliance? Business calendar reference opt-in or required?
-4. **Registry composition** (#21). Two L1 governance docs attaching rules to the same tag — declaration order, explicit priority, or conflict rejection?
-5. **Multi-instance design** (#32). Events, arrays, or both? Governance hooks per-instance vs. per-iteration.
-6. **Version migration declaration surface** (#3). Kernel carries governance version or each case? `tenant`-scope behavioral contract?
-7. **Canonical forms.** Enforce "simple sequential workflow MUST be expressed as compound state with ordered children, not flat atomic sequence"?
-8. **Defeasibility layer** (#25). `workflow-governance` or distinct companion? Priority encoding? Compose with `sourceAuthority` AND Integration Profile §11.2.
-9. **Case-field policy vs. L2 `Right`** (#26b). Compose or supersede? Hold policy interaction. Assurance Invariant 6 independence.
-10. **Cancellation region semantics** (#27). Set or predicate? Event / guard / explicit action? Compensation run / skip / author's choice?
-11. **`ExternalArtifactRef` shape** (#28). 9th case-field type or `$def`? Retrieval contract — sync / deferred / action-body?
-12. **Task suspension reducibility** (#30). Always reducible to `holdType: task-suspended`, or independent task state needed?
-13. **Equity expression language** (#36). FEL extension, restricted DSL, or FEL + windowing?
-14. **Assurance-level composition** (#43). Minimum floor per impact level, disclosure-only, or implementation-defined?
-15. **JSON-LD authoring surface** (Deferred #9). Should `@context` land in authoring or stay export-only?
-16. **#29b firing mechanism.** Event-based (enqueue synthetic event) or guard-based (`$milestone.*` FEL boolean)?
+Load-bearing design decisions not yet attached to a single backlog item. Ordered by frequency of downstream dependence.
+
+1. **Typed event taxonomy** (#20). **OQ1:** is `$join` engine-synthesized-only or authored as a `signal`? **OQ4:** closed `kind` enum with `x-*` payload extension, or open `kind` admitting `x-` prefix? Both are load-bearing on #20 Task 1.
+2. **Registry composition** (#21). Two L1 governance docs attaching rules to the same tag — declaration order, explicit priority, or conflict rejection?
+3. **Defeasibility layer** (#25). Workflow-governance or distinct companion? Priority encoding? Compose with `sourceAuthority` AND Integration Profile §11.2.
+4. **Equity expression language** (#36). FEL extension, restricted DSL, or FEL + windowing?
+5. **Assurance-level composition** (#43). Minimum floor per impact level, disclosure-only, or implementation-defined?
+6. **JSON-LD authoring surface** (Deferred #9). Should `@context` land in authoring or stay export-only?
 
 ---
 
-## Completed
-
-Closed-out work items are archived in [`COMPLETED.md`](COMPLETED.md). New completions should be appended there, not tracked here.
-
----
-
-## Notes
-
-**ADR references (resolved 2026-04-18).** `ADR-0057 (wos-core-implementation-boundary)` and `ADR-0058 (wos-core-gap-analysis)` live in `thoughts/archive/adr/` (implemented). A prior audit looked only in active `thoughts/adr/` and incorrectly flagged them as missing. Citations in `enterprise-implementation-roadmap.md:257`, `thoughts/plans/2026-04-13-wos-runtime-crate.md:423`, `thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md:302`, and `specs/companions/runtime.md:51,:906` all resolve against the archive copies. No action pending — retained here so future audits don't re-raise the same flag.
+*Closed-out work is archived in [COMPLETED.md](COMPLETED.md). Append there, not here.*
