@@ -53,3 +53,51 @@ This document is a **draft specification**. It is a sidecar to the WOS Workflow 
 ### 1.3 Usage
 
 Pipelines reference library assertions by `id`. The pipeline stage inherits the assertion's type, expression, fields, and rejection policy unless overridden at the stage level.
+
+---
+
+## 2. Cross-Document Reference Protocol
+
+The Assertion Gate Library is a reusable catalogue; individual [pipeline stages](workflow-governance.md) carry the authority to *use* a library entry at a given point in a workflow. Two schema shapes express that usage: an **inline assertion body** carried directly on the stage, and a **reference** that resolves into a library-defined body at load time. This subsection is the normative contract for how processors MUST handle the two shapes. The seam on the library schema is `#/$defs/AssertionUse`, which is a `oneOf` over `AssertionInlineUse` and `AssertionReference`. The governance spec's `PipelineStage.assertions[]` is the intended consumer — each item resolves through this seam before any assertion logic runs.
+
+### 2.1 Shape of a Reference
+
+An **inline** assertion is a body with the fields defined in §1.2 and an optional `assertionId` that pins the inline body to a stable external name. A **reference** is an object whose only data-bearing key is `assertionRef`, a URI that targets a published Assertion Gate Library.
+
+Inline form:
+
+```json
+{
+  "type": "arithmetic",
+  "description": "Totals sum cleanly",
+  "expression": "totalIncome = wageIncome + investmentIncome",
+  "assertionId": "totalIncomeArithmetic"
+}
+```
+
+Reference form:
+
+```json
+{
+  "assertionRef": "https://agency.gov/assertion-libraries/income-verification#totalIncomeArithmetic"
+}
+```
+
+The two forms are mutually exclusive at the schema layer; once `assertionRef` resolves, downstream processors MUST treat the reference identically to a locally-declared inline body with the same fields.
+
+### 2.2 Resolution Semantics
+
+Resolution happens **at load time**, before any pipeline execution begins. The following rules are normative:
+
+1. **Source of truth.** The referenced body is drawn from the WOS Assertion Gate Library sidecar whose `url` matches the authority + path portion of `assertionRef`, and whose `assertions[]` contains an entry whose `id` equals the key encoded in the reference URI (the fragment for HTTP(S) URIs, the terminal sub-component for `urn:` URIs). Processors MUST use a single, configured library map — they MUST NOT fetch unknown libraries at runtime.
+2. **Unresolvable reference.** If no configured library matches the reference URI, or no `id` in that library matches the selector, the processor MUST reject the enclosing document as a **configuration error** at load time. Lazy resolution at pipeline execution is forbidden: failure to resolve is a deploy-time failure, not a per-case failure.
+3. **Conflicting `id` values.** If two configured libraries each declare an assertion with the same `id` and either could satisfy a reference, the processor MUST reject the configuration as an error. This follows the existing [single-source authority](workflow-governance.md) principle — every named contract has exactly one owning document. Disambiguation belongs in the URI, not in runtime fallback logic.
+4. **Self-declared `assertionId`.** If the referenced assertion body carries its own `assertionId` (permitted by `AssertionInlineUse` for bodies later lifted into a library), that `assertionId` MUST equal the `id` under which the library published the entry. Mismatch is a configuration error.
+
+### 2.3 Override Precedence
+
+Inline bodies and library references MUST NOT be combined on the same item. Schema enforces this via `oneOf` on `AssertionUse` plus `additionalProperties: false` on each branch — mixing keys is a **configuration error**, not a silent merge. This rule is intentional: a partial override mechanism would introduce a second dimension of assertion semantics (the inline body, the referenced body, and the projection of one onto the other) whose interactions are expensive to reason about and impossible to round-trip through audit traces. Authors who need a variant of a library assertion MUST either publish a new library entry with a distinct `id` or inline the full body. The either-or rule keeps the audit trail's authority pointer unambiguous.
+
+### 2.4 Lint Follow-up
+
+A new Tier-2 lint rule, **G-064 `assertion-library-resolution`**, is **planned; not yet implemented** (tracked in `TODO.md` §4.4 #38). G-064 will check that (a) every `assertionRef` URI resolves against the configured library set, (b) no two configured libraries declare colliding `id` values, and (c) `assertionId` on an inline body matches the corresponding library `id` when both are present. Until G-064 lands, processors are solely responsible for rejecting these configurations at load time; schema validation only covers URI syntax.
