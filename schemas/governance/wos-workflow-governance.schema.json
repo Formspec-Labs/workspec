@@ -1101,6 +1101,198 @@
           "type": "string",
           "description": "Human-readable description of this task pattern and what it involves. Used in verifiability matrix documentation and governance reports.",
           "examples": ["Extract field values from submitted documents using OCR and structured parsing.", "Verify income data against source documents and arithmetic constraints."]
+        },
+        "slaDefinitions": {
+          "type": "array",
+          "description": "Named SLA windows declared against this task pattern. Each entry binds an expected duration to a start trigger and a calendar; multiple entries MAY coexist (e.g. a `firstResponse` SLA plus an end-to-end `fullResolution` SLA). Processor obligations for warning emission, breach handling, and escalation are specified in Runtime Companion §10.3.",
+          "items": { "$ref": "#/$defs/SlaDefinition" }
+        },
+        "warningThresholds": {
+          "type": "array",
+          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateRef`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion §10.3).",
+          "items": { "$ref": "#/$defs/WarningThreshold" }
+        },
+        "breachPolicy": {
+          "$ref": "#/$defs/BreachPolicy",
+          "description": "Action the processor MUST take when an `slaDefinitions` entry's expected duration elapses without task completion. Composes with `warningThresholds` (pre-breach) and `escalationChain` (post-breach). See Governance §10.3 and Runtime Companion §10.3."
+        },
+        "escalationChain": {
+          "type": "array",
+          "description": "Ordered escalation ladder activated when `breachPolicy.action` = `escalate` or when a prior level's `gracePeriod` exhausts. Each step reassigns to `assignTo`; on exhaustion the step's `onExhaustion` policy advances the chain, fails the task, or opens a ticket.",
+          "items": { "$ref": "#/$defs/EscalationStep" }
+        }
+      }
+    },
+    "SlaDefinition": {
+      "type": "object",
+      "required": ["id", "expectedDuration", "calendarType", "startAt"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SLA window identifier, unique within this task pattern. Referenced by audit traces and by other governance artifacts that need to correlate breach events back to a named window (e.g. `firstResponse`, `fullResolution`).",
+          "examples": ["firstResponse", "fullResolution"]
+        },
+        "expectedDuration": {
+          "type": "string",
+          "pattern": "^(indefinite|P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?))$",
+          "description": "Expected completion window for this SLA. MUST be an ISO 8601 duration (e.g. `P1D`, `PT4H`) or the literal string `indefinite` for open-ended tracking. As a WOS extension, the `P<N>BD` form denotes N business days resolved against the referenced business calendar (see `calendarRef`).",
+          "examples": ["P1D", "PT4H", "indefinite", "P5BD"]
+        },
+        "calendarType": {
+          "type": "string",
+          "enum": ["wall-clock", "business"],
+          "description": "Calendar used when evaluating `expectedDuration`. `wall-clock` advances continuously; `business` advances only during calendar-declared business hours and requires a resolvable `calendarRef` (Runtime Companion §10.3, lint G-023).",
+          "examples": ["wall-clock", "business"]
+        },
+        "calendarRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution. Left as a plain URI here so governance documents may point at any calendar artifact addressable from their runtime environment.",
+          "examples": [
+            "https://agency.gov/sidecars/business-calendar-fy2026",
+            "urn:wos:sidecar:business-calendar:fy2026-federal"
+          ]
+        },
+        "startAt": {
+          "type": "string",
+          "enum": ["assignment", "activation", "custom-event"],
+          "description": "Point in the task lifecycle from which `expectedDuration` is measured. `assignment` = when the task enters state `assigned` (Governance §10.1); `activation` = when a `claimed`/`created` task becomes actionable; `custom-event` = a kernel event named in `startEvent` (required when `startAt` = `custom-event`).",
+          "examples": ["assignment", "custom-event"]
+        },
+        "startEvent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. Event-name resolution against the target kernel is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "examples": ["applicantResponseReceived", "caseReadyForReview"]
+        }
+      },
+      "if": {
+        "properties": { "startAt": { "const": "custom-event" } },
+        "required": ["startAt"]
+      },
+      "then": { "required": ["startEvent"] }
+    },
+    "WarningThreshold": {
+      "type": "object",
+      "required": ["beforeBreach", "templateRef", "notify"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "beforeBreach": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "Lead time, as an ISO 8601 duration, before any matching `slaDefinitions.expectedDuration` elapses at which this warning fires. Multiple thresholds MAY declare escalating lead times (e.g. `P2D`, `PT4H`, `PT30M`); the processor fires each independently (Runtime Companion §10.3).",
+          "examples": ["P2D", "PT4H", "PT30M"]
+        },
+        "templateRef": {
+          "type": "string",
+          "description": "Notification template identifier to render when this threshold fires. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
+          "examples": ["slaWarning4Hour", "firstResponseImminentBreach"]
+        },
+        "notify": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Actor identifier (role or individual) receiving the rendered warning notification. Resolved against the kernel actor registry per Governance §10.2 / §11.",
+            "examples": ["taskOwner", "caseSupervisor"]
+          },
+          "description": "Actor identifiers (roles or individuals) that receive the rendered warning. Actor resolution follows the same rules as Delegation and task assignment (Governance §11, §10.2).",
+          "examples": [["taskOwner", "businessAdministrator"], ["caseSupervisor"]]
+        }
+      }
+    },
+    "BreachPolicy": {
+      "type": "object",
+      "required": ["action"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["notify", "escalate", "autoReassign", "fail"],
+          "description": "Processor action when an `slaDefinitions` entry's expected duration elapses without completion. `notify`: notify responsible actors, no state change. `escalate`: advance through `escalationChain`. `autoReassign`: rotate to another potentialOwner. `fail`: transition task to `failed` and trigger rejection policy (Governance §10.3, Runtime Companion §10.3).",
+          "examples": ["escalate", "autoReassign"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the governance response to an SLA breach so the processor can apply the correct remediation"
+          }
+        },
+        "templateRef": {
+          "type": "string",
+          "description": "Notification template identifier rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
+          "examples": ["slaBreachNotice", "caseworkerReassignmentNotice"]
+        },
+        "escalationChainRef": {
+          "type": "string",
+          "description": "Identifier resolving to a step in the same task pattern's `escalationChain` (matched by level or id). Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "examples": ["level-1", "supervisorLevel"]
+        },
+        "timeoutPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["onRepeatedBreach"],
+          "description": "Optional policy controlling what happens when the same task pattern breaches repeatedly.",
+          "properties": {
+            "onRepeatedBreach": {
+              "type": "string",
+              "enum": ["suspend", "fail", "continue"],
+              "description": "Processor behaviour when a task pattern accumulates repeated SLA breaches. `suspend`: suspend the task. `fail`: transition to `failed` and invoke rejection policy. `continue`: keep escalating without state change (Runtime Companion §10.3).",
+              "examples": ["suspend", "fail"]
+            }
+          }
+        }
+      }
+    },
+    "EscalationStep": {
+      "type": "object",
+      "required": ["level", "assignTo", "gracePeriod", "onExhaustion"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ordered position of this step in the escalation ladder. Levels SHOULD be contiguous starting at 1; the processor walks them in ascending order until the task clears, is failed, or a ticket is created (Governance §10.3).",
+          "examples": [1, 2]
+        },
+        "assignTo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor identifier (role or individual) the task reassigns to when this escalation level fires. Actor resolution follows Governance §10.2 / §11; the processor creates a delegated task in provenance.",
+          "examples": ["teamLead", "divisionDirector"]
+        },
+        "gracePeriod": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration the assigned actor has to resolve the task before this step's `onExhaustion` policy fires. As a WOS extension, `P<N>BD` denotes N business days against the SLA's declared calendar.",
+          "examples": ["P1D", "PT4H", "P2BD"]
+        },
+        "onExhaustion": {
+          "type": "string",
+          "enum": ["escalate", "fail", "ticketCreate"],
+          "description": "Action when `gracePeriod` expires without resolution. `escalate`: advance to the next `EscalationStep` by `level`. `fail`: transition task to `failed` (invokes rejection policy). `ticketCreate`: open an out-of-band ticket and park the task pending manual intervention.",
+          "examples": ["escalate", "ticketCreate"]
         }
       }
     },
