@@ -1154,7 +1154,7 @@
         "calendarRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution. Left as a plain URI here so governance documents may point at any calendar artifact addressable from their runtime environment.",
+          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. Ref convention: URI into the Business Calendar sidecar itself (not a key into a map), because a governance document may point at any calendar artifact addressable from its runtime environment; contrast with `templateRef` / `escalationChainRef` / `notificationTemplateRef` which are plain string keys. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution.",
           "examples": [
             "https://agency.gov/sidecars/business-calendar-fy2026",
             "urn:wos:sidecar:business-calendar:fy2026-federal"
@@ -1198,7 +1198,7 @@
         },
         "templateRef": {
           "type": "string",
-          "description": "Notification template identifier to render when this threshold fires. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
+          "description": "Notification template identifier to render when this threshold fires. Ref convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateRef`), not a URI. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
           "examples": ["slaWarning4Hour", "firstResponseImminentBreach"]
         },
         "notify": {
@@ -1237,12 +1237,12 @@
         },
         "templateRef": {
           "type": "string",
-          "description": "Notification template identifier rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
+          "description": "Notification template identifier rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Ref convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateRef`), not a URI. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
           "examples": ["slaBreachNotice", "caseworkerReassignmentNotice"]
         },
         "escalationChainRef": {
           "type": "string",
-          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Matched against the step's numeric `level` (e.g. `level-1`) or its optional `id` (e.g. `supervisor`). Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Ref convention: plain string key into this task pattern's own `escalationChain` array -- matched against the step's numeric `level` (e.g. `level-1`) or its optional `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
           "examples": ["level-1", "supervisor"]
         },
         "timeoutPolicy": {

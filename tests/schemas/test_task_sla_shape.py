@@ -312,6 +312,80 @@ class TestEscalationStepLevel:
         assert errors, f"escalationChain[].level={level} must fail — minimum is 1"
 
 
+class TestEnumRejections:
+    """Negative coverage for every enum across the four SLA authoring shapes.
+
+    The positive paths are already exercised by the round-trip fixture and
+    by TestBreachPolicyAction above; these tests guard against the next
+    authoring typo silently being accepted (Review D Finding 4)."""
+
+    def test_invalid_calendar_type_rejected(self, schema):
+        v = _validator_for_def(schema, "SlaDefinition")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "firstResponse",
+                    "expectedDuration": "PT4H",
+                    "calendarType": "lunar",
+                    "startAt": "assignment",
+                }
+            )
+        )
+        assert errors, (
+            "SlaDefinition.calendarType='lunar' must fail — enum is "
+            "{wall-clock, business}"
+        )
+
+    def test_invalid_start_at_rejected(self, schema):
+        v = _validator_for_def(schema, "SlaDefinition")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "firstResponse",
+                    "expectedDuration": "PT4H",
+                    "calendarType": "wall-clock",
+                    "startAt": "creation",
+                }
+            )
+        )
+        assert errors, (
+            "SlaDefinition.startAt='creation' must fail — enum is "
+            "{assignment, activation, custom-event}"
+        )
+
+    def test_invalid_on_exhaustion_rejected(self, schema):
+        v = _validator_for_def(schema, "EscalationStep")
+        errors = list(
+            v.iter_errors(
+                {
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "ignore",
+                }
+            )
+        )
+        assert errors, (
+            "EscalationStep.onExhaustion='ignore' must fail — enum is "
+            "{escalate, fail, ticketCreate}"
+        )
+
+    def test_invalid_on_repeated_breach_rejected(self, schema):
+        v = _validator_for_def(schema, "BreachPolicy")
+        errors = list(
+            v.iter_errors(
+                {
+                    "action": "notify",
+                    "timeoutPolicy": {"onRepeatedBreach": "retry"},
+                }
+            )
+        )
+        assert errors, (
+            "BreachPolicy.timeoutPolicy.onRepeatedBreach='retry' must fail — "
+            "enum is {suspend, fail, continue}"
+        )
+
+
 class TestAdditionalPropertiesClosed:
     """Unknown properties anywhere under the four new sub-shapes are rejected."""
 
