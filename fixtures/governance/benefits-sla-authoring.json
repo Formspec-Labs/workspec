@@ -1,0 +1,71 @@
+{
+  "$wosWorkflowGovernance": "1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication — Task SLA Authoring",
+  "description": "Happy-path governance fixture exercising Task SLA authoring (Governance §10.4): slaDefinitions, warningThresholds, breachPolicy, and escalationChain on a single TaskPattern. Mirrors the processor-side obligations in Runtime Companion §10.3.",
+
+  "taskCatalog": [
+    {
+      "pattern": "incomeVerification",
+      "verifiable": "yes",
+      "verificationMethod": "Source-grounding plus arithmetic recomputation",
+      "description": "Verify income data against source documents and arithmetic constraints",
+
+      "slaDefinitions": [
+        {
+          "id": "firstResponse",
+          "expectedDuration": "PT4H",
+          "calendarType": "wall-clock",
+          "startAt": "assignment"
+        },
+        {
+          "id": "fullResolution",
+          "expectedDuration": "P5BD",
+          "calendarType": "business",
+          "calendarRef": "urn:wos:sidecar:business-calendar:fy2026-federal",
+          "startAt": "custom-event",
+          "startEvent": "applicantResponseReceived"
+        }
+      ],
+
+      "warningThresholds": [
+        {
+          "beforeBreach": "P1D",
+          "templateRef": "slaWarning1Day",
+          "notify": ["taskOwner"]
+        },
+        {
+          "beforeBreach": "PT30M",
+          "templateRef": "firstResponseImminentBreach",
+          "notify": ["taskOwner", "caseSupervisor"]
+        }
+      ],
+
+      "breachPolicy": {
+        "action": "escalate",
+        "templateRef": "slaBreachNotice",
+        "escalationChainRef": "level-1",
+        "timeoutPolicy": {
+          "onRepeatedBreach": "suspend"
+        }
+      },
+
+      "escalationChain": [
+        {
+          "level": 1,
+          "assignTo": "teamLead",
+          "gracePeriod": "PT4H",
+          "onExhaustion": "escalate"
+        },
+        {
+          "level": 2,
+          "assignTo": "divisionDirector",
+          "gracePeriod": "P1D",
+          "onExhaustion": "ticketCreate"
+        }
+      ]
+    }
+  ]
+}
