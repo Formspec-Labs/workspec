@@ -6,8 +6,11 @@
 //! guard loop. A transition T2 whose guard reads a path P that another
 //! transition T1 writes via `setData` can be re-fired whenever T1 runs; if
 //! the graph of `writes → reads` edges among fireable transitions contains
-//! a cycle, the processor can thrash against its 100-cycle convergence cap
-//! (`CONVERGENCE_CAP` in `wos_core::eval_mode`).
+//! a cycle, the processor can thrash against its 100-cycle cap — the
+//! re-evaluation convergence cap defined in `wos_core::eval_mode` as
+//! `CONVERGENCE_CAP`. The emitted K-049 diagnostic uses the short phrase
+//! "100-cycle cap"; this module docstring spells out both names so the
+//! cross-reference into `wos_core` is obvious. (§4.3b Finding 8.)
 //!
 //! This module detects that shape statically and surfaces it as K-049.
 //! The rule only runs when the kernel declares `evaluationMode: continuous`
@@ -161,6 +164,11 @@ fn append_segments(out: &mut Vec<Segment>, segments: &[FelPathSegment]) {
 ///     non-empty segment (wildcard set-cover),
 ///   - `write` is a strict prefix of `read` (writing `a` invalidates `a.b.c`),
 ///   - `read` is a strict prefix of `write` (reading `a` is affected by writing `a.b`).
+///
+/// `reaches` is symmetric in its truth value — `reaches(a, b) == reaches(b, a)`.
+/// The names `write` / `read` are labels for the caller's intent; the
+/// direction of the dep-graph edge is encoded by the caller, which always
+/// passes writers first when building adjacency. §4.3b Finding 6.
 fn reaches(write: &[Segment], read: &[Segment]) -> bool {
     let n = write.len().min(read.len());
     for i in 0..n {
@@ -384,10 +392,16 @@ fn collect_setdata_paths(actions: &[Action], out: &mut HashSet<Vec<Segment>>) {
 ///
 /// When the walker sees a node that resolves to a structured path (the
 /// outermost node of an access chain), it emits the full path and stops
-/// descending into that subtree. Without the short-circuit, a reference
-/// like `caseFile.input` would also produce the stem `caseFile` as a
-/// second path via the inner `FieldRef` node, which would then over-match
-/// against any write into `caseFile.*` under §3.6.4 prefix reachability.
+/// descending into that subtree. The short-circuit is load-bearing because
+/// the FEL parser represents dotted accesses as nested nodes: `caseFile.input`
+/// parses as `PostfixAccess(FieldRef("caseFile", []), [Dot("input")])`.
+/// Without the short-circuit, `walk_expr` would recurse into the inner
+/// `FieldRef("caseFile")` after emitting the full path `[caseFile, input]`
+/// and emit a second stem path `[caseFile]`. Under §3.6.4 prefix
+/// reachability, `reaches([caseFile, output], [caseFile])` returns true
+/// (strict-prefix write invalidates parent read), producing spurious K-049
+/// warnings on acyclic kernels. See the
+/// `k049_guard_walker_short_circuit_prevents_spurious_cycle` test.
 fn extract_read_paths(guard: &str) -> HashSet<Vec<Segment>> {
     let Ok(expr) = parse(guard) else {
         return HashSet::new();
@@ -1043,6 +1057,35 @@ mod tests {
         let write = normalize_setdata_path("caseFile.items[0].y");
         let read = normalize_setdata_path("caseFile.items");
         assert!(reaches(&write, &read));
+    }
+
+    #[test]
+    fn reaches_is_symmetric_in_truth_value() {
+        // §4.3b Finding 6 — `reaches(a, b) == reaches(b, a)` for every
+        // input pair. Direction is encoded by the CALLER; this function
+        // only asks "do these two path shapes overlap?". Pin a few
+        // representative pairs so a future asymmetric refactor breaks here.
+        let pairs: &[(&str, &str, bool)] = &[
+            ("caseFile.a", "caseFile.a", true),                         // equal
+            ("caseFile.items[0].x", "caseFile.items[*].x", true),       // wildcard set-cover
+            ("caseFile.items", "caseFile.items[0].y", true),            // prefix
+            ("caseFile.items[0].y", "caseFile.items[1].y", false),      // distinct indices
+            ("caseFile.a", "caseFile.b", false),                        // distinct names
+        ];
+        for (lhs, rhs, expected) in pairs {
+            let a = normalize_setdata_path(lhs);
+            let b = normalize_setdata_path(rhs);
+            assert_eq!(
+                reaches(&a, &b),
+                *expected,
+                "reaches({lhs:?}, {rhs:?}) mismatched"
+            );
+            assert_eq!(
+                reaches(&a, &b),
+                reaches(&b, &a),
+                "reaches is asymmetric for ({lhs:?}, {rhs:?})"
+            );
+        }
     }
 
     #[test]
