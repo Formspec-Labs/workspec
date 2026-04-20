@@ -365,6 +365,27 @@
           "examples": [
             "urn:formspec:agency.gov:doc-extraction-output:1.0.0"
           ]
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "FEL expression that MUST evaluate to `true` for this capability to be invocable. Evaluated against the current evaluation context (Kernel §7); may reference `caseFile.*`, `@event`, `@agent`, and any other guard-reachable context.",
+            "examples": [
+              "caseFile.documentsReceived = true",
+              "caseFile.amount > 0"
+            ]
+          },
+          "description": "FEL expressions evaluated against the current evaluation context (Kernel §7) before the capability is invoked (AI Integration §3.3.1). All entries MUST evaluate to boolean `true` for the capability to be invocable. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is skipped and the processor falls through to the agent's fallback chain (§8). Expressions MAY reference `caseFile.*`, `@event`, `@agent`, and any context a guard may reference. Absent or empty array (default) means no preconditions — the capability is always invocable.",
+          "examples": [
+            ["caseFile.documentsReceived = true"],
+            ["caseFile.amount > 0", "caseFile.verified = true"]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Declaratively gates agent capability invocation; unsatisfied preconditions skip to the fallback chain instead of calling an undergated agent"
+          }
         }
       }
     },

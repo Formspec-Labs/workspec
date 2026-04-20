@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `6d27e60ef2faff48a83f26ec92ba008d3b095919`). 100 rules across 35 T1 / 56 T2 / 9 T3 (0 LoadBearing, 0 Stable, 10 Tested, 90 Draft).
+> **Regenerated from code registries** (commit `2730ac8393f5b074db04fba0acb3a167e676454b`). 102 rules across 35 T1 / 58 T2 / 9 T3 (0 LoadBearing, 0 Stable, 11 Tested, 91 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -8,7 +8,7 @@
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   56 rules                  │
+│  Tier 2: wos-lint --project (cross)   58 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -94,6 +94,7 @@
 | `AI-043` | AI | draft | Agent config MUST disclose optimization objective. | — |
 | `AI-046` | AI | draft | `rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`. | — |
 | `AI-056` | AI | draft | Autonomy is an action-site property, not an agent property. | — |
+| `AI-057` | AI | draft | Capability `preconditions` entries MUST be valid FEL. | — |
 | `DM-002` | DM | draft | Rights/safety workflows SHOULD follow shadow/canary/production sequence. | — |
 | `G-001` | G | draft | Due process MUST be enforced for `rights-impacting` or `safety-impacting` kernels. | — |
 | `G-003` | G | draft | Notice MUST include specific determination, reason codes, and appeal instructions. | — |
@@ -130,10 +131,11 @@
 | `K-017` | K | draft | FEL guards MUST NOT reference related case state. | — |
 | `K-019` | K | draft | FEL functions MUST be declared built-ins or registered extensions. | — |
 | `K-037` | K | draft | Fail-fast `$join` fires only on an error final state. | — |
+| `K-049` | K | tested | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | — |
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 
-**T2 total: 56** (0 LoadBearing, 0 Stable, 1 Tested, 55 Draft)
+**T2 total: 58** (0 LoadBearing, 0 Stable, 2 Tested, 56 Draft)
 
 ---
 
@@ -160,7 +162,7 @@
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
 | T1 | 35 | 0 | 0 | 2 | 33 |
-| T2 | 56 | 0 | 0 | 1 | 55 |
+| T2 | 58 | 0 | 0 | 2 | 56 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **100** | **0** | **0** | **10** | **90** |
+| **Total** | **102** | **0** | **0** | **11** | **91** |
 

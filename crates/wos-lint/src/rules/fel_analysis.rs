@@ -17,6 +17,7 @@
 //! | G-042  | expression-validity | Assertion `expression` fields are valid FEL    |
 //! | G-043  | expression-validity | Delegation scope `conditions` are valid FEL    |
 //! | AI-024 | expression-validity | Escalation conditions are valid FEL + use `@agent` |
+//! | AI-057 | expression-validity | Capability `preconditions` entries are valid FEL |
 //! | AG-010 | smt-compatibility   | Verifiable constraints satisfy all SMT rules   |
 //! | AG-011 | smt-compatibility   | `let` bindings are not recursive               |
 //! | AG-012 | smt-compatibility   | `every`/`some` with arity ≠ 2 need manual review |
@@ -82,12 +83,42 @@ fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>
     }
 }
 
-/// Check FEL in an AI Integration document (AI-024).
+/// Check FEL in an AI Integration document (AI-024, AI-057).
 fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(agents) = doc.value.get("agents").and_then(Value::as_object) {
         for (agent_name, agent) in agents {
             let base_path = format!("/agents/{agent_name}");
             check_escalation_conditions(agent, &base_path, diagnostics);
+            check_capability_preconditions(agent, &base_path, diagnostics);
+        }
+    }
+}
+
+/// AI-057: Each capability `preconditions` entry MUST be valid FEL (Kernel §7).
+fn check_capability_preconditions(
+    agent: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(capabilities) = agent.get("capabilities").and_then(Value::as_array) else {
+        return;
+    };
+    for (cap_idx, capability) in capabilities.iter().enumerate() {
+        let Some(preconditions) = capability.get("preconditions").and_then(Value::as_array) else {
+            continue;
+        };
+        for (pre_idx, entry) in preconditions.iter().enumerate() {
+            let Some(expr_str) = entry.as_str() else {
+                continue;
+            };
+            let path = format!("{base_path}/capabilities/{cap_idx}/preconditions/{pre_idx}");
+            if let Err(err) = parse(expr_str) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "AI-057",
+                    path,
+                    format!("capability precondition is not valid FEL: {err}"),
+                ));
+            }
         }
     }
 }
@@ -1175,6 +1206,79 @@ mod tests {
         assert!(
             !diag.iter().any(|d| d.rule_id == "AI-024"),
             "unexpected AI-024: {diag:?}"
+        );
+    }
+
+    // --- AI-057: capability precondition FEL validity ---
+
+    #[test]
+    fn ai057_valid_precondition_is_clean() {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.documentsReceived = true"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-057"),
+            "unexpected AI-057: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai057_invalid_precondition_fails() {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["!!! not FEL !!!"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-057" && d.severity == LintSeverity::Error),
+            "expected AI-057 error, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai057_missing_preconditions_is_noop() {
+        // A capability without any preconditions MUST NOT trigger AI-057.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{ "id": "extract" }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-057"),
+            "unexpected AI-057: {diag:?}"
         );
     }
 

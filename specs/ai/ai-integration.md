@@ -147,6 +147,19 @@ Each capability declares what the agent can do, with Formspec Definition referen
 | `description` | string | OPTIONAL | What this capability does. |
 | `inputContractRef` | string (URI) | OPTIONAL | Formspec Definition or JSON Schema for input. Uses headless contract pattern (Core S2.3). |
 | `outputContractRef` | string (URI) | OPTIONAL | Formspec Definition or JSON Schema for output. |
+| `preconditions` | array of string (FEL) | OPTIONAL | Boolean FEL expressions evaluated before invocation; see §3.3.1. |
+
+### 3.3.1 Capability Preconditions
+
+A capability MAY declare a `preconditions` array of FEL expressions (Kernel §7). Before the processor invokes the capability, every expression is evaluated against the current evaluation context -- `caseFile`, `@event`, `@agent`, and any other context a guard may reference (Kernel §7.4). Semantics:
+
+1. All entries MUST evaluate to boolean `true` for the capability to be invocable.
+2. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is **skipped**: the processor does NOT invoke the agent and instead falls through to the fallback chain defined for this capability (§8).
+3. Absent or empty `preconditions` (the default) means the capability is always invocable.
+4. Every precondition evaluation MUST produce a provenance record identifying the capability, the expression, and the resolved value. When a precondition blocks an invocation, the record's `outcome` MUST be `preconditionNotSatisfied` so that audit tooling can distinguish a declarative gate from an agent failure.
+5. Preconditions are evaluated **before** the agent input contract is rendered and before any guardrails run. They are the cheapest gate in the capability pipeline; use them to keep agents from being called against cases that are structurally wrong for them.
+
+Preconditions are declarative: they say "only invoke this capability when the world looks like this." They do not relax deontic constraints (§4) -- a capability that passes its preconditions is still bound by every permission, prohibition, obligation, and right declared against it.
 
 ### 3.4 Model Version Policy
 

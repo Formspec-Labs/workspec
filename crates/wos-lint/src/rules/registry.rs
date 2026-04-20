@@ -302,6 +302,16 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    RuleMetadata {
+        id: "AI-057",
+        tier: Tier::T2,
+        severity: Severity::Error,
+        summary: "Capability `preconditions` entries MUST be valid FEL.",
+        fixtures: &[],
+        graduation: Graduation::Draft,
+        spec_ref: Some("specs/ai/ai-integration.md#331-capability-preconditions"),
+        suggested_fix: None,
+    },
     // --- CM (Correspondence Metadata) ---------------------------------
     RuleMetadata {
         id: "CM-001",
