@@ -12,7 +12,7 @@
 | Lint matrix | 102 rules in `LINT-MATRIX.md` (35 T1 · 58 T2 · 9 T3 · 11 Tested · 91 Draft; regenerated from code registries) |
 | CI gates | `schema_doc_zero_regression` (all 21 production schemas) · `every_promoted_*_rule_has_executable_or_annotated_evidence` (Tested/LoadBearing) · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
-**Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+**Links:** [Core extraction plan](thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
 ---
 
@@ -20,7 +20,7 @@
 
 > Session 7 landed 2026-04-20 (8 commits): DRAFTS triage archived (`0d17f9f`); §4.3 #56 K-049 continuous-mode cycle detection (`4fd32e3`); §4.3 #12 capability preconditions + AI-057 (`19ad643`); v0 spike Task 4 conformance gate (`f6320c2`); v0 spike Task 5 retrospective + plan propagation (`a80e37d`); K-049 review Finding 1 fix onEntry/onExit (`2c6a2e2`); §4.3a review follow-ups filed (`64962ea`) and expert-refined (`4ceddb7`). Session 6 items (#2 deterministic adverse-decision notice, §5.4 Task 7 synth-trace schema, §4.2 #21/#39/#37, §4.3 #13/#57) remain uncommitted in the working tree as of 2026-04-20.
 
-1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked. Needs design decision on the 5-kind taxonomy + ~176-fixture migration strategy before implementation.
+1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked. Needs design decision on the 5-kind taxonomy + ~175-fixture migration strategy before implementation.
 2. **§4.3a K-049 / AI-057 review follow-ups** `[mixed]` — six items with expert-decided approaches (2026-04-20 spec-expert + wos-expert consultations). See §4.3a below. #F5a (kernel `ProvenanceOutcome` enum) is the highest-leverage single item: closes both §3.3.1 `preconditionNotSatisfied` and §10.3 `convergenceCapReached` MUSTs in one schema change.
 3. **§4.4 Split release trains** — unblocked since §4.2 close. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
 4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1–7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
@@ -46,7 +46,7 @@ Legend: 🟡 partial · 🔴 not started · 🚨 has blocker from review
 
 Items that are still open. All landed work is in [COMPLETED.md](COMPLETED.md).
 
-- 🔴 **§4.1 #20 Typed event meta-vocabulary** — see §4.1 below. Replace `Transition.event: string` with a 5-kind typed union. Closes kernel's last load-bearing openness. ~176 fixtures to migrate. Needs design decision on taxonomy before implementation.
+- 🔴 **§4.1 #20 Typed event meta-vocabulary** — see §4.1 below. Replace `Transition.event: string` with a 5-kind typed union. Closes kernel's last load-bearing openness. ~175 fixtures to migrate. Needs design decision on taxonomy before implementation.
 - 🟡 **§4.3a K-049 / AI-057 review follow-ups** — six expert-refined items (see §4.3a below). Highest leverage: #F5a kernel `ProvenanceOutcome` enum closes both §3.3.1 (`preconditionNotSatisfied`) and §10.3 (`convergenceCapReached`) MUSTs in one schema change.
 - 🔴 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. Unblocked since §4.2 close.
 - 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Unblocked since §5.4 scaffold complete. Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
@@ -71,9 +71,9 @@ Items that are still open. All landed work is in [COMPLETED.md](COMPLETED.md).
 
 > **Status:** sequencing unresolved. TODO previously placed engine adapters as a near-term priority; IDEA_SCRATCH #49 marked them Defer with trigger "first commercial deployment requesting a specific adapter." No arbitrating document. Items kept in the backlog below but **not** scheduled until this question is resolved.
 
-- [ ] **#49 Camunda 8 Worker** `[Imp 5 / Cx 8 / Debt 3]` — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
-- [ ] **#49 Temporal Workflow** `[Imp 5 / Cx 8 / Debt 3]` — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
-- [ ] **#49 AWS Step Functions** `[Imp 5 / Cx 8 / Debt 3]` — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
+- [ ] **#49a Camunda 8 Worker** `[Imp 5 / Cx 8 / Debt 3]` — Delegate BPMN task execution under WOS governance. Most common BPMN target; broadest external fixture diversity.
+- [ ] **#49b Temporal Workflow** `[Imp 5 / Cx 8 / Debt 3]` — Map WOS evaluation steps to deterministic replay. Natural fit with WOS evaluator determinism.
+- [ ] **#49c AWS Step Functions** `[Imp 5 / Cx 8 / Debt 3]` — Bridge ASL states to WOS transitions. Broadest commercial reach; narrowest semantic fit.
 
 ---
 
@@ -97,7 +97,7 @@ Previously split across "schema closures" and "behavioral specs." Collapsed and 
 
 Items that get materially more expensive if deferred, or that block a first real adopter. The critical-path items closed in sessions 4–7 (DRAFTS triage, #24a Facts-Tier snapshot, #23 OverrideRecord, NoticeTemplate reconciliation, #2 deterministic adverse-decision notice, #31 jurisdiction-aware calendar) are archived in [COMPLETED.md](COMPLETED.md). One item remains:
 
-- [ ] **#20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union `{ kind: "timer" | "message" | "signal" | "condition" | "error", ... }`. No `named` wrapper; no escape hatch. Co-type `Action.event` for `startTimer`. Closes kernel's last load-bearing openness. Migration surface is ~168 fixtures containing `"event":` strings (much larger than originally framed); plus schema + Rust model + K-007 lint promotion to schema validation. DRAFTS triage complete (2026-04-20) — unblocked. **Needs a design decision on the 5-kind taxonomy and migration strategy before implementation.**
+- [ ] **#20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union `{ kind: "timer" | "message" | "signal" | "condition" | "error", ... }`. No `named` wrapper; no escape hatch. Co-type `Action.event` for `startTimer`. Closes kernel's last load-bearing openness. Migration surface is ~175 fixtures containing `"event":` strings (docs + conformance; larger than originally framed); plus schema + Rust model + K-007 lint promotion to schema validation. DRAFTS triage complete (2026-04-20) — unblocked. **Needs a design decision on the 5-kind taxonomy and migration strategy before implementation.**
 
 ### 4.2 — Next (mostly closed — #22a is the only open item)
 
@@ -118,7 +118,7 @@ Low-cost, low-risk batch. All items landed; details in [COMPLETED.md](COMPLETED.
 
 ### 4.3a — K-049 / AI-057 review follow-ups (opened 2026-04-20)
 
-From the 2026-04-20 semi-formal review of `4fd32e3` (K-049) and `19ad643` (AI-057). Finding 1 (onEntry/onExit) already fixed in `2c6a2e2`; Findings 6, 8, 9 were OBSERVATION-severity style notes and require no action. Five remaining items, each annotated with the concrete approach agreed via the 2026-04-20 spec-expert / wos-expert consultations. Ordered by dependency (#F5a unblocks #F5b; #F3a unblocks #F3b).
+From the 2026-04-20 semi-formal review of `4fd32e3` (K-049) and `19ad643` (AI-057). Finding 1 (onEntry/onExit) already fixed in `2c6a2e2`; Findings 6, 8, 9 were OBSERVATION-severity style notes and require no action. Six remaining items, each annotated with the concrete approach agreed via the 2026-04-20 spec-expert / wos-expert consultations. Ordered by dependency (#F5a unblocks #F5b; #F3a unblocks #F3b).
 
 - [ ] **#F2 K-049 switch to structured-path comparison (§3.6.4 reachability)** `[Imp 5 / Cx 4 / Debt 4]` — Status quo violates the dep-graph spec, not a benign false-negative budget: Core §3.6.1 enumerates wildcard + indexed refs as first-class graph vertices, and §3.6.4 makes wildcard a set-cover reachability over indexed refs. **Approach (chosen):** replace the `Option<String>` stem comparison in `fel_analysis::simple_access_path_string` call sites (at least for K-049) with a structured `Vec<Segment>` where `Segment ∈ {Dot(Ident), Index(n), Wildcard}` and compare under a "reachable-via" relation that mirrors §3.6.4: `a[*].b` read reaches `a[N].b` write and vice-versa; `a[0].b` read does NOT reach `a[1].b` write; `a[0].b` read reaches a write to the whole `a` group. Normalize the raw-string `setData.action.path` into the same structured form for symmetric comparison. ~dozen lines beyond the current comparator. Adds K-049 regression fixtures for indexed and wildcard cycles. **Spec citations:** `specs/core/spec.md` §3.6.1 (lines 1388-1409), §3.6.4 (lines 1454-1463); `specs/fel/fel-grammar.md` §6.
 - [ ] **#F3a K-049 message reword + `$continuous` fixture** `[Imp 3 / Cx 2 / Debt 2]` — Immediate patch so the diagnostic is honest under today's runtime. **Approach:** reword K-049's message to spec-faithful, implementation-neutral phrasing ("per Runtime §10.3 re-evaluation could thrash against the 100-cycle cap"), and add one K-049 unit test using `"event": "$continuous"` so the rule covers the event shape `eval.rs:412-421` actually re-fires today. **Does not** fix the underlying runtime under-implementation (that is #F3b).
@@ -182,7 +182,7 @@ Build on the stable provenance export surface from §2. Schedule after §4.1 lan
 External-deadline-driven. Benefits from ontology (§2) landing first.
 
 - [ ] **#50 EU AI Act alignment** `[Imp 7 / Cx 5 / Debt 4]` — Art. 13–14 alignment spec: draft → 1.0.0. Watchlist — external compliance deadlines can force escalation.
-- [ ] **#50 OMB M-24-10 compliance** `[Imp 6 / Cx 4 / Debt 3]` — Compliance support spec: draft → 1.0.0. Narrower than EU AI Act; overlaps existing assurance / impact-level plumbing. More process-documentation-shaped than structural, so Debt is lower.
+- [ ] **#53 OMB M-24-10 compliance** `[Imp 6 / Cx 4 / Debt 3]` — Compliance support spec: draft → 1.0.0. Narrower than EU AI Act; overlaps existing assurance / impact-level plumbing. More process-documentation-shaped than structural, so Debt is lower.
 
 ---
 
