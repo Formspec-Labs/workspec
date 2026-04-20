@@ -312,6 +312,22 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: Some("specs/ai/ai-integration.md#331-capability-preconditions"),
         suggested_fix: None,
     },
+    // AI-058: Unit tests live in `crates/wos-lint/src/rules/fel_analysis.rs`
+    // (`ai058_binary_comparison_is_boolean_shaped`,
+    // `ai058_bare_field_ref_fires`, `ai058_string_literal_fires`,
+    // `ai058_boolean_returning_builtin_is_clean`). Shares the
+    // `check_capability_preconditions` entry point with AI-057.
+    RuleMetadata {
+        id: "AI-058",
+        tier: Tier::T2,
+        severity: Severity::Warning,
+        summary:
+            "Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion).",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/ai/ai-integration.md#331-capability-preconditions"),
+        suggested_fix: None,
+    },
     // --- CM (Correspondence Metadata) ---------------------------------
     RuleMetadata {
         id: "CM-001",

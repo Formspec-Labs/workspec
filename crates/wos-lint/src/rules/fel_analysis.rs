@@ -31,7 +31,7 @@
 use std::collections::{HashMap, HashSet};
 
 use fel_core::{
-    ast::{BinaryOp, Expr, PathSegment},
+    ast::{BinaryOp, Expr, PathSegment, UnaryOp},
     builtin_function_catalog, parse,
 };
 use serde_json::Value;
@@ -94,7 +94,14 @@ fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnos
     }
 }
 
-/// AI-057: Each capability `preconditions` entry MUST be valid FEL (Kernel §7).
+/// AI-057 + AI-058: Each capability `preconditions` entry MUST be valid FEL
+/// (AI-057) AND its AST root MUST be a boolean-shaped expression (AI-058).
+///
+/// The two rules fire on the same inputs: AI-057 catches parse failures
+/// (hard error); AI-058 catches parse-clean expressions whose AST root does
+/// not type to `boolean` (warning). Core §4.3.1 / §5.2.1 type bind/shape
+/// slots as `→ boolean` and §3.4.3 forbids truthy coercion, so a
+/// parse-clean `caseFile.amount` or `"open"` in a boolean slot is a bug.
 fn check_capability_preconditions(
     agent: &Value,
     base_path: &str,
@@ -112,15 +119,101 @@ fn check_capability_preconditions(
                 continue;
             };
             let path = format!("{base_path}/capabilities/{cap_idx}/preconditions/{pre_idx}");
-            if let Err(err) = parse(expr_str) {
-                diagnostics.push(LintDiagnostic::t2_error(
-                    "AI-057",
-                    path,
-                    format!("capability precondition is not valid FEL: {err}"),
-                ));
+            match parse(expr_str) {
+                Err(err) => {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "AI-057",
+                        path,
+                        format!("capability precondition is not valid FEL: {err}"),
+                    ));
+                }
+                Ok(expr) => {
+                    if !is_boolean_shaped(&expr) {
+                        diagnostics.push(LintDiagnostic::t2_warning(
+                            "AI-058",
+                            path,
+                            format!(
+                                "capability precondition `{expr_str}` does not have a \
+                                 boolean-shaped AST root; preconditions must evaluate to a \
+                                 boolean (AI Integration §3.3.1; Core §3.4.3 forbids truthy \
+                                 coercion)"
+                            ),
+                        ));
+                    }
+                }
             }
         }
     }
+}
+
+/// Return true when `expr`'s AST root syntactically produces a boolean.
+///
+/// The predicate is deliberately conservative: it matches operator shapes
+/// whose FEL semantics return boolean, and a hard-coded set of
+/// boolean-returning builtins. Anything else — bare field refs, string
+/// literals, arithmetic — is treated as non-boolean. Ternary / if-then-else
+/// require both branches to satisfy the predicate recursively.
+///
+/// See AI Integration §3.3.1 and Core §4.3.1 / §5.2.1 for the slot-type
+/// requirement this predicate enforces at lint time.
+pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
+    match expr {
+        Expr::Boolean(_) => true,
+        Expr::BinaryOp { op, .. } => matches!(
+            op,
+            BinaryOp::Or
+                | BinaryOp::And
+                | BinaryOp::Eq
+                | BinaryOp::NotEq
+                | BinaryOp::Lt
+                | BinaryOp::LtEq
+                | BinaryOp::Gt
+                | BinaryOp::GtEq
+        ),
+        Expr::UnaryOp { op: UnaryOp::Not, .. } => true,
+        Expr::Membership { .. } => true,
+        Expr::Ternary {
+            then_branch,
+            else_branch,
+            ..
+        }
+        | Expr::IfThenElse {
+            then_branch,
+            else_branch,
+            ..
+        } => is_boolean_shaped(then_branch) && is_boolean_shaped(else_branch),
+        Expr::FunctionCall { name, .. } => is_boolean_returning_builtin(name),
+        Expr::LetBinding { body, .. } => is_boolean_shaped(body),
+        _ => false,
+    }
+}
+
+/// Hard-coded set of Core FEL builtins whose return type is boolean.
+///
+/// Matches the `specs/ai/ai-integration.md` §3.3.1 typing list and the
+/// §4.3a #F4 consult decision. Kept in sync with
+/// `fel_core::builtin_function_catalog` by convention — adding a new
+/// boolean-returning builtin there requires adding it here as well.
+fn is_boolean_returning_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "empty"
+            | "present"
+            | "selected"
+            | "isNumber"
+            | "isString"
+            | "isDate"
+            | "isNull"
+            | "isBoolean"
+            | "contains"
+            | "startsWith"
+            | "endsWith"
+            | "matches"
+            | "valid"
+            | "relevant"
+            | "readonly"
+            | "required"
+    )
 }
 
 /// Check FEL in an Advanced Governance document (AG-010 through AG-014).
@@ -1257,6 +1350,110 @@ mod tests {
             diag.iter()
                 .any(|d| d.rule_id == "AI-057" && d.severity == LintSeverity::Error),
             "expected AI-057 error, got: {diag:?}"
+        );
+    }
+
+    // --- AI-058: capability precondition boolean-AST-root ---
+
+    #[test]
+    fn ai058_binary_comparison_is_boolean_shaped() {
+        // `caseFile.amount > 0` — binary comparison, boolean-shaped root.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.amount > 0"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_bare_field_ref_fires() {
+        // `caseFile.amount` alone is a path, not a boolean.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.amount"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_string_literal_fires() {
+        // `"open"` parses (as a string literal) but is not boolean-shaped.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["\"open\""]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_boolean_returning_builtin_is_clean() {
+        // `present(caseFile.documentsReceived)` — builtin returning boolean.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["present(caseFile.documentsReceived)"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
         );
     }
 
