@@ -987,6 +987,23 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // K-049: Unit tests live in `crates/wos-lint/src/rules/continuous_mode.rs`
+    // (`k049_flags_self_write_cycle_in_continuous_mode`,
+    // `k049_flags_multi_node_cycle_in_continuous_mode`,
+    // `k049_detects_cycle_across_nested_compound_states`). Negative coverage:
+    // `k049_skips_event_driven_mode`, `k049_ignores_acyclic_continuous_kernel`,
+    // `k049_gracefully_ignores_unparseable_guards`.
+    RuleMetadata {
+        id: "K-049",
+        tier: Tier::T2,
+        severity: Severity::Warning,
+        summary:
+            "Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/companions/runtime.md#s10-3"),
+        suggested_fix: None,
+    },
     // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
     // crates/wos-lint/src/rules/tier2.rs (e.g. `k_ext_002_root_level_x_wos_key_flagged`).
     // The two linked `fixtures/validation/x-wos-*.json` files are authoring

@@ -12,6 +12,7 @@
 //! |-----------|---------|----------------------------------------------------------------------|
 //! | K-010     | error   | createTask assignTo MUST reference a declared kernel actor          |
 //! | K-037     | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
+//! | K-049     | warning | Continuous-mode setData/guard dependency cycles (see `continuous_mode`) |
 //! | K-EXT-002 | warning | Keys using the reserved `x-wos-*` namespace (Kernel §10.6)           |
 //!
 //! ## Governance — due process
@@ -183,6 +184,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
         check_action_actor_references_typed(kernel, &kc.actor_ids, diagnostics);
         check_fail_fast_error_final_states_typed(kernel, diagnostics);
+        super::continuous_mode::check(kernel, diagnostics);
     }
 
     for gov in project.of_kind(DocumentKind::WorkflowGovernance) {

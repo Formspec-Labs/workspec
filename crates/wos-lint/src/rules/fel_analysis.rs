@@ -716,7 +716,7 @@ fn is_simple_access_expr(expr: &Expr) -> bool {
 }
 
 /// Dotted path for a simple field or context access (`$a.b` → `a.b`). Indices/wildcards excluded.
-fn simple_access_path_string(expr: &Expr) -> Option<String> {
+pub(super) fn simple_access_path_string(expr: &Expr) -> Option<String> {
     match expr {
         Expr::FieldRef {
             name,
@@ -786,7 +786,7 @@ fn references_agent_context(expr: &Expr) -> bool {
 ///
 /// Children are iterated inline via `visit_children` to avoid allocating
 /// a `Vec` per node (Finding #2).
-fn walk_expr(expr: &Expr, visitor: &mut impl FnMut(&Expr) -> bool) {
+pub(super) fn walk_expr(expr: &Expr, visitor: &mut impl FnMut(&Expr) -> bool) {
     if visitor(expr) {
         return;
     }
