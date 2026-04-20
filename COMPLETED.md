@@ -206,3 +206,50 @@ Largest parallel dispatch to date. Three batches: (1) uncommitted session-6 work
 ### Validation at close
 
 Final state: `cargo test --workspace` 1002+ passed / 0 failed · SCHEMA-DOC-001 zero-regression gate green · `pytest tests/schemas/ -q` 171 passed / 11 skipped / 1 xfailed (+50 vs session 7). 103 LINT-MATRIX rules (AI-058 added). All eight parallel agents + all four parallel reviews landed on disjoint file sets without conflict — validates the parallel-agent dispatch discipline from `thoughts/practices/2026-04-17-parallel-agent-dispatch.md`.
+
+## Session 9 (2026-04-20) — 4-agent parallel sweep of review follow-ups (19 commits)
+
+All §4.3b review follow-ups closed in a single 4-agent parallel dispatch. Disjoint file scopes kept conflict surface minimal despite shared-crate touches on `wos-core/src/provenance.rs`.
+
+### Review A follow-ups — wos-lint cluster (6 commits)
+
+- [x] **#F4a AI-058 allowlist drift** (`2d3132f` + `b0ec6e0`) — `is_boolean_shaped`'s boolean-returning builtin allowlist now derives from `fel_core::builtin_function_catalog()` via `std::sync::LazyLock<HashSet<&'static str>>`, filtering on signatures ending `→ boolean`. Adds `every`, `some`, `boolean` (three real builtins previously missing → false positives on valid FEL); removes bogus `isBoolean` (was never a registered builtin). Four new tests pin each branch.
+- [x] **#F2a Guard-walker short-circuit regression test** (`196346c`) — direct test `k049_guard_walker_short_circuit_prevents_spurious_cycle` with inline rationale naming the `PostfixAccess(FieldRef("caseFile", []), [Dot("input")])` parse shape that motivated the short-circuit. Previously only indirect-tested via `k049_ignores_acyclic_continuous_kernel`.
+- [x] **Review A Finding 4 — `NullCoalesce` admission** (`10bd3af`) — `is_boolean_shaped` now recurses into `Expr::NullCoalesce { left, right }` (both sides must be boolean-shaped). Closes a false-positive class for `$flag ?? true` precondition patterns.
+- [x] **Review A Finding 5 — adversarial `normalize_setdata_path` coverage** (`6b448df`) — new test `normalize_adversarial_inputs_degrade_to_single_dot` covers 7 edge cases (`""`, `"."`, `"foo[]"`, `"foo[-1]"`, `"foo[[0]]"`, `"foo[a]"`, `"foo[ 1 ]"`). `[*]` deliberately excluded since the normalizer handles it as `[Wildcard]` (documented inline).
+- [x] **Review A Findings 3/6/8 — narrative cleanup** (`45a97f3`) — `extract_read_paths` docstring names the PostfixAccess parse shape; `reaches()` gains a symmetry comment + regression test; module docstring normalizes "100-cycle cap" / "convergence cap" phrasing to match the emitted diagnostic. Zero behavior change; diagnostic test still passes.
+- wos-lint unit tests: 88 → 97 (+9).
+
+### Review B follow-ups — schema cluster (6 commits)
+
+- [x] **Review B Finding 4 — `ProvenanceOutcome` shape simplification** (`3f4bce9`) — rework to match sibling open-enum convention at `wos-kernel.schema.json:803-818`: top-level `type: string` + bare `oneOf: [{enum}, {pattern}]`. No leaf-level duplication. Commit bundled the F5e vendor-regex change to avoid a transient-invalid intermediate shape.
+- [x] **#F5d F5b composition story** (`504a48b` + `2e853b7`) — `CapabilityInvocationRecord` $def moved from `schemas/ai/wos-ai-integration.schema.json` to `schemas/kernel/wos-provenance-record.schema.json`. Kernel provenance schema is now the single validation point for the §3.3.1 MUST. AI schema retains only a `$comment` pointer. Spec prose (AI §3.3.1 + Kernel §8.2.2) updated to describe the moved enforcement accurately.
+- [x] **#F5e Vendor-extension regex normalization** (`37347a5`, regression test only — regex flip itself landed in `3f4bce9`) — `^x-[a-zA-Z][a-zA-Z0-9-]*$` → `^x-[a-z][a-z0-9-]*$`, matching the established lowercase-kebab convention elsewhere. `x-Acme-Foo` now correctly rejected.
+- [x] **#F5c F5a runtime-emission wiring / F3b Task 3** (`a683c03`) — `ProvenanceRecord` gained `pub outcome: Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]` (roundtrip-safe on existing fixtures). `eval_mode.rs` convergence-cap emission flipped from `ProvenanceKind::CaseStateMutation` + `data.convergenceCapReached: true` to the dedicated `ProvenanceKind::ConvergenceCapReached` variant with `outcome: Some("convergenceCapReached")` and clean `data` payload. **ADR 0059 Task 3 is complete** — F3b remaining scope shrinks to 4 tasks / ~2-3 engineer-days. Crossed the `wos-runtime` fence with mechanical `outcome: None` additions at ~29 literal-constructor sites plus spillover in `wos-core/{explain,event_handler,deontic,autonomy,confidence}` and `wos-conformance`. New regression test `convergence_cap_emits_dedicated_kind_and_outcome_field`.
+- [x] **Review B Findings 5 + 6 — edge-case coverage + literal agreement** (`0eb14b2`) — 4 new Python contract tests: `test_outcome_rejects_bare_x_prefix`, `test_absent_invocation_blocked_not_required_outcome`, `test_non_capability_record_kind_with_blocked_flag_not_required_outcome`, plus a cross-schema grep-based smoke test that `preconditionNotSatisfied` agrees across the (now post-move) kernel $def and its `if/then` const. Finding 6 discharge: `const` retained for simplicity; agreement pinned by test.
+- `cargo test --workspace`: 1006 → 1012 (+6 net across wos-core + the new regression).
+
+### Review D follow-ups — #40 Task SLA (4 commits)
+
+- [x] **#40a `expectedDuration` rejects `"indefinite"`** (`8b32330`) — drop `indefinite|` branch from `SlaDefinition.expectedDuration` regex; now matches sibling `WarningThreshold.beforeBreach` + `EscalationStep.gracePeriod` duration-only regex. Prose + examples updated; one new negative test. Semantic justification: "indefinite SLA" is an oxymoron since `warningThresholds` + `breachPolicy` have nothing to fire against.
+- [x] **#40b `startEvent` kernel event-name pattern** (`d22038c`) — `"pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"` added. Rejects `$`-prefixed reserved names (`$continuous`, `$join`, `$timeout.*`), empty strings, whitespace. Two new negative tests.
+- [x] **#40c `EscalationStep.id` OPTIONAL + `escalationChainRef` contract** (`dea7786`) — added OPTIONAL `id: string` with kernel identifier pattern; `BreachPolicy.escalationChainRef` description now concretely references how level-based vs id-based resolution works. Fixture gained `id: "supervisor"` on step 2.
+- [x] **Review D Findings 3 + 4 — calendarRef convention comments + enum negatives** (`62c43cc`) — confirmed `HoldPolicy.notificationTemplateRef` precedent (plain `type: string` for in-document keys, `format: uri` for sidecar URI). Added one-line convention comments to `calendarRef` / `WarningThreshold.templateRef` / `BreachPolicy.templateRef` / `escalationChainRef`. 4 new enum negative tests (`calendarType`, `startAt`, `onExhaustion`, `timeoutPolicy.onRepeatedBreach`).
+- Task SLA tests: 27 → 35 (+8).
+
+### Review H follow-ups — #38 Assertion Library (3 commits)
+
+- [x] **#38b + Review H F4/F5/F9 — adoption path + dual-role clarifications** (`c746e9c`) — `specs/governance/assertion-library.md` §2 rewritten with honest adoption story: adopting `AssertionUse` from a consumer schema requires either cross-schema URI `$ref` plumbing (untested territory) OR duplicating the three $defs OR the §4.5 merge which dissolves the choice. New paragraph §2.1 disambiguates `assertionId`'s dual role (inline-standalone vs. library-mirrored). G-064 check (c) tightened to "When an `assertionRef` resolves to a library body that carries its own `assertionId`, that `assertionId` MUST match the library `id`." §2 gained a forward-looking sentence on the §4.5 merge interaction.
+- [x] **Review H Finding 7 — "Configuration error" glossary** (`2020c48`) — one-paragraph gloss at top of §2.2 defining "configuration error" as a load-time reject condition. Cross-linkable from any future sidecar spec.
+- [x] **Review H Finding 8 — Edge-case negative tests** (`4b0e575`) — 3 new tests in `test_assertion_reference_shape.py`: `assertionRef: ""` rejected via `minLength: 1`; `assertionRef: null` rejected via type mismatch; `assertionRef: "#localFrag"` rejected via `format: uri` requiring absolute URI.
+- **Review H Finding 1 (#38a)** — regen no-op (`npm run docs:generate` reported 3 updated artifacts but git saw no diff; `docs:check` was already exit-0 at session start because the 3 stale `.llm.md` files had been regenerated content-identically). No commit needed.
+- AssertionReference tests: 12 → 15 (+3).
+
+### Cross-agent coordination notes
+
+- **Transient git churn** between Agents A and B on shared wos-core crate: one agent's `git reset` / `git stash` operations briefly touched the other's uncommitted work. Recovered cleanly via `git stash pop` + `git checkout HEAD --`; no scope-overlap damage. Parallel-agent dispatch on shared crates carries real friction — future sessions should sequence provenance.rs-touching work or introduce a coordination mutex.
+- **F3b Task 3 landed ahead of F3b Tasks 1-2** — Agent B completed the emission wiring opportunistically while adding the `outcome` field. Order departed from the ADR's sequential plan but delivered the same end-state; ADR 0059 commit-message cross-reference notes Task 3 closed out-of-band.
+
+### Validation at close
+
+`cargo test --workspace`: **1012 passed / 0 failed**. SCHEMA-DOC-001 zero-regression gate green. `pytest tests/schemas/ -q`: **188 passed / 11 skipped / 1 xfailed** (+17 vs session 8). `npm run docs:check`: exit 0. `git status`: clean.

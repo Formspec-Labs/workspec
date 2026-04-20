@@ -1,16 +1,17 @@
 # WOS TODO
 
-**Last audited:** 2026-04-20 (session 8 close — 8-agent parallel dispatch: §4.1 #2 review fixes committed, §4.3a F2/F3a/F4/F5a/F5b all landed, §4.4 release trains Tasks 1-3 + #40 Task SLA + #38 Assertion Library cross-doc refs landed, §4.6 #45 sidecar audit delivered, #20 typed events plan + F3b ADR drafted; 4 semi-formal code reviews still in flight)
+**Last audited:** 2026-04-20 (session 9 close — 4-agent parallel sweep addressing EVERY review finding from sessions 6/7/8; 19 commits; F3b Task 3 landed out-of-band; all §4.3b follow-ups closed)
 
 **Snapshot**
 
 | Metric | Value |
 |---|---|
 | Specs / schemas | 20 specs · 25 schemas (21 production + 4 meta: conformance / lint / mcp / synth) · 0 SCHEMA-DOC-001 violations across all (`all_production_schemas_have_zero_schema_doc_violations` CI gate) |
-| Fixtures | 53 document + 150 conformance (147 top-level + 3 export); session 8 added 2 K-049 regression fixtures (indexed + wildcard cycles) + 1 SLA authoring happy-path + 1 assertion-library reference fixture |
+| Fixtures | 53 document + 150 conformance (147 top-level + 3 export); session 8-9 added 2 K-049 regression fixtures (indexed + wildcard cycles) + 1 SLA authoring happy-path + 1 assertion-library reference fixture |
 | Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 6 MVP (`wos-authoring` @ 50 tests, `wos-mcp` @ 22 tools, **`wos-synth-core` @ 13 tests, `wos-synth-mock` @ 3, `wos-synth-anthropic` @ 2, `wos-synth-cli`** — DIP invariant verified empty `cargo tree -p wos-synth-core --edges normal \| grep -E 'reqwest\|tokio\|anthropic'`) + 1 spike (`wos-synth-spike` @ 17 tests, keep-with-deletion-horizon) |
-| Lint matrix | 103 rules in `LINT-MATRIX.md` (35 T1 · 59 T2 · 9 T3 · 12 Tested · 91 Draft; AI-058 added; K-049 stays Tested pending F3b-driven LoadBearing promotion) |
-| Python tests | `pytest tests/schemas/` — 171 passed / 11 skipped / 1 xfailed (+50 vs session 7: +9 ProvenanceOutcome, +4 CapabilityInvocationRecord, +27 Task SLA, +12 AssertionReference minus dedup) |
+| Lint matrix | 103 rules in `LINT-MATRIX.md` (35 T1 · 59 T2 · 9 T3 · 12 Tested · 91 Draft; AI-058 allowlist now derives from `fel_core::builtin_function_catalog()` filtering on `→ boolean` signatures) |
+| Rust tests | `cargo test --workspace` — 1012 passed / 0 failed (+10 vs session 8: includes `convergence_cap_emits_dedicated_kind_and_outcome_field` regression + 9 new wos-lint tests) |
+| Python tests | `pytest tests/schemas/` — 188 passed / 11 skipped / 1 xfailed (+17 vs session 8: +4 ProvenanceOutcome edge cases + 8 Task SLA + 3 AssertionReference + 2 CapabilityInvocationRecord) |
 | CI gates | `schema_doc_zero_regression` (all 21 production schemas) · `every_promoted_*_rule_has_executable_or_annotated_evidence` (Tested/LoadBearing) · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
 **Links:** [Core extraction plan](thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
@@ -19,13 +20,13 @@
 
 ## Next actionable work items (ordered by ROI)
 
-> Session 8 landed 2026-04-20 (~23 commits across 8 parallel agents): §4.1 #2 review fixes (`02ca0c1` + `a041433` + `25026dd` + `abe3c76`); §4.3a F3a (`e15bd80`) / F4 (`8855591`) / F2 (`ee05cec`) / F5a (`2d890d3`) / F5b (`ae3589f`) plus LINT-MATRIX regen (`d46d172`); §4.4 release trains Tasks 1-3 (`78283ae` + `2c53f62` + `49de6c0` + `9aee9be`); §4.4 #40 Task SLA (`8b466fa` + `bc5de5f` + `130a51e`); §4.4 #38 Assertion Library cross-doc refs (`77695eb` + `f862d1f` + `21e9195`); §4.6 #45 sidecar audit (`9900e39`); #20 typed events plan (`6cad36e`); F3b ADR 0059 (`fcd2c19`). Five of six §4.3a items CLOSED — only F3b remains (implementation; ADR landed).
+> Session 9 landed 2026-04-20 (19 commits across 4 parallel agents addressing **every** review finding from sessions 6/7/8). F3b Task 3 closed out-of-band by Agent B (`a683c03` emits `ProvenanceKind::ConvergenceCapReached` with `outcome` field); `CapabilityInvocationRecord` moved from AI schema to kernel provenance schema (closes #F5d composition story); AI-058 allowlist now catalog-driven (closes #F4a false positives on `every`/`some`/`boolean`). All §4.3b items ✅.
 
-1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. **Plan drafted** (`6cad36e`, `thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md`). **Load-bearing open questions:** OQ1 (`$join` disposition) and OQ4 (vendor-kind extension shape) block Task 1. **Actual fixture count: 185 files / 844 occurrences** (higher than original ~175 estimate). ~8-10 engineer-days after OQ1/OQ4 resolved.
-2. **§4.3a #F3b Runtime §10.3 conformance** `[Imp 7 / Cx 6 / Debt 5]` — ADR 0059 landed (`fcd2c19`). All preconditions satisfied: F5a schema + `ProvenanceKind::ConvergenceCapReached` variant already exist (`2d890d3`); F2 structured-path K-049 lands the cycle shapes F3b closes. 5 tasks, ~3-5 engineer-days. READY TO EXECUTE.
-3. **§4.4 Release trains Tasks 4-5** — Changesets tooling + GitHub Actions release workflow. Tasks 1-3 foundation landed (`78283ae` + `2c53f62` + `49de6c0`). See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
-4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1-7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
-5. **§4.3b Session-8 review follow-ups** — see §4.3b below. New batch from the in-flight 4 parallel semi-formal reviews; two already returned (D Task SLA, H Assertion Library) with 2 warnings + 2 nits each.
+1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. **Plan drafted** (`6cad36e`, `thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md`). **Load-bearing open questions:** OQ1 (`$join` disposition) and OQ4 (vendor-kind extension shape) block Task 1. **Actual fixture count: 185 files / 844 occurrences**. ~8-10 engineer-days after OQ1/OQ4 resolved.
+2. **§4.3a #F3b Runtime §10.3 conformance** `[Imp 7 / Cx 6 / Debt 5]` — ADR 0059 (`fcd2c19`). **Task 3 landed out-of-band** (`a683c03`). Remaining: Tasks 1-2-4-5 (scaffold re-scan, flip default + migration, add 3 unit tests, K-049 LoadBearing promotion). ~2-3 engineer-days remaining. READY TO EXECUTE.
+3. **§4.4 Release trains Tasks 4-5** — Changesets tooling + GitHub Actions release workflow. Tasks 1-3 foundation landed session 8. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
+4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete. See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
+5. **§4.5 Structural merges** — G's §4.6 #45 audit ratifies three: assertion-library → workflow-governance (Cx 2; H's `AssertionUse` seam + §4.3b #38b prose make adoption cheaper); verification-report → advanced-governance "Output Artifacts" (Cx 2); due-process-config 3-section residue → workflow-governance (Cx 3). Decision needed: one PR or three?
 
 ---
 
@@ -33,7 +34,8 @@
 
 Full session-by-session narratives (sessions 2–7) live in [COMPLETED.md](COMPLETED.md). Summary of the closed sessions:
 
-- **Session 8 (2026-04-20, ~23 commits, 8-agent parallel dispatch)** — §4.1 #2 review fixes committed; §4.3a F2/F3a/F4/F5a/F5b all landed; §4.4 release trains Tasks 1-3 + #40 Task SLA + #38 Assertion Library cross-doc refs; §4.6 #45 sidecar audit delivered; #20 typed events plan; F3b ADR 0059. Four semi-formal code reviews of the session's work in flight; three returned (B/D/H) with WARNING/NIT follow-ups filed under §4.3b.
+- **Session 9 (2026-04-20, 19 commits, 4-agent parallel sweep)** — addressed **every** review finding from sessions 6/7/8: AI-058 allowlist catalog-driven (+3 `NullCoalesce` admission + guard-walker + adversarial path tests); `CapabilityInvocationRecord` $def moved to kernel + `ProvenanceOutcome` shape normalization; Task SLA 40a/b/c + 4 enum negatives; Assertion Library adoption prose + edge-case tests + `configuration error` glossary. F3b Task 3 closed out-of-band.
+- **Session 8 (2026-04-20, ~23 commits, 8-agent parallel dispatch)** — §4.1 #2 review fixes committed; §4.3a F2/F3a/F4/F5a/F5b all landed; §4.4 release trains Tasks 1-3 + #40 Task SLA + #38 Assertion Library cross-doc refs; §4.6 #45 sidecar audit delivered; #20 typed events plan; F3b ADR 0059. Four semi-formal code reviews of the session's work.
 - **Session 7 (2026-04-20, 8 commits)** — DRAFTS triage; K-049 continuous-mode cycle detection; capability preconditions + AI-057; v0 spike Tasks 4–5; review Finding 1 fix; §4.3a follow-ups filed + expert-refined.
 - **Session 6 (2026-04-20)** — §5.4 Task 7 synth-trace schema; §4.1 #2 deterministic adverse-decision notice; §4.2 #21/#37/#39; §4.3 #13/#57.
 - **Session 5 (2026-04-19, 10 commits)** — §4.2 #37 / #46 / §4.1 #24a closure.
@@ -43,19 +45,19 @@ Full session-by-session narratives (sessions 2–7) live in [COMPLETED.md](COMPL
 
 ---
 
-## Active work items (2026-04-20 session 8 close)
+## Active work items (2026-04-20 session 9 close)
 
 Legend: 🟡 partial · 🔴 not started · 🚨 has blocker from review
 
-Items still open. All landed work is in [COMPLETED.md](COMPLETED.md).
+Items still open. All landed work is in [COMPLETED.md](COMPLETED.md). **All review follow-ups from sessions 6/7/8 are closed** (§4.3b swept 2026-04-20).
 
 - 🔴 **§4.1 #20 Typed event meta-vocabulary** — plan drafted (`6cad36e`). Load-bearing open questions (OQ1 `$join` disposition, OQ4 vendor-kind shape) must be resolved before Task 1. ~8-10 engineer-days once unblocked. 185 fixtures / 844 occurrences to migrate.
-- 🔴 **§4.3a #F3b Runtime §10.3 conformance** — ADR 0059 landed (`fcd2c19`). All preconditions satisfied. 5 tasks, ~3-5 engineer-days. **READY TO EXECUTE** — highest-leverage open item.
-- 🟡 **§4.3b Session-8 review follow-ups** — see §4.3b. 3 of 4 reviews returned (B/D/H); A wos-lint cluster still running. Combined surface: ~4 WARNINGs + ~8 NITs across Task SLA, Assertion Library, and schema cluster.
+- 🟡 **§4.3a #F3b Runtime §10.3 conformance** — ADR 0059 (`fcd2c19`). **Task 3 landed out-of-band** (`a683c03`, session 9). Remaining: Tasks 1-2-4-5 (scaffold re-scan, flip default, 3 unit tests, K-049 LoadBearing promotion). ~2-3 engineer-days. READY TO EXECUTE.
 - 🟡 **§4.4 Split release trains** — Tasks 1-3 landed; Tasks 4-5 (Changesets tooling + release workflow) open. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
 - 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
-- 🔴 **§4.2 #22a ProvenanceKind tier-typing** — lock-in pressure relieved by PE.2's exhaustive match; remaining value is data-shape cleanliness. Part of the broader #22 crate split (§4.6). Consider bundling with F3b which also touches provenance.rs.
-- 🔴 **§4.5 Structural merges** — G's §4.6 #45 audit ratifies three: `assertion-library → workflow-governance` (Cx 2; H's `AssertionUse` seam makes it cheaper), `verification-report → advanced-governance` "Output Artifacts" (Cx 2), `due-process-config` 3-section residual → workflow-governance (Cx 3). See §4.5 below.
+- 🔴 **§4.5 Structural merges** — G's #45 audit ratifies three merges (see §4.5). Needs user decision: one PR or three?
+- 🔴 **§4.2 #22a ProvenanceKind tier-typing** — lock-in pressure relieved by PE.2's exhaustive match; remaining value is data-shape cleanliness. Part of the broader #22 crate split (§4.6). Consider bundling with remaining F3b Tasks 1-2 which also touch provenance.rs.
+- 🔴 **Cross-reference shape ADR candidate** — surfaced across Reviews B + D: `calendarRef` (URI) vs `templateRef` (plain string key) vs `escalationChainRef` (local id) vs `assertionRef` (URI) use inconsistent shapes. Worth a separate ADR pinning conventions before the next cross-ref lands. Low urgency; land naturally alongside §4.5 merges.
 
 ---
 
@@ -132,37 +134,18 @@ Opened after the 2026-04-20 semi-formal review of `4fd32e3` + `19ad643`. Five of
 - [x] **#F5a Kernel `$defs/ProvenanceOutcome`** — `2d890d3`. Open-enum with reserved literals + `x-` vendor pattern; optional `outcome` on `FactsTierRecord`; Rust `ProvenanceKind::ConvergenceCapReached` variant.
 - [x] **#F5b AI schema `if/then`** — `ae3589f`. `CapabilityInvocationRecord` $def enforces `outcome = "preconditionNotSatisfied"` when `data.invocationBlocked: true`.
 
-### 4.3b — Session-8 review follow-ups (opened 2026-04-20)
+### 4.3b — Session-8 review follow-ups — **all closed** (2026-04-20 session 9)
 
-From the 2026-04-20 semi-formal reviews of session 8's parallel-agent landings. Four reviews dispatched; B, D, H returned; A (wos-lint cluster) still in flight. WARNINGs land here; OBSERVATION-severity items (enum-rejection test gaps, style-only deviations) filed as individual tickets or deferred.
+Session 9's 4-agent parallel sweep addressed every finding. Details in [COMPLETED.md](COMPLETED.md) Session 9. Summary:
 
-**From Review B (schema cluster F5a + F5b):**
+- **Review A (wos-lint):** F4a (allowlist catalog-driven) / F2a (short-circuit test) / F3 / F4 (NullCoalesce) / F5 / F6 / F8 all ✅. 6 commits.
+- **Review B (schemas):** F5c (F3b Task 3 out-of-band) / F5d (moved to kernel) / F5e (regex) / F4 (shape simplified) / F5 / F6 / F7 all ✅. 6 commits.
+- **Review D (#40 SLA):** 40a / 40b / 40c / F3 / F4 / F5 all ✅. 4 commits.
+- **Review H (#38 Assertion):** 38a / 38b / F4 / F5 / F6 / F7 / F8 / F9 all ✅. 3 commits.
 
-- [ ] **#F5c F5a runtime-emission wiring** `[Imp 5 / Cx 2 / Debt 3]` — Review B Finding 3. `ProvenanceRecord` at `crates/wos-core/src/provenance.rs:283-359` has no `outcome` field, and `crates/wos-core/src/eval_mode.rs:78-100` still emits `ProvenanceKind::CaseStateMutation` + `data.convergenceCapReached: true` rather than the newly-declared `ProvenanceKind::ConvergenceCapReached` variant. F5a is schema-only staging until this lands. **Rolls into F3b Task 3** per ADR 0059.
-- [ ] **#F5d F5b composition story** `[Imp 4 / Cx 3 / Debt 3]` — Review B Finding 1 + 7. `CapabilityInvocationRecord` is an orphan `$def` — no `$ref` composes it over real provenance output. The `if/then` MUST never fires against real data. Options: (a) ship a conformance composer that loads AI+kernel schemas over provenance logs, (b) move the `if/then` into `wos-provenance-record.schema.json`, or (c) soften the spec prose at `specs/ai/ai-integration.md:159`. Recommend (b) — kernel provenance schema is the single validation point.
-- [ ] **#F5e Vendor-extension regex normalization** `[Imp 2 / Cx 1 / Debt 2]` — Review B Finding 2. `^x-[a-zA-Z][a-zA-Z0-9-]*$` in new `ProvenanceOutcome` `$def` diverges from established `^x-[a-z][a-z0-9-]*$` at `wos-kernel.schema.json:816` and `wos-workflow-governance.schema.json:1527`, and from registry canonical `^x-[a-z0-9]+(-[a-z0-9]+)*$` at `wos-extension-registry.schema.json:216`. Align on lowercase-kebab.
+Surfaced for follow-up (not blocking):
 
-**From Review D (§4.4 #40 Task SLA):**
-
-- [ ] **#40a `expectedDuration` `indefinite` semantics** `[Imp 3 / Cx 2 / Debt 2]` — Review D Finding 1. `SlaDefinition.expectedDuration` accepts `"indefinite"` (regex copy from `HoldPolicy`) but `WarningThreshold.beforeBreach` and `EscalationStep.gracePeriod` don't — suggesting the author recognized `indefinite` is nonsense for pre-breach warnings. Either drop `indefinite|` from SLA `expectedDuration` (align with siblings) OR expand the description + add a conformance test that pins processor semantics for indefinite SLAs.
-- [ ] **#40b `startEvent` name pattern** `[Imp 3 / Cx 1 / Debt 2]` — Review D Finding 2. `SlaDefinition.startEvent` only requires `type: string, minLength: 1`. Add a lightweight `pattern` matching kernel event-name grammar (reject `$`-prefixed reserved names + whitespace) so common authoring typos fail schema-time, not lint-time.
-- [ ] **#40c `EscalationStep.id` vs `escalationChainRef` drift** `[Imp 2 / Cx 1 / Debt 1]` — Review D Finding 6. `BreachPolicy.escalationChainRef` description says "matched by level or id" but `EscalationStep` has no `id` field. Either add OPTIONAL `id` (future-proof) or rewrite the description to say "by level" only.
-- Review D Findings 4-5 (NIT: 4 enum rejection tests + `indefinite` fixture branch) filed as test-suite completeness items; land together with #40a.
-
-**From Review H (§4.4 #38 Assertion Library refs):**
-
-- [ ] **#38a Stale `.llm.md` regeneration** `[Imp 2 / Cx 1 / Debt 1]` — Review H Finding 1. `specs/governance/assertion-library.llm.md` is stale (`npm run docs:check` fails). CLAUDE.md "Spec Authoring Contract" mandates `npm run docs:generate` after any schema/spec change. Commit `f862d1f` didn't regen. `workflow-governance.llm.md` and `ai-integration.llm.md` may also need regen.
-- [ ] **#38b Cross-schema `$ref` plumbing** `[Imp 3 / Cx 4 / Debt 3]` — Review H Finding 3. "One-line `$ref AssertionUse`" adoption claim understates reality: no cross-schema URI `$ref` exists anywhere in `schemas/`. Adopting `AssertionUse` from `workflow-governance.schema.json` requires either (a) introducing cross-schema URI-ref plumbing (validator base-URI + resolver + test harness) or (b) duplicating the three `$def`s. Either way the §4.5 `assertion-library → workflow-governance` merge is the natural landing point (absorbs the shape cleanly).
-- TODO-text currency fix (Review H Finding 2) — #38 entry below is stale post-landing; fix inline this session. G-064 named explicitly.
-- Review H Findings 4-8 (OBSERVATION: spec prose clarifications, test coverage nits) captured inline above; no separate tracking.
-
-**From Review A (wos-lint cluster F3a + F4 + F2):**
-
-- [ ] **#F4a AI-058 builtin-allowlist drift** `[Imp 4 / Cx 1 / Debt 2]` — Review A Finding 1. `is_boolean_shaped`'s boolean-returning builtin allowlist at `fel_analysis.rs:197-217` is out of sync with `fel-core`'s `BUILTIN_FUNCTIONS` catalog. Missing three valid entries (`every`, `some`, `boolean`) — false positives on valid preconditions like `every(caseFile.items, $ > 0)`. Includes one bogus entry (`isBoolean`) that isn't a registered builtin at all. **Fix:** derive the allowlist from `builtin_function_catalog()` filtering on `→ boolean` signatures instead of hard-coding. Add coverage tests per builtin.
-- [ ] **#F2a Guard-walker short-circuit regression test** `[Imp 2 / Cx 1 / Debt 1]` — Review A Finding 2. The short-circuit at `continuous_mode.rs:398-402` is load-bearing (without it, `PostfixAccess` chains emit spurious stem paths that over-match under prefix reachability). Currently only covered indirectly via `k049_ignores_acyclic_continuous_kernel`. Add a direct test: two transitions reading `caseFile.input` and writing `caseFile.output`, explicit zero-diagnostic assertion + comment citing the short-circuit contract.
-- Review A Findings 3-8 (NIT + OBSERVATION): docstring clarifications, `NullCoalesce` admission in `is_boolean_shaped`, adversarial `normalize_setdata_path` test cases, `reaches()` symmetry comment. Defer or bundle with #F4a.
-
-**Open question surfaced across Reviews B + D:** several schemas now carry cross-reference properties (`calendarRef`, `templateRef`, `escalationChainRef`, `assertionRef`) with inconsistent shape conventions (URI vs. local-id vs. URN). Worth a separate "Cross-reference shape conventions" ADR to pin the distinction and prevent future drift.
+- **Cross-reference shape conventions ADR** — schemas now carry `calendarRef` (URI), `templateRef` (plain string key), `escalationChainRef` (local id), `assertionRef` (URI) with divergent shapes. Reviews B + D flagged; worth a standalone ADR pinning the convention. Promoted to "Active work items" list above.
 
 ### 4.4 — Behavioral backlog (after §4.1–§4.3 stabilize)
 
