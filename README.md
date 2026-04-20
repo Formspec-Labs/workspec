@@ -4,6 +4,8 @@
 
 Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE) (specs, schemas, runtime) and [BSL 1.1](../LICENSE-BSL) (studio). See [LICENSING.md](../LICENSING.md) for details.
 
+WOS ships as **four independent release streams** — `wos-kernel`, `wos-governance`, `wos-ai`, and `wos-advanced` — so kernel consumers can pin stability while AI-layer work iterates. Compliance claims reference a pair of stream versions (e.g. `wos-kernel@1.0 + wos-ai@0.5`). See [RELEASE-STREAMS.md](RELEASE-STREAMS.md) for the stream → path mapping and [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) for known-good pairings.
+
 ---
 
 ## Two-line pitch
