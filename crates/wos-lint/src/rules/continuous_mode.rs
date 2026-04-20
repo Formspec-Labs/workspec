@@ -584,6 +584,63 @@ mod tests {
     }
 
     #[test]
+    fn k049_guard_walker_short_circuit_prevents_spurious_cycle() {
+        // §4.3b #F2a — direct regression for `extract_read_paths`'s
+        // short-circuit on access chains. The parser represents
+        // `caseFile.input` as `PostfixAccess(FieldRef("caseFile", []),
+        // [Dot("input")])`. Without the short-circuit at
+        // `extract_read_paths`, `walk_expr` would visit the inner
+        // `FieldRef("caseFile")` AFTER emitting the full path
+        // `[caseFile, input]`, emitting an additional stem path
+        // `[caseFile]`. Then `reaches([caseFile, output], [caseFile])`
+        // returns true under §3.6.4 prefix reachability (strict-prefix
+        // write invalidates parent read), producing a spurious K-049
+        // warning on this acyclic kernel.
+        //
+        // This test is deliberately structurally identical to
+        // `k049_ignores_acyclic_continuous_kernel` but lives as its own
+        // named case so regressions in the short-circuit get attributed
+        // directly. Load-bearing: do not collapse into the sibling test.
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": {
+                "fields": {
+                    "input": { "type": "number" },
+                    "output": { "type": "number" }
+                }
+            },
+            "lifecycle": {
+                "initialState": "compute",
+                "states": {
+                    "compute": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "step",
+                            "target": "compute",
+                            "guard": "caseFile.input > 0",
+                            "actions": [{
+                                "action": "setData",
+                                "path": "caseFile.output",
+                                "value": 1
+                            }]
+                        }]
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert!(
+            diagnostics.is_empty(),
+            "spurious K-049 from missing guard-walker short-circuit: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn k049_ignores_acyclic_continuous_kernel() {
         // Continuous mode, setData + guard — but the write path and the guard
         // read paths are disjoint. No cycle.
