@@ -456,6 +456,84 @@ Breach policies:
 
 SLA evaluation uses business calendar days when a Business Calendar sidecar is present. Otherwise, SLA evaluation uses wall-clock time.
 
+### 10.4 Task SLA Authoring
+
+§10.3 specifies normative processor behaviour for SLAs, but without authoring surface those obligations are only fulfillable by out-of-band configuration. This subsection adds four first-class properties on `TaskPattern` (governance schema `TaskPattern` $def) so governance documents can declaratively author the SLA policy the §10.3 processor will enforce. All four properties are OPTIONAL on `TaskPattern`; when present, they MUST conform to the shapes below.
+
+| Property | Type | Required | Description |
+| -------- | ---- | -------- | ----------- |
+| `slaDefinitions` | array of `SlaDefinition` | OPTIONAL | Named SLA windows measured against this task pattern. Multiple entries MAY coexist on one task (e.g. `firstResponse` plus `fullResolution`). |
+| `warningThresholds` | array of `WarningThreshold` | OPTIONAL | Pre-breach notifications fired at declared lead times before any matching `slaDefinitions` entry elapses. |
+| `breachPolicy` | `BreachPolicy` | OPTIONAL | Processor action when an SLA window elapses without completion: `notify`, `escalate`, `autoReassign`, or `fail`. |
+| `escalationChain` | array of `EscalationStep` | OPTIONAL | Ordered ladder activated when `breachPolicy.action = escalate` or when a prior step's grace period exhausts. |
+
+#### 10.4.1 `slaDefinitions`
+
+Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`) or the literal string `"indefinite"`; the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event. Event-name resolution is left to a future T2 lint.
+
+Examples:
+
+```json
+{ "id": "firstResponse", "expectedDuration": "PT4H", "calendarType": "wall-clock", "startAt": "assignment" }
+```
+
+```json
+{ "id": "fullResolution", "expectedDuration": "P5BD", "calendarType": "business", "calendarRef": "urn:wos:sidecar:business-calendar:fy2026-federal", "startAt": "custom-event", "startEvent": "applicantResponseReceived" }
+```
+
+#### 10.4.2 `warningThresholds`
+
+Each `WarningThreshold` is `{ beforeBreach, templateRef, notify }`. `beforeBreach` is an ISO 8601 duration specifying the lead time before any matching `slaDefinitions.expectedDuration` elapses at which the warning fires; the processor evaluates every threshold independently, so escalating leads (for example `P1D`, `PT4H`, `PT30M`) fan out multiple notifications. `templateRef` MUST resolve into a Notification Template sidecar (lint G-063) and SHOULD carry the `sla-warning` category. `notify` is a non-empty array of actor identifiers resolved per Governance §10.2 / §11.
+
+Examples:
+
+```json
+{ "beforeBreach": "P1D", "templateRef": "slaWarning1Day", "notify": ["taskOwner"] }
+```
+
+```json
+{ "beforeBreach": "PT30M", "templateRef": "firstResponseImminentBreach", "notify": ["taskOwner", "caseSupervisor"] }
+```
+
+#### 10.4.3 `breachPolicy`
+
+`BreachPolicy` is `{ action, templateRef?, escalationChainRef?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateRef` is a Notification Template sidecar reference rendered on breach. `escalationChainRef` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Cross-reference integrity for the template and chain refs is deferred to a future T2 lint.
+
+Examples:
+
+```json
+{ "action": "escalate", "escalationChainRef": "level-1", "timeoutPolicy": { "onRepeatedBreach": "suspend" } }
+```
+
+```json
+{ "action": "notify", "templateRef": "slaBreachNotice" }
+```
+
+#### 10.4.4 `escalationChain`
+
+Each `EscalationStep` is `{ level, assignTo, gracePeriod, onExhaustion }`. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
+
+Examples:
+
+```json
+{ "level": 1, "assignTo": "teamLead", "gracePeriod": "PT4H", "onExhaustion": "escalate" }
+```
+
+```json
+{ "level": 2, "assignTo": "divisionDirector", "gracePeriod": "P1D", "onExhaustion": "ticketCreate" }
+```
+
+#### 10.4.5 Future work
+
+Cross-reference integrity across the four SLA authoring shapes is currently unenforced and tracked as a future T2 lint:
+
+- `SlaDefinition.startEvent` MUST name a kernel event declared on the target Kernel Document (when `startAt = custom-event`).
+- `BreachPolicy.escalationChainRef` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern`.
+- `WarningThreshold.templateRef` and `BreachPolicy.templateRef` MUST resolve through a Notification Template sidecar (lint **G-063**).
+- When `SlaDefinition.calendarType = business`, `calendarRef` SHOULD be present and resolvable to a Business Calendar sidecar (lint **G-023**).
+
+Schema enforcement in this release covers shape only; resolvability is an authoring-time lint concern. The §10.3 processor obligations remain normative regardless of which of the four properties a governance document chooses to author.
+
 ---
 
 ## 11. Delegation of Authority
