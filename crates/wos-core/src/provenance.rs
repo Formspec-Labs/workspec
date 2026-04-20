@@ -64,6 +64,10 @@ pub enum ProvenanceKind {
     InvalidDuration,
     /// Timer fired beyond its tolerance window (LCD S6.6, Runtime S7.2).
     ToleranceViolation,
+    /// Continuous-mode re-evaluation hit the 100-cycle convergence cap for a
+    /// single triggering mutation (Runtime §10.3). The record's `data` carries
+    /// the triggering mutation so downstream tooling can locate the cycle.
+    ConvergenceCapReached,
 
     // ── Deontic enforcement (AI S4) ────────────────────────────────
     /// A deontic constraint was violated (AI S4.2–S4.4).
@@ -808,6 +812,7 @@ pub fn audit_layer_for_kind(kind: ProvenanceKind) -> &'static str {
         | ProvenanceKind::ActionExecuted
         | ProvenanceKind::InvalidDuration
         | ProvenanceKind::ToleranceViolation
+        | ProvenanceKind::ConvergenceCapReached
         | ProvenanceKind::DeonticViolation
         | ProvenanceKind::DeonticEvaluation
         | ProvenanceKind::DeonticResolution
@@ -1246,6 +1251,7 @@ mod tests {
             ProvenanceKind::ActionExecuted,
             ProvenanceKind::InvalidDuration,
             ProvenanceKind::ToleranceViolation,
+            ProvenanceKind::ConvergenceCapReached,
             ProvenanceKind::DeonticViolation,
             ProvenanceKind::DeonticEvaluation,
             ProvenanceKind::DeonticResolution,

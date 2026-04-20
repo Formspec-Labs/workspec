@@ -410,6 +410,7 @@ Every provenance record MUST include:
 | `outputs` | object | OPTIONAL | Output data from the action. |
 | `transitionTags` | array | REQUIRED for state-transition records with tagged transitions, OPTIONAL otherwise | Semantic tags copied from the firing transition. |
 | `caseFileSnapshot` | object | REQUIRED for `determination` transitions, OPTIONAL otherwise | Canonical snapshot of the case-file state used by the determination. |
+| `outcome` | string | OPTIONAL | Open-enum outcome literal recorded by the processor. See §8.2.2 for reserved values. |
 | `inputDigest` | string | OPTIONAL | Cryptographic digest of inputs for tamper detection. |
 | `outputDigest` | string | OPTIONAL | Cryptographic digest of outputs for tamper detection. |
 | `definitionVersion` | string | REQUIRED | Version of the Kernel Document governing this action. |
@@ -429,6 +430,17 @@ When a transition tagged `determination` fires, the processor MUST copy the tran
 | `sha256` | string | REQUIRED | Lowercase SHA-256 hex digest of `jcsCanonical`. |
 
 Identical case-file state at determination fire time MUST produce byte-identical `jcsCanonical` values and identical `sha256` values. Governance adverse-decision notices (Governance §3.2) and override records (Governance §7.3) use this snapshot as the deterministic factual basis for later explanation, appeal, and audit.
+
+#### 8.2.2 Outcome Field
+
+The optional `outcome` field records why the processor completed (or declined to complete) the action captured by the record. It is an **open enum**: the values listed below are reserved across all WOS tiers, and vendor extensions MUST use an `x-` prefix to avoid future collisions. The reserved values are:
+
+| Value | Mandated by | Meaning |
+|-------|-------------|---------|
+| `preconditionNotSatisfied` | AI Integration §3.3.1 | A capability precondition FEL expression evaluated to `false` or a non-boolean, so the processor skipped the agent invocation and fell through to the fallback chain. |
+| `convergenceCapReached` | Runtime §10.3 | Continuous-mode re-evaluation reached the 100-cycle convergence cap for a single triggering mutation; the processor halted further re-evaluation for that mutation. |
+
+The canonical schema definition is `$defs/ProvenanceOutcome` in `wos-provenance-record.schema.json`. Processors that emit outcome values outside this reserved set MUST prefix them with `x-` (see Kernel §10.6 extensions).
 
 ### 8.3 Tamper Detection
 
