@@ -981,6 +981,39 @@ mod tests {
         );
     }
 
+    #[test]
+    fn normalize_adversarial_inputs_degrade_to_single_dot() {
+        // §4.3b Finding 5 — pin the degrade-to-single-Dot contract on the
+        // inputs `normalize_setdata_path` treats as unparseable. Each case
+        // must return `vec![Segment::Dot(raw.to_string())]` so downstream
+        // reachability stays conservative rather than dropping the write.
+        //
+        // Trimming, numeric normalization, negative indices, and bracket
+        // nesting are deliberately NOT supported — they would mask author
+        // intent. `[*]` is intentionally NOT in this list: a leading
+        // bracket with a wildcard normalizes to `[Wildcard]` and is
+        // exercised by the `reaches_wildcard_*` tests.
+        let adversarial: &[&str] = &[
+            "",             // empty raw input
+            ".",            // lone separator
+            "foo[]",        // empty bracket contents
+            "foo[-1]",      // negative index (not usize-parseable)
+            "foo[[0]]",     // nested brackets
+            "foo[a]",       // non-numeric, non-wildcard bracket contents
+            "foo[ 1 ]",     // whitespace inside brackets
+        ];
+
+        for &raw in adversarial {
+            let got = normalize_setdata_path(raw);
+            assert_eq!(
+                got,
+                vec![Segment::Dot(raw.to_string())],
+                "adversarial input {raw:?} should degrade to a single Dot segment \
+                 holding the raw input; got {got:?}"
+            );
+        }
+    }
+
     // --- reaches() unit tests ---
 
     #[test]
