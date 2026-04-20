@@ -92,7 +92,7 @@ pub(super) fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnosti
         head.path.clone(),
         format!(
             "continuous-mode isolation invariant: `setData` → guard dependency cycle ({trail}); \
-             runtime will trip the 100-cycle convergence cap (Runtime Companion §10.3)"
+             per Runtime §10.3 re-evaluation could thrash against the 100-cycle cap"
         ),
     ));
 }
@@ -556,6 +556,86 @@ mod tests {
                             "event": "e2",
                             "target": "phaseA",
                             "guard": "caseFile.b > 0"
+                        }]
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].rule_id, "K-049");
+    }
+
+    #[test]
+    fn k049_message_spec_faithful() {
+        // The emitted message MUST describe spec obligations, not runtime
+        // implementation details. See §4.3a #F3a — "100-cycle convergence cap"
+        // wording leaks an implementation threshold; the spec-faithful
+        // phrasing cites Runtime §10.3 directly.
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": { "fields": { "value": { "type": "number" } } },
+            "lifecycle": {
+                "initialState": "idle",
+                "states": {
+                    "idle": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "tick",
+                            "target": "idle",
+                            "guard": "caseFile.value > 0",
+                            "actions": [{ "action": "setData", "path": "caseFile.value", "value": 1 }]
+                        }]
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        let msg = &diagnostics[0].message;
+        assert!(
+            msg.contains("Runtime §10.3"),
+            "message should cite Runtime §10.3, got: {msg}"
+        );
+        assert!(
+            msg.contains("100-cycle cap"),
+            "message should mention the cap, got: {msg}"
+        );
+        assert!(
+            !msg.contains("runtime will trip"),
+            "message should be implementation-neutral, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn k049_flags_cycle_via_continuous_sentinel_event() {
+        // Runtime re-fires transitions with `"event": "$continuous"` in
+        // continuous mode (see `crates/wos-core/src/eval.rs:412-421`).
+        // K-049 must cover that event shape — the rule's whole point is to
+        // flag guards that would re-fire via the continuous driver.
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": { "fields": { "value": { "type": "number" } } },
+            "lifecycle": {
+                "initialState": "idle",
+                "states": {
+                    "idle": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "$continuous",
+                            "target": "idle",
+                            "guard": "caseFile.value > 0",
+                            "actions": [{ "action": "setData", "path": "caseFile.value", "value": 1 }]
                         }]
                     }
                 }
