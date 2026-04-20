@@ -1,6 +1,6 @@
 # WOS TODO
 
-**Last audited:** 2026-04-20 (session 6 close — §5.4 Task 7 synth-trace schema + drift test, §4.1 #2 deterministic adverse-decision notice, §4.2 #21 extension-registry MVP, §4.2 #39 continuationPolicyRef, §4.2 #37 Drift-Monitor policyRef, §4.3 #13 verifiability principle, §4.3 #57 assurance x-lm.critical all landed; metrics below reflect current tree, not last session's)
+**Last audited:** 2026-04-20 (session 7 close — DRAFTS triage archived, K-049 continuous-mode cycle detection, Capability preconditions + AI-057, v0 spike Tasks 4-5 complete, semi-formal review Finding 1 fixed, §4.3a review follow-ups filed + expert-refined)
 
 **Snapshot**
 
@@ -8,8 +8,8 @@
 |---|---|
 | Specs / schemas | 20 specs · 25 schemas (21 production + 4 meta: conformance / lint / mcp / synth) · 0 SCHEMA-DOC-001 violations across all (`all_production_schemas_have_zero_schema_doc_violations` CI gate) |
 | Fixtures | 53 document + 150 conformance (147 top-level + 3 export); T3 green (`kernel_conformance` 133 passed, `trace_parity` 20 passed) |
-| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 6 MVP (`wos-authoring` @ 50 tests, `wos-mcp` @ 22 tools, **`wos-synth-core` @ 13 tests, `wos-synth-mock` @ 3, `wos-synth-anthropic` @ 2, `wos-synth-cli`** — DIP invariant verified empty `cargo tree -p wos-synth-core --edges normal \| grep -E 'reqwest\|tokio\|anthropic'`) + 1 spike (`wos-synth-spike`) |
-| Lint matrix | 100 rules in `LINT-MATRIX.md` (35 T1 · 56 T2 · 9 T3 · 10 Tested · 90 Draft; regenerated from code registries) |
+| Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) + 6 MVP (`wos-authoring` @ 50 tests, `wos-mcp` @ 22 tools, **`wos-synth-core` @ 13 tests, `wos-synth-mock` @ 3, `wos-synth-anthropic` @ 2, `wos-synth-cli`** — DIP invariant verified empty `cargo tree -p wos-synth-core --edges normal \| grep -E 'reqwest\|tokio\|anthropic'`) + 1 spike (`wos-synth-spike` @ 17 tests, keep-with-deletion-horizon) |
+| Lint matrix | 102 rules in `LINT-MATRIX.md` (35 T1 · 58 T2 · 9 T3 · 11 Tested · 91 Draft; regenerated from code registries) |
 | CI gates | `schema_doc_zero_regression` (all 21 production schemas) · `every_promoted_*_rule_has_executable_or_annotated_evidence` (Tested/LoadBearing) · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
 **Links:** [Core extraction plan](../thoughts/plans/2026-04-10-wos-core-extraction.md) (complete) · [Runtime plan](../thoughts/plans/2026-04-13-wos-runtime-crate.md) (complete) · [§1 plan](thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md) (complete) · [LINT-MATRIX](LINT-MATRIX.md) · [Runtime Companion](specs/companions/runtime.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Completed archive](COMPLETED.md) · [ADR 0065](../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
@@ -18,13 +18,50 @@
 
 ## Next actionable work items (ordered by ROI)
 
-> Session 6 landed 2026-04-20: §4.1 #2 deterministic adverse-decision notice (uncommitted at time of audit but test-green end-to-end — `cargo test -p wos-conformance --test kernel_conformance g002_notice_before_adverse` passes), §5.4 Task 7 synth-trace JSON Schema + drift test (`f7c6c86`), §4.2 #21 extension-registry MVP (`3550fad`), §4.2 #39 continuationPolicyRef binding (`eaa678d`), §4.2 #37 Drift-Monitor policyRef (`b077613`), §4.3 #13 verifiability principle (`31a0e21`), §4.3 #57 assurance `x-lm.critical` coverage (`a1100fe`). §4.1 critical path now reduces to DRAFTS triage + #20 typed events.
+> Session 7 landed 2026-04-20 (8 commits): DRAFTS triage archived (`0d17f9f`); §4.3 #56 K-049 continuous-mode cycle detection (`4fd32e3`); §4.3 #12 capability preconditions + AI-057 (`19ad643`); v0 spike Task 4 conformance gate (`f6320c2`); v0 spike Task 5 retrospective + plan propagation (`a80e37d`); K-049 review Finding 1 fix onEntry/onExit (`2c6a2e2`); §4.3a review follow-ups filed (`64962ea`) and expert-refined (`4ceddb7`). Session 6 items (#2 deterministic adverse-decision notice, §5.4 Task 7 synth-trace schema, §4.2 #21/#39/#37, §4.3 #13/#57) remain uncommitted in the working tree as of 2026-04-20.
 
-1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked.
+1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked. Needs design decision on the 5-kind taxonomy + ~176-fixture migration strategy before implementation.
+2. **§4.3a K-049 / AI-057 review follow-ups** `[mixed]` — six items with expert-decided approaches (2026-04-20 spec-expert + wos-expert consultations). See §4.3a below. #F5a (kernel `ProvenanceOutcome` enum) is the highest-leverage single item: closes both §3.3.1 `preconditionNotSatisfied` and §10.3 `convergenceCapReached` MUSTs in one schema change.
 3. **§4.4 Split release trains** — unblocked since §4.2 close. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
-4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1–7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md).
-5. ~~**v0 spike Tasks 4-5**~~ — landed 2026-04-20 (`f6320c2` + `a80e37d`). Conformance smoke-test gate lands inline-fixture wrapper pattern; retrospective at [`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md). Live-run iteration counts (Q-V0-1..4) flagged as follow-up.
-6. **§4.3 cheap batch complete 2026-04-20** — #12 capability preconditions (schema + spec §3.3.1 + wos-core model + AI-057 parse-validity lint) and #56 isolation-invariant lint rule (K-049) both landed. #34 already covered by `SCHEMA-DOC-001`; #42 landed in session 5.
+4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1–7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
+
+---
+
+## 2026-04-20 session 7 — DRAFTS triage + §4.3 cheap batch close + v0 spike Tasks 4-5 + review follow-ups (8 commits)
+
+Single-stream closeout of the prerequisite DRAFTS triage and the last two open §4.3 items, plus the deferred v0 spike Tasks 4-5, plus the semi-formal review pass and the follow-up filings.
+
+### §4.1 DRAFTS triage (`0d17f9f`)
+
+All 13 historical kernel drafts (12 markdown v0.x-v7 + 1 schema snapshot) moved from `DRAFTS/` to `thoughts/archive/drafts/` with a classification README (superseded kernel iterations / v7 reframe ancestors / tier-spec ancestors / schema snapshot). MD-INVENTORY §6 rewritten to point at the archive; IDEA_SCRATCH reference updated. Unblocks #20.
+
+### §4.3 cheap batch closure
+
+- **`4fd32e3`** — **#56 K-049 isolation-invariant lint rule.** New module `crates/wos-lint/src/rules/continuous_mode.rs`: parses each transition guard via `fel-core`, collects `setData` write-paths (transition actions + source state `onExit` + target state `onEntry`), builds a directed write→read graph keyed by a per-path writer index (O(writes × reads)), runs iterative-DFS cycle detection, emits a T2 warning when `evaluationMode: continuous`. Exports `simple_access_path_string` + `walk_expr` as `pub(super)` from `fel_analysis.rs` for reuse. Registered `Tested` with spec_ref `specs/companions/runtime.md#s10-3`.
+- **`19ad643`** — **#12 Capability preconditions + AI-057.** Added `Capability.preconditions: array of FEL strings` (with `x-lm.critical`) to `schemas/ai/wos-ai-integration.schema.json`; normative semantics in new spec §3.3.1 (all entries MUST evaluate to boolean `true`; unsatisfied → skip to fallback chain §8; provenance with `outcome: preconditionNotSatisfied`; preconditions do not relax deontic constraints). Wos-core `Capability` struct picked up `preconditions: Vec<String>` with `serde(default)`. New AI-057 T2 error lint enforces FEL parse validity per entry.
+- **`2c6a2e2`** — **Review Finding 1 fix for K-049.** Original implementation only surveyed `transition.actions`, ignoring `state.on_entry` / `state.on_exit` — spec §10.3 names onEntry setData as the canonical cycle source. Fix extends the cycle-detector pre-pass with a per-state write index and attributes effective writes per Kernel §4.7 execution sequence: source_state.onExit + transition.actions + target_state.onEntry. New 7th unit test `k049_flags_cycle_through_on_entry_setdata` locks the shape.
+
+### v0 spike Tasks 4-5 closure (per [`plan`](thoughts/plans/2026-04-17-wos-synth-v0-spike.md))
+
+- **`f6320c2`** — **Task 4 conformance gate.** After lint passes, the spike wraps the synthesized kernel in a minimal inline `ConformanceFixture` (`documents: { "kernel": "inline" }`, empty `event_sequence`, empty `expected_transitions`) and calls `wos_conformance::run_fixture` — a "kernel loads + initial config reachable" smoke test. One repair round granted; budget-aware (refuses if lint already consumed all 5 iterations). New error variant `SpikeError::ConformanceFailure` isolates conformance-phase failures. 2 new unit tests cover the gate helper.
+- **`a80e37d`** — **Task 5 retrospective + plan propagation.** Document at `thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`. Key findings: `wos-conformance` has no `run(&doc)` entry point — the gate had to build an inline fixture. `ToolContext` shipped in `wos-synth-core` without spike counter-example — marked provisional. MCP dual-entry pattern out of scope for spike. Structured repair-prompt improvement (rule_id + suggested_fix + spec_ref) recommended before `wos-bench` measures convergence. Live iteration counts (Q-V0-1..4) flagged as follow-up. Plan propagations appended inline to `wos-synth-crate`, `wos-synthesis-benchmark`, `wos-mcp-crate` plans. Spike disposition: keep-with-deletion-horizon (2-3 months).
+
+### Semi-formal code review + §4.3a follow-ups
+
+Background `semi-formal-code-review` agent ran over `0d17f9f` + `4fd32e3` + `19ad643`. Verdict: **APPROVE with follow-ups**. 9 findings — Finding 1 fixed inline (`2c6a2e2`); Findings 6/8/9 were OBSERVATION-severity style notes requiring no action; remaining 4 (Findings 2, 3, 4, 5) filed as §4.3a items (`64962ea`). 
+
+Parallel **spec-expert** and **wos-expert** consultations then converged on concrete approaches for each follow-up (`4ceddb7`):
+
+- **#F2** — pick (c): structured `Vec<Segment>` path comparison under Core §3.6.4 reachability (status quo violates §3.6.1's dep-graph spec).
+- **#F3** — split into #F3a (immediate message reword + `$continuous` fixture) and #F3b (ADR + rewrite `eval.rs` post-mutation re-scan to match Runtime §10.3).
+- **#F4** — add AI-058 with boolean-AST-root allowlist; file upstream Formspec issue for §3.8.1 normativity gap (non-null-non-boolean-in-boolean is spec-silent).
+- **#F5** — split into #F5a (kernel `$defs/ProvenanceOutcome` enum + optional `outcome` on `FactsTierRecord` — closes both `preconditionNotSatisfied` and `convergenceCapReached` MUSTs) and #F5b (AI schema `if/then` enforcement).
+
+Bonus drift surfaced during consultation: **`ProvenanceKind::ConvergenceCapReached`** missing from `crates/wos-core/src/provenance.rs:44` despite being named as a `recordKind` in `runtime.md:517`.
+
+### Validation at close
+
+`cargo test --workspace`: 63 test binaries, 0 failures. K-049: 7 unit tests. AI-057: 3 unit tests. Spike: 17 unit tests. SCHEMA-DOC-001 zero-regression gate passes. Python: 121 passed / 11 skipped / 1 xfailed.
 
 ---
 
@@ -211,7 +248,7 @@ All warnings from the original review (wos-mcp JSON-RPC hygiene, v0 spike model 
 
 ---
 
-## Current plan status (2026-04-18)
+## Current plan status (2026-04-20)
 
 Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from review
 
@@ -239,6 +276,10 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 - ✅ **§4.1 #31 Jurisdiction-aware business calendar** — `44ac44c` (session 4). Replaced "implementation-defined" §7.1 selection with deterministic 6-step algorithm via optional `appliesWhen` FEL on each Business Calendar. Multi-jurisdiction rights-impacting workflows now have a declarative selection mechanism. Timezone disagreement among applicable calendars raises a configuration error.
 - ✅ **§4.2 #29a Milestone trigger-mode spec-lag closure** — `64b03a5` (session 4). `Milestone.triggerMode: writeSettled` (default-only enum) names the runtime KS.2 behavior. Spec §4.13 gained "Trigger semantics" paragraph naming fire-after-settled-write + at-most-once-per-instance + lexicographic id ordering. Wos-core struct picks up the optional field (roundtrip safe). Unblocks #29b reactive milestone firing.
 - ✅ **§4.2 #37 Drift Monitor demotion policy binding** — session 5 closeout. Drift Monitor `AlertThreshold.policyRef` resolves to Agent Config `DemotionRule.id`; `AI-AUTO-002` locks the drift-alert demotion path (`autonomyDemotion` + `driftReclassification` + event reroute through `escalated`), and paired `AI-AUTO-001` locks escalation-expiry revocation (`autonomyDemotion` on next invocation). Registry now has 99 rules / 8 T3; T3 green at 148/148.
+- ✅ **§4.1 DRAFTS triage** — `0d17f9f` (session 7). 13 historical kernel drafts moved to `thoughts/archive/drafts/` with classification README. Unblocked §4.1 #20 typed event meta-vocabulary.
+- ✅ **§4.3 #56 K-049 continuous-mode cycle detection** — `4fd32e3` (session 7) + `2c6a2e2` (review Finding 1 fix for onEntry/onExit). New module `crates/wos-lint/src/rules/continuous_mode.rs`: FEL-parses each guard, builds write→read adjacency including `onExit` + transition actions + target `onEntry` per Kernel §4.7, runs iterative-DFS cycle detection, emits T2 warning when `evaluationMode: continuous`. 7 unit tests; registered `Tested`.
+- ✅ **§4.3 #12 Capability preconditions + AI-057** — `19ad643` (session 7). `Capability.preconditions: array of FEL strings` (schema + spec §3.3.1 + wos-core model + AI-057 T2 error lint). Semantics: all MUST evaluate to boolean `true`; unsatisfied → skip to fallback chain; provenance `outcome: preconditionNotSatisfied`; preconditions do not relax deontic constraints. 3 unit tests on AI-057.
+- 🟡 **§4.3a K-049 / AI-057 review follow-ups** — filed `64962ea` + refined `4ceddb7` (session 7). Six items with expert-decided approaches from parallel spec-expert + wos-expert consultations: **#F2** structured path comparison under Core §3.6.4 reachability; **#F3a** K-049 message reword + `$continuous` fixture; **#F3b** ADR + rewrite `eval.rs` post-mutation re-scan to match Runtime §10.3; **#F4** AI-058 boolean-AST-root allowlist lint; **#F5a** kernel `$defs/ProvenanceOutcome` enum (closes both `preconditionNotSatisfied` and `convergenceCapReached` MUSTs); **#F5b** AI schema `if/then` enforcement. Plus: `ProvenanceKind::ConvergenceCapReached` missing from `crates/wos-core/src/provenance.rs:44` — surfaced during consultation.
 - ✅ **§5.6 Repositioning docs** — README + POSITIONING lead with Claim A / Claim B framing.
 - ✅ **§8 Open questions** — all 6 resolved 2026-04-17; doc archived at `thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md`.
 - ✅ **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). 6 commits (`793e2e8` through `59bf25b`); 72 pytest cases pass, 2 skip, 1 xfail. Meta-validity + fixture validity + spec-example validity + negative fixtures + CI gate.
