@@ -35,6 +35,18 @@ pub enum SpikeError {
     #[error("lint pipeline error: {0}")]
     LintFailure(String),
 
+    /// The conformance harness rejected the document after lint had passed.
+    ///
+    /// The spike wraps the synthesized kernel in a minimal smoke-test fixture
+    /// (empty `event_sequence`, empty `expected_transitions`) and runs it
+    /// through [`wos_conformance::run_fixture`]. Any failure the engine
+    /// surfaces (document-load errors, engine-internal errors, fixture parse
+    /// errors) ends up here when it persists past the one allowed repair
+    /// pass. Kept distinct from [`SpikeError::LintFailure`] so the retrospective
+    /// can attribute convergence failures to the right gate.
+    #[error("conformance gate failed: {0}")]
+    ConformanceFailure(String),
+
     /// The LLM produced output that is not parseable as JSON.
     #[error("JSON parse error after {iterations} iteration(s): {source}\nRaw attempt:\n{attempt}")]
     ParseJson {

@@ -1,16 +1,19 @@
 // Rust guideline compliant 2026-02-21
 
-//! Lint-driven synthesis loop.
+//! Lint- and conformance-gated synthesis loop.
 //!
-//! [`synthesize`] drives the full generate-lint-repair cycle:
+//! [`synthesize`] drives the full generate-lint-conformance-repair cycle:
 //!
 //! 1. Call the Anthropic API with a generation prompt built from the problem text.
 //! 2. Parse the response as JSON.
 //! 3. Run [`wos_lint::lint_document`] on the raw JSON string.
-//! 4. If there are zero error-severity diagnostics, return the parsed document.
-//! 5. If errors remain and the iteration cap has not been hit, build a repair
-//!    prompt and loop back to step 1.
-//! 6. If the cap is reached with errors still present, return
+//! 4. If error-severity diagnostics remain and the iteration cap has not been
+//!    hit, build a repair prompt and loop back to step 1.
+//! 5. Once lint passes, run [`wos_conformance::run_fixture`] on a minimal
+//!    smoke-test fixture wrapping the synthesized kernel. Failures become
+//!    diagnostics fed to one additional repair pass; if the next attempt
+//!    still fails conformance return [`SpikeError::ConformanceFailure`].
+//! 6. If the cap is reached with lint errors still present, return
 //!    [`SpikeError::Unconverged`].
 //!
 //! The loop deliberately skips `Warning` and `Info` diagnostics — only
@@ -93,7 +96,7 @@ pub async fn synthesize(problem: &str, anthropic_key: &str) -> Result<Value, Spi
             .collect();
 
         if errors.is_empty() {
-            return Ok(parsed);
+            return gate_on_conformance(parsed, json_text, iteration, anthropic_key).await;
         }
 
         last_diagnostics = errors.clone();
@@ -109,6 +112,107 @@ pub async fn synthesize(problem: &str, anthropic_key: &str) -> Result<Value, Spi
         iterations: MAX_ITERATIONS,
         last_diagnostics: last_diagnostics.join("\n"),
     })
+}
+
+/// Smoke-test a lint-clean kernel document through the conformance engine and,
+/// on failure, grant one additional repair round before surrendering.
+///
+/// This implements Task 4 of the v0 spike plan: "conformance gate after
+/// lint-pass". The gate builds a minimal fixture -- no events, no expected
+/// transitions -- that exercises the document-load path and the engine's
+/// initial-configuration construction without asserting any runtime
+/// behavior. A document that passes this smoke test is structurally valid
+/// for the conformance harness; richer behavioral assertions stay out of
+/// scope for the spike.
+///
+/// `initial_iteration` is the 1-based lint iteration index that produced the
+/// lint-clean document; the repair round is attributed as
+/// `initial_iteration + 1` so the retrospective can distinguish lint-phase
+/// iterations from conformance-phase iterations.
+async fn gate_on_conformance(
+    doc: Value,
+    doc_text: &str,
+    initial_iteration: u32,
+    anthropic_key: &str,
+) -> Result<Value, SpikeError> {
+    let first_failures = match run_conformance_smoke_test(&doc) {
+        Ok(()) => return Ok(doc),
+        Err(failures) => failures,
+    };
+
+    // The plan allows exactly one conformance-driven repair pass before giving
+    // up -- we've already spent `initial_iteration` iterations on lint, so this
+    // is the (initial_iteration + 1)th call.  Refuse to loop indefinitely if
+    // lint took the full budget.
+    if initial_iteration >= MAX_ITERATIONS {
+        return Err(SpikeError::ConformanceFailure(first_failures.join("\n")));
+    }
+
+    let repair_prompt = build_repair_prompt(doc_text, &first_failures);
+    let response_text = call_anthropic(anthropic_key, &repair_prompt).await?;
+    let repaired_raw = response_text.trim().to_string();
+    let repaired_text = strip_fences(&repaired_raw);
+
+    let repaired: Value = serde_json::from_str(repaired_text).map_err(|source| {
+        SpikeError::ParseJson {
+            attempt: repaired_raw.clone(),
+            iterations: initial_iteration + 1,
+            source,
+        }
+    })?;
+
+    // Re-run lint on the repair attempt -- a repair that re-introduces lint
+    // errors must not be silently accepted.  Reuse the same Error-severity
+    // filter the main loop applies so behaviour stays consistent.
+    let canonical = serde_json::to_string(&repaired)
+        .expect("re-serialising a parsed Value must not fail");
+    let lint_errors: Vec<String> = wos_lint::lint_document(&canonical)
+        .map_err(classify_lint_error)?
+        .into_iter()
+        .filter(|d| d.severity == wos_lint::Severity::Error)
+        .map(|d| d.to_string())
+        .collect();
+    if !lint_errors.is_empty() {
+        return Err(SpikeError::ConformanceFailure(format!(
+            "conformance repair re-introduced lint errors: {}",
+            lint_errors.join("; ")
+        )));
+    }
+
+    match run_conformance_smoke_test(&repaired) {
+        Ok(()) => Ok(repaired),
+        Err(failures) => Err(SpikeError::ConformanceFailure(failures.join("\n"))),
+    }
+}
+
+/// Wrap `doc` in a minimal inline conformance fixture and run it through the
+/// engine; return the failures list when the fixture does not pass.
+///
+/// The fixture has empty `event_sequence` and empty `expected_transitions`,
+/// so a "pass" means only that the engine could load the kernel and enter
+/// its initial configuration -- not that any runtime behaviour was validated.
+/// That is deliberate: the spike is proving the shape of the loop, not
+/// proving the kernel's behavioural correctness.
+fn run_conformance_smoke_test(doc: &Value) -> Result<(), Vec<String>> {
+    let fixture = serde_json::json!({
+        "binding": "formspec",
+        "id": "v0-spike-smoke",
+        "rule": "SPIKE-SMOKE",
+        "description": "v0 spike conformance smoke test: kernel loads + initial config is reachable.",
+        "documents": { "kernel": "inline" },
+        "inline_documents": { "kernel": doc },
+        "event_sequence": [],
+        "expected_transitions": []
+    });
+
+    let fixture_text = serde_json::to_string(&fixture)
+        .expect("fixture JSON must serialise");
+
+    match wos_conformance::run_fixture(&fixture_text, ".") {
+        Ok(result) if result.passed => Ok(()),
+        Ok(result) => Err(result.failures),
+        Err(err) => Err(vec![err.to_string()]),
+    }
 }
 
 /// Call the Anthropic API and return the text content of the first response block.
@@ -258,6 +362,50 @@ mod tests {
                  got: {other:?}"
             ),
         }
+    }
+
+    /// A minimal well-formed kernel -- no events, no transitions -- must
+    /// pass the conformance smoke test. This locks the Task 4 happy path:
+    /// a lint-clean kernel that the engine can load and initialize flows
+    /// through without a repair pass.
+    #[test]
+    fn conformance_smoke_test_accepts_minimal_kernel() {
+        let doc = serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:formspec:test:spike-smoke:1.0.0",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "lifecycle": {
+                "initialState": "idle",
+                "states": { "idle": { "type": "final" } }
+            }
+        });
+
+        super::run_conformance_smoke_test(&doc).expect("minimal kernel should pass");
+    }
+
+    /// A structurally broken kernel -- `initialState` names a state that does
+    /// not exist -- must be rejected by the conformance engine. This proves
+    /// the gate surfaces real errors, not just syntactic JSON failures.
+    #[test]
+    fn conformance_smoke_test_rejects_unreachable_initial_state() {
+        let doc = serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:formspec:test:spike-broken:1.0.0",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "lifecycle": {
+                "initialState": "nonexistent",
+                "states": { "idle": { "type": "final" } }
+            }
+        });
+
+        let failures = super::run_conformance_smoke_test(&doc)
+            .expect_err("unreachable initial state must fail the smoke test");
+        assert!(
+            !failures.is_empty(),
+            "expected at least one failure message, got: {failures:?}"
+        );
     }
 
     /// Non-marker lint failures (e.g. malformed JSON reaching the linter)
