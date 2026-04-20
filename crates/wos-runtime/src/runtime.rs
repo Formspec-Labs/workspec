@@ -4,14 +4,14 @@
 
 use std::error::Error as StdError;
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
 use semver::{Version, VersionReq};
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use wos_core::business_calendar::{
-    next_business_moment, BusinessCalendarDocument, BusinessCalendarError,
+    BusinessCalendarDocument, BusinessCalendarError, next_business_moment,
 };
 use wos_core::eval::{Evaluator, GuardEvaluation, ObservedAction, ObservedTransition};
 use wos_core::instance::{
@@ -19,8 +19,8 @@ use wos_core::instance::{
 };
 use wos_core::model::governance::DelegationScope;
 use wos_core::model::kernel::{ActionKind, ActorKind, ImpactLevel, KernelDocument};
-use wos_core::provenance::{audit_layer_for_kind, ProvenanceKind, ProvenanceRecord};
-use wos_core::timer::{max_tolerance_ms, tolerance_to_iso, Timer};
+use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, audit_layer_for_kind};
+use wos_core::timer::{Timer, max_tolerance_ms, tolerance_to_iso};
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
 };
@@ -28,7 +28,7 @@ use wos_core::traits::{
 use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
 use crate::integration::{IntegrationBinding, IntegrationProfileDocument};
 use crate::integration_handlers::{
-    dispatch_integration_binding, load_or_invoke_service_result, InvocationContext,
+    InvocationContext, dispatch_integration_binding, load_or_invoke_service_result,
 };
 use crate::milestones::evaluate_milestones;
 use crate::store::{
@@ -3304,10 +3304,12 @@ mod tests {
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::TaskPresented));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::TaskPresented)
+        );
 
         let instance = runtime.load_instance("case-1").unwrap();
         assert_eq!(instance.active_tasks.len(), 1);
@@ -3424,14 +3426,18 @@ mod tests {
         let first = runtime.drain_once("case-a").unwrap();
         let second = runtime.drain_once("case-b").unwrap();
 
-        assert!(!first
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
+        assert!(
+            !first
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
     }
 
     #[test]
@@ -3721,10 +3727,12 @@ mod tests {
             serde_json::json!("pending")
         );
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted)
+        );
     }
 
     /// Regression: the persist-task-draft append site must route its record
@@ -3830,10 +3838,12 @@ mod tests {
 
         let record = runtime.store.load_record("case-4").unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
+        );
     }
 
     #[test]
@@ -4020,10 +4030,12 @@ mod tests {
 
         let result = runtime.drain_once("case-7").unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("$timeout.review"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TimerFired));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TimerFired)
+        );
 
         let instance = runtime.load_instance("case-7").unwrap();
         assert!(instance.configuration.contains(&"timed_out".to_string()));
@@ -4520,14 +4532,18 @@ mod tests {
             let invocations = invocations.lock().unwrap();
             assert_eq!(invocations.len(), 1);
         }
-        assert!(second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted));
+        assert!(
+            second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted)
+        );
     }
 
     #[test]
