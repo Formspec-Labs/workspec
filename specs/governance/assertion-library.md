@@ -91,6 +91,8 @@ The two forms are mutually exclusive at the schema layer; once `assertionRef` re
 
 ### 2.2 Resolution Semantics
 
+Throughout this section, **"configuration error"** means a condition the processor MUST detect at document-load time and reject; runtime evaluation MUST NOT proceed with a document carrying a configuration error. The term is used identically in `specs/governance/workflow-governance.md` §3.6 (Continuation of Service) and `specs/sidecars/business-calendar.md` §7.2 (Multi-Calendar Composition); those spec sites do not normatively define the phrase. The gloss here serves as the working definition for this document.
+
 Resolution happens **at load time**, before any pipeline execution begins. The following rules are normative:
 
 1. **Source of truth.** The referenced body is drawn from the WOS Assertion Gate Library sidecar whose `url` matches the authority + path portion of `assertionRef`, and whose `assertions[]` contains an entry whose `id` equals the key encoded in the reference URI (the fragment for HTTP(S) URIs, the terminal sub-component for `urn:` URIs). Processors MUST use a single, configured library map — they MUST NOT fetch unknown libraries at runtime.
