@@ -315,7 +315,10 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     // AI-058: Unit tests live in `crates/wos-lint/src/rules/fel_analysis.rs`
     // (`ai058_binary_comparison_is_boolean_shaped`,
     // `ai058_bare_field_ref_fires`, `ai058_string_literal_fires`,
-    // `ai058_boolean_returning_builtin_is_clean`). Shares the
+    // `ai058_boolean_returning_builtin_is_clean`, plus the §4.3b #F4a
+    // allowlist tests `ai058_every_builtin_is_clean`,
+    // `ai058_some_builtin_is_clean`, `ai058_boolean_cast_is_clean`,
+    // `ai058_is_boolean_is_not_a_builtin`). Shares the
     // `check_capability_preconditions` entry point with AI-057.
     RuleMetadata {
         id: "AI-058",
