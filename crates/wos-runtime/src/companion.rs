@@ -732,6 +732,7 @@ impl ReferenceCompanionPolicy {
                     output_digest: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
+                    outcome: None,
                 });
             }
         }
@@ -789,6 +790,7 @@ impl ReferenceCompanionPolicy {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
     }
 }

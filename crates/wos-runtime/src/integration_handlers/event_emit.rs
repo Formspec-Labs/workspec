@@ -105,6 +105,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
 
         Ok(vec![provenance])

@@ -136,6 +136,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                                 output_digest: None,
                                 transition_tags: Vec::new(),
                                 case_file_snapshot: None,
+                                outcome: None,
                             });
                         }
                     }
@@ -189,6 +190,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                     output_digest: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
+                    outcome: None,
                 });
             }
         }
@@ -340,6 +342,7 @@ fn execute_step(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     });
 
     (step_provenance, Ok(step_result.output))
@@ -430,6 +433,7 @@ fn arazzo_step_record(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     }
 }
 

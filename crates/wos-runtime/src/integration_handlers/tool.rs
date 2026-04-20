@@ -118,6 +118,7 @@ impl IntegrationBindingHandler for ToolHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
@@ -145,6 +146,7 @@ impl IntegrationBindingHandler for ToolHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -188,6 +190,7 @@ impl IntegrationBindingHandler for ToolHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 

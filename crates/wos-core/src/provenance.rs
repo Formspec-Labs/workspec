@@ -64,9 +64,11 @@ pub enum ProvenanceKind {
     InvalidDuration,
     /// Timer fired beyond its tolerance window (LCD S6.6, Runtime S7.2).
     ToleranceViolation,
-    /// Continuous-mode re-evaluation hit the 100-cycle convergence cap for a
-    /// single triggering mutation (Runtime §10.3). The record's `data` carries
-    /// the triggering mutation so downstream tooling can locate the cycle.
+    /// Continuous-mode re-evaluation hit the 100-cycle convergence cap for
+    /// a single triggering mutation (Runtime §10.3). The record's `outcome`
+    /// field carries the reserved literal `"convergenceCapReached"` (kernel
+    /// `$defs/ProvenanceOutcome`); `data` carries `triggeringMutation` and
+    /// `cyclesUsed` so downstream tooling can locate the cycle.
     ConvergenceCapReached,
 
     // ── Deontic enforcement (AI S4) ────────────────────────────────
@@ -356,6 +358,17 @@ pub struct ProvenanceRecord {
     /// Case-file snapshot used by a determination-tagged transition.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub case_file_snapshot: Option<CaseFileSnapshot>,
+
+    /// Open-enum outcome literal recorded by the processor (Kernel §8.2.2).
+    ///
+    /// Optional; the kernel `$defs/ProvenanceOutcome` schema validates any
+    /// populated value against the reserved-literal set
+    /// (`preconditionNotSatisfied`, `convergenceCapReached`) plus an
+    /// `x-`-prefixed vendor-extension fallback. The `skip_serializing_if`
+    /// keeps existing fixtures byte-identical: records that leave the field
+    /// `None` still serialize without an `"outcome"` key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
 }
 
 impl ProvenanceRecord {
@@ -379,6 +392,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -418,6 +432,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -451,6 +466,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -478,6 +494,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -504,6 +521,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -530,6 +548,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -553,6 +572,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -576,6 +596,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -599,6 +620,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -622,6 +644,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -653,6 +676,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -679,6 +703,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -706,6 +731,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -745,6 +771,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -775,6 +802,7 @@ impl ProvenanceRecord {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 }
@@ -1134,6 +1162,7 @@ mod tests {
             assert!(record.output_digest.is_none());
             assert!(record.transition_tags.is_empty());
             assert!(record.case_file_snapshot.is_none());
+            assert!(record.outcome.is_none());
         }
 
         assert_zero_defaults(&ProvenanceRecord::state_transition("a", "b", "ev", None));

@@ -652,6 +652,7 @@ impl WosRuntime {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -1188,6 +1189,7 @@ impl WosRuntime {
                             output_digest: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
+                            outcome: None,
                         });
                     } else {
                         provenance.push(ProvenanceRecord {
@@ -1213,6 +1215,7 @@ impl WosRuntime {
                             output_digest: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
+                            outcome: None,
                         });
                     }
 
@@ -1242,6 +1245,7 @@ impl WosRuntime {
                             output_digest: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
+                            outcome: None,
                         });
                     }
                 }
@@ -2129,6 +2133,7 @@ fn compensation_provenance(
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
         provenance.push(ProvenanceRecord {
             record_kind: ProvenanceKind::CompensationScopeBoundary,
@@ -2148,6 +2153,7 @@ fn compensation_provenance(
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
     } else if visited.len() == 2 {
         if let Some((from, _)) = fail_transition {
@@ -2178,6 +2184,7 @@ fn compensation_provenance(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
     }
@@ -2276,6 +2283,7 @@ mod tests {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             },
         ];
 

@@ -105,6 +105,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -126,6 +127,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
 
         Ok(provenance)

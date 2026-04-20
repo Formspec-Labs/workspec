@@ -10,7 +10,9 @@
 //!
 //! A convergence cap of 100 re-evaluation cycles prevents infinite loops.
 //! When the cap is reached, the processor halts re-evaluation and records
-//! a `convergenceCapReached` provenance record.
+//! a `ProvenanceKind::ConvergenceCapReached` record carrying the kernel
+//! `$defs/ProvenanceOutcome` reserved literal `"convergenceCapReached"` on
+//! its `outcome` field.
 
 use crate::eval::Evaluator;
 use crate::model::kernel::EvaluationMode;
@@ -74,16 +76,23 @@ pub fn continuous_reevaluate(
 
     loop {
         if cycles >= CONVERGENCE_CAP {
-            // Record convergence cap provenance (Runtime S10.3).
+            // Record convergence cap provenance (Runtime §10.3).
+            //
+            // Emission shape completes ADR 0059 Task 3 (§4.3b #F5c / F3b Task 3):
+            //   - `record_kind` = `ConvergenceCapReached` (dedicated variant,
+            //     not the prior `CaseStateMutation` overload),
+            //   - `outcome` = `"convergenceCapReached"` (kernel `$defs/ProvenanceOutcome`
+            //     reserved literal), and
+            //   - `data` carries the triggering mutation + cycles used for
+            //     downstream tooling to locate the cycle.
             evaluator.record_provenance(ProvenanceRecord {
-                record_kind: ProvenanceKind::CaseStateMutation,
+                record_kind: ProvenanceKind::ConvergenceCapReached,
                 timestamp: String::new(),
                 actor_id: None,
                 from_state: None,
                 to_state: None,
                 event: None,
                 data: Some(serde_json::json!({
-                    "convergenceCapReached": true,
                     "triggeringMutation": triggering_mutation,
                     "cyclesUsed": cycles,
                 })),
@@ -97,6 +106,7 @@ pub fn continuous_reevaluate(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: Some("convergenceCapReached".to_string()),
             });
             return Ok(ContinuousEvalResult {
                 transitions_fired: total_fired,
@@ -327,5 +337,95 @@ mod tests {
         assert!(result.convergence_cap_reached);
         assert_eq!(result.cycles_used, CONVERGENCE_CAP);
         assert_eq!(result.transitions_fired, CONVERGENCE_CAP);
+    }
+
+    /// §4.3b #F5c / ADR 0059 Task 3: the cap-hit provenance record now
+    /// emits as a dedicated `ConvergenceCapReached` kind carrying
+    /// `outcome: "convergenceCapReached"`, not the prior
+    /// `CaseStateMutation` overload with the flag hidden in `data`.
+    #[test]
+    fn convergence_cap_emits_dedicated_kind_and_outcome_field() {
+        let mut states = IndexMap::new();
+
+        states.insert(
+            "loop".to_string(),
+            atomic_state(vec![Transition {
+                event: "$continuous".to_string(),
+                target: "loop2".to_string(),
+                guard: None,
+                tags: Vec::new(),
+                actions: Vec::new(),
+                description: None,
+            }]),
+        );
+        states.insert(
+            "loop2".to_string(),
+            atomic_state(vec![Transition {
+                event: "$continuous".to_string(),
+                target: "loop".to_string(),
+                guard: None,
+                tags: Vec::new(),
+                actions: Vec::new(),
+                description: None,
+            }]),
+        );
+
+        let kernel = KernelDocument {
+            wos_kernel: "1.0".to_string(),
+            schema: None,
+            url: Some("https://example.org/test/cap-shape".to_string()),
+            version: Some("1.0.0".to_string()),
+            title: Some("Cap Shape Test".to_string()),
+            description: None,
+            status: None,
+            impact_level: Some(ImpactLevel::Operational),
+            actors: Vec::new(),
+            lifecycle: Lifecycle {
+                initial_state: "loop".to_string(),
+                states,
+                milestones: HashMap::new(),
+            },
+            case_file: None,
+            contracts: HashMap::new(),
+            provenance: None,
+            execution: None,
+            evaluation_mode: Some(EvaluationMode::Continuous),
+            max_relationship_event_depth: None,
+            extensions: HashMap::new(),
+        };
+
+        let mut evaluator = Evaluator::new(kernel).unwrap();
+        continuous_reevaluate(&mut evaluator, "loop-trigger").unwrap();
+
+        let cap_record = evaluator
+            .provenance()
+            .records()
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::ConvergenceCapReached)
+            .expect("ConvergenceCapReached record must be emitted on cap hit");
+        assert_eq!(
+            cap_record.outcome.as_deref(),
+            Some("convergenceCapReached"),
+            "the dedicated ConvergenceCapReached record must carry \
+             outcome = \"convergenceCapReached\" so kernel \
+             $defs/ProvenanceOutcome validation and downstream tooling \
+             can distinguish the cap-hit from an unrelated case-state \
+             mutation",
+        );
+        let data = cap_record.data.as_ref().expect("cap record has data payload");
+        assert_eq!(
+            data.get("triggeringMutation").and_then(|v| v.as_str()),
+            Some("loop-trigger"),
+        );
+        assert_eq!(
+            data.get("cyclesUsed").and_then(|v| v.as_u64()),
+            Some(CONVERGENCE_CAP as u64),
+        );
+        assert!(
+            data.get("convergenceCapReached").is_none(),
+            "the flag moved from `data.convergenceCapReached` to the \
+             first-class `outcome` field; carrying both would invite \
+             drift between the two signals",
+        );
     }
 }

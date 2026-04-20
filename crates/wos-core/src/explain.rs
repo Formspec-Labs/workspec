@@ -275,6 +275,7 @@ mod tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 
@@ -308,6 +309,7 @@ mod tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         }
     }
 

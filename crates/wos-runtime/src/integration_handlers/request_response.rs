@@ -100,6 +100,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
@@ -127,6 +128,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -169,6 +171,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -241,6 +244,7 @@ pub(crate) fn validate_integration_contract(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     }))
 }
 

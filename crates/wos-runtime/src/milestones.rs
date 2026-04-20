@@ -72,6 +72,7 @@ pub fn evaluate_milestones(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
     }

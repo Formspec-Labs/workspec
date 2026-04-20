@@ -73,6 +73,7 @@ pub fn evaluate_deontic_constraints(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     });
 
     // Evaluate at three composition levels (AI S4.7).
@@ -139,6 +140,7 @@ pub fn evaluate_deontic_constraints(
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
     }
 
@@ -174,6 +176,7 @@ pub fn evaluate_deontic_constraints(
                         output_digest: None,
                         transition_tags: Vec::new(),
                         case_file_snapshot: None,
+                        outcome: None,
                     });
                 }
             }
@@ -216,6 +219,7 @@ pub fn evaluate_deontic_constraints(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
     }
@@ -270,6 +274,7 @@ fn evaluate_constraint_set(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
         for prohib in &constraints.prohibitions {
@@ -295,6 +300,7 @@ fn evaluate_constraint_set(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
         for oblig in &constraints.obligations {
@@ -320,6 +326,7 @@ fn evaluate_constraint_set(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
         return;
@@ -381,6 +388,7 @@ fn evaluate_constraint_set(
                     output_digest: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
+                    outcome: None,
                 });
                 violations.push((perm.id.clone(), effective_action));
             }
@@ -428,6 +436,7 @@ fn evaluate_constraint_set(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
             violations.push((prohib.id.clone(), prohib.on_violation));
         }
@@ -466,6 +475,7 @@ fn evaluate_constraint_set(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
             violations.push((oblig.id.clone(), oblig.on_violation));
         }
@@ -510,6 +520,7 @@ fn handle_null_propagation(
                     output_digest: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
+                    outcome: None,
                 });
                 true
             }
@@ -540,6 +551,7 @@ fn handle_null_propagation(
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
             true
         }
@@ -598,6 +610,7 @@ fn check_consistency(
                             output_digest: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
+                            outcome: None,
                         });
                     }
                 }

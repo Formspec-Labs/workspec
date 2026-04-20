@@ -216,6 +216,7 @@ fn handle_outbound(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     };
 
     Ok(vec![pending_provenance])
@@ -292,6 +293,7 @@ fn handle_inbound(
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
     }
 
@@ -319,6 +321,7 @@ fn handle_inbound(
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     });
 
     Ok(provenance)

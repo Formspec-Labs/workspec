@@ -511,6 +511,7 @@ mod runner_trace_tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
         // Non-policy kind: must be filtered out.
         let state_transition = ProvenanceRecord {
@@ -531,6 +532,7 @@ mod runner_trace_tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
         // Different event: must be filtered out.
         let other_event = ProvenanceRecord {
@@ -551,6 +553,7 @@ mod runner_trace_tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
 
         let provenance = vec![matching, state_transition, other_event];
@@ -596,6 +599,7 @@ mod runner_trace_tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
         let applied = policy_applications_for_event(&[bypass], "approve");
         assert_eq!(applied.len(), 1);
@@ -629,6 +633,7 @@ mod runner_trace_tests {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         };
         let applied = policy_applications_for_event(&[resolution], "determined");
         assert_eq!(applied.len(), 1);

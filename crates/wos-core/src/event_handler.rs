@@ -452,6 +452,7 @@ fn evaluate_delegation(
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
     }
 }
@@ -909,5 +910,6 @@ fn mk(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
         output_digest: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
+        outcome: None,
     }
 }

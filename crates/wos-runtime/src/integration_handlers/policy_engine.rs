@@ -108,6 +108,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
             output_digest: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
+            outcome: None,
         });
 
         // Apply the output binding using the canonical decision as the source document.
@@ -147,6 +148,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
                 output_digest: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
+                outcome: None,
             });
         }
 
