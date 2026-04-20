@@ -1242,8 +1242,8 @@
         },
         "escalationChainRef": {
           "type": "string",
-          "description": "Identifier resolving to a step in the same task pattern's `escalationChain` (matched by level or id). Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
-          "examples": ["level-1", "supervisorLevel"]
+          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Matched against the step's numeric `level` (e.g. `level-1`) or its optional `id` (e.g. `supervisor`). Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "examples": ["level-1", "supervisor"]
         },
         "timeoutPolicy": {
           "type": "object",
@@ -1271,6 +1271,13 @@
       },
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationChainRef` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position, so inserting a new level does not silently retarget existing refs. Cross-reference resolution remains a future T2 lint concern.",
+          "examples": ["supervisor", "divisionDirector"]
+        },
         "level": {
           "type": "integer",
           "minimum": 1,

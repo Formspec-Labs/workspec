@@ -278,6 +278,24 @@ class TestEscalationStepLevel:
         )
         assert errors == [], f"level=1 rejected: {errors}"
 
+    def test_optional_id_round_trips(self, schema):
+        """EscalationStep.id is OPTIONAL and, when present, matches the kernel
+        identifier grammar so BreachPolicy.escalationChainRef can target a
+        named step rather than an ordinal level (Review D #40c)."""
+        v = _validator_for_def(schema, "EscalationStep")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "supervisor",
+                    "level": 2,
+                    "assignTo": "divisionDirector",
+                    "gracePeriod": "P1D",
+                    "onExhaustion": "ticketCreate",
+                }
+            )
+        )
+        assert errors == [], f"EscalationStep with id='supervisor' rejected: {errors}"
+
     @pytest.mark.parametrize("level", [0, -1])
     def test_level_below_one_rejected(self, schema, level):
         v = _validator_for_def(schema, "EscalationStep")

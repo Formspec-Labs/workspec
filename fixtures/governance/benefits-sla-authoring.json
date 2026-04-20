@@ -60,6 +60,7 @@
           "onExhaustion": "escalate"
         },
         {
+          "id": "supervisor",
           "level": 2,
           "assignTo": "divisionDirector",
           "gracePeriod": "P1D",

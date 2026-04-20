@@ -511,7 +511,7 @@ Examples:
 
 #### 10.4.4 `escalationChain`
 
-Each `EscalationStep` is `{ level, assignTo, gracePeriod, onExhaustion }`. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
+Each `EscalationStep` is `{ id?, level, assignTo, gracePeriod, onExhaustion }`. `id` is an OPTIONAL stable identifier matching `^[a-zA-Z][a-zA-Z0-9_-]*$`; `BreachPolicy.escalationChainRef` matches a step either by numeric `level` (e.g. `level-1`) or by `id` (e.g. `supervisor`), letting authors point a breach policy at a named step without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
 
 Examples:
 
