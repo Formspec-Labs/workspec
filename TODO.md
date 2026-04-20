@@ -23,7 +23,7 @@
 1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked.
 3. **§4.4 Split release trains** — unblocked since §4.2 close. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
 4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1–7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md).
-5. **v0 spike Tasks 4-5** — conformance gate + retrospective with plan propagation. Still pending from [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md).
+5. ~~**v0 spike Tasks 4-5**~~ — landed 2026-04-20 (`f6320c2` + `a80e37d`). Conformance smoke-test gate lands inline-fixture wrapper pattern; retrospective at [`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md). Live-run iteration counts (Q-V0-1..4) flagged as follow-up.
 6. **§4.3 cheap batch complete 2026-04-20** — #12 capability preconditions (schema + spec §3.3.1 + wos-core model + AI-057 parse-validity lint) and #56 isolation-invariant lint rule (K-049) both landed. #34 already covered by `SCHEMA-DOC-001`; #42 landed in session 5.
 
 ---
@@ -242,7 +242,7 @@ Legend: ✅ landed · 🟡 partial · 🔴 not started · 🚨 has blocker from 
 - ✅ **§5.6 Repositioning docs** — README + POSITIONING lead with Claim A / Claim B framing.
 - ✅ **§8 Open questions** — all 6 resolved 2026-04-17; doc archived at `thoughts/archive/reviews/2026-04-16-architecture-review-open-questions.md`.
 - ✅ **Schema regression tests** — [plan](thoughts/plans/2026-04-17-wos-schema-regression-tests.md). 6 commits (`793e2e8` through `59bf25b`); 72 pytest cases pass, 2 skip, 1 xfail. Meta-validity + fixture validity + spec-example validity + negative fixtures + CI gate.
-- 🟡 **v0 spike** — [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md). **Tasks 1-3** landed `26c7eaa` + `d2bb234` + `58fb369`: 529 LOC across 4 files (under 800 cap), lint-driven repair loop, 9 unit tests green. **All 3 warnings fixed 2026-04-18**: model bumped to `claude-sonnet-4-6` (`47677fa`); `SpikeError::MissingWosMarker` / `LintFailure` distinct variants with classifier tests (`e165dd7`); API-key guard rejects empty / whitespace-only (`add6796`); upstream `wos-lint::document` got a TODO pointing at the sentinel-substring fragility (`ef0da3c`). 15/15 tests green. **Tasks 4-5 pending**: conformance gate + retrospective with plan propagation.
+- ✅ **v0 spike** — [plan](thoughts/plans/2026-04-17-wos-synth-v0-spike.md). **Tasks 1-3** landed `26c7eaa` + `d2bb234` + `58fb369`: 529 LOC across 4 files (under 800 cap), lint-driven repair loop, 9 unit tests green. **All 3 warnings fixed 2026-04-18** (`47677fa` + `e165dd7` + `add6796` + `ef0da3c`). **Task 4** landed 2026-04-20 (`f6320c2`): conformance smoke-test gate using inline-fixture wrapper (empty event_sequence + empty expected_transitions); 2 new unit tests covering minimal-valid + dangling-initialState branches. **Task 5** landed 2026-04-20 (`a80e37d`): retrospective at [`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md); plan propagations appended inline to wos-synth-crate, wos-synthesis-benchmark, and wos-mcp-crate. Open follow-ups: live Anthropic run for Q-V0-1..4; upstream `wos_conformance::smoke_test_document` helper; structured repair-prompt with rule_id + suggested_fix + spec_ref.
 
 ---
 

@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 use fel_core::parse;
 use wos_core::model::kernel::{
-    ActionKind, EvaluationMode, KernelDocument, Region, State, Transition,
+    Action, ActionKind, EvaluationMode, KernelDocument, Region, State, Transition,
 };
 
 use crate::diagnostic::LintDiagnostic;
@@ -37,8 +37,21 @@ pub(super) fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnosti
         return;
     }
 
+    // First pass: index every reachable state by name so transitions can
+    // look up their source and target state metadata. Finding 1 from the
+    // 2026-04-20 code review: `setData` actions living in `state.on_entry`
+    // or `state.on_exit` also drive re-evaluation and are the canonical
+    // cycle source cited by Runtime Companion §10.3.
+    let mut state_writes: HashMap<String, StateWrites> = HashMap::new();
+    collect_state_writes(&kernel.lifecycle.states, &mut state_writes);
+
     let mut nodes: Vec<TransitionNode> = Vec::new();
-    collect_transitions(&kernel.lifecycle.states, "/lifecycle/states", &mut nodes);
+    collect_transitions(
+        &kernel.lifecycle.states,
+        "/lifecycle/states",
+        &state_writes,
+        &mut nodes,
+    );
 
     // Build per-path write-index so cycle edges are O(writes × reads) not O(n²).
     let mut writers_by_path: HashMap<String, Vec<usize>> = HashMap::new();
@@ -100,6 +113,7 @@ struct TransitionNode {
 fn collect_transitions(
     states: &indexmap::IndexMap<String, State>,
     parent_path: &str,
+    state_writes: &HashMap<String, StateWrites>,
     out: &mut Vec<TransitionNode>,
 ) {
     for (name, state) in states {
@@ -107,37 +121,72 @@ fn collect_transitions(
         for (idx, transition) in state.transitions.iter().enumerate() {
             out.push(build_node(
                 format!("{state_path}/transitions/{idx}"),
+                name,
                 transition,
+                state_writes,
             ));
         }
-        collect_transitions(&state.states, &format!("{state_path}/states"), out);
+        collect_transitions(
+            &state.states,
+            &format!("{state_path}/states"),
+            state_writes,
+            out,
+        );
         for (region_name, region) in &state.regions {
             collect_region(
                 region,
                 &format!("{state_path}/regions/{region_name}"),
+                state_writes,
                 out,
             );
         }
     }
 }
 
-fn collect_region(region: &Region, parent_path: &str, out: &mut Vec<TransitionNode>) {
-    collect_transitions(&region.states, &format!("{parent_path}/states"), out);
+fn collect_region(
+    region: &Region,
+    parent_path: &str,
+    state_writes: &HashMap<String, StateWrites>,
+    out: &mut Vec<TransitionNode>,
+) {
+    collect_transitions(
+        &region.states,
+        &format!("{parent_path}/states"),
+        state_writes,
+        out,
+    );
 }
 
-fn build_node(path: String, transition: &Transition) -> TransitionNode {
+fn build_node(
+    path: String,
+    source_name: &str,
+    transition: &Transition,
+    state_writes: &HashMap<String, StateWrites>,
+) -> TransitionNode {
     let reads = transition
         .guard
         .as_deref()
         .map(extract_read_paths)
         .unwrap_or_default();
 
+    // Effective writes for cycle-detection purposes are everything the
+    // transition actually causes to run when it fires:
+    //   1. The source state's `onExit` actions (Kernel §4.7 step 1).
+    //   2. The transition's own `actions` (Kernel §4.7 step 2).
+    //   3. The target state's `onEntry` actions (Kernel §4.7 step 3).
+    // The target may live anywhere in the state tree; we look it up by
+    // name via the pre-built `state_writes` index. Missing-name lookups
+    // are silently ignored — K-006 already reports dangling targets.
     let mut writes = HashSet::new();
-    for action in &transition.actions {
-        if action.action == ActionKind::SetData {
-            if let Some(p) = &action.path {
-                writes.insert(p.clone());
-            }
+    if let Some(source) = state_writes.get(source_name) {
+        for path in &source.on_exit {
+            writes.insert(path.clone());
+        }
+    }
+    collect_setdata_paths(&transition.actions, &mut writes);
+    if let Some(target) = state_writes.get(&transition.target) {
+        for path in &target.on_entry {
+            writes.insert(path.clone());
         }
     }
 
@@ -145,6 +194,39 @@ fn build_node(path: String, transition: &Transition) -> TransitionNode {
         path,
         reads,
         writes,
+    }
+}
+
+/// Per-state index of `setData` paths written by `onEntry` / `onExit`.
+struct StateWrites {
+    on_entry: HashSet<String>,
+    on_exit: HashSet<String>,
+}
+
+fn collect_state_writes(
+    states: &indexmap::IndexMap<String, State>,
+    out: &mut HashMap<String, StateWrites>,
+) {
+    for (name, state) in states {
+        let mut on_entry = HashSet::new();
+        collect_setdata_paths(&state.on_entry, &mut on_entry);
+        let mut on_exit = HashSet::new();
+        collect_setdata_paths(&state.on_exit, &mut on_exit);
+        out.insert(name.clone(), StateWrites { on_entry, on_exit });
+        collect_state_writes(&state.states, out);
+        for region in state.regions.values() {
+            collect_state_writes(&region.states, out);
+        }
+    }
+}
+
+fn collect_setdata_paths(actions: &[Action], out: &mut HashSet<String>) {
+    for action in actions {
+        if action.action == ActionKind::SetData {
+            if let Some(p) = &action.path {
+                out.insert(p.clone());
+            }
+        }
     }
 }
 
@@ -422,6 +504,59 @@ mod tests {
                                 }]
                             }
                         }
+                    }
+                }
+            }
+        }));
+
+        let mut diagnostics = Vec::new();
+        check(&kernel, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].rule_id, "K-049");
+    }
+
+    #[test]
+    fn k049_flags_cycle_through_on_entry_setdata() {
+        // Spec §10.3 names onEntry setData as a canonical cycle source.
+        // Transition T1 has no action but targets `phaseB`; phaseB's onEntry
+        // writes `caseFile.b`. Transition T2 (on phaseB) reads `caseFile.b`
+        // in its guard and writes `caseFile.a` via onExit of phaseA (which
+        // T1 itself targets). Closes the loop through entry/exit actions.
+        let kernel = kernel_from_json(serde_json::json!({
+            "$wosKernel": "1.0",
+            "evaluationMode": "continuous",
+            "actors": [{ "id": "operator", "type": "human" }],
+            "impactLevel": "operational",
+            "caseFile": {
+                "fields": {
+                    "a": { "type": "number" },
+                    "b": { "type": "number" }
+                }
+            },
+            "lifecycle": {
+                "initialState": "phaseA",
+                "states": {
+                    "phaseA": {
+                        "type": "atomic",
+                        "onExit": [
+                            { "action": "setData", "path": "caseFile.a", "value": 1 }
+                        ],
+                        "transitions": [{
+                            "event": "e1",
+                            "target": "phaseB",
+                            "guard": "caseFile.a > 0"
+                        }]
+                    },
+                    "phaseB": {
+                        "type": "atomic",
+                        "onEntry": [
+                            { "action": "setData", "path": "caseFile.b", "value": 1 }
+                        ],
+                        "transitions": [{
+                            "event": "e2",
+                            "target": "phaseA",
+                            "guard": "caseFile.b > 0"
+                        }]
                     }
                 }
             }
