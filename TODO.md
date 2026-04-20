@@ -22,7 +22,7 @@
 
 1. **§4.1 #20 Typed event meta-vocabulary** `[Imp 8 / Cx 7 / Debt 6]` — Replace `Transition.event: string` with strict 5-kind typed union. Closes the kernel's last load-bearing openness. DRAFTS triage complete (2026-04-20) — unblocked. Needs design decision on the 5-kind taxonomy + ~175-fixture migration strategy before implementation.
 2. **§4.3a K-049 / AI-057 review follow-ups** `[mixed]` — six items with expert-decided approaches (2026-04-20 spec-expert + wos-expert consultations). See §4.3a below. #F5a (kernel `ProvenanceOutcome` enum) is the highest-leverage single item: closes both §3.3.1 `preconditionNotSatisfied` and §10.3 `convergenceCapReached` MUSTs in one schema change.
-3. **§4.4 Split release trains** — unblocked since §4.2 close. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
+3. **§4.4 Split release trains** — 🟡 partial. Tasks 1–3 landed 2026-04-20 (RELEASE-STREAMS + four per-stream CHANGELOGs + COMPATIBILITY-MATRIX + README pointer); Tasks 4–5 (Changesets tooling + release workflow) open. See [plan](thoughts/plans/2026-04-16-wos-release-trains.md).
 4. **§5.5 Synthesis benchmark (`wos-bench`)** — unblocked since §5.4 scaffold complete (Tasks 1–7). See [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
 
 ---
@@ -48,7 +48,7 @@ Items that are still open. All landed work is in [COMPLETED.md](COMPLETED.md).
 
 - 🔴 **§4.1 #20 Typed event meta-vocabulary** — see §4.1 below. Replace `Transition.event: string` with a 5-kind typed union. Closes kernel's last load-bearing openness. ~175 fixtures to migrate. Needs design decision on taxonomy before implementation.
 - 🟡 **§4.3a K-049 / AI-057 review follow-ups** — six expert-refined items (see §4.3a below). Highest leverage: #F5a kernel `ProvenanceOutcome` enum closes both §3.3.1 (`preconditionNotSatisfied`) and §10.3 (`convergenceCapReached`) MUSTs in one schema change.
-- 🔴 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. Unblocked since §4.2 close.
+- 🟡 **§4.4 Split release trains** — [plan](thoughts/plans/2026-04-16-wos-release-trains.md). Changesets + per-stream git tags mirroring ADR 0063. Tasks 1-3 landed 2026-04-20; Tasks 4-5 (Changesets tooling + release workflow) open.
 - 🔴 **§5.5 Synthesis benchmark (`wos-bench`)** — [plan](thoughts/plans/2026-04-16-wos-synthesis-benchmark.md). Unblocked since §5.4 scaffold complete. Live Anthropic run closes Q-V0-1..4 from the v0 spike retrospective.
 - 🔴 **§4.2 #22a ProvenanceKind tier-typing** — see §4.2 below. Lock-in pressure relieved by PE.2's exhaustive `audit_layer_for_kind` match; remaining value is data-shape cleanliness. Part of the broader #22 crate split (§4.6).
 
