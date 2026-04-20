@@ -369,53 +369,29 @@ Master integration spec merging 3 Phase 11 sources (gap analysis, coprocessor pr
 
 ---
 
-## 6. `DRAFTS/` — Historical Core Drafts
+## 6. `thoughts/archive/drafts/` — Historical Core Drafts (archived 2026-04-20)
 
-All drafts superseded by `specs/kernel/spec.md` and the `v7` reframe.
+The 13 files in this archive (12 markdown + 1 schema snapshot) were moved from
+the top-level `DRAFTS/` directory during TODO §4.1 DRAFTS triage (2026-04-20).
+All content is superseded by `specs/kernel/spec.md` v1.0.0-draft.1 and the
+canonical tier specs under `specs/`. See
+[`thoughts/archive/drafts/README.md`](thoughts/archive/drafts/README.md)
+for the full classification table and rationale.
 
-### `DRAFTS/wcos-lifecycle-spec.md`
-W3C-style Editor's Draft (2026-04-08) for Lifecycle/Topology tier with Harel statechart semantics — atomic/compound/parallel/final states, guards, milestones, timeline, hierarchical composition. Planned WOS-Lifecycle tier extending kernel.
-**Status:** ✨ Aspirational/Planning — tier spec deferred from v7 kernel.
+Highlights retained for historical reference:
 
-### `DRAFTS/wos-agent-tier-spec.md` + `DRAFTS/wos-agent-tier-v7.md`
-Near-duplicate drafts for WOS-Agent Tier — agent configuration, autonomy escalation, confidence, three-level guardrail composition, multi-step sessions, tool governance, evaluation/drift, Assist protocol.
-**Status:** ✨ Aspirational/Planning — tier specs in progress.
-
-### `DRAFTS/wos-core-agent-amendments.md`
-Amendments to WOS Core v0.1.0 adding foundational AI agent support — Actor/Agent/Autonomy/Confidence/Guardrail terminology, three-agent-type actor model, autonomy levels, guardrails, decision records.
-**Status:** ⏹ Superseded — amendments incorporated into v2+.
-
-### `DRAFTS/wos-core-spec.md`
-WOS Core Specification v0.x baseline.
-**Status:** ⏹ Superseded — v0 baseline replaced by v2→v6→v7.
-
-### `DRAFTS/wos-core-v2.md`
-WOS Core v2.0.0 First Public Working Draft (2026-04-08). Introduces 8-layer architecture (Lifecycle, Decision, Human Task, Agent Governance, Case State, Integration, Provenance, Durable Execution), 21 conformance profiles, actor model, autonomy, confidence, guardrails with fallbacks, four-layer provenance.
-**Status:** ⏹ Superseded.
-
-### `DRAFTS/wos-core-v3.md`
-WOS Core v3.0.0 — adds JSON-LD native serialization, SHACL shapes for policy-level governance, separation of syntax (JSON Schema) from semantic governance (SHACL), PROV-AGENT + OCEL 2.0 alignment.
-**Status:** ⏹ Superseded.
-
-### `DRAFTS/wos-core-v4.md`
-WOS Core v4.0.0 — Constraint-Enhanced Layered Kernel. Tripartite object model (ActivityDefinition/WorkflowDefinition/Task); kernel layers (1/5/7/8) separated from profile layers (2/3/4/6); deontic governance (OASIS LegalRuleML); typed patch operations for AI-assisted authoring.
-**Status:** ⏹ Superseded.
-
-### `DRAFTS/wos-core-v5.md`
-WOS Core v5.0.0 — Formspec Definitions as universal interface contract ("headless contract" pattern: Items/Binds/Shapes); FEL as single expression language; Mapping DSL for bidirectional flow; Assist Governance Interface; Arazzo + CWL integration; Formspec ValidationReport/Ledger provenance.
-**Status:** ⏹ Superseded.
-
-### `DRAFTS/wos-core-v6.md`
-WOS Core v6.0.0 Final Draft for Community Review — declarative constraint zones (DCR), behavioral attestations, dual-readability narrative (deterministic adverse-decision summaries), verifiable constraint subset (decidable FEL for SMT), instance migration with state/case-file mapping. 10 conformance profiles.
-**Status:** ⏹ Superseded by v7 reframe; content redistributed across canonical kernel + profiles/tiers.
-
-### `DRAFTS/wos-core-v7-kernel.md`
-WOS v7.0.0-draft.1 — minimal kernel with deferred scope. Keeps actor model, impact classification, deontic, autonomy, oversight, audit, due process, durable execution, interface contract abstraction. Defers lifecycle topology, decision logic, task management, agent config, integration types, provenance schemas, retry policies to dedicated tier specs.
-**Status:** ✨ Aspirational/Planning — represents architectural shift that shaped canonical `specs/kernel/spec.md`.
-
-### `DRAFTS/wos-core-v7-proposal.md`
-WOS v7 Change Proposal — verifiability-driven profile-based architecture: Minimal Kernel + Preparation Profile (agents touching information) + Governance Profile (agents touching outcomes). Profile composition enables incremental adoption. Backward-compatible with v6.
-**Status:** ✨ Aspirational/Planning — complements v7-kernel reframe.
+- **Superseded kernel iterations** — `wos-core-spec.md` (v0.1 baseline),
+  `wos-core-v2.md` (8-layer, 21 profiles), `wos-core-v3.md` (JSON-LD + SHACL),
+  `wos-core-v4.md` (constraint-enhanced layered kernel), `wos-core-v5.md`
+  (Formspec-as-interface-contract), `wos-core-v6.md` (community-review draft),
+  `wos-core-agent-amendments.md` (agent terminology added to v0.1).
+- **v7 reframe drafts** — `wos-core-v7-kernel.md` and `wos-core-v7-proposal.md`
+  shaped the canonical kernel/profile split.
+- **Tier-spec ancestors** — `wos-agent-tier-spec.md` + `wos-agent-tier-v7.md`
+  (near-duplicates; content now in `specs/ai/`), `wcos-lifecycle-spec.md`
+  (Harel statechart semantics folded into kernel §4 lifecycle topology).
+- **Schema snapshot** — `wos-core-v7.schema.json` replaced by the 21 production
+  schemas under `schemas/`.
 
 ---
 
@@ -444,7 +420,7 @@ Research directive/RFP that prompted the landscape study — >50 standards acros
 4. **Identity/Trellis prep** — custody-and-assurance seam + Assurance layer (prerequisite for Trellis integration).
 
 **Technical debt / legacy:**
-- `DRAFTS/` folder (12 files) is historical — all superseded by current `specs/kernel/` + planned tier specs.
+- Historical kernel drafts (13 files) were archived to `thoughts/archive/drafts/` on 2026-04-20 — all superseded by current `specs/kernel/` + tier specs.
 - `thoughts/archive/` contains 5 files already archived by convention.
 - Research prompt is a candidate for archival once design phase closes.
 
