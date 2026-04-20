@@ -386,3 +386,36 @@ The four-crate split mirrors the `packages/formspec-chat` + `packages/formspec-m
 **Estimated effort:** ~5–6 engineer-weeks for a working v0 across all four crates; ongoing thereafter.
 
 *Architectural note: this plan initially proposed a monolithic `wos-synth` crate with feature-gated provider deps. Architectural review (2026-04-17) flagged the design as violating dependency inversion — the loop was compile-time-coupled to a specific provider. The revised plan splits along DIP boundaries, mirroring parent Formspec's `formspec-chat` / `formspec-mcp` / `formspec-studio-core` layering. The scaffold that landed at `2815e4d` will be reshaped (or its position preserved as `wos-synth-core`) during Task 1 of the revised plan.*
+
+---
+
+## Addendum — v0-spike findings (2026-04-20)
+
+Findings from the v0 spike retrospective
+([`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](../research/2026-04-20-wos-synth-v0-spike-findings.md))
+that affect this plan:
+
+- **`ToolContext` is provisional, not empirically justified.** The spike at
+  <800 LOC does not use the trait; it calls `wos_lint::lint_document` and
+  `wos_conformance::run_fixture` directly. The trait shipped in `wos-synth-core`
+  Task 2 without a spike counter-example. Keep the trait but **do not extend
+  it with speculative methods** (remote dispatch, caching, benchmarking
+  hooks) until a second concrete implementation materializes to inform the
+  shape. Treat the existing `DirectToolContext` as the one valid
+  implementation.
+- **Structured repair-prompt improvement recommended.** Both this crate and
+  `wos-synth-spike` flatten `LintDiagnostic` to its `Display` form in the
+  repair prompt, losing `rule_id`, `suggested_fix`, and `spec_ref`. The
+  single cheapest prompt-engineering gain available is emitting these as a
+  structured block (JSON or labelled sections) so the LLM gets a rule
+  identifier + a remediation hint alongside the narrative message. Track
+  this as a follow-up to §5.4 Task 6 or as a §5.5 prerequisite — whichever
+  ships first.
+- **Conformance gate needs a fixture wrapper.** `wos_conformance::run_fixture`
+  requires a full `ConformanceFixture`; there is no `run(&doc)` entry point.
+  `wos-synth-spike` wraps the kernel inline (`documents: { "kernel": "inline"
+  }`, empty event sequence). If `wos-synth-core`'s `DirectToolContext` gains
+  a conformance method, it should either (a) mirror this wrapper pattern or
+  (b) depend on a new upstream `wos_conformance::smoke_test_document(doc:
+  &Value) -> Result<(), Vec<String>>` helper. Option (b) is preferred; track
+  as a `wos-conformance` follow-up.

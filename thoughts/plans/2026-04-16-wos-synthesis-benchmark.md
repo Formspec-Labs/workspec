@@ -153,3 +153,39 @@ A valid WOS kernel document plus governance sidecars (due-process, assertion-gat
 "WOS is designed for LLMs" becomes a measurable claim once the benchmark exists. The number can rise or fall with schema quality, prompt quality, and model capability — all three become tunable with a signal to optimize against. This is the artifact that makes Claim A falsifiable.
 
 **Estimated effort:** ongoing; ~1 engineer-week to bootstrap, ~2 days per fixture to author good problem statements.
+
+---
+
+## Addendum — v0-spike findings (2026-04-20)
+
+Findings from the v0 spike retrospective
+([`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](../research/2026-04-20-wos-synth-v0-spike-findings.md))
+that affect `wos-bench`:
+
+- **Conformance gate is fixture-shaped, not document-shaped.**
+  `wos_conformance::run_fixture` takes a `ConformanceFixture`, not a raw
+  kernel JSON. The spike wraps the kernel in an inline fixture with empty
+  `event_sequence` and `expected_transitions` (a "kernel loads + initial
+  config reachable" smoke test). `wos-bench` must choose between:
+  - **Option A** — duplicate the inline-fixture wrapper per consumer
+    (`wos-synth-spike`, `wos-synth-core`, `wos-bench` all build their own).
+  - **Option B** — land `wos_conformance::smoke_test_document(doc: &Value)
+    -> Result<(), Vec<String>>` upstream, reuse across all three.
+
+  **Recommendation:** Option B, as a prerequisite to `wos-bench` Task 1.
+- **Benchmark metric should be stage-aware.** The spike's failure modes
+  split into `ConformanceFailure`, `ParseJson`, `Unconverged` (lint-cap).
+  Track iterations per stage rather than a single "total iterations"
+  counter so regressions in lint-phase prompts do not hide behind
+  conformance-phase improvements.
+- **Structured repair-prompt gain is available.** See the corresponding
+  note in [`2026-04-16-wos-synth-crate.md`](./2026-04-16-wos-synth-crate.md)
+  — emitting `rule_id` + `suggested_fix` + `spec_ref` as a structured
+  block is the single cheapest prompt-engineering improvement and should
+  land in `wos-synth-core` before `wos-bench` starts measuring convergence
+  rates, otherwise the baseline numbers will be unrepresentative.
+- **Live iteration counts are an open question.** The v0 retrospective
+  explicitly flags Q-V0-1 through Q-V0-4 as unanswered pending a live
+  Anthropic run. `wos-bench`'s first runs against the PO fixture will
+  close these — the retrospective document is the place to record the
+  numbers.

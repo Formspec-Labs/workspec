@@ -243,3 +243,19 @@ WOS currently has lower-layer crates (`wos-core`, `wos-lint`, `wos-conformance`)
 ## Estimated effort
 
 ~2 engineer-weeks for scaffold + 22 tools + tool-catalog schema. Each new `wos-authoring` helper added in the future typically produces one corresponding MCP tool (~30 minutes marginal cost per tool once the infrastructure is in place).
+
+---
+
+## Addendum — v0-spike findings (2026-04-20)
+
+The v0 spike
+([`thoughts/research/2026-04-20-wos-synth-v0-spike-findings.md`](../research/2026-04-20-wos-synth-v0-spike-findings.md))
+does not exercise the MCP transport — it calls `wos_lint` and
+`wos_conformance` directly. The dual-entry pattern question (retrospective
+Q4, "was dual-entry needed?") is therefore *out of scope for the spike*,
+not *unanswered by the spike*. This plan's Task 2 assumptions stand; the
+spike provides no new evidence for or against them.
+
+**No plan change.** Record this explicitly so future readers do not
+mistake the spike's silence on MCP for a validated "yes, dual-entry
+pattern is load-bearing".
