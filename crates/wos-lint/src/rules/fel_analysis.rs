@@ -185,6 +185,11 @@ pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
         } => is_boolean_shaped(then_branch) && is_boolean_shaped(else_branch),
         Expr::FunctionCall { name, .. } => is_boolean_returning_builtin(name),
         Expr::LetBinding { body, .. } => is_boolean_shaped(body),
+        // `a ?? b` is boolean-shaped when both operands are boolean-shaped,
+        // e.g. `$flag ?? true`. One branch returning a non-boolean (a path,
+        // a number) taints the whole expression — fall through to the `_`
+        // arm by short-circuiting here. Review A Finding 4.
+        Expr::NullCoalesce { left, right } => is_boolean_shaped(left) && is_boolean_shaped(right),
         _ => false,
     }
 }
@@ -1525,6 +1530,34 @@ mod tests {
         assert!(
             !diag.iter().any(|d| d.rule_id == "AI-058"),
             "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    // --- §4.3b Finding 4: NullCoalesce in is_boolean_shaped ---
+
+    #[test]
+    fn ai058_null_coalesce_of_booleans_is_clean() {
+        // `caseFile.flag ?? true` — null-coalesce of two boolean-shaped
+        // operands. Before Finding 4, `is_boolean_shaped` had no arm for
+        // `Expr::NullCoalesce` and fell into `_ => false`, firing AI-058
+        // on a valid boolean expression.
+        let diag = run_ai058("boolean(caseFile.flag) ?? true");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058 on boolean null-coalesce: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_null_coalesce_with_non_boolean_fires() {
+        // `caseFile.amount ?? 0` — operands are a path and a number, neither
+        // boolean-shaped. The new NullCoalesce arm must still fail this
+        // expression (both branches boolean-shaped ⇒ whole is boolean).
+        let diag = run_ai058("caseFile.amount ?? 0");
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning on non-boolean null-coalesce, got: {diag:?}"
         );
     }
 
