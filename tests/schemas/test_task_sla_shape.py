@@ -111,7 +111,7 @@ class TestTaskPatternSlaRoundTrip:
 
 
 class TestSlaDefinitionExpectedDuration:
-    @pytest.mark.parametrize("value", ["P1D", "PT4H", "indefinite"])
+    @pytest.mark.parametrize("value", ["P1D", "PT4H", "P5BD"])
     def test_valid_durations_accepted(self, schema, value):
         v = _validator_for_def(schema, "SlaDefinition")
         errors = list(
@@ -138,7 +138,27 @@ class TestSlaDefinitionExpectedDuration:
                 }
             )
         )
-        assert errors, "expectedDuration='eventually' must fail — not an ISO 8601 duration or 'indefinite'"
+        assert errors, "expectedDuration='eventually' must fail — not an ISO 8601 duration"
+
+    def test_expected_duration_rejects_indefinite(self, schema):
+        """`indefinite` is valid on HoldPolicy.expectedDuration but MUST be rejected on
+        SlaDefinition.expectedDuration — an indefinite SLA has no elapse point for
+        warningThresholds or breachPolicy to fire against (Review D #40a)."""
+        v = _validator_for_def(schema, "SlaDefinition")
+        errors = list(
+            v.iter_errors(
+                {
+                    "id": "firstResponse",
+                    "expectedDuration": "indefinite",
+                    "calendarType": "wall-clock",
+                    "startAt": "assignment",
+                }
+            )
+        )
+        assert errors, (
+            "SlaDefinition.expectedDuration='indefinite' must fail — "
+            "unlike HoldPolicy, SLAs have no semantic for open-ended windows"
+        )
 
     def test_custom_event_requires_start_event(self, schema):
         """startAt = custom-event MUST require a startEvent."""

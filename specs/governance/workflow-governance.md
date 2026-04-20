@@ -469,7 +469,7 @@ SLA evaluation uses business calendar days when a Business Calendar sidecar is p
 
 #### 10.4.1 `slaDefinitions`
 
-Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`) or the literal string `"indefinite"`; the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event. Event-name resolution is left to a future T2 lint.
+Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`); the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. The `"indefinite"` form is deliberately rejected here (it is valid on `HoldPolicy.expectedDuration` but not on SLAs: an indefinite SLA has no elapse point for `warningThresholds` or `breachPolicy` to fire against). `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event. Event-name resolution is left to a future T2 lint.
 
 Examples:
 

@@ -1141,9 +1141,9 @@
         },
         "expectedDuration": {
           "type": "string",
-          "pattern": "^(indefinite|P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?))$",
-          "description": "Expected completion window for this SLA. MUST be an ISO 8601 duration (e.g. `P1D`, `PT4H`) or the literal string `indefinite` for open-ended tracking. As a WOS extension, the `P<N>BD` form denotes N business days resolved against the referenced business calendar (see `calendarRef`).",
-          "examples": ["P1D", "PT4H", "indefinite", "P5BD"]
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "Expected completion window for this SLA. MUST be an ISO 8601 duration (e.g. `P1D`, `PT4H`). An \"indefinite\" SLA is a category error -- warning thresholds and breach policy have nothing to fire against -- so the literal `indefinite` form (permitted on `HoldPolicy.expectedDuration`) is rejected here. As a WOS extension, the `P<N>BD` form denotes N business days resolved against the referenced business calendar (see `calendarRef`).",
+          "examples": ["P1D", "PT4H", "P5BD"]
         },
         "calendarType": {
           "type": "string",
