@@ -11,7 +11,7 @@
 export type JsonSchemaUri = string;
 
 /**
- * A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateRef (Governance S3.1).
+ * A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateKey (Governance S3.1).
  */
 export interface WOSNotificationTemplateConfig {
   /**
@@ -20,7 +20,7 @@ export interface WOSNotificationTemplateConfig {
   $wosNotificationTemplate: '1.0';
   $schema?: JsonSchemaUri;
   /**
-   * URI of the WOS Kernel Document this notification template config applies to. The processor resolves notificationTemplateKey and noticeTemplateRef lookups against the template collection in this sidecar when the kernel URI matches (Governance S12.2, S3.1).
+   * URI of the WOS Kernel Document this notification template config applies to. The processor resolves notificationTemplateKey and noticeTemplateKey lookups against the template collection in this sidecar when the kernel URI matches (Governance S12.2, S3.1).
    */
   targetWorkflow: string;
   /**
@@ -36,7 +36,7 @@ export interface WOSNotificationTemplateConfig {
    */
   description?: string;
   /**
-   * Named notification templates. Template keys are the identifiers referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateRef (Governance S3.1) in governance documents.
+   * Named notification templates. Template keys are the identifiers referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateKey (Governance S3.1) in governance documents.
    */
   templates: {
     [k: string]: NotificationTemplate;

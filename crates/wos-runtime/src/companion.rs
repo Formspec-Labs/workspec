@@ -214,8 +214,8 @@ fn deterministic_adverse_decision_notice_input(
         .get("noticeGracePeriod")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
-    let template_ref = policy
-        .get("noticeTemplateRef")
+    let template_key = policy
+        .get("noticeTemplateKey")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
     let appeal = appeal_details(policy);
@@ -230,7 +230,7 @@ fn deterministic_adverse_decision_notice_input(
     let resolution = resolve_notice_template(
         companion_docs,
         kernel.url.as_deref(),
-        template_ref.as_deref(),
+        template_key.as_deref(),
     );
     let (template, resolved_template_key, template_resolution_source) = match &resolution {
         NoticeTemplateResolution::Explicit { key, template } => {
@@ -253,7 +253,7 @@ fn deterministic_adverse_decision_notice_input(
         grace_period,
         resolved_template_key,
         template_resolution_source: template_resolution_source.to_string(),
-        template_ref,
+        template_key,
         human_readable,
         appeal,
     })
@@ -332,7 +332,7 @@ fn appeal_details(policy: &serde_json::Value) -> serde_json::Value {
 }
 
 /// Outcome of notice-template resolution. Surfaces whether the processor
-/// used the explicit `noticeTemplateRef` key, fell back to the first
+/// used the explicit `noticeTemplateKey` key, fell back to the first
 /// category=`adverse-decision` template, or could not find one at all.
 /// Callers propagate this into the `noticeSent` provenance so that a
 /// fallback selection is auditable rather than silent (Review Finding 4).
@@ -351,7 +351,7 @@ enum NoticeTemplateResolution<'a> {
 fn resolve_notice_template<'a>(
     companion_docs: &'a HashMap<String, serde_json::Value>,
     target_workflow: Option<&str>,
-    template_ref: Option<&str>,
+    template_key: Option<&str>,
 ) -> NoticeTemplateResolution<'a> {
     let mut docs = companion_docs.iter().collect::<Vec<_>>();
     docs.sort_by(|(left, _), (right, _)| left.cmp(right));
@@ -371,10 +371,10 @@ fn resolve_notice_template<'a>(
         let Some(templates) = doc.get("templates").and_then(serde_json::Value::as_object) else {
             continue;
         };
-        if let Some(template_ref) = template_ref {
-            if let Some(template) = templates.get(template_ref) {
+        if let Some(template_key) = template_key {
+            if let Some(template) = templates.get(template_key) {
                 return NoticeTemplateResolution::Explicit {
-                    key: template_ref.to_string(),
+                    key: template_key.to_string(),
                     template,
                 };
             }

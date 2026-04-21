@@ -1392,16 +1392,16 @@ fn g060_calendar_different_workflow_skips_mandatory_sla_check() {
 }
 
 // ========================================================================
-// G-063: Template refs MUST resolve to Notification Template sidecar keys.
+// G-063: Template keys MUST resolve to Notification Template sidecar keys.
 // ========================================================================
 
 #[test]
-fn g063_notice_template_ref_without_sidecar_flagged() {
+fn g063_notice_template_key_without_sidecar_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "missingTemplate"
+        "noticeTemplateKey": "missingTemplate"
     });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
@@ -1410,12 +1410,12 @@ fn g063_notice_template_ref_without_sidecar_flagged() {
 }
 
 #[test]
-fn g063_notice_template_ref_resolves_clean() {
+fn g063_notice_template_key_resolves_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "adverseTpl"
+        "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
         "$wosNotificationTemplate": "1.0",
@@ -1451,11 +1451,11 @@ fn g063_no_template_refs_skips_check() {
 }
 
 #[test]
-fn g063_notice_template_ref_runs_without_kernel() {
+fn g063_notice_template_key_runs_without_kernel() {
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "adverseTpl"
+        "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
         "$wosNotificationTemplate": "1.0",
@@ -1481,15 +1481,198 @@ fn g063_notice_template_ref_runs_without_kernel() {
 }
 
 #[test]
-fn g063_notice_template_ref_without_kernel_missing_sidecar_flagged() {
+fn g063_notice_template_key_without_kernel_missing_sidecar_flagged() {
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "orphanRef"
+        "noticeTemplateKey": "orphanRef"
     });
 
     let diags = lint_project_with_docs(vec![("governance.json", gov)]);
     assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
+}
+
+// ========================================================================
+// G-066: BreachPolicy escalationStepId MUST resolve in the same task pattern.
+// ========================================================================
+
+#[test]
+fn g066_unknown_escalation_step_id_flagged() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "missingStep"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
+    assert_eq!(severity_of(&diags, "G-066"), Some(Severity::Error));
+}
+
+#[test]
+fn g066_named_escalation_step_id_resolves_clean() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_level_escalation_step_id_resolves_clean() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "level-1"
+            },
+            "escalationChain": [
+                {
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_no_escalation_step_id_skips_check() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "notify",
+                "templateKey": "slaWarning"
+            },
+            "escalationChain": [
+                {
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_tasks_object_unknown_step_id_flagged() {
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "ghost"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_tasks_object_named_step_resolves_clean() {
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_escalation_step_id_without_chain_flagged() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            }
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
 }
 
 #[test]

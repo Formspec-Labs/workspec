@@ -127,9 +127,9 @@ export interface AdverseDecisionPolicy {
    */
   noticeGracePeriod?: string;
   /**
-   * Reference to a Notification Template sidecar for deterministic adverse-decision notice formatting. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.
+   * Notification Template key for deterministic adverse-decision notice formatting. Key convention: plain string key into the Notification Template sidecar's template map, not a URI. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.
    */
-  noticeTemplateRef?: string;
+  noticeTemplateKey?: string;
   /**
    * Level of explanation provided with adverse decisions (Governance S3.3). 'individualized': REQUIRED for rights-impacting. 'categorical': RECOMMENDED for operational. 'aggregate': minimum for informational.
    */
@@ -516,7 +516,7 @@ export interface SlaDefinition {
    */
   startAt: 'assignment' | 'activation' | 'custom-event';
   /**
-   * Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) — those are not valid clock origins. Event-name *resolution* against the target kernel is still deferred to a future T2 lint (tracked alongside G-023 / G-063).
+   * Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) — those are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.
    */
   startEvent?: string;
   /**
@@ -563,7 +563,7 @@ export interface BreachPolicy {
    */
   templateKey?: string;
   /**
-   * Identifier resolving to a step in the same task pattern's `escalationChain`. Id convention: plain string targeting a sibling `EscalationStep` by its numeric `level` token (e.g. `level-1`) or optional stable `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).
+   * Identifier resolving to a step in the same task pattern's `escalationChain`. Id convention: plain string targeting a sibling `EscalationStep` by its numeric `level` token (e.g. `level-1`) or optional stable `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is enforced by lint G-066.
    */
   escalationStepId?: string;
   /**
@@ -585,7 +585,7 @@ export interface BreachPolicy {
 }
 export interface EscalationStep {
   /**
-   * Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationStepId` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position, so inserting a new level does not silently retarget existing refs. Cross-reference resolution remains a future T2 lint concern.
+   * Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationStepId` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. Cross-reference resolution is enforced by lint G-066.
    */
   id?: string;
   /**

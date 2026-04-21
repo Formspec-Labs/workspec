@@ -4,10 +4,9 @@ Guards the four new `TaskPattern` authoring properties landed on
 `schemas/governance/wos-workflow-governance.schema.json`:
 `slaDefinitions`, `warningThresholds`, `breachPolicy`, and
 `escalationChain`. Runtime Companion §10.3 specifies the processor
-semantics these properties author against; cross-reference integrity
-(kernel event names, escalation-step ids, template keys) is a future
-T2 lint concern (tracked alongside G-023, G-063) and is deliberately
-NOT covered here.
+semantics these properties author against; cross-reference integrity is
+handled by Tier 2 lint rules (calendarRef via G-023, template keys via
+G-063, escalation-step ids via G-066) and is deliberately NOT covered here.
 """
 from __future__ import annotations
 

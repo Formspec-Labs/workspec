@@ -26,10 +26,9 @@ pub struct AdverseDecisionNoticeInput {
     pub timing: String,
     /// Minimum notice grace period.
     pub grace_period: Option<String>,
-    /// Notification Template key declared by the governance policy
-    /// (`noticeTemplateRef`). `None` when the policy did not pin a key.
-    pub template_ref: Option<String>,
-    /// Notification Template key actually selected. Differs from `template_ref`
+    /// Notification Template key declared by the governance policy.
+    pub template_key: Option<String>,
+    /// Notification Template key actually selected. Differs from `template_key`
     /// when the processor fell back to the first category=`adverse-decision`
     /// template in the bundle.
     pub resolved_template_key: Option<String>,
@@ -265,7 +264,7 @@ fn deterministic_notice_payload(notice: &AdverseDecisionNoticeInput) -> serde_js
         "timing": notice.timing,
         "type": "adverse-decision",
         "snapshotSha256": notice.case_file_snapshot.sha256,
-        "templateRef": notice.template_ref,
+        "templateKey": notice.template_key,
         "resolvedTemplateKey": notice.resolved_template_key,
         "templateResolution": notice.template_resolution_source,
         "machineReadable": {
@@ -284,7 +283,7 @@ fn deterministic_notice_payload(notice: &AdverseDecisionNoticeInput) -> serde_js
             "notice": {
                 "timing": notice.timing,
                 "gracePeriod": notice.grace_period,
-                "templateRef": notice.template_ref,
+                "templateKey": notice.template_key,
                 "resolvedTemplateKey": notice.resolved_template_key,
                 "templateResolution": notice.template_resolution_source,
             },

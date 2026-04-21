@@ -34,7 +34,8 @@
 //! | G-022 | warning | Actor in both potentialOwner and excludedOwner                       |
 //! | G-023 | warning | SLA should set calendarType=business when scoped calendar sidecar present |
 //! | G-060 | error   | SLA MUST use business days when a Business Calendar targets this workflow (no kernel required) |
-//! | G-063 | error   | `templateKey`, `notificationTemplateKey`, legacy `notificationTemplateRef`, and `noticeTemplateRef` MUST resolve to template keys (no kernel required) |
+//! | G-063 | error   | `templateKey`, `notificationTemplateKey`, and `noticeTemplateKey` MUST resolve to template keys (no kernel required) |
+//! | G-066 | error   | `BreachPolicy.escalationStepId` MUST resolve within the same task pattern (no kernel required) |
 //! | G-024 | warning | Delegation verification config present when kernel has determination  |
 //! | G-027 | error   | Sub-delegation chain depth must not exceed maxDelegationDepth        |
 //! | G-028 | error   | hold policies MUST attach to hold-tagged kernel states               |
@@ -193,9 +194,10 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         let typed_gov =
             serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
 
-        // G-023 / G-060 / G-063 only need governance + project sidecars (no typed kernel).
+        // G-023 / G-060 / G-063 / G-066 only need governance + project sidecars (no typed kernel).
         check_sla_business_calendar(gov, project, diagnostics);
         check_notification_template_refs(gov, project, diagnostics);
+        check_sla_escalation_step_ids(gov, diagnostics);
 
         if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
             check_target_workflow_match_typed(gov, kernel, diagnostics);
@@ -787,8 +789,8 @@ fn notification_template_keys_for_workflow(
 }
 
 /// Collect `(jsonPath, keyValue)` for notification-template catalog surfaces:
-/// `templateKey` (SLA warning/breach), `notificationTemplateKey` / legacy
-/// `notificationTemplateRef` (hold policies), and `noticeTemplateRef` (due process notices).
+/// `templateKey` (SLA warning/breach), `notificationTemplateKey` (hold
+/// policies), and `noticeTemplateKey` (due process notices).
 fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(String, String)>) {
     match value {
         Value::Object(map) => {
@@ -798,9 +800,8 @@ fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(St
                 } else {
                     format!("{base}/{k}")
                 };
-                if (k == "notificationTemplateRef"
-                    || k == "notificationTemplateKey"
-                    || k == "noticeTemplateRef"
+                if (k == "notificationTemplateKey"
+                    || k == "noticeTemplateKey"
                     || k == "templateKey")
                     && let Some(s) = v.as_str()
                 {
@@ -865,8 +866,8 @@ fn check_sla_business_calendar(
 // G-063: Notification template references resolve
 // ---------------------------------------------------------------------------
 
-/// G-063: `templateKey`, `notificationTemplateKey`, legacy `notificationTemplateRef`, and
-/// `noticeTemplateRef` MUST resolve to a template key in a Notification Template sidecar for the
+/// G-063: `templateKey`, `notificationTemplateKey`, and `noticeTemplateKey`
+/// MUST resolve to a template key in a Notification Template sidecar for the
 /// same `targetWorkflow`.
 fn check_notification_template_refs(
     gov: &crate::document::WosDocument,
@@ -891,7 +892,7 @@ fn check_notification_template_refs(
                 "G-063",
                 &path,
                 format!(
-                    "notification template ref '{r}' but no Notification Template sidecar targets this workflow"
+                    "notification template key '{r}' but no Notification Template sidecar targets this workflow"
                 ),
             ));
         }
@@ -904,11 +905,86 @@ fn check_notification_template_refs(
                 "G-063",
                 &path,
                 format!(
-                    "notification template ref '{r}' does not match any template key in the Notification Template sidecar"
+                    "notification template key '{r}' does not match any template key in the Notification Template sidecar"
                 ),
             ));
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// G-066: BreachPolicy escalation step ids resolve within task pattern
+// ---------------------------------------------------------------------------
+
+/// G-066: `BreachPolicy.escalationStepId` MUST resolve to an
+/// `EscalationStep` in the same task pattern by explicit `id` or `level-N`.
+fn check_sla_escalation_step_ids(
+    gov: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if let Some(task_catalog) = gov.value.get("taskCatalog").and_then(Value::as_array) {
+        for (idx, task) in task_catalog.iter().enumerate() {
+            check_task_pattern_escalation_step_id(
+                task,
+                &format!("/taskCatalog/{idx}"),
+                diagnostics,
+            );
+        }
+    }
+
+    if let Some(tasks) = gov.value.get("tasks").and_then(Value::as_object) {
+        for (task_name, task) in tasks {
+            check_task_pattern_escalation_step_id(
+                task,
+                &format!("/tasks/{task_name}"),
+                diagnostics,
+            );
+        }
+    }
+}
+
+fn check_task_pattern_escalation_step_id(
+    task: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(step_id) = task
+        .pointer("/breachPolicy/escalationStepId")
+        .and_then(Value::as_str)
+    else {
+        return;
+    };
+
+    let targets = escalation_step_targets(task);
+    if targets.contains(step_id) {
+        return;
+    }
+
+    diagnostics.push(LintDiagnostic::t2_error(
+        "G-066",
+        &format!("{base_path}/breachPolicy/escalationStepId"),
+        format!(
+            "BreachPolicy escalationStepId '{step_id}' does not match any escalationChain step id or level token in this task pattern"
+        ),
+    ));
+}
+
+fn escalation_step_targets(task: &Value) -> std::collections::HashSet<String> {
+    let mut targets = std::collections::HashSet::new();
+    let Some(chain) = task.get("escalationChain").and_then(Value::as_array) else {
+        return targets;
+    };
+
+    for step in chain {
+        if let Some(id) = step.get("id").and_then(Value::as_str) {
+            targets.insert(id.to_string());
+        }
+        if let Some(level) = step.get("level").and_then(Value::as_u64) {
+            targets.insert(format!("level-{level}"));
+        }
+    }
+
+    targets
 }
 
 // ---------------------------------------------------------------------------

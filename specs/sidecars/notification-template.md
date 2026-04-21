@@ -18,7 +18,7 @@ status: draft
 
 The WOS Notification Template Sidecar defines reusable templates for notices that WOS workflows generate during governance events: hold notifications, adverse decision notices, appeal instructions, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines (Governance S3.2). This sidecar separates notice content from governance logic, allowing templates to be versioned, localized, and audited independently.
 
-The Workflow Governance Specification references notification templates via `notificationTemplateKey` in Hold Policy properties (Governance S12.2) and `noticeTemplateRef` in Adverse Decision Policy properties (Governance S3.1). This sidecar provides the template definitions those references resolve to.
+The Workflow Governance Specification references notification templates via `notificationTemplateKey` in Hold Policy properties (Governance S12.2) and `noticeTemplateKey` in Adverse Decision Policy properties (Governance S3.1). This sidecar provides the template definitions those references resolve to.
 
 This is a sidecar document, not a layer. It provides template data consumed by existing governance mechanisms without introducing new seams, document types, or processing concepts.
 
@@ -45,7 +45,7 @@ Government agencies must provide legally adequate notice for consequential workf
 
 The Workflow Governance Specification references notification templates in:
 
-- **Governance S3.1** (Adverse Decision Policy): `noticeTemplateRef` for adverse decision notices.
+- **Governance S3.1** (Adverse Decision Policy): `noticeTemplateKey` for adverse decision notices.
 - **Governance S12.2** (Hold Policy Properties): `notificationTemplateKey` for hold notifications.
 
 This sidecar provides the template definitions those references resolve to.
@@ -72,7 +72,7 @@ A Notification Template sidecar is a JSON document identified by the `$wosNotifi
 |----------|------|----------|-------------|
 | `$wosNotificationTemplate` | string | REQUIRED | Document type marker. MUST be `"1.0"`. |
 | `targetWorkflow` | string (URI) | REQUIRED | URI of the WOS Kernel Document this sidecar applies to. |
-| `templates` | object (map of Template) | REQUIRED | Named notification templates. Template keys are the identifiers referenced by `notificationTemplateKey` and `noticeTemplateRef` in governance documents. |
+| `templates` | object (map of Template) | REQUIRED | Named notification templates. Template keys are the identifiers referenced by `notificationTemplateKey` and `noticeTemplateKey` in governance documents. |
 
 ### 2.2 Optional Properties
 
@@ -192,11 +192,11 @@ A processor MUST reject an `adverse-decision` template that does not include sec
 
 ### 5.1 Reference Resolution
 
-When a governance document's `notificationTemplateKey` or `noticeTemplateRef` value matches a template key in a Notification Template sidecar targeting the same workflow, the processor resolves the reference to that template.
+When a governance document's `notificationTemplateKey` or `noticeTemplateKey` value matches a template key in a Notification Template sidecar targeting the same workflow, the processor resolves the reference to that template.
 
 ### 5.2 Missing Template
 
-When a `notificationTemplateKey` or `noticeTemplateRef` references a template key that does not exist in any Notification Template sidecar targeting the workflow, the processor MUST record a warning in provenance. The notification is not sent, but the workflow continues.
+When a `notificationTemplateKey` or `noticeTemplateKey` references a template key that does not exist in any Notification Template sidecar targeting the workflow, the processor MUST record a warning in provenance. The notification is not sent, but the workflow continues.
 
 ### 5.3 Rendering
 
@@ -216,7 +216,7 @@ Template rendering is implementation-defined. The processor MUST:
 A processor that supports Notification Template sidecars:
 
 1. MUST parse and validate the document against the Notification Template schema.
-2. MUST resolve `notificationTemplateKey` and `noticeTemplateRef` references from governance documents to template keys in this sidecar.
+2. MUST resolve `notificationTemplateKey` and `noticeTemplateKey` references from governance documents to template keys in this sidecar.
 3. MUST verify that `adverse-decision` templates include sections addressing the due process requirements in S4.4.
 4. MUST resolve placeholder variables from the case state and governance context.
 5. MUST record notification rendering failures in provenance.
@@ -224,7 +224,7 @@ A processor that supports Notification Template sidecars:
 
 ### 6.2 Absence Behavior
 
-When no Notification Template sidecar targets a workflow, `notificationTemplateKey` and `noticeTemplateRef` values in governance documents are unresolvable. The processor SHOULD log a warning but MUST NOT treat this as a fatal error. Notification delivery falls back to implementation-defined behavior.
+When no Notification Template sidecar targets a workflow, `notificationTemplateKey` and `noticeTemplateKey` values in governance documents are unresolvable. The processor SHOULD log a warning but MUST NOT treat this as a fatal error. Notification delivery falls back to implementation-defined behavior.
 
 ---
 

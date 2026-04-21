@@ -19,7 +19,7 @@
           "noticeRequired": true,
           "noticeTiming": "beforeEffective",
           "noticeGracePeriod": "P30D",
-          "noticeTemplateRef": "adverseDecisionNotice",
+          "noticeTemplateKey": "adverseDecisionNotice",
           "explanationLevel": "individualized",
           "counterfactualRequired": true,
           "appealMechanism": {
@@ -91,7 +91,7 @@
         "timing": "beforeEffective",
         "type": "adverse-decision",
         "snapshotSha256": "7c6c9f0425dd8135fe6bbe81f876ddc1a6c5478bec3967dec1a40c93a6f8a749",
-        "templateRef": "adverseDecisionNotice",
+        "templateKey": "adverseDecisionNotice",
         "machineReadable": {
           "kind": "adverseDecisionNotice",
           "facts": {

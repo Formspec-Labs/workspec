@@ -120,7 +120,7 @@ The affected individual MUST receive notice before the decision takes effect. Th
 
 A `noticeGracePeriod` (ISO 8601 duration) defines the minimum delay between notice delivery and the decision taking effect.
 
-Notice assembly is deterministic. When an `adverse-decision` transition fires under an `AdverseDecisionPolicy` with `noticeRequired: true`, the processor MUST derive the notice from the pre-transition Facts-tier `caseFileSnapshot` captured for the same determination transition, the policy's appeal configuration, and the Notification Template referenced by `noticeTemplateRef`. The emitted `noticeSent` provenance record MUST carry `data.source = "deterministic"`, a machine-readable `data.machineReadable.kind = "adverseDecisionNotice"` artifact, the same `snapshotSha256` used by the Facts-tier snapshot, and human-readable prose rendered from the same inputs. Identical snapshot, policy, template, transition, appeal, and transition-firing-timestamp inputs MUST produce byte-identical machine-readable content and byte-identical human-readable prose. The transition-firing timestamp (the processor wall-clock value captured when the adverse transition is drained) is a determining input because it is used to derive the concrete `appealDeadline` rendered into human-readable prose; holding it constant alongside the other inputs is required for byte-identity. Processors MUST NOT use model-generated Narrative-tier content as the authoritative adverse-decision notice.
+Notice assembly is deterministic. When an `adverse-decision` transition fires under an `AdverseDecisionPolicy` with `noticeRequired: true`, the processor MUST derive the notice from the pre-transition Facts-tier `caseFileSnapshot` captured for the same determination transition, the policy's appeal configuration, and the Notification Template referenced by `noticeTemplateKey`. The emitted `noticeSent` provenance record MUST carry `data.source = "deterministic"`, a machine-readable `data.machineReadable.kind = "adverseDecisionNotice"` artifact, the same `snapshotSha256` used by the Facts-tier snapshot, and human-readable prose rendered from the same inputs. Identical snapshot, policy, template, transition, appeal, and transition-firing-timestamp inputs MUST produce byte-identical machine-readable content and byte-identical human-readable prose. The transition-firing timestamp (the processor wall-clock value captured when the adverse transition is drained) is a determining input because it is used to derive the concrete `appealDeadline` rendered into human-readable prose; holding it constant alongside the other inputs is required for byte-identity. Processors MUST NOT use model-generated Narrative-tier content as the authoritative adverse-decision notice.
 
 For `rights-impacting` workflows, the processor MUST maintain a respondent ledger that records notice delivery, receipt confirmation, and appeal deadlines for each affected individual. Formspec Definitions that collect personal data in rights-impacting workflows MUST use the Respondent Ledger (Formspec Response S4) to track consent and data subject rights.
 
@@ -469,7 +469,7 @@ SLA evaluation uses business calendar days when a Business Calendar sidecar is p
 
 #### 10.4.1 `slaDefinitions`
 
-Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`); the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. The `"indefinite"` form is deliberately rejected here (it is valid on `HoldPolicy.expectedDuration` but not on SLAs: an indefinite SLA has no elapse point for `warningThresholds` or `breachPolicy` to fire against). `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event matching `^[a-zA-Z][a-zA-Z0-9_-]*$`. The pattern rejects empty strings, whitespace, and the reserved `$`-prefixed kernel event names (for example `$continuous`, `$join`, `$timeout.*`, `$compensation.complete`) which are not valid clock origins. Event-name *resolution* against the target kernel is left to a future T2 lint.
+Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`); the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. The `"indefinite"` form is deliberately rejected here (it is valid on `HoldPolicy.expectedDuration` but not on SLAs: an indefinite SLA has no elapse point for `warningThresholds` or `breachPolicy` to fire against). `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event matching `^[a-zA-Z][a-zA-Z0-9_-]*$`. The pattern rejects empty strings, whitespace, and the reserved `$`-prefixed kernel event names (for example `$continuous`, `$join`, `$timeout.*`, `$compensation.complete`) which are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.
 
 Examples:
 
@@ -497,7 +497,7 @@ Examples:
 
 #### 10.4.3 `breachPolicy`
 
-`BreachPolicy` is `{ action, templateKey?, escalationStepId?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateKey` is a Notification Template sidecar key rendered on breach. `escalationStepId` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Cross-reference integrity for the template and chain refs is deferred to a future T2 lint.
+`BreachPolicy` is `{ action, templateKey?, escalationStepId?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateKey` is a Notification Template sidecar key rendered on breach. `escalationStepId` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Template-key integrity is enforced by lint G-063; escalation-step integrity is enforced by lint G-066.
 
 Examples:
 
@@ -523,12 +523,12 @@ Examples:
 { "level": 2, "assignTo": "divisionDirector", "gracePeriod": "P1D", "onExhaustion": "ticketCreate" }
 ```
 
-#### 10.4.5 Future work
+#### 10.4.5 Cross-reference integrity
 
-Cross-reference integrity across the four SLA authoring shapes is currently unenforced and tracked as a future T2 lint:
+Cross-reference integrity across the four SLA authoring shapes is enforced by the following lint rules:
 
-- `SlaDefinition.startEvent` MUST name a kernel event declared on the target Kernel Document (when `startAt = custom-event`).
-- `BreachPolicy.escalationStepId` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern`.
+- `SlaDefinition.startEvent` MUST name a kernel event declared on the target Kernel Document (when `startAt = custom-event`; lint **G-029**).
+- `BreachPolicy.escalationStepId` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern` (lint **G-066**).
 - `WarningThreshold.templateKey` and `BreachPolicy.templateKey` MUST resolve through a Notification Template sidecar (lint **G-063**).
 - When `SlaDefinition.calendarType = business`, `calendarRef` SHOULD be present and resolvable to a Business Calendar sidecar (lint **G-023**).
 

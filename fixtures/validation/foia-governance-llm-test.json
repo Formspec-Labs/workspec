@@ -10,7 +10,7 @@
       "noticeRequired": true,
       "noticeTiming": "beforeEffective",
       "noticeGracePeriod": "P20BD",
-      "noticeTemplateRef": "foiaAdverseDecisionNotice",
+      "noticeTemplateKey": "foiaAdverseDecisionNotice",
       "explanationLevel": "individualized",
       "counterfactualRequired": true,
       "appealMechanism": {

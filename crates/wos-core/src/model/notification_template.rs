@@ -5,8 +5,8 @@
 //! Deserialized from JSON via serde. Notification template sidecars
 //! target a kernel workflow and provide reusable templates for notices
 //! generated during governance events: adverse decisions, holds, appeals,
-//! SLA warnings, and status updates. Referenced by `notificationTemplateRef`
-//! (Governance S12.2) and `noticeTemplateRef` (Governance S3.1).
+//! SLA warnings, and status updates. Referenced by `notificationTemplateKey`
+//! (Governance S12.2) and `noticeTemplateKey` (Governance S3.1).
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -39,7 +39,7 @@ pub struct NotificationTemplateDocument {
     pub description: Option<String>,
 
     /// Named notification templates. Keys are the identifiers
-    /// referenced by `notificationTemplateRef` and `noticeTemplateRef`.
+    /// referenced by `notificationTemplateKey` and `noticeTemplateKey`.
     pub templates: HashMap<String, NotificationTemplate>,
 
     /// Extension data. Keys MUST start with `x-`.
