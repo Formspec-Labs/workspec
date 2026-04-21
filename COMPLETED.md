@@ -255,6 +255,11 @@ All §4.3b review follow-ups closed in a single 4-agent parallel dispatch. Disjo
 - [x] **F3b continuous-mode post-mutation guard re-scan** (`bdf7063`) — `Evaluator::rescan_on_mutation`; guard-only transitions participate per Runtime Companion §10.3; `Transition::event` optional with trim-to-absent deserialization; kernel schema + spec alignment.
 - [x] **ADR 0059 Task 5 — K-049 LoadBearing + greenfield cleanup** (`f03ca40`) — drop authored `"$continuous"` from `participates_in_continuous_rescan`; synthetic trace/provenance dispatch label `$postMutationRescan`; remove deprecated `try_fire_guardless_transition`; K-049 warning cites §10.3 + `CONVERGENCE_CAP`; rule promoted **LoadBearing** with two `fixtures/validation/k-049-load-bearing-*.json` + `tier2_rules` harness; governance/kernel schema descriptions updated.
 
+### #22a — ProvenanceKind tier-typing (`1240745`, `916d6db`)
+
+- [x] **`wos-core` provenance module split** — `provenance.rs` replaced by `provenance/{mod,snapshot,kind,audit_tier,record,log,tests}.rs`; `ProvenanceAuditTier` (`Facts` | `Narrative`) with `From<ProvenanceKind>`; `audit_layer_for_kind` retained as a string bridge; crate-root re-export.
+- [x] **`wos-runtime` stamp path** — `populate_provenance_record_fields` sets `audit_layer` via `ProvenanceAuditTier::from(record.record_kind).as_str()` (typed tier at emission site).
+
 ### Validation at close
 
 `cargo test --workspace`: **1012 passed / 0 failed**. SCHEMA-DOC-001 zero-regression gate green. `pytest tests/schemas/ -q`: **188 passed / 11 skipped / 1 xfailed** (+17 vs session 8). `npm run docs:check`: exit 0. `git status`: clean.
