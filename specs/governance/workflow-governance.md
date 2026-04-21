@@ -483,35 +483,35 @@ Examples:
 
 #### 10.4.2 `warningThresholds`
 
-Each `WarningThreshold` is `{ beforeBreach, templateRef, notify }`. `beforeBreach` is an ISO 8601 duration specifying the lead time before any matching `slaDefinitions.expectedDuration` elapses at which the warning fires; the processor evaluates every threshold independently, so escalating leads (for example `P1D`, `PT4H`, `PT30M`) fan out multiple notifications. `templateRef` MUST resolve into a Notification Template sidecar (lint G-063) and SHOULD carry the `sla-warning` category. `notify` is a non-empty array of actor identifiers resolved per Governance §10.2 / §11.
+Each `WarningThreshold` is `{ beforeBreach, templateKey, notify }`. `beforeBreach` is an ISO 8601 duration specifying the lead time before any matching `slaDefinitions.expectedDuration` elapses at which the warning fires; the processor evaluates every threshold independently, so escalating leads (for example `P1D`, `PT4H`, `PT30M`) fan out multiple notifications. `templateKey` MUST resolve into a Notification Template sidecar (lint G-063) and SHOULD carry the `sla-warning` category. `notify` is a non-empty array of actor identifiers resolved per Governance §10.2 / §11.
 
 Examples:
 
 ```json
-{ "beforeBreach": "P1D", "templateRef": "slaWarning1Day", "notify": ["taskOwner"] }
+{ "beforeBreach": "P1D", "templateKey": "slaWarning1Day", "notify": ["taskOwner"] }
 ```
 
 ```json
-{ "beforeBreach": "PT30M", "templateRef": "firstResponseImminentBreach", "notify": ["taskOwner", "caseSupervisor"] }
+{ "beforeBreach": "PT30M", "templateKey": "firstResponseImminentBreach", "notify": ["taskOwner", "caseSupervisor"] }
 ```
 
 #### 10.4.3 `breachPolicy`
 
-`BreachPolicy` is `{ action, templateRef?, escalationChainRef?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateRef` is a Notification Template sidecar reference rendered on breach. `escalationChainRef` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Cross-reference integrity for the template and chain refs is deferred to a future T2 lint.
+`BreachPolicy` is `{ action, templateKey?, escalationStepId?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateKey` is a Notification Template sidecar key rendered on breach. `escalationStepId` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Cross-reference integrity for the template and chain refs is deferred to a future T2 lint.
 
 Examples:
 
 ```json
-{ "action": "escalate", "escalationChainRef": "level-1", "timeoutPolicy": { "onRepeatedBreach": "suspend" } }
+{ "action": "escalate", "escalationStepId": "level-1", "timeoutPolicy": { "onRepeatedBreach": "suspend" } }
 ```
 
 ```json
-{ "action": "notify", "templateRef": "slaBreachNotice" }
+{ "action": "notify", "templateKey": "slaBreachNotice" }
 ```
 
 #### 10.4.4 `escalationChain`
 
-Each `EscalationStep` is `{ id?, level, assignTo, gracePeriod, onExhaustion }`. `id` is an OPTIONAL stable identifier matching `^[a-zA-Z][a-zA-Z0-9_-]*$`; `BreachPolicy.escalationChainRef` matches a step either by numeric `level` (e.g. `level-1`) or by `id` (e.g. `supervisor`), letting authors point a breach policy at a named step without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
+Each `EscalationStep` is `{ id?, level, assignTo, gracePeriod, onExhaustion }`. `id` is an OPTIONAL stable identifier matching `^[a-zA-Z][a-zA-Z0-9_-]*$`; `BreachPolicy.escalationStepId` matches a step either by numeric `level` (e.g. `level-1`) or by `id` (e.g. `supervisor`), letting authors point a breach policy at a named step without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
 
 Examples:
 
@@ -528,8 +528,8 @@ Examples:
 Cross-reference integrity across the four SLA authoring shapes is currently unenforced and tracked as a future T2 lint:
 
 - `SlaDefinition.startEvent` MUST name a kernel event declared on the target Kernel Document (when `startAt = custom-event`).
-- `BreachPolicy.escalationChainRef` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern`.
-- `WarningThreshold.templateRef` and `BreachPolicy.templateRef` MUST resolve through a Notification Template sidecar (lint **G-063**).
+- `BreachPolicy.escalationStepId` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern`.
+- `WarningThreshold.templateKey` and `BreachPolicy.templateKey` MUST resolve through a Notification Template sidecar (lint **G-063**).
 - When `SlaDefinition.calendarType = business`, `calendarRef` SHOULD be present and resolvable to a Business Calendar sidecar (lint **G-023**).
 
 Schema enforcement in this release covers shape only; resolvability is an authoring-time lint concern. The §10.3 processor obligations remain normative regardless of which of the four properties a governance document chooses to author.
@@ -621,7 +621,7 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 | `expectedDuration` | string | REQUIRED | ISO 8601 duration or the string `"indefinite"`. |
 | `resumeTrigger` | string | REQUIRED except `legal-hold` | Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule. `legal-hold` has no event-based resume trigger and is released only by an explicit legal-hold-release fact. |
 | `timeoutAction` | enum | REQUIRED except `legal-hold` | Action when `expectedDuration` expires without the resume trigger: `escalate`, `auto-resume`, or `cancel`. `legal-hold` has no timeout action. |
-| `notificationTemplateRef` | string | OPTIONAL | Reference to a Notification Template sidecar for hold notifications. |
+| `notificationTemplateKey` | string | OPTIONAL | Key into a Notification Template sidecar for hold notifications. |
 | `description` | string | OPTIONAL | Human-readable description of this hold policy. |
 
 ### 12.3 Hold Type Semantics

@@ -1,18 +1,12 @@
 {
   "$wosWorkflowGovernance": "1.0",
-  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "version": "1.0.0",
-  "title": "Benefits Adjudication — Task SLA Authoring",
-  "description": "Happy-path governance fixture exercising Task SLA authoring (Governance §10.4): slaDefinitions, warningThresholds, breachPolicy, and escalationChain on a single TaskPattern. Mirrors the processor-side obligations in Runtime Companion §10.3.",
-
+  "title": "Benefits adjudication — SLA authoring fixture",
+  "description": "Minimal governance excerpt exercising ADR-0060 keys (templateKey, escalationStepId, notificationTemplateKey) against the benefits kernel URL.",
   "taskCatalog": [
     {
       "pattern": "incomeVerification",
       "verifiable": "yes",
-      "verificationMethod": "Source-grounding plus arithmetic recomputation",
-      "description": "Verify income data against source documents and arithmetic constraints",
-
       "slaDefinitions": [
         {
           "id": "firstResponse",
@@ -29,29 +23,18 @@
           "startEvent": "applicantResponseReceived"
         }
       ],
-
       "warningThresholds": [
         {
           "beforeBreach": "P1D",
-          "templateRef": "slaWarning1Day",
+          "templateKey": "slaWarning1Day",
           "notify": ["taskOwner"]
-        },
-        {
-          "beforeBreach": "PT30M",
-          "templateRef": "firstResponseImminentBreach",
-          "notify": ["taskOwner", "caseSupervisor"]
         }
       ],
-
       "breachPolicy": {
         "action": "escalate",
-        "templateRef": "slaBreachNotice",
-        "escalationChainRef": "level-1",
-        "timeoutPolicy": {
-          "onRepeatedBreach": "suspend"
-        }
+        "escalationStepId": "level-1",
+        "timeoutPolicy": { "onRepeatedBreach": "suspend" }
       },
-
       "escalationChain": [
         {
           "level": 1,
@@ -60,13 +43,21 @@
           "onExhaustion": "escalate"
         },
         {
-          "id": "supervisor",
           "level": 2,
           "assignTo": "divisionDirector",
           "gracePeriod": "P1D",
           "onExhaustion": "ticketCreate"
         }
       ]
+    }
+  ],
+  "holdPolicies": [
+    {
+      "holdType": "pending-applicant-response",
+      "expectedDuration": "P30D",
+      "resumeTrigger": "applicantResponse",
+      "timeoutAction": "escalate",
+      "notificationTemplateKey": "holdPendingApplicant"
     }
   ]
 }

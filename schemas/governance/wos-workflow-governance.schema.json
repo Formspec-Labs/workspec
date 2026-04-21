@@ -1109,7 +1109,7 @@
         },
         "warningThresholds": {
           "type": "array",
-          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateRef`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion §10.3).",
+          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateKey`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion §10.3).",
           "items": { "$ref": "#/$defs/WarningThreshold" }
         },
         "breachPolicy": {
@@ -1154,7 +1154,7 @@
         "calendarRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. Ref convention: URI into the Business Calendar sidecar itself (not a key into a map), because a governance document may point at any calendar artifact addressable from its runtime environment; contrast with `templateRef` / `escalationChainRef` / `notificationTemplateRef` which are plain string keys. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution.",
+          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. Ref convention: URI into the Business Calendar sidecar itself (not a key into a map), because a governance document may point at any calendar artifact addressable from its runtime environment; contrast with `templateKey` / `escalationStepId` / `notificationTemplateKey` which are plain string keys or sibling ids. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution.",
           "examples": [
             "https://agency.gov/sidecars/business-calendar-fy2026",
             "urn:wos:sidecar:business-calendar:fy2026-federal"
@@ -1182,7 +1182,7 @@
     },
     "WarningThreshold": {
       "type": "object",
-      "required": ["beforeBreach", "templateRef", "notify"],
+      "required": ["beforeBreach", "templateKey", "notify"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -1196,9 +1196,9 @@
           "description": "Lead time, as an ISO 8601 duration, before any matching `slaDefinitions.expectedDuration` elapses at which this warning fires. Multiple thresholds MAY declare escalating lead times (e.g. `P2D`, `PT4H`, `PT30M`); the processor fires each independently (Runtime Companion §10.3).",
           "examples": ["P2D", "PT4H", "PT30M"]
         },
-        "templateRef": {
+        "templateKey": {
           "type": "string",
-          "description": "Notification template identifier to render when this threshold fires. Ref convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateRef`), not a URI. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
+          "description": "Notification template key to render when this threshold fires. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
           "examples": ["slaWarning4Hour", "firstResponseImminentBreach"]
         },
         "notify": {
@@ -1235,14 +1235,14 @@
             "intent": "Classifies the governance response to an SLA breach so the processor can apply the correct remediation"
           }
         },
-        "templateRef": {
+        "templateKey": {
           "type": "string",
-          "description": "Notification template identifier rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Ref convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateRef`), not a URI. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
+          "description": "Notification template key rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
           "examples": ["slaBreachNotice", "caseworkerReassignmentNotice"]
         },
-        "escalationChainRef": {
+        "escalationStepId": {
           "type": "string",
-          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Ref convention: plain string key into this task pattern's own `escalationChain` array -- matched against the step's numeric `level` (e.g. `level-1`) or its optional `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
+          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Id convention: plain string targeting a sibling `EscalationStep` by its numeric `level` token (e.g. `level-1`) or optional stable `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is deferred to a future T2 lint (tracked alongside G-023 / G-063).",
           "examples": ["level-1", "supervisor"]
         },
         "timeoutPolicy": {
@@ -1275,7 +1275,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
-          "description": "Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationChainRef` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position, so inserting a new level does not silently retarget existing refs. Cross-reference resolution remains a future T2 lint concern.",
+          "description": "Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationStepId` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position, so inserting a new level does not silently retarget existing refs. Cross-reference resolution remains a future T2 lint concern.",
           "examples": ["supervisor", "divisionDirector"]
         },
         "level": {
@@ -1586,9 +1586,9 @@
             "auto-resume"
           ]
         },
-        "notificationTemplateRef": {
+        "notificationTemplateKey": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for hold notifications. When present, the processor sends a notification using this template when the hold begins.",
+          "description": "Notification template key for hold notifications. When present, the processor sends a notification using this template when the hold begins.",
           "examples": ["holdNotificationTemplate", "pendingApplicantResponseNotice"]
         },
         "scope": {

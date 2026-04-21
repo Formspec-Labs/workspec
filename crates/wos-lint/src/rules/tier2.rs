@@ -34,7 +34,7 @@
 //! | G-022 | warning | Actor in both potentialOwner and excludedOwner                       |
 //! | G-023 | warning | SLA should set calendarType=business when scoped calendar sidecar present |
 //! | G-060 | error   | SLA MUST use business days when a Business Calendar targets this workflow (no kernel required) |
-//! | G-063 | error   | notificationTemplateRef / noticeTemplateRef MUST resolve to template keys (no kernel required) |
+//! | G-063 | error   | `templateKey`, `notificationTemplateKey`, legacy `notificationTemplateRef`, and `noticeTemplateRef` MUST resolve to template keys (no kernel required) |
 //! | G-024 | warning | Delegation verification config present when kernel has determination  |
 //! | G-027 | error   | Sub-delegation chain depth must not exceed maxDelegationDepth        |
 //! | G-028 | error   | hold policies MUST attach to hold-tagged kernel states               |
@@ -786,7 +786,9 @@ fn notification_template_keys_for_workflow(
     keys
 }
 
-/// Collect `(jsonPath, refValue)` for every `notificationTemplateRef` / `noticeTemplateRef`.
+/// Collect `(jsonPath, keyValue)` for notification-template catalog surfaces:
+/// `templateKey` (SLA warning/breach), `notificationTemplateKey` / legacy
+/// `notificationTemplateRef` (hold policies), and `noticeTemplateRef` (due process notices).
 fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(String, String)>) {
     match value {
         Value::Object(map) => {
@@ -796,7 +798,10 @@ fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(St
                 } else {
                     format!("{base}/{k}")
                 };
-                if (k == "notificationTemplateRef" || k == "noticeTemplateRef")
+                if (k == "notificationTemplateRef"
+                    || k == "notificationTemplateKey"
+                    || k == "noticeTemplateRef"
+                    || k == "templateKey")
                     && let Some(s) = v.as_str()
                 {
                     out.push((p, s.to_string()));
@@ -860,8 +865,9 @@ fn check_sla_business_calendar(
 // G-063: Notification template references resolve
 // ---------------------------------------------------------------------------
 
-/// G-063: `notificationTemplateRef` / `noticeTemplateRef` MUST resolve to a
-/// template key in a Notification Template sidecar for the same `targetWorkflow`.
+/// G-063: `templateKey`, `notificationTemplateKey`, legacy `notificationTemplateRef`, and
+/// `noticeTemplateRef` MUST resolve to a template key in a Notification Template sidecar for the
+/// same `targetWorkflow`.
 fn check_notification_template_refs(
     gov: &crate::document::WosDocument,
     project: &WosProject,

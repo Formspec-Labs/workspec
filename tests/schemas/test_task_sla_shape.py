@@ -5,7 +5,7 @@ Guards the four new `TaskPattern` authoring properties landed on
 `slaDefinitions`, `warningThresholds`, `breachPolicy`, and
 `escalationChain`. Runtime Companion §10.3 specifies the processor
 semantics these properties author against; cross-reference integrity
-(kernel event names, escalation chain refs, template refs) is a future
+(kernel event names, escalation-step ids, template keys) is a future
 T2 lint concern (tracked alongside G-023, G-063) and is deliberately
 NOT covered here.
 """
@@ -64,13 +64,13 @@ def _minimal_task_with_all_four() -> dict:
         "warningThresholds": [
             {
                 "beforeBreach": "P1D",
-                "templateRef": "slaWarning1Day",
+                "templateKey": "slaWarning1Day",
                 "notify": ["taskOwner"],
             }
         ],
         "breachPolicy": {
             "action": "escalate",
-            "escalationChainRef": "level-1",
+            "escalationStepId": "level-1",
             "timeoutPolicy": {"onRepeatedBreach": "suspend"},
         },
         "escalationChain": [
@@ -228,7 +228,7 @@ class TestWarningThresholdBeforeBreach:
             v.iter_errors(
                 {
                     "beforeBreach": value,
-                    "templateRef": "slaWarning",
+                    "templateKey": "slaWarning",
                     "notify": ["taskOwner"],
                 }
             )
@@ -242,7 +242,7 @@ class TestWarningThresholdBeforeBreach:
             v.iter_errors(
                 {
                     "beforeBreach": value,
-                    "templateRef": "slaWarning",
+                    "templateKey": "slaWarning",
                     "notify": ["taskOwner"],
                 }
             )
@@ -280,7 +280,7 @@ class TestEscalationStepLevel:
 
     def test_optional_id_round_trips(self, schema):
         """EscalationStep.id is OPTIONAL and, when present, matches the kernel
-        identifier grammar so BreachPolicy.escalationChainRef can target a
+        identifier grammar so BreachPolicy.escalationStepId can target a
         named step rather than an ordinal level (Review D #40c)."""
         v = _validator_for_def(schema, "EscalationStep")
         errors = list(
@@ -410,7 +410,7 @@ class TestAdditionalPropertiesClosed:
             v.iter_errors(
                 {
                     "beforeBreach": "P1D",
-                    "templateRef": "slaWarning",
+                    "templateKey": "slaWarning",
                     "notify": ["taskOwner"],
                     "mystery": "garbage",
                 }

@@ -42,7 +42,7 @@ A Due Process Config targets a Workflow Governance Document via `targetGovernanc
 | `continuationPolicies` | array of ContinuationPolicy | OPTIONAL | Detailed continuation-of-service policies. |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
 
-> **Notice templates live in the Notification Template sidecar, not here.** This config previously carried a thin `noticeTemplates` array of `{id, title, sections}` records, but the rich `TemplateSection`-based shape in the [WOS Notification Template Config](../sidecars/notification-template.md) sidecar is the canonical authoring surface for notices. The thin shape was removed to eliminate the divergent surface; `noticeTemplateRef` (Governance §3.1) and `notificationTemplateRef` (Governance §12.2) both resolve through the Notification Template sidecar (see lint rule G-063).
+> **Notice templates live in the Notification Template sidecar, not here.** This config previously carried a thin `noticeTemplates` array of `{id, title, sections}` records, but the rich `TemplateSection`-based shape in the [WOS Notification Template Config](../sidecars/notification-template.md) sidecar is the canonical authoring surface for notices. The thin shape was removed to eliminate the divergent surface; `noticeTemplateRef` (Governance §3.1) and `notificationTemplateKey` (Governance §12.2) both resolve through the Notification Template sidecar (see lint rule G-063).
 
 ### 1.3 Appeal Routing
 
