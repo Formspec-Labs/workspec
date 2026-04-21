@@ -260,6 +260,15 @@ All §4.3b review follow-ups closed in a single 4-agent parallel dispatch. Disjo
 - [x] **`wos-core` provenance module split** — `provenance.rs` replaced by `provenance/{mod,snapshot,kind,audit_tier,record,log,tests}.rs`; `ProvenanceAuditTier` (`Facts` | `Narrative`) with `From<ProvenanceKind>`; `audit_layer_for_kind` retained as a string bridge; crate-root re-export.
 - [x] **`wos-runtime` stamp path** — `populate_provenance_record_fields` sets `audit_layer` via `ProvenanceAuditTier::from(record.record_kind).as_str()` (typed tier at emission site).
 
+### #20 — Typed event meta-vocabulary (`TransitionEvent`)
+
+- [x] **Kernel JSON Schema** — `$defs/TransitionEvent` + five branch shapes; `Transition.event` and `Action.event` (`startTimer`) reference the union; `signal.name` pattern allows `$join` and `$compensation.complete`.
+- [x] **`wos-core`** — `TransitionEvent` with lowercase `kind` tag, camelCase JSON field renames on variants, `from_legacy_string` / `runtime_dispatch_label` / `matches_runtime_dispatch`; optional `Transition.event`; legacy string deserialization on transitions and actions.
+- [x] **Eval / runtime / lint / authoring / MCP** — dispatch and lint rules updated; K-007 retained on typed model for `$` misuse on `message` / disallowed `$` signals; K-008 join signal check.
+- [x] **Fixtures + migration script** — `scripts/migrate-transition-events.py`; kernel fixtures including `$compensation.complete` as `signal` name with `$` prefix (matches `process_event`).
+- [x] **Spec prose** — `specs/kernel/spec.md` §4.5–§4.6, §4.8, §4.10, §9.2; governance `startEvent` reserved-name note.
+- [x] **Plan doc** — `thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md` aligned with shipped serde and compensation signal spelling.
+
 ### Validation at close
 
 `cargo test --workspace`: **1012 passed / 0 failed**. SCHEMA-DOC-001 zero-regression gate green. `pytest tests/schemas/ -q`: **188 passed / 11 skipped / 1 xfailed** (+17 vs session 8). `npm run docs:check`: exit 0. `git status`: clean.

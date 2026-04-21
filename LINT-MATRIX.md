@@ -56,7 +56,7 @@
 | `K-004` | K | draft | `cancellationPolicy` MUST only appear on `parallel` states. | — |
 | `K-005` | K | draft | `historyState` MUST only appear on `compound` states. | — |
 | `K-006` | K | draft | Transition `target` MUST reference an existing state. | — |
-| `K-007` | K | draft | Event names MUST NOT use the `$` prefix (kernel-reserved). | — |
+| `K-007` | K | draft | Typed `message` event names MUST NOT start with `$`; typed `signal` allows `$join` and `$compensation.complete` only (JSON Schema + Tier 1 on parsed model). | tier1_rules.rs |
 | `K-008` | K | draft | Parallel state outgoing transitions MUST use `$join` as event. | — |
 | `K-009` | K | draft | Actor identifiers MUST be unique. | — |
 | `K-014` | K | draft | Milestone `id` values MUST be unique. | — |
@@ -166,4 +166,3 @@
 | T2 | 59 | 1 | 0 | 2 | 56 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
 | **Total** | **103** | **1** | **0** | **11** | **91** |
-

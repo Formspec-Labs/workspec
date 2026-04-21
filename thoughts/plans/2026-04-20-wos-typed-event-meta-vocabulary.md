@@ -24,8 +24,8 @@
 ## Completion criteria
 
 1. `schemas/kernel/wos-kernel.schema.json` defines `$defs/TransitionEvent` as a discriminated union on `kind` with five branches and is referenced from `Transition.event` and `Action.event` (the `startTimer` field).
-2. `Transition.event` and `Action.event` no longer accept plain strings.
-3. `crates/wos-core/src/model/kernel.rs` replaces `pub event: String` on `Transition` with `pub event: TransitionEvent`, an enum tagged `#[serde(tag = "kind", rename_all = "camelCase")]`.
+2. `Transition.event` and `Action.event` normatively use typed objects; the reference deserializer MAY still accept a legacy bare string and coerce it to `TransitionEvent` for migration.
+3. `crates/wos-core/src/model/kernel.rs` uses `pub event: Option<TransitionEvent>` on `Transition` (optional) and `Option<TransitionEvent>` on `Action` for `startTimer`, with `#[serde(tag = "kind", rename_all = "lowercase")]` on the enum and explicit `#[serde(rename = "timerId")]` / camelCase field aliases on variant fields so JSON matches the schema.
 4. Every in-tree fixture under `fixtures/` and `crates/wos-conformance/{fixtures,tests/fixtures}/` is migrated to the typed form. 185 files; 844 `"event":` occurrences in authored kernel bodies.
 5. `cargo test --workspace` and `python3 -m pytest tests/ -q` green.
 6. `npm run docs:check` (if applicable for this repo — replace with local equivalent `make docs` / schema-doc checker) green; SCHEMA-DOC-001 green on the new `TransitionEvent` $def.
@@ -41,9 +41,9 @@
 - **Modify:** `crates/wos-core/src/eval.rs:388-584`, `:269`, `:814` — match on typed form.
 - **Modify:** `crates/wos-core/src/event_handler.rs:20,274`; `crates/wos-core/src/project.rs:92`; `crates/wos-runtime/src/runtime.rs:574,602,688,1118-1128`; `crates/wos-runtime/src/companion.rs:155-272,400,511` — call-site migration.
 - **Modify:** `crates/wos-lint/src/rules/tier1.rs:149-168` (K-007 delete, K-008 rewrite); `crates/wos-lint/src/rules/tier2.rs:157`; `crates/wos-lint/src/rules/continuous_mode.rs:766-870` (verify `$continuous` synthesized-only).
-- **Create:** `scripts/migrate-events-to-typed.py`.
+- **Create:** `scripts/migrate-transition-events.py` (landed name).
 - **Modify:** 185 fixtures across `fixtures/` and `crates/wos-conformance/{fixtures,tests/fixtures}/`.
-- **Modify:** `LINT-MATRIX.md` — K-007 → `schema`, K-008 note updated.
+- **Modify:** `LINT-MATRIX.md` — K-007 summary updated (JSON Schema **plus** Tier 1 on the typed model for `$` misuse); K-008 note updated.
 
 ---
 
@@ -68,7 +68,7 @@ The five kinds, with payload and rationale:
 
 **`message`** — `{ kind, name, correlationKey?, data? }`. `name` is required, MUST NOT start with `$`, MAY be dotted (OQ2). `correlationKey` routes externally-delivered messages. `data` open. Example: `{ "kind": "message", "name": "submit", "correlationKey": "case-123" }`. Subsumes every current author-defined event (127 unique names × 779 non-`$` occurrences).
 
-**`signal`** — `{ kind, name, scope }`. `scope: "instance" | "related" | "broadcast"`. `instance` affects only the current workflow instance; `related` routes to related cases (subsumes today's `$related.*`); `broadcast` delivers to all instances subscribed to the name. Example: `{ "kind": "signal", "name": "stateChanged", "scope": "related" }`. Subsumes `$related.{stateChanged,resolved,holdReleased}`, `$compensation.complete` (as `{name: "compensationComplete", scope: "instance"}`). `$join` disposition under OQ1.
+**`signal`** — `{ kind, name, scope }`. `scope: "instance" | "related" | "broadcast"`. `instance` affects only the current workflow instance; `related` routes to related cases (subsumes today's `$related.*`); `broadcast` delivers to all instances subscribed to the name. Example: `{ "kind": "signal", "name": "stateChanged", "scope": "related" }`. Subsumes `$related.{stateChanged,resolved,holdReleased}`, `$compensation.complete` (as `{ "kind": "signal", "name": "$compensation.complete", "scope": "instance" }` — the runtime `process_event` name includes the `$` prefix). `$join` disposition under OQ1.
 
 **`condition`** — `{ kind, expression }`. `expression` is FEL; evaluated when the processor is in continuous mode and re-evaluated on case-file mutation (§4.3a #F3b). Example: `{ "kind": "condition", "expression": "caseFile.amount > 10000" }`. New capability — no current fixture shape. In event-driven mode, `condition` transitions are inert.
 
@@ -133,9 +133,9 @@ Each branch is `type: object`, `additionalProperties: false` (except `message.da
 
 ### New types in `crates/wos-core/src/model/kernel.rs`
 
-`TransitionEvent` is a `#[serde(tag = "kind", rename_all = "camelCase")]` tagged enum with variants `Timer { timer_id, expires_at, duration, source }`, `Message { name, correlation_key, data }`, `Signal { name, scope }`, `Condition { expression }`, `Error { code, action_path }`. Two supporting enums — `TimerEventSource { Task, Service, State, Signal, Workflow, Custom }` and `SignalScope { Instance, Related, Broadcast }` — both `rename_all = "camelCase"`. A helper `TransitionEvent::discriminant_name(&self) -> &str` returns a migration-compatibility name (name for message/signal; timerId for timer; error code for error; synthesized digest for condition) used by `project.rs:92` and `tier2.rs:157` so existing event-index maps keep working.
+`TransitionEvent` is an internally tagged enum: `#[serde(tag = "kind", rename_all = "lowercase")]` so JSON uses `"kind": "timer"` / `"message"` / etc. Variant fields use Rust `snake_case` with `#[serde(rename = "timerId")]` (and similar) where JSON is camelCase. Supporting enums `TimerEventSource` and `SignalScope` use `rename_all = "camelCase"` on their **variant** names in JSON (`task`, `instance`, …). Helpers: `from_legacy_string`, `runtime_dispatch_label`, `matches_runtime_dispatch`, `start_timer_fires_string`.
 
-`Transition.event: String` becomes `Transition.event: TransitionEvent` (at `model/kernel.rs:301`). `Action.event: Option<String>` becomes `Action.event: Option<TransitionEvent>` (at `:380`), practically always the `Timer` variant for `startTimer`.
+`Transition.event` is `Option<TransitionEvent>` (optional transition trigger). `Action.event` is `Option<TransitionEvent>` for `startTimer`, practically always the `Timer` variant.
 
 ### Call-site migration list (grep-verified)
 
@@ -146,11 +146,11 @@ Each branch is `type: object`, `additionalProperties: false` (except `message.da
 | `crates/wos-core/src/eval.rs` | 269 | `fires_event: timer.event.clone()` | `fires_event: timer.event.clone()` (still `TransitionEvent`; downstream readers access `.timer_id`) |
 | `crates/wos-core/src/eval.rs` | 814 | `let fires_event = action.event.as_deref().unwrap_or("")` | match on `action.event` → `Timer { timer_id, .. }` |
 | `crates/wos-core/src/event_handler.rs` | 20, 274 | `pub event: String` on `AdverseDecisionNoticeInput` | keep `String`; this is a *runtime observation*, not an authored shape. Document the boundary. |
-| `crates/wos-core/src/project.rs` | 92 | `events.insert(transition.event.as_str())` | `events.insert(transition.event.discriminant_name())` |
+| `crates/wos-core/src/project.rs` | 92 | `events.insert(transition.event.as_str())` | `events.insert(transition.event.runtime_dispatch_label())` (collection uses `String` set) |
 | `crates/wos-runtime/src/runtime.rs` | 574, 602, 688, 1118-1128 | `event.event` (inbound-event struct name) | inbound-event struct keeps `String`; boundary is clear (authored schema is typed, runtime inbox is still name-string until a later item reshapes it) |
-| `crates/wos-runtime/src/companion.rs` | 155, 161, 180-183, 249, 272, 400, 511 | `transition.event == event_name` string compare | `transition.event.discriminant_name() == event_name` or a new `matches_by_name` helper |
+| `crates/wos-runtime/src/companion.rs` | … | `transition.event == event_name` string compare | `matches_runtime_dispatch` / typed comparison |
 | `crates/wos-lint/src/rules/tier1.rs` | 149-168 | K-007 `$`-prefix check; K-008 parallel-state transition shape | K-007 deleted (now schema); K-008 rewritten against typed form |
-| `crates/wos-lint/src/rules/tier2.rs` | 157 | `events.insert(transition.event.clone())` | `discriminant_name().to_string()` |
+| `crates/wos-lint/src/rules/tier2.rs` | 157 | `events.insert(transition.event.clone())` | `runtime_dispatch_label()` |
 | `crates/wos-lint/src/rules/continuous_mode.rs` | 766-870 | K-049 `$continuous` sentinel | no change if `$continuous` is engine-synthesized-only and never authored; verify and add a test ensuring the schema rejects an authored `"event": "$continuous"` |
 
 **Runtime Event Bus boundary.** The runtime receives inbound events as names (strings); the kernel JSON is typed. Authored form is typed; the runtime's event-inbox struct (`InboundEvent { event: String, ... }`) stays untyped for now. Deliberate minimal blast radius — reshape authored schema here, reshape the inbox in a follow-up plan.
@@ -169,7 +169,7 @@ Each branch is `type: object`, `additionalProperties: false` (except `message.da
 | `"event": "$timeout.slaTimer"` (15) | `{ "kind": "timer", "timerId": "slaTimer", "source": "custom" }` | The suffix *is* the timerId; the category is `custom`. |
 | `"event": "$timeout.regionA"` / `regionB` (5) | `{ "kind": "timer", "timerId": "regionA", "source": "custom" }` | Same pattern. |
 | `"event": "$join"` | `{ "kind": "signal", "scope": "instance", "name": "$join" }` OR dropped from authored form — see Open Question 1. | 18 occurrences. |
-| `"event": "$compensation.complete"` (3) | `{ "kind": "signal", "scope": "instance", "name": "compensationComplete" }` | Drop the `$` prefix. Engine synthesises this signal after §9.5 compensation completes. |
+| `"event": "$compensation.complete"` (3) | `{ "kind": "signal", "scope": "instance", "name": "$compensation.complete" }` | Keep the `$` prefix on `name` so the typed transition matches the processor-delivered event string after §9.5 compensation completes. |
 | `"event": "$related.stateChanged"` (0 in fixtures) | `{ "kind": "signal", "scope": "related", "name": "stateChanged" }` | Forward-looking; runtime path not yet exercised. |
 | `"event": "$activate"` / `$restart` / `$migrate` (4 total) | case-by-case; likely `signal` | Out-of-spec names not listed in §4.10. Flag for human review during migration. |
 | `"event": "$verificationReportProduced"` / `Modified` (2) | `{ "kind": "message", "name": "verificationReportProduced" }` | These are author-defined but misuse the `$` prefix (K-007 violations that slipped in). Drop prefix. |
@@ -190,9 +190,9 @@ Each branch is `type: object`, `additionalProperties: false` (except `message.da
 
 ## Section 6 — Lint rule migration
 
-### K-007 — promoted from draft-lint to schema validation
+### K-007 — schema + Tier 1 on typed `TransitionEvent`
 
-The existing lint at `crates/wos-lint/src/rules/tier1.rs:149-156` (`if transition.event.starts_with('$') && transition.event != "$join"` → error) is deleted. The schema's closed `kind` enum plus the `name` `pattern` guard (no leading `$`) structurally rejects any authored `$`-prefix. K-007's rule id moves to `LINT-MATRIX.md` status `schema` with the note "enforced by `TransitionEvent` union in `wos-kernel.schema.json`." Existing K-007 tests in `crates/wos-lint/tests/tier1_rules.rs:443-507` are converted to *schema* tests (feed malformed JSON to the validator, expect rejection).
+The schema's `message` `name` pattern forbids a leading `$`, and `signal` `name` allows only `$join` and `$compensation.complete` with a `$` prefix. Tier 1 additionally flags typed `TransitionEvent::Message` whose `name` starts with `$`, and typed `TransitionEvent::Signal` whose `name` starts with `$` but is not one of those two sentinels — so invalid shapes that bypass JSON Schema (e.g. hand-edited documents) still surface as K-007. `crates/wos-lint/tests/tier1_rules.rs` uses typed `{ "kind": "message", "name": "$…" }` fixtures for the negative case (a legacy bare string coerces to `message` without `$` and would not trip K-007).
 
 ### K-008 — parallel-state transition shape
 

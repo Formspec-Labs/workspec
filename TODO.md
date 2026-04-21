@@ -2,7 +2,7 @@
 
 Working backlog for the Workflow Orchestration Standard specification suite. Session narratives and all closed items live in [COMPLETED.md](COMPLETED.md); architectural commitments and scope lines live in the [stack-wide vision model](../.claude/vision-model.md); this file indexes active work, blocked items, and trigger-gated future work.
 
-**Last audited:** 2026-04-21 (#22a provenance tier-typing landed; ADR 0059 F3b + K-049 already on main).
+**Last audited:** 2026-04-21 (#20 typed `TransitionEvent` landed; #22a provenance tier-typing; ADR 0059 F3b + K-049 on main).
 
 ## Snapshot
 
@@ -24,13 +24,23 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 **Scoring note.** Per [`user_profile.md`](../.claude/user_profile.md) economic model: dev/time is free, architectural drift is expensive. Ordering uses **`Imp × Debt`**; Cx is preserved as a scheduling dimension but does not change priority. Debt values trend **up** between sessions on pre-1.0 work. Score notation: `[Imp / Cx / Debt]`; the number in parentheses is `Imp × Debt`.
 
-1. **#20 Typed event meta-vocabulary** `[8 / 7 / 8]` (**64**) — replace `Transition.event: string` with a 5-kind typed union (`timer | message | signal | condition | error`). 185 fixtures / 844 occurrences; every synth / bench / export / analyzer currently building against the loose string shape. Plan: [2026-04-20](thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md). **Gate softened:** vision-model captures defaults for OQ1 (`$join` engine-synthesized-only) and OQ4 (closed enum + `x-*` payload extension). User may override at implementation time; no longer a hard block.
-2. **`custodyHook` Trellis joint ADR** `[6 / 4 / 6]` (**36**) — the concrete provenance-record shape WOS emits and Trellis expects to anchor. Joint-design ADR spanning both submodules; surfaced as load-bearing during vision-model pass. Coordinates with Trellis's reference implementation (ADR 0004 per vision-model status). **Gate: none — Trellis has a reference implementation; design the wire-format ADR.**
-3. **Cross-reference shape ADR** `[6 / 2 / 6]` (**36**) — `<entity>Ref` (URI) / `<entity>Key` (local string) / `<entity>Id` (sibling id). Three patterns named, not unified — they denote different things. Renames `templateRef` → `templateKey`, `escalationChainRef` → `escalationStepId`. **Gate: none — draft takes ~2 hours.**
-4. **`DurableRuntime` trait extraction + Temporal/Restate spike** `[7 / 5 / 5]` (**35**) — extract the center-vs-adapter seam from `wos-runtime`; ship in-memory adapter + spike Temporal + Restate against it; pick production backend based on direct observation of Rust SDK ergonomics + ops fit. Three-way conformance posture (spec + reference + production adapter) unlocks. Spike must also answer the multi-tenant contract (namespaces vs. partitions + per-tenant provenance-log scoping); the tenant-scope answer #3 waits on comes out of this spike. **Gate: none — vision-model default is "spike both, pick from observation."**
-5. **Signature Profile workflow semantics** `[7 / 5 / 5]` (**35**) — DocuSign-parity workflow semantics for WOS (signer roles via `actorExtension`, flow patterns as lifecycle tags, intent capture, signer-authentication policy schema, `SignatureAffirmation` provenance record shape). Cryptographic integrity + cert-of-completion live in Trellis; WOS only emits the evidence record. **Gate: α DocuSign parity bar (vision-model default: ESIGN/UETA/eIDAS + top ~80% common-case features; NOT administrative UX surface — confirm at drafting time).**
+1. **`custodyHook` Trellis joint ADR** `[6 / 4 / 6]` (**36**) — the concrete provenance-record shape WOS emits and Trellis expects to anchor. Joint-design ADR spanning both submodules; surfaced as load-bearing during vision-model pass. Coordinates with Trellis's reference implementation (ADR 0004 per vision-model status). **Gate: none — Trellis has a reference implementation; design the wire-format ADR.**
+2. **Cross-reference shape ADR** `[6 / 2 / 6]` (**36**) — `<entity>Ref` (URI) / `<entity>Key` (local string) / `<entity>Id` (sibling id). Three patterns named, not unified — they denote different things. Renames `templateRef` → `templateKey`, `escalationChainRef` → `escalationStepId`. **Draft:** [ADR-0060](thoughts/adr/0060-cross-reference-naming-ref-key-id.md) (*Proposed* — acceptance + schema PR still open). **Gate: none — draft takes ~2 hours.**
+3. **`DurableRuntime` trait extraction + Temporal/Restate spike** `[7 / 5 / 5]` (**35**) — extract the center-vs-adapter seam from `wos-runtime`; ship in-memory adapter + spike Temporal + Restate against it; pick production backend based on direct observation of Rust SDK ergonomics + ops fit. Three-way conformance posture (spec + reference + production adapter) unlocks. Spike must also answer the multi-tenant contract (namespaces vs. partitions + per-tenant provenance-log scoping); the tenant-scope answer #3 waits on comes out of this spike. **Gate: none — vision-model default is "spike both, pick from observation."**
+4. **Signature Profile workflow semantics** `[7 / 5 / 5]` (**35**) — DocuSign-parity workflow semantics for WOS (signer roles via `actorExtension`, flow patterns as lifecycle tags, intent capture, signer-authentication policy schema, `SignatureAffirmation` provenance record shape). Cryptographic integrity + cert-of-completion live in Trellis; WOS only emits the evidence record. **Gate: α DocuSign parity bar (vision-model default: ESIGN/UETA/eIDAS + top ~80% common-case features; NOT administrative UX surface — confirm at drafting time).**
 
-*Falling off Do next at Imp × Debt < 30:* §4.5 merges (20, owner decision needed), §5.5 `wos-bench` (18), §4.4 release-trains Tasks 4-5 (15). All live in Backlog.
+### Agent task extract (from this file)
+
+| Task ID | Tracks | Deliverable | Depends on |
+|---------|--------|-------------|------------|
+| **WOS-T1** | Do next **#1** | Joint ADR: `custodyHook` wire format + Trellis anchoring | Trellis ADR 0004 alignment |
+| **WOS-T2** | Do next **#2** | [ADR-0060](thoughts/adr/0060-cross-reference-naming-ref-key-id.md) accepted + governance schema rename PR | ADR acceptance |
+| **WOS-T3** | Do next **#3** | `DurableRuntime` trait + Temporal/Restate spike + tenant-scope notes | None |
+| **WOS-T4** | Do next **#4** | Signature Profile spec slice + schemas | α DocuSign parity bar |
+| **WOS-B1** | Backlog | §4.5 structural merges (1 vs 3 PRs) | Owner packaging decision |
+| **WOS-B2** | Backlog | Kernel-Basic profile **LoadBearing** declaration + lint-matrix wire | None |
+
+*Falling off Do next at Imp × Debt < 30:* §4.5 structural merges (owner decision needed), §5.5 `wos-bench` (18), §4.4 release-trains Tasks 4-5 (15). All live in Backlog.
 
 ---
 
@@ -99,7 +109,7 @@ Per vision model, these are 1.0 deliverables (not deferred) because spec writing
 ### Interoperability + speculative (trigger-gated)
 
 - **SCXML interoperability** `[3 / 6 / 2]` (**6**) — bidirectional WOS ↔ SCXML mapping. Trigger: ecosystem demand.
-- **#51 Statutory deadline chains** `[4 / 7 / 5]` (**20**) — must compose with #31 business calendars + #20 typed events. Trigger: first production deployment exposes concrete need.
+- **#51 Statutory deadline chains** `[4 / 7 / 5]` (**20**) — must compose with #31 business calendars + typed kernel events (`TransitionEvent`, #20). Trigger: first production deployment exposes concrete need.
 
 ---
 
@@ -126,12 +136,12 @@ Vision model recommends three discrete PRs; sidecar audit recommended one. Owner
 
 ### Engine adapters — trigger-gated (commercial request)
 
-WOS's production runtime is now the Temporal/Restate adapter (Do next #5). Additional adapters are trigger-gated on commercial adopter request.
+WOS's production runtime is now the Temporal/Restate adapter (Do next **#3** — `DurableRuntime` spike). Additional adapters are trigger-gated on commercial adopter request.
 
 - **#49a Camunda 8 Worker** `[5 / 8 / 3]` — BPMN target; broadest external fixture diversity.
 - **#49c AWS Step Functions** `[5 / 8 / 3]` — broadest commercial reach; narrowest semantic fit.
 
-(#49b Temporal moved into Do next #5 as the production runtime choice.)
+(#49b Temporal moved into Do next **#3** as the production runtime choice.)
 
 ### Ontology field identity — design not started
 
@@ -150,7 +160,7 @@ Captured but not active; re-score when the trigger fires.
 | #6 | Typed Patch Operations | 1/8/0 | Authoring tool ships structural edits. |
 | #7 | OCEL 2.0 Object-Centric Case Model | 2/9/5 | Multi-object mutation emerges, or flat→OCEL export shows systematic loss. |
 | #9 | JSON-LD Export Surface | 5/5/3 | Ontology spec drafts begin OR shipped PROV-O pulls `@context` into authoring. |
-| #32 | Multi-Instance Iteration | 6/7/5 | #20 lands. Highest-priority deferred item. |
+| #32 | Multi-Instance Iteration | 6/7/5 | #20 landed — unblocked. Highest-priority deferred item. |
 | #33 | Inclusive-OR / Event-Choice / Boundary Events | 3/5/2 | Authoring frustration with workarounds (externally observable signal). |
 
 ---
@@ -195,7 +205,7 @@ Most prior open questions (OQ1, OQ4, #21 Registry composition, #25 Defeasibility
 
 1. **α — DocuSign parity bar** (gates Signature Profile drafting). Default per vision model: ESIGN/UETA/eIDAS compliance + top ~80% of DocuSign common-case workflow features; NOT administrative UX surface. Confirm when drafting begins.
 2. **§4.5 PR packaging** (sidecar-audit Q1). One PR (audit recommendation) or three (vision-model recommendation)?
-3. **`custodyHook` Trellis contract shape** — joint-design ADR between WOS and Trellis. Load-bearing for WOS 1.0 closure. Tracked as Do next #3.
+3. **`custodyHook` Trellis contract shape** — joint-design ADR between WOS and Trellis. Load-bearing for WOS 1.0 closure. Tracked as Do next **#1**.
 
 For stack-wide active uncertainties (backend spike γ, wos-runtime role δ, SBA timeline, multi-tenant model, rendering service), see [vision-model.md § Active uncertainties](../.claude/vision-model.md#active-uncertainties-wos-scope).
 

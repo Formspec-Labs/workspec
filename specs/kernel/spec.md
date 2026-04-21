@@ -171,18 +171,20 @@ For `parallel` states, the `cancellationPolicy` governs behavior when any region
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `event` | string | OPTIONAL | Triggering event identifier for explicit event delivery. When omitted, the transition does not match any external event name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). |
+| `event` | TransitionEvent | OPTIONAL | Typed trigger for explicit **event delivery** (see below). When omitted, the transition does not match any external event **name**; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan when `event` is omitted or `event.kind` is `condition`, per Runtime Companion §10.3. |
 | `target` | string | REQUIRED | Target state identifier. |
 | `guard` | string (FEL) | OPTIONAL | FEL expression that must evaluate to `true` for the transition to fire. |
 | `actions` | array of Action | OPTIONAL | Actions executed during the transition. |
 | `tags` | array of string | OPTIONAL | Semantic tags for governance attachment via `lifecycleHook` (S10.4). |
 | `description` | string | OPTIONAL | Human-readable explanation of this transition. |
 
+**`TransitionEvent`.** Normative authored shape is a JSON object with required discriminant `kind`: `timer` \| `message` \| `signal` \| `condition` \| `error`, plus kind-specific fields. The Kernel JSON Schema defines the full shape (`schemas/kernel/wos-kernel.schema.json`, `$defs/TransitionEvent` and branch definitions). At the **runtime boundary**, events are still identified by a string **name** (for example the value passed to `process_event`). A transition matches when that string equals the transition's typed `event` resolved to the same name (for `message` and `signal`, the `name` field; for `timer`, the synthesized expiry name from `timerId`, `source`, and optional `firesAs` per §9.2 and §4.10; for `error`, the runtime dispatch name is the literal `$error` while the typed `code` (and optional `actionPath`) carry the error discriminant; for `condition`, continuous-mode rescan rules in the Runtime Companion). Authoring and integration surfaces SHOULD preserve the full typed `event` JSON where they expose transitions (for example search and graph tools), and SHOULD use a separate derived dispatch string only for matching against `process_event` names—not as a substitute for the authored object. A reference deserializer MAY accept a legacy bare string for `event` and coerce it to the equivalent `TransitionEvent` for migration; new documents SHOULD use the object form. Unknown legacy reserved strings beginning with `$` that are not recognized by that coercion MUST NOT be silently rewritten to a different message `name` (they remain invalid and are rejected by static rules such as K-007).
+
 ### 4.6 Transition Resolution
 
-When an event occurs:
+When an event occurs (identified by its runtime **event name** string):
 
-1. Collect all transitions from current active states whose `event` property is present **and** equals the triggering event name.
+1. Collect all transitions from current active states whose `event` is present **and** whose typed `event` resolves to the same name as the triggering event (per §4.5).
 2. Evaluate guards in **document order**. The first transition whose guard evaluates to `true` (or has no guard) wins.
 3. If no transition matches, the event is recorded in provenance but does not change lifecycle state.
 
@@ -201,9 +203,9 @@ When a transition fires:
 
 **Fork (entering a parallel state):** All regions are activated simultaneously. Each region begins in its `initialState`.
 
-**Join (exiting a parallel state):** Governed by the `cancellationPolicy`. Under `wait-all` (default), when all regions reach a final state, the processor generates a synthetic `$join` event. Outgoing transitions from the parallel state MUST use `$join` as their event. Under `cancel-siblings`, the synthetic event fires when any region reaches a final state; remaining regions are cancelled. Under `fail-fast`, the synthetic event fires when any region reaches a state tagged `error`; remaining regions are cancelled.
+**Join (exiting a parallel state):** Governed by the `cancellationPolicy`. Under `wait-all` (default), when all regions reach a final state, the processor generates a synthetic `$join` event (runtime name). Outgoing transitions from the parallel state MUST declare `event` as a `signal` with `name` `$join` and `scope` `instance` — that is, `{ "kind": "signal", "name": "$join", "scope": "instance" }` in JSON — so they match that synthetic delivery. Under `cancel-siblings`, the synthetic event fires when any region reaches a final state; remaining regions are cancelled. Under `fail-fast`, the synthetic event fires when any region reaches a state tagged `error`; remaining regions are cancelled.
 
-The `$join` event is kernel-defined. Workflow authors MUST NOT use `$join` as a user-defined event name.
+The `$join` name is kernel-defined for join completion. Workflow authors MUST NOT use `$join` as a **message** event `name`; it is reserved for the join **signal** shape above.
 
 ### 4.9 Event Handling
 
@@ -211,7 +213,7 @@ Events that match no transition from any current active state are recorded in pr
 
 ### 4.10 Kernel-Generated Events
 
-The kernel generates synthetic events in response to internal conditions. Kernel-generated event names are prefixed with `$` to distinguish them from document-authored events. Workflow authors MUST NOT define events with the `$` prefix.
+The kernel generates synthetic events in response to internal conditions. Kernel-generated event **names** are prefixed with `$` to distinguish them from ordinary author **message** names. In the typed `TransitionEvent` model, authors match these deliveries using the appropriate kind: for example `$timeout.*` names map to `timer` events with the matching `source` (and `timerId` / `firesAs` as in the schema); `$join` and `$compensation.complete` map to `signal` events whose `name` is exactly that string (including the `$` prefix) and whose `scope` is typically `instance`; relationship events `$related.*` map to `signal` with `scope` `related` and a `name` that resolves to the same identifier the processor delivers on the event boundary (Runtime Companion). **`message` event `name` MUST NOT begin with `$`** (schema-enforced); reserved kernel prefixes are expressed as `timer`, `signal`, or `error` as applicable — not as `message`.
 
 | Event | Source | Description |
 | ----- | ------ | ----------- |
@@ -392,6 +394,7 @@ This section is normative.
 The kernel defines the **Facts tier** -- the foundational, immutable provenance layer. Every action that changes lifecycle state or case state MUST produce a Facts tier record.
 
 Higher layers add interpretive provenance tiers through the `provenanceLayer` seam (S10.3):
+
 - Layer 1 adds the **Reasoning tier** (rules applied, evidence consulted) and **Counterfactual tier** (what would change the outcome).
 - Layer 2 adds the **Narrative tier** (model-generated explanation; non-authoritative).
 
@@ -480,7 +483,7 @@ The kernel defines the following action types:
 | `invokeService` | Invokes an external service. | `serviceRef`, `idempotencyKey` |
 | `setData` | Sets a case file value. | `path`, `value` |
 | `emitEvent` | Emits an event. | `eventType`, `data` |
-| `startTimer` | Starts a durable timer. | `timerId`, `duration` or `deadline`, `event` |
+| `startTimer` | Starts a durable timer. | `timerId`, `duration` or `deadline`, `event` (`TransitionEvent`; in practice the `timer` kind) |
 | `cancelTimer` | Cancels a running timer. | `timerId` |
 | `log` | Writes an entry to provenance. | `message`, `data` |
 
