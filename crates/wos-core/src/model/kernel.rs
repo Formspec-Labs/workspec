@@ -533,6 +533,10 @@ pub struct Milestone {
     /// condition is evaluated after every durable case-state write. Held as
     /// a string so future trigger modes can be added without breaking
     /// roundtrip serialization on existing documents.
-    #[serde(default, rename = "triggerMode", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "triggerMode",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub trigger_mode: Option<String>,
 }

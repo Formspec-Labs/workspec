@@ -50,6 +50,6 @@ pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};
 pub use model::kernel::{ImpactLevel, Lifecycle, Milestone, Region};
 pub use model::notification_template::NotificationTemplateDocument;
 pub use project::Project;
-pub use provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+pub use provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 pub use proxy::{AssistGovernanceProxyEvidence, observe_assist_governance_proxy};
 pub use timer::Timers;

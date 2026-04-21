@@ -453,7 +453,10 @@ mod tests {
              can distinguish the cap-hit from an unrelated case-state \
              mutation",
         );
-        let data = cap_record.data.as_ref().expect("cap record has data payload");
+        let data = cap_record
+            .data
+            .as_ref()
+            .expect("cap record has data payload");
         assert_eq!(
             data.get("triggeringMutation").and_then(|v| v.as_str()),
             Some("loop-trigger"),

@@ -8,7 +8,7 @@
 
 pub mod evaluator;
 
-pub use evaluator::{next_business_moment, BusinessCalendarError};
+pub use evaluator::{BusinessCalendarError, next_business_moment};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

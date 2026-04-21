@@ -625,10 +625,7 @@ fn guard_evaluation_inputs_include_wildcard_array_elements() {
         .inputs
         .pointer("/caseFile/items")
         .expect("items array surfaces under caseFile namespace");
-    assert_eq!(
-        items,
-        &serde_json::json!([{ "ok": true }, { "ok": true }])
-    );
+    assert_eq!(items, &serde_json::json!([{ "ok": true }, { "ok": true }]));
 }
 
 #[test]

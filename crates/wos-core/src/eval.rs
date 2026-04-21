@@ -11,8 +11,8 @@
 use std::collections::HashMap;
 
 use fel_core::{ast::Expr, dependencies::extract_dependencies, evaluate, parse, types::FelValue};
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
 use crate::instance::CaseInstance;
@@ -493,7 +493,8 @@ impl Evaluator {
             };
 
             for transition in &indexed.state.transitions {
-                let event_matches = transition_matches_dispatch(transition, event, continuous_rescan);
+                let event_matches =
+                    transition_matches_dispatch(transition, event, continuous_rescan);
                 if !event_matches {
                     continue;
                 }
@@ -572,7 +573,8 @@ impl Evaluator {
             }
 
             for transition in &state_def.transitions {
-                let event_matches = transition_matches_dispatch(transition, event, continuous_rescan);
+                let event_matches =
+                    transition_matches_dispatch(transition, event, continuous_rescan);
                 if !event_matches {
                     continue;
                 }
