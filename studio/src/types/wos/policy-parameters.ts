@@ -6,71 +6,75 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Policy Parameter Config sidecar document. Provides date-indexed parameter values for temporal parameter resolution in WOS workflows. Government workflows apply rules effective at specific dates, not today's date. Each parameter declares its effective-date schedule and a resolution date reference -- the case state field that determines which date-effective value applies. Follows the OpenFisca model of date-indexed parameter values.
  */
 export interface WOSPolicyParameterConfig {
   /**
-   * WOS Policy Parameter Config specification version. MUST be '1.0'.
+   * Document type marker identifying this as a WOS Policy Parameter Config sidecar document (Governance S13). MUST be the string '1.0'. Processors use this field to dispatch to the policy parameter resolver; its absence means the document is not a recognized Policy Parameter Config.
    */
   $wosPolicyParameters: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document these parameters apply to.
+   * URI of the WOS Kernel Document these policy parameters apply to. Must match the Kernel Document's url field exactly. Processors MUST reject a Policy Parameter Config whose targetWorkflow does not match the url of the Kernel Document being loaded (Governance S13.2).
    */
   targetWorkflow: string;
   /**
-   * Version of this Policy Parameter Config document.
+   * Semantic version of this Policy Parameter Config document. Useful for audit trails — allows workflows to pin a specific parameter set for reproducibility.
    */
   version?: string;
   /**
-   * Human-readable name for this parameter configuration.
+   * Human-readable name for this parameter configuration. Displayed in tooling and governance dashboards.
    */
   title?: string;
   /**
-   * Human-readable description of this parameter set.
+   * Human-readable description of this parameter set's purpose and coverage. Intended for authors and auditors.
    */
   description?: string;
   /**
-   * Named parameters with date-indexed values. Parameter names become available in the evaluation context under 'parameters.[name]'.
+   * Named parameters with date-indexed values. Parameter names become available in the evaluation context under 'parameters.[name]'. Each parameter resolves to the value in effect on the case's resolution date (Governance S13.3).
    */
   parameters: {
     [k: string]: ParameterDefinition;
   };
   /**
-   * Named regulatory version bindings with date-indexed document references. Binding names become available in the evaluation context under 'parameters.[name]', resolved to the effective URI for the case's resolution date.
+   * Named regulatory version bindings with date-indexed document references. Binding names become available in the evaluation context under 'parameters.[name]', resolved to the effective URI for the case's resolution date. Ensures the case uses the form or service that was in effect at the time of the case event, not today (Governance S13.4).
    */
   bindings?: {
     [k: string]: RegulatoryBinding;
   };
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSPolicyParameterConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface ParameterDefinition {
   /**
-   * Human-readable description of this parameter.
+   * Human-readable description of what this parameter represents and how it is used in eligibility or decision logic.
    */
   description: string;
   /**
-   * Parameter value type.
+   * JSON value type of this parameter's values. Determines how the resolved value is typed in the evaluation context.
    */
   type: 'number' | 'integer' | 'string' | 'boolean';
   /**
-   * Unit of measure.
+   * Unit of measure for this parameter's values, used in tooling and documentation only (not enforced by the processor).
    */
   unit?: string;
   /**
-   * Case state field path that provides the resolution date. Different parameters MAY resolve against different dates.
+   * Case state field path that supplies the resolution date for this parameter. The processor looks up the most recent values entry on or before this date (Governance S13.3). Different parameters within the same document MAY use different resolution dates — e.g., eligibility thresholds resolve against applicationDate while appeal deadlines resolve against adverseDecisionDate.
    */
   resolutionDateRef: string;
   /**
-   * Regulatory or statutory authority for this parameter.
+   * Regulatory or statutory authority establishing this parameter's existence and legal basis. Used for audit documentation.
    */
   authority?: string;
   /**
@@ -79,22 +83,36 @@ export interface ParameterDefinition {
    * @minItems 1
    */
   values: [DateValue, ...DateValue[]];
+  /**
+   * This interface was referenced by `ParameterDefinition`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface DateValue {
   /**
-   * Date this value becomes effective (ISO 8601 date).
+   * ISO 8601 date on which this value becomes effective. The resolver picks the entry with the most recent effectiveDate that is on or before the resolution date.
    */
   effectiveDate: string;
   /**
-   * The parameter value effective from this date until the next entry.
+   * The parameter value effective from this date until the next entry's effectiveDate. Type is unconstrained here but MUST match the ParameterDefinition.type declared on the parent parameter.
    */
   value: {
     [k: string]: unknown;
   };
   /**
-   * Specific authority for this value change.
+   * Specific regulatory or statutory authority for this individual value change. Used in audit traces and explanation generation.
    */
   authority?: string;
+  /**
+   * This interface was referenced by `DateValue`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface RegulatoryBinding {
   /**
@@ -102,11 +120,11 @@ export interface RegulatoryBinding {
    */
   id: string;
   /**
-   * Human-readable description of what this binding controls.
+   * Human-readable description of what versioned document or service this binding controls. Used in tooling and audit documentation.
    */
   description: string;
   /**
-   * Case state field path that provides the resolution date. Uses the same mechanism as ParameterDefinition.resolutionDateRef.
+   * Case state field path that supplies the resolution date for this binding. Uses the same mechanism as ParameterDefinition.resolutionDateRef: the resolver picks the most recent values entry on or before this date (Governance S13.4). Different bindings MAY use different resolution dates within the same document.
    */
   resolutionDateRef: string;
   /**
@@ -114,7 +132,7 @@ export interface RegulatoryBinding {
    */
   bindingType: 'formspec' | 'jsonSchema' | 'service' | 'mapping';
   /**
-   * Regulatory or statutory authority for this binding.
+   * Regulatory or statutory authority establishing this binding's existence and legal basis. Used in audit documentation and explanation generation.
    */
   authority?: string;
   /**
@@ -123,18 +141,38 @@ export interface RegulatoryBinding {
    * @minItems 1
    */
   values: [BindingDateValue, ...BindingDateValue[]];
+  /**
+   * This interface was referenced by `RegulatoryBinding`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface BindingDateValue {
   /**
-   * Date this binding becomes effective (ISO 8601 date).
+   * ISO 8601 date on which this document version becomes the binding reference. The resolver picks the most recent entry on or before the resolution date.
    */
   effectiveDate: string;
   /**
-   * URI of the document version effective from this date until the next entry.
+   * URI of the versioned document or service endpoint that is the binding reference from this effectiveDate until the next entry's effectiveDate.
    */
   value: string;
   /**
-   * Specific authority for this version change.
+   * Specific regulatory or statutory authority for this individual version change. Used in audit traces and explanation generation.
    */
   authority?: string;
+  /**
+   * This interface was referenced by `BindingDateValue`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

@@ -6,31 +6,33 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Assertion Gate Library sidecar document. Provides a reusable collection of assertion gate definitions for WOS data validation pipelines. Pipelines reference assertions by identifier, enabling shared definitions across multiple pipelines and governance documents.
  */
 export interface WOSAssertionGateLibrary {
   /**
-   * WOS Assertion Gate Library specification version. MUST be '1.0'.
+   * Document type marker identifying this as a WOS Assertion Gate Library sidecar document (Governance S5.1). MUST be the string '1.0'. Processors use this field to dispatch to the assertion library parser; its absence means the document is not a recognized Assertion Gate Library.
    */
   $wosAssertionLibrary: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * Canonical URI identifier for this library.
+   * Canonical URI that uniquely identifies this assertion library. Used to reference the library from pipeline stages and governance documents.
    */
   url?: string;
   /**
-   * Version of this library document.
+   * Semantic version of this assertion library document. Allows pipelines to pin a specific library version for reproducibility.
    */
   version?: string;
   /**
-   * Human-readable name for this assertion library.
+   * Human-readable name for this assertion library. Displayed in tooling and governance dashboards.
    */
   title?: string;
   /**
-   * Human-readable description of this library's purpose.
+   * Human-readable description of this library's purpose and the domain it covers. Used in tooling and governance documentation.
    */
   description?: string;
   /**
@@ -39,40 +41,59 @@ export interface WOSAssertionGateLibrary {
    * @minItems 1
    */
   assertions: [AssertionDefinition, ...AssertionDefinition[]];
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSAssertionGateLibrary`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface AssertionDefinition {
   /**
-   * Unique assertion identifier. Referenced by pipeline stages.
+   * Unique assertion identifier within this library. Referenced by assertion-gate pipeline stages (see AssertionUse) to include this assertion by name rather than inline. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` so it is safe to embed in URI path segments used by assertionRef (see AssertionReference).
    */
   id: string;
   /**
-   * Assertion gate type (Governance S5.4).
+   * Optional stable external reference key for this assertion. When present, MUST equal `id`; authors use it only to make the cross-document reference contract explicit at the callsite (mirrors the `assertionId` property consumers see on AssertionUse). Processors MUST treat mismatch between `id` and `assertionId` as a configuration error at load time (see assertion-library.md §Cross-Document Reference Protocol).
+   */
+  assertionId?: string;
+  /**
+   * Assertion gate type determining the verification method applied to the data (Governance S5.4). 'source-grounded': checks that extracted field values appear verbatim in referenced source documents. 'arithmetic': validates that a FEL expression over numeric fields holds. 'range': checks that a value falls within declared bounds. 'consistency': asserts agreement between two pipeline stages or fields. 'format': structural or pattern validation. 'cross-document': checks consistency across multiple documents. 'temporal': validates date/time relationships.
    */
   type: 'source-grounded' | 'arithmetic' | 'range' | 'consistency' | 'format' | 'cross-document' | 'temporal';
   /**
-   * FEL expression defining the assertion constraint.
+   * FEL expression defining the assertion constraint. Evaluated in the pipeline's data context; MUST evaluate to a boolean. Required for arithmetic, range, and temporal assertion types.
    */
   expression?: string;
   /**
-   * Fields subject to this assertion.
+   * Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.
    */
   fields?: string[];
   /**
-   * Reference to a pipeline stage for consistency checking.
+   * Reference to a prior pipeline stage whose output is compared for consistency checking. Used with consistency and cross-document assertion types.
    */
   referenceStage?: string;
   /**
-   * Human-readable description of what this assertion checks.
+   * Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.
    */
   description: string;
   /**
-   * Default rejection policy when this assertion fails.
+   * Default rejection policy when this assertion fails. Overrides the enclosing stage's rejectionPolicy for this specific assertion.
    */
   rejectionPolicy?: 'retryWithCorrections' | 'escalateToSupervisor' | 'holdPendingData' | 'failWithExplanation';
+  /**
+   * This interface was referenced by `AssertionDefinition`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

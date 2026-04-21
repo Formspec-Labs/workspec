@@ -6,35 +6,37 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Correspondence Metadata Config sidecar document. Declares the metadata schema for correspondence entries stored in case state. Government workflows track correspondence (letters, phone calls, emails, portal submissions, in-person interactions) as part of the case record. The kernel's existing event mechanism handles correspondence events -- events that match no transition are recorded in provenance (Kernel S4.9). This sidecar defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.
  */
 export interface WOSCorrespondenceMetadataConfig {
   /**
-   * WOS Correspondence Metadata Config specification version. MUST be '1.0'.
+   * WOS Correspondence Metadata Config specification version marker. MUST be exactly '1.0'. Processors use this field to detect the document type and select the appropriate schema version for validation. Omitting or misspelling this marker causes the document to be rejected as an unrecognized document type.
    */
   $wosCorrespondenceMetadata: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document this correspondence config applies to.
+   * Absolute URI of the WOS Kernel Document this correspondence configuration applies to. Processors use this field to bind the sidecar to its parent workflow and validate that correspondence entries are recorded against the correct case type. MUST be an absolute URI matching the '$id' of the target kernel document.
    */
   targetWorkflow: string;
   /**
-   * Version of this Correspondence Metadata Config document.
+   * Semver version string for this Correspondence Metadata Config document, used for change tracking and compatibility checks.
    */
   version?: string;
   /**
-   * Human-readable name for this correspondence configuration.
+   * Human-readable display name for this correspondence configuration document, shown in tooling and audit reports.
    */
   title?: string;
   /**
-   * Human-readable description of this correspondence configuration.
+   * Human-readable summary explaining what kinds of correspondence this configuration covers and which workflow it supports.
    */
   description?: string;
   /**
-   * Case state field path where correspondence entries are stored. The workflow stores an array of correspondence entry objects at this path.
+   * Dot-separated case state field path where correspondence entries are stored as an array. The workflow processor appends correspondence entry objects to this path when correspondence events are recorded in provenance. MUST refer to an array-typed field in the case state.
    */
   correspondenceField: string;
   /**
@@ -43,10 +45,12 @@ export interface WOSCorrespondenceMetadataConfig {
    * @minItems 1
    */
   entryTemplates: [EntryTemplate, ...EntryTemplate[]];
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSCorrespondenceMetadataConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -56,7 +60,7 @@ export interface EntryTemplate {
    */
   id: string;
   /**
-   * Human-readable description of when this template applies.
+   * Human-readable description of the correspondence category this template covers, used in tooling and audit summaries.
    */
   description?: string;
   /**
@@ -75,10 +79,18 @@ export interface EntryTemplate {
    * Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, actorType, contentRef, summary, timestamp).
    */
   requiredFields?: string[];
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `EntryTemplate`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

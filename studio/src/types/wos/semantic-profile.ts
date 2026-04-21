@@ -6,38 +6,42 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Semantic Profile Document per the WOS Semantic Profile specification v1.0. A parallel seam document that declares linked data semantics for a WOS workflow: a JSON-LD @context mapping WOS properties to RDF terms, SHACL shape references for semantic validation, PROV-O vocabulary mappings for provenance export, and XES/OCEL export configuration for process mining interoperability. The Semantic Profile adds interpretation and export capability without changing how WOS documents are processed. WOS MUST NOT alter core Formspec processing semantics.
  */
 export interface WOSSemanticProfileDocument {
   /**
-   * WOS Semantic Profile specification version. MUST be '1.0'. Identifies this document as a WOS Semantic Profile Document and pins the specification version.
+   * WOS Semantic Profile specification version. MUST be '1.0'. Identifies this document as a WOS Semantic Profile Document and pins the specification version. Processors reject documents with unsupported versions.
    */
   $wosSemanticProfile: '1.0';
-  /**
-   * Optional JSON Schema URI for editor validation and autocompletion.
-   */
-  $schema?: string;
+  $schema?: JsonSchemaUri;
   targetWorkflow: TargetWorkflow;
   /**
    * Version of this Semantic Profile Document. SemVer is RECOMMENDED.
    */
   version?: string;
   /**
-   * Human-readable name for this semantic profile.
+   * Human-readable name for this semantic profile. Displayed in tooling and provenance exports when identifying the semantic layer for this workflow.
    */
   title?: string;
   /**
-   * Human-readable description of the semantic profile's purpose and scope.
+   * Human-readable description of the semantic profile's purpose and scope. Documents which vocabularies, shape graphs, and export formats are configured.
    */
   description?: string;
   context: ContextConfiguration;
   shapes?: ShapeConfiguration;
   provMapping?: ProvMappingConfiguration;
   processMining?: ProcessMiningConfiguration;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSSemanticProfileDocument`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -46,20 +50,27 @@ export interface WOSSemanticProfileDocument {
  */
 export interface TargetWorkflow {
   /**
-   * Canonical URL of the target WOS Kernel Document.
+   * Canonical URL of the target WOS Kernel Document. The semantic processor resolves the JSON-LD context, SHACL shapes, PROV-O namespace, and process mining configuration from this profile when the kernel document URI matches this value exactly.
    */
   url: string;
   /**
    * SemVer range expression for compatible kernel document versions.
    */
   compatibleVersions?: string;
+  /**
+   * This interface was referenced by `TargetWorkflow`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * JSON-LD @context configuration. Declares the context document URL, version, additional namespaces, and domain vocabulary extensions.
  */
 export interface ContextConfiguration {
   /**
-   * URL of the JSON-LD @context document to apply to WOS documents. The normative WOS context is published at https://wos-spec.org/context/{version}.
+   * URL of the JSON-LD @context document to apply to WOS documents. The normative WOS context is published at https://wos-spec.org/context/{version}. Custom deployments may publish their own context extending the base WOS context.
    */
   contextUrl: string;
   /**
@@ -70,12 +81,22 @@ export interface ContextConfiguration {
    * Additional namespace prefix-to-IRI mappings beyond the base WOS context. Keys are namespace prefixes, values are namespace IRIs.
    */
   namespaces?: {
+    /**
+     * Namespace IRI for this prefix. MUST be a valid absolute URI that serves as the base IRI for terms in the named vocabulary. Appended to prefix declarations in the JSON-LD @context.
+     */
     [k: string]: string;
   };
   /**
    * External domain vocabularies to incorporate into the @context. Each vocabulary declares a namespace prefix and IRI for domain-specific case data interoperability.
    */
   domainVocabularies?: DomainVocabulary[];
+  /**
+   * This interface was referenced by `ContextConfiguration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface DomainVocabulary {
   /**
@@ -83,13 +104,20 @@ export interface DomainVocabulary {
    */
   prefix: string;
   /**
-   * Namespace IRI for this vocabulary.
+   * Namespace IRI for this vocabulary. Used as the base IRI for terms from this vocabulary in the JSON-LD @context expansion. MUST be a resolvable or well-known absolute URI.
    */
   namespace: string;
   /**
-   * Human-readable description of this vocabulary's purpose and scope.
+   * Human-readable description of this vocabulary's purpose and scope. Documents which domain concepts are covered and why this vocabulary was selected for semantic interoperability.
    */
   description?: string;
+  /**
+   * This interface was referenced by `DomainVocabulary`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * SHACL shape configuration. Declares shape graph URIs for semantic validation of WOS documents interpreted as RDF.
@@ -102,26 +130,36 @@ export interface ShapeConfiguration {
    */
   shapeGraphs: [string, ...string[]];
   /**
-   * Minimum severity for reported SHACL violations. 'violation': only sh:Violation results. 'warning': sh:Violation and sh:Warning. 'info': all results.
+   * Minimum severity for reported SHACL violations. 'violation': only sh:Violation results. 'warning': sh:Violation and sh:Warning. 'info': all results including sh:Info.
    */
   severity?: 'violation' | 'warning' | 'info';
   /**
    * What to validate with SHACL shapes. 'definition': the workflow definition only. 'provenance': provenance records only. 'all': both definition and provenance.
    */
   scope?: 'definition' | 'provenance' | 'all';
+  /**
+   * This interface was referenced by `ShapeConfiguration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * PROV-O vocabulary mapping configuration. Declares how WOS provenance records map to W3C PROV-O graphs.
  */
 export interface ProvMappingConfiguration {
   /**
-   * Base namespace for minting provenance IRIs in the PROV-O output graph. Record identifiers are appended to this namespace to form Activity IRIs.
+   * Base namespace for minting provenance IRIs in the PROV-O output graph. Record identifiers are appended to this namespace to form Activity IRIs. All prov:Activity and prov:Entity IRIs in the exported graph use this as their base.
    */
   provenanceNamespace: string;
   /**
    * Customized mapping of WOS actor types to PROV-O Agent subclass IRIs. Keys are WOS actor types ('human', 'system', 'agent'), values are RDF type IRIs. Defaults: human -> prov:Person, system -> prov:SoftwareAgent, agent -> wos:AIAgent.
    */
   actorMapping?: {
+    /**
+     * RDF type IRI for this WOS actor type in the PROV-O output graph. Must be a valid absolute URI that is a subclass of prov:Agent or a recognized PROV-O agent type.
+     */
     [k: string]: string;
   };
   /**
@@ -129,17 +167,31 @@ export interface ProvMappingConfiguration {
    */
   tierMapping?: {
     /**
-     * RDF type IRI for Reasoning tier prov:Bundle instances.
+     * RDF type IRI for Reasoning tier prov:Bundle instances in the PROV-O graph output. Overrides the default wos:ReasoningBundle type for agency-specific PROV-O vocabulary.
      */
     reasoning?: string;
     /**
-     * RDF type IRI for Counterfactual tier prov:Bundle instances.
+     * RDF type IRI for Counterfactual tier prov:Bundle instances in the PROV-O graph output. Overrides the default wos:CounterfactualBundle type for agency-specific PROV-O vocabulary.
      */
     counterfactual?: string;
     /**
-     * RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false.
+     * RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false. Overrides the default wos:NarrativeBundle type for agency-specific vocabulary.
      */
     narrative?: string;
+    /**
+     * This interface was referenced by `undefined`'s JSON-Schema definition
+     * via the `patternProperty` "^x-".
+     */
+    [k: string]: {
+      [k: string]: unknown;
+    };
+  };
+  /**
+   * This interface was referenced by `ProvMappingConfiguration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
   };
 }
 /**
@@ -164,4 +216,17 @@ export interface ProcessMiningConfiguration {
    * For OCEL export: WOS object types (case file item types) to include in the object-centric event log. When omitted, all case file item types are included.
    */
   objectTypes?: string[];
+  /**
+   * This interface was referenced by `ProcessMiningConfiguration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

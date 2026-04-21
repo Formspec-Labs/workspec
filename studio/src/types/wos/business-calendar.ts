@@ -6,31 +6,33 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Business Calendar Config sidecar document. Defines business days, holiday schedules, and operating hours for SLA evaluation and temporal parameter resolution in WOS workflows. Government workflows measure deadlines in business days, not wall-clock time: a 30-day response window excludes weekends and holidays. The governance layer's SLA evaluation (Governance S10.3) and temporal parameter resolution (Governance S13.3) consume this sidecar when present. When absent, SLA evaluation uses wall-clock time.
  */
 export interface WOSBusinessCalendarConfig {
   /**
-   * WOS Business Calendar specification version. MUST be '1.0'.
+   * WOS Business Calendar specification version. MUST be '1.0'. Identifies this document as a WOS Business Calendar Config sidecar and pins the specification version. Processors reject documents with unsupported versions.
    */
   $wosBusinessCalendar: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document this business calendar applies to.
+   * URI of the WOS Kernel Document this business calendar applies to. The processor loads this sidecar when the kernel document's URI matches. When multiple calendars target the same workflow, the most recently effective one wins (Governance S10.3).
    */
   targetWorkflow: string;
   /**
-   * Version of this Business Calendar Config document.
+   * Version of this Business Calendar Config document. SemVer is RECOMMENDED. Increment when the holiday list or work-week configuration changes.
    */
   version?: string;
   /**
-   * Human-readable name for this business calendar.
+   * Human-readable name for this business calendar. Displayed in provenance audit trails and error messages when calendar validation fails.
    */
   title?: string;
   /**
-   * Human-readable description of this business calendar.
+   * Human-readable description of this business calendar. Documents which jurisdiction's holidays and work-week rules are encoded.
    */
   description?: string;
   /**
@@ -60,15 +62,21 @@ export interface WOSBusinessCalendarConfig {
    */
   expirationDate?: string;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * FEL expression evaluated against the case file to determine whether this calendar applies to a given case. Multi-jurisdiction workflows declare one calendar per jurisdiction and use this expression to route a case to the right one (Business Calendar §7.1). Evaluated whenever an SLA or temporal-parameter resolution requires a calendar; calendars whose expression evaluates false are excluded from composition. When absent, the calendar applies unconditionally to every case targeting the same workflow — equivalent to `appliesWhen: 'true'`. The expression sees the same evaluation context as governance FEL expressions: case-file fields, lifecycle state, actor metadata. See Kernel §7 for FEL grammar.
    */
-  extensions?: {
+  appliesWhen?: string;
+  extensions?: ExtensionsMap;
+  /**
+   * This interface was referenced by `WOSBusinessCalendarConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface Holiday {
   /**
-   * Human-readable holiday name.
+   * Human-readable holiday name displayed in provenance audit trails and SLA calculation logs. Used to identify which holiday caused a business-day adjustment.
    */
   name: string;
   /**
@@ -83,17 +91,37 @@ export interface Holiday {
    * Whether this entry is an observed date rather than the actual holiday. When a fixed-date holiday falls on a non-working day, a separate entry with 'observed: true' marks the actual day off.
    */
   observed?: boolean;
+  /**
+   * This interface was referenced by `Holiday`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Working hours within a business day. When present and an SLA is specified in hours, the processor counts only elapsed time during these hours. When absent, a business day is the full 24-hour period.
  */
 export interface OperatingHours {
   /**
-   * Start of the operating period (HH:MM in 24-hour format). The operating period is [start, end) -- inclusive of start, exclusive of end.
+   * Start of the operating period (HH:MM in 24-hour format, interpreted in the calendar's timezone). The operating period is [start, end) — inclusive of start, exclusive of end. Hour-based SLA counters only accumulate time within this window.
    */
   start: string;
   /**
-   * End of the operating period (HH:MM in 24-hour format). MUST be after 'start'.
+   * End of the operating period (HH:MM in 24-hour format, interpreted in the calendar's timezone). MUST be strictly after 'start'. Hour-based SLA counters stop accumulating at this time each business day and resume at 'start' the next business day.
    */
   end: string;
+  /**
+   * This interface was referenced by `OperatingHours`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

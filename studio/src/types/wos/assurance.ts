@@ -17,22 +17,47 @@ export interface WOSAssuranceDeclaration {
    * Subject continuity reference (S3).
    */
   subjectContinuity?: {
+    /**
+     * The persistent subject identifier linking this instance to prior interactions. Enables a processor to re-identify the same legal person across workflow instances without a fresh assurance ceremony (Assurance S3.2).
+     */
     reference: string;
+    /**
+     * Continuity scope: how broadly this reference is trusted. 'instance': single workflow run. 'case': all runs under the same case identifier. 'tenant': all workflows within one agency tenant. 'deployment': entire WOS deployment.
+     */
     scope: 'instance' | 'case' | 'tenant' | 'deployment';
     [k: string]: unknown;
   };
   /**
-   * Disclosure posture — independent of assuranceLevel per Invariant 6 (S4).
+   * Disclosure posture — independent of assuranceLevel per Invariant 6 (S4). 'anonymous': no identifying information. 'pseudonymous': token only. 'identified': real identity verified. 'public': public record.
    */
   disclosurePosture?: 'anonymous' | 'pseudonymous' | 'identified' | 'public';
   /**
    * Provider-neutral attestation (S5).
    */
   attestation?: {
+    /**
+     * The entity about whom the attestation is made. Typically the subject reference URI or a WOS actor identifier for the claimant (Assurance S5.1).
+     */
     subject: string;
+    /**
+     * The claim being asserted about the subject. Use a URI from a controlled vocabulary when possible (Assurance S5.2). Describes what property or capability is being attested.
+     */
     predicate: string;
+    /**
+     * The evidentiary or procedural basis for this attestation. Describes how the claim was established: self-assertion, document verification, in-person check, or third-party corroboration (Assurance S5.3).
+     */
     basis: string;
+    /**
+     * Scope and duration for which this attestation is considered valid. When omitted, validity is implementation-defined. May be a time range, a workflow-phase identifier, or a case-level scope string.
+     */
     validityScope?: string;
+    [k: string]: unknown;
+  };
+  /**
+   * This interface was referenced by `WOSAssuranceDeclaration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
     [k: string]: unknown;
   };
 }

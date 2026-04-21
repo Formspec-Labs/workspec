@@ -6,23 +6,25 @@
  */
 
 /**
- * A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1).
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
+ * A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateRef (Governance S3.1).
  */
 export interface WOSNotificationTemplateConfig {
   /**
-   * WOS Notification Template specification version. MUST be '1.0'.
+   * WOS Notification Template specification version. MUST be '1.0'. Identifies this document as a WOS Notification Template Config sidecar and pins the specification version. Processors reject documents with unsupported versions.
    */
   $wosNotificationTemplate: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document this notification template config applies to.
+   * URI of the WOS Kernel Document this notification template config applies to. The processor resolves notificationTemplateKey and noticeTemplateRef lookups against the template collection in this sidecar when the kernel URI matches (Governance S12.2, S3.1).
    */
   targetWorkflow: string;
   /**
-   * Version of this Notification Template Config document.
+   * Version of this Notification Template Config document. SemVer is RECOMMENDED. Increment when template content, variables, or delivery channel configuration changes.
    */
   version?: string;
   /**
@@ -30,19 +32,21 @@ export interface WOSNotificationTemplateConfig {
    */
   title?: string;
   /**
-   * Human-readable description of this notification template collection.
+   * Human-readable description of this notification template collection. Documents which governance events these templates cover and their regulatory authority.
    */
   description?: string;
   /**
-   * Named notification templates. Template keys are the identifiers referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1) in governance documents.
+   * Named notification templates. Template keys are the identifiers referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateRef (Governance S3.1) in governance documents.
    */
   templates: {
     [k: string]: NotificationTemplate;
   };
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSNotificationTemplateConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -58,7 +62,7 @@ export interface NotificationTemplate {
     | 'case-status-update'
     | 'resume-notification';
   /**
-   * Human-readable description of when this template is used.
+   * Human-readable description of when this template is used and what regulatory obligation it satisfies. Referenced in audit logs.
    */
   description?: string;
   /**
@@ -80,27 +84,29 @@ export interface NotificationTemplate {
    */
   deliveryChannels?: ('postal' | 'email' | 'portal' | 'sms' | 'in-app')[];
   /**
-   * Reference to a locale-specific variant of this template.
+   * BCP 47 language tag reference to a locale-specific variant of this template. When the recipient's locale matches, the localized template is used instead of the default.
    */
   localeRef?: string;
   /**
    * Regulatory or statutory authority requiring this notification.
    */
   authority?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `NotificationTemplate`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface TemplateSection {
   /**
-   * Section identifier. MUST be unique within the template.
+   * Section identifier unique within the template. Used in audit logs and accessibility anchors. Referenced by condition expressions to target specific sections.
    */
   id: string;
   /**
-   * Section heading displayed in the rendered notification.
+   * Section heading displayed in the rendered notification. Rendered as a visible heading above the section content in postal, email, and portal output.
    */
   title?: string;
   /**
@@ -112,11 +118,24 @@ export interface TemplateSection {
    */
   content?: string;
   /**
-   * Whether this section MUST appear in the rendered notification. Default: true.
+   * Whether this section MUST appear in the rendered notification. Default: true. For adverse-decision templates, due-process sections (determination, reasons, appealRights) MUST be required.
    */
   required?: boolean;
   /**
    * FEL expression that controls section visibility. When the expression evaluates to false, the section is omitted from the rendered notification. Evaluated against the standard FEL evaluation context (Kernel S7.3).
    */
   condition?: string;
+  /**
+   * This interface was referenced by `TemplateSection`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

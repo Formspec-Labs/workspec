@@ -6,36 +6,40 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Lifecycle Detail Configuration document per the WOS Lifecycle Detail Companion v1.0. Provides detailed compensation, history, and timer configuration that elaborates the kernel's lifecycle semantics. This is an optional companion to a WOS Kernel Document -- a Kernel Structural processor does not need it. A Kernel Complete processor SHOULD use it to configure advanced execution behavior: compensation recovery mode, parallel cancellation behavior, history state policies, and timer tolerance.
  */
 export interface WOSLifecycleDetailConfiguration {
   /**
-   * WOS Lifecycle Detail specification version. MUST be '1.0'.
+   * Document type marker identifying this as a WOS Lifecycle Detail Configuration document (Lifecycle Detail S1.2). MUST be the string '1.0'. Processors use this field to dispatch to the lifecycle detail parser; its absence means the document is not a Lifecycle Detail Configuration.
    */
   $wosLifecycleDetail: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document this configuration targets.
+   * URI of the WOS Kernel Document this Lifecycle Detail Configuration applies to. Must match the Kernel Document's url field exactly. Processors MUST reject a Lifecycle Detail Configuration whose targetWorkflow does not match the url of the Kernel Document being loaded (Lifecycle Detail S1.3).
    */
   targetWorkflow: string;
   /**
-   * Version of this Lifecycle Detail Configuration.
+   * Semantic version of this Lifecycle Detail Configuration document. Useful for audit trails and migration tooling. Not enforced by the processor.
    */
   version?: string;
   /**
-   * Human-readable name.
+   * Human-readable name for this Lifecycle Detail Configuration. Used in tooling and audit UIs. Not processed by the runtime.
    */
   title?: string;
   compensation?: CompensationConfig;
   timerConfig?: TimerConfig;
   scxmlMapping?: ScxmlMappingConfig;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSLifecycleDetailConfiguration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -48,13 +52,20 @@ export interface CompensationConfig {
    */
   defaultRecoveryMode?: 'backward' | 'forward';
   /**
-   * Behavior when a compensating action itself fails. 'continue': best effort, proceed to next compensation. 'halt': stop compensation sequence on first failure.
+   * Behavior when a compensating action itself fails during backward recovery (Lifecycle Detail S5.5). 'continue': best-effort — log the failure and proceed to the next compensation step. 'halt': stop the compensation sequence on first failure and surface an alert for manual intervention.
    */
   onCompensationFailure?: 'continue' | 'halt';
   /**
    * Per-scope compensation overrides for specific states or regions.
    */
   scopeOverrides?: CompensationScopeOverride[];
+  /**
+   * This interface was referenced by `CompensationConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface CompensationScopeOverride {
   /**
@@ -62,17 +73,24 @@ export interface CompensationScopeOverride {
    */
   scopeRef: string;
   /**
-   * Recovery mode override for this scope.
+   * Recovery mode override for this specific compensable scope, superseding the top-level defaultRecoveryMode (Lifecycle Detail S5.6). Use 'forward' for idempotent or externally-observable scopes where re-attempting is safer than reversing.
    */
   recoveryMode?: 'backward' | 'forward';
   /**
-   * Compensation failure behavior override for this scope.
+   * Compensation failure behavior override for this specific scope, superseding the top-level onCompensationFailure setting (Lifecycle Detail S5.5). Use 'halt' for scopes that require strict consistency (e.g., dual-blind reviews).
    */
   onCompensationFailure?: 'continue' | 'halt';
   /**
-   * Human-readable explanation of why this scope has a non-default compensation policy.
+   * Human-readable explanation of why this compensable scope has a non-default compensation policy. Intended for authors and auditors, not processed by the runtime.
    */
   description?: string;
+  /**
+   * This interface was referenced by `CompensationScopeOverride`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Timer behavior configuration (Lifecycle Detail S6).
@@ -83,28 +101,48 @@ export interface TimerConfig {
    */
   firingTolerance?: string;
   /**
-   * Whether timers created in a state's onEntry are automatically cancelled and recreated when the state is re-entered (Lifecycle Detail S6.4). Default: true.
+   * Whether timers created in a state's onEntry actions are automatically cancelled and recreated when that state is re-entered (Lifecycle Detail S6.4). Default: true. Set to false only when re-entry should continue the original deadline rather than reset it.
    */
   resetOnReentry?: boolean;
+  /**
+   * This interface was referenced by `TimerConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * SCXML interoperability mapping configuration (Lifecycle Detail S7).
  */
 export interface ScxmlMappingConfig {
   /**
-   * Whether SCXML export/import is enabled for this workflow.
+   * Whether SCXML export/import is activated for this workflow (Lifecycle Detail S7). When false, the processor skips SCXML interoperability entirely. Set to true only for workflows that need SCXML roundtrip fidelity.
    */
   enabled?: boolean;
   /**
-   * How FEL guard expressions are mapped to SCXML's expression language. 'ecmascript': automatic translation to ECMAScript. 'xpath': automatic translation to XPath. 'manual': expressions must be manually mapped.
+   * Strategy for translating FEL guard expressions to the target SCXML expression language (Lifecycle Detail S7.3). 'ecmascript': automatic translation to ECMAScript (most SCXML engines). 'xpath': automatic translation to XPath. 'manual': no automatic translation — each expression must be provided separately.
    */
   expressionMapping?: 'ecmascript' | 'xpath' | 'manual';
   /**
-   * Whether WOS-specific properties with no SCXML equivalent (tags, impact level, contracts, milestones) are silently dropped on export. When false, export fails if unsupported properties are present.
+   * Whether WOS-specific properties with no SCXML equivalent (tags, impact level, contracts, milestones) are silently dropped on SCXML export (Lifecycle Detail S7.4). When false, export fails if any unsupported WOS properties are present.
    */
   dropUnsupported?: boolean;
   /**
    * Prefix added to kernel-generated events (which use '$' prefix in WOS) when exported to SCXML, since '$' may not be valid in all SCXML implementations.
    */
   eventPrefixMapping?: string;
+  /**
+   * This interface was referenced by `ScxmlMappingConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }
