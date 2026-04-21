@@ -9,6 +9,7 @@
 use wos_core::instance::{CaseInstance, PendingEvent};
 use wos_core::provenance::ProvenanceRecord;
 
+use crate::custody::{CustodyAppendContext, CustodyAppendInput};
 use crate::runtime::{
     CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
 };
@@ -100,4 +101,17 @@ pub trait DurableRuntime {
         cursor: usize,
         limit: usize,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError>;
+
+    /// Loads an ADR-0061 custody append window.
+    ///
+    /// # Errors
+    /// Returns an error when the instance cannot be found or a provenance
+    /// record cannot be canonicalized into custody append input form.
+    fn load_custody_append_window(
+        &self,
+        instance_id: &str,
+        cursor: usize,
+        limit: usize,
+        context: CustodyAppendContext,
+    ) -> Result<Vec<CustodyAppendInput>, RuntimeError>;
 }

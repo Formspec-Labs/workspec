@@ -11,6 +11,54 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wos_core::provenance::ProvenanceRecord;
 
+/// Runtime context for building custody append inputs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustodyAppendContext {
+    /// Registered `wos.*` prefix used for provenance event types.
+    pub event_type_prefix: String,
+    /// WOS version governing the authored record semantics.
+    pub wos_spec_version: String,
+    /// URI for the normative record schema or document surface.
+    pub record_schema_ref: String,
+    /// URI for the governing workflow or kernel document.
+    pub workflow_ref: String,
+    /// Stable deployment case identifier.
+    pub case_ref: String,
+    /// Optional governance-envelope or sidecar document URI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governance_envelope_ref: Option<String>,
+}
+
+impl CustodyAppendContext {
+    /// Build metadata for a persisted provenance record.
+    ///
+    /// The runtime uses the append-only provenance log position as the stable
+    /// record identity for records that predate an embedded Kernel §8 `id`.
+    ///
+    /// # Errors
+    /// Returns an error when the provenance kind cannot be rendered as a WOS
+    /// event type.
+    pub fn metadata_for_provenance_record(
+        &self,
+        instance_ref: &str,
+        log_position: usize,
+        record: &ProvenanceRecord,
+    ) -> Result<CustodyAppendMetadata, CustodyAppendError> {
+        Ok(CustodyAppendMetadata {
+            record_id: format!("{}#provenance-{log_position}", self.case_ref),
+            event_type: provenance_event_type(&self.event_type_prefix, record)?,
+            wos_spec_version: self.wos_spec_version.clone(),
+            record_schema_ref: self.record_schema_ref.clone(),
+            workflow_ref: self.workflow_ref.clone(),
+            case_ref: self.case_ref.clone(),
+            instance_ref: instance_ref.to_string(),
+            governance_envelope_ref: self.governance_envelope_ref.clone(),
+            lifecycle_ref: lifecycle_ref_for_record(record),
+        })
+    }
+}
+
 /// Custody append metadata supplied by the WOS runtime.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -209,6 +257,56 @@ fn provenance_kind_label(record: &ProvenanceRecord) -> Result<String, CustodyApp
     Ok(kind.to_string())
 }
 
+fn provenance_event_type(
+    event_type_prefix: &str,
+    record: &ProvenanceRecord,
+) -> Result<String, CustodyAppendError> {
+    let event_type_prefix = event_type_prefix.trim_end_matches('.');
+    validate_required_field("eventTypePrefix", event_type_prefix)?;
+    Ok(format!(
+        "{event_type_prefix}.{}",
+        provenance_kind_label(record)?
+    ))
+}
+
+fn lifecycle_ref_for_record(record: &ProvenanceRecord) -> Option<CustodyLifecycleRef> {
+    let lifecycle_ref = CustodyLifecycleRef {
+        transition_id: transition_id_for_record(record),
+        state_id: record
+            .lifecycle_state
+            .clone()
+            .or_else(|| record.from_state.clone())
+            .or_else(|| record.to_state.clone()),
+        event_name: record.event.clone(),
+        task_pattern: data_string(record, "taskPattern"),
+        task_id: data_string(record, "taskId"),
+    };
+
+    if lifecycle_ref == CustodyLifecycleRef::default() {
+        None
+    } else {
+        Some(lifecycle_ref)
+    }
+}
+
+fn transition_id_for_record(record: &ProvenanceRecord) -> Option<String> {
+    match (&record.from_state, &record.to_state, &record.event) {
+        (Some(from_state), Some(to_state), Some(event)) => {
+            Some(format!("{from_state}->{to_state}:{event}"))
+        }
+        _ => None,
+    }
+}
+
+fn data_string(record: &ProvenanceRecord, key: &str) -> Option<String> {
+    record
+        .data
+        .as_ref()
+        .and_then(|data| data.get(key))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +419,57 @@ mod tests {
             input.record_digest_sha256,
             format!("{:x}", Sha256::digest(input.record_canonical_json_bytes()))
         );
+    }
+
+    #[test]
+    fn context_builds_metadata_from_persisted_provenance_position() {
+        let mut record =
+            ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
+        record.lifecycle_state = Some("intake".to_string());
+        let context = CustodyAppendContext {
+            event_type_prefix: "wos.kernel".to_string(),
+            wos_spec_version: "0.1.0".to_string(),
+            record_schema_ref: "https://example.com/schemas/wos-provenance-record.json".to_string(),
+            workflow_ref: "https://example.com/workflows/intake-review.json".to_string(),
+            case_ref: "case-123".to_string(),
+            governance_envelope_ref: None,
+        };
+
+        let metadata = context
+            .metadata_for_provenance_record("instance-456", 7, &record)
+            .expect("metadata");
+
+        assert_eq!(metadata.record_id, "case-123#provenance-7");
+        assert_eq!(metadata.event_type, "wos.kernel.stateTransition");
+        assert_eq!(metadata.instance_ref, "instance-456");
+        assert_eq!(
+            metadata.lifecycle_ref,
+            Some(CustodyLifecycleRef {
+                transition_id: Some("intake->review:submitted".to_string()),
+                state_id: Some("intake".to_string()),
+                event_name: Some("submitted".to_string()),
+                task_pattern: None,
+                task_id: None,
+            })
+        );
+    }
+
+    #[test]
+    fn context_rejects_empty_event_type_prefix() {
+        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
+        let context = CustodyAppendContext {
+            event_type_prefix: "   ".to_string(),
+            wos_spec_version: "0.1.0".to_string(),
+            record_schema_ref: "https://example.com/schemas/wos-provenance-record.json".to_string(),
+            workflow_ref: "https://example.com/workflows/intake-review.json".to_string(),
+            case_ref: "case-123".to_string(),
+            governance_envelope_ref: None,
+        };
+
+        let error = context
+            .metadata_for_provenance_record("instance-456", 0, &record)
+            .expect_err("reject");
+
+        assert_eq!(error, CustodyAppendError::EmptyField("eventTypePrefix"));
     }
 }

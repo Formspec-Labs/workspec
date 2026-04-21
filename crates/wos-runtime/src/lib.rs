@@ -25,7 +25,8 @@ pub use binding::{
 pub use companion::ReferenceCompanionPolicy;
 #[doc(inline)]
 pub use custody::{
-    CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata, CustodyLifecycleRef,
+    CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
+    CustodyLifecycleRef,
 };
 #[doc(inline)]
 pub use durable::DurableRuntime;

@@ -3,35 +3,40 @@
 //! Runtime command surface for WOS processors.
 
 mod actions;
+mod drain;
+mod durable_impl;
+mod instance;
+mod provenance;
+mod support;
 mod tasks;
 mod timers;
 
 use std::error::Error as StdError;
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine as _;
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 use wos_core::business_calendar::BusinessCalendarDocument;
-use wos_core::eval::{Evaluator, GuardEvaluation, ObservedTransition};
-use wos_core::instance::{
-    CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
-};
-use wos_core::model::kernel::{ActorKind, ImpactLevel, KernelDocument};
-use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
+#[cfg(test)]
+use wos_core::eval::Evaluator;
+use wos_core::eval::{GuardEvaluation, ObservedTransition};
+use wos_core::instance::{CaseInstance, FormspecTaskContext, PendingEvent};
+use wos_core::model::kernel::KernelDocument;
+#[cfg(test)]
+use wos_core::provenance::ProvenanceKind;
+use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
 };
 
-use self::timers::{
-    annotate_timer_created_with_calendar_version, annotate_timer_created_with_convergence_error,
-    materialize_due_timers, timers_to_state,
-};
-use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
-use crate::durable::DurableRuntime;
+use crate::binding::{BindingError, BindingRegistry};
+use crate::custody::CustodyAppendError;
 use crate::integration::IntegrationProfileDocument;
-use crate::milestones::evaluate_milestones;
-use crate::store::{RuntimeRecord, RuntimeStore, StoreError};
+use crate::store::{RuntimeStore, StoreError};
+
+pub use provenance::{populate_provenance_record_fields, stamp_provenance};
+use provenance::{compensation_provenance, contract_validation_record};
+use support::{
+    format_timestamp, impact_level_label, make_task_id, merge_case_state,
+    normalize_semver_range_expression, parse_timestamp,
+};
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
 const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
@@ -214,6 +219,10 @@ pub enum RuntimeError {
     /// Binding adapter failed.
     #[error(transparent)]
     Binding(#[from] BindingError),
+
+    /// Custody append input generation failed.
+    #[error(transparent)]
+    CustodyAppend(#[from] CustodyAppendError),
 
     /// Required workflow metadata is absent.
     #[error("missing workflow metadata: {0}")]
@@ -418,736 +427,6 @@ impl WosRuntime {
         self.business_calendar = Some(calendar);
         self
     }
-
-    /// Create and persist a new case instance.
-    pub fn create_instance(
-        &mut self,
-        request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let CreateInstanceRequest {
-            instance_id,
-            definition_url,
-            definition_version,
-            initial_case_state,
-        } = request;
-        let kernel = self
-            .resolver
-            .resolve_kernel(&definition_url, &definition_version)?;
-        let mut evaluator = Evaluator::with_time_and_case_state(
-            kernel.clone(),
-            now_ms,
-            initial_case_state.as_ref(),
-        )
-        .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-
-        let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
-        let instance = CaseInstance {
-            instance_id,
-            definition_url,
-            definition_version,
-            configuration: evaluator.configuration().active_states().to_vec(),
-            case_state: evaluator.case_state_json(),
-            provenance_position: 0,
-            next_task_sequence: 0,
-            timers: timer_states,
-            active_tasks: Vec::new(),
-            history_store: Default::default(),
-            compensation_logs: Default::default(),
-            status: InstanceStatus::Active,
-            pending_events: Vec::new(),
-            governance_state: None,
-            volume_counters: None,
-            fired_milestones: Default::default(),
-            pending_callbacks: Default::default(),
-            created_at: now_iso.clone(),
-            updated_at: now_iso.clone(),
-            extensions: Default::default(),
-        };
-
-        let mut record = RuntimeRecord::new(instance);
-        let mut appended_provenance = evaluator.provenance().records().to_vec();
-        // Annotate any timers created during instance initialization with calendarVersion.
-        if let Some(cal) = &self.business_calendar {
-            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
-        }
-        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(
-            &mut appended_provenance,
-            &convergence_error_ids,
-        );
-        let actions = evaluator.take_executed_actions();
-        let (created_task_ids, emitted_events, runtime_provenance) =
-            self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
-        appended_provenance.extend(runtime_provenance);
-        let (pending_presentations, presentation_provenance) =
-            self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
-        appended_provenance.extend(presentation_provenance);
-        populate_provenance_record_fields(
-            &mut appended_provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position = appended_provenance.len() as u64;
-        record.provenance_log.extend(appended_provenance);
-        self.store.create_record(record.clone())?;
-
-        self.deliver_pending_presentations(&pending_presentations)?;
-
-        let _ = (created_task_ids, emitted_events);
-        Ok(record.instance)
-    }
-
-    /// Load the canonical case instance state.
-    pub fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
-        Ok(self.store.load_record(instance_id)?.instance)
-    }
-
-    /// Append an event to the instance queue.
-    pub fn enqueue_event(
-        &mut self,
-        instance_id: &str,
-        mut event: PendingEvent,
-    ) -> Result<(), RuntimeError> {
-        let mut record = self.store.load_record(instance_id)?;
-        if event.timestamp.is_empty() {
-            event.timestamp = format_timestamp(self.clock.now_ms())?;
-        }
-        record.instance.pending_events.push(event);
-        record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
-        self.store.save_record(record.clone())?;
-        Ok(())
-    }
-
-    /// Drain a single event from the instance queue.
-    pub fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.store.load_record(instance_id)?;
-        let mut appended_provenance =
-            materialize_due_timers(&mut record.instance, now_ms, &now_iso)?;
-
-        let Some(event) = record.instance.pending_events.first().cloned() else {
-            if !appended_provenance.is_empty() {
-                // Resolve kernel for SP §5.3/§5.4 field population (due-timer
-                // materialization path). The kernel is always resolvable here
-                // because the instance is persisted.
-                let kernel = self.resolver.resolve_kernel(
-                    &record.instance.definition_url,
-                    &record.instance.definition_version,
-                )?;
-                populate_provenance_record_fields(
-                    &mut appended_provenance,
-                    &kernel,
-                    &record.instance.definition_version,
-                );
-                stamp_provenance(&mut appended_provenance, &now_iso);
-                record.instance.updated_at = now_iso;
-                record.instance.provenance_position += appended_provenance.len() as u64;
-                record.provenance_log.extend(appended_provenance);
-                self.store.save_record(record)?;
-            }
-            return Ok(DrainOnceResult::default());
-        };
-
-        record.instance.pending_events.remove(0);
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        let mut runtime_result = DrainOnceResult {
-            processed_event: Some(event.event.clone()),
-            processed_event_token: event.idempotency_token.clone(),
-            transitions: Vec::new(),
-            provenance: Vec::new(),
-            created_task_ids: Vec::new(),
-            emitted_events: Vec::new(),
-            guard_evaluations: Vec::new(),
-        };
-
-        let drained_event_name = event.event.clone();
-        let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
-            kernel: kernel.clone(),
-            instance: record.instance.clone(),
-            event,
-            now_ms,
-            now_iso: now_iso.clone(),
-        })?;
-        appended_provenance.extend(decision.provenance);
-
-        let Some(event) = decision.event else {
-            populate_provenance_record_fields(
-                &mut appended_provenance,
-                &kernel,
-                &record.instance.definition_version,
-            );
-            stamp_provenance(&mut appended_provenance, &now_iso);
-            record.instance.updated_at = now_iso;
-            record.instance.provenance_position += appended_provenance.len() as u64;
-            record.provenance_log.extend(appended_provenance.clone());
-            self.store.save_record(record)?;
-            runtime_result.provenance = appended_provenance;
-            return Ok(runtime_result);
-        };
-
-        let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.instance, now_ms)
-            .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-        evaluator
-            .process_event(&event.event, event.actor_id.as_deref(), event.data.as_ref())
-            .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-        runtime_result.transitions = evaluator.transitions().to_vec();
-        runtime_result.guard_evaluations = evaluator.take_guard_evaluations();
-
-        appended_provenance.extend(evaluator.provenance().records().to_vec());
-        // Annotate any newly created timers with calendarVersion when a calendar
-        // is attached (provenance approach a — augment data field, no new variant).
-        if let Some(cal) = &self.business_calendar {
-            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
-        }
-        appended_provenance.extend(compensation_provenance(
-            &kernel,
-            &record.provenance_log,
-            &appended_provenance,
-        ));
-        record.instance.configuration = evaluator.configuration().active_states().to_vec();
-        record.instance.case_state = evaluator.case_state_json();
-        let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
-        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(
-            &mut appended_provenance,
-            &convergence_error_ids,
-        );
-        record.instance.timers = timer_states;
-        record.instance.history_store = evaluator.history_store().clone();
-        record.instance.updated_at = now_iso.clone();
-
-        let case_state_can_mutate_explicitly = record
-            .provenance_log
-            .iter()
-            .chain(appended_provenance.iter())
-            .any(|record| record.record_kind == ProvenanceKind::CaseStateMutation);
-        if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
-            appended_provenance.push(ProvenanceRecord {
-                record_kind: ProvenanceKind::StateTransition,
-                timestamp: String::new(),
-                actor_id: event.actor_id.clone(),
-                from_state: None,
-                to_state: None,
-                event: Some(event.event.clone()),
-                data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-
-        // Milestone firing: evaluate after the event's transition tree completes
-        // (including all onEntry/onExit setData), before side-effect realization
-        // (createTask/emitEvent) that would enqueue follow-on events (Kernel S4.13).
-        // Records are appended in lexicographic milestone-id order so the provenance
-        // stream is deterministic.
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
-        appended_provenance.extend(milestone_records);
-
-        let actions = evaluator.take_executed_actions();
-        let (created_task_ids, emitted_events, runtime_provenance) =
-            self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
-        appended_provenance.extend(runtime_provenance);
-
-        let (pending_presentations, presentation_provenance) =
-            self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
-        appended_provenance.extend(presentation_provenance);
-
-        // Stamp the drain's event onto policy-application provenance
-        // records that left `event = None`. The governance / AI / autonomy
-        // / confidence constructors all set `event: None` because they
-        // don't carry the triggering event in their construction context,
-        // but the trace teaching-signal (§5.3) needs this association so
-        // conformance traces can scope `policies_applied` to the right
-        // trace step. Scoped strictly to `is_policy_application()` kinds
-        // — kernel-layer records (state transitions, action executions)
-        // already set `event` correctly in their constructors and the
-        // field is load-bearing there (see `ProvenanceRecord::state_transition`).
-        for prov_record in &mut appended_provenance {
-            if prov_record.event.is_none() && prov_record.record_kind.is_policy_application() {
-                prov_record.event = Some(drained_event_name.clone());
-            }
-        }
-        populate_provenance_record_fields(
-            &mut appended_provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position += appended_provenance.len() as u64;
-        record.provenance_log.extend(appended_provenance.clone());
-        self.store.save_record(record.clone())?;
-
-        self.deliver_pending_presentations(&pending_presentations)?;
-
-        runtime_result.provenance = appended_provenance;
-        runtime_result.created_task_ids = created_task_ids;
-        runtime_result.emitted_events = emitted_events;
-        Ok(runtime_result)
-    }
-
-    /// Drain events until the queue is empty and no timers are due.
-    pub fn drain_until_idle(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
-        let mut results = Vec::new();
-
-        loop {
-            let result = self.drain_once(instance_id)?;
-            let should_stop = result.processed_event.is_none();
-            if should_stop {
-                break;
-            }
-            results.push(result);
-        }
-
-        Ok(results)
-    }
-}
-
-impl DurableRuntime for WosRuntime {
-    fn create_instance(
-        &mut self,
-        request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError> {
-        WosRuntime::create_instance(self, request)
-    }
-
-    fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
-        WosRuntime::load_instance(self, instance_id)
-    }
-
-    fn enqueue_event(
-        &mut self,
-        instance_id: &str,
-        event: PendingEvent,
-    ) -> Result<(), RuntimeError> {
-        WosRuntime::enqueue_event(self, instance_id, event)
-    }
-
-    fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
-        WosRuntime::drain_once(self, instance_id)
-    }
-
-    fn drain_until_idle(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
-        WosRuntime::drain_until_idle(self, instance_id)
-    }
-
-    fn persist_task_draft(
-        &mut self,
-        task_id: &str,
-        response: serde_json::Value,
-        actor_id: &str,
-        idempotency_token: Option<&str>,
-    ) -> Result<PersistDraftResult, RuntimeError> {
-        WosRuntime::persist_task_draft(self, task_id, response, actor_id, idempotency_token)
-    }
-
-    fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
-        WosRuntime::dismiss_task(self, task_id, reason)
-    }
-
-    fn submit_task_response(
-        &mut self,
-        task_id: &str,
-        response: serde_json::Value,
-        actor_id: &str,
-        idempotency_token: Option<&str>,
-    ) -> Result<TaskSubmissionResult, RuntimeError> {
-        WosRuntime::submit_task_response(self, task_id, response, actor_id, idempotency_token)
-    }
-
-    fn load_provenance_window(
-        &self,
-        instance_id: &str,
-        cursor: usize,
-        limit: usize,
-    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        WosRuntime::load_provenance_window(self, instance_id, cursor, limit)
-    }
-}
-
-fn format_timestamp(timestamp_ms: u64) -> Result<String, RuntimeError> {
-    let nanos = i128::from(timestamp_ms) * 1_000_000;
-    let nanos_i64 = i64::try_from(nanos)
-        .map_err(|_| RuntimeError::Clock("timestamp exceeds supported range".to_string()))?;
-    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(nanos_i64.into())
-        .map_err(|error| RuntimeError::Clock(error.to_string()))?;
-    timestamp
-        .format(&Rfc3339)
-        .map_err(|error| RuntimeError::Clock(error.to_string()))
-}
-
-/// Stamp every record whose `timestamp` is empty with `now_iso`.
-///
-/// Records that already carry a timestamp (e.g. stamped earlier in the pipeline
-/// or restored from persistence) are left untouched. This is the single
-/// authoritative point where an empty `ProvenanceRecord::timestamp` is filled
-/// in on the append path; exporters (PROV-O, XES, OCEL) downstream can treat
-/// any record surfaced from the runtime as having a non-empty timestamp.
-pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
-    for record in records {
-        if record.timestamp.is_empty() {
-            record.timestamp = now_iso.to_string();
-        }
-    }
-}
-
-/// Populate the eight push-stamped Semantic Profile fields on `records`
-/// immediately before persistence (SP §5.3, §5.4, §5.5, §6.3, §6.5).
-///
-/// This is the sole append-path site where these fields are filled in, so
-/// every record handed to the store downstream carries the full SP-required
-/// shape. Each field is set only when it is currently `None` / empty — the
-/// same push-stamped discipline as [`stamp_provenance`]. Callers MUST invoke
-/// this before `stamp_provenance` (timestamp is independent and stamped last).
-///
-/// The populator intentionally does NOT set `timestamp`. Callers either call
-/// [`stamp_provenance`] on the same records immediately after the populate
-/// pass (the common path), OR pre-assign `timestamp` themselves before the
-/// record enters the populator (e.g. `persist_task_draft`, `dismiss_task`,
-/// `record_submission_rejection`, which stamp from their ambient `now_iso`).
-/// Both patterns satisfy the "every stored record has a timestamp" invariant.
-///
-/// The populator mirrors the AI Integration-aware actor lookup used by
-/// `integration_handlers::request_response` (see its `actor_kind_to_string`
-/// site): we resolve `actor_id` against the kernel's declared `actors` and
-/// map `ActorKind::Human → "human"`, `ActorKind::System → "system"`. Records
-/// whose `actor_id` is not in the kernel registry keep `actor_type = None`
-/// (SP §5.3 "omit, do not default"). The `"agent"` variant is reserved for
-/// AI Integration agent-registry resolution (out of scope here —
-// TODO(spec-upstream) below).
-pub fn populate_provenance_record_fields(
-    records: &mut [ProvenanceRecord],
-    kernel: &KernelDocument,
-    definition_version: &str,
-) {
-    for record in records {
-        // Tier classification (SP §5.4, §6.5).
-        if record.audit_layer.is_none() {
-            record.audit_layer = Some(
-                ProvenanceAuditTier::from(record.record_kind)
-                    .as_str()
-                    .to_string(),
-            );
-        }
-
-        // Actor type (SP §5.3, §5.5, §6.3).
-        if record.actor_type.is_none()
-            && let Some(actor_id) = record.actor_id.as_deref()
-            && let Some(actor) = kernel.actors.iter().find(|a| a.id == actor_id)
-        {
-            record.actor_type = Some(match actor.kind {
-                ActorKind::Human => "human".to_string(),
-                ActorKind::System => "system".to_string(),
-                // TODO(spec-upstream): map ActorKind::Agent → "agent" once
-                // the AI Integration agent registry lookup is threaded into
-                // the runtime context. ActorKind today is Human | System only.
-            });
-        }
-
-        // Definition version (SP §5.3, §6.3).
-        if record.definition_version.is_none() && !definition_version.is_empty() {
-            record.definition_version = Some(definition_version.to_string());
-        }
-
-        // Lifecycle state (SP §5.3, §6.3): promote from record-specific sources.
-        if record.lifecycle_state.is_none() {
-            match record.record_kind {
-                ProvenanceKind::StateTransition => {
-                    // The pre-transition state IS the lifecycle state at
-                    // action time (the event fired while the instance
-                    // occupied `from_state`).
-                    if let Some(from) = record.from_state.as_deref() {
-                        record.lifecycle_state = Some(from.to_string());
-                    }
-                }
-                ProvenanceKind::CaseStateMutation => {
-                    // `case_state_mutation` embeds the lifecycle state in `data`.
-                    let state = record
-                        .data
-                        .as_ref()
-                        .and_then(|d| d.get("lifecycleState"))
-                        .and_then(serde_json::Value::as_str);
-                    if let Some(state) = state {
-                        record.lifecycle_state = Some(state.to_string());
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Inputs / outputs (SP §5.3, §6.3) — only for record kinds that have
-        // identifiable entity relationships. Other kinds stay empty.
-        match record.record_kind {
-            ProvenanceKind::StateTransition => {
-                if record.inputs.is_empty()
-                    && let Some(event) = record.event.as_deref()
-                {
-                    record.inputs = vec![event.to_string()];
-                }
-                if record.outputs.is_empty()
-                    && let Some(to_state) = record.to_state.as_deref()
-                {
-                    record.outputs = vec![to_state.to_string()];
-                }
-            }
-            ProvenanceKind::CaseStateMutation => {
-                if record.inputs.is_empty()
-                    && let Some(path) = record
-                        .data
-                        .as_ref()
-                        .and_then(|d| d.get("path"))
-                        .and_then(serde_json::Value::as_str)
-                {
-                    record.inputs = vec![path.to_string()];
-                }
-                if record.outputs.is_empty()
-                    && let Some(new_value) = record.data.as_ref().and_then(|d| d.get("newValue"))
-                {
-                    // SP §5.3 outputs are scalar entity references. JSON string
-                    // scalars must appear unquoted (so `"approved"` → `approved`,
-                    // matching the unquoted form of numbers/bools). Other JSON
-                    // shapes (number, bool, null, object, array) fall back to
-                    // the JSON serialization, which already lacks surrounding
-                    // quotes for primitives.
-                    record.outputs = vec![stringify_scalar(new_value)];
-                }
-            }
-            _ => {}
-        }
-
-        // Digests (SP §5.3, §6.3) — computed last, from the final inputs/outputs.
-        if record.input_digest.is_none() {
-            record.input_digest = digest_of(&record.inputs);
-        }
-        if record.output_digest.is_none() {
-            record.output_digest = digest_of(&record.outputs);
-        }
-    }
-}
-
-/// Stringify a JSON scalar for inclusion in `inputs`/`outputs` (SP §5.3).
-///
-/// JSON strings are emitted as their raw value (without surrounding quotes);
-/// everything else falls back to the JSON serialization — which for numbers,
-/// bools, and null is already unquoted, and for composite shapes (objects,
-/// arrays) preserves the embedded structure for downstream exporters.
-///
-/// This keeps the stringified form consistent across scalar JSON types:
-/// `Value::String("x")` → `"x"`, `Value::Number(42)` → `"42"`.
-fn stringify_scalar(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::String(s) => s.clone(),
-        other => other.to_string(),
-    }
-}
-
-/// SHA-256 hex digest of the JSON-serialized `items` vector.
-///
-/// Returns `None` when the vector is empty (per SP §5.3, digests are only
-/// emitted when the corresponding inputs/outputs are present).
-fn digest_of(items: &[String]) -> Option<String> {
-    if items.is_empty() {
-        return None;
-    }
-    use sha2::{Digest, Sha256};
-    let payload = serde_json::to_string(items).unwrap_or_default();
-    Some(format!("{:x}", Sha256::digest(payload.as_bytes())))
-}
-
-fn parse_timestamp(timestamp: &str) -> Result<u64, RuntimeError> {
-    let parsed = OffsetDateTime::parse(timestamp, &Rfc3339)
-        .map_err(|error| RuntimeError::Clock(error.to_string()))?;
-    let millis = parsed.unix_timestamp_nanos() / 1_000_000;
-    u64::try_from(millis).map_err(|_| RuntimeError::Clock("negative timestamp".to_string()))
-}
-
-fn merge_case_state(target: &mut serde_json::Value, updates: &serde_json::Value) {
-    if let (Some(target_object), Some(update_object)) =
-        (target.as_object_mut(), updates.as_object())
-    {
-        for (key, value) in update_object {
-            target_object.insert(key.clone(), value.clone());
-        }
-    }
-}
-
-fn normalize_semver_range_expression(expression: &str) -> String {
-    expression
-        .split("||")
-        .map(|clause| {
-            let clause = clause.trim();
-            if clause.contains(',') {
-                clause.to_string()
-            } else {
-                clause.split_whitespace().collect::<Vec<_>>().join(", ")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" || ")
-}
-
-fn impact_level_label(level: ImpactLevel) -> String {
-    match level {
-        ImpactLevel::RightsImpacting => "rights-impacting",
-        ImpactLevel::SafetyImpacting => "safety-impacting",
-        ImpactLevel::Operational => "operational",
-        ImpactLevel::Informational => "informational",
-    }
-    .to_string()
-}
-
-fn make_task_id(instance_id: &str, ordinal: u64, task_ref: &str) -> String {
-    let encoded_instance_id = URL_SAFE_NO_PAD.encode(instance_id);
-    format!("wos-task:{encoded_instance_id}:{ordinal}:{task_ref}")
-}
-
-fn compensation_provenance(
-    kernel: &KernelDocument,
-    persisted_provenance: &[ProvenanceRecord],
-    appended_provenance: &[ProvenanceRecord],
-) -> Vec<ProvenanceRecord> {
-    let compensation_started_now = appended_provenance.iter().any(|record| {
-        record.record_kind == ProvenanceKind::StateTransition
-            && record.to_state.as_deref() == Some("compensating")
-    });
-    if !compensation_started_now {
-        return Vec::new();
-    }
-
-    let transitions: Vec<(&str, &str)> = persisted_provenance
-        .iter()
-        .chain(appended_provenance.iter())
-        .filter(|record| record.record_kind == ProvenanceKind::StateTransition)
-        .filter_map(|record| Some((record.from_state.as_deref()?, record.to_state.as_deref()?)))
-        .collect();
-
-    let mut visited: Vec<&str> = vec![kernel.lifecycle.initial_state.as_str()];
-    for (_, to) in &transitions {
-        if *to != "compensating" && *to != "compensated" && *to != "done" {
-            visited.push(to);
-        }
-    }
-
-    let mut provenance = Vec::new();
-    let fail_transition = transitions.iter().find(|(_, to)| *to == "compensating");
-    if visited.len() >= 3 {
-        let mut reversed = visited;
-        reversed.reverse();
-        provenance.push(ProvenanceRecord {
-            record_kind: ProvenanceKind::CompensationExecuted,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "order": reversed })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        });
-        provenance.push(ProvenanceRecord {
-            record_kind: ProvenanceKind::CompensationScopeBoundary,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "innerScopeOnly": true })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        });
-    } else if visited.len() == 2 {
-        if let Some((from, _)) = fail_transition {
-            let compensated: Vec<&str> = visited
-                .iter()
-                .filter(|state| **state != *from)
-                .copied()
-                .collect();
-            provenance.push(ProvenanceRecord {
-                record_kind: ProvenanceKind::CompensationExecuted,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "pivotStep": from,
-                    "compensated": compensated,
-                    "excluded": [*from],
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-                transition_tags: Vec::new(),
-                case_file_snapshot: None,
-                outcome: None,
-            });
-        }
-    }
-
-    provenance
-}
-
-fn contract_validation_record(
-    task_id: &str,
-    actor_id: &str,
-    response: &serde_json::Value,
-    validation: &SubmissionValidation,
-) -> ProvenanceRecord {
-    ProvenanceRecord::contract_validation(
-        task_id,
-        Some(actor_id),
-        serde_json::json!({
-            "response": response,
-            "validationOutcome": validation.validation_outcome,
-        }),
-    )
 }
 
 #[cfg(test)]
@@ -1158,8 +437,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use crate::binding::{CaseMutationBundle, PreparedTask};
-    use crate::store::{InMemoryStore, RuntimeStore, StoreError};
+    use crate::binding::{CaseMutationBundle, PreparedTask, SubmissionValidation};
+    use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
     use crate::DurableRuntime;
     use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
@@ -2214,6 +1493,42 @@ mod tests {
                 .load_provenance_window("case-trait", 0, 50)
                 .expect("trait load_provenance_window");
             assert!(!window.is_empty());
+
+            let custody_window = runtime
+                .load_custody_append_window(
+                    "case-trait",
+                    0,
+                    50,
+                    crate::CustodyAppendContext {
+                        event_type_prefix: "wos.kernel".to_string(),
+                        wos_spec_version: "0.1.0".to_string(),
+                        record_schema_ref:
+                            "https://wos-spec.org/schemas/kernel/provenance-record/1.0"
+                                .to_string(),
+                        workflow_ref: "urn:test:durable-trait".to_string(),
+                        case_ref: "case-trait".to_string(),
+                        governance_envelope_ref: None,
+                    },
+                )
+                .expect("trait load_custody_append_window");
+            assert_eq!(custody_window.len(), window.len());
+            assert_eq!(
+                custody_window[0].idempotency_tuple(),
+                (
+                    "case-trait",
+                    custody_window[0].event_type.as_str(),
+                    "case-trait#provenance-0"
+                )
+            );
+            assert!(
+                custody_window[0].event_type.starts_with("wos.kernel."),
+                "unexpected custody event type: {}",
+                custody_window[0].event_type
+            );
+            assert_eq!(
+                custody_window[0].record_canonical_json,
+                serde_json_canonicalizer::to_string(&window[0]).expect("canonical provenance")
+            );
 
             runtime
                 .persist_task_draft(
