@@ -12,7 +12,7 @@
 //! |-----------|---------|----------------------------------------------------------------------|
 //! | K-010     | error   | createTask assignTo MUST reference a declared kernel actor          |
 //! | K-037     | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
-//! | K-049     | warning | Continuous-mode setData/guard dependency cycles (see `continuous_mode`) |
+//! | K-049     | warning (LoadBearing) | Continuous-mode setData/guard dependency cycles (see `continuous_mode`) |
 //! | K-EXT-002 | warning | Keys using the reserved `x-wos-*` namespace (Kernel §10.6)           |
 //!
 //! ## Governance — due process

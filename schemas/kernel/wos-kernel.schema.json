@@ -508,7 +508,7 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the event that triggers this transition for explicit event delivery (Kernel §4.5, §4.6). When omitted, the transition never matches an external `process_event` name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define other `$`-prefixed event names. The transitional sentinel `$continuous` is deprecated (Runtime §10.3 migration) and MUST NOT appear in new documents.",
+          "description": "Identifier of the event that triggers this transition for explicit event delivery (Kernel §4.5, §4.6). When omitted, the transition never matches an external `process_event` name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define other `$`-prefixed event names. When the processor fires a transition from that re-scan, it records a synthetic dispatch label (for example `$postMutationRescan`) in provenance — that label is not a valid authored `event` value.",
           "examples": ["submit", "approve", "reject", "task.completed", "$timeout.task"],
           "x-lm": {
             "critical": true,

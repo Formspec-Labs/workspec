@@ -3,14 +3,12 @@
 //! Continuous-mode isolation invariant (Runtime Companion §10.3).
 //!
 //! In `continuous` evaluation mode, any `setData` mutation re-triggers the
-//! guard loop. A transition T2 whose guard reads a path P that another
-//! transition T1 writes via `setData` can be re-fired whenever T1 runs; if
-//! the graph of `writes → reads` edges among fireable transitions contains
-//! a cycle, the processor can thrash against its 100-cycle cap — the
-//! re-evaluation convergence cap defined in `wos_core::eval_mode` as
-//! `CONVERGENCE_CAP`. The emitted K-049 diagnostic uses the short phrase
-//! "100-cycle cap"; this module docstring spells out both names so the
-//! cross-reference into `wos_core` is obvious. (§4.3b Finding 8.)
+//! guard loop (Runtime Companion §10.3). A transition T2 whose guard reads a
+//! path P that another transition T1 writes via `setData` can be re-fired
+//! whenever T1 runs; if the graph of `writes → reads` edges among transitions
+//! contains a cycle, the processor can loop until stable or until
+//! `wos_core::eval_mode::CONVERGENCE_CAP` (100) stops the re-scan. K-049 surfaces
+//! that shape as a warning.
 //!
 //! This module detects that shape statically and surfaces it as K-049.
 //! The rule only runs when the kernel declares `evaluationMode: continuous`
@@ -247,7 +245,8 @@ pub(super) fn check(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnosti
         head.path.clone(),
         format!(
             "continuous-mode isolation invariant: `setData` → guard dependency cycle ({trail}); \
-             per Runtime §10.3 re-evaluation could thrash against the 100-cycle cap"
+             Runtime Companion §10.3 post-mutation guard re-scan can loop this configuration until stable \
+             or until the processor hits `wos_core::eval_mode::CONVERGENCE_CAP` (100 iterations)"
         ),
     ));
 }
@@ -796,11 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn k049_message_spec_faithful() {
-        // The emitted message MUST describe spec obligations, not runtime
-        // implementation details. See §4.3a #F3a — "100-cycle convergence cap"
-        // wording leaks an implementation threshold; the spec-faithful
-        // phrasing cites Runtime §10.3 directly.
+    fn k049_message_matches_runtime_and_cap_wording() {
         let kernel = kernel_from_json(serde_json::json!({
             "$wosKernel": "1.0",
             "evaluationMode": "continuous",
@@ -813,7 +808,6 @@ mod tests {
                     "idle": {
                         "type": "atomic",
                         "transitions": [{
-                            "event": "tick",
                             "target": "idle",
                             "guard": "caseFile.value > 0",
                             "actions": [{ "action": "setData", "path": "caseFile.value", "value": 1 }]
@@ -828,51 +822,13 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         let msg = &diagnostics[0].message;
         assert!(
-            msg.contains("Runtime §10.3"),
-            "message should cite Runtime §10.3, got: {msg}"
+            msg.contains("Runtime Companion §10.3"),
+            "message should cite Runtime Companion §10.3, got: {msg}"
         );
         assert!(
-            msg.contains("100-cycle cap"),
-            "message should mention the cap, got: {msg}"
+            msg.contains("CONVERGENCE_CAP"),
+            "message should name CONVERGENCE_CAP, got: {msg}"
         );
-        assert!(
-            !msg.contains("runtime will trip"),
-            "message should be implementation-neutral, got: {msg}"
-        );
-    }
-
-    #[test]
-    fn k049_flags_cycle_via_continuous_sentinel_event() {
-        // Runtime re-fires transitions with `"event": "$continuous"` in
-        // continuous mode (see `crates/wos-core/src/eval.rs:412-421`).
-        // K-049 must cover that event shape — the rule's whole point is to
-        // flag guards that would re-fire via the continuous driver.
-        let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
-            "evaluationMode": "continuous",
-            "actors": [{ "id": "operator", "type": "human" }],
-            "impactLevel": "operational",
-            "caseFile": { "fields": { "value": { "type": "number" } } },
-            "lifecycle": {
-                "initialState": "idle",
-                "states": {
-                    "idle": {
-                        "type": "atomic",
-                        "transitions": [{
-                            "event": "$continuous",
-                            "target": "idle",
-                            "guard": "caseFile.value > 0",
-                            "actions": [{ "action": "setData", "path": "caseFile.value", "value": 1 }]
-                        }]
-                    }
-                }
-            }
-        }));
-
-        let mut diagnostics = Vec::new();
-        check(&kernel, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].rule_id, "K-049");
     }
 
     #[test]
@@ -900,7 +856,6 @@ mod tests {
                     "idle": {
                         "type": "atomic",
                         "transitions": [{
-                            "event": "$continuous",
                             "target": "idle",
                             "guard": "caseFile.items[0].x > 0",
                             "actions": [{
@@ -943,7 +898,6 @@ mod tests {
                     "idle": {
                         "type": "atomic",
                         "transitions": [{
-                            "event": "$continuous",
                             "target": "idle",
                             "guard": "sum(caseFile.items[*].y) > 0",
                             "actions": [{

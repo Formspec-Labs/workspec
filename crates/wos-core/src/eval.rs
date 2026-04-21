@@ -118,7 +118,12 @@ pub struct Evaluator {
 
 /// Event name recorded on provenance and guard traces when a transition fires
 /// from continuous-mode post-mutation re-scan (Runtime Companion §10.3).
-const CONTINUOUS_RESCAN_EVENT: &str = "$continuous";
+///
+/// This string is **never** read from a kernel document — it is synthesized
+/// by the evaluator for traces only. Authored §10.3 re-scan participation uses
+/// guard-only transitions (omit `event`); authored `$`-prefixed transition
+/// events are rejected by lint K-007.
+const CONTINUOUS_RESCAN_EVENT: &str = "$postMutationRescan";
 
 /// An observed state transition.
 #[derive(Debug, Clone)]
@@ -429,21 +434,15 @@ impl Evaluator {
     /// Re-run transition guards after a case-file mutation in `continuous` mode.
     ///
     /// Implements Runtime Companion §10.3: collect every transition that omits
-    /// `event` (guard-only), plus deprecated `"$continuous"` transitions, walk
-    /// the active configuration in the same order as explicit events, and fire
-    /// the first whose guard is now true. Provenance records the synthetic
-    /// [`CONTINUOUS_RESCAN_EVENT`] name so downstream exports stay stable.
+    /// `event` (guard-only), walk the active configuration in the same order as
+    /// explicit events, and fire the first whose guard is now true. Provenance
+    /// records the synthetic [`CONTINUOUS_RESCAN_EVENT`] label (not an authored
+    /// event name).
     ///
     /// Returns `true` if a transition fired, `false` if the configuration is
     /// already stable.
     pub fn rescan_on_mutation(&mut self) -> Result<bool, EvalError> {
         self.try_fire_transition(CONTINUOUS_RESCAN_EVENT, None, None, true)
-    }
-
-    /// Deprecated alias for [`Self::rescan_on_mutation`].
-    #[deprecated(note = "use Evaluator::rescan_on_mutation (Runtime §10.3 semantics)")]
-    pub fn try_fire_guardless_transition(&mut self) -> Result<bool, EvalError> {
-        self.rescan_on_mutation()
     }
 
     // ── Transition dispatch ─────────────────────────────────────

@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `ee05cec1b54543c0df9e0179bc1aeee258723fc9`). 103 rules across 35 T1 / 59 T2 / 9 T3 (0 LoadBearing, 0 Stable, 12 Tested, 91 Draft).
+> **Regenerated from code registries** (commit `bdf70635e1c2747252002f5a609d8574ffd474d2`). 103 rules across 35 T1 / 59 T2 / 9 T3 (1 LoadBearing, 0 Stable, 11 Tested, 91 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -132,11 +132,11 @@
 | `K-017` | K | draft | FEL guards MUST NOT reference related case state. | — |
 | `K-019` | K | draft | FEL functions MUST be declared built-ins or registered extensions. | — |
 | `K-037` | K | draft | Fail-fast `$join` fires only on an error final state. | — |
-| `K-049` | K | tested | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | — |
+| `K-049` | K | load_bearing | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | k-049-load-bearing-self-loop.json, k-049-load-bearing-two-node-cycle.json |
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 
-**T2 total: 59** (0 LoadBearing, 0 Stable, 3 Tested, 56 Draft)
+**T2 total: 59** (1 LoadBearing, 0 Stable, 2 Tested, 56 Draft)
 
 ---
 
@@ -163,7 +163,7 @@
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
 | T1 | 35 | 0 | 0 | 2 | 33 |
-| T2 | 59 | 0 | 0 | 3 | 56 |
+| T2 | 59 | 1 | 0 | 2 | 56 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **103** | **0** | **0** | **12** | **91** |
+| **Total** | **103** | **1** | **0** | **11** | **91** |
 

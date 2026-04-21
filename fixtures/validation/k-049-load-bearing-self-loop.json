@@ -1,0 +1,27 @@
+{
+  "$wosKernel": "1.0",
+  "url": "https://wos-spec.org/fixtures/k-049-load-bearing-self-loop",
+  "impactLevel": "operational",
+  "evaluationMode": "continuous",
+  "actors": [{ "id": "operator", "type": "human" }],
+  "caseFile": {
+    "fields": {
+      "value": { "type": "number" }
+    }
+  },
+  "lifecycle": {
+    "initialState": "idle",
+    "states": {
+      "idle": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "idle",
+            "guard": "caseFile.value > 0",
+            "actions": [{ "action": "setData", "path": "caseFile.value", "value": 1 }]
+          }
+        ]
+      }
+    }
+  }
+}

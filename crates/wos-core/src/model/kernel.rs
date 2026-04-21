@@ -303,10 +303,7 @@ pub struct Transition {
     /// When omitted (or serialized with only whitespace, treated as absent),
     /// the transition does **not** match any external event name. In
     /// `continuous` evaluation mode it still participates in the post-mutation
-    /// guard re-scan (Runtime Companion §10.3). The deprecated authoring
-    /// sentinel `"$continuous"` is accepted for one release cycle and treated
-    /// like an omitted event for explicit matching while remaining eligible for
-    /// the re-scan.
+    /// guard re-scan (Runtime Companion §10.3).
     #[serde(
         default,
         deserialize_with = "deserialize_transition_event",
@@ -356,7 +353,6 @@ impl Transition {
         match self.event.as_deref() {
             None => true,
             Some(s) if s.trim().is_empty() => true,
-            Some("$continuous") => true,
             Some(_) => false,
         }
     }

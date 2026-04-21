@@ -1,0 +1,33 @@
+{
+  "$wosKernel": "1.0",
+  "url": "https://wos-spec.org/fixtures/k-049-load-bearing-two-node-cycle",
+  "impactLevel": "operational",
+  "evaluationMode": "continuous",
+  "actors": [{ "id": "operator", "type": "human" }],
+  "caseFile": {
+    "fields": {
+      "a": { "type": "number" },
+      "b": { "type": "number" }
+    }
+  },
+  "lifecycle": {
+    "initialState": "idle",
+    "states": {
+      "idle": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "idle",
+            "guard": "caseFile.a > 0",
+            "actions": [{ "action": "setData", "path": "caseFile.b", "value": 1 }]
+          },
+          {
+            "target": "idle",
+            "guard": "caseFile.b > 0",
+            "actions": [{ "action": "setData", "path": "caseFile.a", "value": 1 }]
+          }
+        ]
+      }
+    }
+  }
+}

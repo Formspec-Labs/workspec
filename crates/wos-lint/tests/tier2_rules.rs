@@ -11,6 +11,7 @@
 
 use serde_json::json;
 use std::io::Write;
+use std::path::PathBuf;
 use wos_lint::Severity;
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -2448,5 +2449,41 @@ fn ai023_severity_is_error() {
         severity_of(&diags, "AI-023"),
         Some(Severity::Error),
         "AI-023 should be error severity (MUST violation when no agent-free path exists)"
+    );
+}
+
+fn wos_spec_workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("wos-spec workspace root is two levels above wos-lint crate")
+        .to_path_buf()
+}
+
+/// K-049 LoadBearing fixture: `k-049-load-bearing-self-loop.json`
+#[test]
+fn k049_load_bearing_fixture_self_loop_triggers_k049() {
+    let root = wos_spec_workspace_root();
+    let path = root.join("fixtures/validation/k-049-load-bearing-self-loop.json");
+    let json = std::fs::read_to_string(&path).expect("read k-049-load-bearing-self-loop.json");
+    let doc: serde_json::Value = serde_json::from_str(&json).expect("parse kernel JSON");
+    let diags = lint_project_with_docs(vec![("kernel.json", doc)]);
+    assert!(
+        has_rule(&diags, "K-049"),
+        "expected K-049 from k-049-load-bearing-self-loop.json: {diags:?}"
+    );
+}
+
+/// K-049 LoadBearing fixture: `k-049-load-bearing-two-node-cycle.json`
+#[test]
+fn k049_load_bearing_fixture_two_node_cycle_triggers_k049() {
+    let root = wos_spec_workspace_root();
+    let path = root.join("fixtures/validation/k-049-load-bearing-two-node-cycle.json");
+    let json = std::fs::read_to_string(&path).expect("read k-049-load-bearing-two-node-cycle.json");
+    let doc: serde_json::Value = serde_json::from_str(&json).expect("parse kernel JSON");
+    let diags = lint_project_with_docs(vec![("kernel.json", doc)]);
+    assert!(
+        has_rule(&diags, "K-049"),
+        "expected K-049 from k-049-load-bearing-two-node-cycle.json: {diags:?}"
     );
 }
