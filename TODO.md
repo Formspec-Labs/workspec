@@ -10,7 +10,7 @@ Working backlog for the Workflow Orchestration Standard specification suite. Ses
 |---|---|
 | Specs / schemas | 20 specs · 25 schemas · 0 SCHEMA-DOC-001 violations |
 | Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) · 6 MVP (`wos-authoring`, `wos-mcp`, `wos-synth-core/-mock/-anthropic/-cli`) · 1 spike (`wos-synth-spike`, keep-with-deletion-horizon) |
-| Tests | `cargo test --workspace` 1012 green · `pytest tests/schemas/` 188 / 11 skipped / 1 xfailed · `npm run docs:check` exit 0 |
+| Tests | `cargo test --workspace` 1021 green · `pytest tests/schemas/` 190 / 11 skipped / 1 xfailed · `npm run docs:check` exit 0 |
 | Lint matrix | 103 rules (35 T1 · 59 T2 · 9 T3 · 1 LoadBearing · 11 Tested · 91 Draft) |
 | CI gates | `schema_doc_zero_regression` · `every_promoted_*_rule_has_executable_or_annotated_evidence` · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
@@ -96,7 +96,7 @@ Build on the stable provenance export surface. #48 Merkle provenance moved to Tr
 
 Per [vision-model.md v1.0 spec-freeze line](../.claude/vision-model.md#v10-spec-freeze-line): "every normative MUST across Kernel + Governance + AI Integration has a passing Tested fixture." CI lint-matrix gates cover rule → fixture; these close the remaining verifiability claims.
 
-- **Provenance emission completeness audit** `[7 / 4 / 5]` (**35**) — verify every WOS MUST that produces an audit event actually emits the provenance record. Distinct from `every_promoted_*_rule_has_executable_or_annotated_evidence`: that checks rules; this checks MUST → emission. Sequences after #22a ProvenanceKind tier-typing so the audit runs against the tier-split structure, not pre-split `provenance.rs`.
+- **Provenance emission completeness audit** `[7 / 4 / 5]` (**35**) — verify every WOS MUST that produces an audit event actually emits the provenance record. Distinct from `every_promoted_*_rule_has_executable_or_annotated_evidence`: that checks rules; this checks MUST → emission. **Unblocked:** #22a ProvenanceKind tier-typing landed (2026-04-21); audit runs against the tier-split structure.
 - **Kernel-Basic conformance profile LoadBearing declaration** `[5 / 2 / 3]` (**15**) — promote the profile; fixtures already exist via the shared conformance suite. One-line declaration plus any missing lint-matrix wiring.
 
 ### Regulatory — 1.0 separate-spec deliverables
