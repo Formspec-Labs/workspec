@@ -9,6 +9,8 @@
 pub mod binding;
 pub mod cloudevents;
 pub mod companion;
+pub mod custody;
+mod durable;
 pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
@@ -21,14 +23,20 @@ pub use binding::{
     SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
+#[doc(inline)]
+pub use custody::{
+    CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata, CustodyLifecycleRef,
+};
+#[doc(inline)]
+pub use durable::DurableRuntime;
 pub use integration::{
     IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
     TargetWorkflow,
 };
 pub use runtime::{
-    Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
-    RuntimeError, RuntimeEventContext, RuntimeEventDecision, SystemClock, TaskSubmissionResult,
-    WosRuntime, populate_provenance_record_fields, stamp_provenance,
+    populate_provenance_record_fields, stamp_provenance, Clock, CompanionPolicy,
+    CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, RuntimeEventContext,
+    RuntimeEventDecision, SystemClock, TaskSubmissionResult, WosRuntime,
 };
 pub use store::{
     InMemoryStore, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,

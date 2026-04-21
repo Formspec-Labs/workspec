@@ -2,39 +2,36 @@
 
 //! Runtime command surface for WOS processors.
 
+mod actions;
+mod tasks;
+mod timers;
+
 use std::error::Error as StdError;
 
-use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::DateTime;
-use semver::{Version, VersionReq};
-use time::OffsetDateTime;
+use base64::Engine as _;
 use time::format_description::well_known::Rfc3339;
-use wos_core::business_calendar::{
-    BusinessCalendarDocument, BusinessCalendarError, next_business_moment,
-};
-use wos_core::eval::{Evaluator, GuardEvaluation, ObservedAction, ObservedTransition};
+use time::OffsetDateTime;
+use wos_core::business_calendar::BusinessCalendarDocument;
+use wos_core::eval::{Evaluator, GuardEvaluation, ObservedTransition};
 use wos_core::instance::{
-    ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
+    CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
 };
-use wos_core::model::governance::DelegationScope;
-use wos_core::model::kernel::{ActionKind, ActorKind, ImpactLevel, KernelDocument};
+use wos_core::model::kernel::{ActorKind, ImpactLevel, KernelDocument};
 use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
-use wos_core::timer::{Timer, max_tolerance_ms, tolerance_to_iso};
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
 };
 
+use self::timers::{
+    annotate_timer_created_with_calendar_version, annotate_timer_created_with_convergence_error,
+    materialize_due_timers, timers_to_state,
+};
 use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
-use crate::integration::{IntegrationBinding, IntegrationProfileDocument};
-use crate::integration_handlers::{
-    InvocationContext, dispatch_integration_binding, load_or_invoke_service_result,
-};
+use crate::durable::DurableRuntime;
+use crate::integration::IntegrationProfileDocument;
 use crate::milestones::evaluate_milestones;
-use crate::store::{
-    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StoreError, TaskArtifact,
-    TaskArtifactKind,
-};
+use crate::store::{RuntimeRecord, RuntimeStore, StoreError};
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
 const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
@@ -725,1022 +722,70 @@ impl WosRuntime {
 
         Ok(results)
     }
+}
 
-    /// Persist a draft task response.
-    pub fn persist_task_draft(
+impl DurableRuntime for WosRuntime {
+    fn create_instance(
+        &mut self,
+        request: CreateInstanceRequest,
+    ) -> Result<CaseInstance, RuntimeError> {
+        WosRuntime::create_instance(self, request)
+    }
+
+    fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
+        WosRuntime::load_instance(self, instance_id)
+    }
+
+    fn enqueue_event(
+        &mut self,
+        instance_id: &str,
+        event: PendingEvent,
+    ) -> Result<(), RuntimeError> {
+        WosRuntime::enqueue_event(self, instance_id, event)
+    }
+
+    fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
+        WosRuntime::drain_once(self, instance_id)
+    }
+
+    fn drain_until_idle(
+        &mut self,
+        instance_id: &str,
+    ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
+        WosRuntime::drain_until_idle(self, instance_id)
+    }
+
+    fn persist_task_draft(
         &mut self,
         task_id: &str,
         response: serde_json::Value,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<PersistDraftResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        if let Some(token) = idempotency_token {
-            let replay_key = ReplayKey {
-                operation: ReplayOperation::PersistDraft,
-                task_id: task_id.to_string(),
-                actor_id: actor_id.to_string(),
-                token: token.to_string(),
-            };
-            if let Some(ReplayValue::Draft(result)) = record.replay_entries.get(&replay_key) {
-                return Ok(result.clone());
-            }
-        }
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-
-        let task = record.instance.active_tasks[task_index].clone();
-        authorize_actor(&*self.access_control, &task, actor_id)?;
-        let status = response
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| RuntimeError::InvalidResponseStatus("missing draft status".to_string()))?
-            .to_string();
-        if !matches!(status.as_str(), "in-progress" | "amended" | "stopped") {
-            return Err(RuntimeError::InvalidResponseStatus(status));
-        }
-
-        let artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Draft,
-            response,
-            actor_id,
-            &now_iso,
-        );
-        let result = PersistDraftResult {
-            artifact_id: artifact.artifact_id.clone(),
-        };
-        record
-            .artifacts
-            .insert(artifact.artifact_id.clone(), artifact.clone());
-        let mut provenance = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskDraftPersisted,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({
-                "artifactId": artifact.artifact_id,
-                "status": status,
-            })),
-        );
-        provenance.timestamp = now_iso.clone();
-        // Populate SP §5.3 fields so persist-task-draft records carry the same
-        // shape as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut provenance),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.instance.provenance_position += 1;
-        record.provenance_log.push(provenance);
-        record.instance.updated_at = now_iso;
-
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::PersistDraft,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Draft(result.clone()),
-            );
-        }
-
-        self.store.save_record(record)?;
-        Ok(result)
+        WosRuntime::persist_task_draft(self, task_id, response, actor_id, idempotency_token)
     }
 
-    /// Record a UI dismissal without advancing lifecycle state.
-    pub fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
-        let now_iso = format_timestamp(self.clock.now_ms())?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-        let task = &record.instance.active_tasks[task_index];
-        if task.context.is_some() {
-            self.presenter.dismiss_task(task_id, reason)?;
-        }
-
-        record.instance.provenance_position += 1;
-        let mut dismissal = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskDismissed,
-            task_id,
-            task.assigned_actor.as_deref(),
-            Some(serde_json::json!({ "reason": reason })),
-        );
-        dismissal.timestamp = now_iso.clone();
-        // Populate SP §5.3 fields so dismissal records carry the same shape
-        // as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut dismissal),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.provenance_log.push(dismissal);
-        record.instance.updated_at = now_iso;
-        self.store.save_record(record)?;
-        Ok(())
+    fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
+        WosRuntime::dismiss_task(self, task_id, reason)
     }
 
-    /// Submit a completed task response.
-    pub fn submit_task_response(
+    fn submit_task_response(
         &mut self,
         task_id: &str,
         response: serde_json::Value,
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        if let Some(token) = idempotency_token {
-            let replay_key = ReplayKey {
-                operation: ReplayOperation::SubmitTaskResponse,
-                task_id: task_id.to_string(),
-                actor_id: actor_id.to_string(),
-                token: token.to_string(),
-            };
-            if let Some(ReplayValue::Submission(result)) = record.replay_entries.get(&replay_key) {
-                return Ok(result.clone());
-            }
-        }
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-
-        let task = record.instance.active_tasks[task_index].clone();
-        authorize_actor(&*self.access_control, &task, actor_id)?;
-        let status = response
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| {
-                RuntimeError::InvalidResponseStatus("missing response status".to_string())
-            })?
-            .to_string();
-        if status != "completed" {
-            let result = TaskSubmissionResult::Rejected {
-                code: "taskResponseStatusNotCompleted".to_string(),
-            };
-            self.record_submission_rejection(
-                &mut record,
-                task_id,
-                actor_id,
-                "taskResponseStatusNotCompleted",
-                &now_iso,
-                idempotency_token,
-                result.clone(),
-            )?;
-            return Ok(result);
-        }
-
-        let binding = task
-            .binding
-            .as_deref()
-            .ok_or_else(|| RuntimeError::UnsupportedBinding("task has no binding".to_string()))?;
-        let adapter = self
-            .bindings
-            .get(binding)
-            .ok_or_else(|| RuntimeError::UnsupportedBinding(binding.to_string()))?;
-        let validation = adapter.validate_submission(&task, &response)?;
-        let mut provenance = vec![ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskResponseSubmitted,
-            task_id,
-            Some(actor_id),
-            None,
-        )];
-        provenance.push(contract_validation_record(
-            task_id,
-            actor_id,
-            &response,
-            &validation,
-        ));
-
-        if !validation_passed(&validation) {
-            let emitted_event = remove_task_with_event(
-                &mut record.instance,
-                task_index,
-                FAILURE_EVENT_EXTENSION_KEY,
-                actor_id,
-                &now_iso,
-            );
-            provenance.push(ProvenanceRecord::task_lifecycle(
-                ProvenanceKind::TaskFailed,
-                task_id,
-                Some(actor_id),
-                Some(serde_json::json!({
-                    "code": "validationFailed",
-                    "validationOutcome": validation.validation_outcome,
-                })),
-            ));
-            // Resolve kernel so we can populate SP §5.3 fields before persisting.
-            let kernel = self.resolver.resolve_kernel(
-                &record.instance.definition_url,
-                &record.instance.definition_version,
-            )?;
-            populate_provenance_record_fields(
-                &mut provenance,
-                &kernel,
-                &record.instance.definition_version,
-            );
-            stamp_provenance(&mut provenance, &now_iso);
-            record.instance.provenance_position += provenance.len() as u64;
-            record.provenance_log.extend(provenance);
-            record.instance.updated_at = now_iso;
-            let result = TaskSubmissionResult::Failed {
-                code: "validationFailed".to_string(),
-                emitted_event,
-            };
-            if let Some(token) = idempotency_token {
-                record.replay_entries.insert(
-                    ReplayKey {
-                        operation: ReplayOperation::SubmitTaskResponse,
-                        task_id: task_id.to_string(),
-                        actor_id: actor_id.to_string(),
-                        token: token.to_string(),
-                    },
-                    ReplayValue::Submission(result.clone()),
-                );
-            }
-            self.store.save_record(record)?;
-            return Ok(result);
-        }
-
-        let accepted_artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Accepted,
-            response.clone(),
-            actor_id,
-            &now_iso,
-        );
-        record.artifacts.insert(
-            accepted_artifact.artifact_id.clone(),
-            accepted_artifact.clone(),
-        );
-        let mutation = adapter.compute_case_mutation(&task, &response)?;
-        let case_mutated = mutation
-            .as_ref()
-            .is_some_and(|bundle| !bundle.field_updates.is_empty());
-        if let Some(bundle) = mutation {
-            if !bundle.field_updates.is_empty() {
-                merge_case_state(
-                    &mut record.instance.case_state,
-                    &serde_json::Value::Object(bundle.field_updates.clone()),
-                );
-                provenance.push(ProvenanceRecord::task_lifecycle(
-                    ProvenanceKind::DataMapping,
-                    task_id,
-                    Some(actor_id),
-                    Some(serde_json::json!({
-                        "artifactId": accepted_artifact.artifact_id,
-                        "mappingRef": task.response_mapping_ref,
-                    })),
-                ));
-            }
-        }
-
-        // Milestone firing: evaluate after durable case-state write, before reactive
-        // transitions drain (Kernel S4.13).  Records follow any DataMapping record so
-        // the provenance stream reads: data changed → milestone fired.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
-        provenance.extend(milestone_records);
-
-        let emitted_event = remove_task_with_event(
-            &mut record.instance,
-            task_index,
-            COMPLETION_EVENT_EXTENSION_KEY,
-            actor_id,
-            &now_iso,
-        );
-        provenance.push(ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskCompleted,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({
-                "artifactId": accepted_artifact.artifact_id,
-                "caseMutated": case_mutated,
-            })),
-        ));
-        populate_provenance_record_fields(
-            &mut provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut provenance, &now_iso);
-        record.instance.provenance_position += provenance.len() as u64;
-        record.provenance_log.extend(provenance);
-        record.instance.updated_at = now_iso;
-
-        let result = TaskSubmissionResult::Completed {
-            artifact_id: accepted_artifact.artifact_id,
-            case_mutated,
-            emitted_event,
-        };
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::SubmitTaskResponse,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Submission(result.clone()),
-            );
-        }
-        self.store.save_record(record)?;
-        Ok(result)
+        WosRuntime::submit_task_response(self, task_id, response, actor_id, idempotency_token)
     }
 
-    /// Load a provenance window by cursor and limit.
-    pub fn load_provenance_window(
+    fn load_provenance_window(
         &self,
         instance_id: &str,
         cursor: usize,
         limit: usize,
     ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        let record = self.store.load_record(instance_id)?;
-        Ok(record
-            .provenance_log
-            .iter()
-            .skip(cursor)
-            .take(limit)
-            .cloned()
-            .collect())
-    }
-
-    fn load_record_for_task_id(&self, task_id: &str) -> Result<RuntimeRecord, RuntimeError> {
-        let instance_id = task_instance_id(task_id)?;
-        Ok(self.store.load_record(&instance_id)?)
-    }
-
-    fn apply_observed_actions(
-        &mut self,
-        kernel: &KernelDocument,
-        record: &mut RuntimeRecord,
-        actions: &[ObservedAction],
-        now_iso: &str,
-    ) -> Result<(Vec<String>, Vec<String>, Vec<ProvenanceRecord>), RuntimeError> {
-        let mut created_task_ids = Vec::new();
-        let mut emitted_events = Vec::new();
-        let mut provenance = Vec::new();
-
-        for observed in actions {
-            match observed.action.action {
-                ActionKind::CreateTask => {
-                    let task = self.create_active_task(kernel, record, observed, now_iso)?;
-                    created_task_ids.push(task.task_id.clone());
-                    provenance.push(ProvenanceRecord::task_lifecycle(
-                        ProvenanceKind::TaskCreated,
-                        &task.task_id,
-                        observed.actor_id.as_deref(),
-                        Some(serde_json::json!({
-                            "taskRef": task.task_ref,
-                            "binding": task.binding,
-                        })),
-                    ));
-                    record.instance.active_tasks.push(task);
-                }
-                ActionKind::EmitEvent => {
-                    let event_name = observed.action.event_type.clone().ok_or_else(|| {
-                        RuntimeError::UnsupportedAction("emitEvent missing eventType".to_string())
-                    })?;
-                    record.instance.pending_events.push(PendingEvent {
-                        event: event_name.clone(),
-                        actor_id: observed.actor_id.clone(),
-                        data: observed.action.data.clone(),
-                        timestamp: now_iso.to_string(),
-                        idempotency_token: None,
-                    });
-                    emitted_events.push(event_name);
-                }
-                ActionKind::InvokeService => {
-                    let service_ref = observed.action.service_ref.clone().ok_or_else(|| {
-                        RuntimeError::UnsupportedAction(
-                            "invokeService missing serviceRef".to_string(),
-                        )
-                    })?;
-                    let integration_binding = self
-                        .integration_profile
-                        .as_ref()
-                        .and_then(|profile| profile.bindings.get(&service_ref))
-                        .cloned();
-                    if let Some(binding) = integration_binding {
-                        provenance.extend(self.invoke_integration_binding(
-                            record,
-                            kernel,
-                            observed,
-                            &service_ref,
-                            &binding,
-                            now_iso,
-                        )?);
-                        continue;
-                    }
-
-                    let input = observed
-                        .action
-                        .data
-                        .clone()
-                        .unwrap_or_else(|| serde_json::json!({}));
-                    let idempotency_key = observed.action.idempotency_key.as_deref();
-                    let (step_result, reused_persisted_result) = load_or_invoke_service_result(
-                        self.service.as_ref(),
-                        record,
-                        &service_ref,
-                        &input,
-                        idempotency_key,
-                        now_iso,
-                    )?;
-
-                    if reused_persisted_result {
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::IdempotencyDedup,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "serviceRef": service_ref,
-                                "idempotencyKey": idempotency_key,
-                                "stepResultRecordedAt": step_result.recorded_at,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                            transition_tags: Vec::new(),
-                            case_file_snapshot: None,
-                            outcome: None,
-                        });
-                    } else {
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::StepResultPersisted,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "serviceRef": service_ref,
-                                "idempotencyKey": idempotency_key,
-                                "output": step_result.output,
-                                "persistedBeforeAdvance": true,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                            transition_tags: Vec::new(),
-                            case_file_snapshot: None,
-                            outcome: None,
-                        });
-                    }
-
-                    if let Some(contract_ref) = observed.action.contract_ref.as_deref() {
-                        let validation_result =
-                            self.validator.validate(contract_ref, &step_result.output)?;
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::ContractValidation,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "contractRef": contract_ref,
-                                "structured": true,
-                                "valid": validation_result.valid,
-                                "errors": validation_result.errors,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                            transition_tags: Vec::new(),
-                            case_file_snapshot: None,
-                            outcome: None,
-                        });
-                    }
-                }
-                ActionKind::SetData
-                | ActionKind::StartTimer
-                | ActionKind::CancelTimer
-                | ActionKind::Log => {}
-            }
-        }
-
-        Ok((created_task_ids, emitted_events, provenance))
-    }
-
-    fn invoke_integration_binding(
-        &mut self,
-        record: &mut RuntimeRecord,
-        kernel: &KernelDocument,
-        observed: &ObservedAction,
-        service_ref: &str,
-        binding: &IntegrationBinding,
-        now_iso: &str,
-    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        self.validate_integration_profile_target(kernel, &record.instance)?;
-        let ctx = InvocationContext {
-            service: self.service.as_ref(),
-            validator: self.validator.as_ref(),
-        };
-        dispatch_integration_binding(
-            &ctx,
-            record,
-            kernel,
-            observed,
-            service_ref,
-            binding,
-            now_iso,
-        )
-    }
-
-    fn validate_integration_profile_target(
-        &self,
-        kernel: &KernelDocument,
-        instance: &CaseInstance,
-    ) -> Result<(), RuntimeError> {
-        let Some(profile) = self.integration_profile.as_ref() else {
-            return Ok(());
-        };
-
-        if profile.target_workflow.url != instance.definition_url {
-            return Err(RuntimeError::Integration(format!(
-                "integration profile targets '{}' but instance uses '{}'",
-                profile.target_workflow.url, instance.definition_url
-            )));
-        }
-
-        if let Some(compatible_versions) = profile.target_workflow.compatible_versions.as_deref() {
-            let requested_version =
-                Version::parse(&instance.definition_version).map_err(|error| {
-                    RuntimeError::Integration(format!(
-                        "instance definition version '{}' is not valid semver: {error}",
-                        instance.definition_version
-                    ))
-                })?;
-            let normalized_versions = normalize_semver_range_expression(compatible_versions);
-            let version_req = VersionReq::parse(&normalized_versions).map_err(|error| {
-                RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' is not valid semver: {error}",
-                    compatible_versions
-                ))
-            })?;
-            if !version_req.matches(&requested_version) {
-                return Err(RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' do not include instance version '{}'",
-                    compatible_versions, instance.definition_version
-                )));
-            }
-        }
-
-        if kernel.url.as_deref() != Some(instance.definition_url.as_str()) {
-            return Err(RuntimeError::Integration(format!(
-                "kernel document url '{}' does not match instance definition url '{}'",
-                kernel.url.as_deref().unwrap_or_default(),
-                instance.definition_url
-            )));
-        }
-
-        Ok(())
-    }
-
-    fn stage_pending_tasks_for_presentation(
-        &mut self,
-        record: &mut RuntimeRecord,
-        now_iso: &str,
-    ) -> Result<(Vec<FormspecTaskContext>, Vec<ProvenanceRecord>), RuntimeError> {
-        let mut pending_presentations = Vec::new();
-        let mut provenance = Vec::new();
-
-        for task in &mut record.instance.active_tasks {
-            let Some(context) = task.context.as_ref() else {
-                continue;
-            };
-            if task.binding.as_deref() != Some("formspec") {
-                continue;
-            }
-            if task.status != ActiveTaskStatus::Created {
-                continue;
-            }
-
-            task.status = ActiveTaskStatus::Assigned;
-            task.updated_at = now_iso.to_string();
-            pending_presentations.push(context.clone());
-            provenance.push(ProvenanceRecord::task_lifecycle(
-                ProvenanceKind::TaskPresented,
-                &task.task_id,
-                task.assigned_actor.as_deref(),
-                Some(serde_json::json!({
-                    "definitionUrl": task.definition_url,
-                    "definitionVersion": task.definition_version,
-                })),
-            ));
-        }
-
-        Ok((pending_presentations, provenance))
-    }
-
-    fn deliver_pending_presentations(
-        &mut self,
-        contexts: &[FormspecTaskContext],
-    ) -> Result<(), RuntimeError> {
-        for context in contexts {
-            self.presenter.present_task(context)?;
-        }
-        Ok(())
-    }
-
-    fn create_active_task(
-        &mut self,
-        kernel: &KernelDocument,
-        record: &mut RuntimeRecord,
-        observed: &ObservedAction,
-        now_iso: &str,
-    ) -> Result<ActiveTask, RuntimeError> {
-        let action = &observed.action;
-        let task_ref = action.task_ref.clone().ok_or_else(|| {
-            RuntimeError::MissingMetadata("createTask missing taskRef".to_string())
-        })?;
-        let task_sequence = record.instance.next_task_sequence + 1;
-        record.instance.next_task_sequence = task_sequence;
-        let task_id = make_task_id(&record.instance.instance_id, task_sequence, &task_ref);
-
-        let mut task = ActiveTask {
-            task_id,
-            task_ref,
-            status: ActiveTaskStatus::Created,
-            assigned_actor: action.assign_to.clone(),
-            contract_ref: action.contract_ref.clone(),
-            binding: None,
-            definition_url: None,
-            definition_version: None,
-            prefill_mapping_ref: action.prefill_mapping_ref.clone(),
-            response_mapping_ref: action.response_mapping_ref.clone(),
-            deadline: None,
-            impact_level: kernel.impact_level.map(impact_level_label),
-            context: None,
-            last_validation_outcome: None,
-            created_at: now_iso.to_string(),
-            updated_at: now_iso.to_string(),
-            extensions: Default::default(),
-        };
-
-        if let Some(completion_event) = &action.completion_event {
-            task.extensions.insert(
-                COMPLETION_EVENT_EXTENSION_KEY.to_string(),
-                serde_json::Value::String(completion_event.clone()),
-            );
-        }
-        if let Some(failure_event) = &action.failure_event {
-            task.extensions.insert(
-                FAILURE_EVENT_EXTENSION_KEY.to_string(),
-                serde_json::Value::String(failure_event.clone()),
-            );
-        }
-
-        if let Some(contract_key) = &task.contract_ref {
-            let contract = kernel
-                .contracts
-                .get(contract_key)
-                .ok_or_else(|| RuntimeError::ContractNotFound(contract_key.clone()))?;
-            task.binding = Some(contract.binding.clone());
-            task.definition_url = Some(contract.reference.clone());
-            task.definition_version = Some(kernel.version.clone().ok_or_else(|| {
-                RuntimeError::MissingMetadata("kernel version required".to_string())
-            })?);
-            if task.prefill_mapping_ref.is_none() {
-                task.prefill_mapping_ref = contract.prefill_mapping_ref.clone();
-            }
-            if task.response_mapping_ref.is_none() {
-                task.response_mapping_ref = contract.response_mapping_ref.clone();
-            }
-
-            if contract.binding == "formspec" {
-                let assigned_actor = task.assigned_actor.clone().ok_or_else(|| {
-                    RuntimeError::MissingMetadata(
-                        "formspec task requires assigned actor".to_string(),
-                    )
-                })?;
-                let adapter = self
-                    .bindings
-                    .get(&contract.binding)
-                    .ok_or_else(|| RuntimeError::UnsupportedBinding(contract.binding.clone()))?;
-                let prepared = adapter.prepare_task(&task, &record.instance.case_state)?;
-                task.context = Some(FormspecTaskContext {
-                    task_id: task.task_id.clone(),
-                    instance_id: record.instance.instance_id.clone(),
-                    contract_ref: contract_key.clone(),
-                    definition_url: task.definition_url.clone().unwrap_or_default(),
-                    definition_version: task.definition_version.clone().unwrap_or_default(),
-                    binding: contract.binding.clone(),
-                    assigned_actor,
-                    prefill_data: prepared.prefill_data,
-                    prefill_mapping_ref: task.prefill_mapping_ref.clone(),
-                    response_mapping_ref: task.response_mapping_ref.clone(),
-                    deadline: task.deadline.clone(),
-                    impact_level: task.impact_level.clone(),
-                    extensions: Default::default(),
-                });
-            } else {
-                return Err(RuntimeError::UnsupportedBinding(contract.binding.clone()));
-            }
-        }
-
-        Ok(task)
-    }
-
-    fn record_submission_rejection(
-        &mut self,
-        record: &mut RuntimeRecord,
-        task_id: &str,
-        actor_id: &str,
-        code: &str,
-        updated_at: &str,
-        idempotency_token: Option<&str>,
-        result: TaskSubmissionResult,
-    ) -> Result<(), RuntimeError> {
-        record.instance.provenance_position += 1;
-        let mut rejection = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskResponseRejected,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({ "code": code })),
-        );
-        rejection.timestamp = updated_at.to_string();
-        // Populate SP §5.3 fields so rejection records carry the same shape
-        // as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut rejection),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.provenance_log.push(rejection);
-        record.instance.updated_at = updated_at.to_string();
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::SubmitTaskResponse,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Submission(result),
-            );
-        }
-        self.store.save_record(record.clone())?;
-        Ok(())
-    }
-}
-
-fn materialize_due_timers(
-    instance: &mut CaseInstance,
-    now_ms: u64,
-    now_iso: &str,
-) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-    let mut due = Vec::new();
-    let mut remaining = Vec::new();
-
-    for timer in instance.timers.drain(..) {
-        if parse_timestamp(&timer.deadline)? <= now_ms {
-            due.push(timer);
-        } else {
-            remaining.push(timer);
-        }
-    }
-    instance.timers = remaining;
-
-    let mut provenance = Vec::new();
-    for timer in due {
-        provenance.push(ProvenanceRecord::timer_fired(&timer.timer_id, &timer.event));
-        let deadline_ms = parse_timestamp(&timer.deadline)?;
-        let lateness_ms = now_ms.saturating_sub(deadline_ms);
-        let max_tolerance = max_tolerance_ms(timer.duration_ms.unwrap_or(0));
-        if lateness_ms > max_tolerance {
-            let tolerance_iso = tolerance_to_iso(max_tolerance);
-            provenance.push(ProvenanceRecord::tolerance_violation(
-                &timer.timer_id,
-                timer.duration_iso.as_deref().unwrap_or("P0D"),
-                &tolerance_iso,
-            ));
-        }
-        instance.pending_events.push(PendingEvent {
-            event: timer.event.clone(),
-            actor_id: None,
-            data: Some(serde_json::json!({ "timerId": timer.timer_id })),
-            timestamp: now_iso.to_string(),
-            idempotency_token: None,
-        });
-    }
-
-    Ok(provenance)
-}
-
-/// Convert all timers to `TimerState`, computing calendar-adjusted deadlines lazily.
-///
-/// Returns `(states, convergence_error_timer_ids)`.  The second element lists
-/// timer IDs whose deadline fell back to naive wall-clock time because the
-/// business calendar evaluator did not converge (degenerate calendar).
-/// Callers MUST annotate the corresponding `TimerCreated` provenance records
-/// with `calendarVersionConvergenceError: true`.
-fn timers_to_state(
-    timers: &wos_core::timer::Timers,
-    calendar: Option<&BusinessCalendarDocument>,
-) -> Result<(Vec<wos_core::instance::TimerState>, Vec<String>), RuntimeError> {
-    let mut states = Vec::with_capacity(timers.len());
-    let mut convergence_error_ids = Vec::new();
-    for timer in timers.iter() {
-        let (state, had_error) = timer_to_state(timer, calendar)?;
-        if had_error {
-            convergence_error_ids.push(state.timer_id.clone());
-        }
-        states.push(state);
-    }
-    Ok((states, convergence_error_ids))
-}
-
-/// Convert a `Timer` to a `TimerState`, computing the deadline lazily.
-///
-/// When a business calendar is attached, the deadline is re-computed using
-/// [`next_business_moment`] each time this function is called (lazy evaluation).
-/// This means calendar updates between events shift future deadlines on the
-/// next drain.  When no calendar is attached, the raw wall-clock deadline is
-/// used unchanged.
-///
-/// Returns `(TimerState, had_convergence_error)`.  The second field is `true`
-/// when a degenerate calendar caused snap-forward to fall back to the naive
-/// deadline; callers should annotate the `TimerCreated` provenance record.
-fn timer_to_state(
-    timer: &Timer,
-    calendar: Option<&BusinessCalendarDocument>,
-) -> Result<(wos_core::instance::TimerState, bool), RuntimeError> {
-    let (deadline_ms, had_convergence_error) = match calendar {
-        Some(cal) => business_deadline_ms(timer, cal)?,
-        None => (timer.deadline_ms, false),
-    };
-
-    let state = wos_core::instance::TimerState {
-        timer_id: timer.id.clone(),
-        deadline: format_timestamp(deadline_ms)?,
-        event: timer.fires_event.clone(),
-        scope_state: if timer.created_in_state.is_empty() {
-            None
-        } else {
-            Some(timer.created_in_state.clone())
-        },
-        duration_iso: Some(timer.duration_iso.clone()),
-        duration_ms: Some(timer.duration_ms),
-        created_at_ms: Some(timer.created_at_ms),
-    };
-    Ok((state, had_convergence_error))
-}
-
-/// Compute a business-calendar–adjusted deadline for `timer`.
-///
-/// Uses `timer.created_at_ms` as the authoritative start time, then advances
-/// through business time by `timer.duration_ms` using the attached calendar.
-///
-/// Returns `(deadline_ms, had_convergence_error)`.  When the calendar evaluator
-/// does not converge (degenerate calendar), falls back to the naive wall-clock
-/// deadline and sets the flag to `true` so the caller can annotate provenance.
-///
-/// # Invariant
-///
-/// `Timer.created_at_ms` is the fixed origin, stamped once at timer-creation
-/// time.  Using it here ensures that repeated recomputations across drains —
-/// even after a calendar-snapped `deadline_ms` has been persisted — always
-/// produce the same result.
-fn business_deadline_ms(
-    timer: &Timer,
-    calendar: &BusinessCalendarDocument,
-) -> Result<(u64, bool), RuntimeError> {
-    let start_ms = timer.created_at_ms;
-    let start_secs = i64::try_from(start_ms / 1000)
-        .map_err(|_| RuntimeError::Clock("timer start timestamp out of range".to_string()))?;
-    let start_utc = DateTime::from_timestamp(start_secs, 0)
-        .ok_or_else(|| RuntimeError::Clock("invalid timer start timestamp".to_string()))?;
-
-    let duration = chrono::Duration::milliseconds(
-        i64::try_from(timer.duration_ms)
-            .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
-    );
-
-    match next_business_moment(start_utc, duration, calendar) {
-        Ok(result) => {
-            let result_ms = u64::try_from(result.timestamp_millis())
-                .map_err(|_| RuntimeError::Clock("business deadline out of range".to_string()))?;
-            Ok((result_ms, false))
-        }
-        Err(BusinessCalendarError::DidNotConverge { .. }) => {
-            // Degenerate calendar: fall back to naive wall-clock deadline so the
-            // timer is not lost, and signal the caller to annotate provenance.
-            Ok((timer.deadline_ms, true))
-        }
-    }
-}
-
-/// Inject `calendarVersion` into every `TimerCreated` provenance record in `records`.
-///
-/// Uses provenance approach (a): extends the existing `data` JSON object with a
-/// `calendarVersion` field — no new provenance variant required.  When the calendar
-/// has no `version` field, the field is set to `null`.
-fn annotate_timer_created_with_calendar_version(
-    records: &mut [ProvenanceRecord],
-    calendar: &BusinessCalendarDocument,
-) {
-    let version = calendar
-        .version
-        .as_deref()
-        .map(serde_json::Value::from)
-        .unwrap_or(serde_json::Value::Null);
-
-    for record in records.iter_mut() {
-        if record.record_kind != ProvenanceKind::TimerCreated {
-            continue;
-        }
-        match &mut record.data {
-            Some(serde_json::Value::Object(map)) => {
-                map.insert("calendarVersion".to_string(), version.clone());
-            }
-            other => {
-                panic!("TimerCreated.data must be an Object; got {other:?}");
-            }
-        }
-    }
-}
-
-/// Extend `TimerCreated` records for the given timer IDs with
-/// `calendarVersionConvergenceError: true`.
-///
-/// Uses the same payload-extension pattern as
-/// `annotate_timer_created_with_calendar_version` — no new `ProvenanceKind`
-/// variant is needed.
-fn annotate_timer_created_with_convergence_error(
-    records: &mut [ProvenanceRecord],
-    timer_ids: &[String],
-) {
-    if timer_ids.is_empty() {
-        return;
-    }
-    for record in records.iter_mut() {
-        if record.record_kind != ProvenanceKind::TimerCreated {
-            continue;
-        }
-        // Check whether this record's timerId is in the convergence-error set.
-        let record_timer_id = record
-            .data
-            .as_ref()
-            .and_then(|d| d.get("timerId"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        if !timer_ids.contains(&record_timer_id) {
-            continue;
-        }
-        match &mut record.data {
-            Some(serde_json::Value::Object(map)) => {
-                map.insert(
-                    "calendarVersionConvergenceError".to_string(),
-                    serde_json::Value::Bool(true),
-                );
-            }
-            other => {
-                panic!("TimerCreated.data must be an Object; got {other:?}");
-            }
-        }
+        WosRuntime::load_provenance_window(self, instance_id, cursor, limit)
     }
 }
 
@@ -1975,116 +1020,9 @@ fn impact_level_label(level: ImpactLevel) -> String {
     .to_string()
 }
 
-fn task_instance_id(task_id: &str) -> Result<String, RuntimeError> {
-    let Some(encoded_instance_id) = task_id
-        .strip_prefix("wos-task:")
-        .and_then(|rest| rest.split_once(':'))
-        .map(|(encoded_instance_id, _)| encoded_instance_id)
-    else {
-        return Err(RuntimeError::TaskNotFound(task_id.to_string()));
-    };
-
-    let decoded = URL_SAFE_NO_PAD
-        .decode(encoded_instance_id)
-        .map_err(|_| RuntimeError::TaskNotFound(task_id.to_string()))?;
-    std::str::from_utf8(&decoded)
-        .map(str::to_owned)
-        .map_err(|_| RuntimeError::TaskNotFound(task_id.to_string()))
-}
-
-fn find_task_index(record: &RuntimeRecord, task_id: &str) -> Option<usize> {
-    record
-        .instance
-        .active_tasks
-        .iter()
-        .position(|task| task.task_id == task_id)
-}
-
 fn make_task_id(instance_id: &str, ordinal: u64, task_ref: &str) -> String {
     let encoded_instance_id = URL_SAFE_NO_PAD.encode(instance_id);
     format!("wos-task:{encoded_instance_id}:{ordinal}:{task_ref}")
-}
-
-fn authorize_actor(
-    access_control: &dyn AccessControl,
-    task: &ActiveTask,
-    actor_id: &str,
-) -> Result<(), RuntimeError> {
-    let assigned_actor = task
-        .assigned_actor
-        .as_deref()
-        .ok_or_else(|| RuntimeError::Unauthorized("task has no assigned actor".to_string()))?;
-    if actor_id == assigned_actor {
-        return Ok(());
-    }
-
-    let mut scope = DelegationScope {
-        impact_levels: Vec::new(),
-        case_types: Vec::new(),
-        max_dollar_threshold: None,
-        conditions: None,
-    };
-    if let Some(impact_level) = &task.impact_level {
-        scope.impact_levels.push(impact_level.clone());
-    }
-    if access_control.can_delegate(assigned_actor, actor_id, &scope) {
-        Ok(())
-    } else {
-        Err(RuntimeError::Unauthorized(actor_id.to_string()))
-    }
-}
-
-fn validation_passed(validation: &SubmissionValidation) -> bool {
-    let outcome = &validation.validation_outcome;
-    outcome.envelope_valid && outcome.pin_match && outcome.definition_valid
-}
-
-fn build_artifact(
-    record: &RuntimeRecord,
-    task_id: &str,
-    kind: TaskArtifactKind,
-    response: serde_json::Value,
-    actor_id: &str,
-    recorded_at: &str,
-) -> TaskArtifact {
-    let kind_name = match kind {
-        TaskArtifactKind::Draft => "draft",
-        TaskArtifactKind::Accepted => "accepted",
-    };
-    let artifact_id = format!("{task_id}:{kind_name}:{}", record.artifacts.len() + 1);
-    TaskArtifact {
-        artifact_id,
-        task_id: task_id.to_string(),
-        kind,
-        response,
-        actor_id: actor_id.to_string(),
-        recorded_at: recorded_at.to_string(),
-    }
-}
-
-fn remove_task_with_event(
-    instance: &mut CaseInstance,
-    task_index: usize,
-    extension_key: &str,
-    actor_id: &str,
-    timestamp: &str,
-) -> Option<String> {
-    let task = instance.active_tasks.remove(task_index);
-    let emitted_event = task
-        .extensions
-        .get(extension_key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string);
-    if let Some(event) = &emitted_event {
-        instance.pending_events.push(PendingEvent {
-            event: event.clone(),
-            actor_id: Some(actor_id.to_string()),
-            data: Some(serde_json::json!({ "taskId": task.task_id })),
-            timestamp: timestamp.to_string(),
-            idempotency_token: None,
-        });
-    }
-    emitted_event
 }
 
 fn compensation_provenance(
@@ -2222,7 +1160,8 @@ mod tests {
 
     use crate::binding::{CaseMutationBundle, PreparedTask};
     use crate::store::{InMemoryStore, RuntimeStore, StoreError};
-    use wos_core::instance::ValidationOutcome;
+    use crate::DurableRuntime;
+    use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 
     #[test]
@@ -3218,6 +2157,133 @@ mod tests {
         )
     }
 
+    #[test]
+    fn durable_runtime_trait_supports_instance_round_trip() {
+        fn exercise_all_trait_methods(runtime: &mut impl DurableRuntime) {
+            let created = runtime
+                .create_instance(CreateInstanceRequest {
+                    instance_id: "case-trait".to_string(),
+                    definition_url: "urn:test:durable-trait".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: Some(serde_json::json!({ "approved": false })),
+                })
+                .expect("trait create_instance");
+            let loaded = runtime
+                .load_instance("case-trait")
+                .expect("trait load_instance");
+            assert_eq!(created.instance_id, loaded.instance_id);
+            assert_eq!(created.definition_url, loaded.definition_url);
+            assert_eq!(created.definition_version, loaded.definition_version);
+
+            runtime
+                .enqueue_event(
+                    "case-trait",
+                    PendingEvent {
+                        event: "start".to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .expect("trait enqueue_event");
+
+            let idle = runtime
+                .drain_until_idle("case-trait")
+                .expect("trait drain_until_idle");
+            assert!(
+                idle.iter().any(|step| step.processed_event.is_some()),
+                "expected at least one drain step that processed an event: {idle:?}"
+            );
+            let task_id = idle
+                .iter()
+                .flat_map(|step| step.created_task_ids.iter())
+                .next()
+                .cloned()
+                .expect("task id from drain");
+
+            let once = runtime
+                .drain_once("case-trait")
+                .expect("trait drain_once on idle queue");
+            assert!(
+                once.processed_event.is_none(),
+                "queue should be idle after drain_until_idle"
+            );
+
+            let window = runtime
+                .load_provenance_window("case-trait", 0, 50)
+                .expect("trait load_provenance_window");
+            assert!(!window.is_empty());
+
+            runtime
+                .persist_task_draft(
+                    &task_id,
+                    serde_json::json!({ "status": "in-progress" }),
+                    "reviewer",
+                    None,
+                )
+                .expect("trait persist_task_draft");
+
+            runtime
+                .dismiss_task(&task_id, "trait exercise cleanup")
+                .expect("trait dismiss_task");
+
+            let submission = runtime
+                .submit_task_response(
+                    &task_id,
+                    serde_json::json!({
+                        "status": "completed",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": true }
+                    }),
+                    "reviewer",
+                    None,
+                )
+                .expect("trait submit_task_response");
+            assert!(
+                matches!(submission, TaskSubmissionResult::Completed { .. }),
+                "expected completed submission, got {submission:?}"
+            );
+        }
+
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:durable-trait",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "start",
+                            "target": "open",
+                            "actions": [{
+                                "action": "createTask",
+                                "taskRef": "review",
+                                "assignTo": "reviewer",
+                                "contractRef": "reviewForm",
+                                "responseMappingRef": "urn:mapping:response",
+                                "completionEvent": "review.completed",
+                                "failureEvent": "review.failed"
+                            }]
+                        }]
+                    }
+                }
+            },
+            "contracts": {
+                "reviewForm": {
+                    "binding": "formspec",
+                    "ref": "urn:formspec:review"
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        exercise_all_trait_methods(&mut runtime);
+    }
+
     fn manual_formspec_task(
         instance_id: &str,
         ordinal: usize,
@@ -3322,12 +2388,10 @@ mod tests {
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
-        assert!(
-            result
-                .provenance
-                .iter()
-                .any(|record| record.record_kind == ProvenanceKind::TaskPresented)
-        );
+        assert!(result
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::TaskPresented));
 
         let instance = runtime.load_instance("case-1").unwrap();
         assert_eq!(instance.active_tasks.len(), 1);
@@ -3444,18 +2508,14 @@ mod tests {
         let first = runtime.drain_once("case-a").unwrap();
         let second = runtime.drain_once("case-b").unwrap();
 
-        assert!(
-            !first
-                .provenance
-                .iter()
-                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
-        );
-        assert!(
-            !second
-                .provenance
-                .iter()
-                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
-        );
+        assert!(!first
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
+        assert!(!second
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
     }
 
     #[test]
@@ -3745,12 +2805,10 @@ mod tests {
             serde_json::json!("pending")
         );
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(
-            record
-                .provenance_log
-                .iter()
-                .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted)
-        );
+        assert!(record
+            .provenance_log
+            .iter()
+            .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted));
     }
 
     /// Regression: the persist-task-draft append site must route its record
@@ -3856,12 +2914,10 @@ mod tests {
 
         let record = runtime.store.load_record("case-4").unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(
-            record
-                .provenance_log
-                .iter()
-                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
-        );
+        assert!(record
+            .provenance_log
+            .iter()
+            .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed));
     }
 
     #[test]
@@ -4048,12 +3104,10 @@ mod tests {
 
         let result = runtime.drain_once("case-7").unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("$timeout.review"));
-        assert!(
-            result
-                .provenance
-                .iter()
-                .any(|entry| entry.record_kind == ProvenanceKind::TimerFired)
-        );
+        assert!(result
+            .provenance
+            .iter()
+            .any(|entry| entry.record_kind == ProvenanceKind::TimerFired));
 
         let instance = runtime.load_instance("case-7").unwrap();
         assert!(instance.configuration.contains(&"timed_out".to_string()));
@@ -4550,18 +3604,14 @@ mod tests {
             let invocations = invocations.lock().unwrap();
             assert_eq!(invocations.len(), 1);
         }
-        assert!(
-            second_result
-                .provenance
-                .iter()
-                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
-        );
-        assert!(
-            !second_result
-                .provenance
-                .iter()
-                .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted)
-        );
+        assert!(second_result
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
+        assert!(!second_result
+            .provenance
+            .iter()
+            .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted));
     }
 
     #[test]
