@@ -1,7 +1,7 @@
 # WOS Vision Model
 
 **Captured:** 2026-04-20
-**Status:** Project-specific operating guidance for WOS. Generic user preferences (economic model, design character, communication style, decision heuristics that aren't WOS-specific) live in [`user-profile.md`](./user-profile.md) — read it alongside this document.
+**Status:** Project-specific operating guidance for WOS. Generic user preferences (economic model, design character, communication style, decision heuristics that aren't WOS-specific) live in [`user-profile.md`](../../../.claude/user_profile.md) — read it alongside this document.
 **Maintenance rule:** Update only when the owner gives explicit signals that conflict with current content. Do NOT update speculatively. Treat each answer as frozen until the owner overrides.
 
 ---
@@ -20,7 +20,7 @@ This document captures the vision model the owner validated on 2026-04-20, after
 - For local tactical decisions inside a single file/function — just follow the code.
 - As a substitute for asking the owner when a genuinely new question arises. This doc answers the questions it was built to answer; it doesn't answer questions the owner never weighed in on.
 
-**Paired with [user-profile.md](./user-profile.md):** That file captures generic operating principles (economic model, opinionatedness preference, communication style, collaboration heuristics). This file captures WOS-specific architectural commitments. Apply both together; when they conflict, direct user signals override both.
+**Paired with [user-profile.md](../../../.claude/user_profile.md):** That file captures generic operating principles (economic model, opinionatedness preference, communication style, collaboration heuristics). This file captures WOS-specific architectural commitments. Apply both together; when they conflict, direct user signals override both.
 
 ---
 
@@ -58,7 +58,7 @@ Four questions fixed the vision model. Owner's answers, in their own words, with
 
 **Owner's answer:** "A" — opinionated / principled.
 
-**Interpretation (WOS-specific consequences — generic preference for opinionated design is in [user-profile.md](./user-profile.md)):**
+**Interpretation (WOS-specific consequences — generic preference for opinionated design is in [user-profile.md](../../../.claude/user_profile.md)):**
 
 - **No `named: string` escape hatch at core taxonomy keys.** The 5-kind event taxonomy is closed; vendors extend via payload `x-*` fields.
 - **Rejection list is load-bearing.** DAG processing, FEEL, SHACL, BPMN parity as authoring goal, FEL conformance profiles — all rejected. Don't re-litigate.
@@ -74,7 +74,7 @@ Four questions fixed the vision model. Owner's answers, in their own words, with
 **Interpretation:**
 
 - **The reference implementation IS the oracle.** Spec MUSTs are verified by: (i) constructing a test fixture that exercises the claim; (ii) running it against the reference implementation; (iii) asserting the spec's predicted outcome.
-- **Every MUST gets a passing fixture at 1.0.** Under the user's minutes-not-days economics (see user-profile.md), closing the current 12/91 Tested/Draft gap is trivial calendar-wise and high-value for the reference-architecture claim.
+- **Every MUST gets a passing fixture at 1.0.** Under the user's minutes-not-days economics (see `../../../.claude/user_profile.md`), closing the current 12/91 Tested/Draft gap is trivial calendar-wise and high-value for the reference-architecture claim.
 - **Conformance tests run against every durable-execution adapter.** In-memory reference + production adapter (Temporal or Restate) must both pass. Three-way agreement (spec + reference + production adapter) is the strongest attainable verification posture.
 
 ---
@@ -125,7 +125,7 @@ Value proposition for SaaS: **Jotform-tier forms UX + governed-AI-agents + crypt
 
 Everything above the trait line is WOS domain logic that no durable-execution substrate can replace. Everything below the trait line is pluggable.
 
-**Backend choice:** owner prefers self-hosted; Rust-primary per [user-profile.md](./user-profile.md). Open decision γ — spike Temporal + Restate against the extracted trait, pick based on direct observation of Rust SDK ergonomics + ops fit. Do not lock blind.
+**Backend choice:** owner prefers self-hosted; Rust-primary per [user-profile.md](../../../.claude/user_profile.md). Open decision γ — spike Temporal + Restate against the extracted trait, pick based on direct observation of Rust SDK ergonomics + ops fit. Do not lock blind.
 
 **`wos-runtime` long-term role:** model (iii) — WOS semantics library + in-memory reference adapter + spec-conformance test oracle. The durable-execution implementation currently tangled into `wos-runtime/src/runtime.rs` (~4451 lines, mostly timer/retry/persistence plumbing) gets extracted below the trait line.
 
@@ -183,7 +183,7 @@ Decisions the owner has signed off on (either via explicit answer or via transit
 
 ## v1.0 spec-freeze line
 
-Under the economic model captured in [user-profile.md](./user-profile.md) (minutes-not-days; priority = Imp × Debt), 1.0 is expansive — scope is set by architectural prerequisites, not calendar budget.
+Under the economic model captured in [user-profile.md](../../../.claude/user_profile.md) (minutes-not-days; priority = Imp × Debt), 1.0 is expansive — scope is set by architectural prerequisites, not calendar budget.
 
 **Must close for 1.0:**
 
@@ -257,7 +257,7 @@ Unresolved decisions, flagged for future sessions to surface when work reaches t
 
 ## WOS-specific decision heuristics
 
-These complement the generic heuristics in [user-profile.md](./user-profile.md). Apply in order when a new WOS design question arises:
+These complement the generic heuristics in [user-profile.md](../../../.claude/user_profile.md). Apply in order when a new WOS design question arises:
 
 1. **Consult this file first; user-profile.md second.** If the question is answered here (directly or by transitive implication from Q1-Q4), apply that answer. Generic principles (opinionatedness, minutes-not-days, interop-over-proprietary) come from user-profile.md.
 2. **Check whether the proposed action conflicts with the foundational answers** (Q1 first adopter, Q2 spec/runtime authority, Q3 opinionated character, Q4 reference-as-oracle). If yes — STOP and ask the owner.
@@ -275,7 +275,7 @@ These complement the generic heuristics in [user-profile.md](./user-profile.md).
 - A spec. Specs live in `specs/`.
 - A plan. Plans live in `thoughts/plans/`.
 - A marketing artifact. [POSITIONING.md](../../POSITIONING.md) covers public-facing framing.
-- A user profile. [`user-profile.md`](./user-profile.md) captures generic preferences; this file captures WOS-specific architecture.
+- A user profile. [`user-profile.md`](../../../.claude/user_profile.md) captures generic preferences; this file captures WOS-specific architecture.
 - Immutable. Updated when owner gives explicit new signals. But cautiously.
 
 ---
@@ -283,4 +283,4 @@ These complement the generic heuristics in [user-profile.md](./user-profile.md).
 ## Changelog
 
 - **2026-04-20** — Initial capture. Vision model probed via four foundational questions (Q1 adopter, Q2 spec/runtime, Q3 opinionatedness, Q4 verifiability); owner answered; model constructed and validated across 11 outstanding design questions plus 4 follow-ups (α DocuSign parity, β SCITT strictness, γ backend choice, δ wos-runtime role). Temporal/Restate layering + Federation Profile + Signature Profile + v1.0 scope expansion under "minutes-not-days" economics captured.
-- **2026-04-20 (later)** — Generic user preferences (economic model, opinionatedness as a general pattern, communication/development style, collaboration heuristics) split out into sibling [`user-profile.md`](./user-profile.md) at owner's request. This document now focuses on WOS-specific architectural commitments and cross-references user-profile for generic principles.
+- **2026-04-20 (later)** — Generic user preferences (economic model, opinionatedness as a general pattern, communication/development style, collaboration heuristics) split out into sibling [`user-profile.md`](../../../.claude/user_profile.md) at owner's request. This document now focuses on WOS-specific architectural commitments and cross-references user-profile for generic principles.
