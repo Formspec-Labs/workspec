@@ -9,18 +9,18 @@
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
-use wos_core::EvalContext;
 use wos_core::eval::ObservedAction;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::EvalContext;
 
 use crate::integration::{IntegrationBinding, IntegrationBindingKind, IntegrationContractRef};
 use crate::milestones::evaluate_milestones;
 use crate::runtime::{InvokeServicesDyn, RuntimeError, ValidateContractsDyn};
 use crate::store::{RuntimeRecord, StepResultRecord};
 
-use super::{IntegrationBindingHandler, value_to_idempotency_key};
+use super::{value_to_idempotency_key, IntegrationBindingHandler};
 
 /// Handler for synchronous request/response HTTP-style bindings.
 pub(crate) struct RequestResponseHandler;
@@ -805,7 +805,7 @@ fn set_case_state_path(
 
 #[cfg(test)]
 mod jsonpath_tests {
-    use super::{JsonPathSegment, parse_json_path, resolve_json_path};
+    use super::{parse_json_path, resolve_json_path, JsonPathSegment};
     use serde_json::json;
 
     // --- Parser tests ---

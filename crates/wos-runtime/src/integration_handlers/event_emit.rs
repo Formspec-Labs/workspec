@@ -16,8 +16,8 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::request_response::{InvocationContext, build_event_data_from_binding};
-use super::{IntegrationBindingHandler, next_outbound_event_id};
+use super::request_response::{build_event_data_from_binding, InvocationContext};
+use super::{next_outbound_event_id, IntegrationBindingHandler};
 
 /// Handler for outbound CloudEvent emission bindings.
 pub(crate) struct EventEmitHandler;

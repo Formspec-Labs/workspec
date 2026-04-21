@@ -45,9 +45,9 @@ use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
 use super::request_response::{
-    InvocationContext, apply_output_binding, build_event_data_from_binding,
+    apply_output_binding, build_event_data_from_binding, InvocationContext,
 };
-use super::{IntegrationBindingHandler, next_outbound_event_id};
+use super::{next_outbound_event_id, IntegrationBindingHandler};
 
 /// Three-way classification of a callback binding invocation.
 enum CallbackInvocationKind {

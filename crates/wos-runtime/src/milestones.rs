@@ -11,10 +11,10 @@ use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use serde_json::json;
-use wos_core::EvalContext;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
+use wos_core::EvalContext;
 
 /// Evaluate all un-fired milestones against `post_state`.
 ///

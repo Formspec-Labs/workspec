@@ -25,8 +25,8 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
+use super::request_response::{apply_output_binding, InvocationContext};
 use super::IntegrationBindingHandler;
-use super::request_response::{InvocationContext, apply_output_binding};
 
 /// Handler for inbound CloudEvent consumption bindings.
 pub(crate) struct EventConsumeHandler;

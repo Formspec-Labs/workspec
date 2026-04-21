@@ -22,10 +22,10 @@ use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
 use super::request_response::{
-    InvocationContext, apply_output_binding, build_integration_input,
-    evaluate_integration_expression, load_or_invoke_service_result, validate_integration_contract,
+    apply_output_binding, build_integration_input, evaluate_integration_expression,
+    load_or_invoke_service_result, validate_integration_contract, InvocationContext,
 };
-use super::{IntegrationBindingHandler, value_to_idempotency_key};
+use super::{value_to_idempotency_key, IntegrationBindingHandler};
 
 /// Handler for non-HTTP tool invocation bindings.
 pub(crate) struct ToolHandler;
