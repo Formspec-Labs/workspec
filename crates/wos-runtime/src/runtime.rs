@@ -19,7 +19,7 @@ use wos_core::instance::{
 };
 use wos_core::model::governance::DelegationScope;
 use wos_core::model::kernel::{ActionKind, ActorKind, ImpactLevel, KernelDocument};
-use wos_core::provenance::{ProvenanceKind, ProvenanceRecord, audit_layer_for_kind};
+use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
 use wos_core::timer::{Timer, max_tolerance_ms, tolerance_to_iso};
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
@@ -1802,7 +1802,11 @@ pub fn populate_provenance_record_fields(
     for record in records {
         // Tier classification (SP §5.4, §6.5).
         if record.audit_layer.is_none() {
-            record.audit_layer = Some(audit_layer_for_kind(record.record_kind).to_string());
+            record.audit_layer = Some(
+                ProvenanceAuditTier::from(record.record_kind)
+                    .as_str()
+                    .to_string(),
+            );
         }
 
         // Actor type (SP §5.3, §5.5, §6.3).
