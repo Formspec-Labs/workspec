@@ -1,6 +1,6 @@
 # ADR-0060: Cross-reference naming — `Ref`, `Key`, and `Id`
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-04-21  
 **Deciders:** Formspec Working Group  
 **Author:** WOS backlog (TODO.md Do next #2)  
@@ -41,12 +41,14 @@ Adopt three **suffix conventions** for new and revised normative properties:
 2. **Do not use `Key` for URIs.** If the value is primarily a URI into another artifact, the field MUST use `*Ref` (and SHOULD declare `format: uri` when the value is a URI).
 3. **Use `Id` only for intra-array / intra-map stable matching**, where the author intends ordinal-independent targeting (e.g. breach policy pointing at a named escalation step).
 
-**Illustrative renames (governance SLA surface — non-normative until schemas land)**
+**First landed rename set (Workflow Governance)**
 
 - `WarningThreshold.templateRef` → `templateKey` (resolves within notification template catalog / sidecar binding, not a bare HTTP URL in typical profiles).
 - `BreachPolicy.escalationChainRef` → `escalationStepId` (selects `EscalationStep.id`).
+- `BreachPolicy.templateRef` → `templateKey` (same in-document notification-template catalog semantics as `WarningThreshold`).
+- `HoldPolicy.notificationTemplateRef` → `notificationTemplateKey` (plain in-document template key, not a URI).
 
-Exact rename set is owned by schema PRs; this ADR records the **taxonomy**, not every field in one shot.
+Future schema PRs SHOULD continue applying the taxonomy until no plain-string key remains under a `*Ref` suffix.
 
 ---
 
@@ -74,4 +76,4 @@ Exact rename set is owned by schema PRs; this ADR records the **taxonomy**, not 
 
 ## 5. Status
 
-**Proposed** — awaits working-group acceptance and a scoped schema PR implementing renames for the first high-churn surface (Workflow Governance SLA / notification template pointers).
+**Accepted** — Workflow Governance now uses `*Ref` for URI-bearing fields (`calendarRef`) and `*Key` / `*Id` for in-document string lookups (`templateKey`, `notificationTemplateKey`, `escalationStepId`).
