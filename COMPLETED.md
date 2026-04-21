@@ -165,7 +165,7 @@ Largest parallel dispatch to date. Three batches: (1) uncommitted session-6 work
 - [x] **#F5a Kernel `$defs/ProvenanceOutcome`** (`2d890d3`) — open-enum with `preconditionNotSatisfied` + `convergenceCapReached` reserved, `^x-` vendor pattern; optional `outcome` on `FactsTierRecord`; Rust `ProvenanceKind::ConvergenceCapReached` variant. Closes both §3.3.1 and §10.3 MUSTs in one schema change.
 - [x] **#F2 K-049 structured-path reachability** (`ee05cec`) — `Vec<Segment>` + `reaches()` per Core §3.6.4; 2 regression fixtures; 10 new tests (`normalize_setdata_path` helpers + cycle regressions).
 - [x] **#F5b AI schema `if/then` preconditionNotSatisfied** (`ae3589f`) — `CapabilityInvocationRecord` $def enforces `outcome = "preconditionNotSatisfied"` when `data.invocationBlocked: true`.
-- [x] **LINT-MATRIX regen** (`d46d172`) — 102 → 103 rules; T2 Tested 2 → 3 (AI-058 added); K-049 stays Tested pending F3b-driven LoadBearing promotion.
+- [x] **LINT-MATRIX regen** (`d46d172`) — 102 → 103 rules; T2 Tested 2 → 3 (AI-058 added); K-049 later promoted LoadBearing in `f03ca40` after F3b.
 - **#F3b ADR 0059 drafted** (`fcd2c19`) — Runtime §10.3 conformance plan; 5 tasks, ~3-5 engineer-days; preconditions satisfied by F5a. Implementation deferred.
 
 ### §4.4 Release trains Tasks 1-3 (4 commits)
@@ -249,6 +249,11 @@ All §4.3b review follow-ups closed in a single 4-agent parallel dispatch. Disjo
 
 - **Transient git churn** between Agents A and B on shared wos-core crate: one agent's `git reset` / `git stash` operations briefly touched the other's uncommitted work. Recovered cleanly via `git stash pop` + `git checkout HEAD --`; no scope-overlap damage. Parallel-agent dispatch on shared crates carries real friction — future sessions should sequence provenance.rs-touching work or introduce a coordination mutex.
 - **F3b Task 3 landed ahead of F3b Tasks 1-2** — Agent B completed the emission wiring opportunistically while adding the `outcome` field. Order departed from the ADR's sequential plan but delivered the same end-state; ADR 0059 commit-message cross-reference notes Task 3 closed out-of-band.
+
+### ADR 0059 F3b + Task 5 — Runtime §10.3 + K-049 LoadBearing (`bdf7063`, `f03ca40`)
+
+- [x] **F3b continuous-mode post-mutation guard re-scan** (`bdf7063`) — `Evaluator::rescan_on_mutation`; guard-only transitions participate per Runtime Companion §10.3; `Transition::event` optional with trim-to-absent deserialization; kernel schema + spec alignment.
+- [x] **ADR 0059 Task 5 — K-049 LoadBearing + greenfield cleanup** (`f03ca40`) — drop authored `"$continuous"` from `participates_in_continuous_rescan`; synthetic trace/provenance dispatch label `$postMutationRescan`; remove deprecated `try_fire_guardless_transition`; K-049 warning cites §10.3 + `CONVERGENCE_CAP`; rule promoted **LoadBearing** with two `fixtures/validation/k-049-load-bearing-*.json` + `tier2_rules` harness; governance/kernel schema descriptions updated.
 
 ### Validation at close
 
