@@ -497,7 +497,7 @@
     },
     "Transition": {
       "type": "object",
-      "required": ["event", "target"],
+      "required": ["target"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -508,7 +508,7 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the event that triggers this transition (Kernel §4.5, §4.6). When an event of this name arrives for an active state that owns this transition, the processor evaluates the (optional) guard; the first transition whose guard evaluates true in document order fires. Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define `$`-prefixed event names.",
+          "description": "Identifier of the event that triggers this transition for explicit event delivery (Kernel §4.5, §4.6). When omitted, the transition never matches an external `process_event` name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define other `$`-prefixed event names. The transitional sentinel `$continuous` is deprecated (Runtime §10.3 migration) and MUST NOT appear in new documents.",
           "examples": ["submit", "approve", "reject", "task.completed", "$timeout.task"],
           "x-lm": {
             "critical": true,

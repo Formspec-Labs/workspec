@@ -269,7 +269,7 @@ fn active_adverse_transition<'a>(
             continue;
         };
         if let Some(transition) = state.transitions.iter().find(|transition| {
-            transition.event == event_name
+            transition.event.as_deref() == Some(event_name)
                 && transition.tags.iter().any(|tag| tag == "adverse-decision")
         }) {
             return Some((active_state.clone(), transition));
@@ -397,7 +397,13 @@ fn notice_render_context(
 ) -> BTreeMap<String, String> {
     let mut context = BTreeMap::new();
     context.insert("caseId".to_string(), instance.instance_id.clone());
-    context.insert("decisionEvent".to_string(), transition.event.clone());
+    context.insert(
+        "decisionEvent".to_string(),
+        transition
+            .event
+            .clone()
+            .unwrap_or_else(|| "(none)".to_string()),
+    );
     context.insert("determination".to_string(), transition.target.clone());
     context.insert("snapshotSha256".to_string(), snapshot.sha256.clone());
     context.insert(
@@ -508,7 +514,7 @@ fn fallback_human_notice(context: &BTreeMap<String, String>, transition: &Transi
         event = context
             .get("decisionEvent")
             .map(String::as_str)
-            .unwrap_or(transition.event.as_str()),
+            .unwrap_or_else(|| transition.event.as_deref().unwrap_or("(none)")),
         snapshot = context
             .get("snapshotSha256")
             .map(String::as_str)
@@ -823,7 +829,7 @@ mod tests {
         });
         let snapshot = CaseFileSnapshot::from_case_state(&case_state);
         let transition = Transition {
-            event: "denied".to_string(),
+            event: Some("denied".to_string()),
             target: "adverseNotice".to_string(),
             guard: None,
             actions: Vec::new(),

@@ -147,21 +147,23 @@ fn check_state_type_semantics_typed(
         }
 
         // K-007
-        if transition.event.starts_with('$') && transition.event != "$join" {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "K-007",
-                &t_path,
-                format!("event name '{}' uses reserved $ prefix", transition.event),
-            ));
+        if let Some(ev) = transition.event.as_deref() {
+            if ev.starts_with('$') && ev != "$join" {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-007",
+                    &t_path,
+                    format!("event name '{ev}' uses reserved $ prefix"),
+                ));
+            }
         }
 
         // K-008
-        if state.kind == StateKind::Parallel && transition.event != "$join" {
+        if state.kind == StateKind::Parallel && transition.event.as_deref() != Some("$join") {
             diagnostics.push(LintDiagnostic::t1_error(
                 "K-008",
                 &t_path,
                 format!(
-                    "parallel state outgoing transition must use '$join' event, found '{}'",
+                    "parallel state outgoing transition must use '$join' event, found {:?}",
                     transition.event
                 ),
             ));

@@ -326,16 +326,21 @@ impl RawWosProject {
             ));
         }
 
-        let event_name = event.unwrap_or_default();
-
         let transition = Transition {
-            event: event_name.clone(),
+            event: event
+                .map(|e| e.trim().to_string())
+                .filter(|e| !e.is_empty()),
             target: to_state.clone(),
             guard,
             actions: Vec::new(),
             description: None,
             tags: Vec::new(),
         };
+
+        let label = transition
+            .event
+            .clone()
+            .unwrap_or_else(|| "(guard-only)".to_string());
 
         // Unwrap is safe: we verified `from_state` exists above.
         self.doc
@@ -347,7 +352,7 @@ impl RawWosProject {
             .push(transition);
 
         Ok(AppliedCommand::without_inverse(format!(
-            "AddTransition({from_state} --[{event_name}]--> {to_state})"
+            "AddTransition({from_state} --[{label}]--> {to_state})"
         )))
     }
 
@@ -389,17 +394,18 @@ impl RawWosProject {
         // transition's `assignTo` action — authors may be mid-migration.
         for (state_id, state) in &self.doc.lifecycle.states {
             for transition in &state.transitions {
-                for (action_idx, action) in transition.actions.iter().enumerate() {
+                        for (action_idx, action) in transition.actions.iter().enumerate() {
                     if action.assign_to.as_deref() == Some(id.as_str()) {
+                        let ev_label = transition.event.as_deref().unwrap_or("(guard-only)");
                         self.diagnostics.push(AuthoringDiagnostic::warning(
                             format!(
                                 "/lifecycle/states/{state_id}/transitions/{}/actions/{action_idx}",
-                                transition.event
+                                ev_label
                             ),
                             format!(
                                 "action assigns to removed actor '{id}' \
-                                 on transition '{state_id}' --[{}]--> '{}'",
-                                transition.event, transition.target
+                                 on transition '{state_id}' --[{ev_label}]--> '{}'",
+                                transition.target
                             ),
                         ));
                     }
@@ -1182,7 +1188,7 @@ mod tests {
         let transitions = &snap.lifecycle.states["submitted"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
-        assert_eq!(transitions[0].event, "approve");
+        assert_eq!(transitions[0].event.as_deref(), Some("approve"));
         assert_eq!(
             transitions[0].guard.as_deref(),
             Some("caseFile.amount <= 50000")

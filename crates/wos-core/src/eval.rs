@@ -18,6 +18,7 @@ use crate::context::EvalContext;
 use crate::instance::CaseInstance;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
+    Transition,
 };
 use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
@@ -115,6 +116,10 @@ pub struct Evaluator {
     history_store: HashMap<String, Vec<String>>,
 }
 
+/// Event name recorded on provenance and guard traces when a transition fires
+/// from continuous-mode post-mutation re-scan (Runtime Companion §10.3).
+const CONTINUOUS_RESCAN_EVENT: &str = "$continuous";
+
 /// An observed state transition.
 #[derive(Debug, Clone)]
 pub struct ObservedTransition {
@@ -193,6 +198,18 @@ pub enum EvalError {
     /// Internal consistency error.
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+fn transition_matches_dispatch(
+    transition: &Transition,
+    event: &str,
+    continuous_rescan: bool,
+) -> bool {
+    if continuous_rescan {
+        transition.participates_in_continuous_rescan()
+    } else {
+        transition.event.as_deref() == Some(event)
+    }
 }
 
 impl Evaluator {
@@ -393,7 +410,7 @@ impl Evaluator {
         actor: Option<&str>,
         data: Option<&serde_json::Value>,
     ) -> Result<bool, EvalError> {
-        if self.try_fire_transition(event, actor, data)? {
+        if self.try_fire_transition(event, actor, data, false)? {
             return Ok(true);
         }
 
@@ -409,15 +426,24 @@ impl Evaluator {
         self.fire_expired_timers(actor)
     }
 
-    /// Try to fire a `$continuous` transition in the current configuration.
+    /// Re-run transition guards after a case-file mutation in `continuous` mode.
     ///
-    /// Used by continuous evaluation mode (Runtime S10.3). Scans all active
-    /// states for transitions on event `$continuous` whose guards evaluate
-    /// to true. Fires the first match (document order).
+    /// Implements Runtime Companion §10.3: collect every transition that omits
+    /// `event` (guard-only), plus deprecated `"$continuous"` transitions, walk
+    /// the active configuration in the same order as explicit events, and fire
+    /// the first whose guard is now true. Provenance records the synthetic
+    /// [`CONTINUOUS_RESCAN_EVENT`] name so downstream exports stay stable.
     ///
-    /// Returns `true` if a transition fired, `false` if no guards were satisfied.
+    /// Returns `true` if a transition fired, `false` if the configuration is
+    /// already stable.
+    pub fn rescan_on_mutation(&mut self) -> Result<bool, EvalError> {
+        self.try_fire_transition(CONTINUOUS_RESCAN_EVENT, None, None, true)
+    }
+
+    /// Deprecated alias for [`Self::rescan_on_mutation`].
+    #[deprecated(note = "use Evaluator::rescan_on_mutation (Runtime §10.3 semantics)")]
     pub fn try_fire_guardless_transition(&mut self) -> Result<bool, EvalError> {
-        self.try_fire_transition("$continuous", None, None)
+        self.rescan_on_mutation()
     }
 
     // ── Transition dispatch ─────────────────────────────────────
@@ -430,11 +456,24 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        continuous_rescan: bool,
     ) -> Result<bool, EvalError> {
+        let dispatch_event = if continuous_rescan {
+            CONTINUOUS_RESCAN_EVENT
+        } else {
+            event
+        };
+
         // Route to parallel parents first.
         let parallel_parents = self.find_parallel_parents();
         for parallel_id in &parallel_parents {
-            if self.try_fire_in_parallel(parallel_id, event, actor, event_data)? {
+            if self.try_fire_in_parallel(
+                parallel_id,
+                event,
+                actor,
+                event_data,
+                continuous_rescan,
+            )? {
                 return Ok(true);
             }
         }
@@ -455,7 +494,8 @@ impl Evaluator {
             };
 
             for transition in &indexed.state.transitions {
-                if transition.event != event {
+                let event_matches = transition_matches_dispatch(transition, event, continuous_rescan);
+                if !event_matches {
                     continue;
                 }
                 if !self.evaluate_guard(
@@ -463,7 +503,7 @@ impl Evaluator {
                     event_data,
                     active_state,
                     &transition.target,
-                    event,
+                    dispatch_event,
                 )? {
                     continue;
                 }
@@ -471,7 +511,7 @@ impl Evaluator {
                 self.fire_transition(
                     active_state,
                     &transition.target,
-                    event,
+                    dispatch_event,
                     actor,
                     &transition.actions,
                     &transition.tags,
@@ -491,10 +531,17 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        continuous_rescan: bool,
     ) -> Result<bool, EvalError> {
         if event == "$join" {
             return Ok(false);
         }
+
+        let dispatch_event = if continuous_rescan {
+            CONTINUOUS_RESCAN_EVENT
+        } else {
+            event
+        };
 
         let indexed = match self.state_index.get(parallel_id) {
             Some(s) => s.clone(),
@@ -526,7 +573,8 @@ impl Evaluator {
             }
 
             for transition in &state_def.transitions {
-                if transition.event != event {
+                let event_matches = transition_matches_dispatch(transition, event, continuous_rescan);
+                if !event_matches {
                     continue;
                 }
                 if !self.evaluate_guard(
@@ -534,7 +582,7 @@ impl Evaluator {
                     event_data,
                     &active,
                     &transition.target,
-                    event,
+                    dispatch_event,
                 )? {
                     continue;
                 }
@@ -557,14 +605,14 @@ impl Evaluator {
                 self.transitions.push(ObservedTransition {
                     from: active.clone(),
                     to: target.clone(),
-                    event: event.to_string(),
+                    event: dispatch_event.to_string(),
                     tags: transition.tags.clone(),
                 });
                 self.provenance
                     .push(ProvenanceRecord::tagged_state_transition(
                         &active,
                         &target,
-                        event,
+                        dispatch_event,
                         actor,
                         &transition.tags,
                         case_file_snapshot,

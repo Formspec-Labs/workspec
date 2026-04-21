@@ -304,7 +304,7 @@ mod tests {
         let transitions = &project.snapshot().lifecycle.states["draft"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
-        assert_eq!(transitions[0].event, "approve");
+        assert_eq!(transitions[0].event.as_deref(), Some("approve"));
     }
 
     #[tokio::test]

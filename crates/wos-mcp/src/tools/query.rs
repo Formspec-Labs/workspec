@@ -177,10 +177,9 @@ fn build_mermaid_graph(doc: &wos_authoring::KernelDocument) -> String {
 
         for transition in &state.transitions {
             let tid = sanitize_id(&transition.target);
-            let label = if transition.event.is_empty() {
-                String::new()
-            } else {
-                format!(" : {}", transition.event)
+            let label = match transition.event.as_deref() {
+                None | Some("") => String::new(),
+                Some(ev) => format!(" : {ev}"),
             };
             lines.push(format!("    {} --> {}{}", sid, tid, label));
         }
@@ -211,10 +210,9 @@ fn build_dot_graph(doc: &wos_authoring::KernelDocument) -> String {
 
         for transition in &state.transitions {
             let tid = sanitize_dot_id(&transition.target);
-            let label = if transition.event.is_empty() {
-                String::new()
-            } else {
-                format!(" [label=\"{}\"]", transition.event)
+            let label = match transition.event.as_deref() {
+                None | Some("") => String::new(),
+                Some(ev) => format!(" [label=\"{ev}\"]"),
             };
             lines.push(format!("  {} -> {}{};", sid, tid, label));
         }
@@ -294,7 +292,11 @@ pub async fn wos_search(
             let mut results = Vec::new();
             for (state_id, state) in &doc.lifecycle.states {
                 for transition in &state.transitions {
-                    if transition.event.to_lowercase().contains(&q)
+                    let event_matches = transition
+                        .event
+                        .as_deref()
+                        .is_some_and(|e| e.to_lowercase().contains(&q));
+                    if event_matches
                         || transition.target.to_lowercase().contains(&q)
                         || state_id.to_lowercase().contains(&q)
                     {

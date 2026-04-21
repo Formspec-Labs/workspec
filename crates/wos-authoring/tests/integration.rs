@@ -168,7 +168,7 @@ fn authoring_session_round_trip_with_undo_redo() {
     let submitted_transitions = &reloaded.lifecycle.states["submitted"].transitions;
     let approve_transitions: Vec<&_> = submitted_transitions
         .iter()
-        .filter(|t| t.event == "approve")
+        .filter(|t| t.event.as_deref() == Some("approve"))
         .collect();
     assert_eq!(approve_transitions.len(), 2, "guarded fork preserved");
     assert!(

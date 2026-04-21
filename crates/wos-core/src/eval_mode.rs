@@ -116,7 +116,7 @@ pub fn continuous_reevaluate(
         }
 
         // Try to fire any eventless (guard-only) transition in the current config.
-        let fired = evaluator.try_fire_guardless_transition()?;
+        let fired = evaluator.rescan_on_mutation()?;
 
         if fired {
             total_fired += 1;
@@ -188,7 +188,7 @@ mod tests {
         states.insert(
             "waiting".to_string(),
             atomic_state(vec![Transition {
-                event: "$continuous".to_string(),
+                event: None,
                 target: "approved".to_string(),
                 guard: Some("caseFile.ready == true".to_string()),
                 tags: Vec::new(),
@@ -238,6 +238,8 @@ mod tests {
         }
     }
 
+    /// ADR 0059 §4.3 Test A — guard-only transition (no `event`) becomes eligible
+    /// after `setData` / case-state mutation under Runtime §10.3.
     #[test]
     fn continuous_mode_fires_when_guard_satisfied() {
         let kernel = continuous_kernel();
@@ -260,6 +262,43 @@ mod tests {
         assert!(evaluator.configuration().contains("approved"));
     }
 
+    /// Guard-only transitions never match explicit `process_event` names.
+    #[test]
+    fn guard_only_transition_does_not_match_explicit_event() {
+        let mut states = IndexMap::new();
+        states.insert(
+            "waiting".to_string(),
+            atomic_state(vec![Transition {
+                event: None,
+                target: "approved".to_string(),
+                guard: Some("caseFile.ready == true".to_string()),
+                tags: Vec::new(),
+                actions: Vec::new(),
+                description: None,
+            }]),
+        );
+        states.insert("approved".to_string(), final_state());
+
+        let mut kernel = KernelDocument {
+            lifecycle: Lifecycle {
+                initial_state: "waiting".to_string(),
+                states,
+                milestones: HashMap::new(),
+            },
+            ..continuous_kernel()
+        };
+        kernel.evaluation_mode = Some(EvaluationMode::EventDriven);
+
+        let mut evaluator = Evaluator::new(kernel).unwrap();
+        evaluator
+            .case_state_mut()
+            .insert("ready".to_string(), serde_json::Value::Bool(true));
+
+        let fired = evaluator.process_event("nudge", None, None).unwrap();
+        assert!(!fired);
+        assert!(evaluator.configuration().contains("waiting"));
+    }
+
     #[test]
     fn event_driven_mode_skips_reevaluation() {
         let mut kernel = continuous_kernel();
@@ -277,16 +316,18 @@ mod tests {
         assert!(evaluator.configuration().contains("waiting"));
     }
 
+    /// ADR 0059 §4.3 Test B — genuine non-sentinel cycle: two guard-only
+    /// transitions ping-pong until the §10.3 convergence cap.
     #[test]
     fn convergence_cap_halts_infinite_loop() {
-        // Build a kernel where a guardless $continuous transition always fires,
+        // Build a kernel where guard-only transitions always fire,
         // ping-ponging between two states until the cap is reached.
         let mut states = IndexMap::new();
 
         states.insert(
             "loop".to_string(),
             atomic_state(vec![Transition {
-                event: "$continuous".to_string(),
+                event: None,
                 target: "loop2".to_string(),
                 guard: None, // Always true.
                 tags: Vec::new(),
@@ -298,7 +339,7 @@ mod tests {
         states.insert(
             "loop2".to_string(),
             atomic_state(vec![Transition {
-                event: "$continuous".to_string(),
+                event: None,
                 target: "loop".to_string(),
                 guard: None,
                 tags: Vec::new(),
@@ -350,7 +391,7 @@ mod tests {
         states.insert(
             "loop".to_string(),
             atomic_state(vec![Transition {
-                event: "$continuous".to_string(),
+                event: None,
                 target: "loop2".to_string(),
                 guard: None,
                 tags: Vec::new(),
@@ -361,7 +402,7 @@ mod tests {
         states.insert(
             "loop2".to_string(),
             atomic_state(vec![Transition {
-                event: "$continuous".to_string(),
+                event: None,
                 target: "loop".to_string(),
                 guard: None,
                 tags: Vec::new(),

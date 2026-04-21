@@ -6,7 +6,7 @@
 //! operates on these types, not on raw `serde_json::Value`.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 /// A WOS Kernel Document.
@@ -297,8 +297,22 @@ pub struct Region {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
-    /// Event that triggers this transition.
-    pub event: String,
+    /// Event that triggers this transition for explicit `process_event`
+    /// delivery.
+    ///
+    /// When omitted (or serialized with only whitespace, treated as absent),
+    /// the transition does **not** match any external event name. In
+    /// `continuous` evaluation mode it still participates in the post-mutation
+    /// guard re-scan (Runtime Companion §10.3). The deprecated authoring
+    /// sentinel `"$continuous"` is accepted for one release cycle and treated
+    /// like an omitted event for explicit matching while remaining eligible for
+    /// the re-scan.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_transition_event",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub event: Option<String>,
 
     /// Target state identifier.
     pub target: String,
@@ -318,6 +332,34 @@ pub struct Transition {
     /// Semantic tags.
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+fn deserialize_transition_event<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    }))
+}
+
+impl Transition {
+    /// Whether this transition participates in continuous-mode post-mutation
+    /// guard re-evaluation (Runtime Companion §10.3).
+    pub fn participates_in_continuous_rescan(&self) -> bool {
+        match self.event.as_deref() {
+            None => true,
+            Some(s) if s.trim().is_empty() => true,
+            Some("$continuous") => true,
+            Some(_) => false,
+        }
+    }
 }
 
 /// A lifecycle action (Kernel S9.2).

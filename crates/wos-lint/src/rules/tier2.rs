@@ -154,7 +154,9 @@ fn collect_events_typed(
 ) {
     for state in states.values() {
         for transition in &state.transitions {
-            events.insert(transition.event.clone());
+            if let Some(ev) = &transition.event {
+                events.insert(ev.clone());
+            }
         }
         collect_events_typed(&state.states, events);
         for region in state.regions.values() {

@@ -89,7 +89,9 @@ fn collect_events<'a>(
 ) {
     for state in states.values() {
         for transition in &state.transitions {
-            events.insert(transition.event.as_str());
+            if let Some(ev) = transition.event.as_deref() {
+                events.insert(ev);
+            }
         }
         collect_events(&state.states, events);
         for region in state.regions.values() {

@@ -171,7 +171,7 @@ For `parallel` states, the `cancellationPolicy` governs behavior when any region
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `event` | string | REQUIRED | Triggering event identifier. |
+| `event` | string | OPTIONAL | Triggering event identifier for explicit event delivery. When omitted, the transition does not match any external event name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). |
 | `target` | string | REQUIRED | Target state identifier. |
 | `guard` | string (FEL) | OPTIONAL | FEL expression that must evaluate to `true` for the transition to fire. |
 | `actions` | array of Action | OPTIONAL | Actions executed during the transition. |
@@ -182,7 +182,7 @@ For `parallel` states, the `cancellationPolicy` governs behavior when any region
 
 When an event occurs:
 
-1. Collect all transitions from current active states whose `event` property matches the triggering event.
+1. Collect all transitions from current active states whose `event` property is present **and** equals the triggering event name.
 2. Evaluate guards in **document order**. The first transition whose guard evaluates to `true` (or has no guard) wins.
 3. If no transition matches, the event is recorded in provenance but does not change lifecycle state.
 

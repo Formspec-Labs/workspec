@@ -78,7 +78,7 @@ fn final_state() -> State {
 
 fn transition(event: &str, target: &str) -> Transition {
     Transition {
-        event: event.to_string(),
+        event: Some(event.to_string()),
         target: target.to_string(),
         guard: None,
         actions: vec![],
@@ -89,7 +89,7 @@ fn transition(event: &str, target: &str) -> Transition {
 
 fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
     Transition {
-        event: event.to_string(),
+        event: Some(event.to_string()),
         target: target.to_string(),
         guard: Some(guard.to_string()),
         actions: vec![],
@@ -267,7 +267,7 @@ fn set_data_action_mutates_case_state() {
         "start".into(),
         State {
             transitions: vec![Transition {
-                event: "go".to_string(),
+                event: Some("go".to_string()),
                 target: "end".to_string(),
                 guard: None,
                 actions: vec![set_action],
