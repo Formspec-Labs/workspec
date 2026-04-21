@@ -82,11 +82,10 @@ pub async fn synthesize(problem: &str, anthropic_key: &str) -> Result<Value, Spi
         };
 
         // Re-serialise to a canonical string for the linter (it needs `&str`).
-        let canonical = serde_json::to_string(&parsed)
-            .expect("re-serialising a parsed Value must not fail");
+        let canonical =
+            serde_json::to_string(&parsed).expect("re-serialising a parsed Value must not fail");
 
-        let diagnostics = wos_lint::lint_document(&canonical)
-            .map_err(classify_lint_error)?;
+        let diagnostics = wos_lint::lint_document(&canonical).map_err(classify_lint_error)?;
 
         // Collect only error-severity findings — warnings and info are fine.
         let errors: Vec<String> = diagnostics
@@ -153,19 +152,18 @@ async fn gate_on_conformance(
     let repaired_raw = response_text.trim().to_string();
     let repaired_text = strip_fences(&repaired_raw);
 
-    let repaired: Value = serde_json::from_str(repaired_text).map_err(|source| {
-        SpikeError::ParseJson {
+    let repaired: Value =
+        serde_json::from_str(repaired_text).map_err(|source| SpikeError::ParseJson {
             attempt: repaired_raw.clone(),
             iterations: initial_iteration + 1,
             source,
-        }
-    })?;
+        })?;
 
     // Re-run lint on the repair attempt -- a repair that re-introduces lint
     // errors must not be silently accepted.  Reuse the same Error-severity
     // filter the main loop applies so behaviour stays consistent.
-    let canonical = serde_json::to_string(&repaired)
-        .expect("re-serialising a parsed Value must not fail");
+    let canonical =
+        serde_json::to_string(&repaired).expect("re-serialising a parsed Value must not fail");
     let lint_errors: Vec<String> = wos_lint::lint_document(&canonical)
         .map_err(classify_lint_error)?
         .into_iter()
@@ -205,8 +203,7 @@ fn run_conformance_smoke_test(doc: &Value) -> Result<(), Vec<String>> {
         "expected_transitions": []
     });
 
-    let fixture_text = serde_json::to_string(&fixture)
-        .expect("fixture JSON must serialise");
+    let fixture_text = serde_json::to_string(&fixture).expect("fixture JSON must serialise");
 
     match wos_conformance::run_fixture(&fixture_text, ".") {
         Ok(result) if result.passed => Ok(()),

@@ -109,8 +109,8 @@ mod tests {
         mock.expect("alpha", "response-a");
         mock.expect("beta", "response-b");
 
-        let r1 = pollster::block_on(mock.complete("sys", "user mentions alpha somewhere", &[]))
-            .unwrap();
+        let r1 =
+            pollster::block_on(mock.complete("sys", "user mentions alpha somewhere", &[])).unwrap();
         assert_eq!(r1.text, "response-a");
 
         let r2 = pollster::block_on(mock.complete("sys", "user mentions beta", &[])).unwrap();
@@ -132,8 +132,7 @@ mod tests {
         mock.expect_n("foo", "bar", 1);
 
         pollster::block_on(mock.complete("sys", "foo present", &[])).unwrap();
-        let err =
-            pollster::block_on(mock.complete("sys", "foo present again", &[])).unwrap_err();
+        let err = pollster::block_on(mock.complete("sys", "foo present again", &[])).unwrap_err();
         assert!(matches!(err, PrompterError::UnexpectedPrompt(_)));
     }
 }

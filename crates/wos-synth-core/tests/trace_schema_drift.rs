@@ -44,7 +44,9 @@ fn representative_trace() -> SynthTrace {
             severity: Severity::Error,
             message: "state 'approved' has no outbound transition".into(),
             path: Some("/states/approved".into()),
-            suggested_fix: Some("add property at /states/approved/type with value 'terminal'".into()),
+            suggested_fix: Some(
+                "add property at /states/approved/type with value 'terminal'".into(),
+            ),
             related_docs: vec![
                 "specs/kernel/spec.md#S4.2".into(),
                 "LINT-MATRIX.md#K-001".into(),
@@ -87,8 +89,7 @@ fn load_published_schema() -> Value {
     let path = schema_path();
     let raw = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
-    serde_json::from_str(&raw)
-        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()))
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()))
 }
 
 /// Compile the published schema into a `jsonschema::Validator`.
@@ -190,4 +191,3 @@ fn unconverged_outcome_validates_against_outcome_schema() {
         );
     }
 }
-

@@ -7,13 +7,23 @@
   "description": "Minimal workflow with a hold-tagged state. Tests that hold timer starts on entry and is cancelled when the resume trigger arrives (G-030, G-054).",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
-    { "id": "caseworker", "type": "human", "description": "Caseworker" },
-    { "id": "applicant", "type": "human", "description": "Applicant" },
-    { "id": "system", "type": "system", "description": "System" }
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Caseworker"
+    },
+    {
+      "id": "applicant",
+      "type": "human",
+      "description": "Applicant"
+    },
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System"
+    }
   ],
-
   "lifecycle": {
     "initialState": "processing",
     "states": {
@@ -21,33 +31,54 @@
         "type": "atomic",
         "transitions": [
           {
-            "event": "needInfo",
+            "event": {
+              "kind": "message",
+              "name": "needInfo"
+            },
             "target": "pendingResponse",
-            "tags": ["hold"]
+            "tags": [
+              "hold"
+            ]
           }
         ]
       },
       "pendingResponse": {
         "type": "atomic",
-        "tags": ["hold"],
+        "tags": [
+          "hold"
+        ],
         "onEntry": [
           {
             "action": "startTimer",
             "timerId": "holdTimer",
             "duration": "P30D",
-            "event": "$timeout.state"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "applicantResponse",
+            "event": {
+              "kind": "message",
+              "name": "applicantResponse"
+            },
             "target": "processing",
             "actions": [
-              { "action": "cancelTimer", "timerId": "holdTimer" }
+              {
+                "action": "cancelTimer",
+                "timerId": "holdTimer"
+              }
             ]
           },
           {
-            "event": "$timeout.state",
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
             "target": "escalated"
           }
         ]
@@ -55,19 +86,27 @@
       "escalated": {
         "type": "atomic",
         "transitions": [
-          { "event": "resolved", "target": "completed" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "resolved"
+            },
+            "target": "completed"
+          }
         ]
       },
-      "completed": { "type": "final" }
+      "completed": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "status": { "type": "string" }
+      "status": {
+        "type": "string"
+      }
     }
   },
-
   "execution": {
     "workflowTimeout": "P365D",
     "instanceVersioning": "pinned"

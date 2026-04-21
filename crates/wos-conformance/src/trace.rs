@@ -57,7 +57,11 @@ pub struct PolicyApplication {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum Delta {
     /// Actual state differs from expected.
     StateMismatch {
@@ -147,8 +151,7 @@ mod tests {
         trace.push_step(sample_step(2));
 
         let json_str = serde_json::to_string(&trace).expect("serialize");
-        let deserialized: ConformanceTrace =
-            serde_json::from_str(&json_str).expect("deserialize");
+        let deserialized: ConformanceTrace = serde_json::from_str(&json_str).expect("deserialize");
 
         assert_eq!(trace, deserialized);
     }

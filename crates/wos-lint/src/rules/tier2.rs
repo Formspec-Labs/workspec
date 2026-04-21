@@ -155,7 +155,7 @@ fn collect_events_typed(
     for state in states.values() {
         for transition in &state.transitions {
             if let Some(ev) = &transition.event {
-                events.insert(ev.clone());
+                events.insert(ev.runtime_dispatch_label());
             }
         }
         collect_events_typed(&state.states, events);
@@ -1091,7 +1091,10 @@ fn check_resolution_date_refs(
 
 /// G-033: A parameter `values` array that is empty means no resolution date
 /// is covered — warn because behavior is undefined.
-fn check_parameter_coverage(gov: &crate::document::WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_parameter_coverage(
+    gov: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let Some(params) = gov.value.get("parameters").and_then(Value::as_object) else {
         return;
     };
@@ -2110,11 +2113,7 @@ fn is_rights_impacting_typed(kernel: &KernelDocument) -> bool {
 /// suffix. The bare prefix `x-wos-` (no suffix) is malformed but not a
 /// reserved-namespace usage, so it is ignored here. Other vendor prefixes
 /// like `x-acme-` or `x-vendor-` are unaffected.
-fn check_reserved_wos_namespace(
-    value: &Value,
-    path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
+fn check_reserved_wos_namespace(value: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(obj) = value.as_object() {
         for (key, child) in obj {
             let child_path = format!("{path}/{}", json_pointer_escape(key));
@@ -2172,7 +2171,11 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
         assert_eq!(matches[0].severity, crate::LintSeverity::Warning);
         assert_eq!(matches[0].path, "/x-wos-future");
         assert!(matches[0].message.contains("x-wos-future"));
@@ -2193,7 +2196,11 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
         assert_eq!(
             matches[0].path,
             "/lifecycle/states/approved/x-wos-experimental"
@@ -2245,7 +2252,11 @@ mod tests {
         });
         let diags = run(doc);
         let hits: Vec<&_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(hits.len(), 1, "expected exactly 1 K-EXT-002, got: {diags:?}");
+        assert_eq!(
+            hits.len(),
+            1,
+            "expected exactly 1 K-EXT-002, got: {diags:?}"
+        );
         assert_eq!(hits[0].path, "/extensions/x-wos-future");
     }
 
@@ -2276,7 +2287,11 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
         assert_eq!(matches[0].path, "/actors/0/x-wos-trait");
     }
 

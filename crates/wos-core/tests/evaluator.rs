@@ -78,7 +78,7 @@ fn final_state() -> State {
 
 fn transition(event: &str, target: &str) -> Transition {
     Transition {
-        event: Some(event.to_string()),
+        event: Some(TransitionEvent::from_legacy_string(event)),
         target: target.to_string(),
         guard: None,
         actions: vec![],
@@ -89,7 +89,7 @@ fn transition(event: &str, target: &str) -> Transition {
 
 fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
     Transition {
-        event: Some(event.to_string()),
+        event: Some(TransitionEvent::from_legacy_string(event)),
         target: target.to_string(),
         guard: Some(guard.to_string()),
         actions: vec![],
@@ -267,7 +267,7 @@ fn set_data_action_mutates_case_state() {
         "start".into(),
         State {
             transitions: vec![Transition {
-                event: Some("go".to_string()),
+                event: Some(TransitionEvent::from_legacy_string("go")),
                 target: "end".to_string(),
                 guard: None,
                 actions: vec![set_action],
@@ -400,7 +400,7 @@ fn timer_fires_after_advance() {
         action: ActionKind::StartTimer,
         timer_id: Some("t1".to_string()),
         duration: Some("PT10S".to_string()),
-        event: Some("$timeout.task".to_string()),
+        event: Some(TransitionEvent::from_legacy_string("$timeout.task")),
         task_ref: None,
         assign_to: None,
         service_ref: None,

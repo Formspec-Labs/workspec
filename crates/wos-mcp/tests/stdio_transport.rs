@@ -152,7 +152,9 @@ fn full_mcp_session() {
     let list = &responses[1];
     assert_eq!(list["jsonrpc"], "2.0");
     assert_eq!(list["id"], 2);
-    let tools = list["result"]["tools"].as_array().expect("tools must be an array");
+    let tools = list["result"]["tools"]
+        .as_array()
+        .expect("tools must be an array");
     assert!(
         tools.iter().any(|t| t["name"] == "wos_ping"),
         "wos_ping must appear in tools/list"
@@ -169,7 +171,10 @@ fn full_mcp_session() {
         .expect("content[0].text must be a string");
     let pong: serde_json::Value =
         serde_json::from_str(content_text).expect("content text must be valid JSON");
-    assert_eq!(pong["pong"], true, "wos_ping must return {{\"pong\": true}}");
+    assert_eq!(
+        pong["pong"], true,
+        "wos_ping must return {{\"pong\": true}}"
+    );
 }
 
 /// JSON-RPC-2.0 §4.1 and MCP both forbid responses to notifications.
@@ -271,10 +276,7 @@ fn tools_list_advertises_twenty_two_tools() {
         .as_array()
         .expect("tools must be an array");
 
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
 
     assert_eq!(
         names.len(),
@@ -339,7 +341,10 @@ fn every_advertised_tool_has_a_dispatch_handler() {
         .filter_map(|t| t["name"].as_str().map(str::to_string))
         .collect();
 
-    assert!(!names.is_empty(), "tools/list must return at least one tool");
+    assert!(
+        !names.is_empty(),
+        "tools/list must return at least one tool"
+    );
 
     // Call each tool with an empty arguments object.
     //

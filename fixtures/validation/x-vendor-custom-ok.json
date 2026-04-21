@@ -7,25 +7,34 @@
   "description": "Minimal kernel that uses a non-reserved vendor x-* namespace at root. K-EXT-002 MUST NOT emit a warning for x-acme-* keys; only the reserved x-wos-* namespace is gated.",
   "status": "active",
   "impactLevel": "operational",
-
   "x-acme-foo": {
     "note": "Vendor-authored extension outside the reserved x-wos-* namespace; must NOT trigger K-EXT-002."
   },
-
   "actors": [
-    { "id": "system", "type": "system", "description": "System actor." }
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System actor."
+    }
   ],
-
   "lifecycle": {
     "initialState": "open",
     "states": {
       "open": {
         "type": "atomic",
         "transitions": [
-          { "event": "close", "target": "closed" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "close"
+            },
+            "target": "closed"
+          }
         ]
       },
-      "closed": { "type": "final" }
+      "closed": {
+        "type": "final"
+      }
     }
   }
 }

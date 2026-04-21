@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 
 use wos_core::{
+    model::kernel::{Actor, ContractReference, Milestone, State, Transition, TransitionEvent},
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
-    model::kernel::{Actor, ContractReference, Milestone, State, Transition},
 };
 
 use crate::{
@@ -311,6 +311,7 @@ impl RawWosProject {
         to_state: String,
         guard: Option<String>,
         event: Option<String>,
+        event_typed: Option<TransitionEvent>,
     ) -> CommandResult {
         // Both endpoints must exist before a transition can be created.
         if !self.doc.lifecycle.states.contains_key(&from_state) {
@@ -326,10 +327,29 @@ impl RawWosProject {
             ));
         }
 
+        let has_legacy = event
+            .as_ref()
+            .map(|e| !e.trim().is_empty())
+            .unwrap_or(false);
+        if event_typed.is_some() && has_legacy {
+            return Err(AuthoringDiagnostic::error(
+                "/lifecycle/transitions".to_string(),
+                "AddTransition: use either `event` (legacy string) or `event_typed`, not both"
+                    .to_string(),
+            ));
+        }
+
+        let ev_typed = if let Some(ev) = event_typed {
+            Some(ev)
+        } else {
+            event
+                .as_ref()
+                .map(|e| e.trim())
+                .filter(|e| !e.is_empty())
+                .map(TransitionEvent::from_legacy_string)
+        };
         let transition = Transition {
-            event: event
-                .map(|e| e.trim().to_string())
-                .filter(|e| !e.is_empty()),
+            event: ev_typed,
             target: to_state.clone(),
             guard,
             actions: Vec::new(),
@@ -337,10 +357,7 @@ impl RawWosProject {
             tags: Vec::new(),
         };
 
-        let label = transition
-            .event
-            .clone()
-            .unwrap_or_else(|| "(guard-only)".to_string());
+        let label = transition.event_dispatch_label();
 
         // Unwrap is safe: we verified `from_state` exists above.
         self.doc
@@ -394,9 +411,9 @@ impl RawWosProject {
         // transition's `assignTo` action — authors may be mid-migration.
         for (state_id, state) in &self.doc.lifecycle.states {
             for transition in &state.transitions {
-                        for (action_idx, action) in transition.actions.iter().enumerate() {
+                for (action_idx, action) in transition.actions.iter().enumerate() {
                     if action.assign_to.as_deref() == Some(id.as_str()) {
-                        let ev_label = transition.event.as_deref().unwrap_or("(guard-only)");
+                        let ev_label = transition.event_dispatch_label();
                         self.diagnostics.push(AuthoringDiagnostic::warning(
                             format!(
                                 "/lifecycle/states/{state_id}/transitions/{}/actions/{action_idx}",
@@ -415,7 +432,9 @@ impl RawWosProject {
 
         self.doc.actors.remove(index);
 
-        Ok(AppliedCommand::without_inverse(format!("RemoveActor({id})")))
+        Ok(AppliedCommand::without_inverse(format!(
+            "RemoveActor({id})"
+        )))
     }
 
     // ── AddActorExtension handler ─────────────────────────────────────────
@@ -511,11 +530,7 @@ impl RawWosProject {
     /// does not need to depend on `wos-core::model::ai::AIIntegrationDocument`
     /// for writes. Consumers that need typed access deserialize the exported
     /// JSON through `wos-core`.
-    fn apply_add_actor_deontic(
-        &mut self,
-        constraint_id: String,
-        rule: String,
-    ) -> CommandResult {
+    fn apply_add_actor_deontic(&mut self, constraint_id: String, rule: String) -> CommandResult {
         let ext = self
             .doc
             .extensions
@@ -569,11 +584,7 @@ impl RawWosProject {
 
     // ── AddMilestone / RemoveMilestone handlers ───────────────────────────
 
-    fn apply_add_milestone(
-        &mut self,
-        milestone_id: String,
-        condition: String,
-    ) -> CommandResult {
+    fn apply_add_milestone(&mut self, milestone_id: String, condition: String) -> CommandResult {
         if self.doc.lifecycle.milestones.contains_key(&milestone_id) {
             return Err(AuthoringDiagnostic::error(
                 format!("/lifecycle/milestones/{milestone_id}"),
@@ -848,9 +859,7 @@ impl RawWosProject {
         if !matches!(modality.as_str(), "must" | "must_not" | "may") {
             return Err(AuthoringDiagnostic::error(
                 format!("/extensions/x-wos-ai/deonticConstraints/{constraint_id}/modality"),
-                format!(
-                    "invalid modality '{modality}'; expected must | must_not | may"
-                ),
+                format!("invalid modality '{modality}'; expected must | must_not | may"),
             ));
         }
 
@@ -908,11 +917,7 @@ impl RawWosProject {
 
     // ── AddExtensionKey handler ───────────────────────────────────────────
 
-    fn apply_add_extension_key(
-        &mut self,
-        key: String,
-        value: serde_json::Value,
-    ) -> CommandResult {
+    fn apply_add_extension_key(&mut self, key: String, value: serde_json::Value) -> CommandResult {
         if !key.starts_with("x-") {
             return Err(AuthoringDiagnostic::error(
                 format!("/extensions/{key}"),
@@ -959,7 +964,8 @@ impl RawWosProject {
                 to_state,
                 guard,
                 event,
-            } => self.apply_add_transition(from_state, to_state, guard, event),
+                event_typed,
+            } => self.apply_add_transition(from_state, to_state, guard, event, event_typed),
             Command::AddActor { id, kind } => self.apply_add_actor(id, kind),
             Command::RemoveActor { id } => self.apply_remove_actor(id),
             Command::AddActorExtension {
@@ -1035,9 +1041,10 @@ impl IWosProjectCore for RawWosProject {
     /// `redo` can re-apply the command. Returns `Err` if the history is
     /// empty — the document is left untouched.
     fn undo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        let entry = self.history.pop().ok_or_else(|| {
-            AuthoringDiagnostic::error("/", "cannot undo: history is empty")
-        })?;
+        let entry = self
+            .history
+            .pop()
+            .ok_or_else(|| AuthoringDiagnostic::error("/", "cannot undo: history is empty"))?;
 
         // Swap: restore the pre-command snapshot and remember the current
         // state as the redo snapshot.
@@ -1056,9 +1063,10 @@ impl IWosProjectCore for RawWosProject {
     /// the current document, and records the inverse entry on `history`.
     /// Returns `Err` if the redo stack is empty.
     fn redo(&mut self) -> Result<(), AuthoringDiagnostic> {
-        let entry = self.redo_stack.pop().ok_or_else(|| {
-            AuthoringDiagnostic::error("/", "cannot redo: redo stack is empty")
-        })?;
+        let entry = self
+            .redo_stack
+            .pop()
+            .ok_or_else(|| AuthoringDiagnostic::error("/", "cannot redo: redo stack is empty"))?;
 
         let current = std::mem::replace(&mut self.doc, entry.before);
         self.history.push(HistoryEntry {
@@ -1181,6 +1189,7 @@ mod tests {
             to_state: "approved".into(),
             guard: Some("caseFile.amount <= 50000".into()),
             event: Some("approve".into()),
+            event_typed: None,
         })
         .expect("AddTransition must succeed when both states exist");
 
@@ -1188,7 +1197,14 @@ mod tests {
         let transitions = &snap.lifecycle.states["submitted"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
-        assert_eq!(transitions[0].event.as_deref(), Some("approve"));
+        assert_eq!(
+            transitions[0]
+                .event
+                .as_ref()
+                .map(|e| e.runtime_dispatch_label())
+                .as_deref(),
+            Some("approve")
+        );
         assert_eq!(
             transitions[0].guard.as_deref(),
             Some("caseFile.amount <= 50000")
@@ -1214,6 +1230,7 @@ mod tests {
                 to_state: "approved".into(),
                 guard: None,
                 event: Some("approve".into()),
+                event_typed: None,
             })
             .expect_err("AddTransition with unknown source must return an error");
 
@@ -1243,6 +1260,7 @@ mod tests {
                 to_state: "nonexistent".into(),
                 guard: None,
                 event: Some("approve".into()),
+                event_typed: None,
             })
             .expect_err("AddTransition with unknown target must return an error");
 
@@ -1250,6 +1268,90 @@ mod tests {
         assert!(
             err.message.contains("does not exist"),
             "error must mention 'does not exist'"
+        );
+    }
+
+    /// AddTransition rejects legacy `event` together with `event_typed`.
+    #[test]
+    fn add_transition_legacy_and_typed_mutually_exclusive() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "submitted".into(),
+            kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        })
+        .unwrap();
+        p.dispatch(Command::AddState {
+            id: "b".into(),
+            kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        })
+        .unwrap();
+
+        let err = p
+            .dispatch(Command::AddTransition {
+                from_state: "submitted".into(),
+                to_state: "b".into(),
+                guard: None,
+                event: Some("go".into()),
+                event_typed: Some(TransitionEvent::Message {
+                    name: "go".into(),
+                    correlation_key: None,
+                    data: None,
+                }),
+            })
+            .expect_err("both event sources must be rejected");
+
+        assert_eq!(err.severity, Severity::Error);
+        assert!(err.message.contains("not both"));
+    }
+
+    /// Typed AddTransition persists the TransitionEvent shape on the snapshot.
+    #[test]
+    fn add_transition_typed_persists_message_metadata() {
+        let mut p = make_project();
+        p.dispatch(Command::AddState {
+            id: "submitted".into(),
+            kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        })
+        .unwrap();
+        p.dispatch(Command::AddState {
+            id: "b".into(),
+            kind: StateKind::Atomic,
+            description: None,
+            metadata: None,
+        })
+        .unwrap();
+
+        p.dispatch(Command::AddTransition {
+            from_state: "submitted".into(),
+            to_state: "b".into(),
+            guard: None,
+            event: None,
+            event_typed: Some(TransitionEvent::Message {
+                name: "notify".into(),
+                correlation_key: Some("k1".into()),
+                data: None,
+            }),
+        })
+        .expect("typed AddTransition must succeed");
+
+        let t = &p.snapshot().lifecycle.states["submitted"].transitions[0];
+        assert!(
+            matches!(
+                &t.event,
+                Some(TransitionEvent::Message {
+                    name,
+                    correlation_key: Some(ck),
+                    ..
+                }) if name == "notify" && ck == "k1"
+            ),
+            "unexpected transition event: {:?}",
+            t.event
         );
     }
 
@@ -1389,10 +1491,7 @@ mod tests {
             initial.lifecycle.states.len()
         );
         assert_eq!(final_snap.impact_level, initial.impact_level);
-        assert_eq!(
-            final_snap.contracts.len(),
-            initial.contracts.len()
-        );
+        assert_eq!(final_snap.contracts.len(), initial.contracts.len());
         assert_eq!(
             final_snap.lifecycle.milestones.len(),
             initial.lifecycle.milestones.len()
@@ -1529,9 +1628,7 @@ mod tests {
     fn remove_actor_unknown_returns_error() {
         let mut p = make_project();
         let err = p
-            .dispatch(Command::RemoveActor {
-                id: "ghost".into(),
-            })
+            .dispatch(Command::RemoveActor { id: "ghost".into() })
             .expect_err("unknown actor must be rejected");
         assert!(err.message.contains("not found"));
     }
@@ -1559,6 +1656,7 @@ mod tests {
             to_state: "loop".into(),
             guard: None,
             event: Some("retry".into()),
+            event_typed: None,
         })
         .unwrap();
 
@@ -1702,6 +1800,7 @@ mod tests {
             to_state: "b".into(),
             guard: None,
             event: Some("go".into()),
+            event_typed: None,
         })
         .unwrap();
 
@@ -1895,7 +1994,10 @@ mod tests {
         .expect("AddActorDeontic must succeed on empty project");
 
         let snap = p.snapshot();
-        let ext = snap.extensions.get("x-wos-ai").expect("x-wos-ai must exist");
+        let ext = snap
+            .extensions
+            .get("x-wos-ai")
+            .expect("x-wos-ai must exist");
         let constraints = ext["deonticConstraints"]
             .as_array()
             .expect("deonticConstraints must be an array");

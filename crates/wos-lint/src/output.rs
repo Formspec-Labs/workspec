@@ -91,8 +91,7 @@ pub fn format_text(diagnostics: &[LintDiagnostic]) -> String {
 /// assert!(json.contains("\"K-001\""));
 /// ```
 pub fn format_json(diagnostics: &[LintDiagnostic]) -> String {
-    serde_json::to_string_pretty(diagnostics)
-        .expect("LintDiagnostic serialization must not fail")
+    serde_json::to_string_pretty(diagnostics).expect("LintDiagnostic serialization must not fail")
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +204,7 @@ pub fn format_sarif(diagnostics: &[LintDiagnostic]) -> String {
         }]
     });
 
-    serde_json::to_string_pretty(&sarif)
-        .expect("SARIF serialization must not fail")
+    serde_json::to_string_pretty(&sarif).expect("SARIF serialization must not fail")
 }
 
 // ---------------------------------------------------------------------------
@@ -298,8 +296,7 @@ mod tests {
     fn format_sarif_warning_maps_to_warning_level() {
         let mut d = sample_diagnostic();
         d.severity = LintSeverity::Warning;
-        let sarif: serde_json::Value =
-            serde_json::from_str(&format_sarif(&[d])).unwrap();
+        let sarif: serde_json::Value = serde_json::from_str(&format_sarif(&[d])).unwrap();
         assert_eq!(sarif["runs"][0]["results"][0]["level"], "warning");
     }
 
@@ -307,8 +304,7 @@ mod tests {
     fn format_sarif_info_maps_to_note_level() {
         let mut d = sample_diagnostic();
         d.severity = LintSeverity::Info;
-        let sarif: serde_json::Value =
-            serde_json::from_str(&format_sarif(&[d])).unwrap();
+        let sarif: serde_json::Value = serde_json::from_str(&format_sarif(&[d])).unwrap();
         assert_eq!(sarif["runs"][0]["results"][0]["level"], "note");
     }
 }

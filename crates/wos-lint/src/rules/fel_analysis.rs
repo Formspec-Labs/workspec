@@ -171,7 +171,9 @@ pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
                 | BinaryOp::Gt
                 | BinaryOp::GtEq
         ),
-        Expr::UnaryOp { op: UnaryOp::Not, .. } => true,
+        Expr::UnaryOp {
+            op: UnaryOp::Not, ..
+        } => true,
         Expr::Membership { .. } => true,
         Expr::Ternary {
             then_branch,
@@ -352,7 +354,11 @@ fn check_delegation_conditions(
 // ---------------------------------------------------------------------------
 
 /// AI-024: Escalation conditions must be valid FEL that references `@agent` context.
-fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_escalation_conditions(
+    agent: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let Some(escalation) = agent.get("escalation") else {
         return;
     };

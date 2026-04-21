@@ -102,8 +102,7 @@ fn diff_diverging_traces_exits_1_and_prints_divergence() {
     let golden_path = golden_trace("K-011-determinism.json");
     let golden_json = std::fs::read_to_string(&golden_path)
         .unwrap_or_else(|e| panic!("cannot read golden trace: {e}"));
-    let mut golden: serde_json::Value =
-        serde_json::from_str(&golden_json).expect("parse golden");
+    let mut golden: serde_json::Value = serde_json::from_str(&golden_json).expect("parse golden");
     golden["steps"][0]["stateAfter"] = serde_json::json!("rejected");
     golden["steps"][0]["expectedStateAfter"] = serde_json::json!("rejected");
 

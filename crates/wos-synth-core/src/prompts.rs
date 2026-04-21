@@ -151,8 +151,7 @@ mod tests {
 
     #[test]
     fn generate_prompt_embeds_problem_and_marker() {
-        let (system, user, anchors) =
-            build_generate_prompt("unique-sentinel-42", Layer::Kernel);
+        let (system, user, anchors) = build_generate_prompt("unique-sentinel-42", Layer::Kernel);
         assert!(system.contains("$wosKernel"));
         assert!(user.contains("unique-sentinel-42"));
         assert!(user.contains("$wosKernel"));

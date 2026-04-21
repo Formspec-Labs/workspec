@@ -22,8 +22,7 @@ fn main() {
     let fixtures_dir = workspace_root.join("crates/wos-conformance/fixtures");
     let output_dir = workspace_root.join("fixtures/conformance/expected-traces");
 
-    std::fs::create_dir_all(&output_dir)
-        .expect("failed to create expected-traces directory");
+    std::fs::create_dir_all(&output_dir).expect("failed to create expected-traces directory");
 
     let mut generated = 0usize;
     let mut failed = 0usize;
@@ -31,19 +30,15 @@ fn main() {
     let mut entries: Vec<_> = std::fs::read_dir(&fixtures_dir)
         .expect("fixtures directory not found")
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .is_some_and(|ext| ext == "json")
-        })
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
     for entry in entries {
         let path = entry.path();
         let name = path.file_name().unwrap().to_str().unwrap();
-        let json = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("failed to read {name}: {e}"));
+        let json =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {name}: {e}"));
 
         // T3 fixtures reference documents relative to the workspace root.
         let base_dir = workspace_root.to_str().unwrap();
@@ -53,8 +48,8 @@ fn main() {
             Ok((_result, trace)) => {
                 let slug = wos_conformance::slugify(&trace.fixture_id);
                 let out_path = output_dir.join(format!("{slug}.json"));
-                let pretty = serde_json::to_string_pretty(&trace)
-                    .expect("trace serialization failed");
+                let pretty =
+                    serde_json::to_string_pretty(&trace).expect("trace serialization failed");
                 std::fs::write(&out_path, pretty)
                     .unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
                 println!("ok  ({})", out_path.file_name().unwrap().to_str().unwrap());

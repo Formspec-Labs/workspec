@@ -43,13 +43,11 @@ fn all_production_schemas_have_zero_schema_doc_violations() {
             continue;
         }
 
-        let json = std::fs::read_to_string(abs_path).unwrap_or_else(|e| {
-            panic!("failed to read {}: {e}", abs_path.display())
-        });
+        let json = std::fs::read_to_string(abs_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", abs_path.display()));
 
-        let diagnostics = wos_lint::lint_schema(&json).unwrap_or_else(|e| {
-            panic!("lint_schema failed for {}: {e}", abs_path.display())
-        });
+        let diagnostics = wos_lint::lint_schema(&json)
+            .unwrap_or_else(|e| panic!("lint_schema failed for {}: {e}", abs_path.display()));
 
         if !diagnostics.is_empty() {
             violations_by_file.push((rel_path, diagnostics.len()));

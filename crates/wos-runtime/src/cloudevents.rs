@@ -97,8 +97,9 @@ impl CloudEvent {
     pub fn to_provenance_data(&self) -> serde_json::Value {
         // CloudEvent fields are all primitives or Option<primitive> — serialization
         // is infallible by construction. The expect communicates that invariant.
-        serde_json::to_value(self)
-            .expect("CloudEvent serialization is infallible: all fields are primitive or Option<Value>")
+        serde_json::to_value(self).expect(
+            "CloudEvent serialization is infallible: all fields are primitive or Option<Value>",
+        )
     }
 }
 
@@ -132,7 +133,10 @@ mod tests {
             "type": "com.example.test"
         }"#;
         let result = serde_json::from_str::<CloudEvent>(json);
-        assert!(result.is_err(), "expected deserialization error for missing id");
+        assert!(
+            result.is_err(),
+            "expected deserialization error for missing id"
+        );
     }
 
     #[test]

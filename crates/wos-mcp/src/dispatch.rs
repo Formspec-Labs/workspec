@@ -41,125 +41,97 @@ pub async fn dispatch(
     args: serde_json::Value,
 ) -> Result<serde_json::Value, DispatchError> {
     match tool_name {
-        "wos_ping" => tools::ping(registry, project_id, args).await.map_err(|source| {
-            DispatchError::ToolFailed {
+        "wos_ping" => tools::ping(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
                 tool: tool_name.to_string(),
                 source,
-            }
-        }),
-        "wos_create_kernel" => {
-            tools::wos_create_kernel(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_load_document" => {
-            tools::wos_load_document(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_export_document" => {
-            tools::wos_export_document(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_describe_document" => {
-            tools::wos_describe_document(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_state" => {
-            tools::wos_add_state(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_transition" => {
-            tools::wos_add_transition(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_set_initial_state" => {
-            tools::wos_set_initial_state(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_remove_state" => {
-            tools::wos_remove_state(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_actor" => {
-            tools::wos_add_actor(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_actor_extension" => {
-            tools::wos_add_actor_extension(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
+            }),
+        "wos_create_kernel" => tools::wos_create_kernel(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_load_document" => tools::wos_load_document(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_export_document" => tools::wos_export_document(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_describe_document" => tools::wos_describe_document(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_state" => tools::wos_add_state(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_transition" => tools::wos_add_transition(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_set_initial_state" => tools::wos_set_initial_state(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_remove_state" => tools::wos_remove_state(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_actor" => tools::wos_add_actor(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_actor_extension" => tools::wos_add_actor_extension(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
         // ── Governance / AI tools (Task 5) ────────────────────────────────
-        "wos_add_due_process_path" => {
-            tools::wos_add_due_process_path(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_assertion_gate" => {
-            tools::wos_add_assertion_gate(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_set_impact_level" => {
-            tools::wos_set_impact_level(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_add_ai_agent" => {
-            tools::wos_add_ai_agent(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
+        "wos_add_due_process_path" => tools::wos_add_due_process_path(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_assertion_gate" => tools::wos_add_assertion_gate(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_set_impact_level" => tools::wos_set_impact_level(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_add_ai_agent" => tools::wos_add_ai_agent(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
         "wos_add_deontic_constraint" => {
             tools::wos_add_deontic_constraint(registry, project_id, args)
                 .await
@@ -169,54 +141,42 @@ pub async fn dispatch(
                 })
         }
         // ── Validation / query tools (Task 6) ────────────────────────────
-        "wos_lint" => {
-            tools::wos_lint(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_run_conformance" => {
-            tools::wos_run_conformance(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_preview_state_graph" => {
-            tools::wos_preview_state_graph(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_search" => {
-            tools::wos_search(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_list_projects" => {
-            tools::wos_list_projects(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
-        "wos_close_project" => {
-            tools::wos_close_project(registry, project_id, args)
-                .await
-                .map_err(|source| DispatchError::ToolFailed {
-                    tool: tool_name.to_string(),
-                    source,
-                })
-        }
+        "wos_lint" => tools::wos_lint(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_run_conformance" => tools::wos_run_conformance(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_preview_state_graph" => tools::wos_preview_state_graph(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_search" => tools::wos_search(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_list_projects" => tools::wos_list_projects(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
+        "wos_close_project" => tools::wos_close_project(registry, project_id, args)
+            .await
+            .map_err(|source| DispatchError::ToolFailed {
+                tool: tool_name.to_string(),
+                source,
+            }),
         other => Err(DispatchError::UnknownTool(other.to_string())),
     }
 }
@@ -257,9 +217,13 @@ mod tests {
     #[tokio::test]
     async fn wos_ping_handler_accepts_registry_and_project_id() {
         let mut registry = ProjectRegistry::new();
-        let result = tools::ping(&mut registry, "ignored-id", serde_json::json!({"anything": 1}))
-            .await
-            .unwrap();
+        let result = tools::ping(
+            &mut registry,
+            "ignored-id",
+            serde_json::json!({"anything": 1}),
+        )
+        .await
+        .unwrap();
         assert_eq!(result, serde_json::json!({"pong": true}));
     }
 
@@ -269,9 +233,14 @@ mod tests {
         let mut registry = ProjectRegistry::new();
 
         // Create a new project.
-        let create = dispatch(&mut registry, "wos_create_kernel", "", serde_json::json!({}))
-            .await
-            .unwrap();
+        let create = dispatch(
+            &mut registry,
+            "wos_create_kernel",
+            "",
+            serde_json::json!({}),
+        )
+        .await
+        .unwrap();
         let pid = create["project_id"].as_str().unwrap().to_string();
 
         // Export it back through dispatch.
@@ -293,9 +262,14 @@ mod tests {
     #[tokio::test]
     async fn dispatch_describe_document_returns_shape() {
         let mut registry = ProjectRegistry::new();
-        let create = dispatch(&mut registry, "wos_create_kernel", "", serde_json::json!({}))
-            .await
-            .unwrap();
+        let create = dispatch(
+            &mut registry,
+            "wos_create_kernel",
+            "",
+            serde_json::json!({}),
+        )
+        .await
+        .unwrap();
         let pid = create["project_id"].as_str().unwrap().to_string();
 
         let desc = dispatch(
@@ -321,9 +295,14 @@ mod tests {
         let mut registry = ProjectRegistry::new();
 
         // Step 1: create kernel.
-        let create = dispatch(&mut registry, "wos_create_kernel", "", serde_json::json!({}))
-            .await
-            .unwrap();
+        let create = dispatch(
+            &mut registry,
+            "wos_create_kernel",
+            "",
+            serde_json::json!({}),
+        )
+        .await
+        .unwrap();
         let pid = create["project_id"].as_str().unwrap().to_string();
 
         // Step 2: add three states.

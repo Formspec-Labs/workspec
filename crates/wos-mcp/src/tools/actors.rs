@@ -85,10 +85,9 @@ pub async fn wos_add_actor_extension(
 fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolError> {
     match args.get(key) {
         None => Err(ToolError::MissingArgument(key.to_string())),
-        Some(v) => v
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))),
+        Some(v) => v.as_str().filter(|s| !s.is_empty()).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))
+        }),
     }
 }
 
@@ -300,9 +299,13 @@ mod tests {
     async fn wrong_type_project_id_gives_invalid_arguments_error() {
         let mut registry = ProjectRegistry::new();
         // project_id is a boolean, not a string.
-        let err = wos_add_actor(&mut registry, "", json!({ "project_id": true, "actor_id": "a1" }))
-            .await
-            .unwrap_err();
+        let err = wos_add_actor(
+            &mut registry,
+            "",
+            json!({ "project_id": true, "actor_id": "a1" }),
+        )
+        .await
+        .unwrap_err();
         assert!(
             matches!(err, ToolError::InvalidArguments(_)),
             "wrong-type key must yield InvalidArguments; got {err:?}"

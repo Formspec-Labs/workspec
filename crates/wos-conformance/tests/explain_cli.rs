@@ -8,8 +8,8 @@
 //! around the same library calls tested here.
 
 use wos_conformance::{
-    diff_traces, render_diff, render_trace, run_fixture_with_trace, slugify, ConformanceTrace,
-    DivergenceCause, Outcome, TraceDiffResult,
+    ConformanceTrace, DivergenceCause, Outcome, TraceDiffResult, diff_traces, render_diff,
+    render_trace, run_fixture_with_trace, slugify,
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -79,7 +79,10 @@ fn explain_passing_fixture_shows_transition_guard_and_pass_summary() {
         "guard expression missing: {output}"
     );
     assert!(output.contains("PASS"), "summary PASS missing: {output}");
-    assert!(!output.contains("FAIL"), "no FAIL on passing fixture: {output}");
+    assert!(
+        !output.contains("FAIL"),
+        "no FAIL on passing fixture: {output}"
+    );
 }
 
 /// Fail path: K-001 is a lint-negative fixture (0 transitions, outcome=fail).
@@ -122,7 +125,10 @@ fn explain_json_flag_round_trips_golden_trace() {
     let reparsed: ConformanceTrace = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(golden, reparsed);
     // Also verify the fixture id is present in the JSON string.
-    assert!(json.contains("K-011-determinism"), "fixture id missing in JSON: {json}");
+    assert!(
+        json.contains("K-011-determinism"),
+        "fixture id missing in JSON: {json}"
+    );
 }
 
 // ── diff_traces + render_diff tests ───────────────────────────────────────────
@@ -147,7 +153,10 @@ fn diff_match_golden_vs_fresh_k011_determinism_returns_ok() {
 fn diff_match_all_golden_traces_match_fresh_runs() {
     let fixtures = [
         ("K-011-determinism", "K-011-determinism.json"),
-        ("K-020-provenance-completeness", "K-020-provenance-completeness.json"),
+        (
+            "K-020-provenance-completeness",
+            "K-020-provenance-completeness.json",
+        ),
         ("K-033-document-order", "K-033-document-order.json"),
     ];
     for (fixture_id, fixture_file) in fixtures {
@@ -181,12 +190,27 @@ fn diff_mismatch_mutated_step_surfaces_divergence_and_exits_nonzero() {
     );
 
     let rendered = render_diff(&result);
-    assert!(rendered.contains("DIVERGENCE"), "DIVERGENCE missing: {rendered}");
-    assert!(rendered.contains("at step: 1"), "step number missing: {rendered}");
+    assert!(
+        rendered.contains("DIVERGENCE"),
+        "DIVERGENCE missing: {rendered}"
+    );
+    assert!(
+        rendered.contains("at step: 1"),
+        "step number missing: {rendered}"
+    );
     // expected state in the mutated golden is "rejected"; actual from runner is "approved"
-    assert!(rendered.contains("rejected"), "expected state missing: {rendered}");
-    assert!(rendered.contains("approved"), "actual state missing: {rendered}");
-    assert!(rendered.contains("hypothesis:"), "hypothesis missing: {rendered}");
+    assert!(
+        rendered.contains("rejected"),
+        "expected state missing: {rendered}"
+    );
+    assert!(
+        rendered.contains("approved"),
+        "actual state missing: {rendered}"
+    );
+    assert!(
+        rendered.contains("hypothesis:"),
+        "hypothesis missing: {rendered}"
+    );
 
     // Verify the exit code semantic: Divergence → exit 1.
     let exit_code: u8 = match &result {
@@ -211,7 +235,9 @@ fn diff_json_flag_divergence_includes_cause_fields() {
     let json = serde_json::to_string_pretty(&result).expect("serialize diff result");
     // JSON should contain divergence key and differsAtStep.
     assert!(
-        json.contains("Divergence") || json.contains("divergence") || json.contains("differsAtStep"),
+        json.contains("Divergence")
+            || json.contains("divergence")
+            || json.contains("differsAtStep"),
         "diff JSON missing divergence content: {json}"
     );
 }

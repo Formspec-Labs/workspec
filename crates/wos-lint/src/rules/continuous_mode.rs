@@ -514,7 +514,10 @@ mod tests {
 
         let mut diagnostics = Vec::new();
         check(&kernel, &mut diagnostics);
-        assert!(diagnostics.is_empty(), "unexpected diagnostics: {diagnostics:?}");
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
     }
 
     #[test]
@@ -686,7 +689,10 @@ mod tests {
 
         let mut diagnostics = Vec::new();
         check(&kernel, &mut diagnostics);
-        assert!(diagnostics.is_empty(), "unexpected diagnostics: {diagnostics:?}");
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
     }
 
     #[test]
@@ -923,7 +929,10 @@ mod tests {
     fn normalize_plain_dotted_path() {
         assert_eq!(
             normalize_setdata_path("caseFile.value"),
-            vec![Segment::Dot("caseFile".into()), Segment::Dot("value".into())]
+            vec![
+                Segment::Dot("caseFile".into()),
+                Segment::Dot("value".into())
+            ]
         );
     }
 
@@ -962,13 +971,13 @@ mod tests {
         // bracket with a wildcard normalizes to `[Wildcard]` and is
         // exercised by the `reaches_wildcard_*` tests.
         let adversarial: &[&str] = &[
-            "",             // empty raw input
-            ".",            // lone separator
-            "foo[]",        // empty bracket contents
-            "foo[-1]",      // negative index (not usize-parseable)
-            "foo[[0]]",     // nested brackets
-            "foo[a]",       // non-numeric, non-wildcard bracket contents
-            "foo[ 1 ]",     // whitespace inside brackets
+            "",         // empty raw input
+            ".",        // lone separator
+            "foo[]",    // empty bracket contents
+            "foo[-1]",  // negative index (not usize-parseable)
+            "foo[[0]]", // nested brackets
+            "foo[a]",   // non-numeric, non-wildcard bracket contents
+            "foo[ 1 ]", // whitespace inside brackets
         ];
 
         for &raw in adversarial {
@@ -1020,11 +1029,11 @@ mod tests {
         // only asks "do these two path shapes overlap?". Pin a few
         // representative pairs so a future asymmetric refactor breaks here.
         let pairs: &[(&str, &str, bool)] = &[
-            ("caseFile.a", "caseFile.a", true),                         // equal
-            ("caseFile.items[0].x", "caseFile.items[*].x", true),       // wildcard set-cover
-            ("caseFile.items", "caseFile.items[0].y", true),            // prefix
-            ("caseFile.items[0].y", "caseFile.items[1].y", false),      // distinct indices
-            ("caseFile.a", "caseFile.b", false),                        // distinct names
+            ("caseFile.a", "caseFile.a", true),                    // equal
+            ("caseFile.items[0].x", "caseFile.items[*].x", true),  // wildcard set-cover
+            ("caseFile.items", "caseFile.items[0].y", true),       // prefix
+            ("caseFile.items[0].y", "caseFile.items[1].y", false), // distinct indices
+            ("caseFile.a", "caseFile.b", false),                   // distinct names
         ];
         for (lhs, rhs, expected) in pairs {
             let a = normalize_setdata_path(lhs);
@@ -1071,6 +1080,9 @@ mod tests {
 
         let mut diagnostics = Vec::new();
         check(&kernel, &mut diagnostics);
-        assert!(diagnostics.is_empty(), "unexpected diagnostics: {diagnostics:?}");
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
     }
 }

@@ -255,7 +255,9 @@ mod tests {
         let log = ProvenanceLog::default();
         let document = export(&log, &config());
 
-        let object = document.as_object().expect("top-level must be a JSON object");
+        let object = document
+            .as_object()
+            .expect("top-level must be a JSON object");
         let mut keys: Vec<_> = object.keys().map(String::as_str).collect();
         keys.sort();
         assert_eq!(keys, ["eventTypes", "events", "objectTypes", "objects"]);
@@ -264,19 +266,28 @@ mod tests {
     #[test]
     fn event_count_equals_record_count() {
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
         log.push(stamped(ProvenanceKind::OnEntry, "2026-01-01T00:00:01Z"));
         log.push(stamped(ProvenanceKind::OnExit, "2026-01-01T00:00:02Z"));
 
         let document = export(&log, &config());
 
-        assert_eq!(document["events"].as_array().expect("events array").len(), 3);
+        assert_eq!(
+            document["events"].as_array().expect("events array").len(),
+            3
+        );
     }
 
     #[test]
     fn every_event_has_id_type_time_relationships() {
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
         log.push(stamped(ProvenanceKind::OnEntry, "2026-01-01T00:00:01Z"));
 
         let document = export(&log, &config());
@@ -284,8 +295,14 @@ mod tests {
         let events = document["events"].as_array().expect("events array");
         for (index, event) in events.iter().enumerate() {
             assert_eq!(event["id"], format!("e-{index}"));
-            assert!(event["type"].is_string(), "type must be string on event {index}");
-            assert!(event["time"].is_string(), "time must be string on event {index}");
+            assert!(
+                event["type"].is_string(),
+                "type must be string on event {index}"
+            );
+            assert!(
+                event["time"].is_string(),
+                "time must be string on event {index}"
+            );
             assert!(
                 event["relationships"].is_array(),
                 "relationships must be array on event {index}"
@@ -296,7 +313,10 @@ mod tests {
     #[test]
     fn every_event_relates_to_instance_object() {
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
         log.push(stamped(ProvenanceKind::TimerFired, "2026-01-01T00:00:10Z"));
 
         let document = export(&log, &config());
@@ -315,7 +335,10 @@ mod tests {
     fn event_types_deduplicated_by_kind() {
         let mut log = ProvenanceLog::default();
         for _ in 0..3 {
-            log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+            log.push(stamped(
+                ProvenanceKind::StateTransition,
+                "2026-01-01T00:00:00Z",
+            ));
         }
         for _ in 0..2 {
             log.push(stamped(ProvenanceKind::OnEntry, "2026-01-01T00:00:01Z"));
@@ -345,12 +368,17 @@ mod tests {
 
         let events = document["events"].as_array().expect("events array");
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0]["time"], "", "empty timestamp must round-trip as empty string");
+        assert_eq!(
+            events[0]["time"], "",
+            "empty timestamp must round-trip as empty string"
+        );
 
         // When every record is unstamped, the instance object's `instanceId`
         // attribute falls back to an empty `time` (documented at module level).
         let objects = document["objects"].as_array().expect("objects array");
-        let instance_attrs = objects[0]["attributes"].as_array().expect("attributes array");
+        let instance_attrs = objects[0]["attributes"]
+            .as_array()
+            .expect("attributes array");
         assert_eq!(
             instance_attrs[0]["time"], "",
             "all-unstamped log must produce empty instanceId attribute time"
@@ -360,7 +388,10 @@ mod tests {
     #[test]
     fn single_instance_object_emitted() {
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
         log.push(stamped(ProvenanceKind::OnEntry, "2026-01-01T00:00:01Z"));
 
         let document = export(&log, &config());
@@ -370,7 +401,9 @@ mod tests {
         assert_eq!(objects[0]["id"], "instance-abc");
         assert_eq!(objects[0]["type"], "wf-instance");
 
-        let object_types = document["objectTypes"].as_array().expect("objectTypes array");
+        let object_types = document["objectTypes"]
+            .as_array()
+            .expect("objectTypes array");
         assert_eq!(object_types.len(), 1);
         assert_eq!(object_types[0]["name"], "wf-instance");
     }
@@ -417,12 +450,27 @@ mod tests {
             "inputs must flatten to indexed scalar attributes",
         );
         assert_eq!(find("inputs.1"), Some(&Value::String("case/2".into())));
-        assert_eq!(find("outputs.0"), Some(&Value::String("case/1#state".into())));
+        assert_eq!(
+            find("outputs.0"),
+            Some(&Value::String("case/1#state".into()))
+        );
         // The non-indexed `inputs` / `outputs` names must NOT appear.
-        assert!(find("inputs").is_none(), "non-indexed `inputs` must not be emitted");
-        assert!(find("outputs").is_none(), "non-indexed `outputs` must not be emitted");
-        assert_eq!(find("inputDigest"), Some(&Value::String("sha256:aaaa".into())));
-        assert_eq!(find("outputDigest"), Some(&Value::String("sha256:bbbb".into())));
+        assert!(
+            find("inputs").is_none(),
+            "non-indexed `inputs` must not be emitted"
+        );
+        assert!(
+            find("outputs").is_none(),
+            "non-indexed `outputs` must not be emitted"
+        );
+        assert_eq!(
+            find("inputDigest"),
+            Some(&Value::String("sha256:aaaa".into()))
+        );
+        assert_eq!(
+            find("outputDigest"),
+            Some(&Value::String("sha256:bbbb".into()))
+        );
     }
 
     #[test]
@@ -458,7 +506,11 @@ mod tests {
             .iter()
             .filter(|attr| attr["name"].as_str().unwrap_or("").starts_with("inputs."))
             .collect();
-        assert_eq!(indexed_inputs.len(), 3, "one indexed attribute per input: {attributes:?}");
+        assert_eq!(
+            indexed_inputs.len(),
+            3,
+            "one indexed attribute per input: {attributes:?}"
+        );
         let indexed_outputs: Vec<_> = attributes
             .iter()
             .filter(|attr| attr["name"].as_str().unwrap_or("").starts_with("outputs."))
@@ -513,7 +565,10 @@ mod tests {
         // dynamic indexed `inputs.{i}` / `outputs.{i}` attributes are not
         // (their cardinality varies per record).
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
         let document = export(&log, &config());
 
         let event_types = document["eventTypes"].as_array().expect("eventTypes array");
@@ -558,7 +613,10 @@ mod tests {
         // Baseline record has actor_id + from/to/event only; the new fields
         // must be absent from the attribute list.
         let mut log = ProvenanceLog::default();
-        log.push(stamped(ProvenanceKind::StateTransition, "2026-01-01T00:00:00Z"));
+        log.push(stamped(
+            ProvenanceKind::StateTransition,
+            "2026-01-01T00:00:00Z",
+        ));
 
         let document = export(&log, &config());
         let attributes = document["events"][0]["attributes"]

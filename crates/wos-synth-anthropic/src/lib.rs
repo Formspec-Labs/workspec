@@ -138,7 +138,13 @@ fn compose_system_prompt(system: &str, anchors: &[CacheAnchor]) -> String {
 
     let anchor_blocks = anchors
         .iter()
-        .map(|a| format!("<context name=\"{name}\">\n{content}\n</context>", name = a.name, content = a.content))
+        .map(|a| {
+            format!(
+                "<context name=\"{name}\">\n{content}\n</context>",
+                name = a.name,
+                content = a.content
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n\n");
 
@@ -158,8 +164,14 @@ mod tests {
     #[test]
     fn compose_system_prompt_wraps_anchors_in_named_blocks() {
         let anchors = vec![
-            CacheAnchor { name: "schema", content: "{}".into() },
-            CacheAnchor { name: "spec", content: "lorem".into() },
+            CacheAnchor {
+                name: "schema",
+                content: "{}".into(),
+            },
+            CacheAnchor {
+                name: "spec",
+                content: "lorem".into(),
+            },
         ];
         let out = compose_system_prompt("base", &anchors);
         assert!(out.contains("base"));

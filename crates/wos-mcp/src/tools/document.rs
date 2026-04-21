@@ -194,10 +194,9 @@ pub async fn wos_describe_document(
 fn require_project_id(args: &Value) -> Result<&str, ToolError> {
     match args.get("project_id") {
         None => Err(ToolError::MissingArgument("project_id".to_string())),
-        Some(v) => v
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ToolError::InvalidArguments("'project_id' must be a non-empty string".to_string())),
+        Some(v) => v.as_str().filter(|s| !s.is_empty()).ok_or_else(|| {
+            ToolError::InvalidArguments("'project_id' must be a non-empty string".to_string())
+        }),
     }
 }
 
@@ -395,13 +394,9 @@ mod tests {
         })
         .to_string();
 
-        let result = wos_load_document(
-            &mut registry,
-            "",
-            json!({ "json": kernel_json }),
-        )
-        .await
-        .unwrap();
+        let result = wos_load_document(&mut registry, "", json!({ "json": kernel_json }))
+            .await
+            .unwrap();
 
         let pid = result["project_id"].as_str().expect("must have project_id");
         let project = registry.get(pid).unwrap();

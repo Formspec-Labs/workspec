@@ -39,7 +39,10 @@ fn suggested_fix_custom_round_trips() {
     };
     let json = serde_json::to_value(&fix).expect("Custom must serialize without error");
     assert_eq!(json["kind"], "custom");
-    assert_eq!(json["hint"], "consult the NoticeTemplate reconciliation plan");
+    assert_eq!(
+        json["hint"],
+        "consult the NoticeTemplate reconciliation plan"
+    );
 
     let back: SuggestedFix =
         serde_json::from_value(json).expect("Custom must deserialize without error");

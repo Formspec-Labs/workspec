@@ -135,7 +135,8 @@ mod tests {
     fn too_many_projects_returns_error() {
         let mut reg = ProjectRegistry::new();
         for _ in 0..20 {
-            reg.insert(make_project()).expect("must succeed for first 20");
+            reg.insert(make_project())
+                .expect("must succeed for first 20");
         }
         let err = reg.insert(make_project()).unwrap_err();
         assert!(matches!(err, ToolError::TooManyProjects));
@@ -144,9 +145,7 @@ mod tests {
     #[test]
     fn unknown_project_id_returns_not_found() {
         let reg = ProjectRegistry::new();
-        let err = reg
-            .get("00000000-0000-0000-0000-000000000000")
-            .unwrap_err();
+        let err = reg.get("00000000-0000-0000-0000-000000000000").unwrap_err();
         assert!(matches!(err, ToolError::ProjectNotFound(_)));
     }
 

@@ -13,7 +13,7 @@ use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::event_handler::{self, AdverseDecisionNoticeInput};
 use wos_core::instance::CaseInstance;
 use wos_core::model::ai::{AIIntegrationDocument, ViolationAction};
-use wos_core::model::kernel::{ImpactLevel, KernelDocument, State, Transition};
+use wos_core::model::kernel::{ImpactLevel, KernelDocument, State, Transition, TransitionEvent};
 use wos_core::provenance::{CaseFileSnapshot, ProvenanceKind, ProvenanceRecord};
 
 use crate::runtime::{CompanionPolicy, RuntimeError, RuntimeEventContext, RuntimeEventDecision};
@@ -269,7 +269,10 @@ fn active_adverse_transition<'a>(
             continue;
         };
         if let Some(transition) = state.transitions.iter().find(|transition| {
-            transition.event.as_deref() == Some(event_name)
+            transition
+                .event
+                .as_ref()
+                .is_some_and(|ev| ev.matches_runtime_dispatch(event_name))
                 && transition.tags.iter().any(|tag| tag == "adverse-decision")
         }) {
             return Some((active_state.clone(), transition));
@@ -401,7 +404,8 @@ fn notice_render_context(
         "decisionEvent".to_string(),
         transition
             .event
-            .clone()
+            .as_ref()
+            .map(TransitionEvent::authoring_display_label)
             .unwrap_or_else(|| "(none)".to_string()),
     );
     context.insert("determination".to_string(), transition.target.clone());
@@ -505,6 +509,11 @@ fn render_human_notice(
 }
 
 fn fallback_human_notice(context: &BTreeMap<String, String>, transition: &Transition) -> String {
+    let transition_event = transition
+        .event
+        .as_ref()
+        .map(TransitionEvent::authoring_display_label)
+        .unwrap_or_else(|| "(none)".to_string());
     format!(
         "Decision\nYour case moved to {determination} after event {event}.\n\nFactual basis\nThe decision used the case-file snapshot with SHA-256 digest {snapshot}.\n\nAppeal rights\nYou may appeal within {appeal_window}. Submit the appeal to {appeal_body}.",
         determination = context
@@ -514,7 +523,7 @@ fn fallback_human_notice(context: &BTreeMap<String, String>, transition: &Transi
         event = context
             .get("decisionEvent")
             .map(String::as_str)
-            .unwrap_or_else(|| transition.event.as_deref().unwrap_or("(none)")),
+            .unwrap_or(transition_event.as_str()),
         snapshot = context
             .get("snapshotSha256")
             .map(String::as_str)
@@ -819,7 +828,7 @@ mod tests {
     //! Unit tests for the deterministic adverse-decision notice renderer.
 
     use super::*;
-    use wos_core::model::kernel::Transition;
+    use wos_core::model::kernel::{Transition, TransitionEvent};
 
     /// Build a fresh renderer context + transition for byte-identity tests.
     fn fixture() -> (BTreeMap<String, String>, Transition, serde_json::Value) {
@@ -829,7 +838,7 @@ mod tests {
         });
         let snapshot = CaseFileSnapshot::from_case_state(&case_state);
         let transition = Transition {
-            event: Some("denied".to_string()),
+            event: Some(TransitionEvent::from_legacy_string("denied")),
             target: "adverseNotice".to_string(),
             guard: None,
             actions: Vec::new(),
@@ -860,8 +869,14 @@ mod tests {
         .expect("test case instance deserialization must succeed");
 
         let now_ms: u64 = 1_700_000_000_000;
-        let context =
-            notice_render_context(&instance, &snapshot, &transition, Some("P30D"), &appeal, now_ms);
+        let context = notice_render_context(
+            &instance,
+            &snapshot,
+            &transition,
+            Some("P30D"),
+            &appeal,
+            now_ms,
+        );
         (context, transition, appeal)
     }
 
@@ -882,7 +897,9 @@ mod tests {
         );
         // Also assert the rendered prose embeds the snapshot digest and appeal
         // window, guarding against regressions that drop a determining input.
-        assert!(rendered_a.contains("7c6c9f0425dd8135fe6bbe81f876ddc1a6c5478bec3967dec1a40c93a6f8a749"));
+        assert!(
+            rendered_a.contains("7c6c9f0425dd8135fe6bbe81f876ddc1a6c5478bec3967dec1a40c93a6f8a749")
+        );
         assert!(rendered_a.contains("P30D"));
     }
 
@@ -918,8 +935,14 @@ mod tests {
         }))
         .unwrap();
         let later_ms = 1_700_000_000_000u64 + 60 * 60 * 1000;
-        let context_late =
-            notice_render_context(&instance, &snapshot, &transition, Some("P30D"), &appeal, later_ms);
+        let context_late = notice_render_context(
+            &instance,
+            &snapshot,
+            &transition,
+            Some("P30D"),
+            &appeal,
+            later_ms,
+        );
         assert_ne!(
             context_early.get("appealDeadline"),
             context_late.get("appealDeadline"),

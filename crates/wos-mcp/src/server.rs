@@ -85,7 +85,10 @@ const INVALID_PARAMS: i32 = -32602;
 ///
 /// Per JSON-RPC-2.0 §4.1 and MCP spec, notifications MUST NOT receive a
 /// response — the server silently consumes them.
-async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
+async fn handle_request(
+    registry: &mut ProjectRegistry,
+    req: JsonRpcRequest,
+) -> Option<JsonRpcResponse> {
     // Notification detection: absence of `id` field is the JSON-RPC-2.0
     // signal that the client does not want a response. A present-but-null
     // `id` is still a request (legal, though unusual).
@@ -186,14 +189,15 @@ async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> 
                     },
                     {
                         "name": "wos_add_transition",
-                        "description": "Add a transition between two existing states. Returns {\"from\": \"...\", \"to\": \"...\", \"trigger\": \"...\"}.",
+                        "description": "Add a transition between two existing states. Returns {\"from\": \"...\", \"to\": \"...\", \"trigger\": \"...\", \"event\": ...}. Use `trigger` for a legacy string event, or `event` for a typed TransitionEvent object (not both).",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "project_id": { "type": "string", "description": "UUID of the open project." },
                                 "from": { "type": "string", "description": "Source state identifier." },
                                 "to": { "type": "string", "description": "Target state identifier." },
-                                "trigger": { "type": "string", "description": "Optional event name that fires the transition." },
+                                "trigger": { "type": "string", "description": "Optional legacy string event name (mutually exclusive with `event`)." },
+                                "event": { "description": "Optional typed TransitionEvent object (mutually exclusive with non-empty `trigger`)." },
                                 "guard": { "type": "string", "description": "Optional FEL guard expression." }
                             },
                             "required": ["project_id", "from", "to"]
@@ -435,23 +439,17 @@ async fn handle_request(registry: &mut ProjectRegistry, req: JsonRpcRequest) -> 
                 // JSON-RPC response whose `result` carries `isError: true`
                 // and the error message in the content array. This lets the
                 // client model tool failures separately from protocol faults.
-                Err(e @ wos_mcp::errors::DispatchError::ToolFailed { .. }) => {
-                    JsonRpcResponse::ok(
-                        id,
-                        serde_json::json!({
-                            "isError": true,
-                            "content": [{"type": "text", "text": e.to_string()}]
-                        }),
-                    )
-                }
+                Err(e @ wos_mcp::errors::DispatchError::ToolFailed { .. }) => JsonRpcResponse::ok(
+                    id,
+                    serde_json::json!({
+                        "isError": true,
+                        "content": [{"type": "text", "text": e.to_string()}]
+                    }),
+                ),
             }
         }
 
-        other => JsonRpcResponse::err(
-            id,
-            METHOD_NOT_FOUND,
-            format!("method not found: {other}"),
-        ),
+        other => JsonRpcResponse::err(id, METHOD_NOT_FOUND, format!("method not found: {other}")),
     })
 }
 
@@ -491,16 +489,15 @@ async fn main() {
             continue;
         }
 
-        let response: Option<JsonRpcResponse> = match serde_json::from_str::<JsonRpcRequest>(
-            trimmed,
-        ) {
-            Ok(req) => handle_request(&mut registry, req).await,
-            Err(e) => Some(JsonRpcResponse::err(
-                Value::Null,
-                -32700, // Parse error
-                format!("parse error: {e}"),
-            )),
-        };
+        let response: Option<JsonRpcResponse> =
+            match serde_json::from_str::<JsonRpcRequest>(trimmed) {
+                Ok(req) => handle_request(&mut registry, req).await,
+                Err(e) => Some(JsonRpcResponse::err(
+                    Value::Null,
+                    -32700, // Parse error
+                    format!("parse error: {e}"),
+                )),
+            };
 
         // JSON-RPC-2.0 notifications produce no output at all.
         let Some(response) = response else {

@@ -18,7 +18,7 @@ use crate::context::EvalContext;
 use crate::instance::CaseInstance;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
-    Transition,
+    Transition, TransitionEvent,
 };
 use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
@@ -213,7 +213,10 @@ fn transition_matches_dispatch(
     if continuous_rescan {
         transition.participates_in_continuous_rescan()
     } else {
-        transition.event.as_deref() == Some(event)
+        transition
+            .event
+            .as_ref()
+            .is_some_and(|ev| ev.matches_runtime_dispatch(event))
     }
 }
 
@@ -860,7 +863,11 @@ impl Evaluator {
             ActionKind::StartTimer => {
                 let timer_id = action.timer_id.as_deref().unwrap_or("");
                 let duration = action.duration.as_deref().unwrap_or("P0D");
-                let fires_event = action.event.as_deref().unwrap_or("");
+                let fires_event = action
+                    .event
+                    .as_ref()
+                    .map(TransitionEvent::start_timer_fires_string)
+                    .unwrap_or_default();
 
                 let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
                     self.provenance
@@ -890,7 +897,7 @@ impl Evaluator {
                 self.provenance.push(ProvenanceRecord::timer_created(
                     timer_id,
                     duration,
-                    fires_event,
+                    fires_event.as_str(),
                 ));
             }
             ActionKind::CancelTimer => {

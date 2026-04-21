@@ -84,9 +84,7 @@ pub fn export(log: &ProvenanceLog, config: &ExportConfig) -> String {
 ///
 /// Concept, Time, and Lifecycle are MUST; Organizational and Identity are
 /// SHOULD, but we always emit them so round-trips stay lossless.
-fn write_extension_declarations(
-    writer: &mut Writer<&mut Vec<u8>>,
-) -> Result<(), quick_xml::Error> {
+fn write_extension_declarations(writer: &mut Writer<&mut Vec<u8>>) -> Result<(), quick_xml::Error> {
     for (name, prefix, uri) in [
         (
             "Concept",
@@ -295,7 +293,10 @@ mod tests {
                     }
                 }
                 Ok(_) => {}
-                Err(error) => panic!("XES parse failed at position {}: {error:?}", reader.buffer_position()),
+                Err(error) => panic!(
+                    "XES parse failed at position {}: {error:?}",
+                    reader.buffer_position()
+                ),
             }
             buffer.clear();
         }

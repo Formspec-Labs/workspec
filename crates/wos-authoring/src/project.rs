@@ -13,7 +13,7 @@
 //! failure. Undo and redo operate at helper-call granularity via the
 //! `IWosProjectCore` implementation on `RawWosProject`.
 
-use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind};
+use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind, TransitionEvent};
 
 use crate::{
     command::{Command, CommandResult},
@@ -137,6 +137,10 @@ impl WosProject {
     }
 
     /// Add a transition from one state to another.
+    ///
+    /// `event` is a legacy trigger string (e.g. `"submit"` or `"$join"`). For
+    /// full typed kernel events (condition milestones, timer metadata, error
+    /// codes, etc.), use [`Self::add_transition_typed`].
     pub fn add_transition(
         &mut self,
         from_state: impl Into<String>,
@@ -149,6 +153,26 @@ impl WosProject {
             to_state: to_state.into(),
             guard,
             event,
+            event_typed: None,
+        })
+    }
+
+    /// Add a transition with a typed [`TransitionEvent`] (kernel §4.5–§4.10).
+    ///
+    /// Pass `None` for `event` for guard-only transitions in `continuous` mode.
+    pub fn add_transition_typed(
+        &mut self,
+        from_state: impl Into<String>,
+        to_state: impl Into<String>,
+        event: Option<TransitionEvent>,
+        guard: Option<String>,
+    ) -> AuthoringResult {
+        self.core.dispatch(Command::AddTransition {
+            from_state: from_state.into(),
+            to_state: to_state.into(),
+            guard,
+            event: None,
+            event_typed: event,
         })
     }
 

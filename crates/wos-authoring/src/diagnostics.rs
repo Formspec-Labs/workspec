@@ -56,11 +56,7 @@ impl AuthoringDiagnostic {
 
 impl std::fmt::Display for AuthoringDiagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{:?}] {}: {}",
-            self.severity, self.path, self.message
-        )
+        write!(f, "[{:?}] {}: {}", self.severity, self.path, self.message)
     }
 }
 

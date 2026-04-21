@@ -14,9 +14,12 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+use wos_core::eval::GuardEvaluation;
 use wos_core::eval::parse_iso_duration_to_ms;
 use wos_core::instance::{FormspecTaskContext, PendingEvent};
 use wos_core::model::ai::AIIntegrationDocument;
@@ -24,18 +27,15 @@ use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
-use time::OffsetDateTime;
-use time::format_description::well_known::Rfc3339;
-use wos_core::eval::GuardEvaluation;
 use wos_runtime::{
     BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
     IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime, stamp_provenance,
 };
 
+use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
 use crate::formspec_processor::FixtureFormspecProcessor;
 use crate::stubs::{StubService, StubValidator};
-use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
@@ -135,8 +135,10 @@ impl WorkflowEngine {
         // Load integration profile if present.
         let integration_profile = if fixture.documents.contains_key("integration") {
             let ip_json = fixture_document_json(fixture, "integration")?;
-            let profile: IntegrationProfileDocument = serde_json::from_value(ip_json)
-                .map_err(|e| ConformanceError::Parse(format!("integration profile parse error: {e}")))?;
+            let profile: IntegrationProfileDocument =
+                serde_json::from_value(ip_json).map_err(|e| {
+                    ConformanceError::Parse(format!("integration profile parse error: {e}"))
+                })?;
             Some(profile)
         } else {
             None
@@ -145,8 +147,9 @@ impl WorkflowEngine {
         // Load business calendar if present.
         let business_calendar = if fixture.documents.contains_key("businessCalendar") {
             let cal_json = fixture_document_json(fixture, "businessCalendar")?;
-            let cal: BusinessCalendarDocument = serde_json::from_value(cal_json)
-                .map_err(|e| ConformanceError::Parse(format!("business calendar parse error: {e}")))?;
+            let cal: BusinessCalendarDocument = serde_json::from_value(cal_json).map_err(|e| {
+                ConformanceError::Parse(format!("business calendar parse error: {e}"))
+            })?;
             Some(cal)
         } else {
             None

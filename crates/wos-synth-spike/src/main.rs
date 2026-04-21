@@ -66,10 +66,7 @@ async fn run(cli: Cli) -> Result<(), SpikeError> {
 
     let problem_text = std::fs::read_to_string(&cli.problem)?;
 
-    eprintln!(
-        "synthesizing WOS kernel from: {}",
-        cli.problem.display()
-    );
+    eprintln!("synthesizing WOS kernel from: {}", cli.problem.display());
 
     let document = loop_mod::synthesize(&problem_text, &api_key).await?;
 
@@ -114,8 +111,8 @@ mod tests {
 
     #[test]
     fn require_api_key_accepts_real_value() {
-        let key = require_api_key(Some("sk-ant-abc123".to_string()))
-            .expect("non-empty key should pass");
+        let key =
+            require_api_key(Some("sk-ant-abc123".to_string())).expect("non-empty key should pass");
         assert_eq!(key, "sk-ant-abc123");
     }
 
@@ -134,8 +131,8 @@ mod tests {
 
     #[test]
     fn require_api_key_rejects_whitespace_only() {
-        let err = require_api_key(Some("   \t\n".to_string()))
-            .expect_err("whitespace-only must reject");
+        let err =
+            require_api_key(Some("   \t\n".to_string())).expect_err("whitespace-only must reject");
         assert!(matches!(err, SpikeError::MissingApiKey));
     }
 }

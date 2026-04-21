@@ -7,24 +7,38 @@
   "description": "Minimal workflow for testing data validation pipelines with assertion gates, risk profiles, and rejection routing.",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
-    { "id": "caseworker", "type": "human", "description": "Caseworker" },
-    { "id": "verificationSystem", "type": "system", "description": "Data verification" }
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Caseworker"
+    },
+    {
+      "id": "verificationSystem",
+      "type": "system",
+      "description": "Data verification"
+    }
   ],
-
   "lifecycle": {
     "initialState": "dataEntry",
     "states": {
       "dataEntry": {
         "type": "atomic",
         "transitions": [
-          { "event": "submit", "target": "validation" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "submit"
+            },
+            "target": "validation"
+          }
         ]
       },
       "validation": {
         "type": "atomic",
-        "tags": ["validation"],
+        "tags": [
+          "validation"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -34,37 +48,68 @@
           }
         ],
         "transitions": [
-          { "event": "validationPassed", "target": "approved" },
-          { "event": "validationFailed", "target": "holdPendingData" },
-          { "event": "validationRejected", "target": "rejected" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "validationPassed"
+            },
+            "target": "approved"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "validationFailed"
+            },
+            "target": "holdPendingData"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "validationRejected"
+            },
+            "target": "rejected"
+          }
         ]
       },
       "holdPendingData": {
         "type": "atomic",
-        "tags": ["hold"],
+        "tags": [
+          "hold"
+        ],
         "transitions": [
-          { "event": "dataProvided", "target": "validation" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "dataProvided"
+            },
+            "target": "validation"
+          }
         ]
       },
-      "approved": { "type": "final" },
-      "rejected": { "type": "final" }
+      "approved": {
+        "type": "final"
+      },
+      "rejected": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "income": { "type": "number" },
-      "employerVerified": { "type": "boolean" }
+      "income": {
+        "type": "number"
+      },
+      "employerVerified": {
+        "type": "boolean"
+      }
     }
   },
-
   "contracts": {
     "dataValidationContract": {
       "binding": "formspec",
       "ref": "urn:formspec:test:data-validation:1.0.0"
     }
   },
-
   "execution": {
     "workflowTimeout": "P30D",
     "instanceVersioning": "pinned"

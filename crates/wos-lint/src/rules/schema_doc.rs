@@ -123,7 +123,14 @@ fn is_leaf(obj: &serde_json::Map<String, Value>) -> bool {
         return false;
     }
     // Composite containers disqualify leaf status.
-    for key in ["properties", "patternProperties", "items", "oneOf", "anyOf", "allOf"] {
+    for key in [
+        "properties",
+        "patternProperties",
+        "items",
+        "oneOf",
+        "anyOf",
+        "allOf",
+    ] {
         if obj.contains_key(key) {
             return false;
         }
@@ -168,7 +175,11 @@ fn check_leaf(
             pointer.to_string(),
             format!(
                 "`description` is {description_len} chars; need at least {description_min}{}",
-                if is_critical { " (x-lm.critical=true)" } else { "" }
+                if is_critical {
+                    " (x-lm.critical=true)"
+                } else {
+                    ""
+                }
             ),
         ));
     }
@@ -185,7 +196,11 @@ fn check_leaf(
             pointer.to_string(),
             format!(
                 "leaf property has {examples_count} `examples`; need at least {examples_min}{}",
-                if is_critical { " (x-lm.critical=true)" } else { "" }
+                if is_critical {
+                    " (x-lm.critical=true)"
+                } else {
+                    ""
+                }
             ),
         ));
     }
@@ -412,7 +427,11 @@ mod tests {
         let diagnostics = lint(schema);
         // `tags` itself is not a leaf (has `items`); the inner string is.
         assert_eq!(diagnostics.len(), 2);
-        assert!(diagnostics.iter().all(|d| d.path == "/properties/tags/items"));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.path == "/properties/tags/items")
+        );
     }
 
     #[test]

@@ -44,7 +44,11 @@ impl ToolContext for DirectToolContext {
 }
 
 fn into_finding(diag: wos_lint::LintDiagnostic) -> LintFinding {
-    let path = if diag.path.is_empty() { None } else { Some(diag.path.clone()) };
+    let path = if diag.path.is_empty() {
+        None
+    } else {
+        Some(diag.path.clone())
+    };
     let suggested_fix = diag.suggested_fix.as_ref().map(render_suggested_fix);
     LintFinding {
         rule_id: diag.rule_id.to_string(),

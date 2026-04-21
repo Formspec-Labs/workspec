@@ -147,9 +147,7 @@ pub fn compute_coverage(
 ///
 /// Duplicate ids are collected separately. The first occurrence wins;
 /// subsequent duplicates are flagged but not inserted.
-fn merge_registries(
-    registries: &[&'static [RuleMetadata]],
-) -> (Vec<RuleMetadata>, Vec<String>) {
+fn merge_registries(registries: &[&'static [RuleMetadata]]) -> (Vec<RuleMetadata>, Vec<String>) {
     let mut seen: HashSet<&'static str> = HashSet::new();
     let mut merged: Vec<RuleMetadata> = Vec::new();
     let mut duplicates: Vec<String> = Vec::new();
@@ -269,10 +267,7 @@ fn discover_fixtures(
     let all_fixtures = collect_fixture_paths(fixtures_dir);
 
     // Workspace root is the parent of the fixtures dir (e.g. `.../wos-spec`).
-    let workspace_root = fixtures_dir
-        .parent()
-        .unwrap_or(fixtures_dir)
-        .to_path_buf();
+    let workspace_root = fixtures_dir.parent().unwrap_or(fixtures_dir).to_path_buf();
 
     // Build an index of all paths referenced by any rule (normalised to
     // forward-slashes for cross-platform suffix matching).
@@ -296,10 +291,7 @@ fn discover_fixtures(
     // inside the expected-traces exclusion subtree.
     let mut orphaned_fixtures: Vec<String> = fixture_rel_paths
         .iter()
-        .filter(|rel| {
-            !is_expected_traces_path(rel)
-                && !path_is_referenced(rel, &referenced_paths)
-        })
+        .filter(|rel| !is_expected_traces_path(rel) && !path_is_referenced(rel, &referenced_paths))
         .cloned()
         .collect();
     orphaned_fixtures.sort();
@@ -567,21 +559,9 @@ pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
     let mut out = String::new();
 
     // ── File header ────────────────────────────────────────────────────────
-    let t1_count = report
-        .rules
-        .iter()
-        .filter(|r| r.tier == "T1")
-        .count();
-    let t2_count = report
-        .rules
-        .iter()
-        .filter(|r| r.tier == "T2")
-        .count();
-    let t3_count = report
-        .rules
-        .iter()
-        .filter(|r| r.tier == "T3")
-        .count();
+    let t1_count = report.rules.iter().filter(|r| r.tier == "T1").count();
+    let t2_count = report.rules.iter().filter(|r| r.tier == "T2").count();
+    let t3_count = report.rules.iter().filter(|r| r.tier == "T3").count();
 
     out.push_str("# WOS Verification Matrix\n");
     out.push('\n');
@@ -702,10 +682,22 @@ pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
         out.push('\n');
 
         // Per-tier counts.
-        let lb = tier_rules.iter().filter(|r| r.graduation == "load_bearing").count();
-        let stable = tier_rules.iter().filter(|r| r.graduation == "stable").count();
-        let tested = tier_rules.iter().filter(|r| r.graduation == "tested").count();
-        let draft = tier_rules.iter().filter(|r| r.graduation == "draft").count();
+        let lb = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "load_bearing")
+            .count();
+        let stable = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "stable")
+            .count();
+        let tested = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "tested")
+            .count();
+        let draft = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "draft")
+            .count();
         out.push_str(&format!(
             "**{tier_label} total: {total}** ({lb} LoadBearing, {stable} Stable, \
              {tested} Tested, {draft} Draft)\n\n---\n\n",
@@ -731,10 +723,22 @@ pub fn render_matrix(report: &CoverageReport, commit_sha: &str) -> String {
         if tier_rules.is_empty() {
             continue;
         }
-        let lb = tier_rules.iter().filter(|r| r.graduation == "load_bearing").count();
-        let stable = tier_rules.iter().filter(|r| r.graduation == "stable").count();
-        let tested = tier_rules.iter().filter(|r| r.graduation == "tested").count();
-        let draft = tier_rules.iter().filter(|r| r.graduation == "draft").count();
+        let lb = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "load_bearing")
+            .count();
+        let stable = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "stable")
+            .count();
+        let tested = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "tested")
+            .count();
+        let draft = tier_rules
+            .iter()
+            .filter(|r| r.graduation == "draft")
+            .count();
         out.push_str(&format!(
             "| {} | {} | {} | {} | {} | {} |\n",
             tier_label,
@@ -924,8 +928,7 @@ mod tests {
         std::fs::write(&golden, r#"{"id": "trace"}"#).unwrap();
 
         let rules: Vec<RuleMetadata> = vec![];
-        let (orphans, _) =
-            discover_fixtures(dir.path().join("fixtures").as_path(), &rules);
+        let (orphans, _) = discover_fixtures(dir.path().join("fixtures").as_path(), &rules);
 
         assert!(
             orphans.is_empty(),
@@ -972,10 +975,12 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].rule_id, "K-030");
-        assert!(candidates[0]
-            .evidence
-            .iter()
-            .any(|e| e.match_kind == EvidenceMatchKind::FilenameStem));
+        assert!(
+            candidates[0]
+                .evidence
+                .iter()
+                .any(|e| e.match_kind == EvidenceMatchKind::FilenameStem)
+        );
     }
 
     #[test]
@@ -994,10 +999,12 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].rule_id, "K-009");
-        assert!(candidates[0]
-            .evidence
-            .iter()
-            .any(|e| e.match_kind == EvidenceMatchKind::RuleField));
+        assert!(
+            candidates[0]
+                .evidence
+                .iter()
+                .any(|e| e.match_kind == EvidenceMatchKind::RuleField)
+        );
     }
 
     #[test]

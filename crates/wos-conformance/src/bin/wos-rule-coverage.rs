@@ -78,9 +78,8 @@ fn run() -> Result<u8, String> {
             .as_deref()
             .map(PathBuf::from)
             .unwrap_or_else(default_matrix_path);
-        std::fs::write(&out_path, &matrix_content).map_err(|e| {
-            format!("failed to write {}: {e}", out_path.display())
-        })?;
+        std::fs::write(&out_path, &matrix_content)
+            .map_err(|e| format!("failed to write {}: {e}", out_path.display()))?;
         eprintln!(
             "LINT-MATRIX.md written to {} ({} rules)",
             out_path.display(),
@@ -98,8 +97,8 @@ fn run() -> Result<u8, String> {
     }
 
     if options.strict {
-        let violations = !report.orphaned_fixtures.is_empty()
-            || !report.promotion_candidates.is_empty();
+        let violations =
+            !report.orphaned_fixtures.is_empty() || !report.promotion_candidates.is_empty();
         if violations {
             return Ok(EXIT_STRICT_VIOLATION);
         }
@@ -124,9 +123,7 @@ fn resolve_commit_sha() -> String {
         .args(["rev-parse", "HEAD"])
         .output();
     match output {
-        Ok(out) if out.status.success() => {
-            String::from_utf8_lossy(&out.stdout).trim().to_string()
-        }
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -163,12 +160,10 @@ impl CliOptions {
                 "--strict" => opts.strict = true,
                 "--generate-matrix" => opts.generate_matrix = true,
                 "--fixtures-dir" => {
-                    opts.fixtures_dir =
-                        Some(read_value(&mut args, "--fixtures-dir")?);
+                    opts.fixtures_dir = Some(read_value(&mut args, "--fixtures-dir")?);
                 }
                 "--matrix-out" => {
-                    opts.matrix_out =
-                        Some(read_value(&mut args, "--matrix-out")?);
+                    opts.matrix_out = Some(read_value(&mut args, "--matrix-out")?);
                 }
                 "--help" | "-h" => {
                     // Print to stdout (not stderr) — help is not an error.
@@ -177,11 +172,7 @@ impl CliOptions {
                     return Ok(opts);
                 }
                 _ if arg.starts_with('-') => {
-                    return Err(format!(
-                        "unknown option '{}'\n\n{}",
-                        arg,
-                        usage_message()
-                    ));
+                    return Err(format!("unknown option '{}'\n\n{}", arg, usage_message()));
                 }
                 _ => {
                     return Err(format!(
@@ -197,10 +188,7 @@ impl CliOptions {
     }
 }
 
-fn read_value(
-    args: &mut impl Iterator<Item = String>,
-    flag: &str,
-) -> Result<String, String> {
+fn read_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<String, String> {
     args.next()
         .ok_or_else(|| format!("missing value for {flag}\n\n{}", usage_message()))
 }

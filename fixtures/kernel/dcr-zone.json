@@ -7,12 +7,18 @@
   "description": "Minimal workflow with a compound state referencing a constraint zone. Tests DCR marking state: equity guardrails (AG-001), exclude-pending error (AG-002), zone satisfaction (AG-003), and proven-unsafe gating (AG-015).",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
-    { "id": "investigator", "type": "human", "description": "Case investigator" },
-    { "id": "supervisor", "type": "human", "description": "Supervisor" }
+    {
+      "id": "investigator",
+      "type": "human",
+      "description": "Case investigator"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor"
+    }
   ],
-
   "lifecycle": {
     "initialState": "investigation",
     "states": {
@@ -25,45 +31,78 @@
         "states": {
           "evidenceGathering": {
             "type": "atomic",
-            "tags": ["investigation"],
+            "tags": [
+              "investigation"
+            ],
             "transitions": [
-              { "event": "evidenceCollected", "target": "analysisReady" }
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "evidenceCollected"
+                },
+                "target": "analysisReady"
+              }
             ]
           },
           "analysisReady": {
             "type": "atomic",
             "transitions": [
-              { "event": "analyzed", "target": "investigationDone" }
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "analyzed"
+                },
+                "target": "investigationDone"
+              }
             ]
           },
-          "investigationDone": { "type": "final" }
+          "investigationDone": {
+            "type": "final"
+          }
         },
         "transitions": [
           {
-            "event": "constraintZone.satisfied",
+            "event": {
+              "kind": "message",
+              "name": "constraintZone.satisfied"
+            },
             "target": "determination",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           }
         ]
       },
       "determination": {
         "type": "atomic",
-        "tags": ["determination"],
+        "tags": [
+          "determination"
+        ],
         "transitions": [
-          { "event": "decided", "target": "complete" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "decided"
+            },
+            "target": "complete"
+          }
         ]
       },
-      "complete": { "type": "final" }
+      "complete": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "evidence": { "type": "array" },
-      "analysis": { "type": "object" }
+      "evidence": {
+        "type": "array"
+      },
+      "analysis": {
+        "type": "object"
+      }
     }
   },
-
   "execution": {
     "workflowTimeout": "P180D",
     "instanceVersioning": "pinned"

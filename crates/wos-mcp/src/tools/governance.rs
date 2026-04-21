@@ -188,10 +188,9 @@ pub async fn wos_add_deontic_constraint(
 fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolError> {
     match args.get(key) {
         None => Err(ToolError::MissingArgument(key.to_string())),
-        Some(v) => v
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))),
+        Some(v) => v.as_str().filter(|s| !s.is_empty()).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))
+        }),
     }
 }
 
@@ -205,9 +204,9 @@ fn parse_string_array(args: &Value, key: &str) -> Result<Vec<String>, ToolError>
                 .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be an array")))?;
             arr.iter()
                 .map(|item| {
-                    item.as_str()
-                        .map(str::to_string)
-                        .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be an array of strings")))
+                    item.as_str().map(str::to_string).ok_or_else(|| {
+                        ToolError::InvalidArguments(format!("'{key}' must be an array of strings"))
+                    })
                 })
                 .collect()
         }
@@ -267,8 +266,13 @@ mod tests {
 
         let doc = registry.get(&pid).unwrap().snapshot();
         let gov = &doc.extensions["x-wos-governance"];
-        assert_eq!(gov["dueProcessPaths"]["appealPath"]["description"], "Standard appeal process");
-        let steps = gov["dueProcessPaths"]["appealPath"]["steps"].as_array().unwrap();
+        assert_eq!(
+            gov["dueProcessPaths"]["appealPath"]["description"],
+            "Standard appeal process"
+        );
+        let steps = gov["dueProcessPaths"]["appealPath"]["steps"]
+            .as_array()
+            .unwrap();
         assert_eq!(steps.len(), 3);
     }
 
@@ -320,8 +324,14 @@ mod tests {
 
         let doc = registry.get(&pid).unwrap().snapshot();
         let gov = &doc.extensions["x-wos-governance"];
-        assert_eq!(gov["assertionGates"]["incomeCheck"]["assertion"], "caseFile.income > 0");
-        assert_eq!(gov["assertionGates"]["incomeCheck"]["transition"], "approve");
+        assert_eq!(
+            gov["assertionGates"]["incomeCheck"]["assertion"],
+            "caseFile.income > 0"
+        );
+        assert_eq!(
+            gov["assertionGates"]["incomeCheck"]["transition"],
+            "approve"
+        );
     }
 
     // ── wos_set_impact_level ──────────────────────────────────────────────
@@ -366,7 +376,12 @@ mod tests {
 
     #[tokio::test]
     async fn set_impact_level_accepts_all_four_variants() {
-        for level in ["rights-impacting", "safety-impacting", "operational", "informational"] {
+        for level in [
+            "rights-impacting",
+            "safety-impacting",
+            "operational",
+            "informational",
+        ] {
             let mut registry = ProjectRegistry::new();
             let pid = create_project(&mut registry);
             wos_set_impact_level(

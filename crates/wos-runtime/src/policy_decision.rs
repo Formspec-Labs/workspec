@@ -67,7 +67,11 @@ impl PolicyDecision {
         let reasons = parse_reasons(value.get("reasons"))?;
         let obligations = parse_obligations(value.get("obligations"))?;
 
-        Some(Self { decision, reasons, obligations })
+        Some(Self {
+            decision,
+            reasons,
+            obligations,
+        })
     }
 
     /// Normalize a Cedar-style result into the canonical shape.
@@ -90,7 +94,10 @@ impl PolicyDecision {
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|v| v.as_str())
-                        .map(|id| Reason { code: id.to_string(), message: None })
+                        .map(|id| Reason {
+                            code: id.to_string(),
+                            message: None,
+                        })
                         .collect()
                 })
                 .unwrap_or_default()
@@ -100,7 +107,11 @@ impl PolicyDecision {
 
         let obligations = parse_obligations(value.get("obligations"))?;
 
-        Some(Self { decision, reasons, obligations })
+        Some(Self {
+            decision,
+            reasons,
+            obligations,
+        })
     }
 
     /// Direct deserialization for an already-canonical decision shape.
@@ -125,7 +136,10 @@ fn parse_reasons(value: Option<&serde_json::Value>) -> Option<Vec<Reason>> {
                 .iter()
                 .map(|item| {
                     let code = item.get("code")?.as_str()?.to_string();
-                    let message = item.get("message").and_then(|v| v.as_str()).map(str::to_string);
+                    let message = item
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
                     Some(Reason { code, message })
                 })
                 .collect();
@@ -179,7 +193,10 @@ mod tests {
         assert_eq!(decision.decision, DecisionEffect::Deny);
         assert_eq!(decision.reasons.len(), 1);
         assert_eq!(decision.reasons[0].code, "policy-001");
-        assert_eq!(decision.reasons[0].message.as_deref(), Some("access denied"));
+        assert_eq!(
+            decision.reasons[0].message.as_deref(),
+            Some("access denied")
+        );
     }
 
     #[test]

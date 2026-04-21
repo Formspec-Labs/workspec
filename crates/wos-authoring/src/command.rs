@@ -3,7 +3,7 @@
 //! `Command` enum — all atomic mutations understood by `RawWosProject`.
 
 use serde::{Deserialize, Serialize};
-use wos_core::{ActorKind, ImpactLevel, StateKind};
+use wos_core::{ActorKind, ImpactLevel, StateKind, TransitionEvent};
 
 use crate::diagnostics::AuthoringDiagnostic;
 
@@ -62,7 +62,6 @@ impl AppliedCommand {
 #[non_exhaustive]
 pub(crate) enum Command {
     // ── Lifecycle ──────────────────────────────────────────────────────────
-
     /// Add a new top-level state.
     AddState {
         /// Unique state identifier within `lifecycle.states`.
@@ -99,7 +98,6 @@ pub(crate) enum Command {
     },
 
     // ── Transitions ────────────────────────────────────────────────────────
-
     /// Add a transition from one state to another.
     AddTransition {
         /// Source state identifier.
@@ -108,12 +106,14 @@ pub(crate) enum Command {
         to_state: String,
         /// Optional guard FEL expression.
         guard: Option<String>,
-        /// Event name that triggers the transition.
+        /// Legacy string event (trimmed, parsed via [`TransitionEvent::from_legacy_string`]).
         event: Option<String>,
+        /// Typed event; when set, must be the only event source (leave `event` empty).
+        #[serde(default)]
+        event_typed: Option<TransitionEvent>,
     },
 
     // ── Actors ─────────────────────────────────────────────────────────────
-
     /// Add an actor declaration.
     ///
     /// AI agents are NOT actors — they live in `x-wos-ai.agents`. Custom
@@ -146,7 +146,6 @@ pub(crate) enum Command {
     },
 
     // ── Governance ─────────────────────────────────────────────────────────
-
     /// Set the document-level impact classification.
     SetImpactLevel {
         /// New impact level.
@@ -164,7 +163,6 @@ pub(crate) enum Command {
     },
 
     // ── AI integration ─────────────────────────────────────────────────────
-
     /// Append a deontic constraint to `x-wos-ai`.
     AddActorDeontic {
         /// Constraint identifier.
@@ -174,7 +172,6 @@ pub(crate) enum Command {
     },
 
     // ── Milestones ─────────────────────────────────────────────────────────
-
     /// Add a named milestone condition under `lifecycle.milestones`.
     AddMilestone {
         /// Unique milestone identifier (map key under `lifecycle.milestones`).
@@ -190,7 +187,6 @@ pub(crate) enum Command {
     },
 
     // ── Timers ─────────────────────────────────────────────────────────────
-
     /// Record a timer configuration in `x-wos-timers`.
     SetTimer {
         /// Timer identifier.
@@ -200,7 +196,6 @@ pub(crate) enum Command {
     },
 
     // ── Governance ─────────────────────────────────────────────────────────
-
     /// Record a due-process path under `x-wos-governance.dueProcessPaths`.
     AddDueProcessPath {
         /// Unique path identifier.
@@ -222,7 +217,6 @@ pub(crate) enum Command {
     },
 
     // ── AI integration ─────────────────────────────────────────────────────
-
     /// Register an AI agent under `x-wos-ai.agents`.
     AddAiAgent {
         /// Unique agent identifier.
@@ -250,7 +244,6 @@ pub(crate) enum Command {
     },
 
     // ── Extensions ─────────────────────────────────────────────────────────
-
     /// Set an `x-`-prefixed extension key on the document.
     AddExtensionKey {
         /// Extension key; must begin with `x-`.
@@ -292,6 +285,7 @@ mod tests {
             to_state: "approved".into(),
             guard: Some("caseFile.amount <= 50000".into()),
             event: Some("approve".into()),
+            event_typed: None,
         };
 
         let _add_actor = Command::AddActor {

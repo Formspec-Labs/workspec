@@ -20,10 +20,10 @@
 use std::path::{Path, PathBuf};
 
 use wos_conformance::{
-    coverage::{compute_coverage, EvidenceMatchKind},
+    coverage::{EvidenceMatchKind, compute_coverage},
     rules::all_rules,
 };
-use wos_lint::{all_lint_rules, Graduation, RuleMetadata};
+use wos_lint::{Graduation, RuleMetadata, all_lint_rules};
 
 #[test]
 fn all_conformance_rules_registry_is_non_empty() {
@@ -264,8 +264,12 @@ fn describe_gap(rule: &RuleMetadata, workspace: &Path) -> String {
 
 fn conformance_registry_src() -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/rules.rs");
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("could not read conformance registry {}: {e}", path.display()))
+    std::fs::read_to_string(&path).unwrap_or_else(|e| {
+        panic!(
+            "could not read conformance registry {}: {e}",
+            path.display()
+        )
+    })
 }
 
 fn workspace_root() -> PathBuf {

@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use wos_core::model::ai::{AIIntegrationDocument, FallbackAction};
 use wos_core::model::governance::GovernanceDocument;
-use wos_core::model::kernel::{ActionKind, KernelDocument, State, StateKind};
+use wos_core::model::kernel::{ActionKind, KernelDocument, State, StateKind, TransitionEvent};
 
 use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosDocument};
@@ -146,24 +146,46 @@ fn check_state_type_semantics_typed(
             ));
         }
 
-        // K-007
-        if let Some(ev) = transition.event.as_deref() {
-            if ev.starts_with('$') && ev != "$join" {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-007",
-                    &t_path,
-                    format!("event name '{ev}' uses reserved $ prefix"),
-                ));
+        // K-007 — `message` names must not start with `$` (reserved for other
+        // TransitionEvent kinds and kernel signals). `signal` allows `$join`
+        // and `$compensation.complete` only; other `$…` signal names are invalid.
+        // (JSON Schema also constrains author-time documents; this catches the
+        // typed model after legacy string coercion.)
+        if let Some(ev) = &transition.event {
+            match ev {
+                TransitionEvent::Message { name, .. } if name.starts_with('$') => {
+                    diagnostics.push(LintDiagnostic::t1_error(
+                        "K-007",
+                        &t_path,
+                        format!(
+                            "message event name must not use reserved `$` prefix (found '{name}')"
+                        ),
+                    ));
+                }
+                TransitionEvent::Signal { name, .. }
+                    if name.starts_with('$')
+                        && name != "$join"
+                        && name != "$compensation.complete" =>
+                {
+                    diagnostics.push(LintDiagnostic::t1_error(
+                        "K-007",
+                        &t_path,
+                        format!(
+                            "signal may only use `$` prefix for '$join' or '$compensation.complete' (found '{name}')"
+                        ),
+                    ));
+                }
+                _ => {}
             }
         }
 
         // K-008
-        if state.kind == StateKind::Parallel && transition.event.as_deref() != Some("$join") {
+        if state.kind == StateKind::Parallel && !transition.is_parallel_join_transition() {
             diagnostics.push(LintDiagnostic::t1_error(
                 "K-008",
                 &t_path,
                 format!(
-                    "parallel state outgoing transition must use '$join' event, found {:?}",
+                    "parallel state outgoing transition must use signal '$join' (instance scope), found {:?}",
                     transition.event
                 ),
             ));
@@ -211,7 +233,10 @@ fn check_set_data_paths_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Lin
 }
 
 /// K-014: Milestone ids must be unique (typed).
-fn check_milestone_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_milestone_uniqueness_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     for id in kernel.lifecycle.milestones.keys() {
         if id.is_empty() {
             diagnostics.push(LintDiagnostic::t1_error(
@@ -263,7 +288,10 @@ fn check_governance(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 }
 
 /// G-055: Hold policy expectedDuration (typed).
-fn check_hold_expected_duration_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_hold_expected_duration_typed(
+    gov: &GovernanceDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     for (i, hold) in gov.hold_policies.iter().enumerate() {
         let duration = &hold.expected_duration;
         if duration != "indefinite" && !duration.starts_with('P') {
@@ -635,7 +663,10 @@ fn check_case_relationship_type_prefix_typed(
 }
 
 /// K-021: Provenance `actorId` MUST reference a declared kernel actor.
-fn check_provenance_actor_ids_typed(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_provenance_actor_ids_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let actors: std::collections::HashSet<&str> =
         kernel.actors.iter().map(|a| a.id.as_str()).collect();
 
@@ -1033,8 +1064,7 @@ fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<LintDiagno
                 continue;
             };
             if contains_unsupported_jsonpath_feature(json_path) {
-                let path =
-                    format!("/bindings/{binding_key}/outputBinding/{case_path}");
+                let path = format!("/bindings/{binding_key}/outputBinding/{case_path}");
                 diagnostics.push(LintDiagnostic::t1_error(
                     "I-001",
                     path,

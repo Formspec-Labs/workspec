@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use wos_conformance::{render_trace, run_fixture_with_trace, Outcome};
+use wos_conformance::{Outcome, render_trace, run_fixture_with_trace};
 
 const EXIT_OK: u8 = 0;
 const EXIT_FIXTURE_FAILED: u8 = 1;
@@ -33,13 +33,12 @@ fn main() -> ExitCode {
 fn run() -> Result<u8, String> {
     let options = CliOptions::parse(std::env::args().skip(1))?;
 
-    let fixture_json =
-        std::fs::read_to_string(&options.fixture_path).map_err(|error| {
-            format!(
-                "failed to read fixture '{}': {error}",
-                options.fixture_path.display()
-            )
-        })?;
+    let fixture_json = std::fs::read_to_string(&options.fixture_path).map_err(|error| {
+        format!(
+            "failed to read fixture '{}': {error}",
+            options.fixture_path.display()
+        )
+    })?;
 
     let base_dir = options
         .base_dir

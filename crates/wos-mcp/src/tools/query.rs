@@ -8,6 +8,7 @@
 //! - `wos_close_project`     — close (remove) an open project.
 
 use serde_json::Value;
+use wos_authoring::TransitionEvent;
 
 use crate::errors::ToolError;
 use crate::registry::ProjectRegistry;
@@ -93,13 +94,10 @@ pub async fn wos_run_conformance(
     args: Value,
 ) -> Result<Value, ToolError> {
     let fixture_json = require_string_arg(&args, "fixture_json")?;
-    let base_dir = args
-        .get("base_dir")
-        .and_then(Value::as_str)
-        .unwrap_or(".");
+    let base_dir = args.get("base_dir").and_then(Value::as_str).unwrap_or(".");
 
-    let (result, trace) = wos_conformance::run_fixture_with_trace(fixture_json, base_dir)
-        .map_err(|e| match e {
+    let (result, trace) =
+        wos_conformance::run_fixture_with_trace(fixture_json, base_dir).map_err(|e| match e {
             wos_conformance::ConformanceError::Engine(_) => {
                 ToolError::Internal(format!("conformance engine error: {e}"))
             }
@@ -177,9 +175,16 @@ fn build_mermaid_graph(doc: &wos_authoring::KernelDocument) -> String {
 
         for transition in &state.transitions {
             let tid = sanitize_id(&transition.target);
-            let label = match transition.event.as_deref() {
-                None | Some("") => String::new(),
-                Some(ev) => format!(" : {ev}"),
+            let label = match &transition.event {
+                None => String::new(),
+                Some(ev) => {
+                    let n = ev.authoring_display_label();
+                    if n.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" : {n}")
+                    }
+                }
             };
             lines.push(format!("    {} --> {}{}", sid, tid, label));
         }
@@ -191,7 +196,10 @@ fn build_mermaid_graph(doc: &wos_authoring::KernelDocument) -> String {
 /// Build a Graphviz DOT digraph string. No external graphviz dependency needed —
 /// we produce the DOT source only; rendering is the caller's responsibility.
 fn build_dot_graph(doc: &wos_authoring::KernelDocument) -> String {
-    let mut lines = vec!["digraph workflow {".to_string(), "  rankdir=LR;".to_string()];
+    let mut lines = vec![
+        "digraph workflow {".to_string(),
+        "  rankdir=LR;".to_string(),
+    ];
 
     if !doc.lifecycle.initial_state.is_empty() {
         let sid = sanitize_dot_id(&doc.lifecycle.initial_state);
@@ -206,13 +214,23 @@ fn build_dot_graph(doc: &wos_authoring::KernelDocument) -> String {
         } else {
             "circle"
         };
-        lines.push(format!("  {} [shape={} label=\"{}\"];", sid, shape, state_id));
+        lines.push(format!(
+            "  {} [shape={} label=\"{}\"];",
+            sid, shape, state_id
+        ));
 
         for transition in &state.transitions {
             let tid = sanitize_dot_id(&transition.target);
-            let label = match transition.event.as_deref() {
-                None | Some("") => String::new(),
-                Some(ev) => format!(" [label=\"{ev}\"]"),
+            let label = match &transition.event {
+                None => String::new(),
+                Some(ev) => {
+                    let n = ev.authoring_display_label();
+                    if n.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [label=\"{n}\"]")
+                    }
+                }
             };
             lines.push(format!("  {} -> {}{};", sid, tid, label));
         }
@@ -230,7 +248,13 @@ fn sanitize_id(id: &str) -> String {
 /// Sanitize a state ID for use in DOT (non-alphanumeric → underscore).
 fn sanitize_dot_id(id: &str) -> String {
     id.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -292,18 +316,30 @@ pub async fn wos_search(
             let mut results = Vec::new();
             for (state_id, state) in &doc.lifecycle.states {
                 for transition in &state.transitions {
-                    let event_matches = transition
-                        .event
-                        .as_deref()
-                        .is_some_and(|e| e.to_lowercase().contains(&q));
+                    let event_matches = transition.event.as_ref().is_some_and(|e| {
+                        e.runtime_dispatch_label().to_lowercase().contains(&q)
+                            || e.authoring_display_label().to_lowercase().contains(&q)
+                            || serde_json::to_string(e)
+                                .map(|s| s.to_lowercase().contains(&q))
+                                .unwrap_or(false)
+                    });
                     if event_matches
                         || transition.target.to_lowercase().contains(&q)
                         || state_id.to_lowercase().contains(&q)
                     {
+                        let event_value = transition
+                            .event
+                            .as_ref()
+                            .and_then(|e| serde_json::to_value(e).ok());
+                        let event_label = transition
+                            .event
+                            .as_ref()
+                            .map(TransitionEvent::runtime_dispatch_label);
                         results.push(serde_json::json!({
                             "from": state_id,
                             "to": transition.target,
-                            "event": transition.event,
+                            "event": event_value,
+                            "event_label": event_label,
                             "guard": transition.guard,
                         }));
                     }
@@ -406,10 +442,9 @@ pub async fn wos_close_project(
 fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolError> {
     match args.get(key) {
         None => Err(ToolError::MissingArgument(key.to_string())),
-        Some(v) => v
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))),
+        Some(v) => v.as_str().filter(|s| !s.is_empty()).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))
+        }),
     }
 }
 
@@ -419,7 +454,7 @@ fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolErr
 mod tests {
     use super::*;
     use serde_json::json;
-    use wos_authoring::{ActorKind, ImpactLevel, StateKind, WosProject};
+    use wos_authoring::{ActorKind, ImpactLevel, StateKind, TransitionEvent, WosProject};
 
     fn create_project(registry: &mut ProjectRegistry) -> String {
         let project = WosProject::new_kernel();
@@ -434,9 +469,7 @@ mod tests {
             .add_transition("draft", "done", Some("submit".to_string()), None)
             .unwrap();
         project.add_actor("reviewer", ActorKind::Human).unwrap();
-        project
-            .set_initial_state("draft")
-            .unwrap();
+        project.set_initial_state("draft").unwrap();
         registry.insert(project).unwrap().to_string()
     }
 
@@ -548,7 +581,43 @@ mod tests {
 
         let matches = result["matches"].as_array().unwrap();
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0]["event"], json!("submit"));
+        assert_eq!(matches[0]["event_label"], json!("submit"));
+        assert_eq!(matches[0]["event"]["kind"], json!("message"));
+        assert_eq!(matches[0]["event"]["name"], json!("submit"));
+    }
+
+    #[tokio::test]
+    async fn search_transitions_matches_correlation_in_typed_event() {
+        let mut registry = ProjectRegistry::new();
+        let mut project = WosProject::new(ImpactLevel::Operational, "typed-search");
+        project.add_state("a", StateKind::Atomic).unwrap();
+        project.add_state("b", StateKind::Atomic).unwrap();
+        project
+            .add_transition_typed(
+                "a",
+                "b",
+                Some(TransitionEvent::Message {
+                    name: "ping".into(),
+                    correlation_key: Some("ck-99".into()),
+                    data: None,
+                }),
+                None,
+            )
+            .unwrap();
+        let pid = registry.insert(project).unwrap().to_string();
+
+        let result = wos_search(
+            &mut registry,
+            "",
+            json!({ "project_id": pid, "kind": "transition", "query": "ck-99" }),
+        )
+        .await
+        .unwrap();
+
+        let matches = result["matches"].as_array().unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0]["event_label"], json!("ping"));
+        assert_eq!(matches[0]["event"]["correlationKey"], json!("ck-99"));
     }
 
     #[tokio::test]

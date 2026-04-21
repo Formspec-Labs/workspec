@@ -7,25 +7,34 @@
   "description": "Minimal kernel that uses the reserved x-wos-* namespace at root. K-EXT-002 MUST emit exactly one warning.",
   "status": "active",
   "impactLevel": "operational",
-
   "x-wos-future": {
-    "note": "This key is reserved for future normative use by the WOS specification (Kernel §10.6) and MUST trigger K-EXT-002."
+    "note": "This key is reserved for future normative use by the WOS specification (Kernel \u00a710.6) and MUST trigger K-EXT-002."
   },
-
   "actors": [
-    { "id": "system", "type": "system", "description": "System actor." }
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System actor."
+    }
   ],
-
   "lifecycle": {
     "initialState": "open",
     "states": {
       "open": {
         "type": "atomic",
         "transitions": [
-          { "event": "close", "target": "closed" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "close"
+            },
+            "target": "closed"
+          }
         ]
       },
-      "closed": { "type": "final" }
+      "closed": {
+        "type": "final"
+      }
     }
   }
 }

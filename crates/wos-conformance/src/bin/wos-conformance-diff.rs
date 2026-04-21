@@ -18,7 +18,9 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use wos_conformance::{diff_traces, render_diff, run_fixture_with_trace, ConformanceTrace, TraceDiffResult};
+use wos_conformance::{
+    ConformanceTrace, TraceDiffResult, diff_traces, render_diff, run_fixture_with_trace,
+};
 
 const EXIT_MATCH: u8 = 0;
 const EXIT_DIVERGE: u8 = 1;
@@ -38,29 +40,26 @@ fn run() -> Result<u8, String> {
     let options = CliOptions::parse(std::env::args().skip(1))?;
 
     // Load the committed expected trace.
-    let expected_json =
-        std::fs::read_to_string(&options.expected_trace_path).map_err(|error| {
-            format!(
-                "failed to read expected trace '{}': {error}",
-                options.expected_trace_path.display()
-            )
-        })?;
-    let expected: ConformanceTrace =
-        serde_json::from_str(&expected_json).map_err(|error| {
-            format!(
-                "failed to parse expected trace '{}': {error}",
-                options.expected_trace_path.display()
-            )
-        })?;
+    let expected_json = std::fs::read_to_string(&options.expected_trace_path).map_err(|error| {
+        format!(
+            "failed to read expected trace '{}': {error}",
+            options.expected_trace_path.display()
+        )
+    })?;
+    let expected: ConformanceTrace = serde_json::from_str(&expected_json).map_err(|error| {
+        format!(
+            "failed to parse expected trace '{}': {error}",
+            options.expected_trace_path.display()
+        )
+    })?;
 
     // Run the fixture to produce a fresh trace.
-    let fixture_json =
-        std::fs::read_to_string(&options.fixture_path).map_err(|error| {
-            format!(
-                "failed to read fixture '{}': {error}",
-                options.fixture_path.display()
-            )
-        })?;
+    let fixture_json = std::fs::read_to_string(&options.fixture_path).map_err(|error| {
+        format!(
+            "failed to read fixture '{}': {error}",
+            options.fixture_path.display()
+        )
+    })?;
 
     let base_dir = options
         .base_dir
@@ -74,13 +73,12 @@ fn run() -> Result<u8, String> {
                 .unwrap_or(".")
         });
 
-    let (_result, actual) =
-        run_fixture_with_trace(&fixture_json, base_dir).map_err(|error| {
-            format!(
-                "conformance runner error for '{}': {error}",
-                options.fixture_path.display()
-            )
-        })?;
+    let (_result, actual) = run_fixture_with_trace(&fixture_json, base_dir).map_err(|error| {
+        format!(
+            "conformance runner error for '{}': {error}",
+            options.fixture_path.display()
+        )
+    })?;
 
     // Compare the two traces.
     let diff_result = diff_traces(&expected, &actual);
@@ -142,8 +140,7 @@ impl CliOptions {
             }
         }
 
-        let (Some(expected_trace_path), Some(fixture_path)) =
-            (expected_trace_path, fixture_path)
+        let (Some(expected_trace_path), Some(fixture_path)) = (expected_trace_path, fixture_path)
         else {
             return Err(usage_message());
         };

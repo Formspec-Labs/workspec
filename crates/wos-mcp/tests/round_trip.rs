@@ -47,10 +47,18 @@ async fn full_round_trip_with_10_plus_tool_calls() {
 
     // ── 1. Create a project ───────────────────────────────────────────────
 
-    let create = dispatch(&mut registry, "wos_create_kernel", "", serde_json::json!({}))
-        .await
-        .expect("wos_create_kernel must succeed");
-    let pid = create["project_id"].as_str().expect("must have project_id").to_string();
+    let create = dispatch(
+        &mut registry,
+        "wos_create_kernel",
+        "",
+        serde_json::json!({}),
+    )
+    .await
+    .expect("wos_create_kernel must succeed");
+    let pid = create["project_id"]
+        .as_str()
+        .expect("must have project_id")
+        .to_string();
 
     // ── 2. Set impact level ───────────────────────────────────────────────
 
@@ -206,9 +214,18 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     .expect("wos_preview_state_graph(mermaid) must succeed");
 
     let graph_str = mermaid["graph"].as_str().expect("must have graph string");
-    assert!(graph_str.contains("open"), "mermaid graph must mention 'open' state");
-    assert!(graph_str.contains("closed"), "mermaid graph must mention 'closed' state");
-    assert!(graph_str.contains("startReview"), "mermaid graph must mention 'startReview' event");
+    assert!(
+        graph_str.contains("open"),
+        "mermaid graph must mention 'open' state"
+    );
+    assert!(
+        graph_str.contains("closed"),
+        "mermaid graph must mention 'closed' state"
+    );
+    assert!(
+        graph_str.contains("startReview"),
+        "mermaid graph must mention 'startReview' event"
+    );
 
     // DOT format.
     let dot = dispatch(
@@ -287,10 +304,26 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     .await
     .expect("wos_describe_document must succeed");
 
-    assert_eq!(describe["state_count"], serde_json::json!(3), "must have 3 states");
-    assert_eq!(describe["transition_count"], serde_json::json!(2), "must have 2 transitions");
-    assert_eq!(describe["actor_count"], serde_json::json!(1), "must have 1 actor");
-    assert_eq!(describe["ai_agent_count"], serde_json::json!(1), "must have 1 AI agent");
+    assert_eq!(
+        describe["state_count"],
+        serde_json::json!(3),
+        "must have 3 states"
+    );
+    assert_eq!(
+        describe["transition_count"],
+        serde_json::json!(2),
+        "must have 2 transitions"
+    );
+    assert_eq!(
+        describe["actor_count"],
+        serde_json::json!(1),
+        "must have 1 actor"
+    );
+    assert_eq!(
+        describe["ai_agent_count"],
+        serde_json::json!(1),
+        "must have 1 AI agent"
+    );
     assert_eq!(describe["impact_level"], serde_json::json!("operational"));
 
     // ── 14. Export document ───────────────────────────────────────────────
@@ -304,8 +337,11 @@ async fn full_round_trip_with_10_plus_tool_calls() {
     .await
     .expect("wos_export_document must succeed");
 
-    let doc_json = export["document"].as_str().expect("must have document string");
-    let doc: serde_json::Value = serde_json::from_str(doc_json).expect("exported doc must be valid JSON");
+    let doc_json = export["document"]
+        .as_str()
+        .expect("must have document string");
+    let doc: serde_json::Value =
+        serde_json::from_str(doc_json).expect("exported doc must be valid JSON");
 
     // Verify round-trip structural integrity.
     assert_eq!(doc["$wosKernel"], serde_json::json!("1.0"));
@@ -327,7 +363,9 @@ async fn full_round_trip_with_10_plus_tool_calls() {
 
     // AI extension must persist.
     let ai = &extensions["x-wos-ai"];
-    let agents = ai["agents"].as_array().expect("x-wos-ai.agents must be an array");
+    let agents = ai["agents"]
+        .as_array()
+        .expect("x-wos-ai.agents must be an array");
     assert_eq!(agents.len(), 1);
     assert_eq!(agents[0]["id"], serde_json::json!("summaryBot"));
 
@@ -381,13 +419,21 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         "purchase-order-simple must pass conformance; failures: {}",
         conformance["failures"]
     );
-    assert!(conformance["trace"].is_object(), "trace must be a JSON object");
+    assert!(
+        conformance["trace"].is_object(),
+        "trace must be a JSON object"
+    );
 
     // ── 17. List projects — assert our project is listed ──────────────────
 
-    let list = dispatch(&mut registry, "wos_list_projects", "", serde_json::json!({}))
-        .await
-        .expect("wos_list_projects must succeed");
+    let list = dispatch(
+        &mut registry,
+        "wos_list_projects",
+        "",
+        serde_json::json!({}),
+    )
+    .await
+    .expect("wos_list_projects must succeed");
 
     let projects = list["projects"].as_array().unwrap();
     assert!(
@@ -410,9 +456,14 @@ async fn full_round_trip_with_10_plus_tool_calls() {
 
     // ── 19. List projects again — registry should be empty ────────────────
 
-    let list_after = dispatch(&mut registry, "wos_list_projects", "", serde_json::json!({}))
-        .await
-        .expect("wos_list_projects must succeed after close");
+    let list_after = dispatch(
+        &mut registry,
+        "wos_list_projects",
+        "",
+        serde_json::json!({}),
+    )
+    .await
+    .expect("wos_list_projects must succeed after close");
 
     assert_eq!(
         list_after["count"],

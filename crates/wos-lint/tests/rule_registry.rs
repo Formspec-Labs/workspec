@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use wos_lint::{all_lint_rules, Graduation, RuleMetadata};
+use wos_lint::{Graduation, RuleMetadata, all_lint_rules};
 
 #[test]
 fn all_lint_rules_registry_is_non_empty() {

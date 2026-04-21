@@ -30,7 +30,7 @@ pub use diagnostic::{
     Diagnostic, LintDiagnostic, LintSeverity, Severity, SourceLocation, SuggestedFix, Tier,
 };
 pub use document::{DocumentKind, WosDocument, WosProject};
-pub use rules::{all_lint_rules, Graduation, RuleMetadata};
+pub use rules::{Graduation, RuleMetadata, all_lint_rules};
 
 // ==========================================================================
 // Structured API — primary interface returning `Vec<LintDiagnostic>`

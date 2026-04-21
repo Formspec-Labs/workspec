@@ -37,4 +37,4 @@ pub use project::{AuthoringResult, WosProject};
 pub use wos_core::{ActorKind, ImpactLevel, KernelDocument, StateKind};
 
 // Re-export model types needed by wos-mcp's query tools for graph generation.
-pub use wos_core::model::kernel::{Actor, State, Transition};
+pub use wos_core::model::kernel::{Actor, State, Transition, TransitionEvent};

@@ -324,8 +324,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         id: "AI-058",
         tier: Tier::T2,
         severity: Severity::Warning,
-        summary:
-            "Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion).",
+        summary: "Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion).",
         fixtures: &[],
         graduation: Graduation::Tested,
         spec_ref: Some("specs/ai/ai-integration.md#331-capability-preconditions"),
@@ -1023,8 +1022,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         id: "K-049",
         tier: Tier::T2,
         severity: Severity::Warning,
-        summary:
-            "Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles.",
+        summary: "Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles.",
         fixtures: &[
             "fixtures/validation/k-049-load-bearing-self-loop.json",
             "fixtures/validation/k-049-load-bearing-two-node-cycle.json",

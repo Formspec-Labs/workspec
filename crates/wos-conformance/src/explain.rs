@@ -76,7 +76,12 @@ fn render_step(step: &TraceStep) -> String {
 
     out.push_str(&format!(
         "  step {}: {} → {} (event: {}{}){}\n",
-        step_num, step.state_before, step.state_after, step.event.name, actor_part, if has_delta { "" } else { &format!(" {tick}") }
+        step_num,
+        step.state_before,
+        step.state_after,
+        step.event.name,
+        actor_part,
+        if has_delta { "" } else { &format!(" {tick}") }
     ));
 
     // Guards evaluated
@@ -107,7 +112,10 @@ fn render_step(step: &TraceStep) -> String {
 
     // Delta detail
     if let Some(delta) = &step.delta {
-        out.push_str(&format!("    {tick} expected: {}\n", expected_state_label(step)));
+        out.push_str(&format!(
+            "    {tick} expected: {}\n",
+            expected_state_label(step)
+        ));
         out.push_str(&format!("      actual:   {}\n", step.state_after));
         out.push_str(&render_delta_reason(delta));
     }
@@ -116,9 +124,7 @@ fn render_step(step: &TraceStep) -> String {
 }
 
 fn expected_state_label(step: &TraceStep) -> &str {
-    step.expected_state_after
-        .as_deref()
-        .unwrap_or("(none)")
+    step.expected_state_after.as_deref().unwrap_or("(none)")
 }
 
 fn render_delta_reason(delta: &Delta) -> String {
@@ -153,8 +159,12 @@ fn render_delta_reason(delta: &Delta) -> String {
             actual_with_policy,
         } => {
             let mut out = format!("      reason:   policy `{policy_id}` changed outcome\n");
-            out.push_str(&format!("                without policy: {expected_without_policy}\n"));
-            out.push_str(&format!("                with policy:    {actual_with_policy}\n"));
+            out.push_str(&format!(
+                "                without policy: {expected_without_policy}\n"
+            ));
+            out.push_str(&format!(
+                "                with policy:    {actual_with_policy}\n"
+            ));
             out
         }
     }
@@ -171,13 +181,13 @@ fn render_summary(trace: &ConformanceTrace, first_divergence: Option<u32>) -> St
 
     let divergence_part = match first_divergence {
         Some(idx) => format!(" | first divergence at step {}", idx + 1),
-        None if trace.outcome != Outcome::Pass => " | no recorded divergence (lint/parse failure)".to_string(),
+        None if trace.outcome != Outcome::Pass => {
+            " | no recorded divergence (lint/parse failure)".to_string()
+        }
         None => String::new(),
     };
 
-    format!(
-        "Summary: {outcome_label} | {step_count} {step_word}{divergence_part}"
-    )
+    format!("Summary: {outcome_label} | {step_count} {step_word}{divergence_part}")
 }
 
 /// Format a JSON value compactly on one line, falling back to `"…"` on error.
@@ -346,19 +356,14 @@ pub fn diff_traces(expected: &ConformanceTrace, actual: &ConformanceTrace) -> Tr
         if exp_step.state_before != act_step.state_before
             || exp_step.state_after != act_step.state_after
         {
-            let exp_state = format!(
-                "{} → {}",
-                exp_step.state_before, exp_step.state_after
-            );
-            let act_state = format!(
-                "{} → {}",
-                act_step.state_before, act_step.state_after
-            );
-            let cause = extract_guard_cause(act_step)
-                .or_else(|| Some(DivergenceCause::StateMismatch {
+            let exp_state = format!("{} → {}", exp_step.state_before, exp_step.state_after);
+            let act_state = format!("{} → {}", act_step.state_before, act_step.state_after);
+            let cause = extract_guard_cause(act_step).or_else(|| {
+                Some(DivergenceCause::StateMismatch {
                     expected: exp_state.clone(),
                     actual: act_state.clone(),
-                }));
+                })
+            });
 
             let hypothesis = build_state_hypothesis(exp_step, act_step);
             return TraceDiffResult::Divergence(TraceDivergence {
@@ -451,7 +456,11 @@ fn render_divergence(div: &TraceDivergence) -> String {
     if let Some(cause) = &div.cause {
         out.push_str("  cause:\n");
         match cause {
-            DivergenceCause::GuardFalse { guard_id, expression, inputs } => {
+            DivergenceCause::GuardFalse {
+                guard_id,
+                expression,
+                inputs,
+            } => {
                 let inputs_str = compact_json(inputs);
                 out.push_str(&format!("    kind:       guard-false\n"));
                 out.push_str(&format!("    guard_id:   {guard_id}\n"));
@@ -483,10 +492,7 @@ fn render_divergence(div: &TraceDivergence) -> String {
     if let Some(detail) = &div.detail {
         out.push_str(&format!("  detail: {detail}\n"));
     }
-    out.push_str(&format!(
-        "  hypothesis: {}\n",
-        div.suggested_hypothesis
-    ));
+    out.push_str(&format!("  hypothesis: {}\n", div.suggested_hypothesis));
 
     out
 }
@@ -518,7 +524,12 @@ fn extract_guard_cause(step: &TraceStep) -> Option<DivergenceCause> {
 
 /// Build a human-readable hypothesis for a state divergence.
 fn build_state_hypothesis(exp_step: &TraceStep, act_step: &TraceStep) -> String {
-    if let Some(Delta::GuardFalse { guard_id, expression, inputs }) = &act_step.delta {
+    if let Some(Delta::GuardFalse {
+        guard_id,
+        expression,
+        inputs,
+    }) = &act_step.delta
+    {
         let inputs_str = compact_json(inputs);
         return format!(
             "guard `{guard_id}` evaluated false; expression: `{expression}`; \
@@ -540,7 +551,9 @@ fn build_state_hypothesis(exp_step: &TraceStep, act_step: &TraceStep) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::trace::{ConformanceTrace, Delta, Event, GuardEvaluation, Outcome, PolicyApplication, TraceStep};
+    use crate::trace::{
+        ConformanceTrace, Delta, Event, GuardEvaluation, Outcome, PolicyApplication, TraceStep,
+    };
     use serde_json::json;
 
     fn make_step(index: u32, from: &str, to: &str, event: &str) -> TraceStep {
@@ -639,13 +652,28 @@ mod tests {
         let trace = make_trace("K-GUARD-FALSE", Outcome::Fail, vec![step]);
         let output = render_trace(&trace);
 
-        assert!(output.contains("expected: approved"), "expected state missing: {output}");
-        assert!(output.contains("actual:   pendingDirectorApproval"), "actual state missing: {output}");
-        assert!(output.contains("submitted->approved:approve"), "guard_id missing: {output}");
-        assert!(output.contains("caseFile.amount <= 50000"), "expression missing: {output}");
+        assert!(
+            output.contains("expected: approved"),
+            "expected state missing: {output}"
+        );
+        assert!(
+            output.contains("actual:   pendingDirectorApproval"),
+            "actual state missing: {output}"
+        );
+        assert!(
+            output.contains("submitted->approved:approve"),
+            "guard_id missing: {output}"
+        );
+        assert!(
+            output.contains("caseFile.amount <= 50000"),
+            "expression missing: {output}"
+        );
         assert!(output.contains("75000"), "input value missing: {output}");
         assert!(output.contains("FAIL"), "FAIL missing: {output}");
-        assert!(output.contains("first divergence at step 1"), "divergence marker missing: {output}");
+        assert!(
+            output.contains("first divergence at step 1"),
+            "divergence marker missing: {output}"
+        );
     }
 
     /// Policy application lines appear for each policy on a step.
@@ -741,7 +769,11 @@ mod tests {
         let result = diff_traces(&expected, &actual);
         match result {
             TraceDiffResult::Divergence(div) => {
-                assert_eq!(div.differs_at_step, Some(1), "step number should be 1-based");
+                assert_eq!(
+                    div.differs_at_step,
+                    Some(1),
+                    "step number should be 1-based"
+                );
                 assert_eq!(div.expected_state.as_deref(), Some("approved"));
                 assert_eq!(div.actual_state.as_deref(), Some("rejected"));
             }
@@ -775,7 +807,11 @@ mod tests {
             TraceDiffResult::Divergence(div) => {
                 assert_eq!(div.differs_at_step, Some(1));
                 match &div.cause {
-                    Some(DivergenceCause::GuardFalse { guard_id, expression, inputs }) => {
+                    Some(DivergenceCause::GuardFalse {
+                        guard_id,
+                        expression,
+                        inputs,
+                    }) => {
                         assert_eq!(guard_id, "submitted->approved:approve");
                         assert!(expression.contains("caseFile.amount"));
                         assert_eq!(inputs["caseFile"]["amount"], json!(75000));
@@ -836,7 +872,11 @@ mod tests {
         let result = diff_traces(&expected, &actual);
         match result {
             TraceDiffResult::Divergence(div) => {
-                assert_eq!(div.differs_at_step, Some(1), "step number should be 1-based");
+                assert_eq!(
+                    div.differs_at_step,
+                    Some(1),
+                    "step number should be 1-based"
+                );
                 match &div.cause {
                     Some(DivergenceCause::ActorMismatch { expected, actual }) => {
                         assert_eq!(expected, "human-approver");
@@ -884,13 +924,31 @@ mod tests {
         };
         let output = render_diff(&TraceDiffResult::Divergence(div));
 
-        assert!(output.contains("DIVERGENCE"), "missing DIVERGENCE: {output}");
+        assert!(
+            output.contains("DIVERGENCE"),
+            "missing DIVERGENCE: {output}"
+        );
         assert!(output.contains("at step: 3"), "missing step: {output}");
-        assert!(output.contains("expected state: approved"), "missing expected: {output}");
-        assert!(output.contains("actual state:   rejected"), "missing actual: {output}");
-        assert!(output.contains("guard-false"), "missing cause kind: {output}");
+        assert!(
+            output.contains("expected state: approved"),
+            "missing expected: {output}"
+        );
+        assert!(
+            output.contains("actual state:   rejected"),
+            "missing actual: {output}"
+        );
+        assert!(
+            output.contains("guard-false"),
+            "missing cause kind: {output}"
+        );
         assert!(output.contains("G-02"), "missing guard_id: {output}");
-        assert!(output.contains("benefit_amount"), "missing expression: {output}");
-        assert!(output.contains("benefit_amount exceeds income_limit"), "missing hypothesis: {output}");
+        assert!(
+            output.contains("benefit_amount"),
+            "missing expression: {output}"
+        );
+        assert!(
+            output.contains("benefit_amount exceeds income_limit"),
+            "missing hypothesis: {output}"
+        );
     }
 }

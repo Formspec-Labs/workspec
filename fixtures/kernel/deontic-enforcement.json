@@ -7,27 +7,47 @@
   "description": "Minimal workflow for testing deontic constraint evaluation. Agent performs eligibility determination with governance constraints on permissions, prohibitions, obligations, and confidence.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
-    { "id": "caseworker", "type": "human", "description": "Human caseworker" },
-    { "id": "eligibilityAgent", "type": "system", "description": "AI eligibility agent" },
-    { "id": "supervisor", "type": "human", "description": "Supervisor for escalations" }
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Human caseworker"
+    },
+    {
+      "id": "eligibilityAgent",
+      "type": "system",
+      "description": "AI eligibility agent"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor for escalations"
+    }
   ],
-
   "lifecycle": {
     "initialState": "pendingDetermination",
     "states": {
       "pendingDetermination": {
         "type": "atomic",
-        "tags": ["determination"],
+        "tags": [
+          "determination"
+        ],
         "transitions": [
           {
-            "event": "determined",
+            "event": {
+              "kind": "message",
+              "name": "determined"
+            },
             "target": "reviewComplete",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           },
           {
-            "event": "escalated",
+            "event": {
+              "kind": "message",
+              "name": "escalated"
+            },
             "target": "humanReview"
           }
         ]
@@ -43,24 +63,39 @@
         ],
         "transitions": [
           {
-            "event": "reviewComplete",
+            "event": {
+              "kind": "message",
+              "name": "reviewComplete"
+            },
             "target": "reviewComplete"
           }
         ]
       },
-      "reviewComplete": { "type": "final" }
+      "reviewComplete": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "income": { "type": "number", "description": "Applicant income" },
-      "dependents": { "type": "integer", "description": "Number of dependents" },
-      "determination": { "type": "string", "description": "Eligibility determination" },
-      "confidence": { "type": "number", "description": "Agent confidence score" }
+      "income": {
+        "type": "number",
+        "description": "Applicant income"
+      },
+      "dependents": {
+        "type": "integer",
+        "description": "Number of dependents"
+      },
+      "determination": {
+        "type": "string",
+        "description": "Eligibility determination"
+      },
+      "confidence": {
+        "type": "number",
+        "description": "Agent confidence score"
+      }
     }
   },
-
   "contracts": {
     "eligibilityContract": {
       "binding": "formspec",
@@ -68,7 +103,6 @@
       "description": "Contract for eligibility determination"
     }
   },
-
   "execution": {
     "workflowTimeout": "P30D",
     "instanceVersioning": "pinned"

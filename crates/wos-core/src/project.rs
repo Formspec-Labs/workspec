@@ -44,11 +44,11 @@ impl Project {
         tags
     }
 
-    /// All event names used in kernel transitions.
-    pub fn kernel_events(&self) -> std::collections::HashSet<&str> {
+    /// All event names used in kernel transitions (runtime dispatch labels).
+    pub fn kernel_events(&self) -> std::collections::HashSet<String> {
         let mut events = std::collections::HashSet::new();
         if let Some(kernel) = &self.kernel {
-            collect_events(&kernel.lifecycle.states, &mut events);
+            collect_events_string(&kernel.lifecycle.states, &mut events);
         }
         events
     }
@@ -83,19 +83,19 @@ fn collect_tags<'a>(
     }
 }
 
-fn collect_events<'a>(
-    states: &'a indexmap::IndexMap<String, crate::model::kernel::State>,
-    events: &mut std::collections::HashSet<&'a str>,
+fn collect_events_string(
+    states: &indexmap::IndexMap<String, crate::model::kernel::State>,
+    events: &mut std::collections::HashSet<String>,
 ) {
     for state in states.values() {
         for transition in &state.transitions {
-            if let Some(ev) = transition.event.as_deref() {
-                events.insert(ev);
+            if let Some(ev) = &transition.event {
+                events.insert(ev.runtime_dispatch_label());
             }
         }
-        collect_events(&state.states, events);
+        collect_events_string(&state.states, events);
         for region in state.regions.values() {
-            collect_events(&region.states, events);
+            collect_events_string(&region.states, events);
         }
     }
 }

@@ -33,7 +33,10 @@ pub async fn wos_add_state(
     let pid = require_string_arg(&args, "project_id")?;
     let state_id = require_string_arg(&args, "state_id")?;
     let kind = parse_state_kind(&args)?;
-    let label = args.get("label").and_then(Value::as_str).map(str::to_string);
+    let label = args
+        .get("label")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let metadata = args.get("metadata").cloned();
 
     let project = registry.get_mut(pid)?;
@@ -54,11 +57,12 @@ pub async fn wos_add_state(
 ///   "project_id": "...",
 ///   "from":       "...",
 ///   "to":         "...",
-///   "trigger":    "...",  // optional event name
+///   "trigger":    "...",  // optional legacy event name (mutually exclusive with `event` object)
+///   "event":      { "kind": "message", "name": "..." },  // optional typed TransitionEvent
 ///   "guard":      "..."   // optional guard FEL expression
 /// }
 /// ```
-/// Returns `{"from": "...", "to": "...", "trigger": "..."}` on success.
+/// Returns `{"from": "...", "to": "...", "trigger": "...", "event": ...}` on success.
 pub async fn wos_add_transition(
     registry: &mut ProjectRegistry,
     _project_id: &str,
@@ -67,18 +71,63 @@ pub async fn wos_add_transition(
     let pid = require_string_arg(&args, "project_id")?;
     let from = require_string_arg(&args, "from")?;
     let to = require_string_arg(&args, "to")?;
-    let trigger = args.get("trigger").and_then(Value::as_str).map(str::to_string);
-    let guard = args.get("guard").and_then(Value::as_str).map(str::to_string);
+    let trigger = args
+        .get("trigger")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let guard = args
+        .get("guard")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    let typed_event: Option<wos_authoring::TransitionEvent> = match args.get("event") {
+        None => None,
+        Some(Value::Null) => None,
+        Some(v @ Value::Object(_)) => Some(serde_json::from_value(v.clone()).map_err(|e| {
+            ToolError::InvalidArguments(format!("invalid typed transition event: {e}"))
+        })?),
+        Some(Value::String(_)) => {
+            return Err(ToolError::InvalidArguments(
+                "`event` must be a TransitionEvent object; use `trigger` for a legacy string"
+                    .into(),
+            ));
+        }
+        Some(_) => {
+            return Err(ToolError::InvalidArguments(
+                "`event` must be a TransitionEvent object".into(),
+            ));
+        }
+    };
+
+    if typed_event.is_some()
+        && trigger
+            .as_ref()
+            .map(|t| !t.is_empty())
+            .unwrap_or(false)
+    {
+        return Err(ToolError::InvalidArguments(
+            "use either `trigger` (legacy string) or `event` (typed object), not both".into(),
+        ));
+    }
 
     let project = registry.get_mut(pid)?;
-    project
-        .add_transition(from, to, trigger.clone(), guard)
-        .map_err(|d| ToolError::InvalidArguments(d.message))?;
+    let response_event = if let Some(ev) = typed_event {
+        project
+            .add_transition_typed(from, to, Some(ev.clone()), guard)
+            .map_err(|d| ToolError::InvalidArguments(d.message))?;
+        serde_json::to_value(&ev).unwrap_or(Value::Null)
+    } else {
+        project
+            .add_transition(from, to, trigger.clone(), guard)
+            .map_err(|d| ToolError::InvalidArguments(d.message))?;
+        Value::Null
+    };
 
     Ok(serde_json::json!({
         "from": from,
         "to": to,
         "trigger": trigger.unwrap_or_default(),
+        "event": response_event,
     }))
 }
 
@@ -150,10 +199,9 @@ pub async fn wos_remove_state(
 fn require_string_arg<'a>(args: &'a Value, key: &str) -> Result<&'a str, ToolError> {
     match args.get(key) {
         None => Err(ToolError::MissingArgument(key.to_string())),
-        Some(v) => v
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))),
+        Some(v) => v.as_str().filter(|s| !s.is_empty()).ok_or_else(|| {
+            ToolError::InvalidArguments(format!("'{key}' must be a non-empty string"))
+        }),
     }
 }
 
@@ -299,12 +347,20 @@ mod tests {
 
         assert_eq!(result["from"], json!("draft"));
         assert_eq!(result["to"], json!("approved"));
+        assert!(result["event"].is_null());
 
         let project = registry.get(&pid).unwrap();
         let transitions = &project.snapshot().lifecycle.states["draft"].transitions;
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].target, "approved");
-        assert_eq!(transitions[0].event.as_deref(), Some("approve"));
+        assert_eq!(
+            transitions[0]
+                .event
+                .as_ref()
+                .map(|e| e.runtime_dispatch_label())
+                .as_deref(),
+            Some("approve")
+        );
     }
 
     #[tokio::test]
@@ -434,9 +490,13 @@ mod tests {
     async fn wrong_type_project_id_gives_invalid_arguments_error() {
         let mut registry = ProjectRegistry::new();
         // project_id is a number, not a string.
-        let err = wos_add_state(&mut registry, "", json!({ "project_id": 42, "state_id": "s1" }))
-            .await
-            .unwrap_err();
+        let err = wos_add_state(
+            &mut registry,
+            "",
+            json!({ "project_id": 42, "state_id": "s1" }),
+        )
+        .await
+        .unwrap_err();
         assert!(
             matches!(err, ToolError::InvalidArguments(_)),
             "wrong-type key must yield InvalidArguments; got {err:?}"

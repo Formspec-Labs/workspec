@@ -10,7 +10,7 @@
   ],
   "patternProperties": {
     "^x-": {
-      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+      "$comment": "Vendor extensions per Kernel spec \u00a710.6 (extensions escape hatch)"
     }
   },
   "additionalProperties": false,
@@ -18,18 +18,23 @@
     "$wosKernel": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Kernel specification version marker. MUST be the literal string '1.0'. This marker is what identifies the surrounding JSON object as a WOS Kernel Document and pins it to the 1.0 line of the Kernel Specification; a processor selects the schema and evaluation semantics from this marker alone. Every Kernel Document MUST carry this key at the root (see Kernel §1, §2).",
-      "examples": ["1.0", "1.0"],
+      "description": "WOS Kernel specification version marker. MUST be the literal string '1.0'. This marker is what identifies the surrounding JSON object as a WOS Kernel Document and pins it to the 1.0 line of the Kernel Specification; a processor selects the schema and evaluation semantics from this marker alone. Every Kernel Document MUST carry this key at the root (see Kernel \u00a71, \u00a72).",
+      "examples": [
+        "1.0",
+        "1.0"
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker and version pin for WOS Kernel documents"
       }
     },
-    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
+    "$schema": {
+      "$ref": "#/$defs/JsonSchemaUri"
+    },
     "url": {
       "type": "string",
       "format": "uri",
-      "description": "Canonical URI identifier for this Kernel Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Processors use this identifier for cross-document references (governance, correspondence metadata, integration profiles) and for instance-version pinning under Kernel §9.6. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
+      "description": "Canonical URI identifier for this Kernel Document. The URL names the workflow definition, not any particular instance \u2014 all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Processors use this identifier for cross-document references (governance, correspondence metadata, integration profiles) and for instance-version pinning under Kernel \u00a79.6. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
       "examples": [
         "https://agency.gov/workflows/benefits-adjudication",
         "https://procurement.example.gov/workflows/purchase-order-approval"
@@ -42,8 +47,11 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version string for this Kernel Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so that processors and governance layers can reason about compatibility. Instance versioning (Kernel §9.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
-      "examples": ["1.0.0", "2025.1.0"]
+      "description": "Version string for this Kernel Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so that processors and governance layers can reason about compatibility. Instance versioning (Kernel \u00a79.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
+      "examples": [
+        "1.0.0",
+        "2025.1.0"
+      ]
     },
     "title": {
       "type": "string",
@@ -63,16 +71,32 @@
     },
     "status": {
       "type": "string",
-      "enum": ["draft", "active", "retired"],
-      "description": "Publication status of this workflow definition. 'draft' means the definition is being authored and SHOULD NOT instantiate production cases. 'active' means the definition is in effect and new instances MAY be created against it. 'retired' means no new instances SHOULD be created, though existing pinned instances continue executing. Transitions move forward: draft → active → retired.",
-      "examples": ["draft", "active", "retired"]
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "description": "Publication status of this workflow definition. 'draft' means the definition is being authored and SHOULD NOT instantiate production cases. 'active' means the definition is in effect and new instances MAY be created against it. 'retired' means no new instances SHOULD be created, though existing pinned instances continue executing. Transitions move forward: draft \u2192 active \u2192 retired.",
+      "examples": [
+        "draft",
+        "active",
+        "retired"
+      ]
     },
     "impactLevel": {
       "type": "string",
-      "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
+      "enum": [
+        "rights-impacting",
+        "safety-impacting",
+        "operational",
+        "informational"
+      ],
       "default": "operational",
       "description": "Consequence level classification for decisions made within this workflow (Kernel S6). 'rights-impacting': decisions affect individual legal rights -- full due process required (Layer 1). 'safety-impacting': decisions affect safety -- full due process required. 'operational': organizational operations -- due process RECOMMENDED. 'informational': no binding decisions -- due process OPTIONAL. Default: 'operational'.",
-      "examples": ["rights-impacting", "operational"],
+      "examples": [
+        "rights-impacting",
+        "operational"
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Proportionality index that governs the strength of governance controls across all layers"
@@ -86,8 +110,16 @@
       "description": "Declarations of actors participating in this workflow (Kernel S3). The kernel defines human and system actor types. Additional types are registered via the actorExtension seam.",
       "examples": [
         [
-          { "id": "requester", "type": "human", "description": "Employee submitting a purchase order" },
-          { "id": "approver", "type": "human", "description": "Manager who approves or rejects" }
+          {
+            "id": "requester",
+            "type": "human",
+            "description": "Employee submitting a purchase order"
+          },
+          {
+            "id": "approver",
+            "type": "human",
+            "description": "Manager who approves or rejects"
+          }
         ]
       ],
       "x-lm": {
@@ -104,10 +136,29 @@
           "states": {
             "submitted": {
               "type": "atomic",
-              "transitions": [{ "event": "approve", "target": "approved" }, { "event": "reject", "target": "rejected" }]
+              "transitions": [
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "approve"
+                  },
+                  "target": "approved"
+                },
+                {
+                  "event": {
+                    "kind": "message",
+                    "name": "reject"
+                  },
+                  "target": "rejected"
+                }
+              ]
             },
-            "approved": { "type": "final" },
-            "rejected": { "type": "final" }
+            "approved": {
+              "type": "final"
+            },
+            "rejected": {
+              "type": "final"
+            }
           }
         }
       ],
@@ -125,7 +176,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/ContractReference"
       },
-      "description": "Named contract references for typed data exchanges in this workflow (Kernel §11). Each key is a contract name referenced from `createTask` actions via `contractRef`; each value is a ContractReference declaring the binding type (Formspec or JSON Schema) and the document URI. Contracts are the kernel's abstract validation interface — the processor delegates actual validation to a conformant contract processor.",
+      "description": "Named contract references for typed data exchanges in this workflow (Kernel \u00a711). Each key is a contract name referenced from `createTask` actions via `contractRef`; each value is a ContractReference declaring the binding type (Formspec or JSON Schema) and the document URI. Contracts are the kernel's abstract validation interface \u2014 the processor delegates actual validation to a conformant contract processor.",
       "examples": [
         {
           "purchaseOrder": {
@@ -152,10 +203,16 @@
     },
     "evaluationMode": {
       "type": "string",
-      "enum": ["event-driven", "continuous"],
+      "enum": [
+        "event-driven",
+        "continuous"
+      ],
       "default": "event-driven",
       "description": "Determines when the processor evaluates transition guards (Runtime Companion S10). 'event-driven' (default): guards are evaluated only when an explicit event arrives. 'continuous': after any case state mutation, the processor re-evaluates all guards in the current configuration -- if any guard that was previously false now evaluates to true, the corresponding transition fires. Continuous mode imposes a convergence cap of 100 re-evaluation cycles per triggering mutation.",
-      "examples": ["event-driven", "continuous"],
+      "examples": [
+        "event-driven",
+        "continuous"
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Controls whether the workflow reacts only to events or also to data changes"
@@ -165,27 +222,47 @@
       "type": "integer",
       "minimum": 1,
       "default": 3,
-      "description": "Maximum cascade depth for relationship-triggered events (`$related.*`) before the processor halts further generation (Kernel §4.10). A state change in case A may trigger a `$related.*` event in case B (depth 1), in case C (depth 2), and so on; beyond this cap the processor records a `relationshipDepthCapReached` provenance entry and stops. Prevents unbounded cascading in cyclically related cases. Default: 3.",
-      "examples": [3, 5]
+      "description": "Maximum cascade depth for relationship-triggered events (`$related.*`) before the processor halts further generation (Kernel \u00a74.10). A state change in case A may trigger a `$related.*` event in case B (depth 1), in case C (depth 2), and so on; beyond this cap the processor records a `relationshipDepthCapReached` provenance entry and stops. Prevents unbounded cascading in cyclically related cases. Default: 3.",
+      "examples": [
+        3,
+        5
+      ]
     },
     "custodyHook": {
       "type": "object",
-      "description": "Custody posture declaration seam (Kernel §10.5). The kernel treats this content as opaque — the concrete shape is supplied by the binding. A monolithic binding typically declares a single posture (e.g., who may read content, whether recovery requires the user, whether delegated compute exposes content); a distributed binding such as Trellis binds a full Trust Profile object here. When Governance (Layer 1) is adopted, changes to this object are recorded as canonical lifecycle facts.",
+      "description": "Custody posture declaration seam (Kernel \u00a710.5). The kernel treats this content as opaque \u2014 the concrete shape is supplied by the binding. A monolithic binding typically declares a single posture (e.g., who may read content, whether recovery requires the user, whether delegated compute exposes content); a distributed binding such as Trellis binds a full Trust Profile object here. When Governance (Layer 1) is adopted, changes to this object are recorded as canonical lifecycle facts.",
       "additionalProperties": true,
       "examples": [
-        { "posture": "provider-readable", "recoveryWithoutUser": false, "delegatedComputeExposesContent": false },
-        { "trustProfile": { "kind": "distributed", "custodians": ["urn:trellis:custodian:alpha", "urn:trellis:custodian:beta"] } }
+        {
+          "posture": "provider-readable",
+          "recoveryWithoutUser": false,
+          "delegatedComputeExposesContent": false
+        },
+        {
+          "trustProfile": {
+            "kind": "distributed",
+            "custodians": [
+              "urn:trellis:custodian:alpha",
+              "urn:trellis:custodian:beta"
+            ]
+          }
+        }
       ]
     },
-    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+    "extensions": {
+      "$ref": "#/$defs/ExtensionsMap"
+    }
   },
   "$defs": {
     "ActorDeclaration": {
       "type": "object",
-      "required": ["id", "type"],
+      "required": [
+        "id",
+        "type"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -194,13 +271,23 @@
           "type": "string",
           "minLength": 1,
           "description": "Unique identifier for this actor declaration within the workflow.",
-          "examples": ["requester", "approver", "intakeSystem"]
+          "examples": [
+            "requester",
+            "approver",
+            "intakeSystem"
+          ]
         },
         "type": {
           "type": "string",
-          "enum": ["human", "system"],
+          "enum": [
+            "human",
+            "system"
+          ],
           "description": "Actor type (Kernel S3). 'human': a person who performs tasks and exercises judgment -- provenance requires identity, role, timestamp. 'system': a deterministic software component -- provenance requires component identifier, version, timestamp. Additional types registered via actorExtension seam.",
-          "examples": ["human", "system"],
+          "examples": [
+            "human",
+            "system"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Determines provenance requirements and trust boundary placement"
@@ -214,15 +301,20 @@
             "Medical reviewer who evaluates clinical documentation"
           ]
         },
-        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+        "extensions": {
+          "$ref": "#/$defs/ExtensionsMap"
+        }
       }
     },
     "Lifecycle": {
       "type": "object",
-      "required": ["initialState", "states"],
+      "required": [
+        "initialState",
+        "states"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -230,8 +322,11 @@
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the state where execution begins when a new workflow instance is created. MUST match a key in the sibling `states` map. The entry point drives onEntry actions of the initial state (Kernel §4.1, §4.7) and pins the starting active configuration used by the deterministic evaluation algorithm (§4.2).",
-          "examples": ["submitted", "intake"],
+          "description": "Identifier of the state where execution begins when a new workflow instance is created. MUST match a key in the sibling `states` map. The entry point drives onEntry actions of the initial state (Kernel \u00a74.1, \u00a74.7) and pins the starting active configuration used by the deterministic evaluation algorithm (\u00a74.2).",
+          "examples": [
+            "submitted",
+            "intake"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Entry point for the workflow statechart"
@@ -242,17 +337,66 @@
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Map of state identifiers to State definitions (Kernel §4.3). Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.",
+          "description": "Map of state identifiers to State definitions (Kernel \u00a74.3). Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.",
           "examples": [
             {
-              "draft": { "type": "atomic", "transitions": [{ "event": "submit", "target": "review" }] },
-              "review": { "type": "atomic", "tags": ["review"], "transitions": [{ "event": "approve", "target": "done" }] },
-              "done": { "type": "final" }
+              "draft": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "submit"
+                    },
+                    "target": "review"
+                  }
+                ]
+              },
+              "review": {
+                "type": "atomic",
+                "tags": [
+                  "review"
+                ],
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "approve"
+                    },
+                    "target": "done"
+                  }
+                ]
+              },
+              "done": {
+                "type": "final"
+              }
             },
             {
-              "submitted": { "type": "atomic", "transitions": [{ "event": "approve", "target": "approved" }, { "event": "reject", "target": "rejected" }] },
-              "approved": { "type": "final" },
-              "rejected": { "type": "final" }
+              "submitted": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "approve"
+                    },
+                    "target": "approved"
+                  },
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "reject"
+                    },
+                    "target": "rejected"
+                  }
+                ]
+              },
+              "approved": {
+                "type": "final"
+              },
+              "rejected": {
+                "type": "final"
+              }
             }
           ],
           "x-lm": {
@@ -265,11 +409,16 @@
           "additionalProperties": {
             "$ref": "#/$defs/Milestone"
           },
-          "description": "Named conditions on case state that indicate meaningful progress (Kernel §4.13). Keys are milestone identifiers; values are Milestone objects whose FEL `condition` is evaluated against case state. Milestones are observable — they surface in provenance and audit views — but they do NOT affect lifecycle state directly. Use milestones when a caller needs to ask \"has the case crossed this point?\" without introducing a lifecycle branch.",
+          "description": "Named conditions on case state that indicate meaningful progress (Kernel \u00a74.13). Keys are milestone identifiers; values are Milestone objects whose FEL `condition` is evaluated against case state. Milestones are observable \u2014 they surface in provenance and audit views \u2014 but they do NOT affect lifecycle state directly. Use milestones when a caller needs to ask \"has the case crossed this point?\" without introducing a lifecycle branch.",
           "examples": [
             {
-              "applicationReceived": { "condition": "caseFile.application != null", "description": "Applicant submitted the form" },
-              "eligibilityDetermined": { "condition": "caseFile.eligibility != null" }
+              "applicationReceived": {
+                "condition": "caseFile.application != null",
+                "description": "Applicant submitted the form"
+              },
+              "eligibilityDetermined": {
+                "condition": "caseFile.eligibility != null"
+              }
             }
           ]
         }
@@ -277,10 +426,12 @@
     },
     "State": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -288,43 +439,90 @@
         {
           "$comment": "Kernel S4.3: compound states MUST have initialState and a non-empty states map.",
           "if": {
-            "properties": { "type": { "const": "compound" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "compound"
+              }
+            },
+            "required": [
+              "type"
+            ]
           },
           "then": {
-            "required": ["initialState", "states"],
+            "required": [
+              "initialState",
+              "states"
+            ],
             "properties": {
-              "states": { "minProperties": 1 }
+              "states": {
+                "minProperties": 1
+              }
             }
           }
         },
         {
           "$comment": "Kernel S4.3, S4.4: parallel states MUST have a non-empty regions map.",
           "if": {
-            "properties": { "type": { "const": "parallel" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "parallel"
+              }
+            },
+            "required": [
+              "type"
+            ]
           },
           "then": {
-            "required": ["regions"],
+            "required": [
+              "regions"
+            ],
             "properties": {
-              "regions": { "minProperties": 1 }
+              "regions": {
+                "minProperties": 1
+              }
             }
           }
         },
         {
           "$comment": "Kernel S4.3: atomic states MUST NOT carry compound/parallel structural fields.",
           "if": {
-            "properties": { "type": { "const": "atomic" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "atomic"
+              }
+            },
+            "required": [
+              "type"
+            ]
           },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["initialState"] },
-                { "required": ["states"] },
-                { "required": ["regions"] },
-                { "required": ["cancellationPolicy"] },
-                { "required": ["historyState"] }
+                {
+                  "required": [
+                    "initialState"
+                  ]
+                },
+                {
+                  "required": [
+                    "states"
+                  ]
+                },
+                {
+                  "required": [
+                    "regions"
+                  ]
+                },
+                {
+                  "required": [
+                    "cancellationPolicy"
+                  ]
+                },
+                {
+                  "required": [
+                    "historyState"
+                  ]
+                }
               ]
             }
           }
@@ -332,17 +530,43 @@
         {
           "$comment": "Kernel S4.3: final states are completion indicators and MUST NOT carry compound/parallel structural fields.",
           "if": {
-            "properties": { "type": { "const": "final" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "final"
+              }
+            },
+            "required": [
+              "type"
+            ]
           },
           "then": {
             "not": {
               "anyOf": [
-                { "required": ["initialState"] },
-                { "required": ["states"] },
-                { "required": ["regions"] },
-                { "required": ["cancellationPolicy"] },
-                { "required": ["historyState"] }
+                {
+                  "required": [
+                    "initialState"
+                  ]
+                },
+                {
+                  "required": [
+                    "states"
+                  ]
+                },
+                {
+                  "required": [
+                    "regions"
+                  ]
+                },
+                {
+                  "required": [
+                    "cancellationPolicy"
+                  ]
+                },
+                {
+                  "required": [
+                    "historyState"
+                  ]
+                }
               ]
             }
           }
@@ -350,30 +574,54 @@
         {
           "$comment": "Kernel S4.4: cancellationPolicy is only meaningful on parallel states.",
           "if": {
-            "required": ["cancellationPolicy"]
+            "required": [
+              "cancellationPolicy"
+            ]
           },
           "then": {
-            "properties": { "type": { "const": "parallel" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "parallel"
+              }
+            },
+            "required": [
+              "type"
+            ]
           }
         },
         {
           "$comment": "Kernel S4.14: historyState is only meaningful on compound states.",
           "if": {
-            "required": ["historyState"]
+            "required": [
+              "historyState"
+            ]
           },
           "then": {
-            "properties": { "type": { "const": "compound" } },
-            "required": ["type"]
+            "properties": {
+              "type": {
+                "const": "compound"
+              }
+            },
+            "required": [
+              "type"
+            ]
           }
         }
       ],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["atomic", "compound", "parallel", "final"],
+          "enum": [
+            "atomic",
+            "compound",
+            "parallel",
+            "final"
+          ],
           "description": "State type (Kernel S4.3). 'atomic': no substates. 'compound': contains substates with initialState. 'parallel': contains concurrent regions. 'final': completion indicator, no outgoing transitions.",
-          "examples": ["atomic", "final"],
+          "examples": [
+            "atomic",
+            "final"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Determines the structural behavior of this state in the statechart"
@@ -405,28 +653,56 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "One semantic tag identifier on this state. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel §4.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, `notification`, and `hold`.",
-            "examples": ["determination", "review", "hold"]
+            "description": "One semantic tag identifier on this state. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel \u00a74.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, `notification`, and `hold`.",
+            "examples": [
+              "determination",
+              "review",
+              "hold"
+            ]
           },
-          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel §4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.",
-          "examples": [["determination", "review"], ["intake"]]
+          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel \u00a74.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.",
+          "examples": [
+            [
+              "determination",
+              "review"
+            ],
+            [
+              "intake"
+            ]
+          ]
         },
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Initial substate identifier for a compound state (Kernel §4.3). REQUIRED when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). When the enclosing compound state is entered, execution proceeds to this substate unless a `historyState` override restores a prior configuration.",
-          "examples": ["drafting", "pendingReview"]
+          "description": "Initial substate identifier for a compound state (Kernel \u00a74.3). REQUIRED when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). When the enclosing compound state is entered, execution proceeds to this substate unless a `historyState` override restores a prior configuration.",
+          "examples": [
+            "drafting",
+            "pendingReview"
+          ]
         },
         "states": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "Substates within a compound state (Kernel §4.3). REQUIRED (non-empty) when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). The compound state's `initialState` MUST match a key in this map.",
+          "description": "Substates within a compound state (Kernel \u00a74.3). REQUIRED (non-empty) when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). The compound state's `initialState` MUST match a key in this map.",
           "examples": [
             {
-              "drafting": { "type": "atomic", "transitions": [{ "event": "submit", "target": "reviewing" }] },
-              "reviewing": { "type": "atomic" }
+              "drafting": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": {
+                      "kind": "message",
+                      "name": "submit"
+                    },
+                    "target": "reviewing"
+                  }
+                ]
+              },
+              "reviewing": {
+                "type": "atomic"
+              }
             }
           ]
         },
@@ -435,26 +711,53 @@
           "additionalProperties": {
             "$ref": "#/$defs/Region"
           },
-          "description": "Named concurrent regions within a parallel state (Kernel §4.3, §4.4, §4.8). REQUIRED (non-empty) when `type` = 'parallel'; MUST NOT appear on atomic, compound, or final states (enforced structurally by the allOf block on this State). Each region executes concurrently; the parallel state exits per the `cancellationPolicy`.",
+          "description": "Named concurrent regions within a parallel state (Kernel \u00a74.3, \u00a74.4, \u00a74.8). REQUIRED (non-empty) when `type` = 'parallel'; MUST NOT appear on atomic, compound, or final states (enforced structurally by the allOf block on this State). Each region executes concurrently; the parallel state exits per the `cancellationPolicy`.",
           "examples": [
             {
-              "approvalTrack": { "initialState": "pending", "states": { "pending": { "type": "atomic" } } },
-              "auditTrack": { "initialState": "scheduled", "states": { "scheduled": { "type": "atomic" } } }
+              "approvalTrack": {
+                "initialState": "pending",
+                "states": {
+                  "pending": {
+                    "type": "atomic"
+                  }
+                }
+              },
+              "auditTrack": {
+                "initialState": "scheduled",
+                "states": {
+                  "scheduled": {
+                    "type": "atomic"
+                  }
+                }
+              }
             }
           ]
         },
         "cancellationPolicy": {
           "type": "string",
-          "enum": ["wait-all", "cancel-siblings", "fail-fast"],
+          "enum": [
+            "wait-all",
+            "cancel-siblings",
+            "fail-fast"
+          ],
           "default": "wait-all",
-          "description": "Cancellation policy for parallel states (Kernel §4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.",
-          "examples": ["wait-all", "cancel-siblings"]
+          "description": "Cancellation policy for parallel states (Kernel \u00a74.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.",
+          "examples": [
+            "wait-all",
+            "cancel-siblings"
+          ]
         },
         "historyState": {
           "type": "string",
-          "enum": ["shallow", "deep"],
-          "description": "History state mode for compound states (Kernel §4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.",
-          "examples": ["shallow", "deep"]
+          "enum": [
+            "shallow",
+            "deep"
+          ],
+          "description": "History state mode for compound states (Kernel \u00a74.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.",
+          "examples": [
+            "shallow",
+            "deep"
+          ]
         },
         "description": {
           "type": "string",
@@ -464,15 +767,20 @@
             "Final state reached when the applicant has been found eligible"
           ]
         },
-        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+        "extensions": {
+          "$ref": "#/$defs/ExtensionsMap"
+        }
       }
     },
     "Region": {
       "type": "object",
-      "required": ["initialState", "states"],
+      "required": [
+        "initialState",
+        "states"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -480,46 +788,71 @@
         "initialState": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the state where this parallel region begins execution when the enclosing parallel state is entered (Kernel §4.4, §4.8). MUST match a key in this region's sibling `states` map.",
-          "examples": ["pending", "scheduled"]
+          "description": "Identifier of the state where this parallel region begins execution when the enclosing parallel state is entered (Kernel \u00a74.4, \u00a74.8). MUST match a key in this region's sibling `states` map.",
+          "examples": [
+            "pending",
+            "scheduled"
+          ]
         },
         "states": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/State"
           },
-          "description": "States contained within this parallel region (Kernel §4.4). Each region carries its own independent statechart that runs concurrently with sibling regions. The region exits when it reaches a final state; the overall parallel state exits per its `cancellationPolicy`.",
+          "description": "States contained within this parallel region (Kernel \u00a74.4). Each region carries its own independent statechart that runs concurrently with sibling regions. The region exits when it reaches a final state; the overall parallel state exits per its `cancellationPolicy`.",
           "examples": [
-            { "pending": { "type": "atomic" }, "done": { "type": "final" } }
+            {
+              "pending": {
+                "type": "atomic"
+              },
+              "done": {
+                "type": "final"
+              }
+            }
           ]
         }
       }
     },
     "Transition": {
       "type": "object",
-      "required": ["target"],
+      "required": [
+        "target"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
       "properties": {
         "event": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Identifier of the event that triggers this transition for explicit event delivery (Kernel §4.5, §4.6). When omitted, the transition never matches an external `process_event` name; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan (Runtime Companion §10.3). Names prefixed with `$` are reserved for kernel-generated events (`$join`, `$timeout.*`, `$error`, `$related.*`) per Kernel §4.10 — workflow authors MUST NOT define other `$`-prefixed event names. When the processor fires a transition from that re-scan, it records a synthetic dispatch label (for example `$postMutationRescan`) in provenance — that label is not a valid authored `event` value.",
-          "examples": ["submit", "approve", "reject", "task.completed", "$timeout.task"],
+          "$ref": "#/$defs/TransitionEvent",
+          "description": "Typed event that triggers this transition for explicit process_event delivery (Kernel \u00a74.5\u2013\u00a74.6). When omitted the transition is guard-only and never matches external event names; in continuous evaluation mode transitions without an event or with a condition event still participate in post-mutation guard re-scan per Runtime Companion \u00a710.3.",
+          "examples": [
+            {
+              "kind": "message",
+              "name": "submit"
+            },
+            {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
+            }
+          ],
           "x-lm": {
             "critical": true,
-            "intent": "The event that triggers this transition"
+            "intent": "Typed transition trigger event"
           }
         },
         "target": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the destination state for this transition. MUST name a state declared somewhere in the lifecycle's `states` map (or a substate reachable by dotted path where the binding supports it). When the transition fires, the processor runs the source state's `onExit` actions, the transition's own `actions`, and the target state's `onEntry` actions in that order (Kernel §4.7). A Kernel Complete processor rejects undeclared targets (§13.3).",
-          "examples": ["approved", "review", "completed"],
+          "description": "Identifier of the destination state for this transition. MUST name a state declared somewhere in the lifecycle's `states` map (or a substate reachable by dotted path where the binding supports it). When the transition fires, the processor runs the source state's `onExit` actions, the transition's own `actions`, and the target state's `onEntry` actions in that order (Kernel \u00a74.7). A Kernel Complete processor rejects undeclared targets (\u00a713.3).",
+          "examples": [
+            "approved",
+            "review",
+            "completed"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "The destination state when this transition fires"
@@ -546,11 +879,22 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "One semantic tag identifier on this transition. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel §4.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, and `notification`.",
-            "examples": ["determination", "adverse-decision"]
+            "description": "One semantic tag identifier on this transition. Tags are free-form lowercase strings used by governance layers to attach rules via the `lifecycleHook` seam (Kernel \u00a74.12). Conventionally recognized values include `determination`, `review`, `adverse-decision`, `quality-check`, `intake`, `appeal`, and `notification`.",
+            "examples": [
+              "determination",
+              "adverse-decision"
+            ]
           },
-          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel §4.12).",
-          "examples": [["determination"], ["review", "quality-check"]]
+          "description": "Semantic tags for governance attachment via lifecycleHook (Kernel \u00a74.12).",
+          "examples": [
+            [
+              "determination"
+            ],
+            [
+              "review",
+              "quality-check"
+            ]
+          ]
         },
         "description": {
           "type": "string",
@@ -564,19 +908,33 @@
     },
     "Action": {
       "type": "object",
-      "required": ["action"],
+      "required": [
+        "action"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
       "properties": {
         "action": {
           "type": "string",
-          "enum": ["createTask", "invokeService", "setData", "emitEvent", "startTimer", "cancelTimer", "log"],
-          "description": "Discriminator selecting which action semantics apply to this object (Kernel §9.2). The value determines which sibling fields are used: `createTask` (human / Formspec-backed task — `taskRef`, `assignTo`, `contractRef`), `invokeService` (external service — `serviceRef`, `idempotencyKey`), `setData` (case-file mutation — `path`, `value`), `emitEvent` (`eventType`, `data`), `startTimer` (`timerId`, `duration` or `deadline`, `event`), `cancelTimer` (`timerId`), and `log` (provenance entry — `message`, `data`).",
-          "examples": ["createTask", "invokeService", "setData"],
+          "enum": [
+            "createTask",
+            "invokeService",
+            "setData",
+            "emitEvent",
+            "startTimer",
+            "cancelTimer",
+            "log"
+          ],
+          "description": "Discriminator selecting which action semantics apply to this object (Kernel \u00a79.2). The value determines which sibling fields are used: `createTask` (human / Formspec-backed task \u2014 `taskRef`, `assignTo`, `contractRef`), `invokeService` (external service \u2014 `serviceRef`, `idempotencyKey`), `setData` (case-file mutation \u2014 `path`, `value`), `emitEvent` (`eventType`, `data`), `startTimer` (`timerId`, `duration` or `deadline`, `event`), `cancelTimer` (`timerId`), and `log` (provenance entry \u2014 `message`, `data`).",
+          "examples": [
+            "createTask",
+            "invokeService",
+            "setData"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Determines what operation is performed at this step"
@@ -586,79 +944,137 @@
           "type": "string",
           "minLength": 1,
           "description": "Reference to a task definition used when `action` = `createTask`. The reference identifies the task template the binding resolves to create a new task instance; the binding's registry defines how `taskRef` values are resolved.",
-          "examples": ["reviewPurchaseOrder", "eligibilityDetermination"]
+          "examples": [
+            "reviewPurchaseOrder",
+            "eligibilityDetermination"
+          ]
         },
         "assignTo": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor identifier for task assignment when `action` = `createTask`. MUST match the `id` of a declared actor (Kernel §3). The runtime uses binding-specific routing policies (role-based queues, load balancing, manual claim) to map the assignment onto a concrete actor instance.",
-          "examples": ["approver", "caseWorker"]
+          "description": "Actor identifier for task assignment when `action` = `createTask`. MUST match the `id` of a declared actor (Kernel \u00a73). The runtime uses binding-specific routing policies (role-based queues, load balancing, manual claim) to map the assignment onto a concrete actor instance.",
+          "examples": [
+            "approver",
+            "caseWorker"
+          ]
         },
         "serviceRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to an external service used when `action` = `invokeService` (Kernel §9.2, §9.3). The binding's registry resolves this name to a concrete integration (e.g., HTTP endpoint, queue, local plugin).",
-          "examples": ["creditBureauLookup", "notificationService"]
+          "description": "Reference to an external service used when `action` = `invokeService` (Kernel \u00a79.2, \u00a79.3). The binding's registry resolves this name to a concrete integration (e.g., HTTP endpoint, queue, local plugin).",
+          "examples": [
+            "creditBureauLookup",
+            "notificationService"
+          ]
         },
         "idempotencyKey": {
           "type": "string",
           "minLength": 1,
           "description": "Idempotency key for deduplicating service invocations (Kernel S9.3). Closes the crash-between-invoke-and-persist window.",
-          "examples": ["${instance.id}-${event.id}-extract"]
+          "examples": [
+            "${instance.id}-${event.id}-extract"
+          ]
         },
         "correlationKey": {
           "type": "string",
           "minLength": 1,
           "description": "Correlation key for routing external callbacks to the correct workflow instance (Kernel S9.4).",
-          "examples": ["${instance.id}"]
+          "examples": [
+            "${instance.id}"
+          ]
         },
         "path": {
           "type": "string",
           "minLength": 1,
-          "description": "Dotted case-file field path when `action` = `setData` (Kernel §5, §9.2). Identifies the case-file slot to be mutated; every mutation is recorded in the case state history (§5.4).",
-          "examples": ["caseFile.status", "caseFile.approvedBy"]
+          "description": "Dotted case-file field path when `action` = `setData` (Kernel \u00a75, \u00a79.2). Identifies the case-file slot to be mutated; every mutation is recorded in the case state history (\u00a75.4).",
+          "examples": [
+            "caseFile.status",
+            "caseFile.approvedBy"
+          ]
         },
         "value": {
-          "description": "Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. Real kernel fixtures use template-interpolation form (`${event.actorId}`) to pull evaluation-context values; bare FEL MAY also be supported depending on the binding. The resolved value MUST be consistent with the declared type of the target case-file field.",
-          "examples": ["approved", 42, "${event.actorId}", "${caseFile.amount}"]
+          "description": "Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel \u00a77); bindings document which interpretation applies. Real kernel fixtures use template-interpolation form (`${event.actorId}`) to pull evaluation-context values; bare FEL MAY also be supported depending on the binding. The resolved value MUST be consistent with the declared type of the target case-file field.",
+          "examples": [
+            "approved",
+            42,
+            "${event.actorId}",
+            "${caseFile.amount}"
+          ]
         },
         "eventType": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the event to emit when `action` = `emitEvent`. The emitted event is routed back into the lifecycle and MAY trigger transitions on the current instance or correlated instances. MUST NOT start with `$` (reserved for kernel-generated events per §4.10).",
-          "examples": ["applicationComplete", "escalate"]
+          "description": "Identifier of the event to emit when `action` = `emitEvent`. The emitted event is routed back into the lifecycle and MAY trigger transitions on the current instance or correlated instances. MUST NOT start with `$` (reserved for kernel-generated events per \u00a74.10).",
+          "examples": [
+            "applicationComplete",
+            "escalate"
+          ]
         },
         "data": {
           "description": "Optional payload carried by the emitted event when `action` = `emitEvent`. Any JSON value; bindings MAY define payload schemas per event type.",
-          "examples": [{ "reason": "insufficient-documentation" }, { "amount": 1000 }]
+          "examples": [
+            {
+              "reason": "insufficient-documentation"
+            },
+            {
+              "amount": 1000
+            }
+          ]
         },
         "timerId": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier used to correlate `startTimer` and `cancelTimer` actions against the same durable timer (Kernel §9.2, §9.7). MUST be unique within the set of currently-running timers for a workflow instance.",
-          "examples": ["reviewDeadline", "followUpReminder"]
+          "description": "Identifier used to correlate `startTimer` and `cancelTimer` actions against the same durable timer (Kernel \u00a79.2, \u00a79.7). MUST be unique within the set of currently-running timers for a workflow instance.",
+          "examples": [
+            "reviewDeadline",
+            "followUpReminder"
+          ]
         },
         "duration": {
           "type": "string",
           "description": "Relative timer duration as an ISO 8601 duration string, used with `action` = `startTimer` when the deadline is relative to the moment the timer starts. Either `duration` or `deadline` MUST be supplied (not both).",
-          "examples": ["PT4H", "P30D"]
+          "examples": [
+            "PT4H",
+            "P30D"
+          ]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
           "description": "Absolute timer deadline as an ISO 8601 datetime, used with `action` = `startTimer` (or on `createTask` to set a task deadline). Either `duration` or `deadline` MUST be supplied on `startTimer` (not both).",
-          "examples": ["2026-05-01T17:00:00Z", "2026-06-30T00:00:00Z"]
+          "examples": [
+            "2026-05-01T17:00:00Z",
+            "2026-06-30T00:00:00Z"
+          ]
         },
         "event": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Event identifier emitted when a `startTimer` timer fires (Kernel §9.2, §4.10). When the timer expires, the processor synthesises an event of this name and routes it through the lifecycle like any other event; if it matches a transition, that transition fires.",
-          "examples": ["timerExpired", "reviewOverdue"]
+          "$ref": "#/$defs/TransitionEvent",
+          "description": "Typed event emitted when a startTimer timer fires (Kernel \u00a79.2). In practice this is almost always a timer branch; firesAs supplies dotted author names when they are not derivable as $timeout.* strings.",
+          "examples": [
+            {
+              "kind": "timer",
+              "timerId": "slaTimer",
+              "source": "custom"
+            },
+            {
+              "kind": "timer",
+              "timerId": "t1",
+              "source": "custom",
+              "firesAs": "deadline.exceeded"
+            }
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Timer expiry event shape for startTimer"
+          }
         },
         "message": {
           "type": "string",
-          "description": "Free-text message recorded to the provenance Facts tier when `action` = `log` (Kernel §8.2, §9.2). Useful for explanatory audit entries that do not change lifecycle or case state.",
-          "examples": ["Eligibility determination completed", "Appeal window opened"]
+          "description": "Free-text message recorded to the provenance Facts tier when `action` = `log` (Kernel \u00a78.2, \u00a79.2). Useful for explanatory audit entries that do not change lifecycle or case state.",
+          "examples": [
+            "Eligibility determination completed",
+            "Appeal window opened"
+          ]
         },
         "description": {
           "type": "string",
@@ -675,13 +1091,16 @@
         "contractRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of a contract in the enclosing document's `contracts` map (Kernel §11). Used with `createTask` to bind the created task to a Formspec Definition or JSON Schema; the binding (formspec vs jsonSchema) is determined by the referenced ContractReference. The kernel delegates all validation to a conformant contract processor.",
-          "examples": ["purchaseOrder", "eligibilityApplication"]
+          "description": "Name of a contract in the enclosing document's `contracts` map (Kernel \u00a711). Used with `createTask` to bind the created task to a Formspec Definition or JSON Schema; the binding (formspec vs jsonSchema) is determined by the referenced ContractReference. The kernel delegates all validation to a conformant contract processor.",
+          "examples": [
+            "purchaseOrder",
+            "eligibilityApplication"
+          ]
         },
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of a Mapping document used to prefill the initial Response of a Formspec-backed task (Runtime Companion §S15). Used with `createTask`; overrides any `prefillMappingRef` declared on the referenced ContractReference for this task.",
+          "description": "URI of a Mapping document used to prefill the initial Response of a Formspec-backed task (Runtime Companion \u00a7S15). Used with `createTask`; overrides any `prefillMappingRef` declared on the referenced ContractReference for this task.",
           "examples": [
             "urn:formspec:example.gov:purchase-order:prefill:1.0.0",
             "https://agency.gov/mappings/eligibility-prefill.json"
@@ -690,7 +1109,7 @@
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of a Mapping document used to project a completed Formspec Response into case state (Runtime Companion §S15). Used with `createTask`; overrides any `responseMappingRef` declared on the referenced ContractReference for this task. If absent (and none is declared on the ContractReference), Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.",
+          "description": "URI of a Mapping document used to project a completed Formspec Response into case state (Runtime Companion \u00a7S15). Used with `createTask`; overrides any `responseMappingRef` declared on the referenced ContractReference for this task. If absent (and none is declared on the ContractReference), Runtime Companion \u00a7S15 forbids automatic host-defined Response-to-case projection.",
           "examples": [
             "urn:formspec:example.gov:purchase-order:response:1.0.0",
             "https://agency.gov/mappings/eligibility-response.json"
@@ -699,24 +1118,34 @@
         "completionEvent": {
           "type": "string",
           "minLength": 1,
-          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `completed` state (Runtime Companion §S15). Used with `createTask` to route successful task completion back into the workflow; the event is processed via the standard lifecycle rules.",
-          "examples": ["purchaseOrderApproved", "eligibilitySubmitted"]
+          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `completed` state (Runtime Companion \u00a7S15). Used with `createTask` to route successful task completion back into the workflow; the event is processed via the standard lifecycle rules.",
+          "examples": [
+            "purchaseOrderApproved",
+            "eligibilitySubmitted"
+          ]
         },
         "failureEvent": {
           "type": "string",
           "minLength": 1,
-          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `failed` state — e.g., validation failure, ledger gating denial, task abandonment, or post-pass check failure (Runtime Companion §S15). Used with `createTask`.",
-          "examples": ["purchaseOrderRejected", "eligibilityRejected"]
+          "description": "Lifecycle event emitted when a Formspec-backed task reaches the `failed` state \u2014 e.g., validation failure, ledger gating denial, task abandonment, or post-pass check failure (Runtime Companion \u00a7S15). Used with `createTask`.",
+          "examples": [
+            "purchaseOrderRejected",
+            "eligibilityRejected"
+          ]
         },
-        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+        "extensions": {
+          "$ref": "#/$defs/ExtensionsMap"
+        }
       }
     },
     "Milestone": {
       "type": "object",
-      "required": ["condition"],
+      "required": [
+        "condition"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -740,19 +1169,25 @@
         },
         "triggerMode": {
           "type": "string",
-          "enum": ["writeSettled"],
+          "enum": [
+            "writeSettled"
+          ],
           "default": "writeSettled",
-          "description": "When the processor evaluates this milestone's condition (Kernel §4.13). `writeSettled` (the default and only currently defined mode) means the condition is evaluated after every durable case-state write — i.e., once the write has been persisted and is observable to subsequent reads. Each milestone fires at most once per case instance: once the condition has evaluated true and a `MilestoneFired` provenance record has been appended, the milestone id is recorded on the case instance and never re-evaluated. Future modes (e.g., reactive event-based firing) will extend this enum without changing existing semantics.",
-          "examples": ["writeSettled"]
+          "description": "When the processor evaluates this milestone's condition (Kernel \u00a74.13). `writeSettled` (the default and only currently defined mode) means the condition is evaluated after every durable case-state write \u2014 i.e., once the write has been persisted and is observable to subsequent reads. Each milestone fires at most once per case instance: once the condition has evaluated true and a `MilestoneFired` provenance record has been appended, the milestone id is recorded on the case instance and never re-evaluated. Future modes (e.g., reactive event-based firing) will extend this enum without changing existing semantics.",
+          "examples": [
+            "writeSettled"
+          ]
         }
       }
     },
     "CaseFile": {
       "type": "object",
-      "required": ["fields"],
+      "required": [
+        "fields"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -762,18 +1197,33 @@
           "additionalProperties": {
             "$ref": "#/$defs/FieldDefinition"
           },
-          "description": "Map of field names to FieldDefinition entries. Each entry defines one typed data slot in the case file — a named column in the case's typed data schema. Fields are append-only at the value level: every mutation is recorded in the case state history (Kernel §5.4), never overwritten in place. Field names MUST be unique within the case file; FEL expressions address them as `caseFile.<fieldName>` (Kernel §7.2).",
+          "description": "Map of field names to FieldDefinition entries. Each entry defines one typed data slot in the case file \u2014 a named column in the case's typed data schema. Fields are append-only at the value level: every mutation is recorded in the case state history (Kernel \u00a75.4), never overwritten in place. Field names MUST be unique within the case file; FEL expressions address them as `caseFile.<fieldName>` (Kernel \u00a77.2).",
           "examples": [
             {
-              "applicantName": { "type": "string" },
-              "annualIncome": { "type": "number" },
-              "applicationDate": { "type": "date" },
-              "eligible": { "type": "boolean" }
+              "applicantName": {
+                "type": "string"
+              },
+              "annualIncome": {
+                "type": "number"
+              },
+              "applicationDate": {
+                "type": "date"
+              },
+              "eligible": {
+                "type": "boolean"
+              }
             },
             {
-              "amount": { "type": "number", "description": "Purchase order amount in USD" },
-              "vendor": { "type": "string" },
-              "approvedBy": { "type": "string" }
+              "amount": {
+                "type": "number",
+                "description": "Purchase order amount in USD"
+              },
+              "vendor": {
+                "type": "string"
+              },
+              "approvedBy": {
+                "type": "string"
+              }
             }
           ],
           "x-lm": {
@@ -792,10 +1242,13 @@
     },
     "CaseRelationship": {
       "type": "object",
-      "required": ["type", "targetCase"],
+      "required": [
+        "type",
+        "targetCase"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -816,8 +1269,15 @@
               "pattern": "^x-[a-z][a-z0-9-]*$"
             }
           ],
-          "description": "Classifier for this cross-case relationship (Kernel §5.5). MUST be one of the five standard values OR an `x-` prefixed vendor extension. Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$`; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata — they do NOT affect lifecycle evaluation. The schema enum mirrors lint rule K-048 so invalid relationship vocabulary fails at schema validation rather than only at lint time.",
-          "examples": ["parent", "child", "sibling", "related", "supersedes", "x-acme-consolidated-with"],
+          "description": "Classifier for this cross-case relationship (Kernel \u00a75.5). MUST be one of the five standard values OR an `x-` prefixed vendor extension. Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$`; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata \u2014 they do NOT affect lifecycle evaluation. The schema enum mirrors lint rule K-048 so invalid relationship vocabulary fails at schema validation rather than only at lint time.",
+          "examples": [
+            "parent",
+            "child",
+            "sibling",
+            "related",
+            "supersedes",
+            "x-acme-consolidated-with"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Classifies the nature of the cross-case relationship"
@@ -835,31 +1295,53 @@
         "relationship": {
           "type": "string",
           "description": "Free-text semantic label describing the nature of the relationship beyond the coarse `type` classifier. Useful for human-oriented audit views and for domain-specific relationship taxonomies.",
-          "examples": ["appeal-of", "household-member", "consolidated-with"]
+          "examples": [
+            "appeal-of",
+            "household-member",
+            "consolidated-with"
+          ]
         },
         "bidirectional": {
           "type": "boolean",
           "default": false,
-          "description": "When `true`, the target case SHOULD also record the inverse relationship so the two cases are mutually discoverable. The kernel does not enforce the inverse link — it is an authoring guidance flag for binding implementations and tooling.",
-          "examples": [true, false]
+          "description": "When `true`, the target case SHOULD also record the inverse relationship so the two cases are mutually discoverable. The kernel does not enforce the inverse link \u2014 it is an authoring guidance flag for binding implementations and tooling.",
+          "examples": [
+            true,
+            false
+          ]
         }
       }
     },
     "FieldDefinition": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["string", "number", "integer", "boolean", "date", "datetime", "object", "array"],
-          "description": "Primitive data type of this case-file field (Kernel §5.3). Used for structural validation of case-state values and for type-aware FEL evaluation. `date` and `datetime` carry ISO 8601 values; `object` and `array` are structurally unconstrained at the kernel layer — richer contracts attach via the contract mechanism (§11).",
-          "examples": ["string", "number", "boolean"]
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "date",
+            "datetime",
+            "object",
+            "array"
+          ],
+          "description": "Primitive data type of this case-file field (Kernel \u00a75.3). Used for structural validation of case-state values and for type-aware FEL evaluation. `date` and `datetime` carry ISO 8601 values; `object` and `array` are structurally unconstrained at the kernel layer \u2014 richer contracts attach via the contract mechanism (\u00a711).",
+          "examples": [
+            "string",
+            "number",
+            "boolean"
+          ]
         },
         "description": {
           "type": "string",
@@ -871,25 +1353,38 @@
         },
         "default": {
           "description": "Default value assigned to this field when a case instance is created and the field has not yet been explicitly set. If omitted, the field begins unset (null under FEL reads). The value MUST be consistent with the declared `type`.",
-          "examples": [0, false, "pending"]
+          "examples": [
+            0,
+            false,
+            "pending"
+          ]
         }
       }
     },
     "ContractReference": {
       "type": "object",
-      "required": ["binding", "ref"],
+      "required": [
+        "binding",
+        "ref"
+      ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
       "properties": {
         "binding": {
           "type": "string",
-          "enum": ["formspec", "jsonSchema"],
+          "enum": [
+            "formspec",
+            "jsonSchema"
+          ],
           "description": "Contract binding type (Kernel S11.2). 'formspec': Formspec Definition (recommended) -- full reactive behavior, cross-field Shapes, Mapping DSL. 'jsonSchema': JSON Schema (baseline) -- structural validation only.",
-          "examples": ["formspec", "jsonSchema"],
+          "examples": [
+            "formspec",
+            "jsonSchema"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Determines the validation capabilities and processing delegation model"
@@ -915,7 +1410,7 @@
         "prefillMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of a Mapping document used to prefill Formspec-backed tasks that use this contract (Runtime Companion §S15). Prefer the same bidirectional Mapping document as `responseMappingRef` when the host supports Mapping Bidirectional.",
+          "description": "URI of a Mapping document used to prefill Formspec-backed tasks that use this contract (Runtime Companion \u00a7S15). Prefer the same bidirectional Mapping document as `responseMappingRef` when the host supports Mapping Bidirectional.",
           "examples": [
             "urn:formspec:example.gov:purchase-order:prefill:1.0.0",
             "https://agency.gov/mappings/eligibility-prefill.json"
@@ -924,7 +1419,7 @@
         "responseMappingRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI of a Mapping document used to project completed Formspec Responses into WOS case state (Runtime Companion §S15). If absent, Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.",
+          "description": "URI of a Mapping document used to project completed Formspec Responses into WOS case state (Runtime Companion \u00a7S15). If absent, Runtime Companion \u00a7S15 forbids automatic host-defined Response-to-case projection.",
           "examples": [
             "urn:formspec:example.gov:purchase-order:response:1.0.0",
             "https://agency.gov/mappings/eligibility-response.json"
@@ -936,7 +1431,7 @@
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -944,16 +1439,21 @@
         "digestAlgorithm": {
           "type": "string",
           "description": "Cryptographic digest algorithm for input/output tamper detection (Kernel S8.3). Implementation-defined but recorded here for auditability.",
-          "examples": ["SHA-256", "SHA-384"]
+          "examples": [
+            "SHA-256",
+            "SHA-384"
+          ]
         },
-        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+        "extensions": {
+          "$ref": "#/$defs/ExtensionsMap"
+        }
       }
     },
     "ExecutionConfig": {
       "type": "object",
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec §10.6"
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
         }
       },
       "additionalProperties": false,
@@ -961,53 +1461,374 @@
         "workflowTimeout": {
           "type": "string",
           "description": "Maximum total workflow duration as ISO 8601 duration (Kernel S9.7).",
-          "examples": ["P365D", "P90D"]
+          "examples": [
+            "P365D",
+            "P90D"
+          ]
         },
         "defaultTaskTimeout": {
           "type": "string",
-          "description": "Default timeout for human tasks as an ISO 8601 duration (Kernel §9.7). Applied when a `createTask` action does not specify its own `deadline`; fires a `$timeout.task` event on expiry.",
-          "examples": ["P7D", "P30D"]
+          "description": "Default timeout for human tasks as an ISO 8601 duration (Kernel \u00a79.7). Applied when a `createTask` action does not specify its own `deadline`; fires a `$timeout.task` event on expiry.",
+          "examples": [
+            "P7D",
+            "P30D"
+          ]
         },
         "defaultServiceTimeout": {
           "type": "string",
           "description": "Default timeout for external service invocations as ISO 8601 duration.",
-          "examples": ["PT30S", "PT5M"]
+          "examples": [
+            "PT30S",
+            "PT5M"
+          ]
         },
         "compensable": {
           "type": "boolean",
           "default": false,
-          "description": "When `true`, the workflow scope is compensable (Kernel §9.5). Enables the compensation seam so that Actions carrying a `compensatingAction` participate in semantically meaningful reversal. Detailed execution semantics (reverse ordering, pivot steps) live in the Lifecycle Detail companion.",
-          "examples": [true, false]
+          "description": "When `true`, the workflow scope is compensable (Kernel \u00a79.5). Enables the compensation seam so that Actions carrying a `compensatingAction` participate in semantically meaningful reversal. Detailed execution semantics (reverse ordering, pivot steps) live in the Lifecycle Detail companion.",
+          "examples": [
+            true,
+            false
+          ]
         },
         "instanceVersioning": {
           "type": "string",
-          "enum": ["pinned", "migrateable"],
+          "enum": [
+            "pinned",
+            "migrateable"
+          ],
           "default": "pinned",
-          "description": "Instance versioning policy (Kernel §9.6). 'pinned' (default): each running instance stays bound to the (url, version) of the Kernel Document that created it. 'migrateable': instances MAY be explicitly migrated to a newer version via a recorded migration operation.",
-          "examples": ["pinned", "migrateable"]
+          "description": "Instance versioning policy (Kernel \u00a79.6). 'pinned' (default): each running instance stays bound to the (url, version) of the Kernel Document that created it. 'migrateable': instances MAY be explicitly migrated to a newer version via a recorded migration operation.",
+          "examples": [
+            "pinned",
+            "migrateable"
+          ]
         },
-        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+        "extensions": {
+          "$ref": "#/$defs/ExtensionsMap"
+        }
       }
-    }
-  ,
+    },
     "ExtensionsMap": {
       "type": "object",
-      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel \u00a710.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained \u2014 any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
       "examples": [
-        { "x-acme-audit-ref": "AUD-2026-001" },
-        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+        {
+          "x-acme-audit-ref": "AUD-2026-001"
+        },
+        {
+          "x-vendor-tier": "gold",
+          "x-vendor-region": "us-east"
+        }
       ],
-      "propertyNames": { "pattern": "^x-" },
+      "propertyNames": {
+        "pattern": "^x-"
+      },
       "additionalProperties": {}
     },
     "JsonSchemaUri": {
       "type": "string",
       "format": "uri",
-      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only \u2014 runtime processors MUST ignore this field.",
       "examples": [
         "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
         "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
       ]
+    },
+    "TransitionEventTimer": {
+      "type": "object",
+      "required": [
+        "kind",
+        "timerId",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "timer",
+          "description": "Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel \u00a74.5\u2013\u00a74.10). The literal MUST equal this branch\u2019s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal \"$error\"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.",
+          "examples": [
+            "timer",
+            "timer"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "TransitionEvent branch discriminator (timer)"
+          }
+        },
+        "timerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Timer correlation identifier within the workflow instance (Kernel \u00a79.2, \u00a79.7). Paired with startTimer and cancelTimer actions. Together with source and optional firesAs it determines which process_event string the runtime delivers when the timer elapses; authors SHOULD reuse the same timerId on the matching startTimer action.",
+          "examples": [
+            "slaTimer",
+            "reviewDeadline"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the durable timer instance for expiry dispatch"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "task",
+            "service",
+            "state",
+            "signal",
+            "workflow",
+            "custom"
+          ],
+          "description": "Kernel \u00a74.10 timeout category used when synthesizing $timeout.* dispatch names. task, service, state, signal, and workflow map to fixed $timeout.<category> strings; custom covers author-defined timers and dotted names, often combined with firesAs.",
+          "examples": [
+            "task",
+            "custom"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Timeout category for synthesized timer event names"
+          }
+        },
+        "duration": {
+          "type": "string",
+          "description": "ISO 8601 duration when authoring a relative timer alongside this transition (optional).",
+          "examples": [
+            "PT4H",
+            "P30D"
+          ]
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Absolute deadline when authoring an absolute timer alongside this transition (optional).",
+          "examples": [
+            "2026-05-01T17:00:00Z",
+            "2026-06-30T00:00:00Z"
+          ]
+        },
+        "firesAs": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact process_event name emitted when a startTimer expires if it cannot be derived from timerId and source alone (Kernel \u00a79.2). Use for dotted author timer names such as deadline.exceeded instead of a synthesized $timeout.* name.",
+          "examples": [
+            "deadline.exceeded",
+            "appeal.window.closed"
+          ]
+        }
+      }
+    },
+    "TransitionEventMessage": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "message",
+          "description": "Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel \u00a74.5\u2013\u00a74.10). The literal MUST equal this branch\u2019s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal \"$error\"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.",
+          "examples": [
+            "message",
+            "message"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "TransitionEvent branch discriminator (message)"
+          }
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^$].*$",
+          "description": "Author-defined message event name for explicit process_event delivery (Kernel \u00a74.5). MUST NOT begin with `$` because reserved kernel prefixes are modeled as other TransitionEvent kinds. Dots are allowed as a namespacing convention only.",
+          "examples": [
+            "submit",
+            "appeal.filed"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "External message name matched against process_event"
+          }
+        },
+        "correlationKey": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional correlation key for external message routing (Kernel \u00a74.5 companion).",
+          "examples": [
+            "case-123",
+            "instance-456"
+          ]
+        },
+        "data": {
+          "description": "Optional opaque payload carried with the message for bindings that support structured events.",
+          "examples": [
+            {
+              "reason": "x"
+            },
+            {
+              "amount": 1
+            }
+          ]
+        }
+      }
+    },
+    "TransitionEventSignal": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "scope"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "signal",
+          "description": "Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel \u00a74.5\u2013\u00a74.10). The literal MUST equal this branch\u2019s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal \"$error\"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.",
+          "examples": [
+            "signal",
+            "signal"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "TransitionEvent branch discriminator (signal)"
+          }
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(\\$join|\\$compensation\\.complete|[A-Za-z0-9][A-Za-z0-9._-]*)$",
+          "description": "Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel \u00a74.8) and `$compensation.complete` (LCD \u00a75.9), plus author-defined identifiers without a leading `$`.",
+          "examples": [
+            "$join",
+            "$compensation.complete"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Signal identifier including $join for parallel completion"
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "instance",
+            "related",
+            "broadcast"
+          ],
+          "description": "Delivery scope for signals (Kernel \u00a74.10). instance targets the current workflow instance; related targets correlated cases; broadcast targets all subscribed instances per binding rules.",
+          "examples": [
+            "instance",
+            "related"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "How widely a signal is delivered when it fires"
+          }
+        }
+      }
+    },
+    "TransitionEventCondition": {
+      "type": "object",
+      "required": [
+        "kind",
+        "expression"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "condition",
+          "description": "Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel \u00a74.5\u2013\u00a74.10). The literal MUST equal this branch\u2019s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal \"$error\"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.",
+          "examples": [
+            "condition",
+            "condition"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "TransitionEvent branch discriminator (condition)"
+          }
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FEL predicate evaluated in continuous evaluation mode after case-file mutation (Runtime Companion \u00a710.3). In event-driven mode this branch does not participate in explicit process_event name matching; guards still constrain firing order.",
+          "examples": [
+            "caseFile.amount > 10000",
+            "caseFile.ready == true"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Continuous-mode guard expression for post-mutation rescan"
+          }
+        }
+      }
+    },
+    "TransitionEventError": {
+      "type": "object",
+      "required": [
+        "kind",
+        "code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "error",
+          "description": "Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel \u00a74.5\u2013\u00a74.10). The literal MUST equal this branch\u2019s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal \"$error\"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.",
+          "examples": [
+            "error",
+            "error"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "TransitionEvent branch discriminator (error)"
+          }
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Normative error code for synthetic `$error` class dispatch (Kernel \u00a74.10). Dot-separated codes align with integration failures, contract violations, and processor faults.",
+          "examples": [
+            "kernel.error",
+            "contract.violation"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Error code carried on synthetic error-class transitions"
+          }
+        },
+        "actionPath": {
+          "type": "string",
+          "description": "JSON Pointer to the failing action when the runtime attaches structural context (optional).",
+          "examples": [
+            "/states/draft/onEntry/0",
+            "/states/review/transitions/1"
+          ]
+        }
+      }
+    },
+    "TransitionEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TransitionEventTimer"
+        },
+        {
+          "$ref": "#/$defs/TransitionEventMessage"
+        },
+        {
+          "$ref": "#/$defs/TransitionEventSignal"
+        },
+        {
+          "$ref": "#/$defs/TransitionEventCondition"
+        },
+        {
+          "$ref": "#/$defs/TransitionEventError"
+        }
+      ],
+      "description": "Typed union for transition triggers and startTimer expiry events (Kernel \u00a74.5\u2013\u00a74.10). Replaces legacy free-form strings with five closed kinds; the runtime inbox remains string-named while documents carry structured objects for validation, linting, and authoring assistance."
     }
   }
 }

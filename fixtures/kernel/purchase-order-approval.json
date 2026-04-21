@@ -7,7 +7,6 @@
   "description": "A simple internal workflow: purchase order submitted by an employee, approved or rejected by a manager. No governance structures. Proves the kernel stands alone without Layer 1 coupling.",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
     {
       "id": "requester",
@@ -25,13 +24,14 @@
       "description": "Automated procurement system that processes approved orders"
     }
   ],
-
   "lifecycle": {
     "initialState": "submitted",
     "states": {
       "submitted": {
         "type": "atomic",
-        "tags": ["intake"],
+        "tags": [
+          "intake"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -41,22 +41,35 @@
         ],
         "transitions": [
           {
-            "event": "approve",
+            "event": {
+              "kind": "message",
+              "name": "approve"
+            },
             "target": "approved",
             "guard": "caseFile.amount <= 50000",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Manager approves the purchase order (under $50k threshold)"
           },
           {
-            "event": "approve",
+            "event": {
+              "kind": "message",
+              "name": "approve"
+            },
             "target": "pendingDirectorApproval",
             "guard": "caseFile.amount > 50000",
             "description": "Orders over $50k require director approval"
           },
           {
-            "event": "reject",
+            "event": {
+              "kind": "message",
+              "name": "reject"
+            },
             "target": "rejected",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Manager rejects the purchase order"
           }
         ]
@@ -65,14 +78,24 @@
         "type": "atomic",
         "transitions": [
           {
-            "event": "approve",
+            "event": {
+              "kind": "message",
+              "name": "approve"
+            },
             "target": "approved",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           },
           {
-            "event": "reject",
+            "event": {
+              "kind": "message",
+              "name": "reject"
+            },
             "target": "rejected",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           }
         ]
       },
@@ -97,7 +120,10 @@
         ],
         "transitions": [
           {
-            "event": "orderProcessed",
+            "event": {
+              "kind": "message",
+              "name": "orderProcessed"
+            },
             "target": "completed"
           }
         ]
@@ -121,12 +147,18 @@
         ],
         "transitions": [
           {
-            "event": "resubmit",
+            "event": {
+              "kind": "message",
+              "name": "resubmit"
+            },
             "target": "submitted",
             "description": "Requester revises and resubmits the order"
           },
           {
-            "event": "cancel",
+            "event": {
+              "kind": "message",
+              "name": "cancel"
+            },
             "target": "cancelled"
           }
         ]
@@ -149,7 +181,6 @@
       }
     }
   },
-
   "caseFile": {
     "fields": {
       "orderId": {
@@ -186,7 +217,6 @@
       }
     }
   },
-
   "contracts": {
     "purchaseOrderForm": {
       "binding": "formspec",
@@ -194,7 +224,6 @@
       "description": "Formspec Definition for the purchase order submission form"
     }
   },
-
   "execution": {
     "workflowTimeout": "P90D",
     "defaultTaskTimeout": "P7D",

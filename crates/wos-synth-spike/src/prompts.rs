@@ -18,15 +18,13 @@
 ///
 /// Path is relative to this source file (`src/prompts.rs`): three levels up
 /// reaches the workspace root, then into `schemas/kernel/`.
-const KERNEL_SCHEMA: &str =
-    include_str!("../../../schemas/kernel/wos-kernel.schema.json");
+const KERNEL_SCHEMA: &str = include_str!("../../../schemas/kernel/wos-kernel.schema.json");
 
 /// Compact spec summary for the kernel tier.
 ///
 /// The LLM spec guide distils the normative behaviour in a size that fits
 /// comfortably inside a single context window.
-const KERNEL_SPEC_SUMMARY: &str =
-    include_str!("../../../specs/kernel/spec.llm.md");
+const KERNEL_SPEC_SUMMARY: &str = include_str!("../../../specs/kernel/spec.llm.md");
 
 /// Build the initial generation prompt from a plain-English problem statement.
 ///
@@ -150,7 +148,10 @@ mod tests {
     fn generate_prompt_embeds_problem() {
         let problem = "unique-sentinel-string-12345";
         let prompt = build_generate_prompt(problem);
-        assert!(prompt.contains(problem), "generate prompt must embed the problem text");
+        assert!(
+            prompt.contains(problem),
+            "generate prompt must embed the problem text"
+        );
     }
 
     #[test]
@@ -170,7 +171,10 @@ mod tests {
     fn repair_prompt_embeds_prior_attempt() {
         let attempt = r#"{"$wosKernel":"1.0","unique":true}"#;
         let prompt = build_repair_prompt(attempt, &[]);
-        assert!(prompt.contains(attempt), "repair prompt must embed the prior attempt JSON");
+        assert!(
+            prompt.contains(attempt),
+            "repair prompt must embed the prior attempt JSON"
+        );
     }
 
     #[test]

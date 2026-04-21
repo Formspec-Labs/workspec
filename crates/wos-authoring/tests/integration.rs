@@ -9,7 +9,7 @@
 //! document to JSON (save), parses it back (load), and asserts
 //! structural round-trip equality plus a realistic topology shape.
 
-use wos_authoring::{ActorKind, ImpactLevel, StateKind, WosProject};
+use wos_authoring::{ActorKind, ImpactLevel, StateKind, TransitionEvent, WosProject};
 use wos_core::KernelDocument;
 
 /// One long integration scenario. Mirrors the shape of
@@ -32,7 +32,14 @@ fn authoring_session_round_trip_with_undo_redo() {
         .expect("add system actor");
 
     // ── States ────────────────────────────────────────────────────────────
-    for id in ["submitted", "pendingDirectorApproval", "approved", "rejected", "cancelled"] {
+    for id in [
+        "submitted",
+        "pendingDirectorApproval",
+        "approved",
+        "rejected",
+        "cancelled",
+        "archived",
+    ] {
         project
             .add_state(id, StateKind::Atomic)
             .unwrap_or_else(|err| panic!("add_state({id}) must succeed: {err:?}"));
@@ -77,6 +84,18 @@ fn authoring_session_round_trip_with_undo_redo() {
             None,
         )
         .expect("director rejection");
+    project
+        .add_transition_typed(
+            "submitted",
+            "archived",
+            Some(TransitionEvent::Message {
+                name: "archive".into(),
+                correlation_key: Some("corr-typed-1".into()),
+                data: None,
+            }),
+            None,
+        )
+        .expect("typed message transition with correlation metadata");
 
     // ── Governance + milestone + extension surface ────────────────────────
     project
@@ -107,11 +126,7 @@ fn authoring_session_round_trip_with_undo_redo() {
     );
     project.redo().expect("redo timer");
     assert!(
-        project
-            .snapshot()
-            .extensions
-            .get("x-wos-timers")
-            .is_some(),
+        project.snapshot().extensions.get("x-wos-timers").is_some(),
         "redo must have restored x-wos-timers"
     );
     // Redo the deontic (LIFO pop from the redo stack, restoring the
@@ -129,8 +144,7 @@ fn authoring_session_round_trip_with_undo_redo() {
     let json = serde_json::to_string_pretty(&exported).expect("serialize KernelDocument");
 
     // ── Load: parse JSON back into a KernelDocument ──────────────────────
-    let reloaded: KernelDocument =
-        serde_json::from_str(&json).expect("parse round-tripped JSON");
+    let reloaded: KernelDocument = serde_json::from_str(&json).expect("parse round-tripped JSON");
 
     // ── Round-trip assertions ────────────────────────────────────────────
     assert_eq!(reloaded.wos_kernel, "1.0");
@@ -160,27 +174,46 @@ fn authoring_session_round_trip_with_undo_redo() {
             "pendingDirectorApproval",
             "approved",
             "rejected",
-            "cancelled"
+            "cancelled",
+            "archived"
         ]
+    );
+
+    let archive_typed = reloaded.lifecycle.states["submitted"]
+        .transitions
+        .iter()
+        .find(|t| t.target == "archived")
+        .expect("typed archive transition must survive round-trip");
+    assert!(
+        matches!(
+            &archive_typed.event,
+            Some(TransitionEvent::Message {
+                name,
+                correlation_key: Some(ck),
+                ..
+            }) if name == "archive" && ck == "corr-typed-1"
+        ),
+        "expected typed Message event with correlationKey, got {:?}",
+        archive_typed.event
     );
 
     // Guarded fork: `submitted` has two `approve` transitions distinguished by guard.
     let submitted_transitions = &reloaded.lifecycle.states["submitted"].transitions;
     let approve_transitions: Vec<&_> = submitted_transitions
         .iter()
-        .filter(|t| t.event.as_deref() == Some("approve"))
+        .filter(|t| {
+            t.event
+                .as_ref()
+                .is_some_and(|e| e.runtime_dispatch_label() == "approve")
+        })
         .collect();
     assert_eq!(approve_transitions.len(), 2, "guarded fork preserved");
-    assert!(
-        approve_transitions
-            .iter()
-            .any(|t| t.guard.as_deref() == Some("caseFile.amount <= 50000")),
-    );
-    assert!(
-        approve_transitions
-            .iter()
-            .any(|t| t.guard.as_deref() == Some("caseFile.amount > 50000")),
-    );
+    assert!(approve_transitions
+        .iter()
+        .any(|t| t.guard.as_deref() == Some("caseFile.amount <= 50000")),);
+    assert!(approve_transitions
+        .iter()
+        .any(|t| t.guard.as_deref() == Some("caseFile.amount > 50000")),);
 
     // Governance surface.
     assert!(reloaded.contracts.contains_key("purchaseOrderForm"));
