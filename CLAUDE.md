@@ -15,6 +15,8 @@ Two separable claims:
 
 WOS does NOT replace the workflow engine. It targets Temporal / Restate / Camunda / Step Functions as execution substrates; the engine handles persistence, timers, crash recovery. WOS governs the transitions that matter for rights, audit, and AI oversight.
 
+At stack end state, WOS contributes governance truth to one portable case record. Durable engines orchestrate; they do not become evidentiary truth. Retries, stalls, resumes, compensation, human overrides, AI recommendations, signature affirmations, and policy-relevant transitions must remain exportable through provenance and Trellis custody when they affect the case.
+
 ## Operating Context — READ THESE BEFORE DECIDING
 
 WOS is one spec in a three-spec stack. Architectural decisions routinely cross spec boundaries. Consult in this order before any non-trivial decision:
@@ -22,9 +24,10 @@ WOS is one spec in a three-spec stack. Architectural decisions routinely cross s
 1. **[`../.claude/user_profile.md`](../.claude/user_profile.md)** — Owner's operating preferences. Economic model (minutes-not-days × Imp × Debt); design philosophy (opinionated, closed taxonomies, named seams); communication style (terse, opinionated, hedges labeled); and the **maximalist one-shot delivery** rule — no stubs, no `TODO: implement later`, no placeholder returns. If AI builds it, it ships complete and working in one pass; iterate on working code, not half-built code. Surface blockers instead of papering over with stubs.
 2. **[`../.claude/vision-model.md`](../.claude/vision-model.md)** — Stack-wide vision captured 2026-04-20. The **WOS section is fully populated**: settled architectural commitments, v1.0 scope snapshot, active uncertainties (α DocuSign parity bar, γ durable-execution backend, δ `wos-runtime` role), and WOS-specific decision heuristics (Trellis-boundary check, SBA+SaaS scoping, named-seams invariant, module-bottleneck sequencing). Consult before any decision that crosses subsystems, spec boundaries, or re-opens a foundational question.
 3. **[`../STACK.md`](../STACK.md)** — Public-facing integrative doc covering the three-spec stack and the five cross-layer contracts. Canonical source for how Formspec + WOS + Trellis compose.
-4. **[`../CLAUDE.md`](../CLAUDE.md)** — Parent repo guide. Filemap conventions, TypeScript tier, Python tier, worktree rules, and the Formspec-side spec authoring contract apply wherever cross-spec work touches the parent tree.
+4. **[`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md)** — Active platform decision register for end-state commitments, implementation leans, forks, kill criteria, and organizational/product constraints. Consult before changing durable-runtime assumptions, signing semantics, custody/export behavior, product-vs-engineering proof claims, or ledger-visible workflow truth.
+5. **[`../CLAUDE.md`](../CLAUDE.md)** — Parent repo guide. Filemap conventions, TypeScript tier, Python tier, worktree rules, and the Formspec-side spec authoring contract apply wherever cross-spec work touches the parent tree.
 
-**Conflict resolution:** direct owner signals in the current conversation > these four docs > this CLAUDE.md > generic defaults. If any of these docs conflicts with owner signals, update the doc — don't work around it.
+**Conflict resolution:** direct owner signals in the current conversation > these docs > this CLAUDE.md > generic defaults. If any of these docs conflicts with owner signals, update the doc — don't work around it.
 
 ## Foundational answers (stack Q1-Q4, specialized for WOS)
 
@@ -72,6 +75,8 @@ From the vision model:
 
 **Trellis-boundary check (first heuristic):** is the question about cryptographic integrity, content-addressed storage, signed envelopes, checkpoint seals, export bundles, or federation/transparency logs? If yes — Trellis concern. Don't invent WOS-side primitives. WOS emits `SignatureAffirmation` and other provenance records; Trellis anchors them through `custodyHook`.
 
+**Signature shortcut rule:** product shortcuts may exist only as workflow-lite paths over the same WOS `SignatureAffirmation` semantics and Trellis custody/export path. Do not create a second meaning of "signed" in product code, intake-only code, or exporter glue.
+
 ## Layer structure
 
 WOS has one required layer and three optional ones. Cross-cutting profiles and companions attach without new kernel extension points.
@@ -91,7 +96,7 @@ WOS has one required layer and three optional ones. Cross-cutting profiles and c
   - **`wos-core`** — typed models, lifecycle evaluation, deontic rules, provenance, contract ordering. Semantics library.
   - **`wos-lint`** — static analysis; 116 rules across three tiers, all with test witnesses. See [`LINT-MATRIX.md`](LINT-MATRIX.md).
   - **`wos-conformance`** — dynamic scenario runner; JSON test fixtures drive the runtime and assert correct behavior.
-  - **`wos-runtime`** — orchestration layer; persistence, queues, simulated time, milestone evaluation. The `DurableRuntime` trait extracts below the center-vs-adapter line (WOS-T3 closed; Restate selected).
+  - **`wos-runtime`** — orchestration layer; persistence, queues, simulated time, milestone evaluation. The `DurableRuntime` trait extracts below the center-vs-adapter line; Restate, Temporal, and other engines are adapter choices unless a recorded spike and owner decision close the fork.
   - **`wos-formspec-binding`** — Formspec coprocessor; prefill, response validation, mapping form data into case state. Seam 2 implementation.
   - **`wos-export`** — exporter; provenance → Trellis `custodyHook` records.
   - **`wos-authoring`**, **`wos-mcp`**, **`wos-synth-*`** — MVP authoring/tooling surfaces.
@@ -107,7 +112,7 @@ WOS has one required layer and three optional ones. Cross-cutting profiles and c
 
 ### Logic ownership — Rust is the spec authority
 
-WOS business logic lives in Rust crates. The `wos-core` crate is the semantics library; `wos-runtime` is the in-memory durable-execution adapter and conformance oracle; production adapters (Restate, optionally Temporal, trigger-gated Camunda / Step Functions) sit below the `DurableRuntime` trait. Do NOT add spec behavior in a scripting layer when it belongs in the Rust center; extend `wos-core` and expose it through the trait.
+WOS business logic lives in Rust crates. The `wos-core` crate is the semantics library; `wos-runtime` is the in-memory durable-execution adapter and conformance oracle; production adapters (Restate, Temporal, trigger-gated Camunda / Step Functions, or another engine) sit below the `DurableRuntime` trait. Do NOT add spec behavior in a scripting layer when it belongs in the Rust center; extend `wos-core` and expose it through the trait.
 
 ### FEL reuse
 
@@ -121,7 +126,7 @@ Provenance records are tiered (`ProvenanceKind` tier-typing, WOS-T1 closed). Eve
 
 - **Center:** `wos-core` + `wos-runtime` (semantics + in-memory oracle).
 - **Trait:** `DurableRuntime` (below runtime; the line between spec-authoritative semantics and adapter-tier orchestration).
-- **Adapters:** in-memory (dev/test + conformance oracle), Restate (production SaaS runtime — γ decided), Temporal (optional), Camunda / Step Functions (trigger-gated).
+- **Adapters:** in-memory (dev/test + conformance oracle), Restate or Temporal as production SaaS runtime after spike evidence and owner decision, Camunda / Step Functions (trigger-gated).
 
 New runtime capabilities MUST be implementable in the in-memory adapter AND the production adapter; conformance fixtures pass against both. Three-way agreement (spec + reference + production adapter) is the verification posture.
 
@@ -172,8 +177,8 @@ Current 1.0 scope, active uncertainties, and trigger-gated items are canonically
 
 Highlights (see vision model for full list):
 
-- **Must close:** Kernel closure (#20, #F3b §10.3 Tasks 1/2/4/5, #22a provenance tier-typing **closed**, cross-reference shape ADR); §4.5 structural merges (owner decision pending); durable-execution trait + Restate adapter (**WOS-T3 closed**); `custodyHook` shape (**WOS-T1 closed**); Signature Profile (**WOS-T4 active**); every normative MUST has a passing Tested fixture.
-- **Trigger-gated:** additional engine adapters (Camunda, Step Functions), SCXML interop, statutory deadline chains.
+- **Must close:** Kernel closure (#20, #F3b §10.3 Tasks 1/2/4/5, #22a provenance tier-typing **closed**, cross-reference shape ADR); §4.5 structural merges (owner decision pending); durable-execution trait plus one production adapter selected by recorded spike/owner decision; `custodyHook` shape (**WOS-T1 closed**); Signature Profile (**WOS-T4 active**); every normative MUST has a passing Tested fixture.
+- **Trigger-gated:** additional engine adapters (Camunda, Step Functions), SCXML interop, additional statutory-deadline profiles beyond the shared stack clock contract.
 - **NOT WOS scope (Trellis territory):** Merkle provenance chains, full SCITT strictness, Federation Profile, checkpoint seals, transparency-log submission, certificate-of-completion export bundle format.
 
 ## WOS-specific decision heuristics
