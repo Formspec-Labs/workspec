@@ -913,8 +913,8 @@
     "OverrideRecord": {
       "$comment": "This $def is intentionally unreachable from the document root. It is a shape-catalog entry: processors and provenance writers consume it out-of-band when serializing override events to the audit log. There is no top-level `overrideRecords` array in this schema by design — overrides are runtime data, not authoring inputs. The 1:1 mapping to OverrideAuthority policy switches is documented in the description and enforced by processors, not by JSON Schema. See thoughts/plans/ for any future work that would plumb this into a typed provenance container.",
       "type": "object",
-      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted).",
-      "required": ["rationale", "authorityVerification", "supportingEvidence"],
+      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted). `id` and `caseId` carry the custody-bound record and case identifiers pinned by the WOS-Trellis append surface.",
+      "required": ["id", "caseId", "rationale", "authorityVerification", "supportingEvidence"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -922,6 +922,20 @@
       },
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_gov_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-record-typeid",
+          "description": "TypeID-structured identifier for this governance runtime record. Reserved family prefix: `gov`.",
+          "examples": ["sba-poc_gov_01jqrpd32jf8xtx9qxkkv3rqsd"]
+        },
+        "caseId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-case-typeid",
+          "description": "TypeID-structured case identifier of the case this override belongs to. Reserved family prefix: `case`.",
+          "examples": ["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"]
+        },
         "rationale": {
           "type": "object",
           "description": "Structured rationale explaining the basis for the override (Governance S7.3 item 1). The rationale MUST be human-readable and MAY cite regulatory authorities, prior cases, or factual findings. The shape is intentionally permissive — agencies declare their own rationale fields under `extensions` — but `summary` is REQUIRED so the audit trail always carries a one-line explanation.",

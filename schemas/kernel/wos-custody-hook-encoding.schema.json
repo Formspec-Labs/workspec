@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/kernel/custody-hook-encoding/1.0",
+  "title": "WOS Custody Hook Append Input",
+  "description": "JSON serialization of the WOS-owned authored-record surface crossing the Kernel `custodyHook` seam. This is a runtime artifact, not an authored WOS document type, so it intentionally has no `$wos*` marker. The root object is the four-field append input defined by WOS Custody Hook Encoding §1.3. The live seam carries raw dCBOR bytes in `record`; this schema models the JSON host representation used by fixtures, tests, and debug export, where those bytes are serialized as base64 text.",
+  "type": "object",
+  "required": [
+    "caseId",
+    "recordId",
+    "eventType",
+    "record"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "caseId": {
+      "$ref": "#/$defs/CaseTypeId"
+    },
+    "recordId": {
+      "$ref": "#/$defs/RecordTypeId"
+    },
+    "eventType": {
+      "$ref": "#/$defs/WosEventType"
+    },
+    "record": {
+      "type": "string",
+      "minLength": 4,
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+      "contentEncoding": "base64",
+      "contentMediaType": "application/cbor",
+      "description": "Base64-encoded dCBOR bytes of the authored WOS record. At the seam this field is raw dCBOR bytes; this schema models the JSON serialization used by fixtures and test harnesses.",
+      "examples": [
+        "oA=="
+      ]
+    }
+  },
+  "$defs": {
+    "TypeIdTail": {
+      "type": "string",
+      "pattern": "^[0-9a-hjkmnp-tv-z]{26}$",
+      "description": "Lowercase Crockford base32 encoding of a UUIDv7 payload, 26 characters.",
+      "examples": [
+        "0123456789abcdefghjkmnpqrs"
+      ]
+    },
+    "TenantPrefix": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Deployment tenant prefix segment of a WOS TypeID used to namespace case and record ids.",
+      "examples": [
+        "default",
+        "sba-poc"
+      ]
+    },
+    "CaseTypeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+      "format": "wos-case-typeid",
+      "description": "TypeID-structured case identifier with the reserved `case` family prefix. WOS passes this value as the case side of the custody append idempotency tuple so Trellis can detect duplicate semantic appends for the same case.",
+      "examples": [
+        "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "default_case_01hw7rm71vfay8vvw14d2pf2db"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable case identity used as one half of the WOS-owned idempotency tuple"
+      }
+    },
+    "ReservedRecordTypeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*_(prov|gov|ai|assurance)_[0-9a-hjkmnp-tv-z]{26}$",
+      "format": "wos-record-typeid",
+      "description": "TypeID-structured authored-record identifier using one of the reserved WOS family prefixes.",
+      "examples": [
+        "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "sba-poc_gov_01hw7rm71vfay8vvw14d2pf2db"
+      ]
+    },
+    "VendorRecordTypeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*_x-[a-z][a-z0-9-]*(?:-[a-z][a-z0-9-]*)+_[0-9a-hjkmnp-tv-z]{26}$",
+      "format": "wos-record-typeid",
+      "description": "TypeID-structured authored-record identifier using a vendor-owned `x-{vendor}-{kind}` family prefix.",
+      "examples": [
+        "sba-poc_x-acme-attestation_01fwhe4ydsfk1shwa919qcpgkg"
+      ]
+    },
+    "RecordTypeId": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReservedRecordTypeId"
+        },
+        {
+          "$ref": "#/$defs/VendorRecordTypeId"
+        }
+      ],
+      "description": "TypeID-structured authored-record identifier using either a reserved WOS family prefix or a vendor-owned family prefix.",
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable authored-record identity used as one half of the WOS-owned idempotency tuple"
+      }
+    },
+    "WosEventType": {
+      "type": "string",
+      "pattern": "^wos\\.(kernel|governance|ai|assurance)\\.[a-z][A-Za-z0-9-]*$",
+      "description": "Outcome-neutral WOS event-type identifier in canonical `wos.<layer>.<recordKind>` form. This field names the authored record family crossing the custodyHook seam without encoding success, failure, or policy outcome.",
+      "examples": [
+        "wos.kernel.stateTransition",
+        "wos.governance.overrideRecord",
+        "wos.ai.autonomyDemotion",
+        "wos.assurance.attestation"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Registered WOS-owned event family identifier for the authored record"
+      }
+    },
+    "IdempotencySource": {
+      "type": "object",
+      "required": [
+        "caseId",
+        "recordId"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "caseId": {
+          "$ref": "#/$defs/CaseTypeId"
+        },
+        "recordId": {
+          "$ref": "#/$defs/RecordTypeId"
+        }
+      },
+      "description": "The WOS-owned semantic idempotency input consumed by the Trellis binding after dCBOR encoding and domain separation. `eventType` is intentionally excluded.",
+      "examples": [
+        {
+          "caseId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordId": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+        }
+      ]
+    },
+    "CustodyAppendReceipt": {
+      "type": "object",
+      "required": [
+        "canonical_event_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "canonical_event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase hex rendering of the 32-byte Trellis canonical_event_hash returned to WOS when represented as JSON. WOS stores this value on accepted provenance so downstream exports can cite the exact anchored canonical event.",
+          "examples": [
+            "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The first pinned Trellis return value WOS stores and cites downstream"
+          }
+        }
+      },
+      "description": "Minimum WOS-facing receipt for a successful `custodyHook` append."
+    }
+  }
+}

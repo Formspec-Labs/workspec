@@ -11,6 +11,7 @@ export * as Advanced from './advanced';
 export * from './equity';
 export * from './verification-report';
 export * from './semantic-profile';
+export * from './signature-profile';
 export * from './lifecycle-detail';
 export * from './correspondence-metadata';
 export * from './notification-template';

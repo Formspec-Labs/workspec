@@ -70,6 +70,34 @@ class TestHappyPath:
         errors = list(validator.iter_errors(doc))
         assert errors == [], f"x-prefixed root key rejected: {errors}"
 
+    def test_reference_fixture_publishes_wos_custody_identifiers(self, validator):
+        doc = json.loads(REGISTRY_FIXTURE.read_text())
+        errors = list(validator.iter_errors(doc))
+        assert errors == [], f"reference fixture rejected: {errors}"
+
+        extensions = doc.get("extensions", {})
+        assert extensions.get("x-wos-owning-spec-version"), (
+            "reference fixture must publish x-wos-owning-spec-version"
+        )
+
+        event_types = extensions.get("x-wos-custody-event-types", [])
+        published_event_types = {entry["eventType"] for entry in event_types}
+        assert {
+            "wos.kernel.stateTransition",
+            "wos.governance.overrideRecord",
+            "wos.ai.autonomyDemotion",
+            "wos.assurance.attestation",
+        } <= published_event_types, (
+            "reference fixture must publish WOS-owned custody event types for "
+            "kernel, governance, ai, and assurance"
+        )
+
+        family_prefixes = extensions.get("x-wos-typeid-family-prefixes", [])
+        published_prefixes = {entry["prefix"] for entry in family_prefixes}
+        assert {"case", "prov", "gov", "ai", "assurance"} <= published_prefixes, (
+            "reference fixture must publish the reserved WOS TypeID family prefixes"
+        )
+
 
 class TestNegativeCases:
     """Explicitly required by the task: at least 3 negative cases."""

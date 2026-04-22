@@ -4,6 +4,46 @@
   "version": "1.0.0",
   "title": "WOS Core Extension Registry — Reference",
   "description": "Reference example registry cataloging the six kernel seams (Kernel §10) plus a Trellis distributed-trust custody profile entry. Demonstrates lifecycle, composition, vendor prefix, and replacedBy fields. Not a normative WOS Working Group registry — illustrative only.",
+  "extensions": {
+    "x-wos-owning-spec-version": "1.0.0-draft.1",
+    "x-wos-custody-event-types": [
+      {
+        "eventType": "wos.kernel.stateTransition",
+        "recordKind": "stateTransition",
+        "layer": "kernel",
+        "typeIdFamilyPrefix": "prov",
+        "specRef": "https://wos-spec.org/specs/kernel/custody-hook-encoding#1-5-event-type-ownership"
+      },
+      {
+        "eventType": "wos.governance.overrideRecord",
+        "recordKind": "overrideRecord",
+        "layer": "governance",
+        "typeIdFamilyPrefix": "gov",
+        "specRef": "https://wos-spec.org/specs/governance/workflow-governance#7-3-override-authority"
+      },
+      {
+        "eventType": "wos.ai.autonomyDemotion",
+        "recordKind": "autonomyDemotion",
+        "layer": "ai",
+        "typeIdFamilyPrefix": "ai",
+        "specRef": "https://wos-spec.org/specs/ai/ai-integration#5-5-autonomy-demotion"
+      },
+      {
+        "eventType": "wos.assurance.attestation",
+        "recordKind": "attestation",
+        "layer": "assurance",
+        "typeIdFamilyPrefix": "assurance",
+        "specRef": "https://wos-spec.org/specs/assurance/assurance#5-attestations"
+      }
+    ],
+    "x-wos-typeid-family-prefixes": [
+      { "prefix": "case", "family": "case instance" },
+      { "prefix": "prov", "family": "kernel facts-tier provenance records" },
+      { "prefix": "gov", "family": "governance runtime records" },
+      { "prefix": "ai", "family": "AI runtime records" },
+      { "prefix": "assurance", "family": "assurance runtime records" }
+    ]
+  },
   "entries": [
     {
       "seam": "kernel.actorExtension.agent",

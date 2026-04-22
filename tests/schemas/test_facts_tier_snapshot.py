@@ -55,6 +55,7 @@ def _snapshot() -> dict:
 def test_determination_transition_without_snapshot_is_rejected(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
         "transitionTags": ["determination"],
     }
@@ -67,6 +68,7 @@ def test_determination_transition_without_snapshot_is_rejected(schema):
 def test_determination_transition_with_snapshot_is_accepted(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
         "transitionTags": ["determination"],
         "caseFileSnapshot": _snapshot(),
@@ -80,6 +82,7 @@ def test_determination_transition_with_snapshot_is_accepted(schema):
 def test_non_determination_transition_without_snapshot_is_accepted(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
         "transitionTags": ["review"],
     }
@@ -109,6 +112,7 @@ def test_full_document_rejects_determination_record_missing_snapshot(schema):
     document = {
         "provenanceLog": [
             {
+                "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
                 "recordKind": "stateTransition",
                 "transitionTags": ["determination"],
             }
@@ -128,11 +132,13 @@ def test_full_document_accepts_determination_record_with_snapshot(schema):
     document = {
         "provenanceLog": [
             {
+                "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
                 "recordKind": "stateTransition",
                 "transitionTags": ["determination"],
                 "caseFileSnapshot": _snapshot(),
             },
             {
+                "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
                 "recordKind": "caseStateMutation",
                 "transitionTags": [],
             },

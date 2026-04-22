@@ -1,0 +1,95 @@
+{
+  "$wosSignatureProfile": "1.0",
+  "$schema": "https://wos-spec.org/schemas/signature-profile/1.0",
+  "targetWorkflow": {
+    "url": "https://agency.gov/workflows/benefits-adjudication",
+    "compatibleVersions": ">=1.0.0 <2.0.0"
+  },
+  "version": "1.0.0",
+  "title": "Benefits Attestation Signature Profile",
+  "description": "Single-signer attestation for a benefits application certification.",
+  "roles": [
+    {
+      "id": "applicantSigner",
+      "role": "signer",
+      "actorId": "applicant",
+      "required": true,
+      "authenticationPolicyKey": "applicantEmailOtp"
+    }
+  ],
+  "documents": [
+    {
+      "id": "benefitsApplication",
+      "documentRef": "urn:agency.gov:documents:benefits-application:v1",
+      "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "documentHashAlgorithm": "sha-256",
+      "renderingRef": "urn:agency.gov:renderings:benefits-application:v1",
+      "formspecResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
+    }
+  ],
+  "authenticationPolicies": [
+    {
+      "key": "applicantEmailOtp",
+      "method": "email-otp",
+      "assuranceLevel": "standard",
+      "providerRef": "urn:agency.gov:identity:providers:email-otp"
+    }
+  ],
+  "signingFlow": {
+    "type": "sequential",
+    "steps": [
+      {
+        "id": "applicantSigns",
+        "roleId": "applicantSigner",
+        "documentId": "benefitsApplication",
+        "required": true
+      }
+    ],
+    "completion": {
+      "type": "all-required"
+    }
+  },
+  "evidence": {
+    "recordKind": "signatureAffirmation",
+    "requiredFields": [
+      "response.signature.acceptedAt",
+      "response.signature.affirmed",
+      "response.signature.documentHash"
+    ],
+    "consentReference": {
+      "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+      "consentVersion": "1.0.0",
+      "acceptedAtPath": "response.signature.acceptedAt",
+      "affirmationPath": "response.signature.affirmed"
+    },
+    "identityBinding": {
+      "method": "email-otp",
+      "assuranceLevel": "standard",
+      "providerRef": "urn:agency.gov:identity:providers:email-otp"
+    },
+    "custodyHookEligible": true
+  },
+  "reminders": {
+    "eventName": "signature.reminder",
+    "schedule": ["P1D"],
+    "templateKey": "signatureReminder"
+  },
+  "expiryPolicy": {
+    "eventName": "signature.expired",
+    "after": "P7D",
+    "transitionId": "signatureExpired"
+  },
+  "declinePolicy": {
+    "transitionId": "signatureDeclined",
+    "reasonRequired": true
+  },
+  "voidPolicy": {
+    "authorizedActorIds": ["caseworker"],
+    "reasonRequired": true
+  },
+  "reassignmentPolicy": {
+    "authorizedActorIds": ["caseworker"],
+    "accountability": "preserve-original-assignment",
+    "reasonRequired": true
+  }
+}

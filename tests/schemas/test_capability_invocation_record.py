@@ -44,6 +44,7 @@ def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
 def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "capabilityInvocation",
         "data": {
             "invocationBlocked": True,
@@ -63,6 +64,7 @@ def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
 def test_blocked_invocation_missing_outcome_is_rejected(schema):
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
         "recordKind": "capabilityInvocation",
         "data": {"invocationBlocked": True},
     }
@@ -78,6 +80,7 @@ def test_blocked_invocation_missing_outcome_is_rejected(schema):
 def test_blocked_invocation_with_wrong_outcome_is_rejected(schema):
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
         "recordKind": "capabilityInvocation",
         "data": {"invocationBlocked": True},
         "outcome": "somethingElse",
@@ -99,6 +102,7 @@ def test_unblocked_invocation_without_outcome_is_accepted(schema):
     """
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
         "recordKind": "capabilityInvocation",
         "data": {
             "invocationBlocked": False,
@@ -122,6 +126,7 @@ def test_absent_invocation_blocked_not_required_outcome(schema):
     over-fire on records that predate the precondition gate."""
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "capabilityInvocation",
         "data": {
             "capabilityId": "documentExtraction",
@@ -146,6 +151,7 @@ def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(schem
     whose payload reuses the field name."""
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
     record = {
+        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
         "recordKind": "stateTransition",
         "data": {
             "invocationBlocked": True,

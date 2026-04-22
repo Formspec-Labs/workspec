@@ -20,6 +20,8 @@ The WOS Extension Registry is a JSON document that catalogs the named extension 
 
 The registry is descriptive, not prescriptive. It catalogs seams; it does not enforce shape — that is the job of the kernel schema, sidecar schemas, and vendor schemas referenced by registry entries. Lint tooling consumes registries to validate that `x-`-prefixed extension keys belong to a declared vendor namespace; documentation tooling consumes registries to render seam catalogs.
 
+For the WOS-Trellis `custodyHook` binding, the registry also carries WOS-owned identifier metadata under reserved `x-wos-*` keys in the root `extensions` object. These keys publish the `wos.*` event-type namespace and the reserved TypeID family prefixes used by the authored-record append surface. They are machine-readable reference data, not additional seam kinds.
+
 WOS MUST NOT alter core Formspec processing semantics. WOS processors MUST delegate Formspec Definition evaluation to a Formspec-conformant processor (Core S1.4).
 
 ---
@@ -44,7 +46,7 @@ A WOS Extension Registry is a JSON document identified by the `$wosExtensionRegi
 | `$schema` | string (URI) | OPTIONAL | URI of the JSON Schema this document conforms to. |
 | `title` | string | OPTIONAL | Human-readable name for the registry. |
 | `description` | string | OPTIONAL | Human-readable description of what the registry catalogs. |
-| `extensions` | object | OPTIONAL | Vendor extension data. Keys MUST be prefixed with `x-`. |
+| `extensions` | object | OPTIONAL | Vendor extension data. Keys MUST be prefixed with `x-`. The WOS Working Group also uses reserved `x-wos-*` keys here for WOS-owned identifier metadata tied to the `custodyHook` binding. |
 
 ### 1.2 RegistryEntry Properties
 
@@ -170,6 +172,46 @@ A registry entry for a `custodyHook` binding catalogs a specific custody profile
   "since": "1.0.0"
 }
 ```
+
+### 2.5.1 WOS-owned custody append identifiers
+
+The `custodyHook` seam itself stays abstract at the kernel layer. The WOS-owned authored-record binding described in [WOS Custody Hook Encoding](../kernel/custody-hook-encoding.md) uses two identifier sets that must also be published:
+
+- the `wos.*` event-type namespace
+- the reserved TypeID family prefixes
+
+The registry publishes those through reserved root `extensions` keys:
+
+- `x-wos-custody-event-types`
+- `x-wos-typeid-family-prefixes`
+- `x-wos-owning-spec-version`
+
+These keys are WOS-owned metadata, not vendor extensions. They are published in `extensions` because the registry's first-class structure still catalogs seams; the identifier metadata is attached reference data for the `custodyHook` seam rather than a new seam kind.
+
+The `x-wos-custody-event-types` array SHOULD publish, at minimum, one entry for each WOS-owned layer:
+
+- `wos.kernel.*`
+- `wos.governance.*`
+- `wos.ai.*`
+- `wos.assurance.*`
+
+Each event-type entry SHOULD disclose:
+
+- `eventType`
+- `recordKind`
+- `layer`
+- `typeIdFamilyPrefix`
+- `specRef`
+
+The `x-wos-typeid-family-prefixes` array SHOULD publish, at minimum, the reserved WOS prefixes:
+
+- `case`
+- `prov`
+- `gov`
+- `ai`
+- `assurance`
+
+The root `x-wos-owning-spec-version` value pins which WOS spec version owns the published identifier set. Trellis-bound registries reference this version when binding the WOS-authored append surface.
 
 ### 2.6 vendor-extension
 

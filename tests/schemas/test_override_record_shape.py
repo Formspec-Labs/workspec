@@ -96,6 +96,8 @@ class TestOverrideRecordRequiredFields:
 
     def _minimal_valid_record(self) -> dict:
         return {
+            "id": "sba-poc_gov_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "caseId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "rationale": {"summary": "New evidence invalidates prior denial."},
             "authorityVerification": {
                 "actorId": "reviewer-alice",
@@ -117,7 +119,7 @@ class TestOverrideRecordRequiredFields:
         assert errors == [], f"minimal valid OverrideRecord rejected: {errors}"
 
     @pytest.mark.parametrize(
-        "missing_field", ["rationale", "authorityVerification", "supportingEvidence"]
+        "missing_field", ["id", "caseId", "rationale", "authorityVerification", "supportingEvidence"]
     )
     def test_missing_required_field_rejected(self, schema, missing_field):
         record = self._minimal_valid_record()
@@ -143,3 +145,17 @@ class TestOverrideRecordRequiredFields:
         v = _validator_for_def(schema, "OverrideRecord")
         errors = list(v.iter_errors(record))
         assert errors, "authorityVerification.method must reject unknown values"
+
+    def test_override_record_rejects_non_gov_id_prefix(self, schema):
+        record = self._minimal_valid_record()
+        record["id"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+        v = _validator_for_def(schema, "OverrideRecord")
+        errors = list(v.iter_errors(record))
+        assert errors, "OverrideRecord.id must use the reserved `gov` family prefix"
+
+    def test_override_record_rejects_non_case_case_id_prefix(self, schema):
+        record = self._minimal_valid_record()
+        record["caseId"] = "sba-poc_gov_01jqrpd32jf8xtx9qxkkv3rqsd"
+        v = _validator_for_def(schema, "OverrideRecord")
+        errors = list(v.iter_errors(record))
+        assert errors, "OverrideRecord.caseId must use the reserved `case` family prefix"

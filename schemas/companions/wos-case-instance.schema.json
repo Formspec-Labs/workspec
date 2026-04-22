@@ -27,11 +27,12 @@
     "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "instanceId": {
       "type": "string",
-      "format": "uri",
-      "description": "Globally unique identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it.",
+      "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+      "format": "wos-case-typeid",
+      "description": "TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.",
       "examples": [
-        "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
-        "https://agency.gov/cases/2026/12345"
+        "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+        "default_case_01hw7rm71vfay8vvw14d2pf2db"
       ],
       "x-lm": {
         "critical": true,
@@ -418,11 +419,12 @@
         },
         "instanceId": {
           "type": "string",
-          "format": "uri",
-          "description": "Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance.",
+          "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-case-typeid",
+          "description": "Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance. Reserved family prefix: `case`.",
           "examples": [
-            "urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4",
-            "https://agency.gov/cases/2026/12345"
+            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
+            "default_case_01hw7rm71vfay8vvw14d2pf2db"
           ]
         },
         "contractRef": {
@@ -499,7 +501,7 @@
       "examples": [
         {
           "taskId": "task-1",
-          "instanceId": "urn:wos:instance:123",
+          "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
           "contractRef": "intake",
           "definitionUrl": "https://gov.agency/forms/intake",
           "definitionVersion": "1.0.0",

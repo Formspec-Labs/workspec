@@ -43,6 +43,7 @@ def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
 def test_outcome_accepts_precondition_not_satisfied(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "capabilityInvocation",
         "outcome": "preconditionNotSatisfied",
     }
@@ -58,6 +59,7 @@ def test_outcome_accepts_precondition_not_satisfied(schema):
 def test_outcome_accepts_convergence_cap_reached(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
         "recordKind": "caseStateMutation",
         "outcome": "convergenceCapReached",
     }
@@ -73,6 +75,7 @@ def test_outcome_accepts_convergence_cap_reached(schema):
 def test_outcome_accepts_vendor_extension_prefix(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
         "recordKind": "stateTransition",
         "outcome": "x-vendor-specific",
     }
@@ -88,6 +91,7 @@ def test_outcome_accepts_vendor_extension_prefix(schema):
 def test_outcome_rejects_unreserved_unprefixed_literal(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
         "recordKind": "stateTransition",
         "outcome": "arbitrary",
     }
@@ -103,6 +107,7 @@ def test_outcome_rejects_unreserved_unprefixed_literal(schema):
 def test_outcome_is_optional(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
     }
 
@@ -123,6 +128,7 @@ def test_outcome_rejects_uppercase_vendor_extension(schema):
     of the WOS vendor-extension surface (§4.3b #F5e)."""
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
         "recordKind": "stateTransition",
         "outcome": "x-Acme-Foo",
     }
@@ -140,6 +146,7 @@ def test_outcome_accepts_lowercase_vendor_extension(schema):
     under the aligned regex."""
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
         "recordKind": "stateTransition",
         "outcome": "x-acme-foo",
     }
@@ -159,6 +166,7 @@ def test_outcome_rejects_bare_x_prefix(schema):
     sentinel that any future reserved literal could shadow."""
     validator = _validator_for_def(schema, "FactsTierRecord")
     record = {
+        "id": "sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
         "recordKind": "stateTransition",
         "outcome": "x-",
     }

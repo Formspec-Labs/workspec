@@ -40,7 +40,7 @@
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of what this registry catalogs and the audience it serves. A registry SHOULD describe whether it covers kernel seams, vendor extensions, deployment-specific overrides, or some combination, so adopters can decide which registries to load.",
+      "description": "Human-readable description of what this registry catalogs and the audience it serves. A registry SHOULD describe whether it covers kernel seams, vendor extensions, deployment-specific overrides, or some combination, so adopters can decide which registries to load. For the WOS-Trellis `custodyHook` binding, the root `extensions` object MAY also carry reserved `x-wos-*` keys publishing WOS-owned `wos.*` event types and TypeID family prefixes.",
       "examples": ["Catalog of the six kernel seams plus reference Trellis custody profile entries published by the WOS Working Group."]
     },
     "entries": {
@@ -77,10 +77,16 @@
     },
     "ExtensionsMap": {
       "type": "object",
-      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix. Processors MUST ignore unknown extension keys to preserve forward compatibility.",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix. At the registry root, WOS-owned `x-wos-*` keys MAY publish custody-append identifier metadata such as `x-wos-custody-event-types`, `x-wos-typeid-family-prefixes`, and `x-wos-owning-spec-version`. Processors MUST ignore unknown extension keys to preserve forward compatibility.",
       "examples": [
         { "x-acme-internal-id": "REG-001" },
-        { "x-vendor-source": "trellis-1.2" }
+        { "x-vendor-source": "trellis-1.2" },
+        {
+          "x-wos-owning-spec-version": "1.0.0-draft.1",
+          "x-wos-typeid-family-prefixes": [
+            { "prefix": "prov", "family": "kernel facts-tier provenance records" }
+          ]
+        }
       ],
       "propertyNames": { "pattern": "^x-" },
       "additionalProperties": {}

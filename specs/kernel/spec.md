@@ -576,6 +576,8 @@ Custody postures are declared, not inferred. Bindings that populate this seam MU
 
 The kernel does NOT define the concrete Trust Profile object. Trellis (the distributed-trust binding) defines that object and binds it to this seam. A monolithic binding may populate this seam with a single declared posture (e.g., "provider-readable, no recovery without user, no delegated compute") and satisfy conformance.
 
+The WOS-owned authored-record wire surface that crosses this seam is defined separately in [WOS Custody Hook Encoding](custody-hook-encoding.md). That companion pins the four-field append input, TypeID rules, JSON→dCBOR conversion discipline, WOS-owned idempotency input, and minimum receipt contract.
+
 ### 10.6 `extensions` and `x-` Keys
 
 **Purpose:** Standard escape hatch for vendor and implementation-specific data.

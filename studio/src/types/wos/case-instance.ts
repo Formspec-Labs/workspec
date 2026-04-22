@@ -16,7 +16,7 @@ export type JsonSchemaUri = string;
 export interface WOSCaseInstance {
   $schema?: JsonSchemaUri;
   /**
-   * Globally unique identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it.
+   * TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.
    */
   instanceId: string;
   /**
@@ -201,7 +201,7 @@ export interface FormspecTaskContext {
    */
   taskId: string;
   /**
-   * Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance.
+   * Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance. Reserved family prefix: `case`.
    */
   instanceId: string;
   /**
