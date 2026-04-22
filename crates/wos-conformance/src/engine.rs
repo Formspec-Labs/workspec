@@ -50,6 +50,7 @@ const RESERVED_DOCUMENT_ROLES: &[&str] = &[
     "governance",
     "integration",
     "businessCalendar",
+    "signatureProfile",
 ];
 
 // ── Public types ─────────────────────────────────────────────────
@@ -155,6 +156,19 @@ impl WorkflowEngine {
             None
         };
 
+        // Load Signature Profile if present. The document role doubles as the
+        // package-local profile key used by task action extensions.
+        let signature_profile = if fixture.documents.contains_key("signatureProfile") {
+            let sig_json = fixture_document_json(fixture, "signatureProfile")?;
+            let profile: wos_runtime::SignatureProfileDocument = serde_json::from_value(sig_json)
+                .map_err(|e| {
+                ConformanceError::Parse(format!("signature profile parse error: {e}"))
+            })?;
+            Some(profile)
+        } else {
+            None
+        };
+
         // Load any remaining companion documents as raw JSON.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
@@ -219,6 +233,9 @@ impl WorkflowEngine {
         }
         if let Some(calendar) = business_calendar {
             runtime = runtime.with_business_calendar(calendar);
+        }
+        if let Some(profile) = signature_profile {
+            runtime = runtime.with_signature_profile("signatureProfile", profile);
         }
 
         Ok(Self {

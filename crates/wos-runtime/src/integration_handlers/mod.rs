@@ -30,7 +30,7 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-pub(crate) use request_response::{load_or_invoke_service_result, InvocationContext};
+pub(crate) use request_response::{InvocationContext, load_or_invoke_service_result};
 
 /// Generate a unique outbound CloudEvent `id` for a given binding invocation.
 ///

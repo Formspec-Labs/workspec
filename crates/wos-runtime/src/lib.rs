@@ -26,7 +26,7 @@ pub use companion::ReferenceCompanionPolicy;
 #[doc(inline)]
 pub use custody::{
     CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
-    CustodyLifecycleRef,
+    CustodyAppendReceipt,
 };
 #[doc(inline)]
 pub use durable::DurableRuntime;
@@ -35,9 +35,11 @@ pub use integration::{
     TargetWorkflow,
 };
 pub use runtime::{
-    populate_provenance_record_fields, stamp_provenance, Clock, CompanionPolicy,
-    CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, RuntimeEventContext,
-    RuntimeEventDecision, SystemClock, TaskSubmissionResult, WosRuntime,
+    Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
+    RuntimeError, RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    SystemClock, TaskSubmissionResult, WosRuntime, populate_provenance_record_fields,
+    stamp_provenance,
 };
 pub use store::{
     InMemoryStore, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,

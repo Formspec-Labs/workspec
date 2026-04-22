@@ -10,6 +10,7 @@ use wos_core::model::kernel::{ActorKind, KernelDocument};
 use wos_core::provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceRecord};
 
 use crate::binding::SubmissionValidation;
+use crate::custody::CustodyAppendReceipt;
 
 /// Stamp every record whose `timestamp` is empty with `now_iso`.
 ///
@@ -119,6 +120,41 @@ pub fn populate_provenance_record_fields(
     }
 }
 
+/// Applying a custody append receipt when the record already carries a
+/// different Trellis hash.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CustodyReceiptStampError {
+    #[error(
+        "custody receipt conflicts with existing canonical_event_hash: existing={existing}, attempted={attempted}"
+    )]
+    Conflict { existing: String, attempted: String },
+}
+
+/// Stamps Trellis's admitting `canonical_event_hash` onto a provenance record.
+///
+/// # Errors
+///
+/// Returns [`CustodyReceiptStampError::Conflict`] when the record already
+/// holds a different hash; idempotent retries pass when the attempted hash
+/// matches the stored value.
+pub fn stamp_custody_receipt(
+    record: &mut ProvenanceRecord,
+    receipt: &CustodyAppendReceipt,
+) -> Result<(), CustodyReceiptStampError> {
+    let attempted = receipt.canonical_event_hash.clone();
+    match &record.canonical_event_hash {
+        None => {
+            record.canonical_event_hash = Some(attempted);
+            Ok(())
+        }
+        Some(existing) if existing == &attempted => Ok(()),
+        Some(existing) => Err(CustodyReceiptStampError::Conflict {
+            existing: existing.clone(),
+            attempted,
+        }),
+    }
+}
+
 pub(super) fn compensation_provenance(
     kernel: &KernelDocument,
     persisted_provenance: &[ProvenanceRecord],
@@ -152,6 +188,7 @@ pub(super) fn compensation_provenance(
         let mut reversed = visited;
         reversed.reverse();
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::CompensationExecuted,
             timestamp: String::new(),
             actor_id: None,
@@ -167,11 +204,13 @@ pub(super) fn compensation_provenance(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
         });
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::CompensationScopeBoundary,
             timestamp: String::new(),
             actor_id: None,
@@ -187,6 +226,7 @@ pub(super) fn compensation_provenance(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -200,6 +240,7 @@ pub(super) fn compensation_provenance(
             .copied()
             .collect();
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::CompensationExecuted,
             timestamp: String::new(),
             actor_id: None,
@@ -219,6 +260,7 @@ pub(super) fn compensation_provenance(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -258,4 +300,61 @@ fn digest_of(items: &[String]) -> Option<String> {
     use sha2::{Digest, Sha256};
     let payload = serde_json::to_string(items).unwrap_or_default();
     Some(format!("{:x}", Sha256::digest(payload.as_bytes())))
+}
+
+#[cfg(test)]
+mod stamp_custody_receipt_tests {
+    use super::*;
+    use crate::custody::CustodyAppendReceipt;
+
+    const HASH_A: &str = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
+    const HASH_B: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    #[test]
+    fn stamps_when_absent() {
+        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        stamp_custody_receipt(
+            &mut record,
+            &CustodyAppendReceipt {
+                canonical_event_hash: HASH_A.to_string(),
+            },
+        )
+        .expect("stamp");
+        assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
+    }
+
+    #[test]
+    fn no_op_when_hash_unchanged() {
+        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        record.canonical_event_hash = Some(HASH_A.to_string());
+        stamp_custody_receipt(
+            &mut record,
+            &CustodyAppendReceipt {
+                canonical_event_hash: HASH_A.to_string(),
+            },
+        )
+        .expect("idempotent");
+        assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
+    }
+
+    #[test]
+    fn conflict_when_hash_differs() {
+        let mut record = ProvenanceRecord::unmatched_event("e", None);
+        record.canonical_event_hash = Some(HASH_A.to_string());
+        let err = stamp_custody_receipt(
+            &mut record,
+            &CustodyAppendReceipt {
+                canonical_event_hash: HASH_B.to_string(),
+            },
+        )
+        .expect_err("conflict");
+        assert_eq!(
+            err,
+            CustodyReceiptStampError::Conflict {
+                existing: HASH_A.to_string(),
+                attempted: HASH_B.to_string(),
+            }
+        );
+        assert_eq!(record.canonical_event_hash.as_deref(), Some(HASH_A));
+    }
 }

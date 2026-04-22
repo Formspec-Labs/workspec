@@ -25,8 +25,8 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::request_response::{apply_output_binding, InvocationContext};
 use super::IntegrationBindingHandler;
+use super::request_response::{InvocationContext, apply_output_binding};
 
 /// Handler for inbound CloudEvent consumption bindings.
 pub(crate) struct EventConsumeHandler;
@@ -84,6 +84,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
 
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -103,6 +104,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -110,6 +112,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
         }
 
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::EventConsumed,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -125,6 +128,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,

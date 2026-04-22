@@ -17,7 +17,12 @@ use wos_runtime::binding::{BindingError, CaseMutationBundle};
 /// Definition validation returns canned errors when configured.
 /// Prefill mirrors case state. Response mapping extracts `data`
 /// into a `field_updates` map.
+///
+/// `pinned_url` / `pinned_version` are reserved for future envelope binding
+/// (e.g. Signature Profile validator integration); the trait surface does not
+/// read them yet.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FixtureFormspecProcessor {
     pinned_url: String,
     pinned_version: String,

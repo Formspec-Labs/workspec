@@ -18,8 +18,8 @@ use super::timers::{
     timers_to_state,
 };
 use super::{
-    format_timestamp, populate_provenance_record_fields, stamp_provenance, CreateInstanceRequest,
-    RuntimeError, WosRuntime,
+    CreateInstanceRequest, RuntimeError, WosRuntime, format_timestamp,
+    populate_provenance_record_fields, stamp_custody_receipt, stamp_provenance,
 };
 
 impl WosRuntime {
@@ -40,6 +40,13 @@ impl WosRuntime {
             definition_version,
             initial_case_state,
         } = request;
+        let (instance_id, legacy_alias) = if CaseInstance::is_case_id(&instance_id) {
+            (instance_id, None)
+        } else if instance_id.trim().is_empty() {
+            (CaseInstance::mint_id(), None)
+        } else {
+            (CaseInstance::mint_id(), Some(instance_id))
+        };
         let kernel = self
             .resolver
             .resolve_kernel(&definition_url, &definition_version)?;
@@ -74,6 +81,13 @@ impl WosRuntime {
             updated_at: now_iso.clone(),
             extensions: Default::default(),
         };
+        let mut instance = instance;
+        if let Some(alias) = legacy_alias {
+            instance.extensions.insert(
+                "x-wos-legacy-instance-alias".to_string(),
+                serde_json::Value::String(alias),
+            );
+        }
 
         let mut record = RuntimeRecord::new(instance);
         let mut appended_provenance = evaluator.provenance().records().to_vec();
@@ -162,9 +176,36 @@ impl WosRuntime {
                     position,
                     provenance,
                 )?;
-                CustodyAppendInput::from_provenance_record(provenance, metadata)
+                CustodyAppendInput::from_provenance_record(provenance, &context, metadata)
                     .map_err(RuntimeError::from)
             })
             .collect()
+    }
+
+    /// Stamps the Trellis custody receipt onto the matching provenance record.
+    ///
+    /// # Errors
+    /// Returns an error when the instance or provenance record cannot be
+    /// located, or when persistence fails.
+    pub fn apply_custody_receipt(
+        &mut self,
+        instance_id: &str,
+        record_id: &str,
+        receipt: crate::custody::CustodyAppendReceipt,
+    ) -> Result<(), RuntimeError> {
+        let mut record = self.store.load_record(instance_id)?;
+        let Some(provenance) = record
+            .provenance_log
+            .iter_mut()
+            .find(|entry| entry.id == record_id)
+        else {
+            return Err(RuntimeError::ProvenanceRecordNotFound(
+                record_id.to_string(),
+            ));
+        };
+        stamp_custody_receipt(provenance, &receipt)?;
+        record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
+        self.store.save_record(record)?;
+        Ok(())
     }
 }

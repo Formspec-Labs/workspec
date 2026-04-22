@@ -99,12 +99,7 @@ pub async fn wos_add_transition(
         }
     };
 
-    if typed_event.is_some()
-        && trigger
-            .as_ref()
-            .map(|t| !t.is_empty())
-            .unwrap_or(false)
-    {
+    if typed_event.is_some() && trigger.as_ref().map(|t| !t.is_empty()).unwrap_or(false) {
         return Err(ToolError::InvalidArguments(
             "use either `trigger` (legacy string) or `event` (typed object), not both".into(),
         ));

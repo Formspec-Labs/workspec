@@ -16,8 +16,8 @@ use crate::integration::{IntegrationBinding, IntegrationBindingKind};
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::request_response::{build_event_data_from_binding, InvocationContext};
-use super::{next_outbound_event_id, IntegrationBindingHandler};
+use super::request_response::{InvocationContext, build_event_data_from_binding};
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 
 /// Handler for outbound CloudEvent emission bindings.
 pub(crate) struct EventEmitHandler;
@@ -88,6 +88,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
             .map_err(|e| RuntimeError::Service(e.to_string()))?;
 
         let provenance = ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::EventEmitted,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -103,6 +104,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,

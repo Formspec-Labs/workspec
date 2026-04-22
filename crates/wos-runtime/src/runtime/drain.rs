@@ -18,8 +18,8 @@ use super::timers::{
     materialize_due_timers, timers_to_state,
 };
 use super::{
-    compensation_provenance, format_timestamp, populate_provenance_record_fields, stamp_provenance,
-    DrainOnceResult, RuntimeError, RuntimeEventContext, WosRuntime,
+    DrainOnceResult, RuntimeError, RuntimeEventContext, WosRuntime, compensation_provenance,
+    format_timestamp, populate_provenance_record_fields, stamp_provenance,
 };
 
 impl WosRuntime {
@@ -94,6 +94,13 @@ impl WosRuntime {
             return Ok(runtime_result);
         };
 
+        appended_provenance.extend(self.signature_expiry_records_for_event(
+            &mut record,
+            &event.event,
+            event.actor_id.as_deref(),
+            &now_iso,
+        )?);
+
         let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.instance, now_ms)
             .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
         evaluator
@@ -133,6 +140,7 @@ impl WosRuntime {
             .any(|record| record.record_kind == ProvenanceKind::CaseStateMutation);
         if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
             appended_provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::StateTransition,
                 timestamp: String::new(),
                 actor_id: event.actor_id.clone(),
@@ -148,6 +156,7 @@ impl WosRuntime {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,

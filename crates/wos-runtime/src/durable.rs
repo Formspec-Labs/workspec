@@ -9,7 +9,7 @@
 use wos_core::instance::{CaseInstance, PendingEvent};
 use wos_core::provenance::ProvenanceRecord;
 
-use crate::custody::{CustodyAppendContext, CustodyAppendInput};
+use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::runtime::{
     CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
 };
@@ -42,7 +42,7 @@ pub trait DurableRuntime {
     /// Returns an error when the instance cannot be found, timestamping fails,
     /// or persistence fails.
     fn enqueue_event(&mut self, instance_id: &str, event: PendingEvent)
-        -> Result<(), RuntimeError>;
+    -> Result<(), RuntimeError>;
 
     /// Drains a single queued event.
     ///
@@ -56,7 +56,7 @@ pub trait DurableRuntime {
     /// # Errors
     /// Returns an error when any `drain_once` step fails.
     fn drain_until_idle(&mut self, instance_id: &str)
-        -> Result<Vec<DrainOnceResult>, RuntimeError>;
+    -> Result<Vec<DrainOnceResult>, RuntimeError>;
 
     /// Persists a task draft artifact.
     ///
@@ -114,4 +114,16 @@ pub trait DurableRuntime {
         limit: usize,
         context: CustodyAppendContext,
     ) -> Result<Vec<CustodyAppendInput>, RuntimeError>;
+
+    /// Stamps a custody receipt onto the matching provenance record.
+    ///
+    /// # Errors
+    /// Returns an error when the instance or provenance record cannot be
+    /// located, or when persistence fails.
+    fn apply_custody_receipt(
+        &mut self,
+        instance_id: &str,
+        record_id: &str,
+        receipt: CustodyAppendReceipt,
+    ) -> Result<(), RuntimeError>;
 }

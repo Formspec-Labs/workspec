@@ -11,10 +11,10 @@ use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
 use serde_json::json;
+use wos_core::EvalContext;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
-use wos_core::EvalContext;
 
 /// Evaluate all un-fired milestones against `post_state`.
 ///
@@ -55,6 +55,7 @@ pub fn evaluate_milestones(
         if milestone_condition_true(&milestone.condition, &case_map) {
             instance.fired_milestones.insert(id.clone());
             records.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::MilestoneFired,
                 timestamp: String::new(),
                 actor_id: None,
@@ -70,6 +71,7 @@ pub fn evaluate_milestones(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,

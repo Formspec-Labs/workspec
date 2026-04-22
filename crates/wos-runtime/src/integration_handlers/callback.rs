@@ -45,9 +45,9 @@ use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
 use super::request_response::{
-    apply_output_binding, build_event_data_from_binding, InvocationContext,
+    InvocationContext, apply_output_binding, build_event_data_from_binding,
 };
-use super::{next_outbound_event_id, IntegrationBindingHandler};
+use super::{IntegrationBindingHandler, next_outbound_event_id};
 
 /// Three-way classification of a callback binding invocation.
 enum CallbackInvocationKind {
@@ -194,6 +194,7 @@ fn handle_outbound(
     );
 
     let pending_provenance = ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::CallbackPending,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -214,6 +215,7 @@ fn handle_outbound(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,
@@ -272,6 +274,7 @@ fn handle_inbound(
 
     if !updates.is_empty() {
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::DataMapping,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -291,6 +294,7 @@ fn handle_inbound(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -304,6 +308,7 @@ fn handle_inbound(
     }
 
     provenance.push(ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::CallbackReceived,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -319,6 +324,7 @@ fn handle_inbound(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,

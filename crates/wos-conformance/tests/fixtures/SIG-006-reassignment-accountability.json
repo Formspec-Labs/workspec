@@ -1,0 +1,34 @@
+{
+  "binding": "formspec",
+  "id": "SIG-006-reassignment-accountability",
+  "rule": "SIG-RT",
+  "description": "Signature reassignment records original/new signer accountability without erasing the original assignment.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    { "event": "start", "actor": "caseworker" },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "adminTask",
+        "response": {
+          "status": "reassigned",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "newActorId": "agency",
+            "reason": "Applicant delegated signature authority."
+          }
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "draft", "to": "signing", "event": "start" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "taskCompleted", "data": { "details": { "signatureStatus": "reassigned", "originalSigner": "caseworker", "newSigner": "agency" } } }
+  ]
+}

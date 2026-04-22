@@ -73,8 +73,11 @@
 //! | DM-002 | warning | rights/safety workflows should follow shadow→canary→production      |
 //! | VR-003 | error   | counterexample required when result is proven-unsafe                |
 
+use std::collections::{HashMap, HashSet};
+
 use serde_json::Value;
 
+use wos_core::model::kernel::ActorKind;
 use wos_core::model::kernel::{CancellationPolicy, ImpactLevel, KernelDocument, State, StateKind};
 
 use crate::diagnostic::LintDiagnostic;
@@ -99,6 +102,8 @@ struct KernelCollections {
     case_fields: std::collections::HashSet<String>,
     /// All declared actor IDs from the kernel `actors` array.
     actor_ids: std::collections::HashSet<String>,
+    /// All human actor IDs from the kernel `actors` array.
+    human_actor_ids: std::collections::HashSet<String>,
 }
 
 impl KernelCollections {
@@ -117,12 +122,19 @@ impl KernelCollections {
             .unwrap_or_default();
 
         let actor_ids = kernel.actors.iter().map(|a| a.id.clone()).collect();
+        let human_actor_ids = kernel
+            .actors
+            .iter()
+            .filter(|actor| actor.kind == ActorKind::Human)
+            .map(|actor| actor.id.clone())
+            .collect();
 
         Self {
             tags,
             events,
             case_fields,
             actor_ids,
+            human_actor_ids,
         }
     }
 }
@@ -262,6 +274,14 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         check_autonomy_is_action_site_property(ai, diagnostics);
     }
 
+    for profile in project.of_kind(DocumentKind::SignatureProfile) {
+        if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+            check_signature_profile(profile, kernel, kc, diagnostics);
+        } else {
+            check_signature_profile_without_kernel(profile, diagnostics);
+        }
+    }
+
     // Policy parameters documents.
     for pp in project.of_kind(DocumentKind::PolicyParameters) {
         if let Some(kc) = kernel_collections.as_ref() {
@@ -294,6 +314,384 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
 // ---------------------------------------------------------------------------
 // K-010: createTask assignTo MUST reference a declared kernel actor
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// SIG-* Signature Profile rules
+// ---------------------------------------------------------------------------
+
+/// Run Signature Profile cross-document checks.
+fn check_signature_profile(
+    profile: &crate::document::WosDocument,
+    kernel: &KernelDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_target_workflow(profile, kernel, diagnostics);
+    check_signature_roles(profile, kc, diagnostics);
+    check_signature_auth_policies(profile, diagnostics);
+    check_signature_steps(profile, diagnostics);
+    check_signature_guards(profile, diagnostics);
+    check_signature_lifecycle_tags(profile, kc, diagnostics);
+    check_signature_timer_events(profile, kc, diagnostics);
+    check_signature_evidence_inputs(profile, kc, diagnostics);
+    check_signature_naming(profile, diagnostics);
+}
+
+/// Run Signature Profile checks that do not require a kernel document.
+fn check_signature_profile_without_kernel(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_auth_policies(profile, diagnostics);
+    check_signature_steps(profile, diagnostics);
+    check_signature_guards(profile, diagnostics);
+    check_signature_naming(profile, diagnostics);
+}
+
+fn check_signature_target_workflow(
+    profile: &crate::document::WosDocument,
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let target = pointer_str(&profile.value, "/targetWorkflow/url");
+    let kernel_url = kernel.url.as_deref();
+    if let (Some(target), Some(kernel_url)) = (target, kernel_url)
+        && target != kernel_url
+    {
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-001",
+            "/targetWorkflow/url",
+            format!("Signature Profile targetWorkflow.url '{target}' does not match kernel url '{kernel_url}'"),
+        ));
+    }
+}
+
+fn check_signature_roles(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(roles) = profile.value.pointer("/roles").and_then(Value::as_array) else {
+        return;
+    };
+    for (index, role) in roles.iter().enumerate() {
+        let actor_id = role.get("actorId").and_then(Value::as_str);
+        if let Some(actor_id) = actor_id {
+            if !kc.actor_ids.contains(actor_id) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "SIG-002",
+                    &format!("/roles/{index}/actorId"),
+                    format!(
+                        "signature role actorId '{actor_id}' does not resolve to a kernel actor"
+                    ),
+                ));
+            } else if !kc.human_actor_ids.contains(actor_id) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "SIG-003",
+                    &format!("/roles/{index}/actorId"),
+                    format!("signature role actorId '{actor_id}' is not a human kernel actor"),
+                ));
+            }
+        }
+    }
+}
+
+fn check_signature_auth_policies(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let policy_keys = string_set_at(profile, "/authenticationPolicies", "key");
+    let Some(roles) = profile.value.pointer("/roles").and_then(Value::as_array) else {
+        return;
+    };
+    for (index, role) in roles.iter().enumerate() {
+        let Some(policy_key) = role.get("authenticationPolicyKey").and_then(Value::as_str) else {
+            continue;
+        };
+        if !policy_keys.contains(policy_key) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-004",
+                &format!("/roles/{index}/authenticationPolicyKey"),
+                format!("authenticationPolicyKey '{policy_key}' does not resolve to authenticationPolicies[*].key"),
+            ));
+        }
+    }
+}
+
+fn check_signature_steps(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let role_ids = string_set_at(profile, "/roles", "id");
+    let document_ids = string_set_at(profile, "/documents", "id");
+    let Some(steps) = profile
+        .value
+        .pointer("/signingFlow/steps")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+
+    let step_ids: HashSet<&str> = steps
+        .iter()
+        .filter_map(|step| step.get("id").and_then(Value::as_str))
+        .collect();
+
+    for (index, step) in steps.iter().enumerate() {
+        if let Some(role_id) = step.get("roleId").and_then(Value::as_str)
+            && !role_ids.contains(role_id)
+        {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-005",
+                &format!("/signingFlow/steps/{index}/roleId"),
+                format!("signing step roleId '{role_id}' does not resolve to roles[*].id"),
+            ));
+        }
+        if let Some(document_id) = step.get("documentId").and_then(Value::as_str)
+            && !document_ids.contains(document_id)
+        {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-006",
+                &format!("/signingFlow/steps/{index}/documentId"),
+                format!(
+                    "signing step documentId '{document_id}' does not resolve to documents[*].id"
+                ),
+            ));
+        }
+        if let Some(depends_on) = step.get("dependsOn").and_then(Value::as_array) {
+            for (dep_index, dependency) in depends_on.iter().enumerate() {
+                let Some(dependency) = dependency.as_str() else {
+                    continue;
+                };
+                if !step_ids.contains(dependency) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-007",
+                        &format!("/signingFlow/steps/{index}/dependsOn/{dep_index}"),
+                        format!("signing step dependency '{dependency}' does not resolve to a sibling step id"),
+                    ));
+                }
+            }
+        }
+    }
+
+    if signature_step_graph_has_cycle(steps) {
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-007",
+            "/signingFlow/steps",
+            "signing step dependencies MUST NOT cycle",
+        ));
+    }
+}
+
+fn check_signature_guards(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(steps) = profile
+        .value
+        .pointer("/signingFlow/steps")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for (index, step) in steps.iter().enumerate() {
+        let Some(guard) = step.get("guard").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Err(error) = fel_core::parse(guard) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-008",
+                &format!("/signingFlow/steps/{index}/guard"),
+                format!("routed signing guard failed to parse as FEL: {error}"),
+            ));
+        }
+    }
+}
+
+fn check_signature_lifecycle_tags(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    for tag in [
+        "awaiting-signature",
+        "signature-complete",
+        "signature-declined",
+        "signature-expired",
+        "signature-voided",
+    ] {
+        if !kc.tags.contains(tag) {
+            diagnostics.push(LintDiagnostic::t2_warning(
+                "SIG-009",
+                "/signingFlow",
+                format!(
+                    "Signature Profile lifecycle tag '{tag}' does not appear in the target kernel"
+                ),
+            ));
+        }
+    }
+    let _ = profile;
+}
+
+fn check_signature_timer_events(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    for path in ["/reminders/eventName", "/expiryPolicy/eventName"] {
+        let Some(event_name) = pointer_str(&profile.value, path) else {
+            continue;
+        };
+        if !kc.events.contains(event_name) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-010",
+                path,
+                format!("signature timer eventName '{event_name}' does not map to a typed kernel timer/message event"),
+            ));
+        }
+    }
+}
+
+fn check_signature_evidence_inputs(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(required_fields) = profile
+        .value
+        .pointer("/evidence/requiredFields")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for (index, field) in required_fields.iter().enumerate() {
+        let Some(field) = field.as_str() else {
+            continue;
+        };
+        if field.starts_with("response.") {
+            continue;
+        }
+        if field.starts_with("caseFile.") && kc.case_fields.contains(field) {
+            continue;
+        }
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-011",
+            &format!("/evidence/requiredFields/{index}"),
+            format!("SignatureAffirmation evidence field '{field}' is not satisfiable from response.* or the kernel caseFile"),
+        ));
+    }
+}
+
+fn check_signature_naming(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_naming_recursive(&profile.value, "", diagnostics);
+}
+
+fn check_signature_naming_recursive(
+    value: &Value,
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let child_path = format!("{path}/{}", escape_json_pointer(key));
+                if key.ends_with("Ref") && !child.as_str().is_some_and(is_uri_like) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-012",
+                        &child_path,
+                        format!("Signature Profile field '{key}' ends with Ref and MUST carry a URI-like cross-artifact reference"),
+                    ));
+                }
+                if key.ends_with("Key") && child.as_str().is_some_and(is_uri_like) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-012",
+                        &child_path,
+                        format!("Signature Profile field '{key}' ends with Key and MUST carry a package-local key, not a URI"),
+                    ));
+                }
+                check_signature_naming_recursive(child, &child_path, diagnostics);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                check_signature_naming_recursive(child, &format!("{path}/{index}"), diagnostics);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn signature_step_graph_has_cycle(steps: &[Value]) -> bool {
+    let graph: HashMap<&str, Vec<&str>> = steps
+        .iter()
+        .filter_map(|step| {
+            let id = step.get("id")?.as_str()?;
+            let deps = step
+                .get("dependsOn")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                .unwrap_or_default();
+            Some((id, deps))
+        })
+        .collect();
+
+    fn visit<'a>(
+        id: &'a str,
+        graph: &HashMap<&'a str, Vec<&'a str>>,
+        visiting: &mut HashSet<&'a str>,
+        visited: &mut HashSet<&'a str>,
+    ) -> bool {
+        if visited.contains(id) {
+            return false;
+        }
+        if !visiting.insert(id) {
+            return true;
+        }
+        for dependency in graph.get(id).into_iter().flatten() {
+            if graph.contains_key(dependency) && visit(dependency, graph, visiting, visited) {
+                return true;
+            }
+        }
+        visiting.remove(id);
+        visited.insert(id);
+        false
+    }
+
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    graph
+        .keys()
+        .any(|id| visit(id, &graph, &mut visiting, &mut visited))
+}
+
+fn string_set_at<'a>(
+    doc: &'a crate::document::WosDocument,
+    pointer: &str,
+    field: &str,
+) -> HashSet<&'a str> {
+    doc.value
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get(field).and_then(Value::as_str))
+        .collect()
+}
+
+fn pointer_str<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
+    value.pointer(pointer).and_then(Value::as_str)
+}
+
+fn is_uri_like(value: &str) -> bool {
+    value.contains(':')
+}
+
+fn escape_json_pointer(value: &str) -> String {
+    value.replace('~', "~0").replace('/', "~1")
+}
 
 /// K-010 (typed): Action `assignTo` fields MUST reference a declared kernel actor.
 fn check_action_actor_references_typed(

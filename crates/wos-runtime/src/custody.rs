@@ -4,12 +4,20 @@
 //!
 //! This module publishes the WOS-owned append surface from ADR-0061 without
 //! embedding any Trellis-, Temporal-, or Restate-specific adapter logic.
-//! Runtime bindings can take one authored WOS record, canonicalize it with
-//! JCS, and forward the resulting append input to their own durable backend.
 
+use std::collections::HashMap;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use ciborium::Value as CborValue;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use wos_core::provenance::ProvenanceRecord;
+use wos_core::typeid;
+
+/// WOS authored records are small governance facts and must stay inside the
+/// current inline-payload posture. If this bound changes, Trellis and WOS must
+/// ratify the new seam contract together.
+const DEFAULT_MAX_INLINE_RECORD_BYTES: usize = 64 * 1024;
 
 /// Runtime context for building custody append inputs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,89 +25,76 @@ use wos_core::provenance::ProvenanceRecord;
 pub struct CustodyAppendContext {
     /// Registered `wos.*` prefix used for provenance event types.
     pub event_type_prefix: String,
-    /// WOS version governing the authored record semantics.
-    pub wos_spec_version: String,
-    /// URI for the normative record schema or document surface.
-    pub record_schema_ref: String,
-    /// URI for the governing workflow or kernel document.
-    pub workflow_ref: String,
-    /// Stable deployment case identifier.
-    pub case_ref: String,
-    /// Optional governance-envelope or sidecar document URI.
+    /// Optional explicit case identifier override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub governance_envelope_ref: Option<String>,
+    pub case_id: Option<String>,
+    /// Optional cap for authored dCBOR bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_inline_record_bytes: Option<usize>,
+    /// Off-wire workflow reference retained for runtime correlation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow_ref: Option<String>,
 }
 
 impl CustodyAppendContext {
     /// Build metadata for a persisted provenance record.
     ///
-    /// The runtime uses the append-only provenance log position as the stable
-    /// record identity for records that predate an embedded Kernel §8 `id`.
-    ///
     /// # Errors
-    /// Returns an error when the provenance kind cannot be rendered as a WOS
-    /// event type.
+    /// Returns an error when the case identifier, record identifier, or event
+    /// type violate the ADR-0061 authored-wire rules.
     pub fn metadata_for_provenance_record(
         &self,
-        instance_ref: &str,
-        log_position: usize,
+        instance_id: &str,
+        _log_position: usize,
         record: &ProvenanceRecord,
     ) -> Result<CustodyAppendMetadata, CustodyAppendError> {
-        Ok(CustodyAppendMetadata {
-            record_id: format!("{}#provenance-{log_position}", self.case_ref),
+        let case_id = self
+            .case_id
+            .clone()
+            .unwrap_or_else(|| instance_id.to_string());
+        let metadata = CustodyAppendMetadata {
+            case_id,
+            record_id: record.id.clone(),
             event_type: provenance_event_type(&self.event_type_prefix, record)?,
-            wos_spec_version: self.wos_spec_version.clone(),
-            record_schema_ref: self.record_schema_ref.clone(),
-            workflow_ref: self.workflow_ref.clone(),
-            case_ref: self.case_ref.clone(),
-            instance_ref: instance_ref.to_string(),
-            governance_envelope_ref: self.governance_envelope_ref.clone(),
-            lifecycle_ref: lifecycle_ref_for_record(record),
-        })
+        };
+        metadata.validate()?;
+        Ok(metadata)
+    }
+
+    fn max_inline_record_bytes(&self) -> usize {
+        self.max_inline_record_bytes
+            .unwrap_or(DEFAULT_MAX_INLINE_RECORD_BYTES)
     }
 }
 
-/// Custody append metadata supplied by the WOS runtime.
+/// Narrow authored-wire metadata supplied by the WOS runtime.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustodyAppendMetadata {
-    /// Stable identifier for the authored WOS record.
+    /// Stable TypeID-structured case identifier.
+    pub case_id: String,
+    /// Stable TypeID-structured authored-record identifier.
     pub record_id: String,
     /// Outcome-neutral `wos.*` event type admitted into the custody layer.
     pub event_type: String,
-    /// WOS version governing the authored record semantics.
-    pub wos_spec_version: String,
-    /// URI for the normative record schema or document surface.
-    pub record_schema_ref: String,
-    /// URI for the governing workflow or kernel document.
-    pub workflow_ref: String,
-    /// Stable deployment case identifier.
-    pub case_ref: String,
-    /// Stable workflow instance identifier.
-    pub instance_ref: String,
-    /// Optional governance-envelope or sidecar document URI.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub governance_envelope_ref: Option<String>,
-    /// Optional structured pointer to the runtime moment that emitted the record.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifecycle_ref: Option<CustodyLifecycleRef>,
 }
 
 impl CustodyAppendMetadata {
-    /// Validate required ADR-0061 metadata before building a custody append input.
+    /// Validates the ADR-0061 authored-wire metadata.
     ///
     /// # Errors
-    /// Returns [`CustodyAppendError::EmptyField`] when a required string is
-    /// empty or whitespace-only, or [`CustodyAppendError::InvalidEventType`]
-    /// when `event_type` is not in the `wos.*` namespace.
+    /// Returns an error when a required field is empty, malformed, or outside
+    /// the reserved WOS identifier namespaces.
     pub fn validate(&self) -> Result<(), CustodyAppendError> {
+        validate_required_field("caseId", &self.case_id)?;
         validate_required_field("recordId", &self.record_id)?;
         validate_required_field("eventType", &self.event_type)?;
-        validate_required_field("wosSpecVersion", &self.wos_spec_version)?;
-        validate_required_field("recordSchemaRef", &self.record_schema_ref)?;
-        validate_required_field("workflowRef", &self.workflow_ref)?;
-        validate_required_field("caseRef", &self.case_ref)?;
-        validate_required_field("instanceRef", &self.instance_ref)?;
+        if !typeid::is_valid_type_id(&self.case_id, Some(typeid::CASE_PREFIX)) {
+            return Err(CustodyAppendError::InvalidTypeId("caseId"));
+        }
+        if !typeid::is_valid_record_type_id(&self.record_id) {
+            return Err(CustodyAppendError::InvalidTypeId("recordId"));
+        }
         if !self.event_type.starts_with("wos.") {
             return Err(CustodyAppendError::InvalidEventType(
                 self.event_type.clone(),
@@ -109,118 +104,80 @@ impl CustodyAppendMetadata {
     }
 }
 
-/// Structured pointer to the runtime moment that produced a custody record.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct CustodyLifecycleRef {
-    /// Kernel transition identifier, when the record came from a transition.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transition_id: Option<String>,
-    /// Lifecycle state active at record creation time.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state_id: Option<String>,
-    /// Triggering event name, when one exists.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub event_name: Option<String>,
-    /// Task pattern identifier, when a task-driven runtime moment applies.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_pattern: Option<String>,
-    /// Runtime task identifier, when the record is task-scoped.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
-}
-
 /// WOS-authored append input for a custody binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustodyAppendInput {
-    /// Stable identifier for the authored WOS record.
+    /// Stable TypeID-structured case identifier.
+    pub case_id: String,
+    /// Stable TypeID-structured authored-record identifier.
     pub record_id: String,
     /// Outcome-neutral `wos.*` event type admitted into custody.
     pub event_type: String,
-    /// WOS-native record family discriminator.
-    pub wos_record_kind: String,
-    /// WOS version governing the authored record semantics.
-    pub wos_spec_version: String,
-    /// URI for the normative record schema or document surface.
-    pub record_schema_ref: String,
-    /// URI for the governing workflow or kernel document.
-    pub workflow_ref: String,
-    /// Stable deployment case identifier.
-    pub case_ref: String,
-    /// Stable workflow instance identifier.
-    pub instance_ref: String,
-    /// Optional governance-envelope or sidecar document URI.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub governance_envelope_ref: Option<String>,
-    /// Optional structured pointer to the runtime moment that emitted the record.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifecycle_ref: Option<CustodyLifecycleRef>,
-    /// JCS-canonical UTF-8 JSON for the authored WOS record.
-    pub record_canonical_json: String,
-    /// Lowercase SHA-256 hex digest of `record_canonical_json`.
-    pub record_digest_sha256: String,
+    /// dCBOR bytes of the authored WOS record.
+    #[serde(with = "base64_record_bytes")]
+    pub record: Vec<u8>,
 }
 
 impl CustodyAppendInput {
-    /// Build a custody append input from an authored record.
+    /// Builds a custody append input from a WOS provenance record.
     ///
     /// # Errors
-    /// Returns an error when required metadata is empty, the event type does
-    /// not live in the `wos.*` namespace, or canonical JSON generation fails.
-    pub fn from_authored_record<T>(
-        record: &T,
-        wos_record_kind: impl Into<String>,
+    /// Returns an error when the metadata is malformed or the authored record
+    /// cannot be converted to deterministic dCBOR bytes.
+    pub fn from_provenance_record(
+        record: &ProvenanceRecord,
+        context: &CustodyAppendContext,
         metadata: CustodyAppendMetadata,
-    ) -> Result<Self, CustodyAppendError>
-    where
-        T: Serialize,
-    {
+    ) -> Result<Self, CustodyAppendError> {
         metadata.validate()?;
-        let wos_record_kind = wos_record_kind.into();
-        validate_required_field("wosRecordKind", &wos_record_kind)?;
-        let record_canonical_json = serde_json_canonicalizer::to_string(record)
-            .map_err(|error| CustodyAppendError::CanonicalJson(error.to_string()))?;
-        let record_digest_sha256 =
-            format!("{:x}", Sha256::digest(record_canonical_json.as_bytes()));
-
+        let authored = serde_json::to_value(record)
+            .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
+        let encoded = record_json_to_dcbor(
+            &authored,
+            context.max_inline_record_bytes(),
+            &provenance_string_tags(),
+        )?;
         Ok(Self {
+            case_id: metadata.case_id,
             record_id: metadata.record_id,
             event_type: metadata.event_type,
-            wos_record_kind,
-            wos_spec_version: metadata.wos_spec_version,
-            record_schema_ref: metadata.record_schema_ref,
-            workflow_ref: metadata.workflow_ref,
-            case_ref: metadata.case_ref,
-            instance_ref: metadata.instance_ref,
-            governance_envelope_ref: metadata.governance_envelope_ref,
-            lifecycle_ref: metadata.lifecycle_ref,
-            record_canonical_json,
-            record_digest_sha256,
+            record: encoded,
         })
     }
 
-    /// Build a custody append input from a WOS provenance record.
+    /// Returns the WOS-owned semantic idempotency input.
+    #[must_use]
+    pub fn idempotency_tuple(&self) -> (&str, &str) {
+        (&self.case_id, &self.record_id)
+    }
+
+    /// Returns the authored dCBOR bytes.
+    #[must_use]
+    pub fn record_bytes(&self) -> &[u8] {
+        &self.record
+    }
+
+    /// Decodes the authored record into a JSON inspection view.
+    ///
+    /// Byte strings are rendered as base64 strings; CBOR tag 0 / 32 values are
+    /// rendered as their underlying strings.
     ///
     /// # Errors
-    /// Returns an error when metadata validation fails or the provenance
-    /// record cannot be canonicalized.
-    pub fn from_provenance_record(
-        record: &ProvenanceRecord,
-        metadata: CustodyAppendMetadata,
-    ) -> Result<Self, CustodyAppendError> {
-        Self::from_authored_record(record, provenance_kind_label(record)?, metadata)
+    /// Returns an error when the authored bytes are not valid CBOR.
+    pub fn record_json_view(&self) -> Result<serde_json::Value, CustodyAppendError> {
+        let decoded: CborValue = ciborium::from_reader(self.record.as_slice())
+            .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
+        cbor_to_json(&decoded)
     }
+}
 
-    /// Return the ADR-0061 idempotency source tuple.
-    pub fn idempotency_tuple(&self) -> (&str, &str, &str) {
-        (&self.case_ref, &self.event_type, &self.record_id)
-    }
-
-    /// Return the authored canonical JSON as UTF-8 bytes.
-    pub fn record_canonical_json_bytes(&self) -> &[u8] {
-        self.record_canonical_json.as_bytes()
-    }
+/// Minimum WOS-facing receipt for a successful custody append.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustodyAppendReceipt {
+    /// Lowercase hex rendering of Trellis's `canonical_event_hash`.
+    pub canonical_event_hash: String,
 }
 
 /// Errors building authored custody append inputs.
@@ -230,13 +187,37 @@ pub enum CustodyAppendError {
     #[error("custody append field must not be empty: {0}")]
     EmptyField(&'static str),
 
+    /// A TypeID field was malformed.
+    #[error("custody append TypeID field is invalid: {0}")]
+    InvalidTypeId(&'static str),
+
     /// The binding event type was outside the `wos.*` namespace.
     #[error("custody event type must start with 'wos.': {0}")]
     InvalidEventType(String),
 
-    /// The authored record could not be rendered as JCS JSON.
-    #[error("failed to canonicalize authored custody record: {0}")]
-    CanonicalJson(String),
+    /// The authored record could not be serialized to JSON first.
+    #[error("failed to serialize authored custody record to JSON: {0}")]
+    JsonSerialization(String),
+
+    /// The authored record could not be rendered as deterministic dCBOR.
+    #[error("failed to encode authored custody record as dCBOR: {0}")]
+    Dcbor(String),
+
+    /// The authored record exceeded the inline payload posture.
+    #[error("authored custody record exceeds inline payload posture: {actual} > {max} bytes")]
+    OversizedRecord { actual: usize, max: usize },
+
+    /// The record contained a JSON number outside the permitted range.
+    #[error("custody record integer is outside the supported signed 64-bit range")]
+    IntegerOutOfRange,
+
+    /// The record contained a non-finite JSON number.
+    #[error("custody record numbers must be finite")]
+    NonFiniteFloat,
+
+    /// The record contained an unsupported tagged value on decode.
+    #[error("custody record contains unsupported CBOR content: {0}")]
+    UnsupportedCbor(String),
 }
 
 fn validate_required_field(name: &'static str, value: &str) -> Result<(), CustodyAppendError> {
@@ -246,230 +227,390 @@ fn validate_required_field(name: &'static str, value: &str) -> Result<(), Custod
     Ok(())
 }
 
-fn provenance_kind_label(record: &ProvenanceRecord) -> Result<String, CustodyAppendError> {
-    let kind = serde_json::to_value(record.record_kind)
-        .map_err(|error| CustodyAppendError::CanonicalJson(error.to_string()))?;
-    let Some(kind) = kind.as_str() else {
-        return Err(CustodyAppendError::CanonicalJson(
-            "provenance kind did not serialize to a string".to_string(),
-        ));
-    };
-    Ok(kind.to_string())
-}
-
 fn provenance_event_type(
     event_type_prefix: &str,
     record: &ProvenanceRecord,
 ) -> Result<String, CustodyAppendError> {
     let event_type_prefix = event_type_prefix.trim_end_matches('.');
     validate_required_field("eventTypePrefix", event_type_prefix)?;
-    Ok(format!(
-        "{event_type_prefix}.{}",
-        provenance_kind_label(record)?
-    ))
-}
-
-fn lifecycle_ref_for_record(record: &ProvenanceRecord) -> Option<CustodyLifecycleRef> {
-    let lifecycle_ref = CustodyLifecycleRef {
-        transition_id: transition_id_for_record(record),
-        state_id: record
-            .lifecycle_state
-            .clone()
-            .or_else(|| record.from_state.clone())
-            .or_else(|| record.to_state.clone()),
-        event_name: record.event.clone(),
-        task_pattern: data_string(record, "taskPattern"),
-        task_id: data_string(record, "taskId"),
+    let kind = serde_json::to_value(record.record_kind)
+        .map_err(|error| CustodyAppendError::JsonSerialization(error.to_string()))?;
+    let Some(kind) = kind.as_str() else {
+        return Err(CustodyAppendError::JsonSerialization(
+            "provenance kind did not serialize to a string".to_string(),
+        ));
     };
-
-    if lifecycle_ref == CustodyLifecycleRef::default() {
-        None
-    } else {
-        Some(lifecycle_ref)
-    }
+    Ok(format!("{event_type_prefix}.{kind}"))
 }
 
-fn transition_id_for_record(record: &ProvenanceRecord) -> Option<String> {
-    match (&record.from_state, &record.to_state, &record.event) {
-        (Some(from_state), Some(to_state), Some(event)) => {
-            Some(format!("{from_state}->{to_state}:{event}"))
+fn provenance_string_tags() -> HashMap<Vec<String>, u64> {
+    HashMap::from([(vec!["timestamp".to_string()], 0u64)])
+}
+
+fn record_json_to_dcbor(
+    value: &serde_json::Value,
+    max_bytes: usize,
+    string_tags: &HashMap<Vec<String>, u64>,
+) -> Result<Vec<u8>, CustodyAppendError> {
+    let cbor = json_to_cbor(value, &mut Vec::new(), string_tags)?;
+    let mut bytes = Vec::new();
+    ciborium::into_writer(&cbor, &mut bytes)
+        .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
+    if bytes.len() > max_bytes {
+        return Err(CustodyAppendError::OversizedRecord {
+            actual: bytes.len(),
+            max: max_bytes,
+        });
+    }
+    Ok(bytes)
+}
+
+fn json_to_cbor(
+    value: &serde_json::Value,
+    path: &mut Vec<String>,
+    string_tags: &HashMap<Vec<String>, u64>,
+) -> Result<CborValue, CustodyAppendError> {
+    match value {
+        serde_json::Value::Null => Ok(CborValue::Null),
+        serde_json::Value::Bool(value) => Ok(CborValue::Bool(*value)),
+        serde_json::Value::String(value) => {
+            if let Some(tag) = string_tags.get(path) {
+                Ok(CborValue::Tag(
+                    *tag,
+                    Box::new(CborValue::Text(value.clone())),
+                ))
+            } else {
+                Ok(CborValue::Text(value.clone()))
+            }
         }
-        _ => None,
+        serde_json::Value::Number(number) => {
+            // Integers outside ±2^63−1 are rejected per Custody Hook Encoding §1.6
+            // encoding table and §1.7 rejection list.
+            if let Some(integer) = number.as_i64() {
+                Ok(CborValue::Integer(integer.into()))
+            } else if let Some(unsigned) = number.as_u64() {
+                let integer =
+                    i64::try_from(unsigned).map_err(|_| CustodyAppendError::IntegerOutOfRange)?;
+                Ok(CborValue::Integer(integer.into()))
+            } else if let Some(float) = number.as_f64() {
+                if !float.is_finite() {
+                    return Err(CustodyAppendError::NonFiniteFloat);
+                }
+                Ok(CborValue::Float(float))
+            } else {
+                Err(CustodyAppendError::IntegerOutOfRange)
+            }
+        }
+        serde_json::Value::Array(items) => {
+            let mut encoded = Vec::with_capacity(items.len());
+            for item in items {
+                encoded.push(json_to_cbor(item, path, string_tags)?);
+            }
+            Ok(CborValue::Array(encoded))
+        }
+        serde_json::Value::Object(object) => {
+            let mut entries = Vec::with_capacity(object.len());
+            for (key, item) in object {
+                path.push(key.clone());
+                let key_value = CborValue::Text(key.clone());
+                let value = json_to_cbor(item, path, string_tags)?;
+                path.pop();
+                let key_bytes = cbor_key_bytes(&key_value)?;
+                entries.push((key_bytes, key_value, value));
+            }
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            Ok(CborValue::Map(
+                entries
+                    .into_iter()
+                    .map(|(_, key, value)| (key, value))
+                    .collect(),
+            ))
+        }
     }
 }
 
-fn data_string(record: &ProvenanceRecord, key: &str) -> Option<String> {
-    record
-        .data
-        .as_ref()
-        .and_then(|data| data.get(key))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string)
+fn cbor_key_bytes(value: &CborValue) -> Result<Vec<u8>, CustodyAppendError> {
+    let mut bytes = Vec::new();
+    ciborium::into_writer(value, &mut bytes)
+        .map_err(|error| CustodyAppendError::Dcbor(error.to_string()))?;
+    Ok(bytes)
+}
+
+fn cbor_to_json(value: &CborValue) -> Result<serde_json::Value, CustodyAppendError> {
+    match value {
+        CborValue::Null => Ok(serde_json::Value::Null),
+        CborValue::Bool(value) => Ok(serde_json::Value::Bool(*value)),
+        CborValue::Integer(value) => {
+            let signed = i64::try_from(*value).map_err(|_| {
+                CustodyAppendError::UnsupportedCbor(
+                    "integer outside signed 64-bit range".to_string(),
+                )
+            })?;
+            Ok(serde_json::json!(signed))
+        }
+        CborValue::Float(value) => Ok(serde_json::json!(value)),
+        CborValue::Text(value) => Ok(serde_json::Value::String(value.clone())),
+        CborValue::Bytes(value) => Ok(serde_json::Value::String(STANDARD.encode(value))),
+        CborValue::Array(items) => {
+            let mut decoded = Vec::with_capacity(items.len());
+            for item in items {
+                decoded.push(cbor_to_json(item)?);
+            }
+            Ok(serde_json::Value::Array(decoded))
+        }
+        CborValue::Map(entries) => {
+            let mut decoded = serde_json::Map::with_capacity(entries.len());
+            for (key, value) in entries {
+                let CborValue::Text(key) = key else {
+                    return Err(CustodyAppendError::UnsupportedCbor(
+                        "non-text map key".to_string(),
+                    ));
+                };
+                decoded.insert(key.clone(), cbor_to_json(value)?);
+            }
+            Ok(serde_json::Value::Object(decoded))
+        }
+        CborValue::Tag(0 | 32, inner) => cbor_to_json(inner),
+        CborValue::Tag(tag, _) => Err(CustodyAppendError::UnsupportedCbor(format!(
+            "unsupported CBOR tag {tag}"
+        ))),
+        other => Err(CustodyAppendError::UnsupportedCbor(format!(
+            "unsupported CBOR value {other:?}"
+        ))),
+    }
+}
+
+mod base64_record_bytes {
+    use super::*;
+
+    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&STANDARD.encode(bytes))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let encoded = String::deserialize(deserializer)?;
+        STANDARD.decode(encoded).map_err(serde::de::Error::custom)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
+    use sha2::{Digest, Sha256};
+    use wos_core::provenance::SignatureAffirmationInput;
 
     fn metadata() -> CustodyAppendMetadata {
         CustodyAppendMetadata {
-            record_id: "prov-0001".to_string(),
+            case_id: typeid::mint_case_id(),
+            record_id: typeid::mint_provenance_id(),
             event_type: "wos.kernel.stateTransition".to_string(),
-            wos_spec_version: "0.1.0".to_string(),
-            record_schema_ref: "https://example.com/schemas/wos-provenance-record.json".to_string(),
-            workflow_ref: "https://example.com/workflows/intake-review.json".to_string(),
-            case_ref: "case-123".to_string(),
-            instance_ref: "instance-456".to_string(),
-            governance_envelope_ref: Some("https://example.com/governance/defaults.json".into()),
-            lifecycle_ref: Some(CustodyLifecycleRef {
-                transition_id: Some("submit".to_string()),
-                state_id: Some("intake".to_string()),
-                event_name: Some("submitted".to_string()),
-                task_pattern: None,
-                task_id: None,
-            }),
+        }
+    }
+
+    fn context() -> CustodyAppendContext {
+        CustodyAppendContext {
+            event_type_prefix: "wos.kernel".to_string(),
+            case_id: None,
+            max_inline_record_bytes: None,
+            workflow_ref: Some("https://example.com/workflows/intake-review.json".to_string()),
         }
     }
 
     #[test]
-    fn provenance_record_becomes_custody_append_input() {
+    fn provenance_record_becomes_four_field_append_input() {
         let mut record =
             ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
         record.timestamp = "2026-04-21T14:30:00Z".to_string();
+        let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata())
+            .expect("build input");
 
-        let input =
-            CustodyAppendInput::from_provenance_record(&record, metadata()).expect("build input");
-
-        assert_eq!(input.wos_record_kind, "stateTransition");
-        assert_eq!(
-            input.idempotency_tuple(),
-            ("case-123", "wos.kernel.stateTransition", "prov-0001")
-        );
-        assert_eq!(
-            input.record_digest_sha256,
-            format!("{:x}", Sha256::digest(input.record_canonical_json_bytes()))
-        );
-        assert_eq!(
-            input.record_canonical_json,
-            serde_json_canonicalizer::to_string(&record).expect("canonical record"),
-        );
+        assert_eq!(input.event_type, "wos.kernel.stateTransition");
+        assert_eq!(input.idempotency_tuple().0, input.case_id);
+        assert_eq!(input.idempotency_tuple().1, input.record_id);
+        let view = input.record_json_view().expect("decode json view");
+        assert_eq!(view["id"], record.id);
+        assert_eq!(view["recordKind"], "stateTransition");
+        assert_eq!(view["timestamp"], "2026-04-21T14:30:00Z");
     }
 
     #[test]
-    fn non_wos_event_type_is_rejected() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let mut metadata = metadata();
-        metadata.event_type = "trellis.record.appended".to_string();
-
-        let error =
-            CustodyAppendInput::from_provenance_record(&record, metadata).expect_err("reject");
+    fn metadata_rejects_non_wos_event_type() {
+        let error = CustodyAppendMetadata {
+            case_id: typeid::mint_case_id(),
+            record_id: typeid::mint_provenance_id(),
+            event_type: "trellis.appended".to_string(),
+        }
+        .validate()
+        .expect_err("reject");
 
         assert_eq!(
             error,
-            CustodyAppendError::InvalidEventType("trellis.record.appended".to_string())
+            CustodyAppendError::InvalidEventType("trellis.appended".to_string())
         );
     }
 
     #[test]
-    fn empty_record_id_in_metadata_is_rejected() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let mut metadata = metadata();
-        metadata.record_id = String::new();
+    fn metadata_rejects_non_case_type_id() {
+        let error = CustodyAppendMetadata {
+            case_id: typeid::mint_provenance_id(),
+            record_id: typeid::mint_provenance_id(),
+            event_type: "wos.kernel.stateTransition".to_string(),
+        }
+        .validate()
+        .expect_err("reject");
 
-        let error =
-            CustodyAppendInput::from_provenance_record(&record, metadata).expect_err("reject");
-        assert_eq!(error, CustodyAppendError::EmptyField("recordId"));
+        assert_eq!(error, CustodyAppendError::InvalidTypeId("caseId"));
     }
 
     #[test]
-    fn whitespace_only_case_ref_is_rejected() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let mut metadata = metadata();
-        metadata.case_ref = "   ".to_string();
+    fn metadata_rejects_case_family_record_id() {
+        let error = CustodyAppendMetadata {
+            case_id: typeid::mint_case_id(),
+            record_id: typeid::mint_case_id(),
+            event_type: "wos.kernel.stateTransition".to_string(),
+        }
+        .validate()
+        .expect_err("reject");
 
-        let error =
-            CustodyAppendInput::from_provenance_record(&record, metadata).expect_err("reject");
-        assert_eq!(error, CustodyAppendError::EmptyField("caseRef"));
+        assert_eq!(error, CustodyAppendError::InvalidTypeId("recordId"));
     }
 
     #[test]
-    fn metadata_validate_surfaces_empty_field_before_digest() {
-        let mut metadata = metadata();
-        metadata.wos_spec_version = " \t ".to_string();
-        let err = metadata.validate().expect_err("reject");
-        assert_eq!(err, CustodyAppendError::EmptyField("wosSpecVersion"));
+    fn metadata_rejects_unknown_record_family() {
+        let prov = typeid::mint_provenance_id();
+        let tail = prov.rsplit_once('_').expect("typeid").1;
+        let error = CustodyAppendMetadata {
+            case_id: typeid::mint_case_id(),
+            record_id: format!("default_custom_{tail}"),
+            event_type: "wos.kernel.stateTransition".to_string(),
+        }
+        .validate()
+        .expect_err("reject");
+
+        assert_eq!(error, CustodyAppendError::InvalidTypeId("recordId"));
     }
 
     #[test]
-    fn from_authored_record_accepts_generic_serialize_value() {
-        let record = serde_json::json!({"alpha": 1, "beta": "two"});
-        let input = CustodyAppendInput::from_authored_record(
-            &record,
-            "customRecordKind",
-            metadata(),
-        )
-        .expect("generic path");
-
-        assert_eq!(input.wos_record_kind, "customRecordKind");
-        assert_eq!(
-            input.record_canonical_json,
-            serde_json_canonicalizer::to_string(&record).expect("canonical"),
-        );
-        assert_eq!(
-            input.record_digest_sha256,
-            format!("{:x}", Sha256::digest(input.record_canonical_json_bytes()))
-        );
-    }
-
-    #[test]
-    fn context_builds_metadata_from_persisted_provenance_position() {
+    fn oversized_records_fail_loudly() {
         let mut record =
             ProvenanceRecord::state_transition("intake", "review", "submitted", Some("worker"));
-        record.lifecycle_state = Some("intake".to_string());
-        let context = CustodyAppendContext {
-            event_type_prefix: "wos.kernel".to_string(),
-            wos_spec_version: "0.1.0".to_string(),
-            record_schema_ref: "https://example.com/schemas/wos-provenance-record.json".to_string(),
-            workflow_ref: "https://example.com/workflows/intake-review.json".to_string(),
-            case_ref: "case-123".to_string(),
-            governance_envelope_ref: None,
-        };
+        record.data = Some(serde_json::json!({ "blob": "x".repeat(8_192) }));
+        let mut context = context();
+        context.max_inline_record_bytes = Some(128);
 
-        let metadata = context
-            .metadata_for_provenance_record("instance-456", 7, &record)
+        let error = CustodyAppendInput::from_provenance_record(&record, &context, metadata())
+            .expect_err("oversize rejection");
+
+        assert!(matches!(error, CustodyAppendError::OversizedRecord { .. }));
+    }
+
+    #[test]
+    fn context_uses_instance_id_as_default_case_id() {
+        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
+        let instance_id = wos_core::instance::CaseInstance::mint_id();
+        let metadata = context()
+            .metadata_for_provenance_record(&instance_id, 0, &record)
             .expect("metadata");
 
-        assert_eq!(metadata.record_id, "case-123#provenance-7");
-        assert_eq!(metadata.event_type, "wos.kernel.stateTransition");
-        assert_eq!(metadata.instance_ref, "instance-456");
+        assert_eq!(metadata.case_id, instance_id);
+        assert_eq!(metadata.record_id, record.id);
+    }
+
+    #[test]
+    fn encoded_json_representation_uses_base64() {
+        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
+        let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata())
+            .expect("append input");
+
+        let json = serde_json::to_value(&input).expect("serialize");
+        let encoded = json["record"].as_str().expect("base64 record");
+        assert_eq!(STANDARD.decode(encoded).expect("decode"), input.record);
+    }
+
+    #[test]
+    fn provenance_fixture_corpus_matches_rust_authority() {
+        let fixture_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/kernel/custody-hook/provenance-state-transition");
+        let authored: ProvenanceRecord = serde_json::from_str(
+            &std::fs::read_to_string(fixture_dir.join("record.json")).expect("fixture json"),
+        )
+        .expect("deserialize provenance fixture");
+        let metadata = CustodyAppendMetadata {
+            case_id: "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd".to_string(),
+            record_id: authored.id.clone(),
+            event_type: "wos.kernel.stateTransition".to_string(),
+        };
+        let expected_bytes =
+            std::fs::read(fixture_dir.join("record.dcbor")).expect("fixture dcbor");
+        let expected_sha256 = std::fs::read_to_string(fixture_dir.join("record.sha256"))
+            .expect("fixture sha256")
+            .trim()
+            .to_string();
+
+        let input = CustodyAppendInput::from_provenance_record(&authored, &context(), metadata)
+            .expect("append input");
+        let digest = Sha256::digest(input.record_bytes());
+        let actual_sha256 = digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+
+        assert_eq!(input.record_bytes(), expected_bytes);
+        assert_eq!(actual_sha256, expected_sha256);
         assert_eq!(
-            metadata.lifecycle_ref,
-            Some(CustodyLifecycleRef {
-                transition_id: Some("intake->review:submitted".to_string()),
-                state_id: Some("intake".to_string()),
-                event_name: Some("submitted".to_string()),
-                task_pattern: None,
-                task_id: None,
-            })
+            input.record_json_view().expect("decode json view"),
+            serde_json::to_value(&authored).expect("json authored record")
         );
     }
 
     #[test]
-    fn context_rejects_empty_event_type_prefix() {
-        let record = ProvenanceRecord::unmatched_event("submitted", Some("worker"));
-        let context = CustodyAppendContext {
-            event_type_prefix: "   ".to_string(),
-            wos_spec_version: "0.1.0".to_string(),
-            record_schema_ref: "https://example.com/schemas/wos-provenance-record.json".to_string(),
-            workflow_ref: "https://example.com/workflows/intake-review.json".to_string(),
-            case_ref: "case-123".to_string(),
-            governance_envelope_ref: None,
-        };
+    fn signature_affirmation_enters_custody_append_window() {
+        let record = ProvenanceRecord::signature_affirmation(SignatureAffirmationInput {
+            signer_id: "applicant",
+            role_id: "applicantSigner",
+            role: "signer",
+            document_id: "benefitsApplication",
+            document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            document_hash_algorithm: "sha-256",
+            signed_at: "2026-04-22T14:30:00Z",
+            identity_binding: serde_json::json!({
+                "method": "email-otp",
+                "assuranceLevel": "standard",
+                "providerRef": "urn:agency.gov:identity:providers:email-otp"
+            }),
+            consent_reference: serde_json::json!({
+                "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+                "consentVersion": "1.0.0",
+                "acceptedAtPath": "response.signature.acceptedAt",
+                "affirmationPath": "response.signature.affirmed"
+            }),
+            signature_provider: "urn:agency.gov:signature:providers:formspec",
+            ceremony_id: "ceremony-2026-0001",
+            profile_ref: Some("urn:agency.gov:wos:signature-profile:benefits:v1"),
+            profile_key: None,
+            formspec_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+            custody_hook_eligible: true,
+        });
+        let metadata = context()
+            .metadata_for_provenance_record(&typeid::mint_case_id(), 0, &record)
+            .expect("metadata");
 
-        let error = context
-            .metadata_for_provenance_record("instance-456", 0, &record)
-            .expect_err("reject");
+        let input = CustodyAppendInput::from_provenance_record(&record, &context(), metadata)
+            .expect("append input");
+        let view = input.record_json_view().expect("decode json view");
 
-        assert_eq!(error, CustodyAppendError::EmptyField("eventTypePrefix"));
+        assert_eq!(input.event_type, "wos.kernel.signatureAffirmation");
+        assert_eq!(input.record_id, record.id);
+        assert_eq!(view["recordKind"], "signatureAffirmation");
+        assert_eq!(view["data"]["signerId"], "applicant");
+        assert_eq!(view["data"]["custodyHookEligible"], true);
     }
 }

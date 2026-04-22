@@ -4,8 +4,8 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use wos_core::autonomy;
 use wos_core::confidence;
 use wos_core::deontic;
@@ -727,6 +727,7 @@ impl ReferenceCompanionPolicy {
             });
             if target_has_pending_response {
                 provenance.push(ProvenanceRecord {
+                    id: ProvenanceRecord::mint_id(),
                     record_kind: ProvenanceKind::DcrResolutionError,
                     timestamp: String::new(),
                     actor_id: None,
@@ -745,6 +746,7 @@ impl ReferenceCompanionPolicy {
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    canonical_event_hash: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
                     outcome: None,
@@ -788,6 +790,7 @@ impl ReferenceCompanionPolicy {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("");
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::ZoneSatisfied,
             timestamp: String::new(),
             actor_id: None,
@@ -803,6 +806,7 @@ impl ReferenceCompanionPolicy {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,

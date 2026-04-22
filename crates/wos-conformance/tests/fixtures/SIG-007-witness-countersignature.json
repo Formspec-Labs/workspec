@@ -1,0 +1,63 @@
+{
+  "binding": "formspec",
+  "id": "SIG-007-witness-countersignature",
+  "rule": "SIG-RT",
+  "description": "Witness counter-signature depends on the primary signer affirmation.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-witness.json"
+  },
+  "event_sequence": [
+    { "event": "start", "actor": "applicant" },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "applicantTask",
+        "response": {
+          "status": "completed",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "identityBinding": { "method": "email-otp", "assuranceLevel": "standard" },
+            "signatureProvider": "formspec",
+            "ceremonyId": "ceremony-primary",
+            "signature": {
+              "acceptedAt": "2026-04-22T12:07:00Z",
+              "affirmed": true,
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          }
+        }
+      }
+    },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "witnessTask",
+        "response": {
+          "status": "completed",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "identityBinding": { "method": "credential", "assuranceLevel": "high" },
+            "signatureProvider": "formspec",
+            "ceremonyId": "ceremony-witness",
+            "signature": {
+              "acceptedAt": "2026-04-22T12:08:00Z",
+              "affirmed": true,
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "draft", "to": "signing", "event": "start" },
+    { "from": "signing", "to": "complete", "event": "signature.completed" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "signatureAffirmation", "data": { "roleId": "applicantSigner" } },
+    { "recordKind": "signatureAffirmation", "data": { "roleId": "witnessRole" } }
+  ]
+}

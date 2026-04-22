@@ -7,6 +7,7 @@ mod drain;
 mod durable_impl;
 mod instance;
 mod provenance;
+mod signature;
 mod support;
 mod tasks;
 mod timers;
@@ -31,8 +32,15 @@ use crate::custody::CustodyAppendError;
 use crate::integration::IntegrationProfileDocument;
 use crate::store::{RuntimeStore, StoreError};
 
-pub use provenance::{populate_provenance_record_fields, stamp_provenance};
+pub use provenance::{
+    CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
+    stamp_provenance,
+};
 use provenance::{compensation_provenance, contract_validation_record};
+pub use signature::{
+    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
+    SignatureProfileDocument,
+};
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state,
     normalize_semver_range_expression, parse_timestamp,
@@ -256,9 +264,37 @@ pub enum RuntimeError {
     #[error("actor unauthorized: {0}")]
     Unauthorized(String),
 
+    /// Signature Profile runtime processing failed.
+    #[error("signature profile runtime failed: {0}")]
+    Signature(String),
+
     /// Timestamp conversion failed.
     #[error("timestamp conversion failed: {0}")]
     Clock(String),
+
+    /// The referenced provenance record was not found.
+    #[error("provenance record not found: {0}")]
+    ProvenanceRecordNotFound(String),
+
+    /// Custody receipt hash disagrees with an already-stamped value on the same record.
+    #[error(
+        "custody receipt conflict: existing canonical_event_hash {existing} differs from attempted {attempted}"
+    )]
+    CustodyReceiptConflict { existing: String, attempted: String },
+}
+
+impl From<provenance::CustodyReceiptStampError> for RuntimeError {
+    fn from(value: provenance::CustodyReceiptStampError) -> Self {
+        match value {
+            provenance::CustodyReceiptStampError::Conflict {
+                existing,
+                attempted,
+            } => Self::CustodyReceiptConflict {
+                existing,
+                attempted,
+            },
+        }
+    }
 }
 
 trait ResolveDocumentsDyn {
@@ -359,6 +395,7 @@ pub struct WosRuntime {
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
+    signature_profiles: Vec<signature::SignatureProfileRegistration>,
 }
 
 impl WosRuntime {
@@ -398,6 +435,7 @@ impl WosRuntime {
             integration_profile: None,
             business_calendar: None,
             bindings,
+            signature_profiles: Vec::new(),
         }
     }
 
@@ -437,9 +475,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
+    use crate::DurableRuntime;
     use crate::binding::{CaseMutationBundle, PreparedTask, SubmissionValidation};
     use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
-    use crate::DurableRuntime;
     use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 
@@ -488,6 +526,7 @@ mod tests {
         let mut records = vec![
             ProvenanceRecord::state_transition("Draft", "Submitted", "submit", None),
             ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::NarrativeTierRecorded,
                 timestamp: String::new(),
                 actor_id: None,
@@ -503,6 +542,7 @@ mod tests {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -1501,24 +1541,16 @@ mod tests {
                     50,
                     crate::CustodyAppendContext {
                         event_type_prefix: "wos.kernel".to_string(),
-                        wos_spec_version: "0.1.0".to_string(),
-                        record_schema_ref:
-                            "https://wos-spec.org/schemas/kernel/provenance-record/1.0"
-                                .to_string(),
-                        workflow_ref: "urn:test:durable-trait".to_string(),
-                        case_ref: "case-trait".to_string(),
-                        governance_envelope_ref: None,
+                        case_id: None,
+                        max_inline_record_bytes: None,
+                        workflow_ref: Some("urn:test:durable-trait".to_string()),
                     },
                 )
                 .expect("trait load_custody_append_window");
             assert_eq!(custody_window.len(), window.len());
             assert_eq!(
                 custody_window[0].idempotency_tuple(),
-                (
-                    "case-trait",
-                    custody_window[0].event_type.as_str(),
-                    "case-trait#provenance-0"
-                )
+                (created.instance_id.as_str(), window[0].id.as_str())
             );
             assert!(
                 custody_window[0].event_type.starts_with("wos.kernel."),
@@ -1526,8 +1558,10 @@ mod tests {
                 custody_window[0].event_type
             );
             assert_eq!(
-                custody_window[0].record_canonical_json,
-                serde_json_canonicalizer::to_string(&window[0]).expect("canonical provenance")
+                custody_window[0]
+                    .record_json_view()
+                    .expect("decoded custody json"),
+                serde_json::to_value(&window[0]).expect("json provenance")
             );
 
             runtime
@@ -1560,6 +1594,19 @@ mod tests {
                 matches!(submission, TaskSubmissionResult::Completed { .. }),
                 "expected completed submission, got {submission:?}"
             );
+
+            let record_id = window[0].id.clone();
+            runtime
+                .apply_custody_receipt(
+                    created.instance_id.as_str(),
+                    &record_id,
+                    crate::CustodyAppendReceipt {
+                        canonical_event_hash:
+                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                .to_string(),
+                    },
+                )
+                .expect("trait apply_custody_receipt");
         }
 
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
@@ -1597,6 +1644,229 @@ mod tests {
         .expect("kernel json");
         let mut runtime = runtime_with_kernel(kernel);
         exercise_all_trait_methods(&mut runtime);
+    }
+
+    #[test]
+    fn custody_receipt_stamps_canonical_event_hash_on_persisted_provenance() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt".to_string(),
+                definition_url: "urn:test:receipt".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+
+        runtime
+            .apply_custody_receipt(
+                "case-receipt",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+                            .to_string(),
+                },
+            )
+            .expect("apply receipt");
+
+        let persisted = runtime
+            .load_provenance_window(created.instance_id.as_str(), 0, 1)
+            .expect("reload provenance");
+        assert_eq!(
+            persisted[0].canonical_event_hash.as_deref(),
+            Some("9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c")
+        );
+    }
+
+    #[test]
+    fn custody_receipt_reapply_is_idempotent_when_hash_matches() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt-idem",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let _created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt-idem".to_string(),
+                definition_url: "urn:test:receipt-idem".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt-idem", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+        let hash = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
+        let receipt = crate::CustodyAppendReceipt {
+            canonical_event_hash: hash.to_string(),
+        };
+        runtime
+            .apply_custody_receipt("case-receipt-idem", &record_id, receipt.clone())
+            .expect("first apply");
+        runtime
+            .apply_custody_receipt("case-receipt-idem", &record_id, receipt)
+            .expect("idempotent reapply");
+        let persisted = runtime
+            .load_provenance_window("case-receipt-idem", 0, 1)
+            .expect("reload");
+        assert_eq!(persisted[0].canonical_event_hash.as_deref(), Some(hash));
+    }
+
+    #[test]
+    fn custody_receipt_conflict_when_hash_differs() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt-conflict",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let _created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt-conflict".to_string(),
+                definition_url: "urn:test:receipt-conflict".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt-conflict", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+        runtime
+            .apply_custody_receipt(
+                "case-receipt-conflict",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+                            .to_string(),
+                },
+            )
+            .expect("first apply");
+        let err = runtime
+            .apply_custody_receipt(
+                "case-receipt-conflict",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "0000000000000000000000000000000000000000000000000000000000000000"
+                            .to_string(),
+                },
+            )
+            .expect_err("second hash must conflict");
+        assert!(matches!(err, RuntimeError::CustodyReceiptConflict { .. }));
+    }
+
+    #[test]
+    fn create_instance_preserves_pre_minted_case_typeid() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let pre_minted = CaseInstance::mint_id();
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: pre_minted.clone(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert_eq!(created.instance_id, pre_minted);
+        assert!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .is_none(),
+            "pre-minted TypeID must not produce a legacy alias"
+        );
+    }
+
+    #[test]
+    fn create_instance_mints_id_for_empty_string() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "   ".to_string(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert!(
+            CaseInstance::is_case_id(&created.instance_id),
+            "empty instance_id must be replaced with a minted case TypeID, got {}",
+            created.instance_id
+        );
+        assert!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .is_none(),
+            "empty instance_id must not produce a legacy alias"
+        );
+    }
+
+    #[test]
+    fn create_instance_mints_id_and_stores_alias_for_legacy_name() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "legacy-case-42".to_string(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert!(
+            CaseInstance::is_case_id(&created.instance_id),
+            "legacy name must be replaced with a minted case TypeID"
+        );
+        assert_eq!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .and_then(serde_json::Value::as_str),
+            Some("legacy-case-42"),
+            "legacy name must be preserved as an alias"
+        );
+        let loaded = runtime
+            .load_instance("legacy-case-42")
+            .expect("load by alias");
+        assert_eq!(loaded.instance_id, created.instance_id);
     }
 
     fn manual_formspec_task(
@@ -1703,10 +1973,12 @@ mod tests {
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::TaskPresented));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::TaskPresented)
+        );
 
         let instance = runtime.load_instance("case-1").unwrap();
         assert_eq!(instance.active_tasks.len(), 1);
@@ -1823,14 +2095,18 @@ mod tests {
         let first = runtime.drain_once("case-a").unwrap();
         let second = runtime.drain_once("case-b").unwrap();
 
-        assert!(!first
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
+        assert!(
+            !first
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
     }
 
     #[test]
@@ -2120,10 +2396,12 @@ mod tests {
             serde_json::json!("pending")
         );
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted)
+        );
     }
 
     /// Regression: the persist-task-draft append site must route its record
@@ -2229,10 +2507,12 @@ mod tests {
 
         let record = runtime.store.load_record("case-4").unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
+        );
     }
 
     #[test]
@@ -2419,10 +2699,12 @@ mod tests {
 
         let result = runtime.drain_once("case-7").unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("$timeout.review"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TimerFired));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TimerFired)
+        );
 
         let instance = runtime.load_instance("case-7").unwrap();
         assert!(instance.configuration.contains(&"timed_out".to_string()));
@@ -2919,14 +3201,18 @@ mod tests {
             let invocations = invocations.lock().unwrap();
             assert_eq!(invocations.len(), 1);
         }
-        assert!(second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted));
+        assert!(
+            second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted)
+        );
     }
 
     #[test]

@@ -36,11 +36,11 @@ use crate::milestones::evaluate_milestones;
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::request_response::{
-    apply_output_binding, build_integration_input, load_or_invoke_service_result,
-    validate_integration_contract, InvocationContext,
-};
 use super::IntegrationBindingHandler;
+use super::request_response::{
+    InvocationContext, apply_output_binding, build_integration_input,
+    load_or_invoke_service_result, validate_integration_contract,
+};
 
 /// A single step declared in `binding.extensions.steps`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +114,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                         )?;
                         if !updates.is_empty() {
                             provenance.push(ProvenanceRecord {
+                                id: ProvenanceRecord::mint_id(),
                                 record_kind: ProvenanceKind::DataMapping,
                                 timestamp: String::new(),
                                 actor_id: observed.actor_id.clone(),
@@ -134,6 +135,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                                 outputs: Vec::new(),
                                 input_digest: None,
                                 output_digest: None,
+                                canonical_event_hash: None,
                                 transition_tags: Vec::new(),
                                 case_file_snapshot: None,
                                 outcome: None,
@@ -168,6 +170,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
             )?;
             if !updates.is_empty() {
                 provenance.push(ProvenanceRecord {
+                    id: ProvenanceRecord::mint_id(),
                     record_kind: ProvenanceKind::DataMapping,
                     timestamp: String::new(),
                     actor_id: observed.actor_id.clone(),
@@ -188,6 +191,7 @@ impl IntegrationBindingHandler for ArazzoHandler {
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    canonical_event_hash: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
                     outcome: None,
@@ -320,6 +324,7 @@ fn execute_step(
 
     let duration_ms = start.elapsed().as_millis() as u64;
     step_provenance.push(ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::ArazzoStep,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -340,6 +345,7 @@ fn execute_step(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,
@@ -412,6 +418,7 @@ fn arazzo_step_record(
     duration_ms: u64,
 ) -> ProvenanceRecord {
     ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::ArazzoStep,
         timestamp: String::new(),
         actor_id: observed.actor_id.clone(),
@@ -431,6 +438,7 @@ fn arazzo_step_record(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,

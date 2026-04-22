@@ -23,6 +23,7 @@ pub enum DocumentKind {
     VerificationReport,
     IntegrationProfile,
     SemanticProfile,
+    SignatureProfile,
     LifecycleDetail,
     CorrespondenceMetadata,
     BusinessCalendar,
@@ -95,6 +96,7 @@ const MARKERS: &[(&str, DocumentKind)] = &[
     ("$wosVerificationReport", DocumentKind::VerificationReport),
     ("$wosIntegrationProfile", DocumentKind::IntegrationProfile),
     ("$wosSemanticProfile", DocumentKind::SemanticProfile),
+    ("$wosSignatureProfile", DocumentKind::SignatureProfile),
     ("$wosLifecycleDetail", DocumentKind::LifecycleDetail),
     (
         "$wosCorrespondenceMetadata",

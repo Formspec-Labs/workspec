@@ -10,7 +10,7 @@
 use wos_core::instance::{CaseInstance, PendingEvent};
 use wos_core::provenance::ProvenanceRecord;
 
-use crate::custody::{CustodyAppendContext, CustodyAppendInput};
+use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::durable::DurableRuntime;
 
 use super::{
@@ -90,5 +90,14 @@ impl DurableRuntime for WosRuntime {
         context: CustodyAppendContext,
     ) -> Result<Vec<CustodyAppendInput>, RuntimeError> {
         WosRuntime::load_custody_append_window(self, instance_id, cursor, limit, context)
+    }
+
+    fn apply_custody_receipt(
+        &mut self,
+        instance_id: &str,
+        record_id: &str,
+        receipt: CustodyAppendReceipt,
+    ) -> Result<(), RuntimeError> {
+        WosRuntime::apply_custody_receipt(self, instance_id, record_id, receipt)
     }
 }

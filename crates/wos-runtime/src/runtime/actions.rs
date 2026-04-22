@@ -17,13 +17,14 @@ use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
 use crate::integration_handlers::{
-    dispatch_integration_binding, load_or_invoke_service_result, InvocationContext,
+    InvocationContext, dispatch_integration_binding, load_or_invoke_service_result,
 };
 use crate::store::RuntimeRecord;
 
 use super::{
-    impact_level_label, make_task_id, normalize_semver_range_expression, RuntimeError, WosRuntime,
-    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
+    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, RuntimeError, WosRuntime,
+    impact_level_label, make_task_id, normalize_semver_range_expression,
+    signature::append_signature_task_extensions,
 };
 
 impl WosRuntime {
@@ -107,6 +108,7 @@ impl WosRuntime {
 
                     if reused_persisted_result {
                         provenance.push(ProvenanceRecord {
+                            id: ProvenanceRecord::mint_id(),
                             record_kind: ProvenanceKind::IdempotencyDedup,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -126,12 +128,14 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            canonical_event_hash: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
                             outcome: None,
                         });
                     } else {
                         provenance.push(ProvenanceRecord {
+                            id: ProvenanceRecord::mint_id(),
                             record_kind: ProvenanceKind::StepResultPersisted,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -152,6 +156,7 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            canonical_event_hash: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
                             outcome: None,
@@ -162,6 +167,7 @@ impl WosRuntime {
                         let validation_result =
                             self.validator.validate(contract_ref, &step_result.output)?;
                         provenance.push(ProvenanceRecord {
+                            id: ProvenanceRecord::mint_id(),
                             record_kind: ProvenanceKind::ContractValidation,
                             timestamp: String::new(),
                             actor_id: observed.actor_id.clone(),
@@ -182,6 +188,7 @@ impl WosRuntime {
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            canonical_event_hash: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
                             outcome: None,
@@ -354,6 +361,8 @@ impl WosRuntime {
             extensions: Default::default(),
         };
 
+        append_signature_task_extensions(&mut task, &action.extensions);
+
         if let Some(completion_event) = &action.completion_event {
             task.extensions.insert(
                 COMPLETION_EVENT_EXTENSION_KEY.to_string(),
@@ -408,7 +417,7 @@ impl WosRuntime {
                     response_mapping_ref: task.response_mapping_ref.clone(),
                     deadline: task.deadline.clone(),
                     impact_level: task.impact_level.clone(),
-                    extensions: Default::default(),
+                    extensions: task.extensions.clone(),
                 });
             } else {
                 return Err(RuntimeError::UnsupportedBinding(contract.binding.clone()));

@@ -23,11 +23,11 @@ use crate::policy_decision::PolicyDecision;
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::request_response::{
-    apply_output_binding, build_integration_input, load_or_invoke_service_result,
-    validate_integration_contract, InvocationContext,
-};
 use super::IntegrationBindingHandler;
+use super::request_response::{
+    InvocationContext, apply_output_binding, build_integration_input,
+    load_or_invoke_service_result, validate_integration_contract,
+};
 
 /// Handler for external policy engine evaluation bindings.
 pub(crate) struct PolicyEngineHandler;
@@ -83,6 +83,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
 
         // Emit PolicyDecision provenance with the canonical shape.
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::PolicyDecision,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -106,6 +107,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -127,6 +129,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -146,6 +149,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,

@@ -7,23 +7,24 @@
 //! reduces the size of `runtime.rs` without changing the current adapter
 //! behavior.
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine as _;
 use crate::binding::SubmissionValidation;
 use crate::milestones::evaluate_milestones;
 use crate::store::{
     ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, TaskArtifact, TaskArtifactKind,
 };
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::model::governance::DelegationScope;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::AccessControl;
 
 use super::{
-    contract_validation_record, format_timestamp, merge_case_state,
-    populate_provenance_record_fields, stamp_provenance, PersistDraftResult, RuntimeError,
-    TaskSubmissionResult, WosRuntime, COMPLETION_EVENT_EXTENSION_KEY,
-    FAILURE_EVENT_EXTENSION_KEY,
+    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, PersistDraftResult, RuntimeError,
+    TaskSubmissionResult, WosRuntime, contract_validation_record, format_timestamp,
+    merge_case_state, populate_provenance_record_fields,
+    signature::{signed_at_for_response, signer_id_for_response},
+    stamp_provenance,
 };
 
 impl WosRuntime {
@@ -197,6 +198,28 @@ impl WosRuntime {
             })?
             .to_string();
         if status != "completed" {
+            if let Some(result) = self.handle_signature_non_completion(
+                &mut record,
+                task_index,
+                &response,
+                actor_id,
+                &now_iso,
+                &status,
+            )? {
+                if let Some(token) = idempotency_token {
+                    record.replay_entries.insert(
+                        ReplayKey {
+                            operation: ReplayOperation::SubmitTaskResponse,
+                            task_id: task_id.to_string(),
+                            actor_id: actor_id.to_string(),
+                            token: token.to_string(),
+                        },
+                        ReplayValue::Submission(result.clone()),
+                    );
+                }
+                self.store.save_record(record)?;
+                return Ok(result);
+            }
             let result = TaskSubmissionResult::Rejected {
                 code: "taskResponseStatusNotCompleted".to_string(),
             };
@@ -325,13 +348,26 @@ impl WosRuntime {
         let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
         provenance.extend(milestone_records);
 
+        let completion_event_key = if self.signature_flow_complete_after(&record.instance, &task)? {
+            COMPLETION_EVENT_EXTENSION_KEY
+        } else {
+            "x-wos-runtime-no-completion-event"
+        };
         let emitted_event = remove_task_with_event(
             &mut record.instance,
             task_index,
-            COMPLETION_EVENT_EXTENSION_KEY,
+            completion_event_key,
             actor_id,
             &now_iso,
         );
+        let signature_record = self
+            .signature_affirmation_for_submission(&record, &task, &response, actor_id, &now_iso)?;
+        if let Some(signature_record) = signature_record {
+            let signer_id = signer_id_for_response(&task, &response, actor_id).to_string();
+            let signed_at = signed_at_for_response(&record, &task, &response, &now_iso, self)?;
+            self.record_signature_completion(&mut record.instance, &task, &signer_id, &signed_at)?;
+            provenance.push(signature_record);
+        }
         provenance.push(ProvenanceRecord::task_lifecycle(
             ProvenanceKind::TaskCompleted,
             task_id,
