@@ -54,6 +54,7 @@ pub fn evaluate_deontic_constraints(
 
     // Record evaluation order (AI S4.6).
     provenance.push(ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::DeonticEvaluation,
         timestamp: String::new(),
         actor_id: None,
@@ -71,6 +72,7 @@ pub fn evaluate_deontic_constraints(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,
@@ -123,6 +125,7 @@ pub fn evaluate_deontic_constraints(
     // Record evaluation at all three composition levels (AI S4.7).
     for level in &["agent", "action-site", "workflow"] {
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::DeonticEvaluation,
             timestamp: String::new(),
             actor_id: None,
@@ -138,6 +141,7 @@ pub fn evaluate_deontic_constraints(
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -156,6 +160,7 @@ pub fn evaluate_deontic_constraints(
                 let result = evaluate_fel_expression(entitled_expr, output, case_state);
                 if matches!(result, FelResult::False | FelResult::Null) {
                     provenance.push(ProvenanceRecord {
+                        id: ProvenanceRecord::mint_id(),
                         record_kind: ProvenanceKind::RightsViolation,
                         timestamp: String::new(),
                         actor_id: None,
@@ -174,6 +179,7 @@ pub fn evaluate_deontic_constraints(
                         outputs: Vec::new(),
                         input_digest: None,
                         output_digest: None,
+                        canonical_event_hash: None,
                         transition_tags: Vec::new(),
                         case_file_snapshot: None,
                         outcome: None,
@@ -199,6 +205,7 @@ pub fn evaluate_deontic_constraints(
                 "most-restrictive"
             };
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticResolution,
                 timestamp: String::new(),
                 actor_id: None,
@@ -217,6 +224,7 @@ pub fn evaluate_deontic_constraints(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -253,6 +261,7 @@ fn evaluate_constraint_set(
     if let Some(rationale) = bypass {
         for perm in &constraints.permissions {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticBypass,
                 timestamp: String::new(),
                 actor_id: None,
@@ -272,6 +281,7 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -279,6 +289,7 @@ fn evaluate_constraint_set(
         }
         for prohib in &constraints.prohibitions {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticBypass,
                 timestamp: String::new(),
                 actor_id: None,
@@ -298,6 +309,7 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -305,6 +317,7 @@ fn evaluate_constraint_set(
         }
         for oblig in &constraints.obligations {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticBypass,
                 timestamp: String::new(),
                 actor_id: None,
@@ -324,6 +337,7 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -371,6 +385,7 @@ fn evaluate_constraint_set(
                     data["invocationSource"] = serde_json::json!(source);
                 }
                 provenance.push(ProvenanceRecord {
+                    id: ProvenanceRecord::mint_id(),
                     record_kind: ProvenanceKind::DeonticViolation,
                     timestamp: String::new(),
                     actor_id: None,
@@ -386,6 +401,7 @@ fn evaluate_constraint_set(
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    canonical_event_hash: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
                     outcome: None,
@@ -416,6 +432,7 @@ fn evaluate_constraint_set(
 
         if violated {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticViolation,
                 timestamp: String::new(),
                 actor_id: None,
@@ -434,6 +451,7 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -455,6 +473,7 @@ fn evaluate_constraint_set(
 
         if violated {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticViolation,
                 timestamp: String::new(),
                 actor_id: None,
@@ -473,6 +492,7 @@ fn evaluate_constraint_set(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -499,6 +519,7 @@ fn handle_null_propagation(
             NullBehavior::Deny => true,
             NullBehavior::Escalate => {
                 provenance.push(ProvenanceRecord {
+                    id: ProvenanceRecord::mint_id(),
                     record_kind: ProvenanceKind::DeonticViolation,
                     timestamp: String::new(),
                     actor_id: None,
@@ -518,6 +539,7 @@ fn handle_null_propagation(
                     outputs: Vec::new(),
                     input_digest: None,
                     output_digest: None,
+                    canonical_event_hash: None,
                     transition_tags: Vec::new(),
                     case_file_snapshot: None,
                     outcome: None,
@@ -531,6 +553,7 @@ fn handle_null_propagation(
     match impact_level {
         ImpactLevel::RightsImpacting | ImpactLevel::SafetyImpacting => {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DeonticViolation,
                 timestamp: String::new(),
                 actor_id: None,
@@ -549,6 +572,7 @@ fn handle_null_propagation(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: None,
@@ -589,6 +613,7 @@ fn check_consistency(
                     let threshold = case_num.abs() * CONSISTENCY_RELATIVE_THRESHOLD;
                     if diff > threshold && diff > CONSISTENCY_ABSOLUTE_THRESHOLD {
                         provenance.push(ProvenanceRecord {
+                            id: ProvenanceRecord::mint_id(),
                             record_kind: ProvenanceKind::ConsistencyViolation,
                             timestamp: String::new(),
                             actor_id: None,
@@ -608,6 +633,7 @@ fn check_consistency(
                             outputs: Vec::new(),
                             input_digest: None,
                             output_digest: None,
+                            canonical_event_hash: None,
                             transition_tags: Vec::new(),
                             case_file_snapshot: None,
                             outcome: None,

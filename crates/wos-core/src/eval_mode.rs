@@ -86,6 +86,7 @@ pub fn continuous_reevaluate(
             //   - `data` carries the triggering mutation + cycles used for
             //     downstream tooling to locate the cycle.
             evaluator.record_provenance(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::ConvergenceCapReached,
                 timestamp: String::new(),
                 actor_id: None,
@@ -104,6 +105,7 @@ pub fn continuous_reevaluate(
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
                 transition_tags: Vec::new(),
                 case_file_snapshot: None,
                 outcome: Some("convergenceCapReached".to_string()),

@@ -133,7 +133,8 @@ impl From<K> for ProvenanceAuditTier {
             | K::CallbackPending
             | K::ArazzoStep
             | K::ToolInvoked
-            | K::PolicyDecision => Self::Facts,
+            | K::PolicyDecision
+            | K::SignatureAffirmation => Self::Facts,
         }
     }
 }

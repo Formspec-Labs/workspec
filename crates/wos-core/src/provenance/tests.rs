@@ -164,6 +164,7 @@ fn deserializes_legacy_records_without_timestamp_field() {
     // Older fixtures predate the timestamp field; they must still load
     // and yield an empty timestamp the runtime can stamp on replay.
     let legacy = serde_json::json!({
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
         "fromState": "a",
         "toState": "b",
@@ -222,6 +223,9 @@ fn new_fields_default_to_none_or_empty_vec() {
         "task-1",
         None,
         serde_json::json!({}),
+    ));
+    assert_zero_defaults(&ProvenanceRecord::signature_affirmation(
+        signature_affirmation_input(),
     ));
 }
 
@@ -288,6 +292,10 @@ fn audit_layer_for_kind_maps_narrative_only() {
     );
     assert_eq!(audit_layer_for_kind(ProvenanceKind::TaskCompleted), "facts");
     assert_eq!(audit_layer_for_kind(ProvenanceKind::EventEmitted), "facts");
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::SignatureAffirmation),
+        "facts"
+    );
 }
 
 /// Finding 3 regression: every `ProvenanceKind` variant must map to a
@@ -392,6 +400,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ArazzoStep,
         ProvenanceKind::ToolInvoked,
         ProvenanceKind::PolicyDecision,
+        ProvenanceKind::SignatureAffirmation,
     ];
 
     for kind in all {
@@ -418,6 +427,7 @@ fn audit_layer_for_kind_covers_every_variant() {
 #[test]
 fn deserializes_legacy_record_missing_new_fields() {
     let legacy = serde_json::json!({
+        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "stateTransition",
         "timestamp": "2026-04-15T12:00:00Z",
         "fromState": "a",
@@ -433,4 +443,66 @@ fn deserializes_legacy_record_missing_new_fields() {
     assert!(record.outputs.is_empty());
     assert!(record.input_digest.is_none());
     assert!(record.output_digest.is_none());
+}
+
+fn signature_affirmation_input() -> SignatureAffirmationInput<'static> {
+    SignatureAffirmationInput {
+        signer_id: "applicant",
+        role_id: "applicantSigner",
+        role: "signer",
+        document_id: "benefitsApplication",
+        document_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        document_hash_algorithm: "sha-256",
+        signed_at: "2026-04-22T14:30:00Z",
+        identity_binding: serde_json::json!({
+            "method": "email-otp",
+            "assuranceLevel": "standard",
+            "providerRef": "urn:agency.gov:identity:providers:email-otp"
+        }),
+        consent_reference: serde_json::json!({
+            "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+            "consentVersion": "1.0.0",
+            "acceptedAtPath": "response.signature.acceptedAt",
+            "affirmationPath": "response.signature.affirmed"
+        }),
+        signature_provider: "urn:agency.gov:signature:providers:formspec",
+        ceremony_id: "ceremony-2026-0001",
+        profile_ref: Some("urn:agency.gov:wos:signature-profile:benefits:v1"),
+        profile_key: None,
+        formspec_response_ref: "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+        custody_hook_eligible: true,
+    }
+}
+
+#[test]
+fn signature_affirmation_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::signature_affirmation(signature_affirmation_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "signatureAffirmation");
+    assert_eq!(json["actorId"], "applicant");
+    assert_eq!(json["data"]["signerId"], "applicant");
+    assert_eq!(json["data"]["roleId"], "applicantSigner");
+    assert_eq!(json["data"]["role"], "signer");
+    assert_eq!(json["data"]["documentId"], "benefitsApplication");
+    assert_eq!(
+        json["data"]["documentHash"],
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    );
+    assert_eq!(json["data"]["documentHashAlgorithm"], "sha-256");
+    assert_eq!(json["data"]["signedAt"], "2026-04-22T14:30:00Z");
+    assert_eq!(
+        json["data"]["signatureProvider"],
+        "urn:agency.gov:signature:providers:formspec"
+    );
+    assert_eq!(json["data"]["ceremonyId"], "ceremony-2026-0001");
+    assert_eq!(
+        json["data"]["profileRef"],
+        "urn:agency.gov:wos:signature-profile:benefits:v1"
+    );
+    assert_eq!(
+        json["data"]["formspecResponseRef"],
+        "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
+    );
+    assert_eq!(json["data"]["custodyHookEligible"], true);
 }

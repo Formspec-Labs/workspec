@@ -198,6 +198,13 @@ pub enum ProvenanceKind {
     /// `data` carries `{"decision": "allow"|"deny"|"indeterminate",
     /// "reasonsCount": <n>, "obligationsCount": <n>, ...}`.
     PolicyDecision,
+
+    // ── Signature Profile (WOS-T4) ─────────────────────────────────
+    /// A signer affirmed a document under a Signature Profile.
+    ///
+    /// `data` carries signer, role, document, identity-binding, consent,
+    /// ceremony, profile, Formspec response, and custody eligibility fields.
+    SignatureAffirmation,
 }
 
 impl ProvenanceKind {

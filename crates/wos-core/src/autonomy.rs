@@ -431,6 +431,7 @@ fn impact_level_str(level: &ImpactLevel) -> &'static str {
 
 fn prov(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
     ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: kind,
         timestamp: String::new(),
         actor_id: None,
@@ -446,6 +447,7 @@ fn prov(kind: ProvenanceKind, data: serde_json::Value) -> ProvenanceRecord {
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
         transition_tags: Vec::new(),
         case_file_snapshot: None,
         outcome: None,

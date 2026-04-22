@@ -20,5 +20,5 @@ mod tests;
 pub use audit_tier::{ProvenanceAuditTier, audit_layer_for_kind};
 pub use kind::ProvenanceKind;
 pub use log::ProvenanceLog;
-pub use record::ProvenanceRecord;
+pub use record::{ProvenanceRecord, SignatureAffirmationInput};
 pub use snapshot::CaseFileSnapshot;

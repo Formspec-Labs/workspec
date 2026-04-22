@@ -2,8 +2,47 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::typeid;
+
 use super::kind::ProvenanceKind;
 use super::snapshot::CaseFileSnapshot;
+
+/// Signature affirmation provenance input.
+///
+/// Holds the required WOS Signature Profile evidence fields before they are
+/// serialized into a `SignatureAffirmation` provenance record.
+pub struct SignatureAffirmationInput<'a> {
+    /// Stable signer identifier from the signature ceremony context.
+    pub signer_id: &'a str,
+    /// Signature Profile role id.
+    pub role_id: &'a str,
+    /// Signature Profile role literal.
+    pub role: &'a str,
+    /// Signature Profile document id.
+    pub document_id: &'a str,
+    /// Digest of the document bytes the signer affirmed.
+    pub document_hash: &'a str,
+    /// Digest algorithm used for `document_hash`.
+    pub document_hash_algorithm: &'a str,
+    /// RFC 3339 timestamp for the signing act.
+    pub signed_at: &'a str,
+    /// Provider-neutral identity-binding evidence.
+    pub identity_binding: serde_json::Value,
+    /// Consent text/version and affirmation evidence reference.
+    pub consent_reference: serde_json::Value,
+    /// Signature provider identifier.
+    pub signature_provider: &'a str,
+    /// Provider or adapter ceremony identifier.
+    pub ceremony_id: &'a str,
+    /// URI reference to the Signature Profile, when cross-artifact.
+    pub profile_ref: Option<&'a str>,
+    /// Package-local Signature Profile key, when resolved in-document.
+    pub profile_key: Option<&'a str>,
+    /// URI reference to the canonical Formspec response.
+    pub formspec_response_ref: &'a str,
+    /// Whether the record is eligible for `custodyHook` admission.
+    pub custody_hook_eligible: bool,
+}
 
 /// A single provenance record.
 ///
@@ -18,6 +57,9 @@ use super::snapshot::CaseFileSnapshot;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceRecord {
+    /// TypeID-structured identifier minted at authoring time.
+    pub id: String,
+
     /// Record type.
     pub record_kind: ProvenanceKind,
 
@@ -86,6 +128,10 @@ pub struct ProvenanceRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_digest: Option<String>,
 
+    /// Trellis `canonical_event_hash` stamped after custody admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_event_hash: Option<String>,
+
     /// Semantic tags copied from the firing transition.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transition_tags: Vec<String>,
@@ -107,15 +153,21 @@ pub struct ProvenanceRecord {
 }
 
 impl ProvenanceRecord {
-    /// Create a state transition record.
-    pub fn state_transition(from: &str, to: &str, event: &str, actor_id: Option<&str>) -> Self {
+    /// Mints a new provenance-record identifier.
+    #[must_use]
+    pub fn mint_id() -> String {
+        typeid::mint_provenance_id()
+    }
+
+    fn blank(record_kind: ProvenanceKind) -> Self {
         Self {
-            record_kind: ProvenanceKind::StateTransition,
+            id: Self::mint_id(),
+            record_kind,
             timestamp: String::new(),
-            actor_id: actor_id.map(String::from),
-            from_state: Some(from.to_string()),
-            to_state: Some(to.to_string()),
-            event: Some(event.to_string()),
+            actor_id: None,
+            from_state: None,
+            to_state: None,
+            event: None,
             data: None,
             audit_layer: None,
             actor_type: None,
@@ -125,10 +177,21 @@ impl ProvenanceRecord {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
         }
+    }
+
+    /// Create a state transition record.
+    pub fn state_transition(from: &str, to: &str, event: &str, actor_id: Option<&str>) -> Self {
+        let mut record = Self::blank(ProvenanceKind::StateTransition);
+        record.actor_id = actor_id.map(String::from);
+        record.from_state = Some(from.to_string());
+        record.to_state = Some(to.to_string());
+        record.event = Some(event.to_string());
+        record
     }
 
     /// Create a state transition record with transition tags and an optional
@@ -149,26 +212,10 @@ impl ProvenanceRecord {
 
     /// Create an unmatched event record (Kernel S4.9).
     pub fn unmatched_event(event: &str, actor_id: Option<&str>) -> Self {
-        Self {
-            record_kind: ProvenanceKind::UnmatchedEvent,
-            timestamp: String::new(),
-            actor_id: actor_id.map(String::from),
-            from_state: None,
-            to_state: None,
-            event: Some(event.to_string()),
-            data: None,
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::UnmatchedEvent);
+        record.actor_id = actor_id.map(String::from);
+        record.event = Some(event.to_string());
+        record
     }
 
     /// Create a case state mutation record (Kernel S5.4).
@@ -178,209 +225,78 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         lifecycle_state: &str,
     ) -> Self {
-        Self {
-            record_kind: ProvenanceKind::CaseStateMutation,
-            timestamp: String::new(),
-            actor_id: actor_id.map(String::from),
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "path": path,
-                "newValue": new_value,
-                "lifecycleState": lifecycle_state,
-                "viaExplicitAction": true,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::CaseStateMutation);
+        record.actor_id = actor_id.map(String::from);
+        record.data = Some(serde_json::json!({
+            "path": path,
+            "newValue": new_value,
+            "lifecycleState": lifecycle_state,
+            "viaExplicitAction": true,
+        }));
+        record
     }
 
     /// Create a timer created record (Lifecycle Detail S6.7).
     pub fn timer_created(timer_id: &str, duration: &str, fires_event: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::TimerCreated,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "timerId": timer_id,
-                "duration": duration,
-                "firesEvent": fires_event,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::TimerCreated);
+        record.data = Some(serde_json::json!({
+            "timerId": timer_id,
+            "duration": duration,
+            "firesEvent": fires_event,
+        }));
+        record
     }
 
     /// Create a timer fired record (Lifecycle Detail S6.7).
     pub fn timer_fired(timer_id: &str, fires_event: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::TimerFired,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "timerId": timer_id,
-                "firesEvent": fires_event,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::TimerFired);
+        record.data = Some(serde_json::json!({
+            "timerId": timer_id,
+            "firesEvent": fires_event,
+        }));
+        record
     }
 
     /// Create a timer cancelled record (Lifecycle Detail S6.7).
     pub fn timer_cancelled(timer_id: &str, reason: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::TimerCancelled,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "timerId": timer_id,
-                "reason": reason,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::TimerCancelled);
+        record.data = Some(serde_json::json!({
+            "timerId": timer_id,
+            "reason": reason,
+        }));
+        record
     }
 
     /// Create a state-entry record.
     pub fn state_entered(state: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::OnEntry,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: Some(state.to_string()),
-            event: None,
-            data: Some(serde_json::json!({ "state": state })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::OnEntry);
+        record.to_state = Some(state.to_string());
+        record.data = Some(serde_json::json!({ "state": state }));
+        record
     }
 
     /// Create an onEntry action record.
     pub fn on_entry(state: &str, action_type: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::OnEntry,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: Some(state.to_string()),
-            event: None,
-            data: Some(serde_json::json!({ "actionType": action_type })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::OnEntry);
+        record.to_state = Some(state.to_string());
+        record.data = Some(serde_json::json!({ "actionType": action_type }));
+        record
     }
 
     /// Create an onExit action record.
     pub fn on_exit(state: &str, action_type: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::OnExit,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: Some(state.to_string()),
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "actionType": action_type })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::OnExit);
+        record.from_state = Some(state.to_string());
+        record.data = Some(serde_json::json!({ "actionType": action_type }));
+        record
     }
 
     /// Create a generic action-executed record.
     pub fn action_executed(state: &str, action_type: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::ActionExecuted,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: Some(state.to_string()),
-            event: None,
-            data: Some(serde_json::json!({ "actionType": action_type })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::ActionExecuted);
+        record.to_state = Some(state.to_string());
+        record.data = Some(serde_json::json!({ "actionType": action_type }));
+        record
     }
 
     /// Create a timer tolerance violation record (LCD S6.6, Runtime S7.2).
@@ -389,85 +305,34 @@ impl ProvenanceRecord {
         duration_iso: &str,
         max_tolerance_iso: &str,
     ) -> Self {
-        Self {
-            record_kind: ProvenanceKind::ToleranceViolation,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "timerId": timer_id,
-                "duration": duration_iso,
-                "maxTolerance": max_tolerance_iso,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::ToleranceViolation);
+        record.data = Some(serde_json::json!({
+            "timerId": timer_id,
+            "duration": duration_iso,
+            "maxTolerance": max_tolerance_iso,
+        }));
+        record
     }
 
     /// Create a history-cleared record.
     pub fn history_cleared(state: &str, reason: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::HistoryCleared,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "state": state,
-                "reason": reason,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::HistoryCleared);
+        record.data = Some(serde_json::json!({
+            "state": state,
+            "reason": reason,
+        }));
+        record
     }
 
     /// Create an invalid-duration warning record.
     pub fn invalid_duration(raw_duration: &str, timer_id: &str) -> Self {
-        Self {
-            record_kind: ProvenanceKind::InvalidDuration,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "rawDuration": raw_duration,
-                "timerId": timer_id,
-                "note": "unrecognized ISO 8601 duration; deadline set to zero (fires immediately)",
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(ProvenanceKind::InvalidDuration);
+        record.data = Some(serde_json::json!({
+            "rawDuration": raw_duration,
+            "timerId": timer_id,
+            "note": "unrecognized ISO 8601 duration; deadline set to zero (fires immediately)",
+        }));
+        record
     }
 
     /// Create a task lifecycle record emitted by the runtime layer.
@@ -477,37 +342,21 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         data: Option<serde_json::Value>,
     ) -> Self {
-        Self {
-            record_kind,
-            timestamp: String::new(),
-            actor_id: actor_id.map(String::from),
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(match data {
-                Some(extra) => {
-                    let mut object = serde_json::Map::new();
-                    object.insert(
-                        "taskId".to_string(),
-                        serde_json::Value::String(task_id.to_string()),
-                    );
-                    object.insert("details".to_string(), extra);
-                    serde_json::Value::Object(object)
-                }
-                None => serde_json::json!({ "taskId": task_id }),
-            }),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
-        }
+        let mut record = Self::blank(record_kind);
+        record.actor_id = actor_id.map(String::from);
+        record.data = Some(match data {
+            Some(extra) => {
+                let mut object = serde_json::Map::new();
+                object.insert(
+                    "taskId".to_string(),
+                    serde_json::Value::String(task_id.to_string()),
+                );
+                object.insert("details".to_string(), extra);
+                serde_json::Value::Object(object)
+            }
+            None => serde_json::json!({ "taskId": task_id }),
+        });
+        record
     }
 
     /// Create a contract validation record emitted by runtime task flows.
@@ -516,35 +365,90 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         data: serde_json::Value,
     ) -> Self {
-        Self {
-            record_kind: ProvenanceKind::ContractValidation,
-            timestamp: String::new(),
-            actor_id: actor_id.map(String::from),
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({
-                "taskId": task_id,
-                "details": data,
-            })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-            transition_tags: Vec::new(),
-            case_file_snapshot: None,
-            outcome: None,
+        let mut record = Self::blank(ProvenanceKind::ContractValidation);
+        record.actor_id = actor_id.map(String::from);
+        record.data = Some(serde_json::json!({
+            "taskId": task_id,
+            "details": data,
+        }));
+        record
+    }
+
+    /// Create a Signature Profile affirmation record.
+    #[must_use]
+    pub fn signature_affirmation(input: SignatureAffirmationInput<'_>) -> Self {
+        let mut data = serde_json::Map::from_iter([
+            (
+                "signerId".to_string(),
+                serde_json::Value::String(input.signer_id.to_string()),
+            ),
+            (
+                "roleId".to_string(),
+                serde_json::Value::String(input.role_id.to_string()),
+            ),
+            (
+                "role".to_string(),
+                serde_json::Value::String(input.role.to_string()),
+            ),
+            (
+                "documentId".to_string(),
+                serde_json::Value::String(input.document_id.to_string()),
+            ),
+            (
+                "documentHash".to_string(),
+                serde_json::Value::String(input.document_hash.to_string()),
+            ),
+            (
+                "documentHashAlgorithm".to_string(),
+                serde_json::Value::String(input.document_hash_algorithm.to_string()),
+            ),
+            (
+                "signedAt".to_string(),
+                serde_json::Value::String(input.signed_at.to_string()),
+            ),
+            ("identityBinding".to_string(), input.identity_binding),
+            ("consentReference".to_string(), input.consent_reference),
+            (
+                "signatureProvider".to_string(),
+                serde_json::Value::String(input.signature_provider.to_string()),
+            ),
+            (
+                "ceremonyId".to_string(),
+                serde_json::Value::String(input.ceremony_id.to_string()),
+            ),
+            (
+                "formspecResponseRef".to_string(),
+                serde_json::Value::String(input.formspec_response_ref.to_string()),
+            ),
+            (
+                "custodyHookEligible".to_string(),
+                serde_json::Value::Bool(input.custody_hook_eligible),
+            ),
+        ]);
+
+        if let Some(profile_ref) = input.profile_ref {
+            data.insert(
+                "profileRef".to_string(),
+                serde_json::Value::String(profile_ref.to_string()),
+            );
         }
+        if let Some(profile_key) = input.profile_key {
+            data.insert(
+                "profileKey".to_string(),
+                serde_json::Value::String(profile_key.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::SignatureAffirmation);
+        record.actor_id = Some(input.signer_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
     }
 }
 
 impl std::fmt::Display for ProvenanceRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.record_kind)?;
+        write!(f, "{}:{:?}", self.id, self.record_kind)?;
         if !self.timestamp.is_empty() {
             write!(f, " at={}", self.timestamp)?;
         }

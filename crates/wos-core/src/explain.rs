@@ -251,6 +251,7 @@ mod tests {
         timestamp: &str,
     ) -> ProvenanceRecord {
         ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::ActionExecuted,
             timestamp: String::new(),
             actor_id: None,
@@ -273,6 +274,7 @@ mod tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,
@@ -286,6 +288,7 @@ mod tests {
         description: &str,
     ) -> ProvenanceRecord {
         ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::ActionExecuted,
             timestamp: String::new(),
             actor_id: None,
@@ -307,6 +310,7 @@ mod tests {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
             transition_tags: Vec::new(),
             case_file_snapshot: None,
             outcome: None,

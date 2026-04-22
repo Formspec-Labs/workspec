@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::typeid;
+
 /// A running workflow instance (Runtime Companion S3.1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +91,20 @@ pub struct CaseInstance {
     /// Extension data (keys prefixed with `x-`).
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extensions: HashMap<String, serde_json::Value>,
+}
+
+impl CaseInstance {
+    /// Mints a new case identifier.
+    #[must_use]
+    pub fn mint_id() -> String {
+        typeid::mint_case_id()
+    }
+
+    /// Returns whether `value` already matches the reserved case TypeID shape.
+    #[must_use]
+    pub fn is_case_id(value: &str) -> bool {
+        typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX))
+    }
 }
 
 /// A callback registration that is waiting for a matching inbound CloudEvent (NB.3).
