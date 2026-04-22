@@ -2,7 +2,7 @@
 
 Active closeout plan for the remaining cross-repo work on WOS-T4. The WOS-side Signature Profile spec/schema/lint/runtime/conformance slice landed on 2026-04-22 and is archived in [COMPLETED.md](COMPLETED.md).
 
-**Status:** active — cross-repo closeout
+**Status:** active — cross-repo closeout (Trellis machine-verifiable slice landed 2026-04-22)
 **Owner:** WOS leads  
 **Stack boundary:** Formspec captures signing evidence, WOS governs the signing workflow and emits `SignatureAffirmation`, Trellis anchors and exports the evidence bundle.
 
@@ -55,26 +55,32 @@ WOS-side verification is green. Remaining work is cross-repo proof and authoring
 
 Work in the parent Formspec project after the WOS center is stable.
 
-- [ ] Identify existing Signature component response shape.
-- [ ] Define canonical signature evidence fields consumed by WOS:
-  - [ ] `signatureValue` or attachment reference.
-  - [ ] `signatureMethod`.
-  - [ ] `signerName`.
-  - [ ] `signedAt`.
-  - [ ] `consentAccepted`.
-  - [ ] `consentTextRef`.
-  - [ ] `consentVersion`.
-  - [ ] `affirmationText`.
-  - [ ] `documentHash`.
-  - [ ] `documentHashAlgorithm`.
-  - [ ] `responseId`.
-  - [ ] `identityProofRef`.
-  - [ ] `signatureProvider`.
-  - [ ] `ceremonyId`.
-- [ ] Ensure server-side revalidation preserves these fields.
-- [ ] Add Formspec fixture for a signed response.
-- [ ] Add WOS-facing mapping example from canonical Formspec response to `SignatureAffirmation`.
-- [ ] State explicitly: WOS MUST NOT infer legal intent from a drawn signature image alone.
+**Status:** landed 2026-04-22 in the parent Formspec repo.
+
+- [x] Identify existing Signature component response shape.
+- [x] Define canonical signature evidence fields consumed by WOS via response-level `authoredSignatures`.
+- [x] Include signing-evidence fields needed for WOS/Trellis proof:
+  - [x] `documentId`.
+  - [x] `signatureValue` or attachment reference.
+  - [x] `signatureMethod`.
+  - [x] `signerId`.
+  - [x] `signerName`.
+  - [x] `signedAt`.
+  - [x] `consentAccepted`.
+  - [x] `consentTextRef`.
+  - [x] `consentVersion`.
+  - [x] `affirmationText`.
+  - [x] `documentHash`.
+  - [x] `documentHashAlgorithm`.
+  - [x] `responseId`.
+  - [x] `identityProofRef`.
+  - [x] `identityBinding`.
+  - [x] `signatureProvider`.
+  - [x] `ceremonyId`.
+- [x] Ensure server-side revalidation preserves these fields.
+- [x] Add Formspec fixture for a signed response.
+- [x] Add WOS-facing mapping example from canonical Formspec response to `SignatureAffirmation`.
+- [x] State explicitly: WOS MUST NOT infer legal intent from a drawn signature image alone.
 
 ---
 
@@ -82,18 +88,20 @@ Work in the parent Formspec project after the WOS center is stable.
 
 Work in Trellis after WOS `SignatureAffirmation` shape is stable.
 
-- [ ] Confirm Trellis accepts WOS `SignatureAffirmation` through `custodyHook`.
-- [ ] Define idempotency tuple for signing records.
-- [ ] Add Trellis vector for WOS signature affirmation append.
-- [ ] Ensure export bundle includes:
-  - [ ] WOS `SignatureAffirmation`.
-  - [ ] Document digest.
-  - [ ] Consent reference.
-  - [ ] Identity-binding reference.
-  - [ ] Formspec response reference.
-  - [ ] Anchor proof.
-- [ ] Define certificate-of-completion composition as Trellis-owned.
-- [ ] Cross-link Trellis ADR/spec to WOS Signature Profile.
+**Status:** machine-verifiable export path **landed 2026-04-22** in the Trellis submodule; human-facing certificate-of-completion composition remains.
+
+- [x] Confirm Trellis accepts WOS `SignatureAffirmation` through `custodyHook` (vector `append/019-wos-signature-affirmation`; `trellis-conformance` replays append).
+- [x] Define idempotency tuple for signing records (ADR-0061 `(caseId, recordId)` tuple pinned in `019`; domain-separated key in append vector).
+- [x] Add Trellis vector for WOS signature affirmation append (`append/019`; generator `fixtures/vectors/_generator/gen_append_019.py`).
+- [x] Ensure export bundle includes:
+  - [x] WOS `SignatureAffirmation` (as the signed event’s readable payload in `010-events.cbor`; catalog summarizes the same bytes).
+  - [x] Document digest (`document_hash` / algorithm in `062-signature-affirmations.cbor` row).
+  - [x] Consent reference (catalog row `consent_reference`).
+  - [x] Identity-binding reference (catalog row `identity_binding`).
+  - [x] Formspec response reference (catalog row `formspec_response_ref`).
+  - [x] Anchor proof (export spine: checkpoints, inclusion proofs, manifest digests; optional external anchor unchanged).
+- [ ] Define certificate-of-completion composition as Trellis-owned (renderer-facing bundle / UX; export catalog is the verifier-facing substrate).
+- [x] Cross-link Trellis spec to WOS Signature Profile (`trellis/specs/trellis-core.md` §6.7 / §18 / §19 — `trellis.export.signature-affirmations.v1`, `062-signature-affirmations.cbor`, verifier obligations).
 
 ---
 
@@ -122,21 +130,20 @@ Work in Trellis after WOS `SignatureAffirmation` shape is stable.
 
 Cross-repo verification:
 
-- [ ] Formspec signed-response fixture passes server revalidation.
-- [ ] Trellis custody vector accepts WOS `SignatureAffirmation`.
-- [ ] Trellis export/certificate fixture includes WOS signing evidence.
+- [x] Formspec signed-response fixture passes server revalidation.
+- [x] Trellis custody vector accepts WOS `SignatureAffirmation` (`append/019`; conformance harness).
+- [x] Trellis export fixture includes WOS signing evidence (`export/006-signature-affirmations-inline` + `verify/014` + `tamper/014`; `trellis-verify` checks catalog digest and row↔payload agreement). **Open:** same bytes/URLs as the parent Formspec fixture in one committed cross-repo bundle (see stack [`TODO.md`](../TODO.md)).
 - [ ] Studio can author and validate at least one sequential and one parallel signature profile.
 
 Bookkeeping:
 
-- [ ] Update `COMPLETED.md` when the remaining cross-repo gates land.
+- [ ] Update Trellis `COMPLETED.md` / WOS `COMPLETED.md` when the remaining cross-repo gates land (optional: short entry for the 2026-04-22 Trellis slice).
 - [ ] Mark WOS-T4 as `-COMPLETE-` only after all WOS-side and cross-repo gates pass.
 
 ---
 
 ## Proposed Execution Order
 
-1. T4-9 Formspec alignment.
-2. T4-10 Trellis alignment.
-3. T4-11 Studio support.
-4. T4-12 verification and closeout.
+1. ~~T4-10 Trellis alignment~~ — machine-verifiable slice done; finish COC presentation + optional fixture re-seeding.
+2. T4-11 Studio support.
+3. T4-12 verification and closeout (shared bundle + Studio).
