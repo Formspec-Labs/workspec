@@ -106,7 +106,7 @@ Build on the stable provenance export surface. #48 Merkle provenance moved to Tr
 
 ### Verifiability closure (1.0)
 
-Per [vision-model.md v1.0 spec-freeze line](../.claude/vision-model.md#v10-spec-freeze-line): "every normative MUST across Kernel + Governance + AI Integration has a passing Tested fixture." CI lint-matrix gates cover rule → fixture; these close the remaining verifiability claims.
+Per [vision-model.md v1.0 scope snapshot](../.claude/vision-model.md#v10-scope-snapshot--the-7-ratification-gates): "every normative MUST across Kernel + Governance + AI Integration has a passing Tested fixture." CI lint-matrix gates cover rule → fixture; these close the remaining verifiability claims.
 
 - **Provenance emission completeness audit** `[7 / 4 / 5]` (**35**) — verify every WOS MUST that produces an audit event actually emits the provenance record. Distinct from `every_promoted_*_rule_has_executable_or_annotated_evidence`: that checks rules; this checks MUST → emission. **Unblocked:** #22a ProvenanceKind tier-typing landed (2026-04-21); audit runs against the tier-split structure.
 - **Kernel-Basic conformance profile LoadBearing declaration** `[5 / 2 / 3]` (**15**) — promote the profile; fixtures already exist via the shared conformance suite. One-line declaration plus any missing lint-matrix wiring.
