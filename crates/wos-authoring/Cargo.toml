@@ -1,7 +1,8 @@
 [package]
 name = "wos-authoring"
 version = "0.0.1"
-edition = "2021"
+edition.workspace = true
+license = "BUSL-1.1"
 publish = false
 
 [dependencies]

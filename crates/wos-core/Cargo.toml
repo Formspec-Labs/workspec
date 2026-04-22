@@ -1,10 +1,10 @@
 [package]
 name = "wos-core"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Domain model and evaluation algorithm for WOS (Workflow Orchestration Standard)"
-license = "Apache-2.0"
-repository = "https://github.com/formspec/formspec"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }

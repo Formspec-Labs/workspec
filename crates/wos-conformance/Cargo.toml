@@ -1,10 +1,10 @@
 [package]
 name = "wos-conformance"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Dynamic conformance test runner for WOS workflows"
-license = "Apache-2.0"
-repository = "https://github.com/formspec/formspec"
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "wos-conformance-explain"

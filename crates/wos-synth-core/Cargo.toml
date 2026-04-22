@@ -1,9 +1,11 @@
 [package]
 name = "wos-synth-core"
-version = "0.0.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 description = "Loop + Prompter trait + ToolContext trait + prompt templates for WOS LLM authoring. Provider-agnostic; no network dependencies."
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 wos-core        = { path = "../wos-core" }

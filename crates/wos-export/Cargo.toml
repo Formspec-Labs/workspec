@@ -1,10 +1,10 @@
 [package]
 name = "wos-export"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Provenance export to PROV-O, XES, and OCEL 2.0 (WOS Semantic Profile §§5–6)"
-license = "Apache-2.0"
-repository = "https://github.com/formspec/formspec"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 quick-xml = { version = "0.36", features = ["serialize"] }

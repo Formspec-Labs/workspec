@@ -1,10 +1,10 @@
 [package]
 name = "wos-lint"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Static linter for WOS (Workflow Orchestration Standard) documents"
-license = "Apache-2.0"
-repository = "https://github.com/formspec/formspec"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 fel-core = { path = "../../../crates/fel-core" }

@@ -1,10 +1,10 @@
 [package]
 name = "wos-runtime"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Generic runtime orchestration for WOS processors"
-license = "Apache-2.0"
-repository = "https://github.com/formspec/formspec"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 base64 = "0.22"

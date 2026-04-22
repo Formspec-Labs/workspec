@@ -1,9 +1,11 @@
 [package]
 name = "wos-synth-anthropic"
-version = "0.0.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 description = "Anthropic-API Prompter implementation for wos-synth-core. Crate-level separation keeps reqwest/tokio/anthropic-sdk out of wos-synth-core's dependency graph."
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 wos-synth-core = { path = "../wos-synth-core" }

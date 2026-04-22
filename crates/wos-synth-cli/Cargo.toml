@@ -1,9 +1,11 @@
 [package]
 name = "wos-synth-cli"
-version = "0.0.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 description = "wos-synth binary — wires AnthropicPrompter (or MockPrompter for dry-run) and DirectToolContext into the wos-synth-core loop."
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "wos-synth"

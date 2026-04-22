@@ -1,9 +1,11 @@
 [package]
 name = "wos-synth-mock"
-version = "0.0.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 description = "Deterministic Prompter implementation for testing wos-synth-core without network access."
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 wos-synth-core = { path = "../wos-synth-core" }
