@@ -2,19 +2,19 @@
 
 Working backlog for the Workflow Orchestration Standard specification suite. Session narratives and all closed items live in [COMPLETED.md](COMPLETED.md); architectural commitments and scope lines live in the [stack-wide vision model](../.claude/vision-model.md); this file indexes active work, blocked items, and trigger-gated future work.
 
-**Last audited:** 2026-04-21 (#20 typed `TransitionEvent` landed; #22a provenance tier-typing; ADR 0059 F3b + K-049 on main).
+**Last audited:** 2026-04-22 — WOS-T4 Signature Profile runtime/lint/conformance + SIG-* fixtures green; WOS-T1 ADR-0061 `custodyHook` four-field append + receipt stamping closed in code/schemas; semi-formal review follow-ups: `ProvenanceRecord.id` required on serde (no silent mint), `typeid::tenant_from_env_value` + env-free unit tests, `FixtureFormspecProcessor` dead_code reservation. Cross-repo Formspec signed-response fixture, Trellis verification corpora drift checks, and Studio authoring/validation UX remain open (WOS-T4 next slice).
 
 ## Snapshot
 
 | Health | Value |
 |---|---|
-| Specs / schemas | 20 specs · 25 schemas · 0 SCHEMA-DOC-001 violations |
+| Specs / schemas | 41 spec/docs under `specs/` · 27 schemas · 0 SCHEMA-DOC-001 violations |
 | Crates | 6 production (`wos-core`, `wos-lint`, `wos-conformance`, `wos-runtime`, `wos-formspec-binding`, `wos-export`) · 6 MVP (`wos-authoring`, `wos-mcp`, `wos-synth-core/-mock/-anthropic/-cli`) · 1 spike (`wos-synth-spike`, keep-with-deletion-horizon) |
-| Tests | `cargo test --workspace` 1021 green · `pytest tests/schemas/` 190 / 11 skipped / 1 xfailed · `npm run docs:check` exit 0 |
-| Lint matrix | 103 rules (35 T1 · 59 T2 · 9 T3 · 1 LoadBearing · 11 Tested · 91 Draft) |
+| Tests | Latest targeted gates: `cargo check --workspace` green; `cargo test -p wos-core --lib` green; `cargo test -p wos-runtime --lib` green; `cargo test -p wos-lint` green; `cargo test -p wos-conformance --test signature_profile` 13 green; `pytest tests/schemas -q` 255 passed / 12 skipped / 1 xfailed |
+| Lint matrix | 116 rules (35 T1 · 72 T2 · 9 T3 · 1 LoadBearing · 11 Tested · 104 Draft) |
 | CI gates | `schema_doc_zero_regression` · `every_promoted_*_rule_has_executable_or_annotated_evidence` · `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures` · `discover_and_report_promotion_candidates` ratchet |
 
-**Navigation:** [**User profile** (read first)](../.claude/user_profile.md) · [**Vision model**](../.claude/vision-model.md) (stack-wide; WOS section inside) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
+**Navigation:** [**User profile** (read first)](../.claude/user_profile.md) · [**Vision model**](../.claude/vision-model.md) (stack-wide; WOS section inside) · [LINT-MATRIX](LINT-MATRIX.md) · [Feature Matrix](WOS-FEATURE-MATRIX.md) · [Implementation Status](WOS-IMPLEMENTATION-STATUS.md) · [IDEA_SCRATCH](IDEA_SCRATCH.md) · [POSITIONING](POSITIONING.md) · [CONVENTIONS](CONVENTIONS.md) · [Runtime Companion](specs/companions/runtime.md) · [ADRs](../thoughts/adr/) · [Plans](thoughts/plans/) · [T1 Execution Plan](T1-TODO.md) · [Parallel-agent dispatch discipline](thoughts/practices/2026-04-17-parallel-agent-dispatch.md)
 
 ---
 
@@ -24,19 +24,22 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 **Scoring note.** Per [`user_profile.md`](../.claude/user_profile.md) economic model: dev/time is free, architectural drift is expensive. Ordering uses **`Imp × Debt`**; Cx is preserved as a scheduling dimension but does not change priority. Debt values trend **up** between sessions on pre-1.0 work. Score notation: `[Imp / Cx / Debt]`; the number in parentheses is `Imp × Debt`.
 
-1. **`custodyHook` Trellis joint ADR** `[6 / 4 / 6]` (**36**) — the concrete provenance-record shape WOS emits and Trellis expects to anchor. Joint-design ADR spanning both submodules; surfaced as load-bearing during vision-model pass. Coordinates with Trellis's reimplementation (ADR 0004 per vision-model status). **Draft landed:** [ADR-0061](thoughts/adr/0061-custody-hook-trellis-wire-format.md) + [mirrored Trellis note](../trellis/thoughts/specs/2026-04-21-trellis-wos-custody-hook-wire-format.md). **Progress:** runtime-facing `CustodyAppendInput` landed in `wos-runtime` with JCS canonical JSON + SHA-256 digest + ADR-0061 idempotency tuple. **Gate: acceptance + adapter stitch.**
-2. **Cross-reference shape ADR** `[6 / 2 / 6]` (**36**) — `<entity>Ref` (URI) / `<entity>Key` (local string) / `<entity>Id` (sibling id). Three patterns named, not unified — they denote different things. Renames `templateRef` → `templateKey`, `escalationChainRef` → `escalationStepId`. **Landed:** [ADR-0060](thoughts/adr/0060-cross-reference-naming-ref-key-id.md) (*Accepted*); Workflow Governance schema/prose/test sweep landed in this session (`templateKey`, `escalationStepId`, `notificationTemplateKey`). **Gate: propagate the taxonomy as other surfaces are touched; no Workflow Governance follow-on remains.**
-3. **`DurableRuntime` trait extraction + Temporal/Restate spike** `[7 / 5 / 5]` (**35**) — extract the center-vs-adapter seam from `wos-runtime`; ship in-memory adapter + spike Temporal + Restate against it; pick production backend based on direct observation of Rust SDK ergonomics + ops fit. Three-way conformance posture (spec + reference + production adapter) unlocks. Spike must also answer the multi-tenant contract (namespaces vs. partitions + per-tenant provenance-log scoping); the tenant-scope answer #3 waits on comes out of this spike. **Progress:** public `DurableRuntime` trait landed, and `runtime.rs` has started shedding adapter-heavy slices into `runtime/tasks.rs`, `runtime/actions.rs`, and `runtime/timers.rs`; remaining work is the rest of the module split + adapter spikes. **Gate: none — vision-model default is "spike both, pick from observation."**
-4. **Signature Profile workflow semantics** `[7 / 5 / 5]` (**35**) — DocuSign-parity workflow semantics for WOS (signer roles via `actorExtension`, flow patterns as lifecycle tags, intent capture, signer-authentication policy schema, `SignatureAffirmation` provenance record shape). Cryptographic integrity + cert-of-completion live in Trellis; WOS only emits the evidence record. **Gate: α DocuSign parity bar (vision-model default: ESIGN/UETA/eIDAS + top ~80% common-case features; NOT administrative UX surface — confirm at drafting time).**
+1. **Signature Profile workflow semantics** `[7 / 5 / 5]` (**35**) — **WOS-T4 ACTIVE.** DocuSign common-case workflow semantics for WOS: signer roles via `actorExtension`, sequential/parallel/routed/free-for-all flows, intent capture, identity binding, signer-authentication policy schema, reminders, expiry, decline, void, reassignment, and `SignatureAffirmation` provenance. Cryptographic integrity + certificate-of-completion live in Trellis; WOS only emits the semantic evidence record. **Execution plan:** [T4-TODO.md](T4-TODO.md). **Landed 2026-04-22:** [ADR-0062](thoughts/adr/0062-signature-profile-workflow-semantics.md), [Signature Profile spec](specs/profiles/signature.md), [Signature Profile schema](schemas/profiles/wos-signature-profile.schema.json), schema fixtures/tests, Studio generated type binding, `ProvenanceKind::SignatureAffirmation`, schema-constrained `SignatureAffirmation` payload, Rust constructor/helper, Facts-tier classification, custody append inclusion, SIG-001..SIG-012 lint, runtime profile loading, signing task evidence validation, `SignatureAffirmation` emission, sequential/parallel/routed/free-for-all/witness/notary/decline/void/reassignment/expiry semantics, and 13 SIG-* conformance tests. **Next T4 slice:** cross-repo Formspec canonical signed-response fixture, Trellis custody/export vector, and Studio authoring/validation UX.
+
+   **WOS-T4 -COMPLETE- criteria:** Formspec captures signing/consent evidence; WOS routes signing through lifecycle/governance semantics; WOS emits `SignatureAffirmation`; Trellis accepts and anchors the record through `custodyHook`; conformance proves sequential, parallel, routed, free-for-all, expiry, decline, reassignment, witness/counter-signature, notary/in-person authentication, missing-consent rejection, and custody append inclusion.
+2. **Provenance emission completeness audit** `[7 / 4 / 5]` (**35**) — verify every WOS MUST that produces an audit event actually emits the provenance record. Distinct from lint-matrix rule evidence: this checks MUST → emission. **Unblocked:** #22a ProvenanceKind tier-typing landed.
+3. **Actor authorization shape (`AuthorizationAttestation`)** `[7 / 4 / 5]` (**35**) — stack contract per [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) D-2. **Gate: ADR 0066 accepted.**
+4. **ADR 0066 implementation — amendment / supersession / rescission / correction** `[7 / 6 / 5]` (**35**) — six provenance record kinds, `caseRelationship.type = supersedes`, Workflow Governance policy sections, exporter coverage. **Gate: ADR 0066 accepted.**
+5. **ADR 0067 implementation — statutory clocks** `[7 / 5 / 5]` (**35**) — `ClockStarted` / `ClockResolved`, `Clock` $def, AppealClock emission, ProcessingSLA emission. **Gate: ADR 0067 accepted.**
 
 ### Agent task extract (from this file)
 
 | Task ID | Tracks | Deliverable | Depends on |
 |---------|--------|-------------|------------|
-| **WOS-T1** | Do next **#1** | Joint ADR: `custodyHook` wire format + Trellis anchoring | Acceptance + adapter stitch |
-| **WOS-T2** | Do next **#2** | [ADR-0060](thoughts/adr/0060-cross-reference-naming-ref-key-id.md) accepted + governance schema rename PR | Closed in Workflow Governance; propagate taxonomy elsewhere as touched |
-| **WOS-T3** | Do next **#3** | `DurableRuntime` trait + Temporal/Restate spike + tenant-scope notes | In progress — trait landed; `tasks.rs` + `actions.rs` + `timers.rs` extracted; spikes remain |
-| **WOS-T4** | Do next **#4** | Signature Profile spec slice + schemas | α DocuSign parity bar |
+| **WOS-T1** | — | Joint ADR cascade: TypeID registry (T1.1) → TypeID minting (T1.2) + schema tightening (T1.3) → converter (T1.4) + spec section (T1.5) → runtime rewrite (T1.6) + receipt wire-through (T1.7) + Trellis verify (T1.8) | **-COMPLETE-** — see [T1-TODO.md](T1-TODO.md) closeout summary |
+| **WOS-T2** | Do next **#2** | [ADR-0060](thoughts/adr/0060-cross-reference-naming-ref-key-id.md) accepted + governance schema/runtime/lint/test sweep | **-COMPLETE-** — Workflow Governance taxonomy closed; G-063/G-066 enforce remaining key/id resolution |
+| **WOS-T3** | Do next **#3** | `DurableRuntime` trait + Temporal/Restate spike + tenant-scope notes | **-COMPLETE-** — Restate selected; Temporal deferred; tenant-scope contract recorded |
+| **WOS-T4** | Do next **#1** | Signature Profile spec slice + schemas + runtime/conformance | **ACTIVE** — WOS-side runtime/lint/conformance landed; cross-repo Formspec/Trellis/Studio gates remain |
 | **WOS-B1** | Backlog | §4.5 structural merges (1 vs 3 PRs) | Owner packaging decision |
 | **WOS-B2** | Backlog | Kernel-Basic profile **LoadBearing** declaration + lint-matrix wire | None |
 
@@ -65,6 +68,15 @@ Companion decisions from session-9 agent dispatch: M-1 Drift Monitor + Agent Con
 
 Per vision model: no "defer to 1.1" bucket on greenfield. These all land at 1.0 unless explicit architectural prerequisite unresolved.
 
+**Stack contracts (ADR 0066 + 0067, proposed 2026-04-21):**
+
+- **Actor authorization shape (`AuthorizationAttestation`)** `[7 / 4 / 5]` (**35**) — stack contract per [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) D-2. Declares the Facts-tier record shape for a human act performed under a named policy; parallel to AI deontic constraints. Binds Workflow Governance policies (`amendmentPolicy`, `rescissionPolicy`, future `authorizationPolicy`) to the attestation record. Cheap — IAM is adapter; claim shape is center. **Gate: ADR 0066 accepted.**
+- **Identity attestation shape — generalize beyond signatures** `[5 / 3 / 4]` (**20**) — WOS-T4 [T4-6](T4-TODO.md#t4-6--wos-runtime-provenance) now has `SignatureAffirmation.identityBinding` as the first concrete shape. This item generalizes that shape for reuse across non-signature evidence (reviewer-policy assurance refs, amendment-authority attestations, review-gate credentials). Lifts T4-6's per-field shape into a reusable `$def` after runtime emission proves the shape is sufficient. **Gate: T4-6 runtime emission landed.**
+- **ADR 0066 implementation — amendment / supersession / rescission / correction** `[7 / 6 / 5]` (**35**) — six provenance record kinds (`CorrectionAuthorized`, `AmendmentAuthorized`, `DeterminationAmended`, `RescissionAuthorized`, `DeterminationRescinded`, `AuthorizationAttestation`); `caseRelationship.type` extension with `supersedes`; `amendmentPolicy` and `rescissionPolicy` Workflow Governance sections; exporter coverage for the six kinds. **Gate: ADR 0066 accepted.**
+- **ADR 0067 implementation — statutory clocks** `[7 / 5 / 5]` (**35**) — `ClockStarted` / `ClockResolved` provenance record kinds (Facts tier); `Clock` $def in kernel schema; AppealClock emission wired to adverse-decision transition path; ProcessingSLA wired to intake-complete. Softens #51 (trigger-gated) — a contract now exists. **Gate: ADR 0067 accepted.**
+
+**Prior behavioral items:**
+
 - **#35 Equity Config enforcement semantics** `[7 / 5 / 4]` (**28**) — processor obligations for `RemediationTrigger.action`; wire `DisparityMethod` to runtime. Prerequisite: #36 resolved (vision model: FEL + restricted-domain profile).
 - **#36 Equity RemediationTrigger expression language** `[6 / 4 / 4]` (**24**) — FEL + restricted-domain profile per vision model; no windowing escape hatch. Implementation.
 - **#26a `AccessControl.canRead` enforcement semantics** `[6 / 3 / 4]` (**24**) — normative processor behavior on `canRead → false`: redact / null / raise / skip. Prerequisite to #26b.
@@ -84,7 +96,7 @@ Per vision model: no "defer to 1.1" bucket on greenfield. These all land at 1.0 
 
 Sequenced for module-bottleneck relief, not delayed by it.
 
-- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` (**15**) — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (4451 lines) split along action-kind dispatch; CI fence. (**#22a** provenance module split + `ProvenanceAuditTier` landed 2026-04-21 — see [COMPLETED.md](COMPLETED.md).)
+- **#22 Crate split along tier boundaries** `[5 / 3 / 3]` (**15**) — `wos-core` → `wos-{kernel,governance,ai,advanced}`; `wos-runtime/runtime.rs` (still a large single module; ≈3.7k lines) split along action-kind dispatch; CI fence. (**#22a** provenance module split + `ProvenanceAuditTier` landed 2026-04-21 — see [COMPLETED.md](COMPLETED.md).)
 
 ### Audit + evidence products
 
@@ -136,12 +148,12 @@ Vision model recommends three discrete PRs; sidecar audit recommended one. Owner
 
 ### Engine adapters — trigger-gated (commercial request)
 
-WOS's production runtime is now the Temporal/Restate adapter (Do next **#3** — `DurableRuntime` spike). Additional adapters are trigger-gated on commercial adopter request.
+WOS's first production runtime target is now the Restate adapter selected by WOS-T3. Additional adapters are trigger-gated on commercial adopter request or SDK maturity.
 
 - **#49a Camunda 8 Worker** `[5 / 8 / 3]` — BPMN target; broadest external fixture diversity.
 - **#49c AWS Step Functions** `[5 / 8 / 3]` — broadest commercial reach; narrowest semantic fit.
 
-(#49b Temporal moved into Do next **#3** as the production runtime choice.)
+(#49b Temporal was evaluated by WOS-T3 and deferred until the Rust workflow API stabilizes.)
 
 ### Ontology field identity — design not started
 
@@ -205,7 +217,7 @@ Most prior open questions (OQ1, OQ4, #21 Registry composition, #25 Defeasibility
 
 1. **α — DocuSign parity bar** (gates Signature Profile drafting). Default per vision model: ESIGN/UETA/eIDAS compliance + top ~80% of DocuSign common-case workflow features; NOT administrative UX surface. Confirm when drafting begins.
 2. **§4.5 PR packaging** (sidecar-audit Q1). One PR (audit recommendation) or three (vision-model recommendation)?
-3. **`custodyHook` Trellis contract shape** — joint-design ADR between WOS and Trellis. Load-bearing for WOS 1.0 closure. Tracked as Do next **#1**.
+3. **`custodyHook` evidence path to Trellis** — WOS→Trellis **authored append wire** is fixed by [ADR-0061](thoughts/adr/0061-custody-hook-trellis-wire-format.md) and WOS-T1 closeout (four-field input, `(caseId, recordId)` idempotency, `CustodyAppendReceipt` → `canonical_event_hash` on provenance). **Open** is cross-stack **proof**: Formspec canonical signed-response artifacts, Trellis append/export vectors staying byte-aligned with live WOS emitters, and Studio authoring gates — same bundle as WOS-T4 “Next slice” / Trellis verification maintenance, not an undecided WOS wire-format ADR.
 
 For stack-wide active uncertainties (backend spike γ, wos-runtime role δ, SBA timeline, multi-tenant model, rendering service), see [vision-model.md § Active uncertainties](../.claude/vision-model.md#active-uncertainties-wos-scope).
 

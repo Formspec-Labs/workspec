@@ -29,6 +29,8 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 - [x] Host traits — nine interfaces in `traits/mod.rs`.
 - [x] `instance.rs`, `explain.rs`.
 - [x] Conformance harness wired to runtime (`WosRuntime` / evaluator path as landed).
+- [x] WOS-T2 — ADR-0060 cross-reference taxonomy revisit: Workflow Governance now uses `templateKey`, `noticeTemplateKey`, `notificationTemplateKey`, and `escalationStepId`; stale `noticeTemplateRef` governance fixtures/runtime surfaces were removed; G-063 enforces Notification Template keys; G-066 enforces `BreachPolicy.escalationStepId` resolution within the same `TaskPattern`; Studio WOS types regenerated from schemas.
+- [x] WOS-T3 — `DurableRuntime` extraction + Temporal/Restate spike: public backend-neutral trait, in-memory `WosRuntime` adapter, runtime module split (`tasks`, `actions`, `timers`, `provenance`, `support`, `drain`, `instance`, `durable_impl`), Restate selected as first production backend, Temporal deferred pending Rust workflow API stability, and tenant-scope contract recorded in `thoughts/reviews/2026-04-21-wos-t3-durable-runtime-temporal-restate-spike.md`.
 - [x] T3 fixtures batches 1–17 (102) and batch 16 processor meta-rules.
 - [x] Inline conformance documents — `run_fixture` and fixture parse checks support `documents.* = "inline"`.
 - [x] Timer region scoping and tolerance validation.
@@ -206,6 +208,23 @@ Largest parallel dispatch to date. Three batches: (1) uncommitted session-6 work
 ### Validation at close
 
 Final state: `cargo test --workspace` 1002+ passed / 0 failed · SCHEMA-DOC-001 zero-regression gate green · `pytest tests/schemas/ -q` 171 passed / 11 skipped / 1 xfailed (+50 vs session 7). 103 LINT-MATRIX rules (AI-058 added). All eight parallel agents + all four parallel reviews landed on disjoint file sets without conflict — validates the parallel-agent dispatch discipline from `thoughts/practices/2026-04-17-parallel-agent-dispatch.md`.
+
+## Session 10 (2026-04-21) — WOS-T1 custodyHook execution closeout
+
+- [x] **TypeID minting landed in code** — added stack-local [typeid.rs](crates/wos-core/src/typeid.rs) with UUIDv7/Crockford `{tenant}_{type}_{uuidv7_base32}` minting + validation; `ProvenanceRecord` now mints `prov` IDs at authoring time; `CaseInstance` now mints `case` IDs and preserves legacy request aliases for runtime compatibility.
+- [x] **Kernel provenance records gained durable custody citation** — `ProvenanceRecord` now carries `canonicalEventHash`; runtime added `apply_custody_receipt(...)` and stamps `CustodyAppendReceipt { canonical_event_hash }` onto persisted provenance by `recordId`.
+- [x] **`wos-runtime::custody` rewritten to ADR-0061** — removed the superseded JCS/wide-shape append surface; live runtime now emits the narrow four-field append input (`caseId`, `recordId`, `eventType`, `record`) with dCBOR-authored bytes, base64 JSON host serialization, canonical CBOR map ordering, oversize rejection, and 2-tuple idempotency `(caseId, recordId)`.
+- [x] **Spec / schema / registry surfaces aligned** — [specs/kernel/custody-hook-encoding.md](specs/kernel/custody-hook-encoding.md), [schemas/kernel/wos-custody-hook-encoding.schema.json](schemas/kernel/wos-custody-hook-encoding.schema.json), registry ownership metadata, case/provenance/governance TypeID patterns, and the Trellis Operational Companion §24.9 now all point at the accepted ADR-0061 contract.
+- [x] **Planning surfaces updated to closure state** — [T1-TODO.md](T1-TODO.md) now carries a closeout summary + verification log; [TODO.md](TODO.md) marks WOS-T1 complete.
+
+### Validation at close
+
+- [x] `cargo test -p wos-core --lib`
+- [x] `cargo test -p wos-runtime --lib`
+- [x] `cargo test -p wos-export --lib`
+- [x] `cargo test -p wos-conformance --lib`
+- [x] `pytest tests/schemas/test_custody_hook_encoding.py tests/schemas/test_extension_registry.py tests/schemas/test_facts_tier_snapshot.py tests/schemas/test_facts_tier_outcome.py tests/schemas/test_capability_invocation_record.py tests/schemas/test_override_record_shape.py tests/schemas/test_case_instance_typeid.py tests/schemas/test_meta_validity.py`
+- [x] `npm run docs:check`
 
 ## Session 9 (2026-04-20) — 4-agent parallel sweep of review follow-ups (19 commits)
 

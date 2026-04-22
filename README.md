@@ -103,7 +103,7 @@ Add governance, AI constraints, or equity rules as separate layered documents wh
 
 ## How the layers work
 
-WOS has one required layer and three optional ones. Each builds on the one below it. Two cross-cutting profiles and two companions attach without new kernel extension points.
+WOS has one required layer and three optional ones. Each builds on the one below it. Three cross-cutting profiles and two companions attach without new kernel extension points.
 
 ### Layer 0 — Kernel (required)
 
@@ -125,6 +125,7 @@ DCR-style constraint zones for flexible investigation work (drawn from DCR Graph
 
 - **Integration Profile** — Connects case data to external APIs (OpenAPI, Arazzo), event systems (CloudEvents), policy engines (OPA, Cedar), and tools. Maps data out, maps results back.
 - **Semantic Profile** — JSON-LD contexts, PROV-O provenance alignment, SHACL governance shapes, XES process mining export.
+- **Signature Profile** — Governs signature workflow semantics: signer roles, signing order, consent and identity binding, reminders, expiry, decline, void, reassignment, and `SignatureAffirmation` provenance.
 
 ### Companions
 
@@ -152,7 +153,7 @@ The spec does not give AI a separate, weaker track — agents participate under 
 
 ## Specification inventory
 
-18 normative specs, 18 JSON schemas. Each document validates against its schema. Schemas live under `schemas/` in folders that mirror the spec structure.
+Normative specs and JSON schemas live side by side. Each document validates against its schema. Schemas live under `schemas/` in folders that mirror the spec structure.
 
 | Layer | Spec | Schema |
 |-------|------|--------|
@@ -172,6 +173,7 @@ The spec does not give AI a separate, weaker track — agents participate under 
 | Advanced sidecar | [`verification-report.md`](specs/advanced/verification-report.md) | [`wos-verification-report`](schemas/advanced/wos-verification-report.schema.json) |
 | Profile | [`integration.md`](specs/profiles/integration.md) | [`wos-integration-profile`](schemas/profiles/wos-integration-profile.schema.json) |
 | Profile | [`semantic.md`](specs/profiles/semantic.md) | [`wos-semantic-profile`](schemas/profiles/wos-semantic-profile.schema.json) |
+| Profile | [`signature.md`](specs/profiles/signature.md) | [`wos-signature-profile`](schemas/profiles/wos-signature-profile.schema.json) |
 | Companion | [`lifecycle-detail.md`](specs/companions/lifecycle-detail.md) | [`wos-lifecycle-detail`](schemas/companions/wos-lifecycle-detail.schema.json) |
 | Runtime | [`runtime.md`](specs/companions/runtime.md) | [`wos-case-instance`](schemas/companions/wos-case-instance.schema.json) |
 

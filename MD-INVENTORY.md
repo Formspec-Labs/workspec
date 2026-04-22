@@ -11,7 +11,7 @@ Generated 2026-04-18 by a swarm of 9 haiku sub-agents, each reading a grouped sl
 ## 1. Root-Level Docs
 
 ### `README.md`
-**Summary:** Defines WOS as a JSON-native spec for governing sensitive workflows with AI-native authoring and agent-as-actor runtime. Introduces 18 specs across four layers (Kernel, Governance, AI Integration, Advanced Governance) plus profiles and companions. Emphasizes that WOS targets LLM-authored workflows and agent governance (not BPMN parity). Reference implementation spans 5 Rust crates with 146 green conformance tests, 197 lint rules, 41 workflow samples.
+**Summary:** Defines WOS as a JSON-native spec for governing sensitive workflows with AI-native authoring and agent-as-actor runtime. Introduces layered specs across Kernel, Governance, AI Integration, and Advanced Governance plus profiles and companions. Emphasizes that WOS targets LLM-authored workflows and agent governance (not BPMN parity). Reference implementation spans Rust crates, conformance tests, lint rules, and workflow samples.
 **Relates to:** POSITIONING, TODO, LINT-MATRIX, WOS-IMPLEMENTATION-STATUS, WOS-FEATURE-MATRIX, enterprise-*.
 **Status:** ✅ Implemented — specs shipped, crates green, pre-release.
 
@@ -93,6 +93,12 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 **Relates to:** Kernel §8.4/§10.3; W3C PROV-O, JSON-LD 1.1, SHACL; IEEE XES, OCEL 2.0, LegalRuleML.
 **Status:** ✅ Canonical Profile.
 **LLM pair:** ✅
+
+#### `specs/profiles/signature.md`
+**Summary:** Parallel seam for signature workflow semantics. Declares signer roles, sequential/parallel/routed/free-for-all signing flows, consent and identity-binding evidence, document hashes, reminders, expiry, decline, void, reassignment, and `SignatureAffirmation` provenance emitted through `custodyHook`.
+**Relates to:** Kernel actors/tasks/timers/provenance; Formspec canonical response fields; Trellis custody/export bundle.
+**Status:** Draft Profile.
+**LLM pair:** — (pending)
 
 ### Assurance — `specs/assurance/`
 
@@ -409,7 +415,7 @@ Research directive/RFP that prompted the landscape study — >50 standards acros
 
 ## Cross-Cutting Observations
 
-**Spec maturity ladder:** All 19 canonical specs under `specs/` are at v1.0.0-draft.1 (dated 2026-04-09 or -10). The 9 "core" layers (kernel + profiles + governance + advanced + ai + companions) are ✅ Canonical Draft; 7 sidecars compose with them.
+**Spec maturity ladder:** Canonical specs under `specs/` are at v1.0.0-draft.1 unless marked otherwise. Signature Profile is a newer draft profile added by WOS-T4. The core layers (kernel + profiles + governance + advanced + ai + companions) are Canonical Draft; sidecars compose with them.
 
 **Implementation progress (crates):** wos-core + wos-lint + wos-conformance + wos-runtime + wos-export + wos-formspec-binding are ✅ Implemented. wos-assurance + wos-mcp + wos-authoring + wos-synth-spike are 🟡 In-Progress. wos-synth-core/anthropic/mock/cli + wos-bench are 🔴 Queued.
 

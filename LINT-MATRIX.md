@@ -1,6 +1,6 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `bdf70635e1c2747252002f5a609d8574ffd474d2`). 103 rules across 35 T1 / 59 T2 / 9 T3 (1 LoadBearing, 0 Stable, 11 Tested, 91 Draft).
+> **Regenerated from code registries** (commit `bdf70635e1c2747252002f5a609d8574ffd474d2`). 116 rules across 35 T1 / 72 T2 / 9 T3 (1 LoadBearing, 0 Stable, 11 Tested, 104 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -8,7 +8,7 @@
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   59 rules                  │
+│  Tier 2: wos-lint --project (cross)   72 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -96,6 +96,18 @@
 | `AI-056` | AI | draft | Autonomy is an action-site property, not an agent property. | — |
 | `AI-057` | AI | draft | Capability `preconditions` entries MUST be valid FEL. | — |
 | `AI-058` | AI | tested | Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion). | — |
+| `SIG-001` | SIG | draft | Signature Profile `targetWorkflow.url` MUST match the loaded kernel URL. | — |
+| `SIG-002` | SIG | draft | Signature Profile roles MUST reference declared kernel actors. | — |
+| `SIG-003` | SIG | draft | Signature Profile roles MUST bind to human kernel actors. | — |
+| `SIG-004` | SIG | draft | Signature role authenticationPolicyKey values MUST resolve. | — |
+| `SIG-005` | SIG | draft | Signature signing-step roleId values MUST resolve. | — |
+| `SIG-006` | SIG | draft | Signature signing-step documentId values MUST resolve. | — |
+| `SIG-007` | SIG | draft | Signature signing-step dependencies MUST resolve and MUST NOT cycle. | — |
+| `SIG-008` | SIG | draft | Routed signing guards MUST parse as valid FEL. | — |
+| `SIG-009` | SIG | draft | Signature lifecycle tags SHOULD appear in the target kernel. | — |
+| `SIG-010` | SIG | draft | Signature reminder and expiry events MUST map to kernel events. | — |
+| `SIG-011` | SIG | draft | SignatureAffirmation evidence inputs MUST be satisfiable. | — |
+| `SIG-012` | SIG | draft | Signature Profile fields MUST follow Ref/Key/Id naming conventions. | — |
 | `DM-002` | DM | draft | Rights/safety workflows SHOULD follow shadow/canary/production sequence. | — |
 | `G-001` | G | draft | Due process MUST be enforced for `rights-impacting` or `safety-impacting` kernels. | — |
 | `G-003` | G | draft | Notice MUST include specific determination, reason codes, and appeal instructions. | — |
@@ -125,7 +137,8 @@
 | `G-053` | G | draft | Sub-delegation is only permitted if the original delegation explicitly allows it. | — |
 | `G-056` | G | draft | Binding `resolutionDateRef` MUST reference a field path in kernel case state. | — |
 | `G-060` | G | draft | Business Calendar target requires SLA evaluation in business days. | — |
-| `G-063` | G | draft | Notification template refs MUST resolve to a template in a targeting sidecar. | — |
+| `G-063` | G | draft | Notification template keys MUST resolve to a template in a targeting sidecar. | — |
+| `G-066` | G | draft | BreachPolicy escalationStepId MUST resolve within the task pattern. | — |
 | `K-010` | K | draft | createTask `assignTo` MUST reference a declared kernel actor. | — |
 | `K-012` | K | draft | Guards MUST be valid FEL expressions. | — |
 | `K-013` | K | draft | Milestone conditions MUST be valid FEL expressions. | — |
@@ -136,7 +149,7 @@
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 
-**T2 total: 59** (1 LoadBearing, 0 Stable, 2 Tested, 56 Draft)
+**T2 total: 72** (1 LoadBearing, 0 Stable, 2 Tested, 69 Draft)
 
 ---
 
@@ -163,6 +176,6 @@
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
 | T1 | 35 | 0 | 0 | 2 | 33 |
-| T2 | 59 | 1 | 0 | 2 | 56 |
+| T2 | 72 | 1 | 0 | 2 | 69 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **103** | **1** | **0** | **11** | **91** |
+| **Total** | **116** | **1** | **0** | **11** | **104** |

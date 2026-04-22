@@ -1,6 +1,6 @@
 # WOS Implementation Status & Roadmap
 
-**Last updated:** 2026-04-15
+**Last updated:** 2026-04-22
 **Status:** Certified Reference Implementation (Draft 1)
 
 This document tracks crate maturity, test coverage, and the technical roadmap. For a high-level feature comparison, see `WOS-FEATURE-MATRIX.md`.
@@ -12,9 +12,9 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 | Component | Status | Detail |
 |-----------|--------|--------|
 | **wos-core** | ✅ | Implements the typed evaluation kernel, deontic/autonomy modules, and explanation assembly. |
-| **wos-lint** | ✅ | Executes 197 rules (36 T1 + 55 T2 + 105 T3 + I-001) against typed models. |
-| **wos-conformance** | ✅ | Manages 144 fixtures and handles Batch 16 processor reporting. |
-| **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, and event queues. |
+| **wos-lint** | ✅ | Executes 116 registered rules (35 T1 + 72 T2 + 9 T3) against typed models and project graphs, including SIG-001..SIG-012 for Signature Profile consistency. |
+| **wos-conformance** | ✅ | Manages 162 fixtures, including 13 SIG-* Signature Profile runtime fixtures, and handles Batch 16 processor reporting. |
+| **wos-runtime** | ✅ | Orchestrates generic persistence, durable execution, event queues, Signature Profile task evidence validation, and `SignatureAffirmation` emission. |
 | **wos-formspec-binding** | ✅ | Implements the S15 protocol, task prefill, and response validation. |
 | **wos-export** | ✅ | Serializes provenance to PROV-O JSON-LD (§5.3–5.6), XES XML (§6.3), OCEL 2.0 JSON (§6.4); 3 SP-EXPORT-* conformance fixtures green. |
 | **wos-assurance** | 🟡 | Spec complete; reference implementation pending. Attaches via provenanceLayer and custodyHook seams. |
@@ -23,16 +23,16 @@ This document tracks crate maturity, test coverage, and the technical roadmap. F
 
 ## 2. Verification Progress (LINT-MATRIX)
 
-WOS verifies 197 normative constraints across three tiers.
+WOS verifies 116 registered constraints across three tiers.
 
 | Tier | Type | Rules | Verified | Gap |
 |------|------|-------|----------|-----|
-| **Tier 1** | Single-Doc | 37 | 37 | 0 |
-| **Tier 2** | Cross-Doc / AST | 55 | 55 | 0 |
-| **Tier 3** | Runtime | 105 | 105 | 0 |
-| **Total** | | **197** | **197** | **0** |
+| **Tier 1** | Single-Doc | 35 | 35 | 0 |
+| **Tier 2** | Cross-Doc / AST | 72 | 72 | 0 |
+| **Tier 3** | Runtime | 9 | 9 | 0 |
+| **Total** | | **116** | **116** | **0** |
 
-**NB:** Tier counts above reflect the baseline kernel+governance+AI rule set. Assurance layer rules (S2.9, S4.9, S7.15, §14.x) add approximately 9 Tier 1/2 rules, to be authored alongside the reference implementation.
+**NB:** Counts reflect the current `wos-lint` registry and `LINT-MATRIX.md`, including the Signature Profile SIG-* rule family. Assurance-layer rule additions remain future registry work.
 
 ---
 
@@ -45,10 +45,11 @@ Runtime Companion S15 specifies the handoff between WOS tasks and Formspec forms
 *   **Validation Ordering:** Prioritizes contract validation before assertion gates in `wos-core`.
 
 ### Durable Execution
-`wos-core` implements runtime behavior while `wos-runtime` manages the persistence layer.
+`wos-core` implements lifecycle behavior while `wos-runtime` manages persistence, profile attachment, and evidence-producing task execution.
 *   **Instance Loading:** Resolves kernel versions strictly.
 *   **Atomic Saves:** Guarantees state consistency via the `RuntimeStore` interface.
 *   **Timer Materialization:** Checks tolerances during simulated time advancement.
+*   **Signature Profile Runtime:** Loads Signature Profile documents, validates signing evidence from Formspec task responses, emits `SignatureAffirmation`, gates lifecycle completion across sequential/parallel/routed/free-for-all flows, and records decline, void, reassignment, and timer-driven expiry evidence.
 
 ---
 
@@ -77,9 +78,10 @@ WOS employs a linked-data architecture to ensure interoperability and AI-safety.
 ## 5. Engineering Roadmap
 
 ### Phase 1: Engine Bindings (§1 Reference Blockers Complete)
-§1 reference implementation blockers are complete as of 2026-04-14. Remaining Phase 1 work is engine adapter bindings:
+§1 reference implementation blockers are complete as of 2026-04-14. WOS-T3 selected Restate as the first production durable backend; remaining Phase 1 work is adapter implementation:
 *   [ ] **Camunda 8 Worker:** Delegates BPMN task execution to WOS governance.
-*   [ ] **Temporal Workflow:** Maps WOS evaluation steps to deterministic replay.
+*   [ ] **Restate Adapter:** Implements `DurableRuntime` over tenant-qualified Restate workflows/virtual objects.
+*   [ ] **Temporal Workflow:** Deferred until the official Rust workflow API stabilizes; maps WOS evaluation steps to deterministic replay when revisited.
 *   [ ] **AWS Step Functions:** Bridges ASL states to WOS transitions.
 *   [x] **Integration Profile Processor:** CloudEvents 1.0 (`event-emit`, `event-consume`, `callback`), Arazzo multi-step sequences, tool invocations, and policy engine bridges all implemented in `wos-runtime`. 13 INT-* conformance fixtures green. (NB.3 + NB.4 complete)
 *   [x] **Business Calendar SLA Evaluation:** `wos-business-calendar` sidecar consumed for Governance S10.3 SLA deadline computation; lazy evaluation at check time; `calendarVersion` snapshot; 4 G-S10-* fixtures green. (BC.1 complete)
