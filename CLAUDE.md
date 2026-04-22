@@ -100,7 +100,7 @@ WOS has one required layer and three optional ones. Cross-cutting profiles and c
 - **`thoughts/`** — ADRs, plans, practices, reviews (mirrors parent convention). Next free ADR id lives in parent [`thoughts/README.md`](../thoughts/README.md).
 - **`changelogs/`** — Per-stream changelogs.
 - **`TODO.md`** — Active backlog. **[`COMPLETED.md`](COMPLETED.md)** holds session narratives and closed items.
-- **`T1-TODO.md` / `T4-TODO.md`** — Per-track execution plans (T1 closed; T4 Signature Profile active).
+- **`T4-TODO.md`** — Active per-track execution plan for Signature Profile closeout. Closed track narratives belong in [`COMPLETED.md`](COMPLETED.md).
 - **Operational docs:** [`CONVENTIONS.md`](CONVENTIONS.md), [`POSITIONING.md`](POSITIONING.md), [`RELEASE-STREAMS.md`](RELEASE-STREAMS.md), [`COMPATIBILITY-MATRIX.md`](COMPATIBILITY-MATRIX.md), [`LINT-MATRIX.md`](LINT-MATRIX.md), [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md), [`WOS-IMPLEMENTATION-STATUS.md`](WOS-IMPLEMENTATION-STATUS.md).
 
 ## Architecture

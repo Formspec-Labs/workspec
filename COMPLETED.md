@@ -209,13 +209,57 @@ Largest parallel dispatch to date. Three batches: (1) uncommitted session-6 work
 
 Final state: `cargo test --workspace` 1002+ passed / 0 failed · SCHEMA-DOC-001 zero-regression gate green · `pytest tests/schemas/ -q` 171 passed / 11 skipped / 1 xfailed (+50 vs session 7). 103 LINT-MATRIX rules (AI-058 added). All eight parallel agents + all four parallel reviews landed on disjoint file sets without conflict — validates the parallel-agent dispatch discipline from `thoughts/practices/2026-04-17-parallel-agent-dispatch.md`.
 
+## Session 11 (2026-04-22) — WOS-T4 Signature Profile WOS-side closeout
+
+WOS-side completion contract archived from the earlier `T4-TODO.md` execution file:
+
+1. WOS freezes the Signature Profile acceptance criteria and DocuSign common-case parity bar.
+2. WOS lands ADR-0062 and the Signature Profile spec/schema surfaces.
+3. WOS ships schema fixtures, generated Studio type bindings, and SIG-001..SIG-012 lint rules.
+4. WOS emits `SignatureAffirmation` provenance with schema-constrained payload and custody append inclusion.
+5. WOS runtime enforces sequential, parallel, routed, free-for-all, decline, void, expiry, reassignment, witness/counter-signature, and notary/in-person semantics.
+6. WOS conformance proves the common signing patterns and missing-consent rejection.
+7. WOS-side verification gates pass; remaining work is cross-repo Formspec, Trellis, and Studio closeout.
+
+- [x] **Acceptance surface and ADR landed** — `TODO.md` now carries the exact `WOS-T4 -COMPLETE-` criteria; [ADR-0062](thoughts/adr/0062-signature-profile-workflow-semantics.md) locked the center-vs-adapter split, signer-role attachment through `actorExtension`, ADR-0060 naming, and the rejection list for kernel enum widening / opaque-vendor-ceremony encoding.
+- [x] **Spec and schema landed** — [specs/profiles/signature.md](specs/profiles/signature.md) and [schemas/profiles/wos-signature-profile.schema.json](schemas/profiles/wos-signature-profile.schema.json) define the Signature Profile document, signer roles, signing flows, consent and identity-binding evidence, reminders, expiry, decline, void, reassignment, and `SignatureAffirmation` shape.
+- [x] **Fixture and type surfaces landed** — schema fixtures `fixtures/profiles/signature-benefits-attestation.json`, `signature-parallel-countersignature.json`, and `signature-routed-notary.json`, Python contract tests, and generated Studio type bindings for `signature-profile` all landed.
+- [x] **Lint slice landed** — SIG-001..SIG-012 now enforce profile-to-kernel/governance consistency, typed timer mapping, satisfiable `SignatureAffirmation` evidence inputs, and ADR-0060 naming discipline; `LINT-MATRIX.md` was updated accordingly.
+- [x] **Runtime provenance landed** — `ProvenanceKind::SignatureAffirmation`, schema-constrained payload validation, Rust helper constructors, stable `recordKind: "signatureAffirmation"`, and custody append inclusion all landed in the WOS runtime surface.
+- [x] **Runtime signing semantics landed** — WOS now enforces sequential, parallel, routed, and free-for-all signing plus decline, void, expiry, reassignment, witness/counter-signature, and notary/in-person flows.
+- [x] **Conformance slice landed** — `SIG-001` through `SIG-012` cover sequential, parallel, routed, expiry, decline, reassignment, witness/counter-signature, notary/in-person authentication, missing-consent rejection, custody append inclusion, free-for-all completion, and void-path behavior.
+- [x] **Planning surfaces updated to handoff state** — `T4-TODO.md` now carries only the remaining cross-repo Formspec, Trellis, Studio, and verification work; WOS-side execution detail moved into this archive.
+
+### Validation at close
+
+- [x] `cargo fmt --all`
+- [x] `cargo check --workspace`
+- [x] `cargo test -p wos-lint`
+- [x] `cargo test -p wos-runtime --lib`
+- [x] `cargo test -p wos-conformance --test signature_profile -- --nocapture`
+- [x] `../.venv/bin/pytest tests/schemas -q`
+- [x] `npm run types:check` in `studio/`
+- [x] `git diff --check`
+
 ## Session 10 (2026-04-21) — WOS-T1 custodyHook execution closeout
+
+Completion contract archived from the former `T1-TODO.md` execution file:
+
+1. WOS publishes the reserved TypeID family prefixes and `wos.*` event-type ownership in the extension-registry surface.
+2. WOS case instances and authored records mint TypeIDs at authoring time rather than deriving them from log position or storage order.
+3. Record-family schemas reject malformed `caseId` / `id` values at authoring time.
+4. The binding mechanically converts schema-valid WOS JSON records into dCBOR using the ADR-0061 encoding table and rejection list.
+5. The WOS runtime emits the narrow four-field append input: `caseId`, `recordId`, `eventType`, `record`.
+6. The WOS-side idempotency source tuple is exactly `(caseId, recordId)` with domain tag `trellis-wos-idempotency-v1`.
+7. The runtime receipt surface is narrowed to `CustodyAppendReceipt { canonical_event_hash }`, and WOS stamps that hash into the first downstream consumer path.
+8. Trellis fixture `append/010-wos-custody-hook-state-transition` and Trellis Operational Companion §24.9 match the final emitted shape.
+9. Round-trip fixture corpora byte-match in Rust and Python for every WOS record family crossing `custodyHook`.
 
 - [x] **TypeID minting landed in code** — added stack-local [typeid.rs](crates/wos-core/src/typeid.rs) with UUIDv7/Crockford `{tenant}_{type}_{uuidv7_base32}` minting + validation; `ProvenanceRecord` now mints `prov` IDs at authoring time; `CaseInstance` now mints `case` IDs and preserves legacy request aliases for runtime compatibility.
 - [x] **Kernel provenance records gained durable custody citation** — `ProvenanceRecord` now carries `canonicalEventHash`; runtime added `apply_custody_receipt(...)` and stamps `CustodyAppendReceipt { canonical_event_hash }` onto persisted provenance by `recordId`.
 - [x] **`wos-runtime::custody` rewritten to ADR-0061** — removed the superseded JCS/wide-shape append surface; live runtime now emits the narrow four-field append input (`caseId`, `recordId`, `eventType`, `record`) with dCBOR-authored bytes, base64 JSON host serialization, canonical CBOR map ordering, oversize rejection, and 2-tuple idempotency `(caseId, recordId)`.
 - [x] **Spec / schema / registry surfaces aligned** — [specs/kernel/custody-hook-encoding.md](specs/kernel/custody-hook-encoding.md), [schemas/kernel/wos-custody-hook-encoding.schema.json](schemas/kernel/wos-custody-hook-encoding.schema.json), registry ownership metadata, case/provenance/governance TypeID patterns, and the Trellis Operational Companion §24.9 now all point at the accepted ADR-0061 contract.
-- [x] **Planning surfaces updated to closure state** — [T1-TODO.md](T1-TODO.md) now carries a closeout summary + verification log; [TODO.md](TODO.md) marks WOS-T1 complete.
+- [x] **Planning surfaces updated to closure state** — `TODO.md` now dropped the live WOS-T1 row; this session archive carries the former T1 closeout contract and verification log.
 
 ### Validation at close
 
