@@ -64,12 +64,16 @@ impl IntegrationBindingHandler for EventConsumeHandler {
         // Reject at the binding boundary if required CE attributes are invalid.
         envelope.validate_ingress().map_err(|e| {
             RuntimeError::Integration(format!(
-                "event-consume binding '{service_ref}': {}", ingress_rejection_message(e)
+                "event-consume binding '{service_ref}': {}",
+                ingress_rejection_message(e)
             ))
         })?;
 
         // Apply output binding: map envelope data into case state.
-        let event_data = envelope.data.clone().unwrap_or_else(|| serde_json::json!({}));
+        let event_data = envelope
+            .data
+            .clone()
+            .unwrap_or_else(|| serde_json::json!({}));
         let updates = apply_output_binding(
             &mut record.instance.case_state,
             &binding.output_binding,
@@ -80,6 +84,7 @@ impl IntegrationBindingHandler for EventConsumeHandler {
 
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -99,10 +104,15 @@ impl IntegrationBindingHandler for EventConsumeHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::EventConsumed,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -118,6 +128,10 @@ impl IntegrationBindingHandler for EventConsumeHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
+            outcome: None,
         });
 
         Ok(provenance)

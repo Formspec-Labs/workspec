@@ -35,6 +35,7 @@ pub mod provenance;
 pub mod proxy;
 pub mod timer;
 pub mod traits;
+pub mod typeid;
 
 pub use context::EvalContext;
 pub use eval::{
@@ -44,12 +45,20 @@ pub use eval::{
 pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
 pub use model::governance::GovernanceDocument;
-pub use model::kernel::{Action, ActionKind, KernelDocument, State, StateKind, Transition};
+pub use model::kernel::{
+    Action, ActionKind, KernelDocument, SignalScope, State, StateKind, TimerEventSource,
+    Transition, TransitionEvent,
+};
 pub use model::kernel::{Actor, ActorKind, CaseFile, CaseRelationship, FieldDefinition};
 pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};
 pub use model::kernel::{ImpactLevel, Lifecycle, Milestone, Region};
 pub use model::notification_template::NotificationTemplateDocument;
 pub use project::Project;
-pub use provenance::{ProvenanceKind, ProvenanceLog, ProvenanceRecord};
+pub use provenance::{ProvenanceAuditTier, ProvenanceKind, ProvenanceLog, ProvenanceRecord};
 pub use proxy::{AssistGovernanceProxyEvidence, observe_assist_governance_proxy};
 pub use timer::Timers;
+pub use typeid::{
+    AI_PREFIX, ASSURANCE_PREFIX, CASE_PREFIX, DEFAULT_TENANT, GOVERNANCE_PREFIX, PROVENANCE_PREFIX,
+    is_valid_record_type_id, is_valid_type_id, mint_ai_id, mint_assurance_id, mint_case_id,
+    mint_governance_id, mint_provenance_id, mint_type_id, tenant, tenant_from_env_value,
+};

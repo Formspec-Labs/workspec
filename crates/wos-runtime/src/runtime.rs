@@ -2,36 +2,48 @@
 
 //! Runtime command surface for WOS processors.
 
+mod actions;
+mod drain;
+mod durable_impl;
+mod instance;
+mod provenance;
+mod signature;
+mod support;
+mod tasks;
+mod timers;
+
 use std::error::Error as StdError;
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine as _;
-use semver::{Version, VersionReq};
-use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
-use chrono::DateTime;
-use wos_core::business_calendar::{next_business_moment, BusinessCalendarDocument, BusinessCalendarError};
-use wos_core::eval::{Evaluator, ObservedAction, ObservedTransition};
-use wos_core::instance::{
-    ActiveTask, ActiveTaskStatus, CaseInstance, FormspecTaskContext, InstanceStatus, PendingEvent,
-};
-use wos_core::model::governance::DelegationScope;
-use wos_core::model::kernel::{ActionKind, ActorKind, ImpactLevel, KernelDocument};
-use wos_core::provenance::{audit_layer_for_kind, ProvenanceKind, ProvenanceRecord};
-use wos_core::timer::{max_tolerance_ms, tolerance_to_iso, Timer};
+use wos_core::business_calendar::BusinessCalendarDocument;
+#[cfg(test)]
+use wos_core::eval::Evaluator;
+use wos_core::eval::{GuardEvaluation, ObservedTransition};
+use wos_core::instance::{CaseInstance, FormspecTaskContext, PendingEvent};
+use wos_core::model::kernel::KernelDocument;
+#[cfg(test)]
+use wos_core::provenance::ProvenanceKind;
+use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{
     AccessControl, ContractValidator, DocumentResolver, ExternalService, TaskPresenter,
 };
 
-use crate::binding::{BindingError, BindingRegistry, SubmissionValidation};
-use crate::integration::{IntegrationBinding, IntegrationProfileDocument};
-use crate::integration_handlers::{
-    dispatch_integration_binding, load_or_invoke_service_result, InvocationContext,
+use crate::binding::{BindingError, BindingRegistry};
+use crate::custody::CustodyAppendError;
+use crate::integration::IntegrationProfileDocument;
+use crate::store::{RuntimeStore, StoreError};
+
+pub use provenance::{
+    CustodyReceiptStampError, populate_provenance_record_fields, stamp_custody_receipt,
+    stamp_provenance,
 };
-use crate::milestones::evaluate_milestones;
-use crate::store::{
-    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
-    StoreError, TaskArtifact, TaskArtifactKind,
+use provenance::{compensation_provenance, contract_validation_record};
+pub use signature::{
+    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
+    SignatureProfileDocument,
+};
+use support::{
+    format_timestamp, impact_level_label, make_task_id, merge_case_state,
+    normalize_semver_range_expression, parse_timestamp,
 };
 
 const COMPLETION_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-completion-event";
@@ -65,6 +77,13 @@ pub struct DrainOnceResult {
     pub created_task_ids: Vec<String>,
     /// Event names emitted during the step.
     pub emitted_events: Vec<String>,
+    /// Guard expressions evaluated during this step (teaching signal, §5.3).
+    ///
+    /// Every transition whose `guard` was tested — pass or fail — contributes
+    /// one entry. Short-circuited false guards on transitions that did not
+    /// fire are included so conformance traces can surface "this guard
+    /// evaluated false" as the reason an expected transition didn't happen.
+    pub guard_evaluations: Vec<GuardEvaluation>,
 }
 
 /// Draft persistence result.
@@ -115,6 +134,10 @@ pub struct RuntimeEventContext {
     pub instance: CaseInstance,
     /// Event dequeued for processing.
     pub event: PendingEvent,
+    /// Runtime clock at the start of event processing.
+    pub now_ms: u64,
+    /// RFC 3339 rendering of `now_ms`.
+    pub now_iso: String,
 }
 
 /// Companion-policy decision for a runtime event.
@@ -205,6 +228,10 @@ pub enum RuntimeError {
     #[error(transparent)]
     Binding(#[from] BindingError),
 
+    /// Custody append input generation failed.
+    #[error(transparent)]
+    CustodyAppend(#[from] CustodyAppendError),
+
     /// Required workflow metadata is absent.
     #[error("missing workflow metadata: {0}")]
     MissingMetadata(String),
@@ -237,9 +264,37 @@ pub enum RuntimeError {
     #[error("actor unauthorized: {0}")]
     Unauthorized(String),
 
+    /// Signature Profile runtime processing failed.
+    #[error("signature profile runtime failed: {0}")]
+    Signature(String),
+
     /// Timestamp conversion failed.
     #[error("timestamp conversion failed: {0}")]
     Clock(String),
+
+    /// The referenced provenance record was not found.
+    #[error("provenance record not found: {0}")]
+    ProvenanceRecordNotFound(String),
+
+    /// Custody receipt hash disagrees with an already-stamped value on the same record.
+    #[error(
+        "custody receipt conflict: existing canonical_event_hash {existing} differs from attempted {attempted}"
+    )]
+    CustodyReceiptConflict { existing: String, attempted: String },
+}
+
+impl From<provenance::CustodyReceiptStampError> for RuntimeError {
+    fn from(value: provenance::CustodyReceiptStampError) -> Self {
+        match value {
+            provenance::CustodyReceiptStampError::Conflict {
+                existing,
+                attempted,
+            } => Self::CustodyReceiptConflict {
+                existing,
+                attempted,
+            },
+        }
+    }
 }
 
 trait ResolveDocumentsDyn {
@@ -340,6 +395,7 @@ pub struct WosRuntime {
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
+    signature_profiles: Vec<signature::SignatureProfileRegistration>,
 }
 
 impl WosRuntime {
@@ -379,6 +435,7 @@ impl WosRuntime {
             integration_profile: None,
             business_calendar: None,
             bindings,
+            signature_profiles: Vec::new(),
         }
     }
 
@@ -408,1736 +465,6 @@ impl WosRuntime {
         self.business_calendar = Some(calendar);
         self
     }
-
-    /// Create and persist a new case instance.
-    pub fn create_instance(
-        &mut self,
-        request: CreateInstanceRequest,
-    ) -> Result<CaseInstance, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let CreateInstanceRequest {
-            instance_id,
-            definition_url,
-            definition_version,
-            initial_case_state,
-        } = request;
-        let kernel = self
-            .resolver
-            .resolve_kernel(&definition_url, &definition_version)?;
-        let mut evaluator = Evaluator::with_time_and_case_state(
-            kernel.clone(),
-            now_ms,
-            initial_case_state.as_ref(),
-        )
-        .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-
-        let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
-        let instance = CaseInstance {
-            instance_id,
-            definition_url,
-            definition_version,
-            configuration: evaluator.configuration().active_states().to_vec(),
-            case_state: evaluator.case_state_json(),
-            provenance_position: 0,
-            next_task_sequence: 0,
-            timers: timer_states,
-            active_tasks: Vec::new(),
-            history_store: Default::default(),
-            compensation_logs: Default::default(),
-            status: InstanceStatus::Active,
-            pending_events: Vec::new(),
-            governance_state: None,
-            volume_counters: None,
-            fired_milestones: Default::default(),
-            pending_callbacks: Default::default(),
-            created_at: now_iso.clone(),
-            updated_at: now_iso.clone(),
-            extensions: Default::default(),
-        };
-
-        let mut record = RuntimeRecord::new(instance);
-        let mut appended_provenance = evaluator.provenance().records().to_vec();
-        // Annotate any timers created during instance initialization with calendarVersion.
-        if let Some(cal) = &self.business_calendar {
-            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
-        }
-        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
-        let actions = evaluator.take_executed_actions();
-        let (created_task_ids, emitted_events, runtime_provenance) =
-            self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
-        appended_provenance.extend(runtime_provenance);
-        let (pending_presentations, presentation_provenance) =
-            self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
-        appended_provenance.extend(presentation_provenance);
-        populate_provenance_record_fields(
-            &mut appended_provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position = appended_provenance.len() as u64;
-        record.provenance_log.extend(appended_provenance);
-        self.store.create_record(record.clone())?;
-
-        self.deliver_pending_presentations(&pending_presentations)?;
-
-        let _ = (created_task_ids, emitted_events);
-        Ok(record.instance)
-    }
-
-    /// Load the canonical case instance state.
-    pub fn load_instance(&self, instance_id: &str) -> Result<CaseInstance, RuntimeError> {
-        Ok(self.store.load_record(instance_id)?.instance)
-    }
-
-    /// Append an event to the instance queue.
-    pub fn enqueue_event(
-        &mut self,
-        instance_id: &str,
-        mut event: PendingEvent,
-    ) -> Result<(), RuntimeError> {
-        let mut record = self.store.load_record(instance_id)?;
-        if event.timestamp.is_empty() {
-            event.timestamp = format_timestamp(self.clock.now_ms())?;
-        }
-        record.instance.pending_events.push(event);
-        record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
-        self.store.save_record(record.clone())?;
-        Ok(())
-    }
-
-    /// Drain a single event from the instance queue.
-    pub fn drain_once(&mut self, instance_id: &str) -> Result<DrainOnceResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.store.load_record(instance_id)?;
-        let mut appended_provenance =
-            materialize_due_timers(&mut record.instance, now_ms, &now_iso)?;
-
-        let Some(event) = record.instance.pending_events.first().cloned() else {
-            if !appended_provenance.is_empty() {
-                // Resolve kernel for SP §5.3/§5.4 field population (due-timer
-                // materialization path). The kernel is always resolvable here
-                // because the instance is persisted.
-                let kernel = self.resolver.resolve_kernel(
-                    &record.instance.definition_url,
-                    &record.instance.definition_version,
-                )?;
-                populate_provenance_record_fields(
-                    &mut appended_provenance,
-                    &kernel,
-                    &record.instance.definition_version,
-                );
-                stamp_provenance(&mut appended_provenance, &now_iso);
-                record.instance.updated_at = now_iso;
-                record.instance.provenance_position += appended_provenance.len() as u64;
-                record.provenance_log.extend(appended_provenance);
-                self.store.save_record(record)?;
-            }
-            return Ok(DrainOnceResult::default());
-        };
-
-        record.instance.pending_events.remove(0);
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        let mut runtime_result = DrainOnceResult {
-            processed_event: Some(event.event.clone()),
-            processed_event_token: event.idempotency_token.clone(),
-            transitions: Vec::new(),
-            provenance: Vec::new(),
-            created_task_ids: Vec::new(),
-            emitted_events: Vec::new(),
-        };
-
-        let decision = self.companion_policy.evaluate_event(RuntimeEventContext {
-            kernel: kernel.clone(),
-            instance: record.instance.clone(),
-            event,
-        })?;
-        appended_provenance.extend(decision.provenance);
-
-        let Some(event) = decision.event else {
-            populate_provenance_record_fields(
-                &mut appended_provenance,
-                &kernel,
-                &record.instance.definition_version,
-            );
-            stamp_provenance(&mut appended_provenance, &now_iso);
-            record.instance.updated_at = now_iso;
-            record.instance.provenance_position += appended_provenance.len() as u64;
-            record.provenance_log.extend(appended_provenance.clone());
-            self.store.save_record(record)?;
-            runtime_result.provenance = appended_provenance;
-            return Ok(runtime_result);
-        };
-
-        let mut evaluator = Evaluator::from_instance(kernel.clone(), &record.instance, now_ms)
-            .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-        evaluator
-            .process_event(&event.event, event.actor_id.as_deref(), event.data.as_ref())
-            .map_err(|error| RuntimeError::Evaluator(error.to_string()))?;
-        runtime_result.transitions = evaluator.transitions().to_vec();
-
-        appended_provenance.extend(evaluator.provenance().records().to_vec());
-        // Annotate any newly created timers with calendarVersion when a calendar
-        // is attached (provenance approach a — augment data field, no new variant).
-        if let Some(cal) = &self.business_calendar {
-            annotate_timer_created_with_calendar_version(&mut appended_provenance, cal);
-        }
-        appended_provenance.extend(compensation_provenance(
-            &kernel,
-            &record.provenance_log,
-            &appended_provenance,
-        ));
-        record.instance.configuration = evaluator.configuration().active_states().to_vec();
-        record.instance.case_state = evaluator.case_state_json();
-        let (timer_states, convergence_error_ids) =
-            timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
-        // Annotate TimerCreated records for any timers whose calendar deadline did not converge.
-        annotate_timer_created_with_convergence_error(&mut appended_provenance, &convergence_error_ids);
-        record.instance.timers = timer_states;
-        record.instance.history_store = evaluator.history_store().clone();
-        record.instance.updated_at = now_iso.clone();
-
-        let case_state_can_mutate_explicitly = record
-            .provenance_log
-            .iter()
-            .chain(appended_provenance.iter())
-            .any(|record| record.record_kind == ProvenanceKind::CaseStateMutation);
-        if !runtime_result.transitions.is_empty() && case_state_can_mutate_explicitly {
-            appended_provenance.push(ProvenanceRecord {
-                record_kind: ProvenanceKind::StateTransition,
-                timestamp: String::new(),
-                actor_id: event.actor_id.clone(),
-                from_state: None,
-                to_state: None,
-                event: Some(event.event.clone()),
-                data: Some(serde_json::json!({ "caseStateUnchangedByTransition": true })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-            });
-        }
-
-        // Milestone firing: evaluate after the event's transition tree completes
-        // (including all onEntry/onExit setData), before side-effect realization
-        // (createTask/emitEvent) that would enqueue follow-on events (Kernel S4.13).
-        // Records are appended in lexicographic milestone-id order so the provenance
-        // stream is deterministic.
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
-        appended_provenance.extend(milestone_records);
-
-        let actions = evaluator.take_executed_actions();
-        let (created_task_ids, emitted_events, runtime_provenance) =
-            self.apply_observed_actions(&kernel, &mut record, &actions, &now_iso)?;
-        appended_provenance.extend(runtime_provenance);
-
-        let (pending_presentations, presentation_provenance) =
-            self.stage_pending_tasks_for_presentation(&mut record, &now_iso)?;
-        appended_provenance.extend(presentation_provenance);
-
-        populate_provenance_record_fields(
-            &mut appended_provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut appended_provenance, &now_iso);
-        record.instance.provenance_position += appended_provenance.len() as u64;
-        record.provenance_log.extend(appended_provenance.clone());
-        self.store.save_record(record.clone())?;
-
-        self.deliver_pending_presentations(&pending_presentations)?;
-
-        runtime_result.provenance = appended_provenance;
-        runtime_result.created_task_ids = created_task_ids;
-        runtime_result.emitted_events = emitted_events;
-        Ok(runtime_result)
-    }
-
-    /// Drain events until the queue is empty and no timers are due.
-    pub fn drain_until_idle(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Vec<DrainOnceResult>, RuntimeError> {
-        let mut results = Vec::new();
-
-        loop {
-            let result = self.drain_once(instance_id)?;
-            let should_stop = result.processed_event.is_none();
-            if should_stop {
-                break;
-            }
-            results.push(result);
-        }
-
-        Ok(results)
-    }
-
-    /// Persist a draft task response.
-    pub fn persist_task_draft(
-        &mut self,
-        task_id: &str,
-        response: serde_json::Value,
-        actor_id: &str,
-        idempotency_token: Option<&str>,
-    ) -> Result<PersistDraftResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        if let Some(token) = idempotency_token {
-            let replay_key = ReplayKey {
-                operation: ReplayOperation::PersistDraft,
-                task_id: task_id.to_string(),
-                actor_id: actor_id.to_string(),
-                token: token.to_string(),
-            };
-            if let Some(ReplayValue::Draft(result)) = record.replay_entries.get(&replay_key) {
-                return Ok(result.clone());
-            }
-        }
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-
-        let task = record.instance.active_tasks[task_index].clone();
-        authorize_actor(&*self.access_control, &task, actor_id)?;
-        let status = response
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| RuntimeError::InvalidResponseStatus("missing draft status".to_string()))?
-            .to_string();
-        if !matches!(status.as_str(), "in-progress" | "amended" | "stopped") {
-            return Err(RuntimeError::InvalidResponseStatus(status));
-        }
-
-        let artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Draft,
-            response,
-            actor_id,
-            &now_iso,
-        );
-        let result = PersistDraftResult {
-            artifact_id: artifact.artifact_id.clone(),
-        };
-        record
-            .artifacts
-            .insert(artifact.artifact_id.clone(), artifact.clone());
-        let mut provenance = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskDraftPersisted,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({
-                "artifactId": artifact.artifact_id,
-                "status": status,
-            })),
-        );
-        provenance.timestamp = now_iso.clone();
-        // Populate SP §5.3 fields so persist-task-draft records carry the same
-        // shape as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut provenance),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.instance.provenance_position += 1;
-        record.provenance_log.push(provenance);
-        record.instance.updated_at = now_iso;
-
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::PersistDraft,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Draft(result.clone()),
-            );
-        }
-
-        self.store.save_record(record)?;
-        Ok(result)
-    }
-
-    /// Record a UI dismissal without advancing lifecycle state.
-    pub fn dismiss_task(&mut self, task_id: &str, reason: &str) -> Result<(), RuntimeError> {
-        let now_iso = format_timestamp(self.clock.now_ms())?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-        let task = &record.instance.active_tasks[task_index];
-        if task.context.is_some() {
-            self.presenter.dismiss_task(task_id, reason)?;
-        }
-
-        record.instance.provenance_position += 1;
-        let mut dismissal = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskDismissed,
-            task_id,
-            task.assigned_actor.as_deref(),
-            Some(serde_json::json!({ "reason": reason })),
-        );
-        dismissal.timestamp = now_iso.clone();
-        // Populate SP §5.3 fields so dismissal records carry the same shape
-        // as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut dismissal),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.provenance_log.push(dismissal);
-        record.instance.updated_at = now_iso;
-        self.store.save_record(record)?;
-        Ok(())
-    }
-
-    /// Submit a completed task response.
-    pub fn submit_task_response(
-        &mut self,
-        task_id: &str,
-        response: serde_json::Value,
-        actor_id: &str,
-        idempotency_token: Option<&str>,
-    ) -> Result<TaskSubmissionResult, RuntimeError> {
-        let now_ms = self.clock.now_ms();
-        let now_iso = format_timestamp(now_ms)?;
-        let mut record = self.load_record_for_task_id(task_id)?;
-        if let Some(token) = idempotency_token {
-            let replay_key = ReplayKey {
-                operation: ReplayOperation::SubmitTaskResponse,
-                task_id: task_id.to_string(),
-                actor_id: actor_id.to_string(),
-                token: token.to_string(),
-            };
-            if let Some(ReplayValue::Submission(result)) = record.replay_entries.get(&replay_key) {
-                return Ok(result.clone());
-            }
-        }
-        let task_index = find_task_index(&record, task_id)
-            .ok_or_else(|| RuntimeError::TaskNotFound(task_id.to_string()))?;
-
-        let task = record.instance.active_tasks[task_index].clone();
-        authorize_actor(&*self.access_control, &task, actor_id)?;
-        let status = response
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| {
-                RuntimeError::InvalidResponseStatus("missing response status".to_string())
-            })?
-            .to_string();
-        if status != "completed" {
-            let result = TaskSubmissionResult::Rejected {
-                code: "taskResponseStatusNotCompleted".to_string(),
-            };
-            self.record_submission_rejection(
-                &mut record,
-                task_id,
-                actor_id,
-                "taskResponseStatusNotCompleted",
-                &now_iso,
-                idempotency_token,
-                result.clone(),
-            )?;
-            return Ok(result);
-        }
-
-        let binding = task
-            .binding
-            .as_deref()
-            .ok_or_else(|| RuntimeError::UnsupportedBinding("task has no binding".to_string()))?;
-        let adapter = self
-            .bindings
-            .get(binding)
-            .ok_or_else(|| RuntimeError::UnsupportedBinding(binding.to_string()))?;
-        let validation = adapter.validate_submission(&task, &response)?;
-        let mut provenance = vec![ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskResponseSubmitted,
-            task_id,
-            Some(actor_id),
-            None,
-        )];
-        provenance.push(contract_validation_record(
-            task_id,
-            actor_id,
-            &response,
-            &validation,
-        ));
-
-        if !validation_passed(&validation) {
-            let emitted_event = remove_task_with_event(
-                &mut record.instance,
-                task_index,
-                FAILURE_EVENT_EXTENSION_KEY,
-                actor_id,
-                &now_iso,
-            );
-            provenance.push(ProvenanceRecord::task_lifecycle(
-                ProvenanceKind::TaskFailed,
-                task_id,
-                Some(actor_id),
-                Some(serde_json::json!({
-                    "code": "validationFailed",
-                    "validationOutcome": validation.validation_outcome,
-                })),
-            ));
-            // Resolve kernel so we can populate SP §5.3 fields before persisting.
-            let kernel = self.resolver.resolve_kernel(
-                &record.instance.definition_url,
-                &record.instance.definition_version,
-            )?;
-            populate_provenance_record_fields(
-                &mut provenance,
-                &kernel,
-                &record.instance.definition_version,
-            );
-            stamp_provenance(&mut provenance, &now_iso);
-            record.instance.provenance_position += provenance.len() as u64;
-            record.provenance_log.extend(provenance);
-            record.instance.updated_at = now_iso;
-            let result = TaskSubmissionResult::Failed {
-                code: "validationFailed".to_string(),
-                emitted_event,
-            };
-            if let Some(token) = idempotency_token {
-                record.replay_entries.insert(
-                    ReplayKey {
-                        operation: ReplayOperation::SubmitTaskResponse,
-                        task_id: task_id.to_string(),
-                        actor_id: actor_id.to_string(),
-                        token: token.to_string(),
-                    },
-                    ReplayValue::Submission(result.clone()),
-                );
-            }
-            self.store.save_record(record)?;
-            return Ok(result);
-        }
-
-        let accepted_artifact = build_artifact(
-            &record,
-            task_id,
-            TaskArtifactKind::Accepted,
-            response.clone(),
-            actor_id,
-            &now_iso,
-        );
-        record.artifacts.insert(
-            accepted_artifact.artifact_id.clone(),
-            accepted_artifact.clone(),
-        );
-        let mutation = adapter.compute_case_mutation(&task, &response)?;
-        let case_mutated = mutation
-            .as_ref()
-            .is_some_and(|bundle| !bundle.field_updates.is_empty());
-        if let Some(bundle) = mutation {
-            if !bundle.field_updates.is_empty() {
-                merge_case_state(
-                    &mut record.instance.case_state,
-                    &serde_json::Value::Object(bundle.field_updates.clone()),
-                );
-                provenance.push(ProvenanceRecord::task_lifecycle(
-                    ProvenanceKind::DataMapping,
-                    task_id,
-                    Some(actor_id),
-                    Some(serde_json::json!({
-                        "artifactId": accepted_artifact.artifact_id,
-                        "mappingRef": task.response_mapping_ref,
-                    })),
-                ));
-            }
-        }
-
-        // Milestone firing: evaluate after durable case-state write, before reactive
-        // transitions drain (Kernel S4.13).  Records follow any DataMapping record so
-        // the provenance stream reads: data changed → milestone fired.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        let post_state = record.instance.case_state.clone();
-        let milestone_records = evaluate_milestones(&kernel, &mut record.instance, &post_state);
-        provenance.extend(milestone_records);
-
-        let emitted_event = remove_task_with_event(
-            &mut record.instance,
-            task_index,
-            COMPLETION_EVENT_EXTENSION_KEY,
-            actor_id,
-            &now_iso,
-        );
-        provenance.push(ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskCompleted,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({
-                "artifactId": accepted_artifact.artifact_id,
-                "caseMutated": case_mutated,
-            })),
-        ));
-        populate_provenance_record_fields(
-            &mut provenance,
-            &kernel,
-            &record.instance.definition_version,
-        );
-        stamp_provenance(&mut provenance, &now_iso);
-        record.instance.provenance_position += provenance.len() as u64;
-        record.provenance_log.extend(provenance);
-        record.instance.updated_at = now_iso;
-
-        let result = TaskSubmissionResult::Completed {
-            artifact_id: accepted_artifact.artifact_id,
-            case_mutated,
-            emitted_event,
-        };
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::SubmitTaskResponse,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Submission(result.clone()),
-            );
-        }
-        self.store.save_record(record)?;
-        Ok(result)
-    }
-
-    /// Load a provenance window by cursor and limit.
-    pub fn load_provenance_window(
-        &self,
-        instance_id: &str,
-        cursor: usize,
-        limit: usize,
-    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        let record = self.store.load_record(instance_id)?;
-        Ok(record
-            .provenance_log
-            .iter()
-            .skip(cursor)
-            .take(limit)
-            .cloned()
-            .collect())
-    }
-
-    fn load_record_for_task_id(&self, task_id: &str) -> Result<RuntimeRecord, RuntimeError> {
-        let instance_id = task_instance_id(task_id)?;
-        Ok(self.store.load_record(&instance_id)?)
-    }
-
-    fn apply_observed_actions(
-        &mut self,
-        kernel: &KernelDocument,
-        record: &mut RuntimeRecord,
-        actions: &[ObservedAction],
-        now_iso: &str,
-    ) -> Result<(Vec<String>, Vec<String>, Vec<ProvenanceRecord>), RuntimeError> {
-        let mut created_task_ids = Vec::new();
-        let mut emitted_events = Vec::new();
-        let mut provenance = Vec::new();
-
-        for observed in actions {
-            match observed.action.action {
-                ActionKind::CreateTask => {
-                    let task = self.create_active_task(kernel, record, observed, now_iso)?;
-                    created_task_ids.push(task.task_id.clone());
-                    provenance.push(ProvenanceRecord::task_lifecycle(
-                        ProvenanceKind::TaskCreated,
-                        &task.task_id,
-                        observed.actor_id.as_deref(),
-                        Some(serde_json::json!({
-                            "taskRef": task.task_ref,
-                            "binding": task.binding,
-                        })),
-                    ));
-                    record.instance.active_tasks.push(task);
-                }
-                ActionKind::EmitEvent => {
-                    let event_name = observed.action.event_type.clone().ok_or_else(|| {
-                        RuntimeError::UnsupportedAction("emitEvent missing eventType".to_string())
-                    })?;
-                    record.instance.pending_events.push(PendingEvent {
-                        event: event_name.clone(),
-                        actor_id: observed.actor_id.clone(),
-                        data: observed.action.data.clone(),
-                        timestamp: now_iso.to_string(),
-                        idempotency_token: None,
-                    });
-                    emitted_events.push(event_name);
-                }
-                ActionKind::InvokeService => {
-                    let service_ref = observed.action.service_ref.clone().ok_or_else(|| {
-                        RuntimeError::UnsupportedAction(
-                            "invokeService missing serviceRef".to_string(),
-                        )
-                    })?;
-                    let integration_binding = self
-                        .integration_profile
-                        .as_ref()
-                        .and_then(|profile| profile.bindings.get(&service_ref))
-                        .cloned();
-                    if let Some(binding) = integration_binding {
-                        provenance.extend(self.invoke_integration_binding(
-                            record,
-                            kernel,
-                            observed,
-                            &service_ref,
-                            &binding,
-                            now_iso,
-                        )?);
-                        continue;
-                    }
-
-                    let input = observed
-                        .action
-                        .data
-                        .clone()
-                        .unwrap_or_else(|| serde_json::json!({}));
-                    let idempotency_key = observed.action.idempotency_key.as_deref();
-                    let (step_result, reused_persisted_result) = load_or_invoke_service_result(
-                        self.service.as_ref(),
-                        record,
-                        &service_ref,
-                        &input,
-                        idempotency_key,
-                        now_iso,
-                    )?;
-
-                    if reused_persisted_result {
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::IdempotencyDedup,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "serviceRef": service_ref,
-                                "idempotencyKey": idempotency_key,
-                                "stepResultRecordedAt": step_result.recorded_at,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                        });
-                    } else {
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::StepResultPersisted,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "serviceRef": service_ref,
-                                "idempotencyKey": idempotency_key,
-                                "output": step_result.output,
-                                "persistedBeforeAdvance": true,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                        });
-                    }
-
-                    if let Some(contract_ref) = observed.action.contract_ref.as_deref() {
-                        let validation_result =
-                            self.validator.validate(contract_ref, &step_result.output)?;
-                        provenance.push(ProvenanceRecord {
-                            record_kind: ProvenanceKind::ContractValidation,
-                            timestamp: String::new(),
-                            actor_id: observed.actor_id.clone(),
-                            from_state: None,
-                            to_state: None,
-                            event: None,
-                            data: Some(serde_json::json!({
-                                "contractRef": contract_ref,
-                                "structured": true,
-                                "valid": validation_result.valid,
-                                "errors": validation_result.errors,
-                            })),
-                            audit_layer: None,
-                            actor_type: None,
-                            lifecycle_state: None,
-                            definition_version: None,
-                            inputs: Vec::new(),
-                            outputs: Vec::new(),
-                            input_digest: None,
-                            output_digest: None,
-                        });
-                    }
-                }
-                ActionKind::SetData
-                | ActionKind::StartTimer
-                | ActionKind::CancelTimer
-                | ActionKind::Log => {}
-            }
-        }
-
-        Ok((created_task_ids, emitted_events, provenance))
-    }
-
-    fn invoke_integration_binding(
-        &mut self,
-        record: &mut RuntimeRecord,
-        kernel: &KernelDocument,
-        observed: &ObservedAction,
-        service_ref: &str,
-        binding: &IntegrationBinding,
-        now_iso: &str,
-    ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-        self.validate_integration_profile_target(kernel, &record.instance)?;
-        let ctx = InvocationContext {
-            service: self.service.as_ref(),
-            validator: self.validator.as_ref(),
-        };
-        dispatch_integration_binding(&ctx, record, kernel, observed, service_ref, binding, now_iso)
-    }
-
-    fn validate_integration_profile_target(
-        &self,
-        kernel: &KernelDocument,
-        instance: &CaseInstance,
-    ) -> Result<(), RuntimeError> {
-        let Some(profile) = self.integration_profile.as_ref() else {
-            return Ok(());
-        };
-
-        if profile.target_workflow.url != instance.definition_url {
-            return Err(RuntimeError::Integration(format!(
-                "integration profile targets '{}' but instance uses '{}'",
-                profile.target_workflow.url, instance.definition_url
-            )));
-        }
-
-        if let Some(compatible_versions) = profile.target_workflow.compatible_versions.as_deref() {
-            let requested_version =
-                Version::parse(&instance.definition_version).map_err(|error| {
-                    RuntimeError::Integration(format!(
-                        "instance definition version '{}' is not valid semver: {error}",
-                        instance.definition_version
-                    ))
-                })?;
-            let normalized_versions = normalize_semver_range_expression(compatible_versions);
-            let version_req = VersionReq::parse(&normalized_versions).map_err(|error| {
-                RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' is not valid semver: {error}",
-                    compatible_versions
-                ))
-            })?;
-            if !version_req.matches(&requested_version) {
-                return Err(RuntimeError::Integration(format!(
-                    "integration profile compatibleVersions '{}' do not include instance version '{}'",
-                    compatible_versions, instance.definition_version
-                )));
-            }
-        }
-
-        if kernel.url.as_deref() != Some(instance.definition_url.as_str()) {
-            return Err(RuntimeError::Integration(format!(
-                "kernel document url '{}' does not match instance definition url '{}'",
-                kernel.url.as_deref().unwrap_or_default(),
-                instance.definition_url
-            )));
-        }
-
-        Ok(())
-    }
-
-    fn stage_pending_tasks_for_presentation(
-        &mut self,
-        record: &mut RuntimeRecord,
-        now_iso: &str,
-    ) -> Result<(Vec<FormspecTaskContext>, Vec<ProvenanceRecord>), RuntimeError> {
-        let mut pending_presentations = Vec::new();
-        let mut provenance = Vec::new();
-
-        for task in &mut record.instance.active_tasks {
-            let Some(context) = task.context.as_ref() else {
-                continue;
-            };
-            if task.binding.as_deref() != Some("formspec") {
-                continue;
-            }
-            if task.status != ActiveTaskStatus::Created {
-                continue;
-            }
-
-            task.status = ActiveTaskStatus::Assigned;
-            task.updated_at = now_iso.to_string();
-            pending_presentations.push(context.clone());
-            provenance.push(ProvenanceRecord::task_lifecycle(
-                ProvenanceKind::TaskPresented,
-                &task.task_id,
-                task.assigned_actor.as_deref(),
-                Some(serde_json::json!({
-                    "definitionUrl": task.definition_url,
-                    "definitionVersion": task.definition_version,
-                })),
-            ));
-        }
-
-        Ok((pending_presentations, provenance))
-    }
-
-    fn deliver_pending_presentations(
-        &mut self,
-        contexts: &[FormspecTaskContext],
-    ) -> Result<(), RuntimeError> {
-        for context in contexts {
-            self.presenter.present_task(context)?;
-        }
-        Ok(())
-    }
-
-    fn create_active_task(
-        &mut self,
-        kernel: &KernelDocument,
-        record: &mut RuntimeRecord,
-        observed: &ObservedAction,
-        now_iso: &str,
-    ) -> Result<ActiveTask, RuntimeError> {
-        let action = &observed.action;
-        let task_ref = action.task_ref.clone().ok_or_else(|| {
-            RuntimeError::MissingMetadata("createTask missing taskRef".to_string())
-        })?;
-        let task_sequence = record.instance.next_task_sequence + 1;
-        record.instance.next_task_sequence = task_sequence;
-        let task_id = make_task_id(&record.instance.instance_id, task_sequence, &task_ref);
-
-        let mut task = ActiveTask {
-            task_id,
-            task_ref,
-            status: ActiveTaskStatus::Created,
-            assigned_actor: action.assign_to.clone(),
-            contract_ref: action.contract_ref.clone(),
-            binding: None,
-            definition_url: None,
-            definition_version: None,
-            prefill_mapping_ref: action.prefill_mapping_ref.clone(),
-            response_mapping_ref: action.response_mapping_ref.clone(),
-            deadline: None,
-            impact_level: kernel.impact_level.map(impact_level_label),
-            context: None,
-            last_validation_outcome: None,
-            created_at: now_iso.to_string(),
-            updated_at: now_iso.to_string(),
-            extensions: Default::default(),
-        };
-
-        if let Some(completion_event) = &action.completion_event {
-            task.extensions.insert(
-                COMPLETION_EVENT_EXTENSION_KEY.to_string(),
-                serde_json::Value::String(completion_event.clone()),
-            );
-        }
-        if let Some(failure_event) = &action.failure_event {
-            task.extensions.insert(
-                FAILURE_EVENT_EXTENSION_KEY.to_string(),
-                serde_json::Value::String(failure_event.clone()),
-            );
-        }
-
-        if let Some(contract_key) = &task.contract_ref {
-            let contract = kernel
-                .contracts
-                .get(contract_key)
-                .ok_or_else(|| RuntimeError::ContractNotFound(contract_key.clone()))?;
-            task.binding = Some(contract.binding.clone());
-            task.definition_url = Some(contract.reference.clone());
-            task.definition_version = Some(kernel.version.clone().ok_or_else(|| {
-                RuntimeError::MissingMetadata("kernel version required".to_string())
-            })?);
-            if task.prefill_mapping_ref.is_none() {
-                task.prefill_mapping_ref = contract.prefill_mapping_ref.clone();
-            }
-            if task.response_mapping_ref.is_none() {
-                task.response_mapping_ref = contract.response_mapping_ref.clone();
-            }
-
-            if contract.binding == "formspec" {
-                let assigned_actor = task.assigned_actor.clone().ok_or_else(|| {
-                    RuntimeError::MissingMetadata(
-                        "formspec task requires assigned actor".to_string(),
-                    )
-                })?;
-                let adapter = self
-                    .bindings
-                    .get(&contract.binding)
-                    .ok_or_else(|| RuntimeError::UnsupportedBinding(contract.binding.clone()))?;
-                let prepared = adapter.prepare_task(&task, &record.instance.case_state)?;
-                task.context = Some(FormspecTaskContext {
-                    task_id: task.task_id.clone(),
-                    instance_id: record.instance.instance_id.clone(),
-                    contract_ref: contract_key.clone(),
-                    definition_url: task.definition_url.clone().unwrap_or_default(),
-                    definition_version: task.definition_version.clone().unwrap_or_default(),
-                    binding: contract.binding.clone(),
-                    assigned_actor,
-                    prefill_data: prepared.prefill_data,
-                    prefill_mapping_ref: task.prefill_mapping_ref.clone(),
-                    response_mapping_ref: task.response_mapping_ref.clone(),
-                    deadline: task.deadline.clone(),
-                    impact_level: task.impact_level.clone(),
-                    extensions: Default::default(),
-                });
-            } else {
-                return Err(RuntimeError::UnsupportedBinding(contract.binding.clone()));
-            }
-        }
-
-        Ok(task)
-    }
-
-    fn record_submission_rejection(
-        &mut self,
-        record: &mut RuntimeRecord,
-        task_id: &str,
-        actor_id: &str,
-        code: &str,
-        updated_at: &str,
-        idempotency_token: Option<&str>,
-        result: TaskSubmissionResult,
-    ) -> Result<(), RuntimeError> {
-        record.instance.provenance_position += 1;
-        let mut rejection = ProvenanceRecord::task_lifecycle(
-            ProvenanceKind::TaskResponseRejected,
-            task_id,
-            Some(actor_id),
-            Some(serde_json::json!({ "code": code })),
-        );
-        rejection.timestamp = updated_at.to_string();
-        // Populate SP §5.3 fields so rejection records carry the same shape
-        // as records that flow through the main stamp path.
-        let kernel = self.resolver.resolve_kernel(
-            &record.instance.definition_url,
-            &record.instance.definition_version,
-        )?;
-        populate_provenance_record_fields(
-            std::slice::from_mut(&mut rejection),
-            &kernel,
-            &record.instance.definition_version,
-        );
-        record.provenance_log.push(rejection);
-        record.instance.updated_at = updated_at.to_string();
-        if let Some(token) = idempotency_token {
-            record.replay_entries.insert(
-                ReplayKey {
-                    operation: ReplayOperation::SubmitTaskResponse,
-                    task_id: task_id.to_string(),
-                    actor_id: actor_id.to_string(),
-                    token: token.to_string(),
-                },
-                ReplayValue::Submission(result),
-            );
-        }
-        self.store.save_record(record.clone())?;
-        Ok(())
-    }
-}
-
-fn materialize_due_timers(
-    instance: &mut CaseInstance,
-    now_ms: u64,
-    now_iso: &str,
-) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
-    let mut due = Vec::new();
-    let mut remaining = Vec::new();
-
-    for timer in instance.timers.drain(..) {
-        if parse_timestamp(&timer.deadline)? <= now_ms {
-            due.push(timer);
-        } else {
-            remaining.push(timer);
-        }
-    }
-    instance.timers = remaining;
-
-    let mut provenance = Vec::new();
-    for timer in due {
-        provenance.push(ProvenanceRecord::timer_fired(&timer.timer_id, &timer.event));
-        let deadline_ms = parse_timestamp(&timer.deadline)?;
-        let lateness_ms = now_ms.saturating_sub(deadline_ms);
-        let max_tolerance = max_tolerance_ms(timer.duration_ms.unwrap_or(0));
-        if lateness_ms > max_tolerance {
-            let tolerance_iso = tolerance_to_iso(max_tolerance);
-            provenance.push(ProvenanceRecord::tolerance_violation(
-                &timer.timer_id,
-                timer.duration_iso.as_deref().unwrap_or("P0D"),
-                &tolerance_iso,
-            ));
-        }
-        instance.pending_events.push(PendingEvent {
-            event: timer.event.clone(),
-            actor_id: None,
-            data: Some(serde_json::json!({ "timerId": timer.timer_id })),
-            timestamp: now_iso.to_string(),
-            idempotency_token: None,
-        });
-    }
-
-    Ok(provenance)
-}
-
-/// Convert all timers to `TimerState`, computing calendar-adjusted deadlines lazily.
-///
-/// Returns `(states, convergence_error_timer_ids)`.  The second element lists
-/// timer IDs whose deadline fell back to naive wall-clock time because the
-/// business calendar evaluator did not converge (degenerate calendar).
-/// Callers MUST annotate the corresponding `TimerCreated` provenance records
-/// with `calendarVersionConvergenceError: true`.
-fn timers_to_state(
-    timers: &wos_core::timer::Timers,
-    calendar: Option<&BusinessCalendarDocument>,
-) -> Result<(Vec<wos_core::instance::TimerState>, Vec<String>), RuntimeError> {
-    let mut states = Vec::with_capacity(timers.len());
-    let mut convergence_error_ids = Vec::new();
-    for timer in timers.iter() {
-        let (state, had_error) = timer_to_state(timer, calendar)?;
-        if had_error {
-            convergence_error_ids.push(state.timer_id.clone());
-        }
-        states.push(state);
-    }
-    Ok((states, convergence_error_ids))
-}
-
-/// Convert a `Timer` to a `TimerState`, computing the deadline lazily.
-///
-/// When a business calendar is attached, the deadline is re-computed using
-/// [`next_business_moment`] each time this function is called (lazy evaluation).
-/// This means calendar updates between events shift future deadlines on the
-/// next drain.  When no calendar is attached, the raw wall-clock deadline is
-/// used unchanged.
-///
-/// Returns `(TimerState, had_convergence_error)`.  The second field is `true`
-/// when a degenerate calendar caused snap-forward to fall back to the naive
-/// deadline; callers should annotate the `TimerCreated` provenance record.
-fn timer_to_state(
-    timer: &Timer,
-    calendar: Option<&BusinessCalendarDocument>,
-) -> Result<(wos_core::instance::TimerState, bool), RuntimeError> {
-    let (deadline_ms, had_convergence_error) = match calendar {
-        Some(cal) => business_deadline_ms(timer, cal)?,
-        None => (timer.deadline_ms, false),
-    };
-
-    let state = wos_core::instance::TimerState {
-        timer_id: timer.id.clone(),
-        deadline: format_timestamp(deadline_ms)?,
-        event: timer.fires_event.clone(),
-        scope_state: if timer.created_in_state.is_empty() {
-            None
-        } else {
-            Some(timer.created_in_state.clone())
-        },
-        duration_iso: Some(timer.duration_iso.clone()),
-        duration_ms: Some(timer.duration_ms),
-        created_at_ms: Some(timer.created_at_ms),
-    };
-    Ok((state, had_convergence_error))
-}
-
-/// Compute a business-calendar–adjusted deadline for `timer`.
-///
-/// Uses `timer.created_at_ms` as the authoritative start time, then advances
-/// through business time by `timer.duration_ms` using the attached calendar.
-///
-/// Returns `(deadline_ms, had_convergence_error)`.  When the calendar evaluator
-/// does not converge (degenerate calendar), falls back to the naive wall-clock
-/// deadline and sets the flag to `true` so the caller can annotate provenance.
-///
-/// # Invariant
-///
-/// `Timer.created_at_ms` is the fixed origin, stamped once at timer-creation
-/// time.  Using it here ensures that repeated recomputations across drains —
-/// even after a calendar-snapped `deadline_ms` has been persisted — always
-/// produce the same result.
-fn business_deadline_ms(
-    timer: &Timer,
-    calendar: &BusinessCalendarDocument,
-) -> Result<(u64, bool), RuntimeError> {
-    let start_ms = timer.created_at_ms;
-    let start_secs = i64::try_from(start_ms / 1000)
-        .map_err(|_| RuntimeError::Clock("timer start timestamp out of range".to_string()))?;
-    let start_utc = DateTime::from_timestamp(start_secs, 0)
-        .ok_or_else(|| RuntimeError::Clock("invalid timer start timestamp".to_string()))?;
-
-    let duration = chrono::Duration::milliseconds(
-        i64::try_from(timer.duration_ms)
-            .map_err(|_| RuntimeError::Clock("timer duration out of range".to_string()))?,
-    );
-  
-    match next_business_moment(start_utc, duration, calendar) {
-        Ok(result) => {
-            let result_ms = u64::try_from(result.timestamp_millis())
-                .map_err(|_| RuntimeError::Clock("business deadline out of range".to_string()))?;
-            Ok((result_ms, false))
-        }
-        Err(BusinessCalendarError::DidNotConverge { .. }) => {
-            // Degenerate calendar: fall back to naive wall-clock deadline so the
-            // timer is not lost, and signal the caller to annotate provenance.
-            Ok((timer.deadline_ms, true))
-        }
-    }
-}
-
-/// Inject `calendarVersion` into every `TimerCreated` provenance record in `records`.
-///
-/// Uses provenance approach (a): extends the existing `data` JSON object with a
-/// `calendarVersion` field — no new provenance variant required.  When the calendar
-/// has no `version` field, the field is set to `null`.
-fn annotate_timer_created_with_calendar_version(
-    records: &mut [ProvenanceRecord],
-    calendar: &BusinessCalendarDocument,
-) {
-    let version = calendar
-        .version
-        .as_deref()
-        .map(serde_json::Value::from)
-        .unwrap_or(serde_json::Value::Null);
-
-    for record in records.iter_mut() {
-        if record.record_kind != ProvenanceKind::TimerCreated {
-            continue;
-        }
-        match &mut record.data {
-            Some(serde_json::Value::Object(map)) => {
-                map.insert("calendarVersion".to_string(), version.clone());
-            }
-            other => {
-                panic!("TimerCreated.data must be an Object; got {other:?}");
-            }
-        }
-    }
-}
-
-/// Extend `TimerCreated` records for the given timer IDs with
-/// `calendarVersionConvergenceError: true`.
-///
-/// Uses the same payload-extension pattern as
-/// `annotate_timer_created_with_calendar_version` — no new `ProvenanceKind`
-/// variant is needed.
-fn annotate_timer_created_with_convergence_error(
-    records: &mut [ProvenanceRecord],
-    timer_ids: &[String],
-) {
-    if timer_ids.is_empty() {
-        return;
-    }
-    for record in records.iter_mut() {
-        if record.record_kind != ProvenanceKind::TimerCreated {
-            continue;
-        }
-        // Check whether this record's timerId is in the convergence-error set.
-        let record_timer_id = record
-            .data
-            .as_ref()
-            .and_then(|d| d.get("timerId"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        if !timer_ids.contains(&record_timer_id) {
-            continue;
-        }
-        match &mut record.data {
-            Some(serde_json::Value::Object(map)) => {
-                map.insert(
-                    "calendarVersionConvergenceError".to_string(),
-                    serde_json::Value::Bool(true),
-                );
-            }
-            other => {
-                panic!("TimerCreated.data must be an Object; got {other:?}");
-            }
-        }
-    }
-}
-
-fn format_timestamp(timestamp_ms: u64) -> Result<String, RuntimeError> {
-    let nanos = i128::from(timestamp_ms) * 1_000_000;
-    let nanos_i64 = i64::try_from(nanos)
-        .map_err(|_| RuntimeError::Clock("timestamp exceeds supported range".to_string()))?;
-    let timestamp = OffsetDateTime::from_unix_timestamp_nanos(nanos_i64.into())
-        .map_err(|error| RuntimeError::Clock(error.to_string()))?;
-    timestamp
-        .format(&Rfc3339)
-        .map_err(|error| RuntimeError::Clock(error.to_string()))
-}
-
-/// Stamp every record whose `timestamp` is empty with `now_iso`.
-///
-/// Records that already carry a timestamp (e.g. stamped earlier in the pipeline
-/// or restored from persistence) are left untouched. This is the single
-/// authoritative point where an empty `ProvenanceRecord::timestamp` is filled
-/// in on the append path; exporters (PROV-O, XES, OCEL) downstream can treat
-/// any record surfaced from the runtime as having a non-empty timestamp.
-pub fn stamp_provenance(records: &mut [ProvenanceRecord], now_iso: &str) {
-    for record in records {
-        if record.timestamp.is_empty() {
-            record.timestamp = now_iso.to_string();
-        }
-    }
-}
-
-/// Populate the eight push-stamped Semantic Profile fields on `records`
-/// immediately before persistence (SP §5.3, §5.4, §5.5, §6.3, §6.5).
-///
-/// This is the sole append-path site where these fields are filled in, so
-/// every record handed to the store downstream carries the full SP-required
-/// shape. Each field is set only when it is currently `None` / empty — the
-/// same push-stamped discipline as [`stamp_provenance`]. Callers MUST invoke
-/// this before `stamp_provenance` (timestamp is independent and stamped last).
-///
-/// The populator intentionally does NOT set `timestamp`. Callers either call
-/// [`stamp_provenance`] on the same records immediately after the populate
-/// pass (the common path), OR pre-assign `timestamp` themselves before the
-/// record enters the populator (e.g. `persist_task_draft`, `dismiss_task`,
-/// `record_submission_rejection`, which stamp from their ambient `now_iso`).
-/// Both patterns satisfy the "every stored record has a timestamp" invariant.
-///
-/// The populator mirrors the AI Integration-aware actor lookup used by
-/// `integration_handlers::request_response` (see its `actor_kind_to_string`
-/// site): we resolve `actor_id` against the kernel's declared `actors` and
-/// map `ActorKind::Human → "human"`, `ActorKind::System → "system"`. Records
-/// whose `actor_id` is not in the kernel registry keep `actor_type = None`
-/// (SP §5.3 "omit, do not default"). The `"agent"` variant is reserved for
-/// AI Integration agent-registry resolution (out of scope here —
-// TODO(spec-upstream) below).
-pub fn populate_provenance_record_fields(
-    records: &mut [ProvenanceRecord],
-    kernel: &KernelDocument,
-    definition_version: &str,
-) {
-    for record in records {
-        // Tier classification (SP §5.4, §6.5).
-        if record.audit_layer.is_none() {
-            record.audit_layer = Some(audit_layer_for_kind(record.record_kind).to_string());
-        }
-
-        // Actor type (SP §5.3, §5.5, §6.3).
-        if record.actor_type.is_none()
-            && let Some(actor_id) = record.actor_id.as_deref()
-            && let Some(actor) = kernel.actors.iter().find(|a| a.id == actor_id)
-        {
-            record.actor_type = Some(match actor.kind {
-                ActorKind::Human => "human".to_string(),
-                ActorKind::System => "system".to_string(),
-                // TODO(spec-upstream): map ActorKind::Agent → "agent" once
-                // the AI Integration agent registry lookup is threaded into
-                // the runtime context. ActorKind today is Human | System only.
-            });
-        }
-
-        // Definition version (SP §5.3, §6.3).
-        if record.definition_version.is_none() && !definition_version.is_empty() {
-            record.definition_version = Some(definition_version.to_string());
-        }
-
-        // Lifecycle state (SP §5.3, §6.3): promote from record-specific sources.
-        if record.lifecycle_state.is_none() {
-            match record.record_kind {
-                ProvenanceKind::StateTransition => {
-                    // The pre-transition state IS the lifecycle state at
-                    // action time (the event fired while the instance
-                    // occupied `from_state`).
-                    if let Some(from) = record.from_state.as_deref() {
-                        record.lifecycle_state = Some(from.to_string());
-                    }
-                }
-                ProvenanceKind::CaseStateMutation => {
-                    // `case_state_mutation` embeds the lifecycle state in `data`.
-                    let state = record
-                        .data
-                        .as_ref()
-                        .and_then(|d| d.get("lifecycleState"))
-                        .and_then(serde_json::Value::as_str);
-                    if let Some(state) = state {
-                        record.lifecycle_state = Some(state.to_string());
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Inputs / outputs (SP §5.3, §6.3) — only for record kinds that have
-        // identifiable entity relationships. Other kinds stay empty.
-        match record.record_kind {
-            ProvenanceKind::StateTransition => {
-                if record.inputs.is_empty()
-                    && let Some(event) = record.event.as_deref()
-                {
-                    record.inputs = vec![event.to_string()];
-                }
-                if record.outputs.is_empty()
-                    && let Some(to_state) = record.to_state.as_deref()
-                {
-                    record.outputs = vec![to_state.to_string()];
-                }
-            }
-            ProvenanceKind::CaseStateMutation => {
-                if record.inputs.is_empty()
-                    && let Some(path) = record
-                        .data
-                        .as_ref()
-                        .and_then(|d| d.get("path"))
-                        .and_then(serde_json::Value::as_str)
-                {
-                    record.inputs = vec![path.to_string()];
-                }
-                if record.outputs.is_empty()
-                    && let Some(new_value) = record.data.as_ref().and_then(|d| d.get("newValue"))
-                {
-                    // SP §5.3 outputs are scalar entity references. JSON string
-                    // scalars must appear unquoted (so `"approved"` → `approved`,
-                    // matching the unquoted form of numbers/bools). Other JSON
-                    // shapes (number, bool, null, object, array) fall back to
-                    // the JSON serialization, which already lacks surrounding
-                    // quotes for primitives.
-                    record.outputs = vec![stringify_scalar(new_value)];
-                }
-            }
-            _ => {}
-        }
-
-        // Digests (SP §5.3, §6.3) — computed last, from the final inputs/outputs.
-        if record.input_digest.is_none() {
-            record.input_digest = digest_of(&record.inputs);
-        }
-        if record.output_digest.is_none() {
-            record.output_digest = digest_of(&record.outputs);
-        }
-    }
-}
-
-/// Stringify a JSON scalar for inclusion in `inputs`/`outputs` (SP §5.3).
-///
-/// JSON strings are emitted as their raw value (without surrounding quotes);
-/// everything else falls back to the JSON serialization — which for numbers,
-/// bools, and null is already unquoted, and for composite shapes (objects,
-/// arrays) preserves the embedded structure for downstream exporters.
-///
-/// This keeps the stringified form consistent across scalar JSON types:
-/// `Value::String("x")` → `"x"`, `Value::Number(42)` → `"42"`.
-fn stringify_scalar(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::String(s) => s.clone(),
-        other => other.to_string(),
-    }
-}
-
-/// SHA-256 hex digest of the JSON-serialized `items` vector.
-///
-/// Returns `None` when the vector is empty (per SP §5.3, digests are only
-/// emitted when the corresponding inputs/outputs are present).
-fn digest_of(items: &[String]) -> Option<String> {
-    if items.is_empty() {
-        return None;
-    }
-    use sha2::{Digest, Sha256};
-    let payload = serde_json::to_string(items).unwrap_or_default();
-    Some(format!("{:x}", Sha256::digest(payload.as_bytes())))
-}
-
-fn parse_timestamp(timestamp: &str) -> Result<u64, RuntimeError> {
-    let parsed = OffsetDateTime::parse(timestamp, &Rfc3339)
-        .map_err(|error| RuntimeError::Clock(error.to_string()))?;
-    let millis = parsed.unix_timestamp_nanos() / 1_000_000;
-    u64::try_from(millis).map_err(|_| RuntimeError::Clock("negative timestamp".to_string()))
-}
-
-fn merge_case_state(target: &mut serde_json::Value, updates: &serde_json::Value) {
-    if let (Some(target_object), Some(update_object)) =
-        (target.as_object_mut(), updates.as_object())
-    {
-        for (key, value) in update_object {
-            target_object.insert(key.clone(), value.clone());
-        }
-    }
-}
-
-fn normalize_semver_range_expression(expression: &str) -> String {
-    expression
-        .split("||")
-        .map(|clause| {
-            let clause = clause.trim();
-            if clause.contains(',') {
-                clause.to_string()
-            } else {
-                clause.split_whitespace().collect::<Vec<_>>().join(", ")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" || ")
-}
-
-fn impact_level_label(level: ImpactLevel) -> String {
-    match level {
-        ImpactLevel::RightsImpacting => "rights-impacting",
-        ImpactLevel::SafetyImpacting => "safety-impacting",
-        ImpactLevel::Operational => "operational",
-        ImpactLevel::Informational => "informational",
-    }
-    .to_string()
-}
-
-fn task_instance_id(task_id: &str) -> Result<String, RuntimeError> {
-    let Some(encoded_instance_id) = task_id
-        .strip_prefix("wos-task:")
-        .and_then(|rest| rest.split_once(':'))
-        .map(|(encoded_instance_id, _)| encoded_instance_id)
-    else {
-        return Err(RuntimeError::TaskNotFound(task_id.to_string()));
-    };
-
-    let decoded = URL_SAFE_NO_PAD
-        .decode(encoded_instance_id)
-        .map_err(|_| RuntimeError::TaskNotFound(task_id.to_string()))?;
-    std::str::from_utf8(&decoded)
-        .map(str::to_owned)
-        .map_err(|_| RuntimeError::TaskNotFound(task_id.to_string()))
-}
-
-fn find_task_index(record: &RuntimeRecord, task_id: &str) -> Option<usize> {
-    record
-        .instance
-        .active_tasks
-        .iter()
-        .position(|task| task.task_id == task_id)
-}
-
-fn make_task_id(instance_id: &str, ordinal: u64, task_ref: &str) -> String {
-    let encoded_instance_id = URL_SAFE_NO_PAD.encode(instance_id);
-    format!("wos-task:{encoded_instance_id}:{ordinal}:{task_ref}")
-}
-
-fn authorize_actor(
-    access_control: &dyn AccessControl,
-    task: &ActiveTask,
-    actor_id: &str,
-) -> Result<(), RuntimeError> {
-    let assigned_actor = task
-        .assigned_actor
-        .as_deref()
-        .ok_or_else(|| RuntimeError::Unauthorized("task has no assigned actor".to_string()))?;
-    if actor_id == assigned_actor {
-        return Ok(());
-    }
-
-    let mut scope = DelegationScope {
-        impact_levels: Vec::new(),
-        case_types: Vec::new(),
-        max_dollar_threshold: None,
-        conditions: None,
-    };
-    if let Some(impact_level) = &task.impact_level {
-        scope.impact_levels.push(impact_level.clone());
-    }
-    if access_control.can_delegate(assigned_actor, actor_id, &scope) {
-        Ok(())
-    } else {
-        Err(RuntimeError::Unauthorized(actor_id.to_string()))
-    }
-}
-
-fn validation_passed(validation: &SubmissionValidation) -> bool {
-    let outcome = &validation.validation_outcome;
-    outcome.envelope_valid && outcome.pin_match && outcome.definition_valid
-}
-
-fn build_artifact(
-    record: &RuntimeRecord,
-    task_id: &str,
-    kind: TaskArtifactKind,
-    response: serde_json::Value,
-    actor_id: &str,
-    recorded_at: &str,
-) -> TaskArtifact {
-    let kind_name = match kind {
-        TaskArtifactKind::Draft => "draft",
-        TaskArtifactKind::Accepted => "accepted",
-    };
-    let artifact_id = format!("{task_id}:{kind_name}:{}", record.artifacts.len() + 1);
-    TaskArtifact {
-        artifact_id,
-        task_id: task_id.to_string(),
-        kind,
-        response,
-        actor_id: actor_id.to_string(),
-        recorded_at: recorded_at.to_string(),
-    }
-}
-
-fn remove_task_with_event(
-    instance: &mut CaseInstance,
-    task_index: usize,
-    extension_key: &str,
-    actor_id: &str,
-    timestamp: &str,
-) -> Option<String> {
-    let task = instance.active_tasks.remove(task_index);
-    let emitted_event = task
-        .extensions
-        .get(extension_key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string);
-    if let Some(event) = &emitted_event {
-        instance.pending_events.push(PendingEvent {
-            event: event.clone(),
-            actor_id: Some(actor_id.to_string()),
-            data: Some(serde_json::json!({ "taskId": task.task_id })),
-            timestamp: timestamp.to_string(),
-            idempotency_token: None,
-        });
-    }
-    emitted_event
-}
-
-fn compensation_provenance(
-    kernel: &KernelDocument,
-    persisted_provenance: &[ProvenanceRecord],
-    appended_provenance: &[ProvenanceRecord],
-) -> Vec<ProvenanceRecord> {
-    let compensation_started_now = appended_provenance.iter().any(|record| {
-        record.record_kind == ProvenanceKind::StateTransition
-            && record.to_state.as_deref() == Some("compensating")
-    });
-    if !compensation_started_now {
-        return Vec::new();
-    }
-
-    let transitions: Vec<(&str, &str)> = persisted_provenance
-        .iter()
-        .chain(appended_provenance.iter())
-        .filter(|record| record.record_kind == ProvenanceKind::StateTransition)
-        .filter_map(|record| Some((record.from_state.as_deref()?, record.to_state.as_deref()?)))
-        .collect();
-
-    let mut visited: Vec<&str> = vec![kernel.lifecycle.initial_state.as_str()];
-    for (_, to) in &transitions {
-        if *to != "compensating" && *to != "compensated" && *to != "done" {
-            visited.push(to);
-        }
-    }
-
-    let mut provenance = Vec::new();
-    let fail_transition = transitions.iter().find(|(_, to)| *to == "compensating");
-    if visited.len() >= 3 {
-        let mut reversed = visited;
-        reversed.reverse();
-        provenance.push(ProvenanceRecord {
-            record_kind: ProvenanceKind::CompensationExecuted,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "order": reversed })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-        });
-        provenance.push(ProvenanceRecord {
-            record_kind: ProvenanceKind::CompensationScopeBoundary,
-            timestamp: String::new(),
-            actor_id: None,
-            from_state: None,
-            to_state: None,
-            event: None,
-            data: Some(serde_json::json!({ "innerScopeOnly": true })),
-            audit_layer: None,
-            actor_type: None,
-            lifecycle_state: None,
-            definition_version: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            input_digest: None,
-            output_digest: None,
-        });
-    } else if visited.len() == 2 {
-        if let Some((from, _)) = fail_transition {
-            let compensated: Vec<&str> = visited
-                .iter()
-                .filter(|state| **state != *from)
-                .copied()
-                .collect();
-            provenance.push(ProvenanceRecord {
-                record_kind: ProvenanceKind::CompensationExecuted,
-                timestamp: String::new(),
-                actor_id: None,
-                from_state: None,
-                to_state: None,
-                event: None,
-                data: Some(serde_json::json!({
-                    "pivotStep": from,
-                    "compensated": compensated,
-                    "excluded": [*from],
-                })),
-                audit_layer: None,
-                actor_type: None,
-                lifecycle_state: None,
-                definition_version: None,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                input_digest: None,
-                output_digest: None,
-            });
-        }
-    }
-
-    provenance
-}
-
-fn contract_validation_record(
-    task_id: &str,
-    actor_id: &str,
-    response: &serde_json::Value,
-    validation: &SubmissionValidation,
-) -> ProvenanceRecord {
-    ProvenanceRecord::contract_validation(
-        task_id,
-        Some(actor_id),
-        serde_json::json!({
-            "response": response,
-            "validationOutcome": validation.validation_outcome,
-        }),
-    )
 }
 
 #[cfg(test)]
@@ -2148,9 +475,10 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use crate::binding::{CaseMutationBundle, PreparedTask};
-    use crate::store::{InMemoryStore, RuntimeStore, StoreError};
-    use wos_core::instance::ValidationOutcome;
+    use crate::DurableRuntime;
+    use crate::binding::{CaseMutationBundle, PreparedTask, SubmissionValidation};
+    use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
+    use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 
     #[test]
@@ -2198,6 +526,7 @@ mod tests {
         let mut records = vec![
             ProvenanceRecord::state_transition("Draft", "Submitted", "submit", None),
             ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::NarrativeTierRecorded,
                 timestamp: String::new(),
                 actor_id: None,
@@ -2213,6 +542,10 @@ mod tests {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             },
         ];
 
@@ -2347,6 +680,274 @@ mod tests {
     }
 
     #[test]
+    fn determination_transition_emits_case_file_snapshot() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "review",
+                "states": {
+                    "review": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decide",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+        let case_state = serde_json::json!({
+            "applicantId": "A-123",
+            "income": 17500,
+            "eligible": true
+        });
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-determination".to_string(),
+                definition_url: "urn:test:determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(case_state.clone()),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-determination",
+                PendingEvent {
+                    event: "decide".to_string(),
+                    actor_id: Some("reviewer".to_string()),
+                    data: None,
+                    timestamp: "2026-04-19T00:00:00Z".to_string(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-determination").unwrap();
+        let transition = result
+            .provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::StateTransition)
+            .expect("state transition provenance");
+        let snapshot = transition
+            .case_file_snapshot
+            .as_ref()
+            .expect("determination transition captures case state");
+
+        assert_eq!(snapshot.value, case_state);
+        assert_eq!(
+            snapshot.jcs_canonical,
+            r#"{"applicantId":"A-123","eligible":true,"income":17500}"#
+        );
+        assert_eq!(snapshot.sha256.len(), 64);
+    }
+
+    #[test]
+    fn recursive_join_determination_uses_current_transition_case_state() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:join-determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "parallelReview",
+                "states": {
+                    "parallelReview": {
+                        "type": "parallel",
+                        "regions": {
+                            "human": {
+                                "initialState": "humanReview",
+                                "states": {
+                                    "humanReview": {
+                                        "type": "atomic",
+                                        "transitions": [{
+                                            "event": "completeReview",
+                                            "target": "humanDone",
+                                            "actions": [{
+                                                "action": "setData",
+                                                "path": "caseFile.reviewScore",
+                                                "value": 100
+                                            }]
+                                        }]
+                                    },
+                                    "humanDone": { "type": "final" }
+                                }
+                            },
+                            "system": {
+                                "initialState": "systemDone",
+                                "states": {
+                                    "systemDone": { "type": "final" }
+                                }
+                            }
+                        },
+                        "transitions": [{
+                            "event": "$join",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-join-determination".to_string(),
+                definition_url: "urn:test:join-determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "reviewScore": 0 })),
+            })
+            .unwrap();
+        runtime
+            .enqueue_event(
+                "case-join-determination",
+                PendingEvent {
+                    event: "completeReview".to_string(),
+                    actor_id: Some("reviewer".to_string()),
+                    data: None,
+                    timestamp: "2026-04-19T00:00:00Z".to_string(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-join-determination").unwrap();
+        let join_transition = result
+            .provenance
+            .iter()
+            .find(|record| {
+                record.record_kind == ProvenanceKind::StateTransition
+                    && record.from_state.as_deref() == Some("parallelReview")
+                    && record.to_state.as_deref() == Some("decided")
+            })
+            .expect("join determination transition provenance");
+        let snapshot = join_transition
+            .case_file_snapshot
+            .as_ref()
+            .expect("join determination captures case state");
+
+        assert_eq!(snapshot.value, serde_json::json!({ "reviewScore": 100 }));
+        assert_eq!(snapshot.jcs_canonical, r#"{"reviewScore":100}"#);
+    }
+
+    /// Finding 3 regression: each determination-tagged transition in a
+    /// single drain MUST capture its own pre-transition case-state snapshot.
+    /// An earlier design draft hoisted the snapshot to a single pre-drain
+    /// capture reused for every record — this test fails that shape and
+    /// forces the per-transition capture wired through `Evaluator`.
+    #[test]
+    fn each_determination_transition_captures_its_own_snapshot() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:multi-determination-snapshot",
+            "version": "1.0.0",
+            "actors": [{ "id": "reviewer", "type": "human" }],
+            "lifecycle": {
+                "initialState": "firstReview",
+                "states": {
+                    "firstReview": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decideFirst",
+                            "target": "secondReview",
+                            "tags": ["determination"],
+                            "actions": [{
+                                "action": "setData",
+                                "path": "caseFile.firstOutcome",
+                                "value": "approved"
+                            }]
+                        }]
+                    },
+                    "secondReview": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "decideSecond",
+                            "target": "decided",
+                            "tags": ["determination"]
+                        }]
+                    },
+                    "decided": { "type": "final" }
+                }
+            }
+        }))
+        .unwrap();
+        let mut runtime = runtime_with_kernel(kernel);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-multi-determination".to_string(),
+                definition_url: "urn:test:multi-determination-snapshot".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "firstOutcome": "pending" })),
+            })
+            .unwrap();
+        for event in ["decideFirst", "decideSecond"] {
+            runtime
+                .enqueue_event(
+                    "case-multi-determination",
+                    PendingEvent {
+                        event: event.to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: None,
+                        timestamp: "2026-04-19T00:00:00Z".to_string(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+        }
+
+        let mut snapshots = Vec::new();
+        loop {
+            let result = runtime.drain_once("case-multi-determination").unwrap();
+            for record in &result.provenance {
+                if record.record_kind == ProvenanceKind::StateTransition {
+                    if let Some(snapshot) = record.case_file_snapshot.as_ref() {
+                        snapshots.push((
+                            record.from_state.clone().unwrap_or_default(),
+                            snapshot.jcs_canonical.clone(),
+                        ));
+                    }
+                }
+            }
+            if result.provenance.is_empty() {
+                break;
+            }
+        }
+
+        assert_eq!(
+            snapshots.len(),
+            2,
+            "two determination transitions must each emit a snapshot"
+        );
+        assert_eq!(
+            snapshots[0],
+            (
+                "firstReview".to_string(),
+                r#"{"firstOutcome":"pending"}"#.to_string()
+            ),
+            "first determination snapshot is pre-mutation"
+        );
+        assert_eq!(
+            snapshots[1],
+            (
+                "secondReview".to_string(),
+                r#"{"firstOutcome":"approved"}"#.to_string()
+            ),
+            "second determination snapshot reflects the mutation from the first transition"
+        );
+    }
+
+    #[test]
     fn inputs_outputs_set_for_case_state_mutation() {
         let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
         let mut records = vec![ProvenanceRecord::case_state_mutation(
@@ -2429,8 +1030,8 @@ mod tests {
         )];
         populate_provenance_record_fields(&mut object_records, &kernel, "1.0.0");
         let object_output = &object_records[0].outputs[0];
-        let round_trip: serde_json::Value = serde_json::from_str(object_output)
-            .expect("object output must be valid JSON");
+        let round_trip: serde_json::Value =
+            serde_json::from_str(object_output).expect("object output must be valid JSON");
         assert_eq!(round_trip, object_value, "object output must round-trip");
 
         // Array → same round-trip contract.
@@ -2443,8 +1044,8 @@ mod tests {
         )];
         populate_provenance_record_fields(&mut array_records, &kernel, "1.0.0");
         let array_output = &array_records[0].outputs[0];
-        let round_trip: serde_json::Value = serde_json::from_str(array_output)
-            .expect("array output must be valid JSON");
+        let round_trip: serde_json::Value =
+            serde_json::from_str(array_output).expect("array output must be valid JSON");
         assert_eq!(round_trip, array_value, "array output must round-trip");
     }
 
@@ -2495,12 +1096,8 @@ mod tests {
             "1.0.0",
             serde_json::json!([{ "id": "reviewer", "type": "human" }]),
         );
-        let mut record = ProvenanceRecord::state_transition(
-            "Draft",
-            "Submitted",
-            "submit",
-            Some("reviewer"),
-        );
+        let mut record =
+            ProvenanceRecord::state_transition("Draft", "Submitted", "submit", Some("reviewer"));
         record.audit_layer = Some("reasoning".to_string());
         record.actor_type = Some("agent".to_string());
         record.lifecycle_state = Some("Preset".to_string());
@@ -2879,6 +1476,399 @@ mod tests {
         )
     }
 
+    #[test]
+    fn durable_runtime_trait_supports_instance_round_trip() {
+        fn exercise_all_trait_methods(runtime: &mut impl DurableRuntime) {
+            let created = runtime
+                .create_instance(CreateInstanceRequest {
+                    instance_id: "case-trait".to_string(),
+                    definition_url: "urn:test:durable-trait".to_string(),
+                    definition_version: "1.0.0".to_string(),
+                    initial_case_state: Some(serde_json::json!({ "approved": false })),
+                })
+                .expect("trait create_instance");
+            let loaded = runtime
+                .load_instance("case-trait")
+                .expect("trait load_instance");
+            assert_eq!(created.instance_id, loaded.instance_id);
+            assert_eq!(created.definition_url, loaded.definition_url);
+            assert_eq!(created.definition_version, loaded.definition_version);
+
+            runtime
+                .enqueue_event(
+                    "case-trait",
+                    PendingEvent {
+                        event: "start".to_string(),
+                        actor_id: Some("reviewer".to_string()),
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .expect("trait enqueue_event");
+
+            let idle = runtime
+                .drain_until_idle("case-trait")
+                .expect("trait drain_until_idle");
+            assert!(
+                idle.iter().any(|step| step.processed_event.is_some()),
+                "expected at least one drain step that processed an event: {idle:?}"
+            );
+            let task_id = idle
+                .iter()
+                .flat_map(|step| step.created_task_ids.iter())
+                .next()
+                .cloned()
+                .expect("task id from drain");
+
+            let once = runtime
+                .drain_once("case-trait")
+                .expect("trait drain_once on idle queue");
+            assert!(
+                once.processed_event.is_none(),
+                "queue should be idle after drain_until_idle"
+            );
+
+            let window = runtime
+                .load_provenance_window("case-trait", 0, 50)
+                .expect("trait load_provenance_window");
+            assert!(!window.is_empty());
+
+            let custody_window = runtime
+                .load_custody_append_window(
+                    "case-trait",
+                    0,
+                    50,
+                    crate::CustodyAppendContext {
+                        event_type_prefix: "wos.kernel".to_string(),
+                        case_id: None,
+                        max_inline_record_bytes: None,
+                        workflow_ref: Some("urn:test:durable-trait".to_string()),
+                    },
+                )
+                .expect("trait load_custody_append_window");
+            assert_eq!(custody_window.len(), window.len());
+            assert_eq!(
+                custody_window[0].idempotency_tuple(),
+                (created.instance_id.as_str(), window[0].id.as_str())
+            );
+            assert!(
+                custody_window[0].event_type.starts_with("wos.kernel."),
+                "unexpected custody event type: {}",
+                custody_window[0].event_type
+            );
+            assert_eq!(
+                custody_window[0]
+                    .record_json_view()
+                    .expect("decoded custody json"),
+                serde_json::to_value(&window[0]).expect("json provenance")
+            );
+
+            runtime
+                .persist_task_draft(
+                    &task_id,
+                    serde_json::json!({ "status": "in-progress" }),
+                    "reviewer",
+                    None,
+                )
+                .expect("trait persist_task_draft");
+
+            runtime
+                .dismiss_task(&task_id, "trait exercise cleanup")
+                .expect("trait dismiss_task");
+
+            let submission = runtime
+                .submit_task_response(
+                    &task_id,
+                    serde_json::json!({
+                        "status": "completed",
+                        "definitionUrl": "urn:formspec:review",
+                        "definitionVersion": "1.0.0",
+                        "data": { "approved": true }
+                    }),
+                    "reviewer",
+                    None,
+                )
+                .expect("trait submit_task_response");
+            assert!(
+                matches!(submission, TaskSubmissionResult::Completed { .. }),
+                "expected completed submission, got {submission:?}"
+            );
+
+            let record_id = window[0].id.clone();
+            runtime
+                .apply_custody_receipt(
+                    created.instance_id.as_str(),
+                    &record_id,
+                    crate::CustodyAppendReceipt {
+                        canonical_event_hash:
+                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                .to_string(),
+                    },
+                )
+                .expect("trait apply_custody_receipt");
+        }
+
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:durable-trait",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "start",
+                            "target": "open",
+                            "actions": [{
+                                "action": "createTask",
+                                "taskRef": "review",
+                                "assignTo": "reviewer",
+                                "contractRef": "reviewForm",
+                                "responseMappingRef": "urn:mapping:response",
+                                "completionEvent": "review.completed",
+                                "failureEvent": "review.failed"
+                            }]
+                        }]
+                    }
+                }
+            },
+            "contracts": {
+                "reviewForm": {
+                    "binding": "formspec",
+                    "ref": "urn:formspec:review"
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        exercise_all_trait_methods(&mut runtime);
+    }
+
+    #[test]
+    fn custody_receipt_stamps_canonical_event_hash_on_persisted_provenance() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt".to_string(),
+                definition_url: "urn:test:receipt".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+
+        runtime
+            .apply_custody_receipt(
+                "case-receipt",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+                            .to_string(),
+                },
+            )
+            .expect("apply receipt");
+
+        let persisted = runtime
+            .load_provenance_window(created.instance_id.as_str(), 0, 1)
+            .expect("reload provenance");
+        assert_eq!(
+            persisted[0].canonical_event_hash.as_deref(),
+            Some("9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c")
+        );
+    }
+
+    #[test]
+    fn custody_receipt_reapply_is_idempotent_when_hash_matches() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt-idem",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let _created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt-idem".to_string(),
+                definition_url: "urn:test:receipt-idem".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt-idem", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+        let hash = "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c";
+        let receipt = crate::CustodyAppendReceipt {
+            canonical_event_hash: hash.to_string(),
+        };
+        runtime
+            .apply_custody_receipt("case-receipt-idem", &record_id, receipt.clone())
+            .expect("first apply");
+        runtime
+            .apply_custody_receipt("case-receipt-idem", &record_id, receipt)
+            .expect("idempotent reapply");
+        let persisted = runtime
+            .load_provenance_window("case-receipt-idem", 0, 1)
+            .expect("reload");
+        assert_eq!(persisted[0].canonical_event_hash.as_deref(), Some(hash));
+    }
+
+    #[test]
+    fn custody_receipt_conflict_when_hash_differs() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:receipt-conflict",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = runtime_with_kernel(kernel);
+        let _created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-receipt-conflict".to_string(),
+                definition_url: "urn:test:receipt-conflict".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create instance");
+        let provenance = runtime
+            .load_provenance_window("case-receipt-conflict", 0, 1)
+            .expect("load provenance");
+        let record_id = provenance[0].id.clone();
+        runtime
+            .apply_custody_receipt(
+                "case-receipt-conflict",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+                            .to_string(),
+                },
+            )
+            .expect("first apply");
+        let err = runtime
+            .apply_custody_receipt(
+                "case-receipt-conflict",
+                &record_id,
+                crate::CustodyAppendReceipt {
+                    canonical_event_hash:
+                        "0000000000000000000000000000000000000000000000000000000000000000"
+                            .to_string(),
+                },
+            )
+            .expect_err("second hash must conflict");
+        assert!(matches!(err, RuntimeError::CustodyReceiptConflict { .. }));
+    }
+
+    #[test]
+    fn create_instance_preserves_pre_minted_case_typeid() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let pre_minted = CaseInstance::mint_id();
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: pre_minted.clone(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert_eq!(created.instance_id, pre_minted);
+        assert!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .is_none(),
+            "pre-minted TypeID must not produce a legacy alias"
+        );
+    }
+
+    #[test]
+    fn create_instance_mints_id_for_empty_string() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "   ".to_string(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert!(
+            CaseInstance::is_case_id(&created.instance_id),
+            "empty instance_id must be replaced with a minted case TypeID, got {}",
+            created.instance_id
+        );
+        assert!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .is_none(),
+            "empty instance_id must not produce a legacy alias"
+        );
+    }
+
+    #[test]
+    fn create_instance_mints_id_and_stores_alias_for_legacy_name() {
+        let kernel = kernel_with_actors("1.0.0", serde_json::json!([]));
+        let mut runtime = runtime_with_kernel(kernel);
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "legacy-case-42".to_string(),
+                definition_url: "urn:test:populator".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create");
+        assert!(
+            CaseInstance::is_case_id(&created.instance_id),
+            "legacy name must be replaced with a minted case TypeID"
+        );
+        assert_eq!(
+            created
+                .extensions
+                .get("x-wos-legacy-instance-alias")
+                .and_then(serde_json::Value::as_str),
+            Some("legacy-case-42"),
+            "legacy name must be preserved as an alias"
+        );
+        let loaded = runtime
+            .load_instance("legacy-case-42")
+            .expect("load by alias");
+        assert_eq!(loaded.instance_id, created.instance_id);
+    }
+
     fn manual_formspec_task(
         instance_id: &str,
         ordinal: usize,
@@ -2983,10 +1973,12 @@ mod tests {
         assert_eq!(result.processed_event.as_deref(), Some("start"));
         assert_eq!(result.created_task_ids.len(), 1);
         assert!(result.created_task_ids[0].starts_with("wos-task:"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::TaskPresented));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::TaskPresented)
+        );
 
         let instance = runtime.load_instance("case-1").unwrap();
         assert_eq!(instance.active_tasks.len(), 1);
@@ -3103,14 +2095,18 @@ mod tests {
         let first = runtime.drain_once("case-a").unwrap();
         let second = runtime.drain_once("case-b").unwrap();
 
-        assert!(!first
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
+        assert!(
+            !first
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
     }
 
     #[test]
@@ -3400,10 +2396,12 @@ mod tests {
             serde_json::json!("pending")
         );
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDraftPersisted)
+        );
     }
 
     /// Regression: the persist-task-draft append site must route its record
@@ -3509,10 +2507,12 @@ mod tests {
 
         let record = runtime.store.load_record("case-4").unwrap();
         assert_eq!(record.instance.active_tasks.len(), 1);
-        assert!(record
-            .provenance_log
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed));
+        assert!(
+            record
+                .provenance_log
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TaskDismissed)
+        );
     }
 
     #[test]
@@ -3699,10 +2699,12 @@ mod tests {
 
         let result = runtime.drain_once("case-7").unwrap();
         assert_eq!(result.processed_event.as_deref(), Some("$timeout.review"));
-        assert!(result
-            .provenance
-            .iter()
-            .any(|entry| entry.record_kind == ProvenanceKind::TimerFired));
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|entry| entry.record_kind == ProvenanceKind::TimerFired)
+        );
 
         let instance = runtime.load_instance("case-7").unwrap();
         assert!(instance.configuration.contains(&"timed_out".to_string()));
@@ -4199,14 +3201,18 @@ mod tests {
             let invocations = invocations.lock().unwrap();
             assert_eq!(invocations.len(), 1);
         }
-        assert!(second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup));
-        assert!(!second_result
-            .provenance
-            .iter()
-            .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted));
+        assert!(
+            second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IdempotencyDedup)
+        );
+        assert!(
+            !second_result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::StepResultPersisted)
+        );
     }
 
     #[test]
@@ -4516,5 +3522,152 @@ mod tests {
                 if message.contains("resolved to no value")
         ));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    // ── §5.3 teaching-signal: guard evaluations surface through DrainOnceResult ──
+
+    #[test]
+    fn drain_once_exposes_guard_evaluations() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:drain-guard-evals",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "submitted",
+                "states": {
+                    "submitted": {
+                        "type": "atomic",
+                        "transitions": [
+                            {
+                                "event": "approve",
+                                "target": "approved",
+                                "guard": "caseFile.amount < 100"
+                            },
+                            {
+                                "event": "approve",
+                                "target": "escalated",
+                                "guard": "caseFile.amount >= 100"
+                            }
+                        ]
+                    },
+                    "approved": { "type": "final" },
+                    "escalated": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel);
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-guards".to_string(),
+                definition_url: "urn:test:drain-guard-evals".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "amount": 250 })),
+            })
+            .unwrap();
+
+        runtime
+            .enqueue_event(
+                "case-guards",
+                PendingEvent {
+                    event: "approve".to_string(),
+                    actor_id: Some("approver".to_string()),
+                    data: None,
+                    timestamp: String::new(),
+                    idempotency_token: None,
+                },
+            )
+            .unwrap();
+
+        let result = runtime.drain_once("case-guards").unwrap();
+
+        // DrainOnceResult must carry both guard evaluations for this event:
+        // the first one blocked (amount < 100 = false), the second fired
+        // (amount >= 100 = true). Without both, §5.4's teaching signal has
+        // no way to show which guard the LLM's workflow expected to fire.
+        assert_eq!(
+            result.guard_evaluations.len(),
+            2,
+            "both guards evaluated on the `approve` event"
+        );
+        assert_eq!(result.guard_evaluations[0].target_state, "approved");
+        assert!(!result.guard_evaluations[0].result);
+        assert_eq!(result.guard_evaluations[1].target_state, "escalated");
+        assert!(result.guard_evaluations[1].result);
+        assert_eq!(
+            result.guard_evaluations[0].inputs,
+            serde_json::json!({ "caseFile": { "amount": 250 } })
+        );
+    }
+
+    #[test]
+    fn drain_once_guard_evaluations_scope_to_one_event() {
+        // Each drain_once must return only the guard evaluations observed
+        // during THAT event. A later drain on a second event must not leak
+        // the first event's records.
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:guard-scope",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "s1",
+                "states": {
+                    "s1": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "go",
+                            "target": "s2",
+                            "guard": "caseFile.ok = true"
+                        }]
+                    },
+                    "s2": {
+                        "type": "atomic",
+                        "transitions": [{
+                            "event": "next",
+                            "target": "s3",
+                            "guard": "caseFile.ok = true"
+                        }]
+                    },
+                    "s3": { "type": "atomic" }
+                }
+            }
+        }))
+        .unwrap();
+
+        let mut runtime = runtime_with_kernel(kernel);
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "case-scope".to_string(),
+                definition_url: "urn:test:guard-scope".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: Some(serde_json::json!({ "ok": true })),
+            })
+            .unwrap();
+        for name in ["go", "next"] {
+            runtime
+                .enqueue_event(
+                    "case-scope",
+                    PendingEvent {
+                        event: name.to_string(),
+                        actor_id: None,
+                        data: None,
+                        timestamp: String::new(),
+                        idempotency_token: None,
+                    },
+                )
+                .unwrap();
+        }
+
+        let first = runtime.drain_once("case-scope").unwrap();
+        let second = runtime.drain_once("case-scope").unwrap();
+
+        assert_eq!(first.guard_evaluations.len(), 1);
+        assert_eq!(first.guard_evaluations[0].event, "go");
+        assert_eq!(second.guard_evaluations.len(), 1);
+        assert_eq!(
+            second.guard_evaluations[0].event, "next",
+            "second drain only sees its own guard"
+        );
     }
 }

@@ -6,29 +6,27 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Due Process Config sidecar document. Provides detailed due process configuration -- notice templates, explanation templates, appeal routing, continuation-of-service policies -- for a WOS Workflow Governance Document. Operational parameters can be updated independently of the governance structure.
  */
 export interface WOSDueProcessConfig {
   /**
-   * WOS Due Process Config specification version. MUST be '1.0'.
+   * Document type marker identifying this as a WOS Due Process Config sidecar document (Governance S3). MUST be the string '1.0'. Processors use this field to dispatch to the due process config parser; its absence means the document is not a recognized Due Process Config.
    */
   $wosDueProcess: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Workflow Governance Document this config targets.
+   * URI of the WOS Workflow Governance Document this Due Process Config targets. Must match the governance document's url field exactly. Processors MUST reject a Due Process Config whose targetGovernance does not match the governance document being loaded (Governance S3.1).
    */
   targetGovernance: string;
   /**
-   * Version of this Due Process Config document.
+   * Semantic version of this Due Process Config document. Useful for audit trails — allows governance documents to pin a specific due process configuration.
    */
   version?: string;
-  /**
-   * Templates for adverse decision notices.
-   */
-  noticeTemplates?: NoticeTemplate[];
   /**
    * Templates for decision explanations at various levels.
    */
@@ -38,85 +36,96 @@ export interface WOSDueProcessConfig {
    * Continuation-of-service policies for different adverse decision types.
    */
   continuationPolicies?: ContinuationPolicy[];
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSDueProcessConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
-export interface NoticeTemplate {
-  /**
-   * Unique template identifier.
-   */
-  id: string;
-  /**
-   * Notice title displayed to the recipient.
-   */
-  title: string;
-  /**
-   * Required sections in the notice.
-   */
-  sections: string[];
-  /**
-   * Optional reference to a Formspec Definition for structured notice rendering.
-   */
-  formspecDefinitionRef?: string;
-  /**
-   * Human-readable description of when this template is used.
-   */
-  description?: string;
-}
 export interface ExplanationTemplate {
   /**
-   * Unique template identifier.
+   * Unique identifier for this explanation template within the Due Process Config. Referenced by explanation generation logic in the processor.
    */
   id: string;
   /**
-   * Explanation level this template serves.
+   * Explanation level this template serves (Governance S3.3). 'individualized': REQUIRED for rights-impacting decisions. 'categorical': RECOMMENDED for operational decisions. 'aggregate': minimum for informational decisions.
    */
   level: 'individualized' | 'categorical' | 'aggregate';
   /**
-   * Required elements in the explanation.
+   * Named elements that MUST be present in explanations generated from this template. Element names are workflow-defined; the processor validates presence in the rendered explanation.
    */
   requiredElements?: string[];
   /**
-   * Human-readable description of this template.
+   * Human-readable description of this explanation template's purpose and scope. Intended for governance authors and auditors.
    */
   description?: string;
+  /**
+   * This interface was referenced by `ExplanationTemplate`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Detailed appeal routing configuration.
  */
 export interface AppealRouting {
   /**
-   * Default pool of eligible appeal reviewers.
+   * Default pool of actors eligible to review appeals when no specific reviewer is assigned. Referenced by the processor during appeal routing.
    */
   defaultReviewerPool?: string;
   /**
-   * How independence from the original determination is ensured.
+   * How independence from the original determination is ensured for appeal reviewers (Governance S3.5). Processors MUST enforce this constraint during reviewer assignment.
    */
   independenceConstraint: string;
   /**
-   * Ordered escalation path for contested appeal reviews.
+   * Ordered escalation path for contested appeal reviews. If an appeal reviewer's decision is contested, the processor routes to the next level in this sequence.
    */
   escalationPath?: string[];
+  /**
+   * This interface was referenced by `AppealRouting`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface ContinuationPolicy {
   /**
-   * Type of adverse decision this policy applies to.
+   * Unique identifier for this continuation policy within the Due Process Config. Referenced by `AppealMechanism.continuationPolicyRef` in the parent governance document so an appeal that turns on `continuationOfServices: true` resolves to this exact policy (Governance §3.6).
+   */
+  id: string;
+  /**
+   * Type of adverse decision this continuation-of-service policy applies to. Matches the workflow's adverse decision classification vocabulary.
    */
   decisionType: string;
   /**
-   * Scope of service continuation.
+   * Scope of services maintained during the appeal window under this policy. Determines what the individual continues to receive while their appeal is pending.
    */
   scope: string;
   /**
-   * ISO 8601 duration of the continuation period.
+   * ISO 8601 duration for which services are continued pending appeal resolution. When the appeal window expires without resolution, the processor applies the configured timeout action.
    */
   duration?: string;
   /**
-   * Human-readable description of this continuation policy.
+   * Human-readable description of this continuation-of-service policy and its regulatory basis. Intended for governance authors and auditors.
    */
   description?: string;
+  /**
+   * This interface was referenced by `ContinuationPolicy`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

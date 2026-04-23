@@ -7,63 +7,126 @@
   "description": "Minimal workflow for testing compensation semantics: append-only log, reverse ordering, pivot step exclusion, nested scopes, and $compensation.complete event.",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
-    { "id": "system", "type": "system", "description": "System" },
-    { "id": "operator", "type": "human", "description": "Operator" }
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System"
+    },
+    {
+      "id": "operator",
+      "type": "human",
+      "description": "Operator"
+    }
   ],
-
   "lifecycle": {
     "initialState": "stepA",
     "states": {
       "stepA": {
         "type": "atomic",
         "onEntry": [
-          { "action": "setData", "path": "caseFile.stepADone", "value": "true" }
+          {
+            "action": "setData",
+            "path": "caseFile.stepADone",
+            "value": "true"
+          }
         ],
         "transitions": [
-          { "event": "advance", "target": "stepB" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "advance"
+            },
+            "target": "stepB"
+          }
         ]
       },
       "stepB": {
         "type": "atomic",
         "onEntry": [
-          { "action": "setData", "path": "caseFile.stepBDone", "value": "true" }
+          {
+            "action": "setData",
+            "path": "caseFile.stepBDone",
+            "value": "true"
+          }
         ],
         "transitions": [
-          { "event": "advance", "target": "stepC" },
-          { "event": "fail", "target": "compensating" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "advance"
+            },
+            "target": "stepC"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "fail"
+            },
+            "target": "compensating"
+          }
         ]
       },
       "stepC": {
         "type": "atomic",
         "onEntry": [
-          { "action": "setData", "path": "caseFile.stepCDone", "value": "true" }
+          {
+            "action": "setData",
+            "path": "caseFile.stepCDone",
+            "value": "true"
+          }
         ],
         "transitions": [
-          { "event": "complete", "target": "done" },
-          { "event": "fail", "target": "compensating" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "complete"
+            },
+            "target": "done"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "fail"
+            },
+            "target": "compensating"
+          }
         ]
       },
       "compensating": {
         "type": "atomic",
         "transitions": [
-          { "event": "$compensation.complete", "target": "compensated" }
+          {
+            "event": {
+              "kind": "signal",
+              "name": "$compensation.complete",
+              "scope": "instance"
+            },
+            "target": "compensated"
+          }
         ]
       },
-      "compensated": { "type": "final" },
-      "done": { "type": "final" }
+      "compensated": {
+        "type": "final"
+      },
+      "done": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "stepADone": { "type": "boolean" },
-      "stepBDone": { "type": "boolean" },
-      "stepCDone": { "type": "boolean" }
+      "stepADone": {
+        "type": "boolean"
+      },
+      "stepBDone": {
+        "type": "boolean"
+      },
+      "stepCDone": {
+        "type": "boolean"
+      }
     }
   },
-
   "execution": {
     "workflowTimeout": "P1D",
     "compensable": true,

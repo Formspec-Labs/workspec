@@ -1,0 +1,36 @@
+[package]
+name = "wos-mcp"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "wos-mcp"
+path = "src/server.rs"
+
+[dependencies]
+# TODO(wos-mcp): reconsider rust-mcp-sdk stdio-only in Task 3 follow-up — the
+# crate's default features (client, server, auth, macros, stdio, sse,
+# streamable-http, hyper-server, ssl) do drag in hyper/axum/reqwest/jsonwebtoken,
+# but a minimal `rust-mcp-sdk = { version = "0.9", default-features = false,
+# features = ["stdio", "server"] }` gates all of those behind other features and
+# pulls ONLY the stdio transport (verified against upstream Cargo.toml
+# 2026-04-18). That invalidates the "too heavy" rationale in server.rs's header
+# comment — if we want to retire the hand-rolled JSON-RPC loop for ecosystem
+# parity, the migration is safe on dependency grounds. Not done in this pass
+# because a transport swap is bigger than a warning-cleanup commit.
+wos-authoring = { path = "../wos-authoring" }
+wos-conformance = { path = "../wos-conformance" }
+wos-lint = { path = "../wos-lint" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["io-std", "macros", "rt-multi-thread"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["io-std", "macros", "rt-multi-thread", "process"] }

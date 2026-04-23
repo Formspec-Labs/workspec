@@ -37,20 +37,12 @@ A Due Process Config targets a Workflow Governance Document via `targetGovernanc
 | `$wosDueProcess` | string | REQUIRED | Document type marker. MUST be `"1.0"`. |
 | `targetGovernance` | string (URI) | REQUIRED | URI of the Workflow Governance Document this config targets. |
 | `version` | string | OPTIONAL | Version of this config document. |
-| `noticeTemplates` | array of NoticeTemplate | OPTIONAL | Templates for adverse decision notices. |
 | `explanationTemplates` | array of ExplanationTemplate | OPTIONAL | Templates for decision explanations. |
 | `appealRouting` | AppealRouting | OPTIONAL | Detailed appeal routing configuration. |
 | `continuationPolicies` | array of ContinuationPolicy | OPTIONAL | Detailed continuation-of-service policies. |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
 
-### 1.2 Notice Templates
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `id` | string | REQUIRED | Template identifier. |
-| `title` | string | REQUIRED | Notice title. |
-| `sections` | array of string | REQUIRED | Required sections in the notice. |
-| `formspecDefinitionRef` | string (URI) | OPTIONAL | Reference to a Formspec Definition for structured notice rendering. |
+> **Notice templates live in the Notification Template sidecar, not here.** This config previously carried a thin `noticeTemplates` array of `{id, title, sections}` records, but the rich `TemplateSection`-based shape in the [WOS Notification Template Config](../sidecars/notification-template.md) sidecar is the canonical authoring surface for notices. The thin shape was removed to eliminate the divergent surface; `noticeTemplateKey` (Governance §3.1) and `notificationTemplateKey` (Governance §12.2) both resolve through the Notification Template sidecar (see lint rule G-063).
 
 ### 1.3 Appeal Routing
 

@@ -1,0 +1,30 @@
+{
+  "binding": "formspec",
+  "id": "SIG-009-missing-consent-blocks-affirmation",
+  "rule": "SIG-RT",
+  "description": "Missing consent evidence blocks SignatureAffirmation emission.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    { "event": "start", "actor": "applicant" },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "applicantTask",
+        "response": {
+          "status": "completed",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "signature": {
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expected_errors": ["missing signature evidence field"]
+}

@@ -1,0 +1,25 @@
+{
+  "$wosAssertionLibrary": "1.0",
+  "$schema": "https://wos-spec.org/schemas/governance/wos-assertion-gate.schema.json",
+  "url": "https://agency.gov/assertion-libraries/income-verification",
+  "version": "1.0.0",
+  "title": "Income Verification Assertions",
+  "description": "Reference library demonstrating the §4.4 #38 cross-document reference protocol: the same stable identifier (`totalIncomeArithmetic`) is published here as a library entry with an optional `assertionId` aligned to `id`, and the narrative prose in specs/governance/assertion-library.md §2 shows how a pipeline stage elsewhere would carry either an inline body or an AssertionReference pointing at this URI.",
+  "assertions": [
+    {
+      "id": "totalIncomeArithmetic",
+      "assertionId": "totalIncomeArithmetic",
+      "type": "arithmetic",
+      "description": "Total income must equal the sum of wage, investment, and other income components.",
+      "expression": "totalIncome = wageIncome + investmentIncome + otherIncome",
+      "rejectionPolicy": "failWithExplanation"
+    },
+    {
+      "id": "wageSourceGrounded",
+      "type": "source-grounded",
+      "description": "Wage income values must appear verbatim in the referenced pay-stub document.",
+      "fields": ["wageIncome", "employerName"],
+      "rejectionPolicy": "retryWithCorrections"
+    }
+  ]
+}

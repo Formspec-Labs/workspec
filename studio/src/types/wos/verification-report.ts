@@ -6,21 +6,29 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Verification Report sidecar document. Records the results of SMT-based formal verification of deontic constraints and governance rules. Captures which constraints were verified, the result (proven-safe, proven-unsafe, inconclusive), counterexamples, and solver metadata. Reports are immutable provenance artifacts.
  */
 export interface WOSVerificationReport {
   /**
-   * WOS Verification Report specification version. MUST be '1.0'.
+   * WOS Verification Report specification version. MUST be '1.0'. Identifies this document as a WOS Verification Report provenance artifact and pins the specification version. Processors reject documents with unsupported versions.
    */
   $wosVerificationReport: '1.0';
-  $schema?: string;
+  $schema?: JsonSchemaUri;
   /**
-   * URI of the WOS Kernel Document whose constraints were verified. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars.
+   * URI of the WOS Kernel Document whose constraints were verified. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars. Used by tooling to cross-reference this report with the governing advanced governance document.
    */
   targetWorkflow: string;
+  /**
+   * Version of this Verification Report document. Typically matches the advanced governance document version that was verified. SemVer is RECOMMENDED.
+   */
   version?: string;
   /**
-   * When the verification was performed.
+   * ISO 8601 date-time when the SMT verification run was performed. Recorded for audit trail purposes; reports are immutable after this timestamp.
    */
   timestamp: string;
   solver: SolverInfo;
@@ -31,7 +39,12 @@ export interface WOSVerificationReport {
    */
   results: [ConstraintResult, ...ConstraintResult[]];
   summary?: VerificationSummary;
-  extensions?: {
+  extensions?: ExtensionsMap;
+  /**
+   * This interface was referenced by `WOSVerificationReport`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -40,21 +53,28 @@ export interface WOSVerificationReport {
  */
 export interface SolverInfo {
   /**
-   * Solver name.
+   * Name of the SMT solver or verification tool that produced these results. Recorded for reproducibility and audit. Standard solvers: Z3, CVC5. Custom verifiers MUST use a unique name.
    */
   name: string;
   /**
-   * Solver version.
+   * Version of the SMT solver or verification tool. Combined with 'name' to form a complete tool identification for audit and reproducibility purposes.
    */
   version: string;
   /**
-   * Solver timeout per constraint.
+   * Maximum time the solver is allowed per constraint before recording an 'inconclusive' result. ISO 8601 duration. Balances thoroughness against CI/CD pipeline time budgets.
    */
   timeout?: string;
+  /**
+   * This interface was referenced by `SolverInfo`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface ConstraintResult {
   /**
-   * Reference to the deontic constraint that was verified.
+   * Reference to the deontic constraint id in the AI Integration Document that was subject to SMT verification. Must match a constraintRef declared in the advanced governance verifiableConstraints list (Advanced S8.1).
    */
   constraintRef: string;
   /**
@@ -63,36 +83,78 @@ export interface ConstraintResult {
   result: 'proven-safe' | 'proven-unsafe' | 'inconclusive';
   counterexample?: Counterexample;
   /**
-   * Time the solver spent on this constraint in milliseconds.
+   * Wall-clock time in milliseconds the solver spent on this constraint. Useful for identifying performance bottlenecks and tuning timeout thresholds.
    */
   solverTimeMs?: number;
   /**
-   * Additional notes from the verification process.
+   * Additional notes from the verification process explaining the result, including which verifiable subset restrictions apply or why the result is inconclusive.
    */
   notes?: string;
+  /**
+   * This interface was referenced by `ConstraintResult`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Counterexample data when result is 'proven-unsafe'.
  */
 export interface Counterexample {
   /**
-   * Input values that violate the constraint.
+   * Mapping of input field paths to values that constitute a counterexample — a concrete assignment that causes the constraint to be violated. Used to reproduce and debug the unsafe case.
    */
   inputs?: {
     [k: string]: unknown;
   };
   /**
-   * Human-readable explanation of why this input violates the constraint.
+   * Human-readable explanation of why this input assignment violates the constraint. Describes the logical path from the counterexample inputs to the constraint violation.
    */
   explanation?: string;
+  /**
+   * This interface was referenced by `Counterexample`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Aggregate verification summary.
  */
 export interface VerificationSummary {
+  /**
+   * Total number of constraints that were submitted for verification in this run. Equal to the sum of provenSafe, provenUnsafe, and inconclusive.
+   */
   totalConstraints?: number;
+  /**
+   * Number of constraints that were formally proven to hold for all possible inputs within the declared finite domains and verifiable subset restrictions.
+   */
   provenSafe?: number;
+  /**
+   * Number of constraints for which a counterexample was found. These constraints do NOT hold and MUST be reviewed and addressed before deployment.
+   */
   provenUnsafe?: number;
+  /**
+   * Number of constraints where the solver timed out or the constraint used constructs outside the verifiable subset. Inconclusive results require manual review.
+   */
   inconclusive?: number;
+  /**
+   * Total wall-clock time in milliseconds the solver spent across all constraints in this run. Sum of all per-constraint solverTimeMs values.
+   */
   totalSolverTimeMs?: number;
+  /**
+   * This interface was referenced by `VerificationSummary`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

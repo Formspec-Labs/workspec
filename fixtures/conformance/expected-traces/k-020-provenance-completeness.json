@@ -1,0 +1,51 @@
+{
+  "fixtureId": "K-020-provenance-completeness",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "approve",
+        "sourceActor": "approver",
+        "payload": {
+          "actorId": "approver",
+          "amount": 3000,
+          "orderId": "PO-2026-042",
+          "vendor": "Office Supplies Inc"
+        }
+      },
+      "stateBefore": "submitted",
+      "stateAfter": "approved",
+      "expectedStateAfter": "approved",
+      "guardsEvaluated": [
+        {
+          "guardId": "submitted->approved:approve",
+          "sourceState": "submitted",
+          "targetState": "approved",
+          "event": "approve",
+          "expression": "caseFile.amount <= 50000",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "amount": 3000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 1,
+      "event": {
+        "name": "orderProcessed",
+        "sourceActor": "procurementSystem",
+        "payload": {
+          "processingRef": "PROC-2026-042"
+        }
+      },
+      "stateBefore": "approved",
+      "stateAfter": "completed",
+      "expectedStateAfter": "completed"
+    }
+  ],
+  "outcome": "pass"
+}

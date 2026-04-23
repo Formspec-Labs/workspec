@@ -18,23 +18,22 @@
     "$wosLifecycleDetail": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Lifecycle Detail specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "Document type marker identifying this as a WOS Lifecycle Detail Configuration document (Lifecycle Detail S1.2). MUST be the string '1.0'. Processors use this field to dispatch to the lifecycle detail parser; its absence means the document is not a Lifecycle Detail Configuration.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Lifecycle Detail Configuration"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this configuration targets.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document this Lifecycle Detail Configuration applies to. Must match the Kernel Document's url field exactly. Processors MUST reject a Lifecycle Detail Configuration whose targetWorkflow does not match the url of the Kernel Document being loaded (Lifecycle Detail S1.3).",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://procurement.example.gov/workflows/purchase-order-approval"
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Binds this lifecycle detail configuration to a specific kernel workflow"
@@ -43,12 +42,13 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Lifecycle Detail Configuration.",
-      "examples": ["1.0.0"]
+      "description": "Semantic version of this Lifecycle Detail Configuration document. Useful for audit trails and migration tooling. Not enforced by the processor.",
+      "examples": ["1.0.0", "2025.3.0"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name."
+      "description": "Human-readable name for this Lifecycle Detail Configuration. Used in tooling and audit UIs. Not processed by the runtime.",
+      "examples": ["Benefits Adjudication Lifecycle Detail", "Purchase Order Approval Lifecycle Detail"]
     },
     "compensation": {
       "$ref": "#/$defs/CompensationConfig",
@@ -69,11 +69,7 @@
       "$ref": "#/$defs/ScxmlMappingConfig",
       "description": "SCXML interoperability mapping configuration (Lifecycle Detail S7)."
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": { "pattern": "^x-" },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "CompensationConfig": {
@@ -100,7 +96,8 @@
           "type": "string",
           "enum": ["continue", "halt"],
           "default": "continue",
-          "description": "Behavior when a compensating action itself fails. 'continue': best effort, proceed to next compensation. 'halt': stop compensation sequence on first failure."
+          "description": "Behavior when a compensating action itself fails during backward recovery (Lifecycle Detail S5.5). 'continue': best-effort — log the failure and proceed to the next compensation step. 'halt': stop the compensation sequence on first failure and surface an alert for manual intervention.",
+          "examples": ["continue", "halt"]
         },
         "scopeOverrides": {
           "type": "array",
@@ -128,16 +125,22 @@
         "recoveryMode": {
           "type": "string",
           "enum": ["backward", "forward"],
-          "description": "Recovery mode override for this scope."
+          "description": "Recovery mode override for this specific compensable scope, superseding the top-level defaultRecoveryMode (Lifecycle Detail S5.6). Use 'forward' for idempotent or externally-observable scopes where re-attempting is safer than reversing.",
+          "examples": ["backward", "forward"]
         },
         "onCompensationFailure": {
           "type": "string",
           "enum": ["continue", "halt"],
-          "description": "Compensation failure behavior override for this scope."
+          "description": "Compensation failure behavior override for this specific scope, superseding the top-level onCompensationFailure setting (Lifecycle Detail S5.5). Use 'halt' for scopes that require strict consistency (e.g., dual-blind reviews).",
+          "examples": ["continue", "halt"]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of why this scope has a non-default compensation policy."
+          "description": "Human-readable explanation of why this compensable scope has a non-default compensation policy. Intended for authors and auditors, not processed by the runtime.",
+          "examples": [
+            "Income verification is idempotent — retry rather than reverse.",
+            "Dual-blind review: partial reversal produces inconsistent state; halt on failure."
+          ]
         }
       }
     },
@@ -158,7 +161,8 @@
         "resetOnReentry": {
           "type": "boolean",
           "default": true,
-          "description": "Whether timers created in a state's onEntry are automatically cancelled and recreated when the state is re-entered (Lifecycle Detail S6.4). Default: true."
+          "description": "Whether timers created in a state's onEntry actions are automatically cancelled and recreated when that state is re-entered (Lifecycle Detail S6.4). Default: true. Set to false only when re-entry should continue the original deadline rather than reset it.",
+          "examples": [true, false]
         }
       }
     },
@@ -174,18 +178,21 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Whether SCXML export/import is enabled for this workflow."
+          "description": "Whether SCXML export/import is activated for this workflow (Lifecycle Detail S7). When false, the processor skips SCXML interoperability entirely. Set to true only for workflows that need SCXML roundtrip fidelity.",
+          "examples": [true, false]
         },
         "expressionMapping": {
           "type": "string",
           "enum": ["ecmascript", "xpath", "manual"],
           "default": "ecmascript",
-          "description": "How FEL guard expressions are mapped to SCXML's expression language. 'ecmascript': automatic translation to ECMAScript. 'xpath': automatic translation to XPath. 'manual': expressions must be manually mapped."
+          "description": "Strategy for translating FEL guard expressions to the target SCXML expression language (Lifecycle Detail S7.3). 'ecmascript': automatic translation to ECMAScript (most SCXML engines). 'xpath': automatic translation to XPath. 'manual': no automatic translation — each expression must be provided separately.",
+          "examples": ["ecmascript", "xpath", "manual"]
         },
         "dropUnsupported": {
           "type": "boolean",
           "default": true,
-          "description": "Whether WOS-specific properties with no SCXML equivalent (tags, impact level, contracts, milestones) are silently dropped on export. When false, export fails if unsupported properties are present."
+          "description": "Whether WOS-specific properties with no SCXML equivalent (tags, impact level, contracts, milestones) are silently dropped on SCXML export (Lifecycle Detail S7.4). When false, export fails if any unsupported WOS properties are present.",
+          "examples": [true, false]
         },
         "eventPrefixMapping": {
           "type": "string",
@@ -194,6 +201,26 @@
           "examples": ["wos.", "internal."]
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

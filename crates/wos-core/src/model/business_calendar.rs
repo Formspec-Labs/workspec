@@ -6,6 +6,4 @@
 //! This module is kept for backward-compatibility with `model::business_calendar::*`
 //! import paths used by downstream crates and tests.
 
-pub use crate::business_calendar::{
-    BusinessCalendarDocument, Holiday, OperatingHours, Weekday,
-};
+pub use crate::business_calendar::{BusinessCalendarDocument, Holiday, OperatingHours, Weekday};

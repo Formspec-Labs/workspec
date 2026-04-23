@@ -43,6 +43,7 @@ This specification defines the orchestration kernel: the minimal substrate that 
 3. **Sidecars are pure metadata.** They enrich without affecting processing.
 4. **Provenance grows upward.** Layer 0 records facts. Each higher layer adds interpretive structure. Lower layers are never modified.
 5. **Complexity is opt-in.** Kernel-only is a valid deployment.
+6. **Every normative claim is testable.** A behavior described in normative prose MUST be reducible to a conformance test, a lint rule, or a schema constraint that a processor can pass or fail. Prose that no test can falsify is design intent, not specification — and is moved to non-normative commentary or deleted. This principle applies recursively to higher-layer companions: see Governance §6.1 and AI Integration §1.2 for layer-specific obligations.
 
 ### 1.3 Scope
 
@@ -170,18 +171,20 @@ For `parallel` states, the `cancellationPolicy` governs behavior when any region
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `event` | string | REQUIRED | Triggering event identifier. |
+| `event` | TransitionEvent | OPTIONAL | Typed trigger for explicit **event delivery** (see below). When omitted, the transition does not match any external event **name**; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan when `event` is omitted or `event.kind` is `condition`, per Runtime Companion §10.3. |
 | `target` | string | REQUIRED | Target state identifier. |
 | `guard` | string (FEL) | OPTIONAL | FEL expression that must evaluate to `true` for the transition to fire. |
 | `actions` | array of Action | OPTIONAL | Actions executed during the transition. |
 | `tags` | array of string | OPTIONAL | Semantic tags for governance attachment via `lifecycleHook` (S10.4). |
 | `description` | string | OPTIONAL | Human-readable explanation of this transition. |
 
+**`TransitionEvent`.** Normative authored shape is a JSON object with required discriminant `kind`: `timer` \| `message` \| `signal` \| `condition` \| `error`, plus kind-specific fields. The Kernel JSON Schema defines the full shape (`schemas/kernel/wos-kernel.schema.json`, `$defs/TransitionEvent` and branch definitions). At the **runtime boundary**, events are still identified by a string **name** (for example the value passed to `process_event`). A transition matches when that string equals the transition's typed `event` resolved to the same name (for `message` and `signal`, the `name` field; for `timer`, the synthesized expiry name from `timerId`, `source`, and optional `firesAs` per §9.2 and §4.10; for `error`, the runtime dispatch name is the literal `$error` while the typed `code` (and optional `actionPath`) carry the error discriminant; for `condition`, continuous-mode rescan rules in the Runtime Companion). Authoring and integration surfaces SHOULD preserve the full typed `event` JSON where they expose transitions (for example search and graph tools), and SHOULD use a separate derived dispatch string only for matching against `process_event` names—not as a substitute for the authored object. A reference deserializer MAY accept a legacy bare string for `event` and coerce it to the equivalent `TransitionEvent` for migration; new documents SHOULD use the object form. Unknown legacy reserved strings beginning with `$` that are not recognized by that coercion MUST NOT be silently rewritten to a different message `name` (they remain invalid and are rejected by static rules such as K-007).
+
 ### 4.6 Transition Resolution
 
-When an event occurs:
+When an event occurs (identified by its runtime **event name** string):
 
-1. Collect all transitions from current active states whose `event` property matches the triggering event.
+1. Collect all transitions from current active states whose `event` is present **and** whose typed `event` resolves to the same name as the triggering event (per §4.5).
 2. Evaluate guards in **document order**. The first transition whose guard evaluates to `true` (or has no guard) wins.
 3. If no transition matches, the event is recorded in provenance but does not change lifecycle state.
 
@@ -200,9 +203,9 @@ When a transition fires:
 
 **Fork (entering a parallel state):** All regions are activated simultaneously. Each region begins in its `initialState`.
 
-**Join (exiting a parallel state):** Governed by the `cancellationPolicy`. Under `wait-all` (default), when all regions reach a final state, the processor generates a synthetic `$join` event. Outgoing transitions from the parallel state MUST use `$join` as their event. Under `cancel-siblings`, the synthetic event fires when any region reaches a final state; remaining regions are cancelled. Under `fail-fast`, the synthetic event fires when any region reaches a state tagged `error`; remaining regions are cancelled.
+**Join (exiting a parallel state):** Governed by the `cancellationPolicy`. Under `wait-all` (default), when all regions reach a final state, the processor generates a synthetic `$join` event (runtime name). Outgoing transitions from the parallel state MUST declare `event` as a `signal` with `name` `$join` and `scope` `instance` — that is, `{ "kind": "signal", "name": "$join", "scope": "instance" }` in JSON — so they match that synthetic delivery. Under `cancel-siblings`, the synthetic event fires when any region reaches a final state; remaining regions are cancelled. Under `fail-fast`, the synthetic event fires when any region reaches a state tagged `error`; remaining regions are cancelled.
 
-The `$join` event is kernel-defined. Workflow authors MUST NOT use `$join` as a user-defined event name.
+The `$join` name is kernel-defined for join completion. Workflow authors MUST NOT use `$join` as a **message** event `name`; it is reserved for the join **signal** shape above.
 
 ### 4.9 Event Handling
 
@@ -210,7 +213,7 @@ Events that match no transition from any current active state are recorded in pr
 
 ### 4.10 Kernel-Generated Events
 
-The kernel generates synthetic events in response to internal conditions. Kernel-generated event names are prefixed with `$` to distinguish them from document-authored events. Workflow authors MUST NOT define events with the `$` prefix.
+The kernel generates synthetic events in response to internal conditions. Kernel-generated event **names** are prefixed with `$` to distinguish them from ordinary author **message** names. In the typed `TransitionEvent` model, authors match these deliveries using the appropriate kind: for example `$timeout.*` names map to `timer` events with the matching `source` (and `timerId` / `firesAs` as in the schema); `$join` and `$compensation.complete` map to `signal` events whose `name` is exactly that string (including the `$` prefix) and whose `scope` is typically `instance`; relationship events `$related.*` map to `signal` with `scope` `related` and a `name` that resolves to the same identifier the processor delivers on the event boundary (Runtime Companion). **`message` event `name` MUST NOT begin with `$`** (schema-enforced); reserved kernel prefixes are expressed as `timer`, `signal`, or `error` as applicable — not as `message`.
 
 | Event | Source | Description |
 | ----- | ------ | ----------- |
@@ -259,6 +262,9 @@ Milestones are named conditions on case state that, when satisfied, indicate mea
 |----------|------|----------|-------------|
 | `condition` | string (FEL) | REQUIRED | FEL expression evaluated against case state. |
 | `description` | string | OPTIONAL | Human-readable description. |
+| `triggerMode` | enum | OPTIONAL | When the processor evaluates the condition. Defaults to `writeSettled`. |
+
+**Trigger semantics (`triggerMode: writeSettled`).** A processor MUST evaluate every un-fired milestone's `condition` after each durable case-state write — once the write has been persisted and is observable to subsequent reads. A milestone fires at most once per case instance: once `condition` evaluates true and a `MilestoneFired` provenance record has been appended (carrying `{"milestoneId": <id>}`), the milestone id is recorded on the case instance and never re-evaluated. Multiple milestones firing from a single write MUST be appended to provenance in lexicographic milestone-id order so the stream is deterministic. Future trigger modes (e.g., reactive event-based firing per §4.13 Future Work) will extend the enum without altering `writeSettled` semantics.
 
 ### 4.14 History States
 
@@ -388,6 +394,7 @@ This section is normative.
 The kernel defines the **Facts tier** -- the foundational, immutable provenance layer. Every action that changes lifecycle state or case state MUST produce a Facts tier record.
 
 Higher layers add interpretive provenance tiers through the `provenanceLayer` seam (S10.3):
+
 - Layer 1 adds the **Reasoning tier** (rules applied, evidence consulted) and **Counterfactual tier** (what would change the outcome).
 - Layer 2 adds the **Narrative tier** (model-generated explanation; non-authoritative).
 
@@ -404,11 +411,41 @@ Every provenance record MUST include:
 | `action` | string | REQUIRED | What action was performed. |
 | `inputs` | object | OPTIONAL | Input data for the action. |
 | `outputs` | object | OPTIONAL | Output data from the action. |
+| `transitionTags` | array | REQUIRED for state-transition records with tagged transitions, OPTIONAL otherwise | Semantic tags copied from the firing transition. |
+| `caseFileSnapshot` | object | REQUIRED for `determination` transitions, OPTIONAL otherwise | Canonical snapshot of the case-file state used by the determination. |
+| `outcome` | string | OPTIONAL | Open-enum outcome literal recorded by the processor. See §8.2.2 for reserved values. |
 | `inputDigest` | string | OPTIONAL | Cryptographic digest of inputs for tamper detection. |
 | `outputDigest` | string | OPTIONAL | Cryptographic digest of outputs for tamper detection. |
 | `definitionVersion` | string | REQUIRED | Version of the Kernel Document governing this action. |
 | `lifecycleState` | string | REQUIRED | Lifecycle state at the time of the action. |
 | `extensions` | object | OPTIONAL | Extension data. All keys MUST be prefixed with `x-`. |
+
+#### 8.2.1 Snapshot Semantics
+
+When a transition tagged `determination` fires, the processor MUST copy the transition's semantic tags into `transitionTags` on the Facts-tier state-transition record and capture the current case-file state in `caseFileSnapshot` immediately before any transition action or post-transition action mutates the case file. The snapshot records the facts the determination was made from, not the values produced by the determination.
+
+`caseFileSnapshot` MUST contain:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `value` | JSON value | REQUIRED | The case-file state observed at transition fire time. |
+| `jcsCanonical` | string | REQUIRED | Canonical JSON representation of `value` using JCS (RFC 8785) canonicalization semantics. |
+| `sha256` | string | REQUIRED | Lowercase SHA-256 hex digest of `jcsCanonical`. |
+
+Identical case-file state at determination fire time MUST produce byte-identical `jcsCanonical` values and identical `sha256` values. Governance adverse-decision notices (Governance §3.2) and override records (Governance §7.3) use this snapshot as the deterministic factual basis for later explanation, appeal, and audit.
+
+#### 8.2.2 Outcome Field
+
+The optional `outcome` field records why the processor completed (or declined to complete) the action captured by the record. It is an **open enum**: the values listed below are reserved across all WOS tiers, and vendor extensions MUST use an `x-` prefix to avoid future collisions. The reserved values are:
+
+| Value | Mandated by | Meaning |
+|-------|-------------|---------|
+| `preconditionNotSatisfied` | AI Integration §3.3.1 | A capability precondition FEL expression evaluated to `false` or a non-boolean, so the processor skipped the agent invocation and fell through to the fallback chain. |
+| `convergenceCapReached` | Runtime §10.3 | Continuous-mode re-evaluation reached the 100-cycle convergence cap for a single triggering mutation; the processor halted further re-evaluation for that mutation. |
+
+The canonical schema definition is `$defs/ProvenanceOutcome` in `wos-provenance-record.schema.json`. Processors that emit outcome values outside this reserved set MUST prefix them with `x-` (see Kernel §10.6 extensions).
+
+The `preconditionNotSatisfied` outcome pairs with the `capabilityInvocation` record-kind discriminator (AI Integration §3.3.1): when a record carries `recordKind: "capabilityInvocation"` with `data.invocationBlocked: true`, the `outcome` field MUST be `preconditionNotSatisfied`. This pairing is enforced at schema-validation time via `$defs/CapabilityInvocationRecord` in `wos-provenance-record.schema.json`, which `FactsTierRecord` composes via `allOf` so that every conformant provenance log participates in the MUST regardless of whether an AI Integration document is also attached to the workflow.
 
 ### 8.3 Tamper Detection
 
@@ -446,7 +483,7 @@ The kernel defines the following action types:
 | `invokeService` | Invokes an external service. | `serviceRef`, `idempotencyKey` |
 | `setData` | Sets a case file value. | `path`, `value` |
 | `emitEvent` | Emits an event. | `eventType`, `data` |
-| `startTimer` | Starts a durable timer. | `timerId`, `duration` or `deadline`, `event` |
+| `startTimer` | Starts a durable timer. | `timerId`, `duration` or `deadline`, `event` (`TransitionEvent`; in practice the `timer` kind) |
 | `cancelTimer` | Cancels a running timer. | `timerId` |
 | `log` | Writes an entry to provenance. | `message`, `data` |
 
@@ -538,6 +575,8 @@ Every WOS deployment handles protected content under a declared custody posture.
 Custody postures are declared, not inferred. Bindings that populate this seam MUST declare, at minimum: who may read content during ordinary operation, whether recovery can occur without the user, and whether delegated compute exposes content to ordinary service components. When Governance (Layer 1) is adopted, custody transitions (changes to any of those answers) are recorded as canonical lifecycle facts (Governance S2.9).
 
 The kernel does NOT define the concrete Trust Profile object. Trellis (the distributed-trust binding) defines that object and binds it to this seam. A monolithic binding may populate this seam with a single declared posture (e.g., "provider-readable, no recovery without user, no delegated compute") and satisfy conformance.
+
+The WOS-owned authored-record wire surface that crosses this seam is defined separately in [WOS Custody Hook Encoding](custody-hook-encoding.md). That companion pins the four-field append input, TypeID rules, JSON→dCBOR conversion discipline, WOS-owned idempotency input, and minimum receipt contract.
 
 ### 10.6 `extensions` and `x-` Keys
 

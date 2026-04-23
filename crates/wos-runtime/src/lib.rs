@@ -9,6 +9,8 @@
 pub mod binding;
 pub mod cloudevents;
 pub mod companion;
+pub mod custody;
+mod durable;
 pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
@@ -21,17 +23,26 @@ pub use binding::{
     SubmissionValidation,
 };
 pub use companion::ReferenceCompanionPolicy;
+#[doc(inline)]
+pub use custody::{
+    CustodyAppendContext, CustodyAppendError, CustodyAppendInput, CustodyAppendMetadata,
+    CustodyAppendReceipt,
+};
+#[doc(inline)]
+pub use durable::DurableRuntime;
 pub use integration::{
     IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
     TargetWorkflow,
 };
 pub use runtime::{
-    populate_provenance_record_fields, stamp_provenance, Clock, CompanionPolicy,
-    CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, RuntimeEventContext,
-    RuntimeEventDecision, SystemClock, TaskSubmissionResult, WosRuntime,
+    Clock, CompanionPolicy, CreateInstanceRequest, DrainOnceResult, PersistDraftResult,
+    RuntimeError, RuntimeEventContext, RuntimeEventDecision, SIGNATURE_PROFILE_KEY_EXTENSION,
+    SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    SystemClock, TaskSubmissionResult, WosRuntime, populate_provenance_record_fields,
+    stamp_provenance,
 };
-pub use wos_core::business_calendar::BusinessCalendarDocument;
 pub use store::{
     InMemoryStore, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
     StoreError, TaskArtifact, TaskArtifactKind,
 };
+pub use wos_core::business_calendar::BusinessCalendarDocument;

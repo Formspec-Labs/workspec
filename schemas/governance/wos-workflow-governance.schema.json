@@ -18,8 +18,9 @@
     "$wosWorkflowGovernance": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Workflow Governance specification version. MUST be '1.0'. Identifies this document as a WOS Workflow Governance Document.",
+      "description": "Document type marker identifying this as a WOS Workflow Governance Document (Governance S1.2). MUST be the string '1.0'. Processors use this field to dispatch to the governance document parser; its absence means the document is not a recognized Workflow Governance Document. Layer 1 governs human and hybrid workflows independently of AI involvement.",
       "examples": [
+        "1.0",
         "1.0"
       ],
       "x-lm": {
@@ -27,11 +28,7 @@
         "intent": "Document type marker and version pin for WOS Workflow Governance documents"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation and autocompletion."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
@@ -48,18 +45,21 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Workflow Governance Document.",
+      "description": "Semantic version of this Workflow Governance Document. Useful for audit trails and change management.",
       "examples": [
-        "1.0.0"
+        "1.0.0",
+        "2026.1.0"
       ]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this governance configuration."
+      "description": "Human-readable name for this Workflow Governance Document. Displayed in tooling and governance dashboards.",
+      "examples": ["Benefits Adjudication Governance", "Purchase Order Approval Governance"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of the governance requirements."
+      "description": "Human-readable description of the governance requirements and scope of this document. Intended for governance authors and auditors.",
+      "examples": ["Governance for the benefits adjudication workflow — due process, review protocols, income verification pipeline.", "Governance for purchase-order approval — separation of duties, delegation, and audit tier for procurement decisions."]
     },
     "dueProcess": {
       "$ref": "#/$defs/DueProcess",
@@ -173,7 +173,8 @@
       "type": "integer",
       "minimum": 0,
       "default": 1,
-      "description": "Maximum sub-delegation chain levels (Governance S11.5). 1 (default): direct delegation only, no sub-delegation. 2: one level of sub-delegation allowed. 0: delegation enforcement disabled entirely."
+      "description": "Maximum sub-delegation chain levels (Governance S11.5). 1 (default): direct delegation only, no sub-delegation. 2: one level of sub-delegation allowed. 0: delegation enforcement disabled entirely.",
+      "examples": [1, 2]
     },
     "holdPolicies": {
       "type": "array",
@@ -200,20 +201,14 @@
       "type": "object",
       "description": "Schema upgrade lifecycle operation (S2.9).",
       "properties": {
-        "priorVersion": { "type": "string" },
-        "newVersion": { "type": "string" },
-        "migrationMechanism": { "type": "string", "enum": ["formspec-changelog", "custom-map", "declared-equivalence"] },
-        "scope": { "type": "string", "enum": ["instance", "workflow", "tenant"] }
+        "priorVersion": { "type": "string", "description": "The governance document schema version being migrated away from. Used by the migration processor to identify the source format.", "examples": ["1.0", "1.1"] },
+        "newVersion": { "type": "string", "description": "The governance document schema version being migrated to. The processor validates the migrated document against this version's schema.", "examples": ["1.1", "2.0"] },
+        "migrationMechanism": { "type": "string", "enum": ["formspec-changelog", "custom-map", "declared-equivalence"], "description": "Mechanism used to transform the governance document from priorVersion to newVersion (S2.9). 'formspec-changelog': apply Formspec changelog transformations. 'custom-map': use a custom field mapping. 'declared-equivalence': assert the two versions are structurally equivalent — no transformation needed.", "examples": ["formspec-changelog", "declared-equivalence"] },
+        "scope": { "type": "string", "enum": ["instance", "workflow", "tenant"], "description": "Scope of the schema upgrade operation (S2.9). 'instance': upgrade a single case instance. 'workflow': upgrade all active instances of this workflow. 'tenant': upgrade all instances across the tenant.", "examples": ["workflow", "tenant"] }
       },
       "required": ["priorVersion", "newVersion", "migrationMechanism", "scope"]
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^x-"
-      },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "DueProcess": {
@@ -250,7 +245,8 @@
         "noticeRequired": {
           "type": "boolean",
           "default": false,
-          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure."
+          "description": "When true, affected individuals MUST receive notice before an adverse decision takes effect (Governance S3.2). The notice MUST include: the specific determination, individualized factual basis, appeal rights, and (if Layer 2 active) AI assistance disclosure.",
+          "examples": [true, false]
         },
         "noticeTiming": {
           "type": "string",
@@ -266,15 +262,19 @@
         },
         "noticeGracePeriod": {
           "type": "string",
-          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'.",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration defining the minimum delay between notice delivery and the decision taking effect. Only meaningful when noticeTiming is 'beforeEffective'. MUST match the supported ISO 8601 duration grammar (for example, `P30D`, `PT12H`, or `P2W`). As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar; statutory deadlines like FOIA's 20-business-day response use this form.",
           "examples": [
             "P30D",
-            "P14D"
+            "P14D",
+            "PT12H",
+            "P20BD"
           ]
         },
-        "noticeTemplateRef": {
+        "noticeTemplateKey": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for notice formatting."
+          "description": "Notification Template key for deterministic adverse-decision notice formatting. Key convention: plain string key into the Notification Template sidecar's template map, not a URI. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.",
+          "examples": ["adverseDecisionNotice", "benefitTerminationNotice"]
         },
         "explanationLevel": {
           "type": "string",
@@ -291,16 +291,27 @@
         "counterfactualRequired": {
           "type": "boolean",
           "default": false,
-          "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'."
+          "description": "When true, adverse decision explanations MUST include positive and negative counterfactuals (Governance S3.4). REQUIRED when impactLevel is 'rights-impacting'.",
+          "examples": [true, false]
         },
         "appealMechanism": {
           "$ref": "#/$defs/AppealMechanism",
           "description": "Appeal mechanism configuration (Governance S3.5)."
         }
+      },
+      "if": {
+        "properties": {
+          "noticeRequired": { "const": true }
+        },
+        "required": ["noticeRequired"]
+      },
+      "then": {
+        "required": ["noticeTemplateKey"]
       }
     },
     "AppealMechanism": {
       "type": "object",
+      "required": ["reviewerConstraint"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -311,46 +322,85 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "When true, an appeal pathway is available for adverse decisions."
+          "description": "When true, an appeal pathway is available for adverse decisions. When false, no appeal mechanism is configured and adverse decisions are final at the workflow level.",
+          "examples": [true, false]
         },
         "appealWindow": {
           "type": "string",
-          "description": "ISO 8601 duration for the appeal filing window.",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration defining the filing window during which an appeal can be submitted after notice of adverse decision is received. MUST match the supported ISO 8601 duration grammar, for example `P30D`, `P60D`, or `PT12H`. As a WOS extension, the `P<N>BD` form (e.g., `P20BD`) denotes N business days resolved against an attached Business Calendar sidecar.",
           "examples": [
             "P30D",
-            "P60D"
+            "P60D",
+            "P20BD"
           ]
         },
         "reviewerConstraint": {
           "type": "string",
-          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5).",
+          "enum": [
+            "independentFromOriginal",
+            "differentUnit",
+            "differentAgency",
+            "externalPanel"
+          ],
+          "description": "Constraint on appeal reviewers. MUST be independent of the original determination (Governance S3.5). Values mirror `AppealRouting.independenceConstraint` in the Due Process Config sidecar so processors can apply a single independence policy across both authoring inputs and runtime routing. `independentFromOriginal`: reviewer is any actor distinct from the original decision-maker. `differentUnit`: reviewer is in a different organizational unit. `differentAgency`: reviewer is in a different agency. `externalPanel`: reviewer is an external panel (e.g., administrative law judge).",
           "examples": [
-            "independentFromOriginal"
-          ]
+            "independentFromOriginal",
+            "differentUnit",
+            "externalPanel"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Closes the appeal-reviewer independence vocabulary so structurally-invalid documents fail at schema validation rather than during downstream linting"
+          }
         },
         "reviewerRoles": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Role identifier eligible to review appeals under this mechanism.",
+            "examples": ["humanAdjudicator", "appealAdjudicator", "independentReviewer"]
           },
-          "description": "Roles eligible to review appeals.",
+          "description": "Roles eligible to review appeals. The processor uses this list to validate reviewer assignments during appeal routing.",
           "examples": [
             [
               "humanAdjudicator"
+            ],
+            [
+              "appealAdjudicator",
+              "seniorCaseworker"
             ]
           ]
         },
         "continuationOfServices": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6)."
+          "description": "When true, the workflow MUST maintain current service levels during the appeal window (Governance S3.6). Prevents deprivation of benefits while appeal is pending. The exact services maintained are defined by `continuationPolicyRef` when present, or by `continuationScope` as a fallback.",
+          "examples": [true, false]
+        },
+        "continuationPolicyRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reference to a `ContinuationPolicy.id` declared in the targeted Due Process Config sidecar (Governance §3.6). When present AND `continuationOfServices` is true, the named policy's `scope` + `duration` define exactly what services are maintained and for how long — replacing the looser `continuationScope` string. The processor MUST resolve the ref against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document; an unresolvable ref MUST emit a configuration warning in provenance and fall back to `continuationScope` if present.",
+          "examples": ["benefitTerminationContinuation", "benefitReductionContinuation"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+          }
         },
         "continuationScope": {
           "type": "string",
-          "description": "Scope of service continuation during appeal.",
+          "enum": [
+            "currentLevel",
+            "reducedLevel",
+            "emergencyOnly"
+          ],
+          "description": "Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).",
           "examples": [
-            "currentLevel"
+            "currentLevel",
+            "reducedLevel",
+            "emergencyOnly"
           ]
         }
       }
@@ -372,7 +422,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Semantic transition tag that this protocol binding will match against kernel transitions and states.",
+            "examples": ["review", "determination", "adverse-decision"]
           },
           "minItems": 1,
           "description": "Semantic transition tags this protocol binding matches (Governance S4.3). Matches any transition or state in the kernel that carries any of these tags.",
@@ -400,7 +452,9 @@
               "calibratedConfidence",
               "dualBlind",
               "unassisted"
-            ]
+            ],
+            "description": "A specific review protocol to apply at the matched transitions (Governance S4.1).",
+            "examples": ["independentFirst", "dualBlind", "considerOpposite"]
           },
           "minItems": 1,
           "description": "Review protocols to apply (Governance S4.1). Multiple protocols MAY be combined.",
@@ -420,7 +474,8 @@
         },
         "transitionOverride": {
           "type": "string",
-          "description": "Optional: target a specific transition by identifier instead of by tag. Overrides tag-based matching for this binding."
+          "description": "Optional transition identifier to target directly instead of using tag-based matching. When present, this binding applies only to the named transition, overriding the tags array for matching purposes.",
+          "examples": ["submitDetermination", "escalateToDirector"]
         },
         "scope": {
           "type": "string",
@@ -431,7 +486,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation of why this protocol combination was chosen."
+          "description": "Human-readable explanation of why this protocol combination was chosen and what it is intended to prevent. Used in governance documentation and audit reports.",
+          "examples": ["All determination steps use dual-blind protocol to prevent anchoring bias.", "Appeal reviews use independent-first plus consider-opposite to ensure genuine reconsideration."]
         }
       }
     },
@@ -451,7 +507,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique pipeline identifier.",
+          "description": "Unique pipeline identifier within this governance document. Referenced by lifecycle hooks to attach the pipeline to specific workflow states or transitions.",
           "examples": [
             "income-verification",
             "document-extraction"
@@ -467,7 +523,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable pipeline description."
+          "description": "Human-readable description of what this pipeline validates and when it is invoked. Used in governance documentation and audit reports.",
+          "examples": ["Validates income data from the external verification service before eligibility determination.", "Extracts and verifies key fields from submitted documents using assertion-gate checks."]
         }
       }
     },
@@ -487,7 +544,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique stage identifier within this pipeline.",
+          "description": "Unique stage identifier within this pipeline. Referenced in logs, audit traces, and by referenceStage in Assertion nodes for consistency checking.",
           "examples": [
             "extract",
             "validate",
@@ -535,7 +592,7 @@
             "holdPendingData",
             "failWithExplanation"
           ],
-          "description": "What happens when this stage fails (Governance S8.1).",
+          "description": "Action taken when this stage's validation fails (Governance S8.1). Applies to all assertions in this stage unless overridden at the assertion level.",
           "examples": [
             "retryWithCorrections",
             "escalateToSupervisor"
@@ -543,15 +600,10 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable stage description."
+          "description": "Human-readable description of what this stage does and why it is included in the pipeline. Used in audit reports and tooling.",
+          "examples": ["Validate income data against the income verification contract.", "Apply arithmetic and source-grounding assertion gates to extracted income fields."]
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": {
-            "pattern": "^x-"
-          },
-          "description": "Extension data for this stage."
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
     },
     "Assertion": {
@@ -577,11 +629,11 @@
             "cross-document",
             "temporal"
           ],
-          "description": "Assertion gate type (Governance S5.4).",
+          "description": "Assertion gate type determining the verification method applied to the data (Governance S5.4). 'source-grounded': checks that extracted field values appear verbatim in referenced source documents. 'arithmetic': validates that a FEL expression over numeric fields holds. 'range': checks that a value falls within declared bounds. 'consistency': asserts agreement between two pipeline stages or fields. 'format': structural or pattern validation. 'cross-document': checks consistency across multiple documents. 'temporal': validates date/time relationships.",
           "examples": [
             "source-grounded",
             "arithmetic",
-            "range"
+            "temporal"
           ],
           "x-lm": {
             "critical": true,
@@ -590,9 +642,10 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this assertion checks.",
+          "description": "Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.",
           "examples": [
-            "Extracted income values must appear in the source pay stub"
+            "Extracted income values must appear in the source pay stub",
+            "Total income must equal the sum of wage, investment, and other income components"
           ]
         },
         "expression": {
@@ -607,14 +660,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Field path relative to the pipeline data context that this assertion verifies.",
+            "examples": ["applicantIncome", "employerName", "filingDate"]
           },
-          "description": "Fields subject to this assertion. Used with source-grounded and consistency types.",
+          "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
             [
               "applicantIncome",
               "filingDate",
               "dependentCount"
+            ],
+            [
+              "wageIncome",
+              "employerName"
             ]
           ]
         },
@@ -633,7 +692,8 @@
             "holdPendingData",
             "failWithExplanation"
           ],
-          "description": "Override rejection policy for this specific assertion."
+          "description": "Override rejection policy for this specific assertion. Supersedes the enclosing stage's rejectionPolicy when present.",
+          "examples": ["retryWithCorrections", "escalateToSupervisor"]
         }
       }
     },
@@ -669,17 +729,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Transition tag that triggers the Reasoning tier requirement.",
+            "examples": ["determination", "adverse-decision"]
           },
           "default": [
             "determination"
           ],
-          "description": "Transition tags that require Reasoning tier records."
+          "description": "Transition tags that require Reasoning tier records. Any transition carrying one of these tags MUST produce a Reasoning tier record (Governance S6.2)."
         },
         "requireDecisionRequirements": {
           "type": "boolean",
           "default": false,
-          "description": "When true, Reasoning tier records MUST include decision requirements declarations."
+          "description": "When true, Reasoning tier records MUST include decision requirements declarations (Governance S6.3).",
+          "examples": [true, false]
         }
       }
     },
@@ -696,17 +759,20 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Transition tag that triggers the Counterfactual tier requirement.",
+            "examples": ["adverse-decision", "determination"]
           },
           "default": [
             "adverse-decision"
           ],
-          "description": "Transition tags that require Counterfactual tier records."
+          "description": "Transition tags that require Counterfactual tier records. Any transition carrying one of these tags MUST produce a Counterfactual tier record (Governance S6.4)."
         },
         "requireProtectedCharacteristics": {
           "type": "boolean",
           "default": true,
-          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics."
+          "description": "When true, negative counterfactuals MUST explicitly address protected characteristics — confirming the decision is independent of any protected class (Governance S6.4).",
+          "examples": [true, false]
         }
       }
     },
@@ -763,7 +829,8 @@
             "stratified"
           ],
           "default": "random",
-          "description": "Sampling method."
+          "description": "Sampling method for selecting decisions to review (Governance S7.1). 'random': select decisions randomly at the specified rate. 'stratified': sample proportionally across strata (e.g., decision type, actor, impact level).",
+          "examples": ["random", "stratified"]
         },
         "scope": {
           "type": "string",
@@ -772,7 +839,8 @@
             "actor"
           ],
           "default": "workflow",
-          "description": "Sampling scope: per-workflow or per-actor."
+          "description": "Sampling scope for the quality review program (Governance S7.1). 'workflow': the rate applies across all decisions in the workflow. 'actor': the rate applies independently per actor.",
+          "examples": ["workflow", "actor"]
         }
       }
     },
@@ -803,14 +871,18 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Role identifier excluded from reviewing its own category of work under separation of duties.",
+            "examples": ["intakeWorker", "dataEntryClerk", "initialReviewer"]
           },
-          "description": "Roles excluded from reviewing their own category of work."
+          "description": "Roles excluded from reviewing their own category of work. Actors holding these roles cannot review decisions they made in the same instance (or globally, per scope).",
+          "examples": [["intakeWorker"], ["dataEntryClerk", "intakeWorker"]]
         }
       }
     },
     "OverrideAuthority": {
       "type": "object",
+      "description": "Policy controlling what an override action MUST capture (Governance S7.3). The corresponding runtime record shape is defined by `OverrideRecord` in this schema; processors emit one OverrideRecord per accepted override as immutable provenance.",
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -821,17 +893,176 @@
         "requireStructuredRationale": {
           "type": "boolean",
           "default": true,
-          "description": "When true, overrides MUST include structured rationale (Governance S7.3)."
+          "description": "When true, overrides MUST include structured rationale (Governance S7.3). The rationale is captured in `OverrideRecord.rationale`.",
+          "examples": [true, false]
         },
         "requireAuthorityVerification": {
           "type": "boolean",
           "default": true,
-          "description": "When true, the processor MUST verify the overriding actor has override authority."
+          "description": "When true, the processor MUST verify the overriding actor has override authority before accepting the override (Governance S7.3). The verification is captured in `OverrideRecord.authorityVerification`.",
+          "examples": [true, false]
         },
         "requireSupportingEvidence": {
           "type": "boolean",
           "default": false,
-          "description": "When true, overrides MUST reference supporting evidence."
+          "description": "When true, overrides MUST reference supporting evidence documents or citations. The references are captured in `OverrideRecord.supportingEvidence`.",
+          "examples": [true, false]
+        }
+      }
+    },
+    "OverrideRecord": {
+      "$comment": "This $def is intentionally unreachable from the document root. It is a shape-catalog entry: processors and provenance writers consume it out-of-band when serializing override events to the audit log. There is no top-level `overrideRecords` array in this schema by design — overrides are runtime data, not authoring inputs. The 1:1 mapping to OverrideAuthority policy switches is documented in the description and enforced by processors, not by JSON Schema. See thoughts/plans/ for any future work that would plumb this into a typed provenance container.",
+      "type": "object",
+      "description": "Typed runtime record emitted whenever a reviewer overrides a prior decision (Governance S7.3). One OverrideRecord is appended to provenance per accepted override; records are immutable. This $def is the normative shape processors MUST conform to when serializing override events. The three required fields correspond directly to the three OverrideAuthority policy switches: `requireStructuredRationale` → `rationale`, `requireAuthorityVerification` → `authorityVerification`, and `requireSupportingEvidence` → `supportingEvidence` (when the policy switch is true the field MUST be non-empty; when false the field MAY be omitted). `id` and `caseId` carry the custody-bound record and case identifiers pinned by the WOS-Trellis append surface.",
+      "required": ["id", "caseId", "rationale", "authorityVerification", "supportingEvidence"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_gov_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-record-typeid",
+          "description": "TypeID-structured identifier for this governance runtime record. Reserved family prefix: `gov`.",
+          "examples": ["sba-poc_gov_01jqrpd32jf8xtx9qxkkv3rqsd"]
+        },
+        "caseId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-case-typeid",
+          "description": "TypeID-structured case identifier of the case this override belongs to. Reserved family prefix: `case`.",
+          "examples": ["sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd"]
+        },
+        "rationale": {
+          "type": "object",
+          "description": "Structured rationale explaining the basis for the override (Governance S7.3 item 1). The rationale MUST be human-readable and MAY cite regulatory authorities, prior cases, or factual findings. The shape is intentionally permissive — agencies declare their own rationale fields under `extensions` — but `summary` is REQUIRED so the audit trail always carries a one-line explanation.",
+          "required": ["summary"],
+          "patternProperties": {
+            "^x-": {
+              "$comment": "Vendor extensions per Kernel spec §10.6"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-line human-readable explanation of why the override was issued. Surfaced in audit reports and adverse-decision notices.",
+              "examples": [
+                "New medical evidence submitted on 2026-03-14 invalidates prior denial.",
+                "Reviewer determined original decision applied wrong regulatory section."
+              ]
+            },
+            "regulatoryCitations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A single regulatory citation string. Format is intentionally free-form so authors can cite statutes, regulations, agency policy, or operational manuals using each authority source's native citation style.",
+                "examples": ["20 CFR 416.1488", "POMS DI 27505.001"]
+              },
+              "description": "Optional citations to the regulatory authorities, statutes, or policies that support the override. Each entry is a free-form citation string.",
+              "examples": [
+                ["20 CFR 416.1488", "POMS DI 27505.001"]
+              ]
+            },
+            "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+          }
+        },
+        "authorityVerification": {
+          "type": "object",
+          "description": "Record of how the overriding actor's authority was verified (Governance S7.3 item 2). Captures who verified, when, and against which authority source. Processors that verify automatically (e.g., role lookup) MUST still emit this record so the audit trail is complete.",
+          "required": ["actorId", "method", "verifiedAt"],
+          "patternProperties": {
+            "^x-": {
+              "$comment": "Vendor extensions per Kernel spec §10.6"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Identifier of the actor whose authority was verified — the actor issuing the override.",
+              "examples": ["reviewer-alice", "supervisor-007"]
+            },
+            "method": {
+              "type": "string",
+              "enum": ["roleAssignment", "delegationGrant", "supervisorAttestation", "externalAuthority"],
+              "description": "How authority was verified. `roleAssignment`: actor's role grants override authority. `delegationGrant`: a Delegation document grants this actor override authority for the case. `supervisorAttestation`: a supervisor explicitly attested. `externalAuthority`: an out-of-band authority source (e.g., HR system) confirmed.",
+              "examples": ["roleAssignment", "delegationGrant"]
+            },
+            "verifiedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO 8601 timestamp recording when authority verification completed. Surfaced in audit trails and used to establish ordering when multiple verifications occur.",
+              "examples": ["2026-03-14T15:42:00Z"]
+            },
+            "authoritySource": {
+              "type": "string",
+              "description": "Identifier of the authority source consulted (e.g., role registry id, delegation document URI, attestation record id).",
+              "examples": ["role-registry/v2#senior-reviewer", "delegations/2026-014"]
+            },
+            "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+          }
+        },
+        "supportingEvidence": {
+          "type": "array",
+          "description": "Documents or facts referenced by the rationale (Governance S7.3 item 3). MUST be present (possibly empty) so consumers can rely on the field's existence; MUST be non-empty when `OverrideAuthority.requireSupportingEvidence` is true.",
+          "items": { "$ref": "#/$defs/EvidenceReference" }
+        },
+        "overriddenDecisionRef": {
+          "type": "string",
+          "description": "Pointer to the prior decision being overridden — typically a provenance record id or case-file path. Optional but strongly recommended so the audit trail can reconstruct the override chain.",
+          "examples": ["provenance/2026-03-14T09:11:00Z/Determination#42"]
+        },
+        "newDeterminationRef": {
+          "type": "string",
+          "description": "Pointer to the new determination produced by the override — typically a provenance record id. Auditors use this together with `overriddenDecisionRef` to reconstruct the override chain.",
+          "examples": ["provenance/2026-03-14T15:42:00Z/Determination#88"]
+        },
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
+      }
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "description": "Reference to a supporting-evidence artifact cited by an `OverrideRecord` (Governance S7.3 item 3). The reference may point to a case-file field, an external document, or a structured fact. At least one of `caseFieldPath` or `uri` MUST be present so the evidence is locatable; this is structurally enforced by the `anyOf` constraint.",
+      "required": ["kind"],
+      "anyOf": [
+        { "required": ["caseFieldPath"] },
+        { "required": ["uri"] }
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["caseField", "document", "fact", "externalRecord"],
+          "description": "What this reference points to. `caseField`: a field within the case file. `document`: a referenceable document (form, attachment). `fact`: a structured factual finding. `externalRecord`: data from an integrated external system.",
+          "examples": ["caseField", "document"]
+        },
+        "caseFieldPath": {
+          "type": "string",
+          "description": "JSON pointer / dotted path into the case file (used when `kind` is `caseField`).",
+          "examples": ["/medical/recentEvidence/2026-03-14"]
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the external document or record (used when `kind` is `document` or `externalRecord`).",
+          "examples": ["https://agency.gov/cases/12345/attachments/MED-007.pdf"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short human-readable description of what this evidence shows. Surfaced in audit reports.",
+          "examples": ["Updated medical assessment from treating physician dated 2026-03-14."]
         }
       }
     },
@@ -851,7 +1082,7 @@
         "pattern": {
           "type": "string",
           "minLength": 1,
-          "description": "Task pattern name.",
+          "description": "Task pattern name identifying this category of work in the task catalog. Used in the verifiability matrix and in audit reports (Governance S9.1).",
           "examples": [
             "fieldExtraction",
             "completenessCheck",
@@ -873,7 +1104,7 @@
         },
         "verificationMethod": {
           "type": "string",
-          "description": "How verification is performed, if verifiable.",
+          "description": "How verification is performed for this task pattern when verifiable is 'yes' or 'partially'. Describes the independent check that can validate the task's output.",
           "examples": [
             "source-grounding",
             "recomputation",
@@ -882,7 +1113,208 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this task pattern."
+          "description": "Human-readable description of this task pattern and what it involves. Used in verifiability matrix documentation and governance reports.",
+          "examples": ["Extract field values from submitted documents using OCR and structured parsing.", "Verify income data against source documents and arithmetic constraints."]
+        },
+        "slaDefinitions": {
+          "type": "array",
+          "description": "Named SLA windows declared against this task pattern. Each entry binds an expected duration to a start trigger and a calendar; multiple entries MAY coexist (e.g. a `firstResponse` SLA plus an end-to-end `fullResolution` SLA). Processor obligations for warning emission, breach handling, and escalation are specified in Runtime Companion §10.3.",
+          "items": { "$ref": "#/$defs/SlaDefinition" }
+        },
+        "warningThresholds": {
+          "type": "array",
+          "description": "Escalating pre-breach alerts for this task pattern. Each threshold fires a notification `beforeBreach` of any matching `slaDefinitions` entry using `templateKey`, routed to the `notify` actors. Ordered independently of breach policy; the processor evaluates every threshold (Runtime Companion §10.3).",
+          "items": { "$ref": "#/$defs/WarningThreshold" }
+        },
+        "breachPolicy": {
+          "$ref": "#/$defs/BreachPolicy",
+          "description": "Action the processor MUST take when an `slaDefinitions` entry's expected duration elapses without task completion. Composes with `warningThresholds` (pre-breach) and `escalationChain` (post-breach). See Governance §10.3 and Runtime Companion §10.3."
+        },
+        "escalationChain": {
+          "type": "array",
+          "description": "Ordered escalation ladder activated when `breachPolicy.action` = `escalate` or when a prior level's `gracePeriod` exhausts. Each step reassigns to `assignTo`; on exhaustion the step's `onExhaustion` policy advances the chain, fails the task, or opens a ticket.",
+          "items": { "$ref": "#/$defs/EscalationStep" }
+        }
+      }
+    },
+    "SlaDefinition": {
+      "type": "object",
+      "required": ["id", "expectedDuration", "calendarType", "startAt"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SLA window identifier, unique within this task pattern. Referenced by audit traces and by other governance artifacts that need to correlate breach events back to a named window (e.g. `firstResponse`, `fullResolution`).",
+          "examples": ["firstResponse", "fullResolution"]
+        },
+        "expectedDuration": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "Expected completion window for this SLA. MUST be an ISO 8601 duration (e.g. `P1D`, `PT4H`). An \"indefinite\" SLA is a category error -- warning thresholds and breach policy have nothing to fire against -- so the literal `indefinite` form (permitted on `HoldPolicy.expectedDuration`) is rejected here. As a WOS extension, the `P<N>BD` form denotes N business days resolved against the referenced business calendar (see `calendarRef`).",
+          "examples": ["P1D", "PT4H", "P5BD"]
+        },
+        "calendarType": {
+          "type": "string",
+          "enum": ["wall-clock", "business"],
+          "description": "Calendar used when evaluating `expectedDuration`. `wall-clock` advances continuously; `business` advances only during calendar-declared business hours and requires a resolvable `calendarRef` (Runtime Companion §10.3, lint G-023).",
+          "examples": ["wall-clock", "business"]
+        },
+        "calendarRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. Ref convention: URI into the Business Calendar sidecar itself (not a key into a map), because a governance document may point at any calendar artifact addressable from its runtime environment; contrast with `templateKey` / `escalationStepId` / `notificationTemplateKey` which are plain string keys or sibling ids. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution.",
+          "examples": [
+            "https://agency.gov/sidecars/business-calendar-fy2026",
+            "urn:wos:sidecar:business-calendar:fy2026-federal"
+          ]
+        },
+        "startAt": {
+          "type": "string",
+          "enum": ["assignment", "activation", "custom-event"],
+          "description": "Point in the task lifecycle from which `expectedDuration` is measured. `assignment` = when the task enters state `assigned` (Governance §10.1); `activation` = when a `claimed`/`created` task becomes actionable; `custom-event` = a kernel event named in `startEvent` (required when `startAt` = `custom-event`).",
+          "examples": ["assignment", "custom-event"]
+        },
+        "startEvent": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) — those are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.",
+          "examples": ["applicantResponseReceived", "caseReadyForReview"]
+        }
+      },
+      "if": {
+        "properties": { "startAt": { "const": "custom-event" } },
+        "required": ["startAt"]
+      },
+      "then": { "required": ["startEvent"] }
+    },
+    "WarningThreshold": {
+      "type": "object",
+      "required": ["beforeBreach", "templateKey", "notify"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "beforeBreach": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "Lead time, as an ISO 8601 duration, before any matching `slaDefinitions.expectedDuration` elapses at which this warning fires. Multiple thresholds MAY declare escalating lead times (e.g. `P2D`, `PT4H`, `PT30M`); the processor fires each independently (Runtime Companion §10.3).",
+          "examples": ["P2D", "PT4H", "PT30M"]
+        },
+        "templateKey": {
+          "type": "string",
+          "description": "Notification template key to render when this threshold fires. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
+          "examples": ["slaWarning4Hour", "firstResponseImminentBreach"]
+        },
+        "notify": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Actor identifier (role or individual) receiving the rendered warning notification. Resolved against the kernel actor registry per Governance §10.2 / §11.",
+            "examples": ["taskOwner", "caseSupervisor"]
+          },
+          "description": "Actor identifiers (roles or individuals) that receive the rendered warning. Actor resolution follows the same rules as Delegation and task assignment (Governance §11, §10.2).",
+          "examples": [["taskOwner", "businessAdministrator"], ["caseSupervisor"]]
+        }
+      }
+    },
+    "BreachPolicy": {
+      "type": "object",
+      "required": ["action"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["notify", "escalate", "autoReassign", "fail"],
+          "description": "Processor action when an `slaDefinitions` entry's expected duration elapses without completion. `notify`: notify responsible actors, no state change. `escalate`: advance through `escalationChain`. `autoReassign`: rotate to another potentialOwner. `fail`: transition task to `failed` and trigger rejection policy (Governance §10.3, Runtime Companion §10.3).",
+          "examples": ["escalate", "autoReassign"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Classifies the governance response to an SLA breach so the processor can apply the correct remediation"
+          }
+        },
+        "templateKey": {
+          "type": "string",
+          "description": "Notification template key rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
+          "examples": ["slaBreachNotice", "caseworkerReassignmentNotice"]
+        },
+        "escalationStepId": {
+          "type": "string",
+          "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Id convention: plain string targeting a sibling `EscalationStep` by its numeric `level` token (e.g. `level-1`) or optional stable `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is enforced by lint G-066.",
+          "examples": ["level-1", "supervisor"]
+        },
+        "timeoutPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["onRepeatedBreach"],
+          "description": "Optional policy controlling what happens when the same task pattern breaches repeatedly.",
+          "properties": {
+            "onRepeatedBreach": {
+              "type": "string",
+              "enum": ["suspend", "fail", "continue"],
+              "description": "Processor behaviour when a task pattern accumulates repeated SLA breaches. `suspend`: suspend the task. `fail`: transition to `failed` and invoke rejection policy. `continue`: keep escalating without state change (Runtime Companion §10.3).",
+              "examples": ["suspend", "fail"]
+            }
+          }
+        }
+      }
+    },
+    "EscalationStep": {
+      "type": "object",
+      "required": ["level", "assignTo", "gracePeriod", "onExhaustion"],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Optional stable identifier for this escalation step, matched by `BreachPolicy.escalationStepId` alongside numeric `level`. MUST match `^[a-zA-Z][a-zA-Z0-9_-]*$` (kernel identifier grammar). Lets authors point a breach policy at a named step (e.g. `supervisor`) without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. Cross-reference resolution is enforced by lint G-066.",
+          "examples": ["supervisor", "divisionDirector"]
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ordered position of this step in the escalation ladder. Levels SHOULD be contiguous starting at 1; the processor walks them in ascending order until the task clears, is failed, or a ticket is created (Governance §10.3).",
+          "examples": [1, 2]
+        },
+        "assignTo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Actor identifier (role or individual) the task reassigns to when this escalation level fires. Actor resolution follows Governance §10.2 / §11; the processor creates a delegated task in provenance.",
+          "examples": ["teamLead", "divisionDirector"]
+        },
+        "gracePeriod": {
+          "type": "string",
+          "pattern": "^P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?)$",
+          "description": "ISO 8601 duration the assigned actor has to resolve the task before this step's `onExhaustion` policy fires. As a WOS extension, `P<N>BD` denotes N business days against the SLA's declared calendar.",
+          "examples": ["P1D", "PT4H", "P2BD"]
+        },
+        "onExhaustion": {
+          "type": "string",
+          "enum": ["escalate", "fail", "ticketCreate"],
+          "description": "Action when `gracePeriod` expires without resolution. `escalate`: advance to the next `EscalationStep` by `level`. `fail`: transition task to `failed` (invokes rejection policy). `ticketCreate`: open an out-of-band ticket and park the task pending manual intervention.",
+          "examples": ["escalate", "ticketCreate"]
         }
       }
     },
@@ -908,7 +1340,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique delegation identifier.",
+          "description": "Unique delegation identifier within this governance document. Referenced in audit traces and by sub-delegation chains when maxDelegationDepth > 1.",
           "examples": [
             "directorToCaseworker",
             "commissionerToDirector"
@@ -917,7 +1349,7 @@
         "delegator": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor reference of the authority granting the delegation.",
+          "description": "Actor identifier of the role or individual granting the delegated authority. Must correspond to an actor defined in the Kernel Document or actor registry.",
           "examples": [
             "divisionDirector",
             "commissioner"
@@ -926,7 +1358,7 @@
         "delegate": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor reference receiving the delegated authority.",
+          "description": "Actor identifier of the role or individual receiving the delegated authority. The processor verifies the acting actor matches this reference when authority is exercised.",
           "examples": [
             "seniorCaseworker",
             "divisionDirector"
@@ -965,37 +1397,44 @@
         "effectiveDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation becomes active."
+          "description": "ISO 8601 date on which this delegation becomes active. Before this date, the processor MUST NOT honor this delegation.",
+          "examples": ["2026-01-01", "2025-07-01"]
         },
         "expirationDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation expires."
+          "description": "ISO 8601 date on which this delegation expires. After this date, the processor MUST NOT honor this delegation.",
+          "examples": ["2026-12-31", "2027-06-30"]
         },
         "revocable": {
           "type": "boolean",
           "default": true,
-          "description": "Whether the delegation can be revoked."
+          "description": "Whether this delegation can be revoked before its expiration date (Governance S11.4). Default: true. When false, the delegation is irrevocable until expirationDate.",
+          "examples": [true, false]
         },
         "revokedDate": {
           "type": "string",
           "format": "date",
-          "description": "Date the delegation was revoked, if applicable."
+          "description": "ISO 8601 date on which this delegation was revoked. When set, the processor MUST treat the delegation as expired from this date forward.",
+          "examples": ["2026-03-15", "2025-11-01"]
         },
         "allowsSubDelegation": {
           "type": "boolean",
           "default": false,
-          "description": "Whether this delegation permits the delegate to further sub-delegate authority (Governance S11.5). Default: false."
+          "description": "Whether this delegation permits the delegate to further sub-delegate authority (Governance S11.5). Default: false.",
+          "examples": [false, true]
         },
         "quorumCount": {
           "type": "integer",
           "minimum": 2,
-          "description": "Minimum distinct authorities required for delegation to take effect (S4.9). Omit for single-authority delegation."
+          "description": "Minimum distinct authorities required for delegation to take effect (S4.9). Omit for single-authority delegation.",
+          "examples": [2, 3]
         },
         "quorumPool": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Eligible authority principal IDs (S4.9). Required when quorumCount is set."
+          "items": { "type": "string", "description": "Principal ID of an authority eligible to contribute to the quorum.", "examples": ["commissioner", "deputyCommissioner", "chiefCounsel"] },
+          "description": "Eligible authority principal IDs forming the quorum pool (S4.9). Required when quorumCount is set.",
+          "examples": [["commissioner", "deputyCommissioner"], ["chiefCounsel", "deputyDirector", "commissioner"]]
         }
       }
     },
@@ -1017,13 +1456,19 @@
               "safety-impacting",
               "operational",
               "informational"
-            ]
+            ],
+            "description": "Impact level for which the delegate may exercise the delegated authority.",
+            "examples": ["operational", "informational"]
           },
-          "description": "Impact levels this delegation covers.",
+          "description": "Impact levels this delegation covers. The delegate may only exercise authority for cases at these impact levels.",
           "examples": [
             [
               "operational",
               "informational"
+            ],
+            [
+              "rights-impacting",
+              "safety-impacting"
             ]
           ]
         },
@@ -1031,13 +1476,18 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Case type identifier for which the delegate may exercise the delegated authority.",
+            "examples": ["standard-application", "renewal", "emergency-request"]
           },
-          "description": "Case types this delegation covers.",
+          "description": "Case types this delegation covers. The delegate may only exercise authority for cases of these types.",
           "examples": [
             [
               "standard-application",
               "renewal"
+            ],
+            [
+              "emergency-request"
             ]
           ]
         },
@@ -1052,7 +1502,7 @@
         },
         "conditions": {
           "type": "string",
-          "description": "Additional FEL expression narrowing the delegation scope.",
+          "description": "FEL expression (Runtime Companion §8.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.",
           "examples": [
             "caseFile.programType = 'supplemental'"
           ]
@@ -1083,12 +1533,29 @@
       "properties": {
         "holdType": {
           "type": "string",
-          "description": "Reason for the hold. Standard values: pending-applicant-response, pending-external-verification, pending-legal-review, pending-legislation, pending-related-case, voluntary-hold, legal-hold. Extensible via x- prefixed values. Note: legal-hold has distinct semantics per S7.15 -- it has no event-based resumeTrigger, survives terminal workflow states, and blocks data destruction/retention expiry regardless of ordinary workflow state.",
+          "oneOf": [
+            {
+              "enum": [
+                "pending-applicant-response",
+                "pending-external-verification",
+                "pending-legal-review",
+                "pending-legislation",
+                "pending-related-case",
+                "voluntary-hold",
+                "legal-hold"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Reason for the hold. MUST be one of the seven standard values OR an `x-` prefixed vendor extension. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`, `legal-hold`. Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$` (e.g., `x-acme-pending-tribal-review`). Note: `legal-hold` has distinct semantics per S7.15 -- it has no event-based `resumeTrigger`, survives terminal workflow states, and blocks data destruction/retention expiry regardless of ordinary workflow state; `resumeTrigger` and `timeoutAction` are NOT required when `holdType` is `legal-hold`.",
           "examples": [
             "pending-applicant-response",
             "pending-external-verification",
             "pending-legislation",
-            "legal-hold"
+            "legal-hold",
+            "x-acme-pending-tribal-review"
           ],
           "x-lm": {
             "critical": true,
@@ -1097,17 +1564,19 @@
         },
         "expectedDuration": {
           "type": "string",
-          "description": "ISO 8601 duration or the string 'indefinite'.",
+          "pattern": "^(indefinite|P(?:\\d+BD|(?!$)(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?=\\d)(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?))$",
+          "description": "Expected ISO 8601 duration of this hold, or the literal string 'indefinite' for holds with no expected end time. When the duration expires without the resumeTrigger firing, the processor applies the timeoutAction. As a WOS extension, the `P<N>BD` form denotes N business days resolved against an attached Business Calendar sidecar.",
           "examples": [
             "P30D",
             "P14D",
-            "indefinite"
+            "indefinite",
+            "P20BD"
           ]
         },
         "resumeTrigger": {
           "type": "string",
           "minLength": 1,
-          "description": "Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule.",
+          "description": "Event name that resumes the case from this hold. The processor listens for this event and resumes the case when it fires — this is NOT a FEL condition polled on a schedule (Governance S12.1).",
           "examples": [
             "applicantResponse",
             "verificationComplete",
@@ -1131,9 +1600,10 @@
             "auto-resume"
           ]
         },
-        "notificationTemplateRef": {
+        "notificationTemplateKey": {
           "type": "string",
-          "description": "Reference to a Notification Template sidecar for hold notifications."
+          "description": "Notification template key for hold notifications. When present, the processor sends a notification using this template when the hold begins.",
+          "examples": ["holdNotificationTemplate", "pendingApplicantResponseNotice"]
         },
         "scope": {
           "type": "string",
@@ -1144,7 +1614,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of this hold policy."
+          "description": "Human-readable description of this hold policy and its regulatory or procedural basis. Used in tooling and audit documentation.",
+          "examples": ["Hold pending applicant response to information request — 30-day window per APA 5 USC 554.", "Legal hold — no event-based resume; survives terminal workflow states and blocks data retention expiry."]
         }
       }
     },
@@ -1171,7 +1642,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable summary of the rule."
+          "description": "Human-readable summary of what this rule requires or prohibits. Used in explanation assembly and audit documentation.",
+          "examples": ["Annual renewal of eligibility required for continued benefit receipt.", "Adverse decisions require individualized written notice at least 30 days before effective date."]
         },
         "sourceAuthority": {
           "type": "string",
@@ -1194,13 +1666,33 @@
         },
         "citation": {
           "type": "string",
-          "description": "Formal citation to the authoritative source.",
+          "description": "Formal citation to the authoritative source document for this rule, in standard legal citation format.",
           "examples": [
             "42 CFR \u00a7 435.916",
             "OMB M-24-10 \u00a73.1"
           ]
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

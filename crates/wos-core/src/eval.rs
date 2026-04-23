@@ -10,16 +10,17 @@
 
 use std::collections::HashMap;
 
-use fel_core::{evaluate, parse, types::FelValue};
-use time::format_description::well_known::Rfc3339;
+use fel_core::{ast::Expr, dependencies::extract_dependencies, evaluate, parse, types::FelValue};
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::context::EvalContext;
 use crate::instance::CaseInstance;
 use crate::model::kernel::{
     Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
+    Transition, TransitionEvent,
 };
-use crate::provenance::{ProvenanceLog, ProvenanceRecord};
+use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
 
 /// Active state configuration tracking leaf states.
@@ -100,6 +101,13 @@ pub struct Evaluator {
     /// All actions executed during this evaluator lifetime.
     executed_actions: Vec<ObservedAction>,
 
+    /// Guard evaluations observed during this evaluator lifetime.
+    ///
+    /// Captures every guard expression tested — including those that
+    /// evaluated false and short-circuited their transition. Drained
+    /// per-event by `wos-runtime::drain_once`.
+    guard_evaluations: Vec<GuardEvaluation>,
+
     /// Saved history configurations keyed by compound state ID.
     ///
     /// When a compound state with `historyState` is exited, the active
@@ -107,6 +115,15 @@ pub struct Evaluator {
     /// configuration is restored instead of using `initialState`.
     history_store: HashMap<String, Vec<String>>,
 }
+
+/// Event name recorded on provenance and guard traces when a transition fires
+/// from continuous-mode post-mutation re-scan (Runtime Companion §10.3).
+///
+/// This string is **never** read from a kernel document — it is synthesized
+/// by the evaluator for traces only. Authored §10.3 re-scan participation uses
+/// guard-only transitions (omit `event`); authored `$`-prefixed transition
+/// events are rejected by lint K-007.
+const CONTINUOUS_RESCAN_EVENT: &str = "$postMutationRescan";
 
 /// An observed state transition.
 #[derive(Debug, Clone)]
@@ -117,6 +134,41 @@ pub struct ObservedTransition {
     pub to: String,
     /// Triggering event.
     pub event: String,
+    /// Semantic tags declared on the transition.
+    pub tags: Vec<String>,
+}
+
+/// A single guard-expression evaluation observed during event processing.
+///
+/// Recorded every time the evaluator tests a transition's `guard` FEL
+/// expression — including short-circuited `false` evaluations on transitions
+/// that did not fire. Downstream consumers (the `wos-runtime` drain loop
+/// and `wos-conformance` trace builder) use these records to produce a
+/// teaching signal for LLM-authored workflows: when a fixture fails, the
+/// trace can show which guard evaluated false and against which inputs.
+///
+/// `guard_id` is synthesized from the transition's shape
+/// (`{source_state}->{target_state}:{event}`) — kernel transitions do not
+/// carry explicit guard identifiers today. `inputs` is a JSON subset of the
+/// evaluation context limited to the paths the guard expression actually
+/// references, preserving FEL namespace nesting (`caseFile.*` / `event.*`).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardEvaluation {
+    /// Synthesized identifier: `{source_state}->{target_state}:{event}`.
+    pub guard_id: String,
+    /// Source state of the transition whose guard was evaluated.
+    pub source_state: String,
+    /// Target state of the transition whose guard was evaluated.
+    pub target_state: String,
+    /// Event name that triggered the guard test.
+    pub event: String,
+    /// The raw FEL expression text.
+    pub expression: String,
+    /// Result of the expression (true fires the transition, false skips it).
+    pub result: bool,
+    /// Inputs actually read by the guard, nested by FEL namespace.
+    pub inputs: serde_json::Value,
 }
 
 /// An action executed by the evaluator during a single event step.
@@ -151,6 +203,21 @@ pub enum EvalError {
     /// Internal consistency error.
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+fn transition_matches_dispatch(
+    transition: &Transition,
+    event: &str,
+    continuous_rescan: bool,
+) -> bool {
+    if continuous_rescan {
+        transition.participates_in_continuous_rescan()
+    } else {
+        transition
+            .event
+            .as_ref()
+            .is_some_and(|ev| ev.matches_runtime_dispatch(event))
+    }
 }
 
 impl Evaluator {
@@ -194,9 +261,10 @@ impl Evaluator {
             case_state: seeded_case_state,
             timers: Timers::default(),
             provenance: ProvenanceLog::default(),
-            simulated_time_ms: 0,
+            simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            guard_evaluations: Vec::new(),
             history_store: HashMap::new(),
         };
         eval.enter_state(&initial, None, None)?;
@@ -245,6 +313,7 @@ impl Evaluator {
             simulated_time_ms: current_time_ms,
             transitions: Vec::new(),
             executed_actions: Vec::new(),
+            guard_evaluations: Vec::new(),
             history_store: instance.history_store.clone(),
         })
     }
@@ -298,6 +367,23 @@ impl Evaluator {
         std::mem::take(&mut self.executed_actions)
     }
 
+    /// All guard evaluations observed since the last `take_guard_evaluations`.
+    ///
+    /// Includes guards that evaluated false and short-circuited their
+    /// transition — the teaching-signal use case needs to see exactly which
+    /// guards the evaluator tested and against what inputs.
+    pub fn guard_evaluations(&self) -> &[GuardEvaluation] {
+        &self.guard_evaluations
+    }
+
+    /// Drain the guard-evaluation buffer.
+    ///
+    /// Called by `wos-runtime::drain_once` after each event step so that
+    /// `DrainOnceResult.guard_evaluations` scopes to the single drained event.
+    pub fn take_guard_evaluations(&mut self) -> Vec<GuardEvaluation> {
+        std::mem::take(&mut self.guard_evaluations)
+    }
+
     /// The kernel document.
     pub fn kernel(&self) -> &KernelDocument {
         &self.kernel
@@ -332,7 +418,7 @@ impl Evaluator {
         actor: Option<&str>,
         data: Option<&serde_json::Value>,
     ) -> Result<bool, EvalError> {
-        if self.try_fire_transition(event, actor, data)? {
+        if self.try_fire_transition(event, actor, data, false)? {
             return Ok(true);
         }
 
@@ -348,15 +434,18 @@ impl Evaluator {
         self.fire_expired_timers(actor)
     }
 
-    /// Try to fire a `$continuous` transition in the current configuration.
+    /// Re-run transition guards after a case-file mutation in `continuous` mode.
     ///
-    /// Used by continuous evaluation mode (Runtime S10.3). Scans all active
-    /// states for transitions on event `$continuous` whose guards evaluate
-    /// to true. Fires the first match (document order).
+    /// Implements Runtime Companion §10.3: collect every transition that omits
+    /// `event` (guard-only), walk the active configuration in the same order as
+    /// explicit events, and fire the first whose guard is now true. Provenance
+    /// records the synthetic [`CONTINUOUS_RESCAN_EVENT`] label (not an authored
+    /// event name).
     ///
-    /// Returns `true` if a transition fired, `false` if no guards were satisfied.
-    pub fn try_fire_guardless_transition(&mut self) -> Result<bool, EvalError> {
-        self.try_fire_transition("$continuous", None, None)
+    /// Returns `true` if a transition fired, `false` if the configuration is
+    /// already stable.
+    pub fn rescan_on_mutation(&mut self) -> Result<bool, EvalError> {
+        self.try_fire_transition(CONTINUOUS_RESCAN_EVENT, None, None, true)
     }
 
     // ── Transition dispatch ─────────────────────────────────────
@@ -369,11 +458,24 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        continuous_rescan: bool,
     ) -> Result<bool, EvalError> {
+        let dispatch_event = if continuous_rescan {
+            CONTINUOUS_RESCAN_EVENT
+        } else {
+            event
+        };
+
         // Route to parallel parents first.
         let parallel_parents = self.find_parallel_parents();
         for parallel_id in &parallel_parents {
-            if self.try_fire_in_parallel(parallel_id, event, actor, event_data)? {
+            if self.try_fire_in_parallel(
+                parallel_id,
+                event,
+                actor,
+                event_data,
+                continuous_rescan,
+            )? {
                 return Ok(true);
             }
         }
@@ -394,19 +496,28 @@ impl Evaluator {
             };
 
             for transition in &indexed.state.transitions {
-                if transition.event != event {
+                let event_matches =
+                    transition_matches_dispatch(transition, event, continuous_rescan);
+                if !event_matches {
                     continue;
                 }
-                if !self.evaluate_guard(transition.guard.as_deref(), event_data)? {
+                if !self.evaluate_guard(
+                    transition.guard.as_deref(),
+                    event_data,
+                    active_state,
+                    &transition.target,
+                    dispatch_event,
+                )? {
                     continue;
                 }
 
                 self.fire_transition(
                     active_state,
-                    &transition.target.clone(),
-                    event,
+                    &transition.target,
+                    dispatch_event,
                     actor,
-                    &transition.actions.clone(),
+                    &transition.actions,
+                    &transition.tags,
                     event_data,
                 )?;
                 return Ok(true);
@@ -423,10 +534,17 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        continuous_rescan: bool,
     ) -> Result<bool, EvalError> {
         if event == "$join" {
             return Ok(false);
         }
+
+        let dispatch_event = if continuous_rescan {
+            CONTINUOUS_RESCAN_EVENT
+        } else {
+            event
+        };
 
         let indexed = match self.state_index.get(parallel_id) {
             Some(s) => s.clone(),
@@ -458,14 +576,23 @@ impl Evaluator {
             }
 
             for transition in &state_def.transitions {
-                if transition.event != event {
+                let event_matches =
+                    transition_matches_dispatch(transition, event, continuous_rescan);
+                if !event_matches {
                     continue;
                 }
-                if !self.evaluate_guard(transition.guard.as_deref(), event_data)? {
+                if !self.evaluate_guard(
+                    transition.guard.as_deref(),
+                    event_data,
+                    &active,
+                    &transition.target,
+                    dispatch_event,
+                )? {
                     continue;
                 }
 
                 let target = transition.target.clone();
+                let case_file_snapshot = self.case_file_snapshot_for_transition(&transition.tags);
 
                 // Execute onExit.
                 self.execute_on_exit_actions(&active, actor, event_data)?;
@@ -482,11 +609,18 @@ impl Evaluator {
                 self.transitions.push(ObservedTransition {
                     from: active.clone(),
                     to: target.clone(),
-                    event: event.to_string(),
+                    event: dispatch_event.to_string(),
+                    tags: transition.tags.clone(),
                 });
-                self.provenance.push(ProvenanceRecord::state_transition(
-                    &active, &target, event, actor,
-                ));
+                self.provenance
+                    .push(ProvenanceRecord::tagged_state_transition(
+                        &active,
+                        &target,
+                        dispatch_event,
+                        actor,
+                        &transition.tags,
+                        case_file_snapshot,
+                    ));
 
                 self.apply_parallel_cancellation_policy(
                     parallel_id,
@@ -658,8 +792,11 @@ impl Evaluator {
         event: &str,
         actor: Option<&str>,
         actions: &[Action],
+        tags: &[String],
         event_data: Option<&serde_json::Value>,
     ) -> Result<(), EvalError> {
+        let case_file_snapshot = self.case_file_snapshot_for_transition(tags);
+
         self.execute_on_exit_actions(source, actor, event_data)?;
 
         for action in actions {
@@ -672,16 +809,31 @@ impl Evaluator {
         self.exit_state_and_descendants(source);
         self.enter_state(target, actor, event_data)?;
 
-        self.provenance.push(ProvenanceRecord::state_transition(
-            source, target, event, actor,
-        ));
+        self.provenance
+            .push(ProvenanceRecord::tagged_state_transition(
+                source,
+                target,
+                event,
+                actor,
+                tags,
+                case_file_snapshot,
+            ));
         self.transitions.push(ObservedTransition {
             from: source.to_string(),
             to: target.to_string(),
             event: event.to_string(),
+            tags: tags.to_vec(),
         });
 
         Ok(())
+    }
+
+    fn case_file_snapshot_for_transition(&self, tags: &[String]) -> Option<CaseFileSnapshot> {
+        if tags.iter().any(|tag| tag == "determination") {
+            Some(CaseFileSnapshot::from_case_state(&self.case_state_json()))
+        } else {
+            None
+        }
     }
 
     // ── Action execution ─────────────────────────────────────────
@@ -711,7 +863,11 @@ impl Evaluator {
             ActionKind::StartTimer => {
                 let timer_id = action.timer_id.as_deref().unwrap_or("");
                 let duration = action.duration.as_deref().unwrap_or("P0D");
-                let fires_event = action.event.as_deref().unwrap_or("");
+                let fires_event = action
+                    .event
+                    .as_ref()
+                    .map(TransitionEvent::start_timer_fires_string)
+                    .unwrap_or_default();
 
                 let duration_ms = parse_iso_duration_to_ms(duration).unwrap_or_else(|raw| {
                     self.provenance
@@ -741,7 +897,7 @@ impl Evaluator {
                 self.provenance.push(ProvenanceRecord::timer_created(
                     timer_id,
                     duration,
-                    fires_event,
+                    fires_event.as_str(),
                 ));
             }
             ActionKind::CancelTimer => {
@@ -842,10 +998,18 @@ impl Evaluator {
     // ── Guard evaluation ─────────────────────────────────────────
 
     /// Evaluate a FEL guard expression. Missing guard = always true.
+    ///
+    /// Records a [`GuardEvaluation`] on every call that actually tests a
+    /// guard expression (including `false` results). Missing guards are
+    /// not recorded — `None` means "no constraint" and carries no teaching
+    /// signal.
     fn evaluate_guard(
-        &self,
+        &mut self,
         guard: Option<&str>,
         event_data: Option<&serde_json::Value>,
+        source_state: &str,
+        target_state: &str,
+        event: &str,
     ) -> Result<bool, EvalError> {
         let guard_expr = match guard {
             Some(g) => g,
@@ -859,7 +1023,20 @@ impl Evaluator {
             .map_err(|e| EvalError::Guard(format!("parse error in '{guard_expr}': {e}")))?;
 
         let result = evaluate(&parsed, &env);
-        Ok(matches!(result.value, FelValue::Boolean(true)))
+        let passed = matches!(result.value, FelValue::Boolean(true));
+
+        let inputs = build_guard_inputs(&parsed, &self.case_state, event_data);
+        self.guard_evaluations.push(GuardEvaluation {
+            guard_id: format!("{source_state}->{target_state}:{event}"),
+            source_state: source_state.to_string(),
+            target_state: target_state.to_string(),
+            event: event.to_string(),
+            expression: guard_expr.to_string(),
+            result: passed,
+            inputs,
+        });
+
+        Ok(passed)
     }
 
     // ── Timer management ─────────────────────────────────────────
@@ -1210,13 +1387,7 @@ fn index_states_recursive(
 
         if state.kind == StateKind::Parallel {
             for (rname, region) in &state.regions {
-                index_states_recursive(
-                    &region.states,
-                    Some(name),
-                    Some(rname),
-                    Some(name),
-                    index,
-                );
+                index_states_recursive(&region.states, Some(name), Some(rname), Some(name), index);
             }
         }
     }
@@ -1278,13 +1449,19 @@ pub fn parse_iso_duration_to_ms(duration: &str) -> Result<u64, &str> {
         None => (rest, ""),
     };
 
-    let ms = parse_duration_segment(date_part, false) + parse_duration_segment(time_part, true);
+    let date_ms = parse_duration_segment(date_part, false).map_err(|_| duration)?;
+    let time_ms = parse_duration_segment(time_part, true).map_err(|_| duration)?;
 
-    Ok(ms)
+    Ok(date_ms + time_ms)
 }
 
 /// Parse a date or time segment of an ISO 8601 duration string.
-fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
+///
+/// Returns `Err(())` when the segment contains an unknown unit letter
+/// (e.g., `B` in `P20BD`). Silently accepting unknown units would let a
+/// `startTimer` with an unrecognized duration fire at 0ms, which is worse
+/// than a loud parse failure.
+fn parse_duration_segment(segment: &str, is_time: bool) -> Result<u64, ()> {
     const MS_PER_SECOND: u64 = 1_000;
     const MS_PER_MINUTE: u64 = 60 * MS_PER_SECOND;
     const MS_PER_HOUR: u64 = 60 * MS_PER_MINUTE;
@@ -1309,7 +1486,7 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
                     'H' => MS_PER_HOUR,
                     'M' => MS_PER_MINUTE,
                     'S' => MS_PER_SECOND,
-                    _ => 0,
+                    _ => return Err(()),
                 }
             } else {
                 match ch {
@@ -1317,7 +1494,7 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
                     'M' => MS_PER_MONTH,
                     'W' => 7 * MS_PER_DAY,
                     'D' => MS_PER_DAY,
-                    _ => 0,
+                    _ => return Err(()),
                 }
             };
 
@@ -1332,7 +1509,115 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> u64 {
         }
     }
 
-    ms
+    Ok(ms)
+}
+
+/// Extract the JSON subset actually referenced by a guard expression.
+///
+/// Walks FEL dependencies and produces a JSON object nested by namespace
+/// (`caseFile.*` / `event.*`). Paths not resolvable against the supplied
+/// state are omitted — the output is a lossy teaching-signal snapshot, not
+/// a complete evaluation context.
+///
+/// Wildcard paths (`caseFile.relationships[*].kind`, produced by FEL
+/// expressions like `every(caseFile.relationships, $.kind == 'parent')`)
+/// are expanded: the `[*]` segment is replaced with the full array, so
+/// the teaching signal shows every element the guard reasoned over rather
+/// than silently dropping the dependency.
+fn build_guard_inputs(
+    expr: &Expr,
+    case_state: &HashMap<String, serde_json::Value>,
+    event_data: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let deps = extract_dependencies(expr);
+    let mut inputs = serde_json::Map::new();
+
+    for field_path in &deps.fields {
+        let (namespace, rest) = match field_path.split_once('.') {
+            Some((ns, rest)) => (ns, rest),
+            None => continue,
+        };
+
+        // Strip trailing `[*]` from the first segment for lookup; we resolve
+        // the full array and keep the wildcard implicit in the shape.
+        let first_segment = rest.split_once('.').map_or(rest, |(h, _)| h);
+        let lookup_head = first_segment.trim_end_matches("[*]");
+        let root_value = match namespace {
+            "caseFile" => case_state.get(lookup_head),
+            "event" => event_data
+                .and_then(|ev| ev.as_object())
+                .and_then(|obj| obj.get(lookup_head)),
+            _ => continue,
+        };
+
+        let Some(top_value) = root_value else {
+            continue;
+        };
+
+        let tail = rest.split_once('.').map_or("", |(_, t)| t);
+        let leaf_value = walk_json_path(top_value, tail);
+        insert_nested(&mut inputs, namespace, lookup_head, tail, leaf_value);
+    }
+
+    serde_json::Value::Object(inputs)
+}
+
+/// Navigate dotted tail segments into a JSON value; returns the value itself
+/// if the tail is empty and `None` on any missing segment.
+fn walk_json_path<'a>(value: &'a serde_json::Value, tail: &str) -> Option<&'a serde_json::Value> {
+    if tail.is_empty() {
+        return Some(value);
+    }
+    let mut cursor = value;
+    for segment in tail.split('.') {
+        let obj = cursor.as_object()?;
+        cursor = obj.get(segment)?;
+    }
+    Some(cursor)
+}
+
+/// Insert `value` into `inputs[namespace][head][.tail...]`, preserving nesting.
+fn insert_nested(
+    inputs: &mut serde_json::Map<String, serde_json::Value>,
+    namespace: &str,
+    head: &str,
+    tail: &str,
+    value: Option<&serde_json::Value>,
+) {
+    let Some(value) = value else { return };
+    let ns_entry = inputs
+        .entry(namespace.to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    let Some(ns_map) = ns_entry.as_object_mut() else {
+        return;
+    };
+
+    if tail.is_empty() {
+        ns_map.insert(head.to_string(), value.clone());
+        return;
+    }
+
+    let head_entry = ns_map
+        .entry(head.to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    let Some(mut cursor) = head_entry.as_object_mut() else {
+        return;
+    };
+
+    let segments: Vec<&str> = tail.split('.').collect();
+    for (i, seg) in segments.iter().enumerate() {
+        if i == segments.len() - 1 {
+            cursor.insert(seg.to_string(), value.clone());
+        } else {
+            let next = cursor
+                .entry(seg.to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            let Some(next_map) = next.as_object_mut() else {
+                return;
+            };
+            cursor = next_map;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1392,5 +1677,16 @@ mod tests {
     #[test]
     fn parse_iso_duration_invalid() {
         assert!(parse_iso_duration_to_ms("invalid").is_err());
+    }
+
+    #[test]
+    fn parse_iso_duration_rejects_unknown_units() {
+        // `BD` (business-day) is not an ISO 8601 unit. Silently treating it as
+        // 0ms means a kernel `startTimer` with `duration: "P20BD"` fires
+        // immediately — the caller has no way to know the input was malformed.
+        // The parser MUST surface an error so callers can emit an
+        // `invalid_duration` provenance record instead of booking a 0ms timer.
+        assert!(parse_iso_duration_to_ms("P20BD").is_err());
+        assert!(parse_iso_duration_to_ms("PT5Q").is_err());
     }
 }

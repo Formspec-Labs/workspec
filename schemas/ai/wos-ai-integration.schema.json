@@ -19,8 +19,9 @@
     "$wosAIIntegration": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS AI Integration specification version. MUST be '1.0'. Identifies this document as a WOS AI Integration Document.",
+      "description": "WOS AI Integration specification version marker. MUST be '1.0'. Identifies this document as a WOS AI Integration Document and pins the schema version. Processors MUST reject documents with an unrecognized value. Corresponds to Layer 2 of the WOS three-layer governance model. See AI Integration §1.",
       "examples": [
+        "1.0",
         "1.0"
       ],
       "x-lm": {
@@ -28,17 +29,14 @@
         "intent": "Document type marker and version pin for WOS AI Integration documents"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation and autocompletion."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this AI integration document targets. MUST match the url property of the target Kernel Document.",
+      "description": "URI of the WOS Kernel Document this AI integration document targets. MUST match the 'url' property of the target Kernel Document. Used by processors to resolve the kernel's named seams (actorExtension, provenanceLayer, lifecycleHook) through which AI governance is applied. An AI Integration Document without a resolvable targetWorkflow MUST be rejected by conformant processors. See AI Integration §2.",
       "examples": [
-        "https://agency.gov/workflows/benefits-adjudication"
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://agency.gov/workflows/grants-review"
       ],
       "x-lm": {
         "critical": true,
@@ -48,18 +46,21 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this AI Integration Document.",
+      "description": "Version of this AI Integration Document. RECOMMENDED to use semantic versioning (major.minor.patch). Version changes MUST be recorded in provenance when the document is used as part of an active workflow instance.",
       "examples": [
-        "1.0.0"
+        "1.0.0",
+        "2.1.0"
       ]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this AI integration configuration."
+      "description": "Human-readable name for this AI integration configuration. Used in administrative dashboards, audit reports, and governance review tooling to identify this document.",
+      "examples": ["Benefits Adjudication AI Integration", "Grants Review AI Governance Layer"]
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of how AI agents participate in this workflow."
+      "description": "Human-readable description of how AI agents participate in this workflow. Included in governance documentation and audit packages to provide context for reviewers.",
+      "examples": ["Extends the benefits adjudication workflow with AI-assisted document extraction and eligibility pre-screening."]
     },
     "defaultAutonomy": {
       "type": "string",
@@ -184,13 +185,7 @@
       "$ref": "#/$defs/AssistGovernanceProxy",
       "description": "WOS Assist Governance Proxy configuration (AI Integration S14). A WOS construct consuming the Formspec Assist protocol (Assist S2.1)."
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^x-"
-      },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "AgentDeclaration": {
@@ -212,7 +207,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique agent identifier within the workflow.",
+          "description": "Unique agent identifier within this AI Integration Document. Used to reference this agent from deontic constraints, fallback chains, agent-specific overrides, and WOS Agent Config sidecars. MUST be unique across all agents in the document.",
           "examples": [
             "documentExtractor",
             "eligibilityScreener",
@@ -222,8 +217,9 @@
         "type": {
           "type": "string",
           "const": "agent",
-          "description": "Actor type. MUST be 'agent' for agent declarations.",
+          "description": "Actor type discriminator. MUST be 'agent' for AI agent declarations. Registers this actor via the kernel actorExtension seam so that WOS Processor governance rules apply. Human actors declared in the kernel use 'human'; this field distinguishes AI agents from all other actor categories. See AI Integration §3.1.",
           "examples": [
+            "agent",
             "agent"
           ],
           "x-lm": {
@@ -252,7 +248,7 @@
         "modelIdentifier": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the model powering this agent.",
+          "description": "Identifier of the model powering this agent. Recorded in provenance for every invocation. For commercial LLMs use the provider's model name; for custom models use an organization-scoped identifier. This field MUST be updated whenever the underlying model changes.",
           "examples": [
             "claude-sonnet-4-20250514",
             "gpt-4o-2024-11-20",
@@ -262,7 +258,7 @@
         "modelVersion": {
           "type": "string",
           "minLength": 1,
-          "description": "Version of the model.",
+          "description": "Version string for the model powering this agent. Together with modelIdentifier, uniquely identifies the exact model artifact. Recorded in provenance for every invocation to support reproducibility and audit.",
           "examples": [
             "2.0.0",
             "2025-05-14"
@@ -270,7 +266,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of the agent's role in the workflow."
+          "description": "Human-readable description of this agent's role and behavior in the workflow. Shown in governance review tooling and audit reports.",
+          "examples": ["Extracts income data from uploaded tax documents.", "Pre-screens applications for likely eligibility based on verified data."]
         },
         "capabilities": {
           "type": "array",
@@ -307,7 +304,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Agent identifier that this agent is permitted to invoke at autonomous level. MUST match the 'id' of another AgentDeclaration in this document. Creates a declared dependency graph used for cascade governance analysis.",
+            "examples": ["postProcessor", "qualityChecker"]
           },
           "description": "Agent IDs that this agent may invoke at autonomous level (AI Integration S3.7). Required when cascading autonomous agents are used.",
           "examples": [
@@ -317,13 +316,7 @@
             ]
           ]
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": {
-            "pattern": "^x-"
-          },
-          "description": "Extension data for this agent declaration."
-        },
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" },
         "deonticConstraints": {
           "$ref": "#/$defs/DeonticConstraints",
           "description": "Agent-level deontic constraints (AI Integration S4.7). Apply to all invocations of this agent."
@@ -345,7 +338,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Capability identifier.",
+          "description": "Capability identifier. Referenced from deontic constraints and output contract validation rules. MUST be unique within the parent agent's capabilities array.",
           "examples": [
             "documentExtraction",
             "eligibilityPreScreen",
@@ -354,7 +347,8 @@
         },
         "description": {
           "type": "string",
-          "description": "What this capability does."
+          "description": "Human-readable description of what this capability does, including what inputs it consumes and what outputs it produces. Displayed in governance review tooling to help auditors understand the agent's functional scope.",
+          "examples": ["Extract structured income data from uploaded tax documents and pay stubs.", "Pre-screen application for likely eligibility using verified income and household data."]
         },
         "inputContractRef": {
           "type": "string",
@@ -371,6 +365,27 @@
           "examples": [
             "urn:formspec:agency.gov:doc-extraction-output:1.0.0"
           ]
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "FEL expression that MUST evaluate to `true` for this capability to be invocable. Evaluated against the current evaluation context (Kernel §7); may reference `caseFile.*`, `@event`, `@agent`, and any other guard-reachable context.",
+            "examples": [
+              "caseFile.documentsReceived = true",
+              "caseFile.amount > 0"
+            ]
+          },
+          "description": "FEL expressions evaluated against the current evaluation context (Kernel §7) before the capability is invoked (AI Integration §3.3.1). All entries MUST evaluate to boolean `true` for the capability to be invocable. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is skipped and the processor falls through to the agent's fallback chain (§8). Expressions MAY reference `caseFile.*`, `@event`, `@agent`, and any context a guard may reference. Absent or empty array (default) means no preconditions — the capability is always invocable.",
+          "examples": [
+            ["caseFile.documentsReceived = true"],
+            ["caseFile.amount > 0", "caseFile.verified = true"]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Declaratively gates agent capability invocation; unsatisfied preconditions skip to the fallback chain instead of calling an undergated agent"
+          }
         }
       }
     },
@@ -429,7 +444,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique permission identifier.",
+          "description": "Unique permission identifier within this deontic constraints block. Referenced in violation provenance records and audit logs to identify which permission was evaluated.",
           "examples": [
             "outputFieldScope",
             "eligibilityRange"
@@ -439,7 +454,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Field path (relative to the agent's output object) that the agent is permitted to populate. The WOS Processor rejects output containing fields not in this list when a permission constraint is active.",
+            "examples": ["eligible", "confidence"]
           },
           "description": "Fields the agent is permitted to produce.",
           "examples": [
@@ -453,12 +470,13 @@
         "field": {
           "type": "string",
           "minLength": 1,
-          "description": "Specific field this permission constrains."
+          "description": "Specific output field path that this permission constrains. Used together with 'bounds' to restrict the permissible value range for a single field rather than listing an entire output schema.",
+          "examples": ["output.eligible", "output.confidence.overall"]
         },
         "bounds": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression defining value bounds.",
+          "description": "FEL expression defining value bounds for the field identified by 'field'. Evaluated with 'value' bound to the field's actual output value. Violation fires the onViolation action.",
           "examples": [
             "value = true or value = false"
           ]
@@ -472,7 +490,8 @@
         "bypassable": {
           "type": "boolean",
           "default": false,
-          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7)."
+          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).",
+          "examples": [false, true]
         }
       }
     },
@@ -493,7 +512,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique prohibition identifier.",
+          "description": "Unique prohibition identifier within this deontic constraints block. Referenced in violation provenance records and audit logs when the prohibition fires.",
           "examples": [
             "noFinalDenial",
             "noInconsistentApproval"
@@ -502,9 +521,10 @@
         "condition": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression defining the forbidden condition. When true, the prohibition is triggered.",
+          "description": "FEL expression defining the forbidden condition. Evaluated against the agent output and workflow instance context after contract validation. When the expression evaluates to true, the prohibition is triggered and the onViolation action fires. MUST be deterministic given the same inputs. See AI Integration §4.3 for evaluation ordering and null-propagation rules.",
           "examples": [
-            "output.eligible = false and instance.impactLevel = 'rights-impacting'"
+            "output.eligible = false and instance.impactLevel = 'rights-impacting'",
+            "output.eligible = true and caseFile.verification.totalIncome > parameters.eligibilityThreshold * 1.5"
           ],
           "x-lm": {
             "critical": true,
@@ -527,7 +547,8 @@
         "bypassable": {
           "type": "boolean",
           "default": false,
-          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7)."
+          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).",
+          "examples": [false, true]
         }
       }
     },
@@ -548,7 +569,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique obligation identifier.",
+          "description": "Unique obligation identifier within this deontic constraints block. Referenced in violation provenance records and audit logs when the obligation check fires.",
           "examples": [
             "citesRegulation",
             "perFieldConfidence"
@@ -557,7 +578,7 @@
         "requirement": {
           "type": "string",
           "minLength": 1,
-          "description": "FEL expression defining the required condition. When false, the obligation is unmet.",
+          "description": "FEL expression defining the required condition that the agent output MUST satisfy. Evaluated after contract validation. When the expression evaluates to false, the obligation is unmet and the onViolation action fires. Agents that cannot guarantee this condition should be configured at a lower autonomy level. See AI Integration §4.4 and null-propagation rules §4.9.",
           "examples": [
             "contains(output.reason, 'CFR') or contains(output.reason, 'USC')",
             "output.confidence.fieldLevel != null"
@@ -569,7 +590,7 @@
         },
         "reason": {
           "type": "string",
-          "description": "Human-readable explanation.",
+          "description": "Human-readable explanation of why this obligation exists and what regulatory or policy authority requires it. Included in provenance when the obligation is unmet.",
           "examples": [
             "Determination must cite regulatory authority."
           ]
@@ -583,7 +604,8 @@
         "bypassable": {
           "type": "boolean",
           "default": false,
-          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7)."
+          "description": "Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).",
+          "examples": [false, true]
         }
       }
     },
@@ -603,7 +625,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Unique right identifier.",
+          "description": "Unique right identifier within this deontic constraints block. Referenced in provenance and audit records to document what data entitlements the agent was granted for each invocation.",
           "examples": [
             "receivesApplicationData",
             "receivesParameterValues"
@@ -620,7 +642,7 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description.",
+          "description": "Human-readable description of what this right entitles the agent to receive and why it is required for the agent to fulfill its role. Included in governance documentation.",
           "examples": [
             "Agent must receive application data as input."
           ]
@@ -635,7 +657,8 @@
         "switchToAssistive",
         "flag"
       ],
-      "description": "Enforcement action for a deontic constraint violation (AI Integration S4.6). Restriction ordering: reject > escalateToHuman > switchToAssistive > flag."
+      "description": "Enforcement action for a deontic constraint violation (AI Integration S4.6). Restriction ordering: reject > escalateToHuman > switchToAssistive > flag.",
+      "examples": ["escalateToHuman", "reject"]
     },
     "NullBehavior": {
       "type": "string",
@@ -644,7 +667,8 @@
         "deny",
         "escalate"
       ],
-      "description": "Override for null propagation behavior (AI Integration S4.9). When omitted, determined by the kernel's impactLevel."
+      "description": "Override for null propagation behavior (AI Integration S4.9). When omitted, determined by the kernel's impactLevel.",
+      "examples": ["escalate", "deny"]
     },
     "ConfidenceFloor": {
       "type": "object",
@@ -676,7 +700,8 @@
             "escalateToHuman",
             "reject"
           ],
-          "description": "Enforcement action when confidence falls below threshold."
+          "description": "Enforcement action taken when the agent's confidence score falls below the configured threshold. 'escalateToHuman': route to a human reviewer via the fallback chain. 'reject': hard-fail the invocation and abort the action.",
+          "examples": ["escalateToHuman", "reject"]
         }
       }
     },
@@ -694,11 +719,12 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Whether confidence decay is active."
+          "description": "Whether time-based confidence decay is active for this agent. When true, the effective confidence score degrades over time using the configured halfLife. Used for agents whose outputs may become stale as case data evolves.",
+          "examples": [true, false]
         },
         "halfLife": {
           "type": "string",
-          "description": "ISO 8601 duration after which effective confidence halves.",
+          "description": "ISO 8601 duration after which the effective confidence score halves relative to the originally reported score. Shorter half-lives force earlier re-invocation for time-sensitive data. Applies only when 'enabled' is true.",
           "examples": [
             "P14D",
             "P7D"
@@ -729,7 +755,7 @@
         "event": {
           "type": "string",
           "minLength": 1,
-          "description": "Event that triggers confidence decay.",
+          "description": "Workflow event path that triggers an immediate confidence reduction. Dot-notation path relative to the workflow instance. When this event fires, the agent's effective confidence is multiplied by the decayFactor immediately, independent of the time-based halfLife decay.",
           "examples": [
             "caseFile.financials.modified",
             "caseFile.documents.added"
@@ -767,7 +793,7 @@
             "alternateAgent",
             "fail"
           ],
-          "description": "Fallback action type (AI Integration S8.3).",
+          "description": "Fallback action type that determines how to handle an agent invocation failure at this level of the chain (AI Integration S8.3). 'escalateToHuman': route to a human reviewer via taskRef. 'retry': retry the same agent up to maxRetries times. 'alternateAgent': invoke the agent identified by alternateAgentRef. 'fail': abort with an error. A valid chain MUST terminate in 'escalateToHuman' or 'fail'.",
           "examples": [
             "retry",
             "escalateToHuman"
@@ -780,12 +806,13 @@
         "taskRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Task reference for escalateToHuman."
+          "description": "Task identifier to create in the kernel when action is 'escalateToHuman'. MUST reference a task declared in the target Kernel Document's task registry so it can be assigned to a human reviewer in the workflow.",
+          "examples": ["manualDocumentExtraction", "manualReview"]
         },
         "maxRetries": {
           "type": "integer",
           "minimum": 1,
-          "description": "Maximum retry attempts for retry action.",
+          "description": "Maximum number of retry attempts before this fallback level is exhausted and the next level in the chain is tried. Applies only when action is 'retry'.",
           "examples": [
             3
           ]
@@ -798,11 +825,12 @@
             "linear"
           ],
           "default": "exponential",
-          "description": "Backoff strategy for retry action."
+          "description": "Retry interval growth strategy. 'fixed': constant interval. 'exponential': doubles each attempt (recommended for transient failures). 'linear': increases by initialInterval each attempt.",
+          "examples": ["exponential", "fixed"]
         },
         "initialInterval": {
           "type": "string",
-          "description": "ISO 8601 duration for initial retry interval.",
+          "description": "ISO 8601 duration for the first retry interval. Subsequent intervals are computed from this base according to the backoff strategy.",
           "examples": [
             "PT5S",
             "PT30S"
@@ -811,12 +839,14 @@
         "alternateAgentRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Agent identifier for alternateAgent action."
+          "description": "Agent identifier to invoke as the alternate when action is 'alternateAgent'. MUST match the 'id' of another AgentDeclaration in this document. Governance constraints for the alternate agent are applied independently.",
+          "examples": ["fallbackExtractor", "legacyScreener"]
         },
         "assignTo": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor to assign the escalated task to. Used with escalateToHuman action."
+          "description": "Actor identifier to assign the escalated task to when action is 'escalateToHuman'. MUST match an actor declared in the kernel's actorRegistry. When omitted, assignment follows the kernel's default task routing rules.",
+          "examples": ["seniorCaseworker", "supervisingReviewer"]
         }
       }
     },
@@ -832,7 +862,8 @@
         "suppressAgentOutput": {
           "type": "boolean",
           "default": true,
-          "description": "When true and independentFirst protocol is active, hide agent output until the reviewer's independent assessment is recorded (AI Integration S10.2)."
+          "description": "When true and the independentFirst review protocol is active, hide agent output until the reviewer's independent assessment is recorded (AI Integration S10.2). Prevents anchoring bias where reviewers defer to the agent rather than forming their own judgment.",
+          "examples": [true, false]
         },
         "presentation": {
           "$ref": "#/$defs/OversightPresentation",
@@ -852,22 +883,26 @@
         "showConfidence": {
           "type": "boolean",
           "default": false,
-          "description": "Display the agent's confidence score."
+          "description": "Display the agent's overall confidence score to the human reviewer. Enables reviewers to calibrate their scrutiny level — e.g., applying more care when confidence is near the floor. Ignored when suppressAgentOutput is true until the independent assessment is submitted.",
+          "examples": [true, false]
         },
         "showAlternatives": {
           "type": "boolean",
           "default": false,
-          "description": "Display alternative recommendations."
+          "description": "Display the agent's alternative recommendations alongside its primary recommendation so reviewers can evaluate the full decision space rather than just approving or rejecting the top result.",
+          "examples": [true, false]
         },
         "highlightLowConfidenceFields": {
           "type": "boolean",
           "default": false,
-          "description": "Visually highlight fields with below-threshold confidence."
+          "description": "Visually highlight individual output fields whose per-field confidence score falls below the configured threshold so reviewers focus attention on the weakest parts of the agent output first.",
+          "examples": [true, false]
         },
         "showDiffFromIndependent": {
           "type": "boolean",
           "default": false,
-          "description": "Highlight differences between reviewer's independent assessment and agent's recommendation. Only meaningful with independentFirst protocol."
+          "description": "Highlight differences between the reviewer's independent assessment and the agent's recommendation after the independent assessment is submitted. Only meaningful with independentFirst protocol; ignored otherwise.",
+          "examples": [true, false]
         }
       }
     },
@@ -883,7 +918,7 @@
         "maxAutonomousPerHour": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum autonomous agent actions per hour.",
+          "description": "Maximum number of fully autonomous agent actions permitted in any rolling 60-minute window across this workflow. When the limit is reached additional autonomous actions are queued or escalated to supervisory per the fallback chain.",
           "examples": [
             100,
             50
@@ -892,7 +927,7 @@
         "maxAutonomousPerDay": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum autonomous agent actions per day.",
+          "description": "Maximum number of fully autonomous agent actions permitted in any rolling 24-hour window across this workflow. Provides a daily capacity ceiling complementing the per-hour rate limit.",
           "examples": [
             500,
             200
@@ -916,7 +951,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Fraction of agent actions to sample for human review.",
+          "description": "Fraction of agent actions to sample for human review. 1.0 means every action is reviewed; 0.0 disables sampling. MUST be increased when drift monitoring detects accuracy degradation.",
           "examples": [
             0.1,
             0.25
@@ -930,7 +965,8 @@
             "adversarial"
           ],
           "default": "random",
-          "description": "Sampling method (AI Integration S11.2). 'stratified': by agent type, confidence, or case characteristics. 'adversarial': targeted sampling of cases likely to reveal agent weaknesses."
+          "description": "Sampling method (AI Integration S11.2). 'stratified': by agent type, confidence, or case characteristics. 'adversarial': targeted sampling of cases likely to reveal agent weaknesses.",
+          "examples": ["stratified", "random"]
         },
         "scope": {
           "type": "string",
@@ -939,7 +975,8 @@
             "agent"
           ],
           "default": "agent",
-          "description": "Sampling scope."
+          "description": "Whether sampling rate applies across all agents in the workflow ('workflow') or independently per agent ('agent'). Use 'agent' scope to apply different rates to each agent's invocations.",
+          "examples": ["agent", "workflow"]
         }
       }
     },
@@ -957,9 +994,10 @@
       "properties": {
         "discloseThatAgentAssisted": {
           "type": "boolean",
-          "description": "Disclose that an AI system assisted in the determination (AI Integration S12.2). MUST be true for rights-impacting workflows. Consistent with OMB M-24-10 and EU AI Act Art. 13.",
+          "description": "Disclose that an AI system assisted in the determination when an adverse decision notice is issued (AI Integration S12.2). MUST be true for rights-impacting workflows per OMB M-24-10 and EU AI Act Art. 13. When true, the WOS Processor injects an AI-assistance disclosure statement into adverse-decision-tagged transition output.",
           "examples": [
-            true
+            true,
+            false
           ],
           "x-lm": {
             "critical": true,
@@ -969,12 +1007,14 @@
         "discloseModelIdentity": {
           "type": "boolean",
           "default": false,
-          "description": "Disclose the model identifier."
+          "description": "Whether to include the model identifier and version in the adverse decision disclosure notice. Enabling this increases transparency but may expose vendor or model information the agency wishes to protect.",
+          "examples": [false, true]
         },
         "discloseConfidence": {
           "type": "boolean",
           "default": false,
-          "description": "Disclose the agent's confidence score."
+          "description": "Whether to include the agent's overall confidence score in the adverse decision disclosure notice. Enables affected parties to understand how certain the AI system was when it contributed to the determination.",
+          "examples": [false, true]
         }
       }
     },
@@ -990,13 +1030,16 @@
         "enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Whether agents should produce Narrative tier records."
+          "description": "Whether agents are required to produce Narrative provenance tier records for their outputs. When true, agent outputs lacking a Narrative record are treated as incomplete by the WOS Processor. See AI Integration §13.",
+          "examples": [true, false]
         },
         "requiredForTags": {
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Transition tag that requires a Narrative tier record from any agent actor involved in the transition. MUST match a tag defined in the target Kernel Document's transition definitions.",
+            "examples": ["determination", "review"]
           },
           "description": "Transition tags that require Narrative tier records from agent actors.",
           "examples": [
@@ -1020,12 +1063,14 @@
         "trainingDataDisclosure": {
           "type": "boolean",
           "default": false,
-          "description": "Whether agents must disclose training data characteristics (AI Integration S9.2)."
+          "description": "Whether agents must disclose training data characteristics in their provenance records (AI Integration S9.2). When true, agents must include training data demographic composition, date range, and source type in their Narrative tier records.",
+          "examples": [true, false]
         },
         "optimizationObjectiveDisclosure": {
           "type": "boolean",
           "default": false,
-          "description": "Whether agents must disclose their optimization objective."
+          "description": "Whether agents must disclose their optimization objective (e.g., precision, recall, F1) in provenance records. Enables downstream auditors to evaluate whether the optimization target is aligned with the workflow's policy goals.",
+          "examples": [true, false]
         },
         "rubberStampMonitoring": {
           "$ref": "#/$defs/RubberStampConfig",
@@ -1045,7 +1090,8 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Whether rubber-stamp detection is active."
+          "description": "Whether rubber-stamp detection monitoring is active for human reviewers of agent outputs. When true, the WOS Processor tracks reviewer engagement metrics and flags patterns indicating reviewers are approving agent outputs without meaningful scrutiny.",
+          "examples": [true, false]
         },
         "minReviewTime": {
           "type": "string",
@@ -1067,7 +1113,7 @@
         },
         "evaluationWindow": {
           "type": "string",
-          "description": "ISO 8601 duration of the evaluation window.",
+          "description": "ISO 8601 duration of the rolling window over which rubber-stamp metrics are aggregated. Reviews older than this window are excluded from the engagement rate calculation.",
           "examples": [
             "P30D",
             "P7D"
@@ -1087,7 +1133,8 @@
         "enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Whether the WOS Assist Governance Proxy is active."
+          "description": "Whether the WOS Assist Governance Proxy is active for this workflow. When true, the proxy intercepts Formspec Assist tool invocations and applies WOS deontic constraints before the tool call proceeds. See AI Integration §14.",
+          "examples": [true, false]
         },
         "toolCategories": {
           "type": "array",
@@ -1113,7 +1160,7 @@
         "category": {
           "type": "string",
           "minLength": 1,
-          "description": "Tool category identifier.",
+          "description": "Tool category identifier as defined in the Formspec Assist protocol tool taxonomy. Groups tools by access pattern so deontic constraints can apply at the category level rather than requiring one rule per tool.",
           "examples": [
             "dataRetrieval",
             "computation",
@@ -1127,9 +1174,30 @@
         "maxInvocationsPerSession": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum tool invocations in this category per session."
+          "description": "Maximum number of tool invocations in this category permitted per workflow session instance. Prevents runaway tool usage by bounded-autonomy agents. When the limit is reached, further invocations in the category are blocked and the configured deontic violation action fires.",
+          "examples": [10, 50]
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

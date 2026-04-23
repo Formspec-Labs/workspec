@@ -1,0 +1,79 @@
+{
+  "fixtureId": "AI-AUTO-001-escalation-expiry-revocation",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "triaged",
+        "sourceActor": "triageAgent",
+        "payload": {
+          "output": {
+            "action": "categorize",
+            "category": "benefits"
+          },
+          "triggerDemotion": "escalation-expiry"
+        }
+      },
+      "stateBefore": "triage",
+      "stateAfter": "review",
+      "expectedStateAfter": "review",
+      "policiesApplied": [
+        {
+          "policyId": "deonticEvaluation",
+          "parameterBindings": {
+            "order": [
+              "permissions",
+              "prohibitions",
+              "obligations",
+              "confidence",
+              "volume",
+              "sampling"
+            ]
+          }
+        },
+        {
+          "policyId": "deonticEvaluation",
+          "parameterBindings": {
+            "level": "agent"
+          }
+        },
+        {
+          "policyId": "deonticEvaluation",
+          "parameterBindings": {
+            "level": "action-site"
+          }
+        },
+        {
+          "policyId": "deonticEvaluation",
+          "parameterBindings": {
+            "level": "workflow"
+          }
+        },
+        {
+          "policyId": "autonomyComputed",
+          "parameterBindings": {
+            "effective": "assistive",
+            "sources": {
+              "actionSiteOverride": "autonomous",
+              "agentDeclaration": "autonomous",
+              "impactLevelCap": "assistive",
+              "workflowDefault": "assistive"
+            }
+          }
+        },
+        {
+          "policyId": "autonomyDemotion",
+          "parameterBindings": {
+            "agentId": "triageAgent",
+            "effectiveAt": "next-invocation",
+            "from": "autonomous",
+            "to": "assistive",
+            "trigger": "escalation-expiry"
+          }
+        }
+      ]
+    }
+  ],
+  "outcome": "pass"
+}

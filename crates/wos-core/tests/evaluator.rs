@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use wos_core::Evaluator;
+use wos_core::eval::GuardEvaluation;
 use wos_core::model::kernel::*;
 use wos_core::provenance::ProvenanceKind;
 
@@ -77,7 +78,7 @@ fn final_state() -> State {
 
 fn transition(event: &str, target: &str) -> Transition {
     Transition {
-        event: event.to_string(),
+        event: Some(TransitionEvent::from_legacy_string(event)),
         target: target.to_string(),
         guard: None,
         actions: vec![],
@@ -88,7 +89,7 @@ fn transition(event: &str, target: &str) -> Transition {
 
 fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
     Transition {
-        event: event.to_string(),
+        event: Some(TransitionEvent::from_legacy_string(event)),
         target: target.to_string(),
         guard: Some(guard.to_string()),
         actions: vec![],
@@ -266,7 +267,7 @@ fn set_data_action_mutates_case_state() {
         "start".into(),
         State {
             transitions: vec![Transition {
-                event: "go".to_string(),
+                event: Some(TransitionEvent::from_legacy_string("go")),
                 target: "end".to_string(),
                 guard: None,
                 actions: vec![set_action],
@@ -399,7 +400,7 @@ fn timer_fires_after_advance() {
         action: ActionKind::StartTimer,
         timer_id: Some("t1".to_string()),
         duration: Some("PT10S".to_string()),
-        event: Some("$timeout.task".to_string()),
+        event: Some(TransitionEvent::from_legacy_string("$timeout.task")),
         task_ref: None,
         assign_to: None,
         service_ref: None,
@@ -451,4 +452,218 @@ fn timer_fires_after_advance() {
         .iter()
         .any(|p| p.record_kind == ProvenanceKind::TimerFired);
     assert!(timer_fired, "should have TimerFired provenance");
+}
+
+// ── Guard-evaluation capture (teaching signal, §5.3) ─────────────
+
+#[test]
+fn guard_evaluation_captured_when_guard_passes() {
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "go",
+            "end",
+            "caseFile.amount > 100",
+        )]),
+    );
+    states.insert("end".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut()
+        .insert("amount".to_string(), serde_json::json!(200));
+
+    eval.process_event("go", None, None).unwrap();
+
+    let evals: Vec<GuardEvaluation> = eval.guard_evaluations().to_vec();
+    assert_eq!(evals.len(), 1, "one guard evaluated");
+    assert_eq!(evals[0].source_state, "start");
+    assert_eq!(evals[0].target_state, "end");
+    assert_eq!(evals[0].event, "go");
+    assert_eq!(evals[0].expression, "caseFile.amount > 100");
+    assert!(evals[0].result);
+    // inputs subsets case state to paths the expression references,
+    // preserving FEL namespace nesting (caseFile.* / event.*).
+    assert_eq!(
+        evals[0].inputs,
+        serde_json::json!({ "caseFile": { "amount": 200 } })
+    );
+}
+
+#[test]
+fn guard_evaluation_captured_when_guard_blocks() {
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "go",
+            "end",
+            "caseFile.amount > 100",
+        )]),
+    );
+    states.insert("end".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut()
+        .insert("amount".to_string(), serde_json::json!(50));
+
+    eval.process_event("go", None, None).unwrap();
+
+    let evals = eval.guard_evaluations();
+    assert_eq!(evals.len(), 1, "blocked guard still recorded");
+    assert!(!evals[0].result, "guard evaluated false");
+    assert_eq!(
+        evals[0].inputs,
+        serde_json::json!({ "caseFile": { "amount": 50 } })
+    );
+}
+
+#[test]
+fn guard_evaluations_capture_short_circuited_false_guards() {
+    // Two transitions on the same event: the first guard blocks (false),
+    // the second fires (true). BOTH evaluations must be captured so an LLM
+    // reading a failing trace can see which guard it expected to fire and why.
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![
+            guarded_transition("go", "approved", "caseFile.amount < 100"),
+            guarded_transition("go", "escalated", "caseFile.amount >= 100"),
+        ]),
+    );
+    states.insert("approved".into(), final_state());
+    states.insert("escalated".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut()
+        .insert("amount".to_string(), serde_json::json!(200));
+
+    eval.process_event("go", None, None).unwrap();
+
+    let evals = eval.guard_evaluations();
+    assert_eq!(evals.len(), 2, "both guards evaluated on this event");
+    assert_eq!(evals[0].target_state, "approved");
+    assert!(!evals[0].result, "first guard blocks");
+    assert_eq!(evals[1].target_state, "escalated");
+    assert!(evals[1].result, "second guard fires");
+}
+
+#[test]
+fn guardless_transitions_produce_no_guard_evaluations() {
+    let mut states = IndexMap::new();
+    states.insert("start".into(), atomic(vec![transition("go", "end")]));
+    states.insert("end".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.process_event("go", None, None).unwrap();
+
+    assert!(
+        eval.guard_evaluations().is_empty(),
+        "no guard expression = no record"
+    );
+}
+
+#[test]
+fn take_guard_evaluations_drains_buffer() {
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "go",
+            "end",
+            "caseFile.amount > 100",
+        )]),
+    );
+    states.insert("end".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut()
+        .insert("amount".to_string(), serde_json::json!(200));
+
+    eval.process_event("go", None, None).unwrap();
+    let drained = eval.take_guard_evaluations();
+    assert_eq!(drained.len(), 1);
+    assert!(
+        eval.guard_evaluations().is_empty(),
+        "buffer cleared after take"
+    );
+}
+
+/// FEL dependency extraction produces wildcard paths like
+/// `caseFile.relationships[*].kind` for expressions using `every()` /
+/// `some()` / `countWhere()` over a collection. The teaching-signal
+/// inputs must surface the full array so repair prompts see every
+/// element the guard reasoned over — silently dropping wildcard deps
+/// was the review-flagged warning on `build_guard_inputs`.
+#[test]
+fn guard_evaluation_inputs_include_wildcard_array_elements() {
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "check",
+            "passed",
+            "every(caseFile.items, $.ok = true)",
+        )]),
+    );
+    states.insert("passed".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.case_state_mut().insert(
+        "items".to_string(),
+        serde_json::json!([{ "ok": true }, { "ok": true }]),
+    );
+
+    eval.process_event("check", None, None).unwrap();
+
+    let evals = eval.guard_evaluations();
+    assert_eq!(evals.len(), 1);
+    assert!(evals[0].result);
+    // The full items array must show up in inputs — not silently dropped
+    // because the dep was `caseFile.items[*].ok`.
+    let items = evals[0]
+        .inputs
+        .pointer("/caseFile/items")
+        .expect("items array surfaces under caseFile namespace");
+    assert_eq!(items, &serde_json::json!([{ "ok": true }, { "ok": true }]));
+}
+
+#[test]
+fn guard_evaluation_inputs_include_event_data() {
+    // Guards can reference $event.* paths; inputs must include the
+    // relevant event payload slice so the teaching signal reflects what
+    // the guard actually saw.
+    let mut states = IndexMap::new();
+    states.insert(
+        "start".into(),
+        atomic(vec![guarded_transition(
+            "submit",
+            "review",
+            "event.priority = 'high'",
+        )]),
+    );
+    states.insert("review".into(), final_state());
+
+    let mut eval = Evaluator::new(minimal_kernel("start", states)).unwrap();
+    eval.process_event(
+        "submit",
+        None,
+        Some(&serde_json::json!({ "priority": "high", "unused": "ignored" })),
+    )
+    .unwrap();
+
+    let evals = eval.guard_evaluations();
+    assert_eq!(evals.len(), 1);
+    assert!(evals[0].result);
+    // Inputs should surface the event-level `priority` path the expression
+    // referenced, but NOT the `unused` path it did not.
+    let inputs = &evals[0].inputs;
+    assert_eq!(
+        inputs.pointer("/event/priority"),
+        Some(&serde_json::json!("high")),
+    );
+    assert!(
+        inputs.pointer("/event/unused").is_none(),
+        "unreferenced event data must not leak into inputs"
+    );
 }

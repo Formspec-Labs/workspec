@@ -8,6 +8,7 @@ repository = "https://github.com/formspec/formspec"
 
 [dependencies]
 base64 = "0.22"
+ciborium = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 fel-core.workspace = true
 serde = { version = "1", features = ["derive"] }

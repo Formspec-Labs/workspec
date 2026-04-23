@@ -13,13 +13,13 @@ use serde_json::Value;
 
 use wos_core::model::ai::{AIIntegrationDocument, FallbackAction};
 use wos_core::model::governance::GovernanceDocument;
-use wos_core::model::kernel::{ActionKind, KernelDocument, State, StateKind};
+use wos_core::model::kernel::{ActionKind, KernelDocument, State, StateKind, TransitionEvent};
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosDocument};
 
 /// Run all Tier 1 checks applicable to the document's kind.
-pub fn check(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     match doc.kind {
         DocumentKind::Kernel => check_kernel(doc, diagnostics),
         DocumentKind::WorkflowGovernance => check_governance(doc, diagnostics),
@@ -38,7 +38,7 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 // Kernel rules
 // ---------------------------------------------------------------------------
 
-fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Ok(kernel) = serde_json::from_value::<KernelDocument>(root.clone()) {
@@ -69,13 +69,13 @@ fn check_state_type_semantics_typed(
     state: &State,
     path: &str,
     all_state_ids: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     match state.kind {
         StateKind::Final => {
             // K-001
             if !state.transitions.is_empty() {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-001",
                     path,
                     "final state must not have outgoing transitions",
@@ -85,14 +85,14 @@ fn check_state_type_semantics_typed(
         StateKind::Compound => {
             // K-002
             if state.initial_state.is_none() {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-002",
                     path,
                     "compound state must declare initialState",
                 ));
             }
             if state.states.is_empty() {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-002",
                     path,
                     "compound state must declare substates in states map",
@@ -102,7 +102,7 @@ fn check_state_type_semantics_typed(
         StateKind::Parallel => {
             // K-003
             if state.regions.is_empty() {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-003",
                     path,
                     "parallel state must declare regions",
@@ -114,7 +114,7 @@ fn check_state_type_semantics_typed(
 
     // K-004: cancellationPolicy only on parallel
     if state.cancellation_policy.is_some() && state.kind != StateKind::Parallel {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "K-004",
             path,
             "cancellationPolicy is only valid on parallel states",
@@ -123,7 +123,7 @@ fn check_state_type_semantics_typed(
 
     // K-005: historyState only on compound
     if state.history_state.is_some() && state.kind != StateKind::Compound {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "K-005",
             path,
             "historyState is only valid on compound states",
@@ -136,7 +136,7 @@ fn check_state_type_semantics_typed(
 
         // K-006
         if !all_state_ids.contains(&transition.target) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-006",
                 &t_path,
                 format!(
@@ -146,22 +146,46 @@ fn check_state_type_semantics_typed(
             ));
         }
 
-        // K-007
-        if transition.event.starts_with('$') && transition.event != "$join" {
-            diagnostics.push(Diagnostic::error(
-                "K-007",
-                &t_path,
-                format!("event name '{}' uses reserved $ prefix", transition.event),
-            ));
+        // K-007 — `message` names must not start with `$` (reserved for other
+        // TransitionEvent kinds and kernel signals). `signal` allows `$join`
+        // and `$compensation.complete` only; other `$…` signal names are invalid.
+        // (JSON Schema also constrains author-time documents; this catches the
+        // typed model after legacy string coercion.)
+        if let Some(ev) = &transition.event {
+            match ev {
+                TransitionEvent::Message { name, .. } if name.starts_with('$') => {
+                    diagnostics.push(LintDiagnostic::t1_error(
+                        "K-007",
+                        &t_path,
+                        format!(
+                            "message event name must not use reserved `$` prefix (found '{name}')"
+                        ),
+                    ));
+                }
+                TransitionEvent::Signal { name, .. }
+                    if name.starts_with('$')
+                        && name != "$join"
+                        && name != "$compensation.complete" =>
+                {
+                    diagnostics.push(LintDiagnostic::t1_error(
+                        "K-007",
+                        &t_path,
+                        format!(
+                            "signal may only use `$` prefix for '$join' or '$compensation.complete' (found '{name}')"
+                        ),
+                    ));
+                }
+                _ => {}
+            }
         }
 
         // K-008
-        if state.kind == StateKind::Parallel && transition.event != "$join" {
-            diagnostics.push(Diagnostic::error(
+        if state.kind == StateKind::Parallel && !transition.is_parallel_join_transition() {
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-008",
                 &t_path,
                 format!(
-                    "parallel state outgoing transition must use '$join' event, found '{}'",
+                    "parallel state outgoing transition must use signal '$join' (instance scope), found {:?}",
                     transition.event
                 ),
             ));
@@ -184,7 +208,7 @@ fn check_state_type_semantics_typed(
 }
 
 /// K-015: setData path must reference a declared caseFile field (typed).
-fn check_set_data_paths_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_set_data_paths_typed(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(case_file) = &kernel.case_file else {
         return;
     };
@@ -195,7 +219,7 @@ fn check_set_data_paths_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Dia
                 let field_name = path_val.strip_prefix("caseFile.").unwrap_or(path_val);
                 let top_field = field_name.split('.').next().unwrap_or(field_name);
                 if !case_file.fields.contains_key(top_field) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "K-015",
                         action_path,
                         format!(
@@ -209,10 +233,13 @@ fn check_set_data_paths_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Dia
 }
 
 /// K-014: Milestone ids must be unique (typed).
-fn check_milestone_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_milestone_uniqueness_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     for id in kernel.lifecycle.milestones.keys() {
         if id.is_empty() {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-014",
                 "/lifecycle/milestones",
                 "milestone id must not be empty",
@@ -222,20 +249,20 @@ fn check_milestone_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut V
 }
 
 /// K-029: startTimer must specify exactly one of duration or deadline (typed).
-fn check_timer_exclusivity_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_timer_exclusivity_typed(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     visit_actions_typed(&kernel.lifecycle.states, &mut |action, action_path| {
         if action.action == ActionKind::StartTimer {
             let has_duration = action.duration.is_some();
             let has_deadline = action.deadline.is_some();
 
             if has_duration && has_deadline {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-029",
                     action_path,
                     "startTimer must specify exactly one of 'duration' or 'deadline', not both",
                 ));
             } else if !has_duration && !has_deadline {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-029",
                     action_path,
                     "startTimer must specify one of 'duration' or 'deadline'",
@@ -249,7 +276,7 @@ fn check_timer_exclusivity_typed(kernel: &KernelDocument, diagnostics: &mut Vec<
 // Governance rules
 // ---------------------------------------------------------------------------
 
-fn check_governance(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_governance(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Ok(gov) = serde_json::from_value::<GovernanceDocument>(root.clone()) {
@@ -261,11 +288,14 @@ fn check_governance(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// G-055: Hold policy expectedDuration (typed).
-fn check_hold_expected_duration_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_hold_expected_duration_typed(
+    gov: &GovernanceDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     for (i, hold) in gov.hold_policies.iter().enumerate() {
         let duration = &hold.expected_duration;
         if duration != "indefinite" && !duration.starts_with('P') {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "G-055",
                 &format!("/holdPolicies/{i}/expectedDuration"),
                 format!(
@@ -277,7 +307,7 @@ fn check_hold_expected_duration_typed(gov: &GovernanceDocument, diagnostics: &mu
 }
 
 /// G-044 / G-045: Delegation dates (typed).
-fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     for (i, delegation) in gov.delegations.iter().enumerate() {
         let path = format!("/delegations/{i}");
         let effective = delegation.effective_date.as_deref();
@@ -286,7 +316,7 @@ fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<
 
         if let (Some(eff), Some(exp)) = (effective, expiration) {
             if exp <= eff {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "G-044",
                     &path,
                     format!("expirationDate '{exp}' must be after effectiveDate '{eff}'"),
@@ -296,7 +326,7 @@ fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<
 
         if let (Some(eff), Some(rev)) = (effective, revoked) {
             if rev < eff {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "G-045",
                     &path,
                     format!("revokedDate '{rev}' must not be before effectiveDate '{eff}'"),
@@ -310,7 +340,7 @@ fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<
 // AI Integration rules
 // ---------------------------------------------------------------------------
 
-fn check_ai_integration(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_ai_integration(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Ok(ai) = serde_json::from_value::<AIIntegrationDocument>(root.clone()) {
@@ -331,7 +361,7 @@ fn check_ai_integration(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// AI-049: Every Narrative provenance record must have `authoritative: false`.
-fn check_narrative_tier_authoritative(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
+fn check_narrative_tier_authoritative(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(records) = root.get("narrativeProvenance").and_then(Value::as_array) {
         for (i, record) in records.iter().enumerate() {
             check_authoritative_false(record, &format!("/narrativeProvenance/{i}"), diagnostics);
@@ -347,18 +377,18 @@ fn check_narrative_tier_authoritative(root: &Value, diagnostics: &mut Vec<Diagno
     }
 }
 
-fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     match record.get("authoritative") {
         Some(Value::Bool(false)) => {}
         None => {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t1_warning(
                 "AI-049",
                 path,
                 "narrative tier record missing required 'authoritative' field (must be false)",
             ));
         }
         _ => {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "AI-049",
                 path,
                 "narrative tier provenance record must have 'authoritative' set to false",
@@ -371,7 +401,7 @@ fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<D
 fn check_fallback_chain_termination_typed(
     chain: &[wos_core::model::ai::FallbackLevel],
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if chain.is_empty() {
         return;
@@ -385,7 +415,7 @@ fn check_fallback_chain_termination_typed(
                 FallbackAction::EscalateToHuman => "escalateToHuman",
                 FallbackAction::Fail => "fail",
             };
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "AI-041",
                 path,
                 format!(
@@ -399,7 +429,7 @@ fn check_fallback_chain_termination_typed(
     for (i, level) in chain.iter().enumerate() {
         if let Some(agent_ref) = &level.alternate_agent_ref {
             if !seen_alternate_agents.insert(agent_ref.as_str()) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "AI-041",
                     &format!("{path}/{i}"),
                     format!(
@@ -415,7 +445,7 @@ fn check_fallback_chain_termination_typed(
 // Assertion Library rules (no typed model — Value walking)
 // ---------------------------------------------------------------------------
 
-fn check_assertion_library(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_assertion_library(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Some(assertions) = root.get("assertions").and_then(Value::as_array) {
@@ -426,7 +456,7 @@ fn check_assertion_library(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
             // G-037
             if let Some(id) = assertion.get("id").and_then(Value::as_str) {
                 if !seen_ids.insert(id) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "G-037",
                         &path,
                         format!("duplicate assertion id '{id}'"),
@@ -445,14 +475,14 @@ fn check_assertion_library(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
 fn check_assertion_expression_fields(
     assertion: &Value,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let assertion_type = assertion.get("type").and_then(Value::as_str).unwrap_or("");
 
     match assertion_type {
         "arithmetic" | "range" | "temporal" => {
             if assertion.get("expression").is_none() {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t1_warning(
                     "G-038",
                     path,
                     format!(
@@ -463,7 +493,7 @@ fn check_assertion_expression_fields(
         }
         "source-grounded" | "consistency" => {
             if assertion.get("fields").is_none() {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t1_warning(
                     "G-039",
                     path,
                     format!("assertion of type '{assertion_type}' should include a 'fields' array"),
@@ -478,7 +508,7 @@ fn check_assertion_expression_fields(
 // Policy Parameters rules (no typed model — Value walking)
 // ---------------------------------------------------------------------------
 
-fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Some(params) = root.get("parameters").and_then(Value::as_object) {
@@ -515,7 +545,7 @@ fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
 
             if let Some(id) = binding.get("id").and_then(Value::as_str) {
                 if id != key {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "G-048",
                         &binding_path,
                         format!("binding id '{id}' must match map key '{key}'"),
@@ -542,14 +572,14 @@ fn check_values_ascending_effective_date(
     values: &[Value],
     path: &str,
     rule_id: &'static str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let mut prev_date: Option<&str> = None;
     for (i, entry) in values.iter().enumerate() {
         if let Some(date) = entry.get("effectiveDate").and_then(Value::as_str) {
             if let Some(prev) = prev_date {
                 if date <= prev {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         rule_id,
                         &format!("{path}/{i}"),
                         format!("effectiveDate '{date}' is not after previous '{prev}'"),
@@ -566,7 +596,7 @@ fn check_parameter_value_type(
     entry: &Value,
     declared_type: &str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(value) = entry.get("value") else {
         return;
@@ -583,7 +613,7 @@ fn check_parameter_value_type(
 
     if !type_matches {
         let actual_kind = json_type_name(value);
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "G-050",
             path,
             format!("parameter value is {actual_kind} but declared type is '{declared_type}'"),
@@ -608,7 +638,7 @@ fn json_type_name(value: &Value) -> &'static str {
 
 fn check_case_relationship_type_prefix_typed(
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     const STANDARD_RELATIONSHIP_TYPES: &[&str] =
         &["parent", "child", "sibling", "related", "supersedes"];
@@ -623,7 +653,7 @@ fn check_case_relationship_type_prefix_typed(
         let is_extension = rel_type.starts_with("x-");
 
         if !is_standard && !is_extension {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-048",
                 &format!("/caseFile/relationships/{i}/type"),
                 format!("non-standard case relationship type '{rel_type}' must use 'x-' prefix"),
@@ -633,7 +663,10 @@ fn check_case_relationship_type_prefix_typed(
 }
 
 /// K-021: Provenance `actorId` MUST reference a declared kernel actor.
-fn check_provenance_actor_ids_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_provenance_actor_ids_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let actors: std::collections::HashSet<&str> =
         kernel.actors.iter().map(|a| a.id.as_str()).collect();
 
@@ -652,7 +685,7 @@ fn check_provenance_actor_ids_typed(kernel: &KernelDocument, diagnostics: &mut V
             continue;
         };
         if !actors.contains(actor_id) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-021",
                 &format!("/provenance/{i}/actorId"),
                 format!(
@@ -668,12 +701,12 @@ fn check_provenance_actor_ids_typed(kernel: &KernelDocument, diagnostics: &mut V
 // ---------------------------------------------------------------------------
 
 /// K-009: Actor identifiers MUST be unique within the kernel actor list.
-fn check_actor_id_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_actor_id_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let mut seen = std::collections::HashSet::new();
 
     for (index, actor) in kernel.actors.iter().enumerate() {
         if !seen.insert(actor.id.as_str()) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "K-009",
                 &format!("/actors/{index}/id"),
                 format!("duplicate actor id '{}'", actor.id),
@@ -683,7 +716,7 @@ fn check_actor_id_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Ve
 }
 
 /// CM-001: Entry template ids MUST be unique within the correspondence sidecar.
-fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Some(entry_templates) = root.get("entryTemplates").and_then(Value::as_array) {
@@ -695,7 +728,7 @@ fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<Diagno
             };
 
             if !seen.insert(id) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "CM-001",
                     &format!("/entryTemplates/{index}/id"),
                     format!("duplicate correspondence entry template id '{id}'"),
@@ -708,7 +741,7 @@ fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<Diagno
 }
 
 /// G-058 / G-059: Business calendar structural validity.
-fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     if let Some(holidays) = root.get("holidays").and_then(Value::as_array) {
@@ -717,7 +750,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
             let has_date = h.get("date").is_some();
             let has_rule = h.get("rule").is_some();
             if has_date == has_rule {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "G-058",
                     &path,
                     if !has_date {
@@ -738,7 +771,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
             let end_m = hh_mm_to_minutes(e);
             match (start_m, end_m) {
                 (Some(sm), Some(em)) if em <= sm => {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "G-059",
                         "/operatingHours/end",
                         "operating hours 'end' MUST be strictly after 'start'",
@@ -746,7 +779,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
                 }
                 (Some(_), Some(_)) => {}
                 _ => {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "G-059",
                         "/operatingHours",
                         "operating hours 'start' and 'end' MUST be valid 24-hour HH:MM values",
@@ -760,7 +793,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>)
 }
 
 /// G-062 / G-065: Notification template content and section id uniqueness.
-fn check_notification_template(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_notification_template(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     let Some(templates) = root.get("templates").and_then(Value::as_object) else {
@@ -786,7 +819,7 @@ fn check_notification_template(doc: &WosDocument, diagnostics: &mut Vec<Diagnost
 fn check_adverse_decision_template_sections(
     template: &Value,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if template.get("category").and_then(Value::as_str) != Some("adverse-decision") {
         return;
@@ -823,28 +856,28 @@ fn check_adverse_decision_template_sections(
     }
 
     if !has_determination {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "G-062",
             path,
             "adverse-decision template MUST include a section with id 'determination'",
         ));
     }
     if !has_reason_codes {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "G-062",
             path,
             "adverse-decision template MUST include reason code coverage (section id 'reasons', 'reasonCodes', or 'reason')",
         ));
     }
     if !has_appeal_rights {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "G-062",
             path,
             "adverse-decision template MUST include appeal rights (section id 'appealRights' or contentType 'appeal-rights')",
         ));
     }
     if !has_appeal_instructions {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t1_error(
             "G-062",
             path,
             "adverse-decision template MUST include a section with id 'appealInstructions'",
@@ -856,7 +889,7 @@ fn check_adverse_decision_template_sections(
 fn check_template_section_id_uniqueness(
     template: &Value,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(sections) = template.get("sections").and_then(Value::as_array) else {
         return;
@@ -867,7 +900,7 @@ fn check_template_section_id_uniqueness(
             continue;
         };
         if !seen.insert(id) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t1_error(
                 "G-065",
                 &format!("{path}/sections/{i}/id"),
                 format!("duplicate section id '{id}' within template"),
@@ -892,7 +925,7 @@ fn hh_mm_to_minutes(s: &str) -> Option<u16> {
 // ---------------------------------------------------------------------------
 
 /// K-022: A provenance digest implies algorithm must be recorded.
-fn check_digest_algorithm(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
+fn check_digest_algorithm(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     visit_all_objects(root, "", &mut |obj, obj_path| {
         if obj.contains_key("digest") {
             let has_algorithm = obj
@@ -901,7 +934,7 @@ fn check_digest_algorithm(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
                 .is_some_and(|ext| ext.contains_key("algorithm"));
 
             if !has_algorithm {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t1_error(
                     "K-022",
                     obj_path,
                     "object has 'digest' but no 'algorithm' key in its extensions map",
@@ -912,7 +945,7 @@ fn check_digest_algorithm(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// K-030: Extension keys must be x- prefixed.
-fn check_extension_prefixes(value: &Value, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_extension_prefixes(value: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(obj) = value.as_object() {
         if let Some(extensions) = obj.get("extensions").and_then(Value::as_object) {
             let ext_path = if path.is_empty() {
@@ -922,7 +955,7 @@ fn check_extension_prefixes(value: &Value, path: &str, diagnostics: &mut Vec<Dia
             };
             for key in extensions.keys() {
                 if !key.starts_with("x-") {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t1_error(
                         "K-030",
                         &ext_path,
                         format!("extension key '{key}' must be prefixed with 'x-'"),
@@ -1015,7 +1048,7 @@ fn visit_state_actions_typed(
 /// The outputBinding profile supports member access, index, wildcard, and slice only.
 /// Filter expressions (`[?(...)]`) and recursive descent (`..`) are rejected at
 /// definition load time so they never become a runtime surprise.
-fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
     let Some(bindings) = root.get("bindings").and_then(Value::as_object) else {
@@ -1031,9 +1064,8 @@ fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic
                 continue;
             };
             if contains_unsupported_jsonpath_feature(json_path) {
-                let path =
-                    format!("/bindings/{binding_key}/outputBinding/{case_path}");
-                diagnostics.push(Diagnostic::error(
+                let path = format!("/bindings/{binding_key}/outputBinding/{case_path}");
+                diagnostics.push(LintDiagnostic::t1_error(
                     "I-001",
                     path,
                     format!(

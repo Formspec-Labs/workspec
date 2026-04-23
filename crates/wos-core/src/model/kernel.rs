@@ -6,7 +6,8 @@
 //! operates on these types, not on raw `serde_json::Value`.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 /// A WOS Kernel Document.
@@ -281,6 +282,243 @@ pub enum HistoryMode {
     Deep,
 }
 
+/// Kernel-generated or author-declared timer categories for [`TransitionEvent::Timer`]
+/// (Kernel §4.10, §9.7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TimerEventSource {
+    Task,
+    Service,
+    State,
+    Signal,
+    Workflow,
+    Custom,
+}
+
+/// Signal delivery scope for [`TransitionEvent::Signal`] (Kernel §4.10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SignalScope {
+    Instance,
+    Related,
+    Broadcast,
+}
+
+/// Typed transition / timer-fire event (Kernel §4.5–§4.10, TODO #20).
+///
+/// Replaces free-form event strings with a closed five-kind union. Runtime
+/// `process_event` still receives string names; [`TransitionEvent::matches_runtime_dispatch`]
+/// compares those names to this shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum TransitionEvent {
+    Timer {
+        #[serde(rename = "timerId")]
+        timer_id: String,
+        source: TimerEventSource,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "expiresAt")]
+        expires_at: Option<String>,
+        /// When set, the timer fires this exact string (e.g. dotted author names).
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "firesAs")]
+        fires_as: Option<String>,
+    },
+    Message {
+        name: String,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "correlationKey"
+        )]
+        correlation_key: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data: Option<serde_json::Value>,
+    },
+    Signal {
+        name: String,
+        scope: SignalScope,
+    },
+    Condition {
+        expression: String,
+    },
+    Error {
+        code: String,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "actionPath"
+        )]
+        action_path: Option<String>,
+    },
+}
+
+impl TransitionEvent {
+    /// Best-effort parse from legacy string event names (pre–TODO #20 documents).
+    pub fn from_legacy_string(s: &str) -> Self {
+        let s = s.trim();
+        match s {
+            "$join" => Self::Signal {
+                name: "$join".to_string(),
+                scope: SignalScope::Instance,
+            },
+            "$error" => Self::Error {
+                code: "kernel.error".to_string(),
+                action_path: None,
+            },
+            _ if s.starts_with("$timeout.") => {
+                let rest = s.strip_prefix("$timeout.").unwrap_or(s);
+                let source = match rest {
+                    "task" => TimerEventSource::Task,
+                    "service" => TimerEventSource::Service,
+                    "state" => TimerEventSource::State,
+                    "signal" => TimerEventSource::Signal,
+                    "workflow" => TimerEventSource::Workflow,
+                    _ => TimerEventSource::Custom,
+                };
+                Self::Timer {
+                    timer_id: rest.to_string(),
+                    source,
+                    duration: None,
+                    expires_at: None,
+                    fires_as: None,
+                }
+            }
+            _ if s.starts_with("$related.") => Self::Signal {
+                name: s.strip_prefix("$related.").unwrap_or(s).to_string(),
+                scope: SignalScope::Related,
+            },
+            "$compensation.complete" => Self::Signal {
+                name: "$compensation.complete".to_string(),
+                scope: SignalScope::Instance,
+            },
+            // Unknown `$…` legacy strings must stay verbatim so lint (K-007) and
+            // migration tooling can reject them instead of silently becoming a
+            // different message name.
+            _ if s.starts_with('$') => Self::Message {
+                name: s.to_string(),
+                correlation_key: None,
+                data: None,
+            },
+            _ => Self::Message {
+                name: s.to_string(),
+                correlation_key: None,
+                data: None,
+            },
+        }
+    }
+
+    /// String used for `process_event` matching and the same labels the
+    /// runtime compares against [`Self::matches_runtime_dispatch`].
+    #[must_use]
+    pub fn runtime_dispatch_label(&self) -> String {
+        match self {
+            Self::Message { name, .. } | Self::Signal { name, .. } => name.clone(),
+            Self::Timer {
+                timer_id,
+                source,
+                fires_as,
+                ..
+            } => Self::timer_fires_string(timer_id, *source, fires_as.as_deref()),
+            Self::Condition { expression } => format!("condition:{expression}"),
+            Self::Error { .. } => "$error".to_string(),
+        }
+    }
+
+    /// Human-readable event summary for graphs, notices, and search — not
+    /// necessarily equal to [`Self::runtime_dispatch_label`] (e.g. `error`
+    /// events carry a code in the typed object but dispatch as `$error`).
+    #[must_use]
+    pub fn authoring_display_label(&self) -> String {
+        match self {
+            Self::Error { code, .. } => format!("error:{code}"),
+            Self::Condition { expression } => format!("condition:{expression}"),
+            _ => self.runtime_dispatch_label(),
+        }
+    }
+
+    #[must_use]
+    pub fn matches_runtime_dispatch(&self, event: &str) -> bool {
+        match self {
+            Self::Message { name, .. } => name == event,
+            Self::Signal { name, .. } => name == event,
+            Self::Timer {
+                timer_id,
+                source,
+                fires_as,
+                ..
+            } => Self::timer_fires_string(timer_id, *source, fires_as.as_deref()) == event,
+            Self::Condition { .. } => false,
+            Self::Error { .. } => event == "$error",
+        }
+    }
+
+    /// Event name emitted when a `startTimer` timer expires (may differ from `timer_id`).
+    #[must_use]
+    pub fn start_timer_fires_string(&self) -> String {
+        match self {
+            Self::Timer {
+                timer_id,
+                source,
+                fires_as,
+                ..
+            } => Self::timer_fires_string(timer_id, *source, fires_as.as_deref()),
+            Self::Message { name, .. } => name.clone(),
+            Self::Signal { name, .. } => name.clone(),
+            Self::Condition { expression } => expression.clone(),
+            Self::Error { code, .. } => code.clone(),
+        }
+    }
+
+    fn timer_fires_string(
+        timer_id: &str,
+        source: TimerEventSource,
+        fires_as: Option<&str>,
+    ) -> String {
+        if let Some(f) = fires_as {
+            if !f.is_empty() {
+                return f.to_string();
+            }
+        }
+        match source {
+            TimerEventSource::Task => "$timeout.task".to_string(),
+            TimerEventSource::Service => "$timeout.service".to_string(),
+            TimerEventSource::State => "$timeout.state".to_string(),
+            TimerEventSource::Signal => "$timeout.signal".to_string(),
+            TimerEventSource::Workflow => "$timeout.workflow".to_string(),
+            TimerEventSource::Custom => format!("$timeout.{timer_id}"),
+        }
+    }
+}
+
+fn deserialize_opt_transition_event<'de, D>(
+    deserializer: D,
+) -> Result<Option<TransitionEvent>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<serde_json::Value>::deserialize(deserializer)?;
+    let Some(v) = v else {
+        return Ok(None);
+    };
+    match v {
+        serde_json::Value::String(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(TransitionEvent::from_legacy_string(t)))
+            }
+        }
+        serde_json::Value::Object(_) => serde_json::from_value::<TransitionEvent>(v)
+            .map(Some)
+            .map_err(D::Error::custom),
+        _ => Err(D::Error::custom(
+            "transition event must be a string or a TransitionEvent object",
+        )),
+    }
+}
+
 /// A parallel state region.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -297,8 +535,19 @@ pub struct Region {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
-    /// Event that triggers this transition.
-    pub event: String,
+    /// Event that triggers this transition for explicit `process_event`
+    /// delivery.
+    ///
+    /// When omitted (or serialized with only whitespace, treated as absent),
+    /// the transition does **not** match any external event name. In
+    /// `continuous` evaluation mode it still participates in the post-mutation
+    /// guard re-scan (Runtime Companion §10.3).
+    #[serde(
+        default,
+        deserialize_with = "deserialize_opt_transition_event",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub event: Option<TransitionEvent>,
 
     /// Target state identifier.
     pub target: String,
@@ -318,6 +567,39 @@ pub struct Transition {
     /// Semantic tags.
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+impl Transition {
+    /// Whether this transition participates in continuous-mode post-mutation
+    /// guard re-evaluation (Runtime Companion §10.3).
+    pub fn participates_in_continuous_rescan(&self) -> bool {
+        match &self.event {
+            None => true,
+            Some(TransitionEvent::Condition { .. }) => true,
+            Some(_) => false,
+        }
+    }
+
+    /// Event label for diagnostics: matches runtime `process_event` names.
+    #[must_use]
+    pub fn event_dispatch_label(&self) -> String {
+        self.event
+            .as_ref()
+            .map(TransitionEvent::runtime_dispatch_label)
+            .unwrap_or_else(|| "(guard-only)".to_string())
+    }
+
+    /// Parallel join: signal `$join` scoped to this instance (Kernel §4.8).
+    #[must_use]
+    pub fn is_parallel_join_transition(&self) -> bool {
+        matches!(
+            &self.event,
+            Some(TransitionEvent::Signal {
+                name,
+                scope: SignalScope::Instance
+            }) if name == "$join"
+        )
+    }
 }
 
 /// A lifecycle action (Kernel S9.2).
@@ -376,8 +658,12 @@ pub struct Action {
     pub deadline: Option<String>,
 
     /// Event to fire (startTimer).
-    #[serde(default)]
-    pub event: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_opt_transition_event",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub event: Option<TransitionEvent>,
 
     /// Log message (log).
     #[serde(default)]
@@ -488,4 +774,17 @@ pub struct Milestone {
     /// Human-readable description.
     #[serde(default)]
     pub description: Option<String>,
+
+    /// When the processor evaluates the condition (Kernel §4.13).
+    ///
+    /// Defaults to `writeSettled`, the only currently defined mode: the
+    /// condition is evaluated after every durable case-state write. Held as
+    /// a string so future trigger modes can be added without breaking
+    /// roundtrip serialization on existing documents.
+    #[serde(
+        default,
+        rename = "triggerMode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub trigger_mode: Option<String>,
 }

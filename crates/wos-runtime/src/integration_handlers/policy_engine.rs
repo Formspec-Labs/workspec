@@ -83,6 +83,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
 
         // Emit PolicyDecision provenance with the canonical shape.
         provenance.push(ProvenanceRecord {
+            id: ProvenanceRecord::mint_id(),
             record_kind: ProvenanceKind::PolicyDecision,
             timestamp: String::new(),
             actor_id: observed.actor_id.clone(),
@@ -106,6 +107,10 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
             outputs: Vec::new(),
             input_digest: None,
             output_digest: None,
+            canonical_event_hash: None,
+            transition_tags: Vec::new(),
+            case_file_snapshot: None,
+            outcome: None,
         });
 
         // Apply the output binding using the canonical decision as the source document.
@@ -124,6 +129,7 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -143,6 +149,10 @@ impl IntegrationBindingHandler for PolicyEngineHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 

@@ -1,0 +1,32 @@
+{
+  "binding": "formspec",
+  "id": "SIG-005-decline-path",
+  "rule": "SIG-RT",
+  "description": "Signature decline records reason evidence and follows the configured decline event.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    { "event": "start", "actor": "applicant" },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "applicantTask",
+        "response": {
+          "status": "declined",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": { "reason": "Applicant declined to sign." }
+        }
+      }
+    }
+  ],
+  "expected_transitions": [
+    { "from": "draft", "to": "signing", "event": "start" },
+    { "from": "signing", "to": "declined", "event": "signature.declined" }
+  ],
+  "expected_provenance": [
+    { "recordKind": "taskFailed", "data": { "details": { "signatureStatus": "declined" } } }
+  ]
+}

@@ -200,10 +200,7 @@ fn activity_with_entities(
             if item_index == 0
                 && let Some(digest) = record.input_digest.as_deref()
             {
-                entity.insert(
-                    "wos:inputDigest".into(),
-                    Value::String(digest.to_owned()),
-                );
+                entity.insert("wos:inputDigest".into(), Value::String(digest.to_owned()));
             }
             entities.push(Value::Object(entity));
         }
@@ -227,10 +224,7 @@ fn activity_with_entities(
             if item_index == 0
                 && let Some(digest) = record.output_digest.as_deref()
             {
-                entity.insert(
-                    "wos:outputDigest".into(),
-                    Value::String(digest.to_owned()),
-                );
+                entity.insert("wos:outputDigest".into(), Value::String(digest.to_owned()));
             }
             entities.push(Value::Object(entity));
         }
@@ -464,7 +458,9 @@ mod tests {
         let agent = document
             .graph
             .iter()
-            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/user-42".into())))
+            .find(|node| {
+                node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/user-42".into()))
+            })
             .expect("agent node must exist");
         assert_eq!(agent["@type"], json!(["prov:Person", "wos:HumanAgent"]));
     }
@@ -481,7 +477,9 @@ mod tests {
         let agent = document
             .graph
             .iter()
-            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/runtime".into())))
+            .find(|node| {
+                node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/runtime".into()))
+            })
             .expect("agent node");
         assert_eq!(
             agent["@type"],
@@ -501,12 +499,11 @@ mod tests {
         let agent = document
             .graph
             .iter()
-            .find(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/claude".into())))
+            .find(|node| {
+                node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/claude".into()))
+            })
             .expect("agent node");
-        assert_eq!(
-            agent["@type"],
-            json!(["prov:SoftwareAgent", "wos:AIAgent"])
-        );
+        assert_eq!(agent["@type"], json!(["prov:SoftwareAgent", "wos:AIAgent"]));
     }
 
     #[test]
@@ -526,7 +523,9 @@ mod tests {
         let agents: Vec<_> = document
             .graph
             .iter()
-            .filter(|node| node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/id-1".into())))
+            .filter(|node| {
+                node.get("@id") == Some(&Value::String("urn:wos:prov:test:agent/id-1".into()))
+            })
             .collect();
         assert_eq!(
             agents.len(),
@@ -560,11 +559,8 @@ mod tests {
         assert_eq!(activities.len(), 1);
 
         assert!(
-            !document
-                .graph
-                .iter()
-                .any(|node| node.get("@id")
-                    == Some(&Value::String("urn:wos:prov:test:agent/user-2".into()))),
+            !document.graph.iter().any(|node| node.get("@id")
+                == Some(&Value::String("urn:wos:prov:test:agent/user-2".into()))),
             "narrative-tier agent must be excluded from default export"
         );
     }

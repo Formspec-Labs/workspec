@@ -334,8 +334,7 @@ fn run_workflow_to_stamped_log(fixture: &ExportFixture) -> ProvenanceLog {
     let kernel_path = tempdir.path().join("kernel.json");
     std::fs::write(
         &kernel_path,
-        serde_json::to_string_pretty(&shared_workflow_kernel())
-            .expect("kernel must serialize"),
+        serde_json::to_string_pretty(&shared_workflow_kernel()).expect("kernel must serialize"),
     )
     .expect("failed to write temp kernel");
     let kernel_path_str = kernel_path
@@ -397,9 +396,7 @@ fn run_workflow_to_stamped_log(fixture: &ExportFixture) -> ProvenanceLog {
 fn is_activity_node(node: &Value, activity_type: &str) -> bool {
     match &node["@type"] {
         Value::String(s) => s == activity_type,
-        Value::Array(items) => items
-            .iter()
-            .any(|v| v.as_str() == Some(activity_type)),
+        Value::Array(items) => items.iter().any(|v| v.as_str() == Some(activity_type)),
         _ => false,
     }
 }
@@ -524,10 +521,8 @@ fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportCo
     // §5.3 `wos:atLifecycleState` on at least N activities (records without
     // `lifecycle_state` — e.g. the second, "unresolved" transition emission
     // — legitimately omit it, so we count rather than require every one).
-    let min_with_lifecycle = assertion_u64(
-        assertions,
-        "prov_o_min_activities_with_at_lifecycle_state",
-    );
+    let min_with_lifecycle =
+        assertion_u64(assertions, "prov_o_min_activities_with_at_lifecycle_state");
     let with_lifecycle = activities
         .iter()
         .filter(|activity| activity.get("wos:atLifecycleState").is_some())
@@ -632,8 +627,7 @@ fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportCo
     let transitions_with_entity_links = activities
         .iter()
         .filter(|activity| {
-            activity.get("wos:actionType").and_then(Value::as_str)
-                == Some("stateTransition")
+            activity.get("wos:actionType").and_then(Value::as_str) == Some("stateTransition")
                 && activity.get("prov:used").is_some()
                 && activity.get("prov:generated").is_some()
         })
@@ -662,9 +656,9 @@ fn assert_prov_o(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportCo
     let has_human_pair = graph.iter().any(|node| {
         is_agent_node(node)
             && match &node["@type"] {
-                Value::Array(items) => required_human_pair.iter().all(|required| {
-                    items.iter().any(|v| v.as_str() == Some(required.as_str()))
-                }),
+                Value::Array(items) => required_human_pair
+                    .iter()
+                    .all(|required| items.iter().any(|v| v.as_str() == Some(required.as_str()))),
                 _ => false,
             }
     });
@@ -881,9 +875,8 @@ fn assert_xes(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConfi
     // the <trace> itself (before the first <event>), with the expected value.
     if assertion_bool(assertions, "xes_trace_has_definition_version") {
         let expected_version = assertion_string(assertions, "xes_expected_definition_version");
-        let expected_attr = format!(
-            r#"<string key="wos:definitionVersion" value="{expected_version}"/>"#
-        );
+        let expected_attr =
+            format!(r#"<string key="wos:definitionVersion" value="{expected_version}"/>"#);
         let trace_header = xml
             .split("<event>")
             .next()
@@ -903,13 +896,15 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     let assertions = &fixture.assertions;
 
     // Top-level keys.
-    let object = document
-        .as_object()
-        .unwrap_or_else(|| panic!("OCEL top-level must be an object for fixture '{}'", fixture.id));
-    let expected_keys: BTreeSet<String> =
-        assertion_string_array(assertions, "ocel_top_level_keys")
-            .into_iter()
-            .collect();
+    let object = document.as_object().unwrap_or_else(|| {
+        panic!(
+            "OCEL top-level must be an object for fixture '{}'",
+            fixture.id
+        )
+    });
+    let expected_keys: BTreeSet<String> = assertion_string_array(assertions, "ocel_top_level_keys")
+        .into_iter()
+        .collect();
     let actual_keys: BTreeSet<String> = object.keys().cloned().collect();
     assert_eq!(
         actual_keys, expected_keys,
@@ -918,9 +913,12 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     );
 
     // Event count.
-    let events = document["events"]
-        .as_array()
-        .unwrap_or_else(|| panic!("OCEL 'events' must be an array for fixture '{}'", fixture.id));
+    let events = document["events"].as_array().unwrap_or_else(|| {
+        panic!(
+            "OCEL 'events' must be an array for fixture '{}'",
+            fixture.id
+        )
+    });
     if assertion_bool(assertions, "ocel_event_count_matches_log") {
         assert_eq!(
             events.len(),
@@ -958,7 +956,10 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     let declared_object_types: Vec<String> = document["objectTypes"]
         .as_array()
         .unwrap_or_else(|| {
-            panic!("OCEL 'objectTypes' must be an array for fixture '{}'", fixture.id)
+            panic!(
+                "OCEL 'objectTypes' must be an array for fixture '{}'",
+                fixture.id
+            )
         })
         .iter()
         .filter_map(|entry| entry.get("name").and_then(Value::as_str).map(String::from))
@@ -975,9 +976,12 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     // / toState / event / inputDigest / outputDigest). The dynamic indexed
     // `inputs.{i}` / `outputs.{i}` attributes vary per record and are NOT
     // declared here (OCEL 2.0 tolerates undeclared attributes).
-    let event_types = document["eventTypes"]
-        .as_array()
-        .unwrap_or_else(|| panic!("OCEL 'eventTypes' must be an array for fixture '{}'", fixture.id));
+    let event_types = document["eventTypes"].as_array().unwrap_or_else(|| {
+        panic!(
+            "OCEL 'eventTypes' must be an array for fixture '{}'",
+            fixture.id
+        )
+    });
     assert!(
         !event_types.is_empty(),
         "OCEL eventTypes must not be empty for fixture '{}'",
@@ -1035,9 +1039,9 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
             .iter()
             .filter(|event| {
                 event["attributes"].as_array().is_some_and(|attrs| {
-                    attrs.iter().any(|attr| {
-                        attr["name"].as_str().is_some_and(|n| n.starts_with(prefix))
-                    })
+                    attrs
+                        .iter()
+                        .any(|attr| attr["name"].as_str().is_some_and(|n| n.starts_with(prefix)))
                 })
             })
             .count() as u64
@@ -1115,7 +1119,10 @@ fn assert_ocel(fixture: &ExportFixture, log: &ProvenanceLog, config: &ExportConf
     // string") rather than a unit-test-style name. The pure unit test in
     // `wos_export::ocel` — `preserves_empty_timestamp_as_string` — covers the
     // same property at the serializer level and stays named for that context.
-    if assertion_bool(assertions, "asserts_empty_timestamp_preserved_as_empty_string_in_ocel") {
+    if assertion_bool(
+        assertions,
+        "asserts_empty_timestamp_preserved_as_empty_string_in_ocel",
+    ) {
         let mut unstamped_log = ProvenanceLog::default();
         unstamped_log.push(ProvenanceRecord::state_transition(
             "draft",

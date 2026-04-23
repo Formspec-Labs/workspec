@@ -18,22 +18,18 @@
     "$wosAgentConfig": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Agent Config specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Agent Config specification version marker. MUST be '1.0'. Identifies this document as a WOS Agent Config sidecar and pins the schema version. Processors MUST reject documents with an unrecognized value. See AI Integration §6.1.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Agent Config sidecar"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetAgent": {
       "type": "string",
       "minLength": 1,
-      "description": "Agent identifier within the AI Integration Document this config targets.",
+      "description": "Agent identifier within the AI Integration Document this config targets. MUST match the 'id' of an AgentDeclaration in the target AI Integration Document. Used by processors to associate operational parameters with the correct agent at runtime. See AI Integration §6.1.",
       "examples": ["documentExtractor", "eligibilityScreener"],
       "x-lm": {
         "critical": true,
@@ -43,18 +39,19 @@
     "targetIntegration": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the AI Integration Document, if not co-located.",
+      "description": "URI of the WOS AI Integration Document this config extends, when the sidecar is not co-located alongside the integration document. Used by processors to resolve the binding when separate deployment is required.",
       "examples": ["https://agency.gov/ai/benefits-adjudication-ai"]
     },
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Agent Config document.",
-      "examples": ["1.0.0"]
+      "description": "Version of this Agent Config document. RECOMMENDED to use semantic versioning (major.minor.patch) so that config changes can be tracked in provenance records independently of the AI Integration Document.",
+      "examples": ["1.0.0", "2.1.3"]
     },
     "title": {
       "type": "string",
-      "description": "Human-readable name for this agent configuration."
+      "description": "Human-readable name for this agent configuration. Displayed in administrative tooling and audit reports to help operators distinguish multiple config documents targeting the same agent.",
+      "examples": ["Document Extractor Agent Configuration", "Eligibility Screener Production Config"]
     },
     "endpoint": {
       "$ref": "#/$defs/EndpointConfig",
@@ -62,7 +59,12 @@
     },
     "approvedVersions": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "A model version string included in the approved list. Processors MUST reject invocations that use a model version not present in this array when the agent's modelVersionPolicy is 'approved'.",
+        "examples": ["2.0.0", "2025-05-14"]
+      },
       "description": "Approved model version list for 'approved' model version policy.",
       "examples": [["2.0.0", "2.1.0", "2.2.0"]]
     },
@@ -79,11 +81,7 @@
       "items": { "$ref": "#/$defs/ActionOverride" },
       "description": "Per-action autonomy and constraint overrides."
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": { "pattern": "^x-" },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "EndpointConfig": {
@@ -99,23 +97,24 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "Agent service endpoint URL.",
-          "examples": ["https://ai.agency.gov/agents/doc-extractor/v2"]
+          "description": "Agent service endpoint URL. The WOS Processor calls this URL when invoking the agent. MUST be an HTTPS URI in production deployments.",
+          "examples": ["https://ai.agency.gov/agents/doc-extractor/v2", "https://ml.agency.gov/api/eligibility-screener/v3"]
         },
         "credentialRef": {
           "type": "string",
-          "description": "Reference to credential store entry.",
-          "examples": ["vault://agents/doc-extractor/api-key"]
+          "description": "Reference to the credential store entry used to authenticate against the agent endpoint. Format is implementation-defined (e.g., Vault path, AWS Secrets Manager ARN). Credential is injected by the WOS Processor at invocation time.",
+          "examples": ["vault://agents/doc-extractor/api-key", "arn:aws:secretsmanager:us-east-1:123456789:secret/agent-creds"]
         },
         "timeout": {
           "type": "string",
-          "description": "Maximum invocation time as ISO 8601 duration.",
+          "description": "Maximum invocation time as ISO 8601 duration. Exceeded invocations are cancelled and the fallback chain is triggered. Recommended to set shorter timeouts for synchronous review-path agents.",
           "examples": ["PT30S", "PT2M"]
         },
         "healthCheckUrl": {
           "type": "string",
           "format": "uri",
-          "description": "Health check endpoint for availability monitoring."
+          "description": "Health check endpoint for availability monitoring. The WOS Processor MAY poll this URL before routing invocations to detect agent unavailability and trigger the fallback chain proactively.",
+          "examples": ["https://ai.agency.gov/agents/doc-extractor/health", "https://ml.agency.gov/api/eligibility-screener/ping"]
         }
       }
     },
@@ -131,7 +130,8 @@
       "properties": {
         "required": {
           "type": "boolean",
-          "description": "Whether calibration is required for this agent."
+          "description": "Whether calibration is required for this agent before it may operate above assistive autonomy. When true and calibration has expired or never occurred, the effective autonomy is capped at assistive regardless of the configured level.",
+          "examples": [true, false]
         },
         "frequency": {
           "type": "string",
@@ -141,14 +141,15 @@
         "minimumSamples": {
           "type": "integer",
           "minimum": 1,
-          "description": "Minimum reviewed outputs for valid calibration.",
+          "description": "Minimum number of human-reviewed outputs required for a valid calibration run. Calibration results based on fewer samples than this threshold are considered insufficient and MUST be treated as expired.",
           "examples": [50, 100]
         },
         "method": {
           "type": "string",
           "enum": ["plattScaling", "isotonic", "binning", "custom"],
           "default": "binning",
-          "description": "Calibration method."
+          "description": "Statistical calibration method used to align agent confidence scores with empirical accuracy. 'plattScaling': sigmoid-fit logistic regression. 'isotonic': non-parametric isotonic regression. 'binning': equal-width histogram binning. 'custom': implementation-defined.",
+          "examples": ["binning", "plattScaling"]
         }
       }
     },
@@ -174,7 +175,8 @@
         "maxAutonomy": {
           "type": "string",
           "enum": ["autonomous", "supervisory", "assistive", "manual"],
-          "description": "Maximum autonomy level this agent may reach."
+          "description": "Hard ceiling on the autonomy level this agent may reach, regardless of escalation rules or dynamic calibration results. Escalation rules can only raise autonomy up to this ceiling. Useful for enforcing org-wide policy that certain agents never exceed supervisory level.",
+          "examples": ["supervisory", "assistive"]
         }
       }
     },
@@ -197,7 +199,8 @@
         "targetLevel": {
           "type": "string",
           "enum": ["autonomous", "supervisory", "assistive"],
-          "description": "Autonomy level to escalate to when condition is met."
+          "description": "Autonomy level to escalate to when the condition is met. MUST NOT exceed the AutonomyPolicy.maxAutonomy ceiling. Agent reverts to baseline when escalationExpiry elapses or when a demotion rule fires.",
+          "examples": ["supervisory", "autonomous"]
         },
         "escalationExpiry": {
           "type": "string",
@@ -206,13 +209,14 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation."
+          "description": "Human-readable explanation of why this escalation rule exists. Included in audit records when the escalation fires to document the governance rationale.",
+          "examples": ["Escalate to supervisory when 30-day accuracy exceeds 97%", "Allow autonomous extraction after 6-month stable operation"]
         }
       }
     },
     "DemotionRule": {
       "type": "object",
-      "required": ["condition", "targetLevel"],
+      "required": ["id", "condition", "targetLevel"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -220,6 +224,16 @@
       },
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for this demotion rule, unique within the parent AutonomyPolicy.demotion array. MUST match the pattern of a JSON object key (no whitespace). Drift Monitor AlertThreshold entries reference this id via 'policyRef' to invoke this rule's structured demotion (condition / targetLevel / pendingRecalibration) instead of the implementation-defined 'action' enum. Audit records cite this id so operators know exactly which demotion rule fired.",
+          "examples": ["demoteOnLowAccuracy", "demoteOnConsecutiveOverrides"],
+          "x-lm": {
+            "critical": true,
+            "intent": "Stable id so Drift Monitor AlertThreshold.policyRef can resolve this rule"
+          }
+        },
         "condition": {
           "type": "string",
           "minLength": 1,
@@ -229,16 +243,19 @@
         "targetLevel": {
           "type": "string",
           "enum": ["supervisory", "assistive", "manual"],
-          "description": "Autonomy level to demote to when condition is met."
+          "description": "Autonomy level to demote to when the demotion condition is met. Demotion takes immediate effect at the next agent invocation. The agent remains at this level until an escalation condition is met or an administrator manually restores its level.",
+          "examples": ["assistive", "manual"]
         },
         "pendingRecalibration": {
           "type": "boolean",
           "default": false,
-          "description": "When true, agent operates at demoted level until recalibration meets escalation conditions."
+          "description": "When true, agent operates at demoted level until recalibration meets escalation conditions.",
+          "examples": [true, false]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable explanation."
+          "description": "Human-readable explanation of why this demotion rule exists. Included in audit records when the demotion fires to document the governance rationale.",
+          "examples": ["Demote to manual when 30-day accuracy drops below 90%", "Demote to assistive on consecutive overrides exceeding 20%"]
         }
       }
     },
@@ -255,13 +272,14 @@
         "actionRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Reference to the action in the kernel lifecycle.",
+          "description": "Reference to the specific action in the kernel lifecycle that this override applies to. Format is 'stage.actionId' matching the kernel document's lifecycle definition. Per-action overrides take precedence over the workflow-level defaultAutonomy.",
           "examples": ["intake.invokeDocExtractor", "review.invokeScreener"]
         },
         "autonomy": {
           "type": "string",
           "enum": ["autonomous", "supervisory", "assistive", "manual"],
-          "description": "Override autonomy level for this action."
+          "description": "Override autonomy level for this specific action. Takes precedence over the workflow default and agent default, subject to the impact-level cap and the maxAutonomy ceiling.",
+          "examples": ["assistive", "supervisory"]
         },
         "reviewWindow": {
           "type": "string",
@@ -272,9 +290,30 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Override confidence floor for this action."
+          "description": "Override the confidence floor threshold for this specific action. When the agent's confidence falls below this value the action falls back to the next fallback level rather than proceeding at the configured autonomy level.",
+          "examples": [0.85, 0.90]
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

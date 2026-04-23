@@ -1,0 +1,120 @@
+{
+  "$wosKernel": "1.0",
+  "url": "urn:test:signature-runtime",
+  "version": "1.0.0",
+  "title": "Signature Runtime Fixture Kernel",
+  "impactLevel": "operational",
+  "actors": [
+    { "id": "applicant", "type": "human" },
+    { "id": "agency", "type": "human" },
+    { "id": "witness", "type": "human" },
+    { "id": "notary", "type": "human" },
+    { "id": "caseworker", "type": "human" }
+  ],
+  "caseFile": {
+    "fields": {
+      "routeApplicant": { "type": "boolean" },
+      "requiresNotary": { "type": "boolean" }
+    }
+  },
+  "contracts": {
+    "signatureContract": {
+      "binding": "formspec",
+      "ref": "urn:test:formspec:signature"
+    }
+  },
+  "lifecycle": {
+    "initialState": "draft",
+    "states": {
+      "draft": {
+        "type": "atomic",
+        "transitions": [{ "event": { "kind": "message", "name": "start" }, "target": "signing" }]
+      },
+      "signing": {
+        "type": "atomic",
+        "tags": ["awaiting-signature"],
+        "onEntry": [
+          {
+            "action": "createTask",
+            "taskRef": "applicantTask",
+            "assignTo": "applicant",
+            "contractRef": "signatureContract",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.failed",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "applicantSigns"
+            }
+          },
+          {
+            "action": "createTask",
+            "taskRef": "agencyTask",
+            "assignTo": "agency",
+            "contractRef": "signatureContract",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.failed",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "agencyApproves"
+            }
+          },
+          {
+            "action": "createTask",
+            "taskRef": "witnessTask",
+            "assignTo": "witness",
+            "contractRef": "signatureContract",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.failed",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "witnessSigns"
+            }
+          },
+          {
+            "action": "createTask",
+            "taskRef": "notaryTask",
+            "assignTo": "notary",
+            "contractRef": "signatureContract",
+            "completionEvent": "signature.completed",
+            "failureEvent": "signature.failed",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "notaryAttests"
+            }
+          },
+          {
+            "action": "createTask",
+            "taskRef": "adminTask",
+            "assignTo": "caseworker",
+            "contractRef": "signatureContract",
+            "extensions": {
+              "x-wos-signature-profile-key": "signatureProfile",
+              "x-wos-signature-step-id": "applicantSigns"
+            }
+          },
+          {
+            "action": "startTimer",
+            "timerId": "signatureExpiry",
+            "duration": "P7D",
+            "event": {
+              "kind": "timer",
+              "timerId": "signatureExpiry",
+              "source": "custom",
+              "firesAs": "signature.expired"
+            }
+          }
+        ],
+        "transitions": [
+          { "event": { "kind": "message", "name": "signature.completed" }, "target": "complete" },
+          { "event": { "kind": "message", "name": "signature.declined" }, "target": "declined" },
+          { "event": { "kind": "message", "name": "signature.expired" }, "target": "expired" },
+          { "event": { "kind": "message", "name": "signature.failed" }, "target": "failed" }
+        ]
+      },
+      "complete": { "type": "final", "tags": ["signature-complete"] },
+      "declined": { "type": "final", "tags": ["signature-declined"] },
+      "expired": { "type": "final", "tags": ["signature-expired"] },
+      "failed": { "type": "final", "tags": ["signature-voided"] }
+    }
+  }
+}

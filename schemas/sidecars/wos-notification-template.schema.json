@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/notification-template/1.0",
   "title": "WOS Notification Template Config",
-  "description": "A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1).",
+  "description": "A WOS Notification Template Config sidecar document. Defines reusable templates for notices that WOS workflows generate during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Government workflows have strict notice requirements -- an adverse benefits decision must include the specific determination, individualized reason codes, appeal rights, and filing deadlines. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateKey (Governance S3.1).",
   "type": "object",
   "required": [
     "$wosNotificationTemplate",
@@ -19,23 +19,19 @@
     "$wosNotificationTemplate": {
       "type": "string",
       "const": "1.0",
-      "description": "WOS Notification Template specification version. MUST be '1.0'.",
-      "examples": ["1.0"],
+      "description": "WOS Notification Template specification version. MUST be '1.0'. Identifies this document as a WOS Notification Template Config sidecar and pins the specification version. Processors reject documents with unsupported versions.",
+      "examples": ["1.0", "1.0"],
       "x-lm": {
         "critical": true,
         "intent": "Document type marker for WOS Notification Template Config sidecar"
       }
     },
-    "$schema": {
-      "type": "string",
-      "format": "uri",
-      "description": "Optional JSON Schema URI for editor validation."
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "targetWorkflow": {
       "type": "string",
       "format": "uri",
-      "description": "URI of the WOS Kernel Document this notification template config applies to.",
-      "examples": ["https://agency.gov/workflows/benefits-adjudication"],
+      "description": "URI of the WOS Kernel Document this notification template config applies to. The processor resolves notificationTemplateKey and noticeTemplateKey lookups against the template collection in this sidecar when the kernel URI matches (Governance S12.2, S3.1).",
+      "examples": ["https://agency.gov/workflows/benefits-adjudication", "https://agency.gov/workflows/appeals-processing"],
       "x-lm": {
         "critical": true,
         "intent": "Binds this sidecar to its parent kernel workflow"
@@ -44,7 +40,7 @@
     "version": {
       "type": "string",
       "minLength": 1,
-      "description": "Version of this Notification Template Config document.",
+      "description": "Version of this Notification Template Config document. SemVer is RECOMMENDED. Increment when template content, variables, or delivery channel configuration changes.",
       "examples": ["1.0.0"]
     },
     "title": {
@@ -54,7 +50,8 @@
     },
     "description": {
       "type": "string",
-      "description": "Human-readable description of this notification template collection."
+      "description": "Human-readable description of this notification template collection. Documents which governance events these templates cover and their regulatory authority.",
+      "examples": ["Benefits adjudication notification templates covering adverse decisions, hold notices, and appeal acknowledgments per APA requirements."]
     },
     "templates": {
       "type": "object",
@@ -62,7 +59,7 @@
         "$ref": "#/$defs/NotificationTemplate"
       },
       "minProperties": 1,
-      "description": "Named notification templates. Template keys are the identifiers referenced by notificationTemplateRef (Governance S12.2) and noticeTemplateRef (Governance S3.1) in governance documents.",
+      "description": "Named notification templates. Template keys are the identifiers referenced by notificationTemplateKey (Governance S12.2) and noticeTemplateKey (Governance S3.1) in governance documents.",
       "examples": [
         {
           "adverseBenefitsDecision": {
@@ -74,18 +71,24 @@
               { "id": "appealRights", "contentType": "appeal-rights", "content": "You have the right to appeal this decision." }
             ]
           }
+        },
+        {
+          "holdNotification": {
+            "category": "hold-notification",
+            "description": "Case hold notice sent when processing is paused pending additional information",
+            "sections": [
+              { "id": "holdReason", "contentType": "structured", "content": "Your case {{caseId}} has been placed on hold. Reason: {{holdReason}}" },
+              { "id": "requiredAction", "contentType": "action-required", "content": "Please submit {{requiredDocuments}} within {{responseDeadline}}." }
+            ]
+          }
         }
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Named templates that governance mechanisms resolve via notificationTemplateRef and noticeTemplateRef"
+        "intent": "Named templates that governance mechanisms resolve via notificationTemplateKey and noticeTemplateKey"
       }
     },
-    "extensions": {
-      "type": "object",
-      "propertyNames": { "pattern": "^x-" },
-      "description": "Extension data. All keys MUST be prefixed with 'x-'."
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "$defs": {
     "NotificationTemplate": {
@@ -117,8 +120,8 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of when this template is used.",
-          "examples": ["Notice of adverse benefits determination sent to applicant"]
+          "description": "Human-readable description of when this template is used and what regulatory obligation it satisfies. Referenced in audit logs.",
+          "examples": ["Notice of adverse benefits determination sent to applicant per APA adverse decision notice requirements."]
         },
         "subject": {
           "type": "string",
@@ -150,7 +153,9 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Variable name that must be present in the rendering context. Matches a {{variableName}} placeholder used in section content strings.",
+            "examples": ["caseId", "applicantName"]
           },
           "description": "Variables that MUST be present in the rendering context. If any required variable is missing, the processor MUST NOT send the notification and MUST record the failure in provenance.",
           "examples": [["caseId", "applicantName", "determination", "reasonCodes", "appealDeadline"]]
@@ -159,14 +164,16 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["postal", "email", "portal", "sms", "in-app"]
+            "enum": ["postal", "email", "portal", "sms", "in-app"],
+            "description": "A delivery channel identifier. 'postal': physical mail. 'email': electronic mail. 'portal': government web portal. 'sms': text message. 'in-app': in-application notification.",
+            "examples": ["postal", "email"]
           },
           "description": "Channels through which this notification can be delivered. 'postal': physical mail. 'email': electronic mail. 'portal': web portal notification. 'sms': text message. 'in-app': in-application notification. When absent, delivery channel is implementation-defined.",
           "examples": [["postal", "email", "portal"]]
         },
         "localeRef": {
           "type": "string",
-          "description": "Reference to a locale-specific variant of this template.",
+          "description": "BCP 47 language tag reference to a locale-specific variant of this template. When the recipient's locale matches, the localized template is used instead of the default.",
           "examples": ["es-US", "zh-Hans"]
         },
         "authority": {
@@ -174,11 +181,7 @@
           "description": "Regulatory or statutory authority requiring this notification.",
           "examples": ["42 USC 1396a", "APA 5 USC 554", "ECOA Regulation B 12 CFR 1002"]
         },
-        "extensions": {
-          "type": "object",
-          "propertyNames": { "pattern": "^x-" },
-          "description": "Extension data. All keys MUST be prefixed with 'x-'."
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       }
     },
     "TemplateSection": {
@@ -194,12 +197,12 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Section identifier. MUST be unique within the template.",
+          "description": "Section identifier unique within the template. Used in audit logs and accessibility anchors. Referenced by condition expressions to target specific sections.",
           "examples": ["determination", "reasons", "appealRights", "appealInstructions", "contactInfo"]
         },
         "title": {
           "type": "string",
-          "description": "Section heading displayed in the rendered notification.",
+          "description": "Section heading displayed in the rendered notification. Rendered as a visible heading above the section content in postal, email, and portal output.",
           "examples": ["Decision", "Reason(s) for This Decision", "Your Right to Appeal", "How to File an Appeal"]
         },
         "contentType": {
@@ -224,7 +227,8 @@
         "required": {
           "type": "boolean",
           "default": true,
-          "description": "Whether this section MUST appear in the rendered notification. Default: true."
+          "description": "Whether this section MUST appear in the rendered notification. Default: true. For adverse-decision templates, due-process sections (determination, reasons, appealRights) MUST be required.",
+          "examples": [true, false]
         },
         "condition": {
           "type": "string",
@@ -235,6 +239,26 @@
           ]
         }
       }
+    }
+  ,
+    "ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
+      "examples": [
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
+      ],
+      "propertyNames": { "pattern": "^x-" },
+      "additionalProperties": {}
+    },
+    "JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
+      "examples": [
+        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
+        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+      ]
     }
   }
 }

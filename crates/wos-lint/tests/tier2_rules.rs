@@ -11,6 +11,7 @@
 
 use serde_json::json;
 use std::io::Write;
+use std::path::PathBuf;
 use wos_lint::Severity;
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -1391,16 +1392,16 @@ fn g060_calendar_different_workflow_skips_mandatory_sla_check() {
 }
 
 // ========================================================================
-// G-063: Template refs MUST resolve to Notification Template sidecar keys.
+// G-063: Template keys MUST resolve to Notification Template sidecar keys.
 // ========================================================================
 
 #[test]
-fn g063_notice_template_ref_without_sidecar_flagged() {
+fn g063_notice_template_key_without_sidecar_flagged() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "missingTemplate"
+        "noticeTemplateKey": "missingTemplate"
     });
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
@@ -1409,12 +1410,12 @@ fn g063_notice_template_ref_without_sidecar_flagged() {
 }
 
 #[test]
-fn g063_notice_template_ref_resolves_clean() {
+fn g063_notice_template_key_resolves_clean() {
     let kernel = base_kernel();
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "adverseTpl"
+        "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
         "$wosNotificationTemplate": "1.0",
@@ -1450,11 +1451,11 @@ fn g063_no_template_refs_skips_check() {
 }
 
 #[test]
-fn g063_notice_template_ref_runs_without_kernel() {
+fn g063_notice_template_key_runs_without_kernel() {
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "adverseTpl"
+        "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
         "$wosNotificationTemplate": "1.0",
@@ -1480,15 +1481,198 @@ fn g063_notice_template_ref_runs_without_kernel() {
 }
 
 #[test]
-fn g063_notice_template_ref_without_kernel_missing_sidecar_flagged() {
+fn g063_notice_template_key_without_kernel_missing_sidecar_flagged() {
     let mut gov = base_governance();
     gov["dueProcess"] = json!({
         "noticeRequired": true,
-        "noticeTemplateRef": "orphanRef"
+        "noticeTemplateKey": "orphanRef"
     });
 
     let diags = lint_project_with_docs(vec![("governance.json", gov)]);
     assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
+}
+
+// ========================================================================
+// G-066: BreachPolicy escalationStepId MUST resolve in the same task pattern.
+// ========================================================================
+
+#[test]
+fn g066_unknown_escalation_step_id_flagged() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "missingStep"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
+    assert_eq!(severity_of(&diags, "G-066"), Some(Severity::Error));
+}
+
+#[test]
+fn g066_named_escalation_step_id_resolves_clean() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_level_escalation_step_id_resolves_clean() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "level-1"
+            },
+            "escalationChain": [
+                {
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_no_escalation_step_id_skips_check() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "notify",
+                "templateKey": "slaWarning"
+            },
+            "escalationChain": [
+                {
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_tasks_object_unknown_step_id_flagged() {
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "ghost"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_tasks_object_named_step_resolves_clean() {
+    let mut gov = base_governance();
+    gov["tasks"] = json!({
+        "reviewTask": {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            },
+            "escalationChain": [
+                {
+                    "id": "supervisor",
+                    "level": 1,
+                    "assignTo": "teamLead",
+                    "gracePeriod": "PT4H",
+                    "onExhaustion": "escalate"
+                }
+            ]
+        }
+    });
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(!has_rule(&diags, "G-066"), "unexpected G-066: {diags:?}");
+}
+
+#[test]
+fn g066_escalation_step_id_without_chain_flagged() {
+    let mut gov = base_governance();
+    gov["taskCatalog"] = json!([
+        {
+            "pattern": "reviewTask",
+            "verifiable": "yes",
+            "breachPolicy": {
+                "action": "escalate",
+                "escalationStepId": "supervisor"
+            }
+        }
+    ]);
+
+    let diags = lint_project_with_docs(vec![("governance.json", gov)]);
+    assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
 }
 
 #[test]
@@ -2448,5 +2632,41 @@ fn ai023_severity_is_error() {
         severity_of(&diags, "AI-023"),
         Some(Severity::Error),
         "AI-023 should be error severity (MUST violation when no agent-free path exists)"
+    );
+}
+
+fn wos_spec_workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("wos-spec workspace root is two levels above wos-lint crate")
+        .to_path_buf()
+}
+
+/// K-049 LoadBearing fixture: `k-049-load-bearing-self-loop.json`
+#[test]
+fn k049_load_bearing_fixture_self_loop_triggers_k049() {
+    let root = wos_spec_workspace_root();
+    let path = root.join("fixtures/validation/k-049-load-bearing-self-loop.json");
+    let json = std::fs::read_to_string(&path).expect("read k-049-load-bearing-self-loop.json");
+    let doc: serde_json::Value = serde_json::from_str(&json).expect("parse kernel JSON");
+    let diags = lint_project_with_docs(vec![("kernel.json", doc)]);
+    assert!(
+        has_rule(&diags, "K-049"),
+        "expected K-049 from k-049-load-bearing-self-loop.json: {diags:?}"
+    );
+}
+
+/// K-049 LoadBearing fixture: `k-049-load-bearing-two-node-cycle.json`
+#[test]
+fn k049_load_bearing_fixture_two_node_cycle_triggers_k049() {
+    let root = wos_spec_workspace_root();
+    let path = root.join("fixtures/validation/k-049-load-bearing-two-node-cycle.json");
+    let json = std::fs::read_to_string(&path).expect("read k-049-load-bearing-two-node-cycle.json");
+    let doc: serde_json::Value = serde_json::from_str(&json).expect("parse kernel JSON");
+    let diags = lint_project_with_docs(vec![("kernel.json", doc)]);
+    assert!(
+        has_rule(&diags, "K-049"),
+        "expected K-049 from k-049-load-bearing-two-node-cycle.json: {diags:?}"
     );
 }

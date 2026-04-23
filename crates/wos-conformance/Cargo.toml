@@ -6,6 +6,26 @@ description = "Dynamic conformance test runner for WOS workflows"
 license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
 
+[[bin]]
+name = "wos-conformance-explain"
+path = "src/bin/wos-conformance-explain.rs"
+
+[[bin]]
+name = "wos-conformance-diff"
+path = "src/bin/wos-conformance-diff.rs"
+
+[[bin]]
+name = "wos-conformance-report"
+path = "src/bin/wos-conformance-report.rs"
+
+[[bin]]
+name = "gen-golden-traces"
+path = "src/bin/gen-golden-traces.rs"
+
+[[bin]]
+name = "wos-rule-coverage"
+path = "src/bin/wos-rule-coverage.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -17,6 +37,7 @@ wos-lint = { path = "../wos-lint" }
 wos-runtime = { path = "../wos-runtime" }
 
 [dev-dependencies]
+assert_cmd = "2"
 insta = { version = "1", features = ["json"] }
 quick-xml = "0.36"
 tempfile = "3"

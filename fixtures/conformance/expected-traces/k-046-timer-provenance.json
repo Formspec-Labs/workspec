@@ -1,0 +1,179 @@
+{
+  "fixtureId": "K-046-timer-provenance",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "applicationComplete",
+        "sourceActor": "intakeWorker",
+        "payload": {
+          "application": {
+            "isComplete": true
+          }
+        }
+      },
+      "stateBefore": "intake",
+      "stateAfter": "incomeVerification",
+      "expectedStateAfter": "incomeVerification",
+      "guardsEvaluated": [
+        {
+          "guardId": "intake->incomeVerification:applicationComplete",
+          "sourceState": "intake",
+          "targetState": "incomeVerification",
+          "event": "applicationComplete",
+          "expression": "caseFile.application.isComplete = true",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "application": {
+                "isComplete": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 1,
+      "event": {
+        "name": "verificationComplete",
+        "sourceActor": "verificationSystem",
+        "payload": {
+          "verification": {
+            "status": "verified"
+          }
+        }
+      },
+      "stateBefore": "incomeVerification",
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "eligibilityReview",
+      "guardsEvaluated": [
+        {
+          "guardId": "incomeVerification->eligibilityReview:verificationComplete",
+          "sourceState": "incomeVerification",
+          "targetState": "eligibilityReview",
+          "event": "verificationComplete",
+          "expression": "caseFile.verification.status = 'verified'",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "verification": {
+                "status": "verified"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 2,
+      "event": {
+        "name": "reviewAComplete",
+        "sourceActor": "caseworkerA",
+        "payload": {
+          "reviewA": {
+            "decision": "ineligible"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewA",
+      "stateAfter": "reviewADone",
+      "expectedStateAfter": "reviewADone"
+    },
+    {
+      "stepIndex": 3,
+      "event": {
+        "name": "reviewBComplete",
+        "sourceActor": "caseworkerB",
+        "payload": {
+          "reviewB": {
+            "decision": "ineligible"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewB",
+      "stateAfter": "reviewBDone",
+      "expectedStateAfter": "reviewBDone"
+    },
+    {
+      "stepIndex": 4,
+      "event": {
+        "name": "$join",
+        "sourceActor": "caseworkerA",
+        "payload": {
+          "eligibility": {
+            "decision": "ineligible",
+            "reason": "income-exceeds-threshold"
+          }
+        }
+      },
+      "stateBefore": "eligibilityReview",
+      "stateAfter": "determination",
+      "expectedStateAfter": "determination",
+      "guardsEvaluated": [
+        {
+          "guardId": "eligibilityReview->reconciliation:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "reconciliation",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision != caseFile.reviewB.decision",
+          "result": false,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "ineligible"
+              },
+              "reviewB": {
+                "decision": "ineligible"
+              }
+            }
+          }
+        },
+        {
+          "guardId": "eligibilityReview->determination:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "determination",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision = caseFile.reviewB.decision",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "ineligible"
+              },
+              "reviewB": {
+                "decision": "ineligible"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 5,
+      "event": {
+        "name": "denied",
+        "sourceActor": "applicant",
+        "payload": {
+          "appeal": {
+            "filedAt": "2026-04-09T10:00:00Z"
+          }
+        }
+      },
+      "stateBefore": "determination",
+      "stateAfter": "adverseNotice",
+      "expectedStateAfter": "adverseNotice"
+    },
+    {
+      "stepIndex": 6,
+      "event": {
+        "name": "appealFiled"
+      },
+      "stateBefore": "adverseNotice",
+      "stateAfter": "appeal",
+      "expectedStateAfter": "appeal"
+    }
+  ],
+  "outcome": "pass"
+}

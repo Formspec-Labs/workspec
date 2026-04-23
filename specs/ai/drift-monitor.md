@@ -57,7 +57,28 @@ This document is a **draft specification**. It is a sidecar to the WOS AI Integr
 | `method` | enum | OPTIONAL | Statistical method: `psi` (Population Stability Index), `ks` (Kolmogorov-Smirnov), `chi2`, `accuracy`, `custom`. |
 | `threshold` | number | OPTIONAL | Threshold value for drift detection. |
 
-### 1.4 Deployment Sequence
+### 1.4 Alert Threshold
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `condition` | string | REQUIRED | FEL expression that triggers the alert. |
+| `severity` | enum | REQUIRED | `info`, `warning`, or `critical`. |
+| `action` | enum | OPTIONAL | `notify`, `demoteToAssistive`, `demoteToManual`, or `suspend`. Implementation-defined when no `policyRef` is given. |
+| `policyRef` | string | OPTIONAL | Reference to a `DemotionRule.id` declared in an Agent Config sidecar (see WOS Agent Config §1.4). |
+| `notifyRoles` | array of string | OPTIONAL | Roles to notify when this threshold is crossed. |
+
+#### 1.4.1 `policyRef` resolution semantics
+
+When `policyRef` is present, processors MUST resolve it as follows:
+
+1. Locate the Agent Config sidecar whose `targetAgent` matches the parent `AgentMonitor.agentRef` and whose `targetIntegration` (or co-located AI Integration Document) targets the same workflow as this monitor's `targetWorkflow`.
+2. Find the `DemotionRule` whose `id` equals `policyRef` within that sidecar's `autonomyPolicy.demotion` array.
+3. When the alert fires, the named DemotionRule's structured semantics (`condition` / `targetLevel` / `pendingRecalibration` / `description`) take precedence over the `action` enum. The provenance record (`autonomyDemotion`, see AI Integration §5.5) MUST cite the resolved `DemotionRule.id` so audit consumers know exactly which named rule fired, not merely that *some* demotion occurred.
+4. If the `policyRef` cannot be resolved (no matching sidecar or no matching `DemotionRule.id`), processors MUST emit a configuration warning in provenance and fall back to the implementation-defined `action` enum behavior. An unresolvable `policyRef` is a misconfiguration, not a runtime error — the alert still fires.
+
+When `policyRef` is absent, the existing `action` enum behavior (`notify` / `demoteToAssistive` / `demoteToManual` / `suspend`) is implementation-defined as before.
+
+### 1.5 Deployment Sequence
 
 For `rights-impacting` and `safety-impacting` workflows, model version changes SHOULD follow a three-phase deployment sequence:
 
@@ -67,7 +88,7 @@ For `rights-impacting` and `safety-impacting` workflows, model version changes S
 | `canary` | New version handles a small percentage of invocations with strict guardrails and elevated review sampling. |
 | `production` | New version replaces prior version after shadow and canary demonstrate acceptable performance. |
 
-### 1.5 Example
+### 1.6 Example
 
 ```json
 {
@@ -90,7 +111,8 @@ For `rights-impacting` and `safety-impacting` workflows, model version changes S
         {
           "condition": "accuracy < 0.90",
           "severity": "critical",
-          "action": "demoteToAssistive"
+          "action": "demoteToAssistive",
+          "policyRef": "demoteToAssistiveOnDegradedAccuracy"
         }
       ]
     }

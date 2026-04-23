@@ -6,27 +6,29 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Drift Monitor Config sidecar document. Provides drift detection and monitoring configuration for agents in a WOS workflow -- drift detection methods, evaluation windows, alert thresholds, rubber-stamp detection, and deployment sequence policies. Monitoring parameters can be tuned independently of the governance document.
  */
 export interface WOSDriftMonitorConfig {
   /**
-   * WOS Drift Monitor Config specification version. MUST be '1.0'.
+   * WOS Drift Monitor Config specification version marker. MUST be '1.0'. Identifies this document as a WOS Drift Monitor Config sidecar and pins the schema version. Processors MUST reject documents with an unrecognized value. See AI Integration §9.
    */
   $wosDriftMonitor: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * URI of the WOS Kernel Document this monitor applies to.
+   * URI of the WOS Kernel Document whose AI agents this monitor tracks. MUST match the 'url' property of the target Kernel Document. Processors use this to correlate drift events with the correct workflow governance and invoke demotion rules when thresholds are crossed. See AI Integration §9.
    */
   targetWorkflow: string;
   /**
-   * Version of this Drift Monitor Config document.
+   * Version of this Drift Monitor Config document. RECOMMENDED to use semantic versioning (major.minor.patch) so monitoring configuration changes are independently tracked in audit records.
    */
   version?: string;
   /**
-   * Human-readable name for this drift monitor configuration.
+   * Human-readable name for this drift monitor configuration. Displayed in administrative dashboards and alert notifications so operators can quickly identify which monitor fired.
    */
   title?: string;
   /**
@@ -36,20 +38,22 @@ export interface WOSDriftMonitorConfig {
    */
   monitors: [AgentMonitor, ...AgentMonitor[]];
   deploymentSequence?: DeploymentSequence;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSDriftMonitorConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface AgentMonitor {
   /**
-   * Agent identifier to monitor.
+   * Agent identifier to monitor. MUST match the 'id' of an AgentDeclaration in the target AI Integration Document. All metric evaluations and alert thresholds defined under this monitor apply exclusively to this agent's invocations.
    */
   agentRef: string;
   /**
-   * ISO 8601 duration of the evaluation window.
+   * ISO 8601 duration of the rolling evaluation window over which metrics are computed. Longer windows smooth short-term variance; shorter windows detect rapid drift earlier. Set shorter windows for high-impact agents.
    */
   evaluationWindow: string;
   /**
@@ -63,10 +67,17 @@ export interface AgentMonitor {
    * Conditions that generate alerts or trigger automatic governance actions.
    */
   alertThresholds?: AlertThreshold[];
+  /**
+   * This interface was referenced by `AgentMonitor`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface MonitorMetric {
   /**
-   * Metric name.
+   * Logical name for this metric, used to reference the metric in alert threshold conditions (e.g., 'extractionAccuracy < 0.90'). Choose a name that clearly identifies what is being measured so alert conditions are self-documenting.
    */
   name: string;
   /**
@@ -77,13 +88,20 @@ export interface MonitorMetric {
    * Threshold value for drift detection. Semantics depend on the method.
    */
   threshold?: number;
+  /**
+   * This interface was referenced by `MonitorMetric`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Rubber-stamp detection for human reviewers of this agent's output.
  */
 export interface RubberStampConfig {
   /**
-   * Whether rubber-stamp detection is active.
+   * Whether rubber-stamp detection monitoring is active for this agent. When true, the monitor tracks reviewer engagement metrics (minReviewTime and maxAgreementRate) and generates alerts when reviewers appear to approve agent outputs without meaningful scrutiny.
    */
   enabled?: boolean;
   /**
@@ -91,54 +109,85 @@ export interface RubberStampConfig {
    */
   minReviewTime?: string;
   /**
-   * Agreement rate above which reviewer engagement is flagged.
+   * Agreement rate above which reviewer engagement is flagged as potentially declining. When a reviewer agrees with the agent more than this fraction of the time within the evaluationWindow, the pattern is reported for oversight review.
    */
   maxAgreementRate?: number;
   /**
    * ISO 8601 duration of the evaluation window for rubber-stamp metrics.
    */
   evaluationWindow?: string;
+  /**
+   * This interface was referenced by `RubberStampConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface AlertThreshold {
   /**
-   * FEL expression or metric condition that triggers the alert.
+   * FEL expression or metric condition that triggers the alert. References metric names defined in the parent AgentMonitor.metrics array. When the expression evaluates to true the threshold is considered crossed and the configured action fires.
    */
   condition: string;
   /**
-   * Alert severity level.
+   * Alert severity level that controls urgency of notification routing and escalation. 'critical' thresholds SHOULD include an automatic governance action such as 'demoteToAssistive' or 'suspend'.
    */
   severity: 'info' | 'warning' | 'critical';
   /**
-   * Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations.
+   * Automatic governance action to take when threshold is crossed. 'notify': alert administrators. 'demoteToAssistive': cap autonomy at assistive. 'demoteToManual': cap autonomy at manual. 'suspend': suspend agent invocations. When 'policyRef' is also present, the named DemotionRule's structured semantics (condition / targetLevel / pendingRecalibration) take precedence over this enum's implementation-defined behavior; this field then serves as a human-readable hint and a fallback when the ref cannot be resolved.
    */
   action?: 'notify' | 'demoteToAssistive' | 'demoteToManual' | 'suspend';
+  /**
+   * Reference to a DemotionRule.id declared in an Agent Config sidecar that targets the same workflow as this monitor. When present, the named DemotionRule fires with its full structured semantics (condition / targetLevel / pendingRecalibration / description) instead of the implementation-defined 'action' enum. The ref MUST resolve to a DemotionRule.id reachable through an Agent Config whose targetAgent matches this monitor's parent agentRef; an unresolvable ref MUST emit a configuration warning in provenance and fall back to the 'action' enum behavior. Audit records cite the resolved DemotionRule.id so operators know exactly which named rule fired.
+   */
+  policyRef?: string;
   /**
    * Roles to notify when this threshold is crossed.
    */
   notifyRoles?: string[];
+  /**
+   * This interface was referenced by `AlertThreshold`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Shadow/canary/production deployment sequence policy. RECOMMENDED for rights-impacting and safety-impacting workflows.
  */
 export interface DeploymentSequence {
   /**
-   * Whether the shadow/canary/production deployment sequence is enforced.
+   * Whether the shadow/canary/production deployment sequence is enforced for this workflow. When true, new agent versions MUST progress through shadow and canary phases before receiving full production traffic.
    */
   enabled?: boolean;
   /**
-   * ISO 8601 duration of the shadow phase.
+   * ISO 8601 duration of the shadow phase, during which the new agent version runs in parallel with the production version but its outputs are not used to make decisions. Drift metrics are collected to verify readiness for canary promotion.
    */
   shadowDuration?: string;
   /**
-   * Fraction of invocations routed to the canary version.
+   * Fraction of live invocations routed to the canary version during the canary phase. The remainder continues using the current production version. Start conservatively (0.05) and increase only after monitoring confirms acceptable metrics.
    */
   canaryPercentage?: number;
   /**
-   * ISO 8601 duration of the canary phase.
+   * ISO 8601 duration of the canary phase, during which the new version handles a small percentage of real traffic. At end of canary phase, metrics are reviewed before full promotion to production.
    */
   canaryDuration?: string;
   /**
-   * Elevated review sampling rate during the canary phase.
+   * Elevated human review sampling rate applied to canary invocations during the canary phase. Set to 1.0 (100% sampling) for rights-impacting workflows to ensure maximum oversight while evaluating the new model version.
    */
   canaryReviewSamplingRate?: number;
+  /**
+   * This interface was referenced by `DeploymentSequence`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

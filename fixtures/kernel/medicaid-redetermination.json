@@ -7,7 +7,6 @@
   "description": "Cyclical benefits workflow with no reachable final state on the happy path. Intake -> eligibility review -> determination -> active benefits (12-month cycle) -> redetermination due -> eligibility review (loop). Proves the kernel handles periodic review without a new construct. Uses stateTimeout on active-benefits, pre-notification timer 60 days before redetermination, hold state for pending applicant response, history state on eligibility-review for context resumption, and append-only case data accumulating across redetermination cycles.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
     {
       "id": "applicant",
@@ -35,13 +34,14 @@
       "description": "External income and eligibility verification"
     }
   ],
-
   "lifecycle": {
     "initialState": "intake",
     "states": {
       "intake": {
         "type": "atomic",
-        "tags": ["intake"],
+        "tags": [
+          "intake"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -56,21 +56,30 @@
         ],
         "transitions": [
           {
-            "event": "applicationComplete",
+            "event": {
+              "kind": "message",
+              "name": "applicationComplete"
+            },
             "target": "eligibilityReview",
             "guard": "caseFile.application.isComplete = true"
           },
           {
-            "event": "applicationIncomplete",
+            "event": {
+              "kind": "message",
+              "name": "applicationIncomplete"
+            },
             "target": "pendingApplicantResponse",
-            "tags": ["hold"]
+            "tags": [
+              "hold"
+            ]
           }
         ]
       },
-
       "pendingApplicantResponse": {
         "type": "atomic",
-        "tags": ["hold"],
+        "tags": [
+          "hold"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -81,30 +90,48 @@
             "action": "startTimer",
             "timerId": "applicantResponseDeadline",
             "duration": "P30D",
-            "event": "$timeout.state"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "applicantResponse",
+            "event": {
+              "kind": "message",
+              "name": "applicantResponse"
+            },
             "target": "intake",
             "actions": [
-              { "action": "cancelTimer", "timerId": "applicantResponseDeadline" }
+              {
+                "action": "cancelTimer",
+                "timerId": "applicantResponseDeadline"
+              }
             ],
             "description": "Applicant responds -- return to intake for reprocessing"
           },
           {
-            "event": "$timeout.state",
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
             "target": "deniedForNonResponse",
-            "tags": ["adverse-decision"],
+            "tags": [
+              "adverse-decision"
+            ],
             "description": "30-day response window expired"
           }
         ]
       },
-
       "eligibilityReview": {
         "type": "compound",
-        "tags": ["review", "determination"],
+        "tags": [
+          "review",
+          "determination"
+        ],
         "initialState": "incomeVerification",
         "states": {
           "incomeVerification": {
@@ -119,11 +146,17 @@
             ],
             "transitions": [
               {
-                "event": "verificationComplete",
+                "event": {
+                  "kind": "message",
+                  "name": "verificationComplete"
+                },
                 "target": "caseworkerReview"
               },
               {
-                "event": "verificationFailed",
+                "event": {
+                  "kind": "message",
+                  "name": "verificationFailed"
+                },
                 "target": "manualVerification"
               }
             ]
@@ -139,7 +172,10 @@
             ],
             "transitions": [
               {
-                "event": "manualVerificationComplete",
+                "event": {
+                  "kind": "message",
+                  "name": "manualVerificationComplete"
+                },
                 "target": "caseworkerReview"
               }
             ]
@@ -155,7 +191,10 @@
             ],
             "transitions": [
               {
-                "event": "determinationComplete",
+                "event": {
+                  "kind": "message",
+                  "name": "determinationComplete"
+                },
                 "target": "reviewComplete"
               }
             ]
@@ -166,20 +205,30 @@
         },
         "transitions": [
           {
-            "event": "eligible",
+            "event": {
+              "kind": "message",
+              "name": "eligible"
+            },
             "target": "activeBenefits",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Applicant found eligible -- benefits activated or renewed"
           },
           {
-            "event": "ineligible",
+            "event": {
+              "kind": "message",
+              "name": "ineligible"
+            },
             "target": "adverseNotice",
-            "tags": ["determination", "adverse-decision"],
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ],
             "description": "Applicant found ineligible -- triggers due process"
           }
         ]
       },
-
       "activeBenefits": {
         "type": "atomic",
         "onEntry": [
@@ -197,18 +246,30 @@
             "action": "startTimer",
             "timerId": "preNotification",
             "duration": "P305D",
-            "event": "preRedeterminationNotice"
+            "event": {
+              "kind": "timer",
+              "timerId": "preNotification",
+              "source": "custom",
+              "firesAs": "preRedeterminationNotice"
+            }
           },
           {
             "action": "startTimer",
             "timerId": "redeterminationDue",
             "duration": "P365D",
-            "event": "$timeout.state"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "preRedeterminationNotice",
+            "event": {
+              "kind": "message",
+              "name": "preRedeterminationNotice"
+            },
             "target": "activeBenefits",
             "actions": [
               {
@@ -225,26 +286,37 @@
             "description": "60 days before redetermination: send pre-notification (self-transition)"
           },
           {
-            "event": "$timeout.state",
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
             "target": "redeterminationDue",
             "description": "12-month cycle complete -- redetermination required"
           },
           {
-            "event": "voluntaryTermination",
+            "event": {
+              "kind": "message",
+              "name": "voluntaryTermination"
+            },
             "target": "terminated",
             "description": "Beneficiary voluntarily terminates benefits"
           },
           {
-            "event": "reportedChange",
+            "event": {
+              "kind": "message",
+              "name": "reportedChange"
+            },
             "target": "eligibilityReview",
             "description": "Reported change of circumstances triggers early review"
           }
         ]
       },
-
       "redeterminationDue": {
         "type": "atomic",
-        "tags": ["notification"],
+        "tags": [
+          "notification"
+        ],
         "onEntry": [
           {
             "action": "setData",
@@ -260,30 +332,48 @@
             "action": "startTimer",
             "timerId": "redeterminationResponseDeadline",
             "duration": "P30D",
-            "event": "$timeout.state"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "redeterminationSubmitted",
+            "event": {
+              "kind": "message",
+              "name": "redeterminationSubmitted"
+            },
             "target": "eligibilityReview",
             "actions": [
-              { "action": "cancelTimer", "timerId": "redeterminationResponseDeadline" }
+              {
+                "action": "cancelTimer",
+                "timerId": "redeterminationResponseDeadline"
+              }
             ],
             "description": "Beneficiary submits redetermination -- cycle back to review"
           },
           {
-            "event": "$timeout.state",
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
             "target": "pendingApplicantResponse",
-            "tags": ["hold"],
+            "tags": [
+              "hold"
+            ],
             "description": "No response to redetermination notice -- enter hold state"
           }
         ]
       },
-
       "adverseNotice": {
         "type": "atomic",
-        "tags": ["notification", "adverse-decision"],
+        "tags": [
+          "notification",
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -294,29 +384,47 @@
             "action": "startTimer",
             "timerId": "appealWindow",
             "duration": "P30D",
-            "event": "appealWindowExpired"
+            "event": {
+              "kind": "timer",
+              "timerId": "appealWindow",
+              "source": "custom",
+              "firesAs": "appealWindowExpired"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "appealFiled",
+            "event": {
+              "kind": "message",
+              "name": "appealFiled"
+            },
             "target": "appeal",
-            "tags": ["appeal"],
+            "tags": [
+              "appeal"
+            ],
             "actions": [
-              { "action": "cancelTimer", "timerId": "appealWindow" }
+              {
+                "action": "cancelTimer",
+                "timerId": "appealWindow"
+              }
             ]
           },
           {
-            "event": "appealWindowExpired",
+            "event": {
+              "kind": "message",
+              "name": "appealWindowExpired"
+            },
             "target": "terminated",
             "description": "Appeal window expired -- benefits terminated"
           }
         ]
       },
-
       "appeal": {
         "type": "atomic",
-        "tags": ["appeal", "review"],
+        "tags": [
+          "appeal",
+          "review"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -326,23 +434,35 @@
         ],
         "transitions": [
           {
-            "event": "appealGranted",
+            "event": {
+              "kind": "message",
+              "name": "appealGranted"
+            },
             "target": "activeBenefits",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Appeal granted -- benefits restored"
           },
           {
-            "event": "appealDenied",
+            "event": {
+              "kind": "message",
+              "name": "appealDenied"
+            },
             "target": "terminated",
-            "tags": ["determination", "adverse-decision"],
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ],
             "description": "Appeal denied -- benefits terminated"
           }
         ]
       },
-
       "deniedForNonResponse": {
         "type": "atomic",
-        "tags": ["adverse-decision"],
+        "tags": [
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -352,22 +472,26 @@
         ],
         "transitions": [
           {
-            "event": "lateResponse",
+            "event": {
+              "kind": "message",
+              "name": "lateResponse"
+            },
             "target": "intake",
             "description": "Late response accepted -- restart intake"
           },
           {
-            "event": "finalClose",
+            "event": {
+              "kind": "message",
+              "name": "finalClose"
+            },
             "target": "terminated"
           }
         ]
       },
-
       "terminated": {
         "type": "final"
       }
     },
-
     "milestones": {
       "applicationReceived": {
         "condition": "caseFile.application != null",
@@ -387,7 +511,6 @@
       }
     }
   },
-
   "caseFile": {
     "fields": {
       "application": {
@@ -438,7 +561,6 @@
       }
     ]
   },
-
   "contracts": {
     "applicationForm": {
       "binding": "formspec",
@@ -451,7 +573,6 @@
       "description": "Formspec Definition for income verification data"
     }
   },
-
   "execution": {
     "workflowTimeout": "P3650D",
     "defaultTaskTimeout": "P30D",

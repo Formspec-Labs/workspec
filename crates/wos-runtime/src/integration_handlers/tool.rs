@@ -21,11 +21,11 @@ use crate::milestones::evaluate_milestones;
 use crate::runtime::RuntimeError;
 use crate::store::RuntimeRecord;
 
-use super::{IntegrationBindingHandler, value_to_idempotency_key};
 use super::request_response::{
     InvocationContext, apply_output_binding, build_integration_input,
     evaluate_integration_expression, load_or_invoke_service_result, validate_integration_contract,
 };
+use super::{IntegrationBindingHandler, value_to_idempotency_key};
 
 /// Handler for non-HTTP tool invocation bindings.
 pub(crate) struct ToolHandler;
@@ -72,12 +72,14 @@ impl IntegrationBindingHandler for ToolHandler {
         let idempotency_key = match observed.action.idempotency_key.clone() {
             Some(key) => Some(key),
             None => match binding.idempotency_key_expression.as_deref() {
-                Some(expression) => Some(value_to_idempotency_key(evaluate_integration_expression(
-                    expression,
-                    kernel,
-                    &record.instance,
-                    observed,
-                )?)?),
+                Some(expression) => {
+                    Some(value_to_idempotency_key(evaluate_integration_expression(
+                        expression,
+                        kernel,
+                        &record.instance,
+                        observed,
+                    )?)?)
+                }
                 None => None,
             },
         };
@@ -93,6 +95,7 @@ impl IntegrationBindingHandler for ToolHandler {
 
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::IdempotencyDedup,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -114,9 +117,14 @@ impl IntegrationBindingHandler for ToolHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::ToolInvoked,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -139,6 +147,10 @@ impl IntegrationBindingHandler for ToolHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -160,6 +172,7 @@ impl IntegrationBindingHandler for ToolHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -180,6 +193,10 @@ impl IntegrationBindingHandler for ToolHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -190,4 +207,3 @@ impl IntegrationBindingHandler for ToolHandler {
         Ok(provenance)
     }
 }
-

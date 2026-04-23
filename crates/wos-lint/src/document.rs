@@ -23,6 +23,7 @@ pub enum DocumentKind {
     VerificationReport,
     IntegrationProfile,
     SemanticProfile,
+    SignatureProfile,
     LifecycleDetail,
     CorrespondenceMetadata,
     BusinessCalendar,
@@ -95,6 +96,7 @@ const MARKERS: &[(&str, DocumentKind)] = &[
     ("$wosVerificationReport", DocumentKind::VerificationReport),
     ("$wosIntegrationProfile", DocumentKind::IntegrationProfile),
     ("$wosSemanticProfile", DocumentKind::SemanticProfile),
+    ("$wosSignatureProfile", DocumentKind::SignatureProfile),
     ("$wosLifecycleDetail", DocumentKind::LifecycleDetail),
     (
         "$wosCorrespondenceMetadata",
@@ -121,6 +123,10 @@ pub fn parse(json: &str) -> Result<WosDocument, LintError> {
         .as_object()
         .ok_or_else(|| LintError::Parse("document root must be an object".into()))?;
 
+    // TODO(wos-lint): promote this to a dedicated LintError::MissingMarker
+    // variant so downstream crates (wos-synth-spike, future synth providers)
+    // don't have to substring-match the sentinel `"no recognized $wos*"`.
+    // See crates/wos-synth-spike/src/loop_mod.rs MISSING_MARKER_SENTINEL.
     let kind = MARKERS
         .iter()
         .find(|(marker, _)| obj.contains_key(*marker))

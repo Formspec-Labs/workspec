@@ -4,7 +4,7 @@
 // route to FormspecBinding, and that unknown binding names are rejected with
 // a ConformanceError::Parse rather than silently falling through.
 
-use wos_conformance::{run_fixture, ConformanceError};
+use wos_conformance::{ConformanceError, run_fixture};
 
 /// Minimal inline fixture JSON with the given binding field (or None to omit it).
 fn inline_fixture(binding: Option<&str>) -> String {

@@ -40,13 +40,21 @@
       "submitted": {
         "type": "atomic",
         "description": "Requester has submitted a FOIA request. Awaiting intake review.",
-        "tags": ["intake"],
+        "tags": [
+          "intake"
+        ],
         "onEntry": [
           {
             "action": "startTimer",
             "timerId": "statutory-response-deadline",
-            "duration": "P20BD",
-            "event": "deadline.exceeded"
+            "x-durationNote": "Calendar-day fallback for `P20BD` (20 business days) until the businessCalendar sidecar binding lands and the runtime can honor business-day semantics; see TODO \u00a74.1 / business-calendar work.",
+            "duration": "P20D",
+            "event": {
+              "kind": "timer",
+              "timerId": "statutory-response-deadline",
+              "source": "custom",
+              "firesAs": "deadline.exceeded"
+            }
           },
           {
             "action": "createTask",
@@ -56,12 +64,18 @@
         ],
         "transitions": [
           {
-            "event": "intake.complete",
+            "event": {
+              "kind": "message",
+              "name": "intake.complete"
+            },
             "target": "intake-review",
             "description": "Intake clerk confirms request is complete and assigns to FOIA officer."
           },
           {
-            "event": "intake.deficient",
+            "event": {
+              "kind": "message",
+              "name": "intake.deficient"
+            },
             "target": "deficiency-notice",
             "description": "Request is missing required information; requester must be notified."
           }
@@ -79,12 +93,18 @@
         ],
         "transitions": [
           {
-            "event": "requester.resubmitted",
+            "event": {
+              "kind": "message",
+              "name": "requester.resubmitted"
+            },
             "target": "submitted",
             "description": "Requester has corrected and resubmitted the request."
           },
           {
-            "event": "request.withdrawn",
+            "event": {
+              "kind": "message",
+              "name": "request.withdrawn"
+            },
             "target": "closed-withdrawn",
             "description": "Requester withdraws the FOIA request."
           }
@@ -93,7 +113,9 @@
       "intake-review": {
         "type": "atomic",
         "description": "FOIA officer assigned; searching for responsive records.",
-        "tags": ["intake"],
+        "tags": [
+          "intake"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -109,12 +131,18 @@
         ],
         "transitions": [
           {
-            "event": "records.found",
+            "event": {
+              "kind": "message",
+              "name": "records.found"
+            },
             "target": "exemption-review",
             "description": "Responsive records found; proceeding to exemption review."
           },
           {
-            "event": "records.none-found",
+            "event": {
+              "kind": "message",
+              "name": "records.none-found"
+            },
             "target": "no-records-determination",
             "description": "No responsive records exist."
           }
@@ -123,7 +151,10 @@
       "exemption-review": {
         "type": "atomic",
         "description": "FOIA officer reviews responsive records for applicable exemptions (national security, personal privacy, law enforcement).",
-        "tags": ["review", "determination"],
+        "tags": [
+          "review",
+          "determination"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -133,29 +164,48 @@
         ],
         "transitions": [
           {
-            "event": "determination.full-disclosure",
+            "event": {
+              "kind": "message",
+              "name": "determination.full-disclosure"
+            },
             "target": "full-disclosure-response",
             "description": "All responsive records are releasable; full disclosure.",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           },
           {
-            "event": "determination.partial-withholding",
+            "event": {
+              "kind": "message",
+              "name": "determination.partial-withholding"
+            },
             "target": "adverse-decision-preparation",
             "description": "Some records withheld under exemptions; partial disclosure adverse decision.",
-            "tags": ["determination", "adverse-decision"]
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
           },
           {
-            "event": "determination.full-withholding",
+            "event": {
+              "kind": "message",
+              "name": "determination.full-withholding"
+            },
             "target": "adverse-decision-preparation",
             "description": "All records withheld under exemptions; full denial adverse decision.",
-            "tags": ["determination", "adverse-decision"]
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
           }
         ]
       },
       "adverse-decision-preparation": {
         "type": "atomic",
         "description": "FOIA officer prepares adverse decision notice with itemized exemption citations and appeal instructions.",
-        "tags": ["adverse-decision"],
+        "tags": [
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -165,7 +215,10 @@
         ],
         "transitions": [
           {
-            "event": "notice.ready",
+            "event": {
+              "kind": "message",
+              "name": "notice.ready"
+            },
             "target": "adverse-decision-issued",
             "description": "Adverse decision notice prepared and ready for issuance."
           }
@@ -174,7 +227,9 @@
       "adverse-decision-issued": {
         "type": "atomic",
         "description": "Adverse decision notice sent to requester. Appeal window open.",
-        "tags": ["adverse-decision"],
+        "tags": [
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "setData",
@@ -185,18 +240,31 @@
             "action": "startTimer",
             "timerId": "appeal-window",
             "duration": "P90D",
-            "event": "appeal.window.closed"
+            "event": {
+              "kind": "timer",
+              "timerId": "appeal-window",
+              "source": "custom",
+              "firesAs": "appeal.window.closed"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "appeal.filed",
+            "event": {
+              "kind": "message",
+              "name": "appeal.filed"
+            },
             "target": "appeal-review",
             "description": "Requester has filed an administrative appeal within the appeal window.",
-            "tags": ["appeal"]
+            "tags": [
+              "appeal"
+            ]
           },
           {
-            "event": "appeal.window.closed",
+            "event": {
+              "kind": "message",
+              "name": "appeal.window.closed"
+            },
             "target": "closed-final",
             "description": "Appeal window elapsed with no appeal filed. Decision is final."
           }
@@ -205,7 +273,10 @@
       "appeal-review": {
         "type": "atomic",
         "description": "Independent review panel adjudicates the appeal. Must be independent of original determination.",
-        "tags": ["review", "appeal"],
+        "tags": [
+          "review",
+          "appeal"
+        ],
         "onEntry": [
           {
             "action": "cancelTimer",
@@ -219,29 +290,49 @@
         ],
         "transitions": [
           {
-            "event": "appeal.granted",
+            "event": {
+              "kind": "message",
+              "name": "appeal.granted"
+            },
             "target": "appeal-granted-response",
             "description": "Appeal panel grants the appeal; records will be disclosed.",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           },
           {
-            "event": "appeal.denied",
+            "event": {
+              "kind": "message",
+              "name": "appeal.denied"
+            },
             "target": "appeal-denied-final",
             "description": "Appeal panel denies the appeal; original determination stands.",
-            "tags": ["determination", "adverse-decision"]
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
           },
           {
-            "event": "appeal.partially-granted",
+            "event": {
+              "kind": "message",
+              "name": "appeal.partially-granted"
+            },
             "target": "appeal-granted-response",
             "description": "Appeal panel partially grants the appeal.",
-            "tags": ["determination", "adverse-decision"]
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
           }
         ]
       },
       "no-records-determination": {
         "type": "atomic",
         "description": "Determination that no responsive records exist; requester notified.",
-        "tags": ["determination", "adverse-decision"],
+        "tags": [
+          "determination",
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -251,7 +342,10 @@
         ],
         "transitions": [
           {
-            "event": "notice.sent",
+            "event": {
+              "kind": "message",
+              "name": "notice.sent"
+            },
             "target": "adverse-decision-issued",
             "description": "No-records notice sent; appeal window opens."
           }
@@ -273,7 +367,10 @@
         ],
         "transitions": [
           {
-            "event": "records.released",
+            "event": {
+              "kind": "message",
+              "name": "records.released"
+            },
             "target": "closed-final",
             "description": "Records transmitted to requester; case closed."
           }
@@ -291,7 +388,10 @@
         ],
         "transitions": [
           {
-            "event": "records.released",
+            "event": {
+              "kind": "message",
+              "name": "records.released"
+            },
             "target": "closed-final",
             "description": "Records transmitted per appeal determination; case closed."
           }
@@ -406,7 +506,8 @@
   },
   "execution": {
     "workflowTimeout": "P1Y",
-    "defaultTaskTimeout": "P20BD",
+    "x-defaultTaskTimeoutNote": "Calendar-day fallback for `P20BD` (20 business days); business-day semantics TBD when the businessCalendar sidecar binding lands.",
+    "defaultTaskTimeout": "P20D",
     "instanceVersioning": "pinned"
   }
 }

@@ -42,8 +42,10 @@ MARKER_TO_SCHEMA: dict[str, str] = {
     "$wosVerificationReport": "advanced/wos-verification-report.schema.json",
     "$wosIntegrationProfile": "profiles/wos-integration-profile.schema.json",
     "$wosSemanticProfile": "profiles/wos-semantic-profile.schema.json",
+    "$wosSignatureProfile": "profiles/wos-signature-profile.schema.json",
     "$wosBusinessCalendar": "sidecars/wos-business-calendar.schema.json",
     "$wosNotificationTemplate": "sidecars/wos-notification-template.schema.json",
+    "$wosExtensionRegistry": "registry/wos-extension-registry.schema.json",
 }
 
 

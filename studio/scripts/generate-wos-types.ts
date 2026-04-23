@@ -24,6 +24,7 @@ const schemas = [
   { src: 'advanced/wos-verification-report.schema.json', name: 'verification-report' },
   { src: 'profiles/wos-integration-profile.schema.json', name: 'integration-profile' },
   { src: 'profiles/wos-semantic-profile.schema.json', name: 'semantic-profile' },
+  { src: 'profiles/wos-signature-profile.schema.json', name: 'signature-profile' },
   { src: 'companions/wos-lifecycle-detail.schema.json', name: 'lifecycle-detail' },
   { src: 'kernel/wos-correspondence-metadata.schema.json', name: 'correspondence-metadata' },
   { src: 'sidecars/wos-notification-template.schema.json', name: 'notification-template' },
@@ -136,13 +137,17 @@ async function checkFreshness(): Promise<void> {
 const mode = process.argv[2] ?? 'generate';
 
 if (mode === 'check') {
-  checkFreshness().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  checkFreshness()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
 } else {
-  writeAll().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  writeAll()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
 }

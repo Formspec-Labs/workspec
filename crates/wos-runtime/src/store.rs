@@ -9,6 +9,8 @@ use wos_core::provenance::ProvenanceRecord;
 
 use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 
+const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
+
 /// Atomic runtime record for a single instance.
 #[derive(Debug, Clone)]
 pub struct RuntimeRecord {
@@ -139,6 +141,7 @@ pub trait RuntimeStore {
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
     records: HashMap<String, RuntimeRecord>,
+    aliases: HashMap<String, String>,
 }
 
 impl InMemoryStore {
@@ -155,13 +158,23 @@ impl RuntimeStore for InMemoryStore {
             return Err(StoreError::AlreadyExists(instance_id));
         }
 
+        if let Some(alias) = legacy_instance_alias(&record.instance)
+            && alias != instance_id
+        {
+            self.aliases.insert(alias, instance_id.clone());
+        }
+
         self.records.insert(instance_id, record);
         Ok(())
     }
 
     fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
-        self.records
+        let canonical_id = self
+            .aliases
             .get(instance_id)
+            .map_or(instance_id, String::as_str);
+        self.records
+            .get(canonical_id)
             .cloned()
             .ok_or_else(|| StoreError::NotFound(instance_id.to_string()))
     }
@@ -172,7 +185,21 @@ impl RuntimeStore for InMemoryStore {
             return Err(StoreError::NotFound(instance_id));
         }
 
+        if let Some(alias) = legacy_instance_alias(&record.instance)
+            && alias != instance_id
+        {
+            self.aliases.insert(alias, instance_id.clone());
+        }
+
         self.records.insert(instance_id, record);
         Ok(())
     }
+}
+
+fn legacy_instance_alias(instance: &CaseInstance) -> Option<String> {
+    instance
+        .extensions
+        .get(LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
 }

@@ -1,0 +1,655 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/kernel/provenance-record/1.0",
+  "title": "WOS Kernel Provenance Log Document",
+  "description": "A WOS Kernel Provenance Log export document per Kernel §8 (Provenance). Carries an append-only array of Facts-tier provenance records emitted by runtime execution. State-transition records whose transitionTags include 'determination' MUST carry a caseFileSnapshot so notices, appeals, and override reviews can reproduce the exact factual basis used by the decision. This schema is the canonical validation target for provenance log exports -- kernel documents themselves do not embed the log.",
+  "type": "object",
+  "required": [
+    "provenanceLog"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "provenanceLog": {
+      "type": "array",
+      "description": "Ordered sequence of Facts-tier provenance records emitted during a workflow run. Records are append-only and their order matches emission order; consumers MUST preserve ordering when re-exporting.",
+      "examples": [
+        [
+          {
+            "recordKind": "stateTransition",
+            "timestamp": "2026-04-19T12:00:00Z",
+            "actorId": "caseworker",
+            "fromState": "review",
+            "toState": "decided",
+            "event": "decide",
+            "transitionTags": [
+              "determination"
+            ],
+            "caseFileSnapshot": {
+              "value": {
+                "income": 17500,
+                "eligible": true
+              },
+              "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+              "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+            }
+          }
+        ]
+      ],
+      "items": {
+        "$ref": "#/$defs/FactsTierRecord"
+      }
+    }
+  },
+  "$defs": {
+    "FactsTierRecord": {
+      "type": "object",
+      "description": "A WOS Facts-tier provenance record emitted by runtime execution. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
+      "required": [
+        "id"
+      ],
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "stateTransition",
+          "timestamp": "2026-04-19T12:00:00Z",
+          "actorId": "caseworker",
+          "fromState": "review",
+          "toState": "decided",
+          "event": "decide",
+          "transitionTags": [
+            "determination"
+          ],
+          "caseFileSnapshot": {
+            "value": {
+              "income": 17500,
+              "eligible": true
+            },
+            "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+            "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-record-typeid",
+          "description": "TypeID-structured identifier for this facts-tier provenance record. Reserved family prefix: `prov`.",
+          "examples": [
+            "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+          ]
+        },
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. For determination snapshot enforcement, the relevant value is 'stateTransition'. Other record kinds MAY also carry caseFileSnapshot for implementation-specific diagnostics.",
+          "examples": [
+            "stateTransition",
+            "caseStateMutation"
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/ProvenanceOutcome"
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory.",
+          "examples": [
+            [
+              "determination"
+            ],
+            [
+              "review"
+            ]
+          ],
+          "items": {
+            "type": "string",
+            "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
+            "examples": [
+              "determination",
+              "review"
+            ]
+          }
+        },
+        "caseFileSnapshot": {
+          "$ref": "#/$defs/CaseFileSnapshot"
+        },
+        "canonicalEventHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase hex rendering of the 32-byte Trellis `canonical_event_hash` stamped after custody admission, when present.",
+          "examples": [
+            "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "stateTransition"
+              },
+              "transitionTags": {
+                "contains": {
+                  "const": "determination"
+                }
+              }
+            },
+            "required": [
+              "recordKind",
+              "transitionTags"
+            ]
+          },
+          "then": {
+            "required": [
+              "caseFileSnapshot"
+            ]
+          }
+        },
+        {
+          "$ref": "#/$defs/CapabilityInvocationRecord"
+        },
+        {
+          "$ref": "#/$defs/SignatureAffirmationRecord"
+        }
+      ]
+    },
+    "CapabilityInvocationRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. Every provenance log validated against this kernel schema participates in the MUST via `FactsTierRecord.allOf`; records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+          "recordKind": "capabilityInvocation",
+          "data": {
+            "invocationBlocked": true,
+            "capabilityId": "documentExtraction"
+          },
+          "outcome": "preconditionNotSatisfied"
+        },
+        {
+          "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
+          "recordKind": "capabilityInvocation",
+          "data": {
+            "invocationBlocked": false,
+            "capabilityId": "documentExtraction"
+          }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
+          "examples": [
+            "capabilityInvocation",
+            "capabilityInvocation"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
+          "examples": [
+            {
+              "invocationBlocked": true,
+              "capabilityId": "documentExtraction"
+            },
+            {
+              "invocationBlocked": false,
+              "capabilityId": "eligibilityScreener"
+            }
+          ],
+          "properties": {
+            "invocationBlocked": {
+              "type": "boolean",
+              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration §3.3.1). The processor MUST then fall through to the fallback chain (AI §8). False (or absent) means the capability was invoked.",
+              "examples": [
+                true,
+                false
+              ],
+              "x-lm": {
+                "critical": true,
+                "intent": "Signal that a capability precondition blocked agent invocation; pairs with outcome=preconditionNotSatisfied to distinguish declarative gates from agent failures"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "invocationBlocked": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "invocationBlocked"
+                ]
+              }
+            },
+            "required": [
+              "recordKind",
+              "data"
+            ]
+          },
+          "then": {
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "const": "preconditionNotSatisfied"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SignatureAffirmationRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, hash, timestamp, identity-binding, consent, provider, ceremony, profile, Formspec response, and custody eligibility fields required by Signature Profile §2.8.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "signatureAffirmation",
+          "data": {
+            "signerId": "applicant",
+            "roleId": "applicantSigner",
+            "role": "signer",
+            "documentId": "benefitsApplication",
+            "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "documentHashAlgorithm": "sha-256",
+            "signedAt": "2026-04-22T14:30:00Z",
+            "identityBinding": {
+              "method": "email-otp",
+              "assuranceLevel": "standard",
+              "providerRef": "urn:agency.gov:identity:providers:email-otp"
+            },
+            "consentReference": {
+              "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+              "consentVersion": "1.0.0",
+              "acceptedAtPath": "response.signature.acceptedAt",
+              "affirmationPath": "response.signature.affirmed"
+            },
+            "signatureProvider": "urn:agency.gov:signature:providers:formspec",
+            "ceremonyId": "ceremony-2026-0001",
+            "profileRef": "urn:agency.gov:wos:signature-profile:benefits:v1",
+            "formspecResponseRef": "urn:agency.gov:formspec:responses:benefits:case-2026-0001",
+            "custodyHookEligible": true
+          }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "`signatureAffirmation` selects records emitted when a Signature Profile signing act is accepted.",
+          "examples": [
+            "signatureAffirmation"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "signatureAffirmation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/SignatureAffirmationData"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SignatureAffirmationData": {
+      "type": "object",
+      "description": "Required payload for a Signature Profile affirmation provenance record. Identity-binding and consent-reference shapes are provider-neutral so Formspec and external ceremony adapters can map into the same WOS evidence record.",
+      "additionalProperties": false,
+      "required": [
+        "signerId",
+        "roleId",
+        "role",
+        "documentId",
+        "documentHash",
+        "documentHashAlgorithm",
+        "signedAt",
+        "identityBinding",
+        "consentReference",
+        "signatureProvider",
+        "ceremonyId",
+        "formspecResponseRef",
+        "custodyHookEligible"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "profileRef"
+          ],
+          "not": {
+            "required": [
+              "profileKey"
+            ]
+          }
+        },
+        {
+          "required": [
+            "profileKey"
+          ],
+          "not": {
+            "required": [
+              "profileRef"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "signerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable signer identifier from the ceremony context or assigned WOS actor.",
+          "examples": [
+            "applicant"
+          ]
+        },
+        "roleId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Signature Profile role id that was satisfied by this accepted signing act.",
+          "examples": [
+            "applicantSigner"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "signer",
+            "in-person-signer",
+            "certified-recipient",
+            "witness",
+            "notary",
+            "approver",
+            "form-filler",
+            "viewer"
+          ],
+          "description": "Signature Profile role literal that defines the signer ceremony semantics.",
+          "examples": [
+            "signer"
+          ]
+        },
+        "documentId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Signature Profile document id whose declared digest was affirmed by the signer.",
+          "examples": [
+            "benefitsApplication"
+          ]
+        },
+        "documentHash": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64,128}$",
+          "description": "Digest of the document bytes that the signer affirmed during the ceremony.",
+          "examples": [
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ]
+        },
+        "documentHashAlgorithm": {
+          "type": "string",
+          "pattern": "^(sha-256|sha-384|sha-512|x-[a-z0-9][a-z0-9-]*)$",
+          "description": "Digest algorithm used to compute documentHash for the affirmed document.",
+          "examples": [
+            "sha-256"
+          ]
+        },
+        "signedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the signer accepted the signing act and consent.",
+          "examples": [
+            "2026-04-22T14:30:00Z"
+          ]
+        },
+        "identityBinding": {
+          "$ref": "#/$defs/SignatureIdentityBinding"
+        },
+        "consentReference": {
+          "$ref": "#/$defs/SignatureConsentReference"
+        },
+        "signatureProvider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider or adapter that supplied the signing ceremony evidence.",
+          "examples": [
+            "urn:agency.gov:signature:providers:formspec"
+          ]
+        },
+        "ceremonyId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider or adapter ceremony identifier for the accepted signing session.",
+          "examples": [
+            "ceremony-2026-0001"
+          ]
+        },
+        "profileRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the Signature Profile used for this signing act.",
+          "examples": [
+            "urn:agency.gov:wos:signature-profile:benefits:v1"
+          ]
+        },
+        "profileKey": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Package-local Signature Profile key used for this signing act.",
+          "examples": [
+            "benefitsSignature"
+          ]
+        },
+        "formspecResponseRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the canonical Formspec response that supplied signature evidence.",
+          "examples": [
+            "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
+          ]
+        },
+        "custodyHookEligible": {
+          "type": "boolean",
+          "const": true,
+          "description": "SignatureAffirmation records are eligible for WOS custodyHook admission.",
+          "examples": [
+            true
+          ]
+        }
+      }
+    },
+    "SignatureIdentityBinding": {
+      "type": "object",
+      "description": "Provider-neutral identity-binding evidence for a signature affirmation.",
+      "required": [
+        "method",
+        "assuranceLevel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^(none|email-otp|sms-otp|knowledge-based|oidc|webauthn|credential|in-person|notary|x-[a-z0-9][a-z0-9-]*)$",
+          "description": "Authentication method used to bind the signer identity to the signing act.",
+          "examples": [
+            "email-otp"
+          ]
+        },
+        "assuranceLevel": {
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "standard",
+            "high",
+            "very-high"
+          ],
+          "description": "Assurance strength reached by the identity-binding evidence.",
+          "examples": [
+            "standard"
+          ]
+        },
+        "providerRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the identity or signature provider, when used.",
+          "examples": [
+            "urn:agency.gov:identity:providers:email-otp"
+          ]
+        },
+        "externalAttestationRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to an external identity attestation, when one exists.",
+          "examples": [
+            "urn:agency.gov:identity:attestations:notary:case-2026-0042"
+          ]
+        }
+      }
+    },
+    "SignatureConsentReference": {
+      "type": "object",
+      "description": "Consent text/version and response evidence paths used to prove signing intent.",
+      "required": [
+        "consentTextRef",
+        "consentVersion",
+        "acceptedAtPath",
+        "affirmationPath"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "consentTextRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI reference to the consent text accepted by the signer during the ceremony.",
+          "examples": [
+            "urn:agency.gov:consent:esign-benefits:v1"
+          ]
+        },
+        "consentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the consent text accepted by the signer and recorded as evidence.",
+          "examples": [
+            "1.0.0"
+          ]
+        },
+        "acceptedAtPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to timestamp evidence in the Formspec response or case file.",
+          "examples": [
+            "response.signature.acceptedAt"
+          ]
+        },
+        "affirmationPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to the explicit affirmation evidence that proves signing intent.",
+          "examples": [
+            "response.signature.affirmed"
+          ]
+        }
+      }
+    },
+    "ProvenanceOutcome": {
+      "type": "string",
+      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration §3.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime §10.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
+      "examples": [
+        "preconditionNotSatisfied",
+        "convergenceCapReached",
+        "x-vendor-quota-exceeded"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "preconditionNotSatisfied",
+            "convergenceCapReached"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "CaseFileSnapshot": {
+      "type": "object",
+      "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export.",
+      "examples": [
+        {
+          "value": {
+            "income": 17500,
+            "eligible": true
+          },
+          "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+          "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        }
+      ],
+      "required": [
+        "value",
+        "jcsCanonical",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires. This value may be an object, array, string, number, boolean, or null depending on the processor's case-state representation.",
+          "examples": [
+            {
+              "income": 17500,
+              "eligible": true
+            }
+          ]
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
+          "examples": [
+            "{\"eligible\":true,\"income\":17500}"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical. This digest links the human-readable snapshot to tamper-evident exports without requiring downstream systems to reserialize value.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
+        }
+      }
+    }
+  }
+}

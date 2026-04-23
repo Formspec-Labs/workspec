@@ -6,15 +6,17 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact, not a WOS document type: it has no $wos* marker because it is produced and consumed by processors, not authored by workflow designers. The instance shape is normatively defined so that instances can migrate between conformant processors without data loss.
  */
 export interface WOSCaseInstance {
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation and autocompletion.
-   */
-  $schema?: string;
-  /**
-   * Globally unique identifier for this workflow instance. Stable for the lifetime of the instance.
+   * TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.
    */
   instanceId: string;
   /**
@@ -32,7 +34,7 @@ export interface WOSCaseInstance {
    */
   configuration: string[];
   /**
-   * Current case file field values. The keys are field names declared in the Kernel Document's caseFile.fields (Kernel S5.2). Values conform to the declared field types (Kernel S5.3).
+   * Current case file field values. The keys are field names declared in the Kernel Document's caseFile.fields (Kernel S5.2). Values conform to the declared field types (Kernel S5.3). Mutated by setData actions and completed task response mappings. This is the authoritative business-data snapshot at the current point in processing.
    */
   caseState: {
     [k: string]: unknown;
@@ -69,7 +71,7 @@ export interface WOSCaseInstance {
    */
   status: 'active' | 'suspended' | 'migrating' | 'completed' | 'terminated';
   /**
-   * ISO 8601 timestamp of instance creation.
+   * ISO 8601 timestamp when this instance was created by the processor (Runtime Companion S3.1). Immutable after creation — never updated on transitions or state changes.
    */
   createdAt: string;
   /**
@@ -82,10 +84,12 @@ export interface WOSCaseInstance {
   pendingEvents?: PendingEvent[];
   governanceState?: GovernanceState;
   volumeCounters?: VolumeCounters;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'. Implementations MAY use this for deployment-specific metadata (e.g., x-correlationId, x-tenantId, x-deploymentRegion).
+   * This interface was referenced by `WOSCaseInstance`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -109,17 +113,24 @@ export interface TimerState {
    * The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4).
    */
   scopeState?: string;
+  /**
+   * This interface was referenced by `TimerState`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Durable nonterminal task state for an active task.
  */
 export interface ActiveTask {
   /**
-   * Stable processor task identifier.
+   * Stable processor-assigned identifier for this task. Used for idempotent event routing, provenance correlation, and delegation references.
    */
   taskId: string;
   /**
-   * Reference to the task definition or task pattern.
+   * Reference to the task definition, task pattern, or human-readable label identifying this task's type within the workflow.
    */
   taskRef: string;
   /**
@@ -127,35 +138,35 @@ export interface ActiveTask {
    */
   status: 'created' | 'assigned' | 'claimed' | 'delegated' | 'escalated';
   /**
-   * Actor assigned to complete the task.
+   * Identifier of the actor assigned to complete this task. Set by createTask; may change on delegation or escalation.
    */
   assignedActor?: string;
   /**
-   * Kernel contract map key used by this task.
+   * Key into the Kernel Document's contracts map identifying which contract governs this task (Kernel S7.2).
    */
   contractRef?: string;
   /**
-   * Contract binding type for this task when backed by a contract.
+   * Contract binding type for this task when backed by a contract. Drives which renderer the task delivery layer invokes.
    */
   binding?: 'formspec' | 'jsonSchema';
   /**
-   * Formspec Definition URL for Formspec-backed tasks.
+   * Formspec Definition URL for Formspec-backed tasks. Pinned at task creation; must match response.definitionUrl on submission.
    */
   definitionUrl?: string;
   /**
-   * Pinned Formspec Definition version for Formspec-backed tasks.
+   * Pinned Formspec Definition version for Formspec-backed tasks. Must match response.definitionVersion on submission.
    */
   definitionVersion?: string;
   /**
-   * Mapping document used to prefill the task response.
+   * URI of the Mapping document used to prefill the task form from current case state before rendering.
    */
   prefillMappingRef?: string;
   /**
-   * Mapping document used to project the completed task response into case state.
+   * URI of the Mapping document used to project a completed task Response back into case state on submission.
    */
   responseMappingRef?: string;
   /**
-   * Task deadline.
+   * Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.
    */
   deadline?: string;
   /**
@@ -165,17 +176,19 @@ export interface ActiveTask {
   context?: FormspecTaskContext;
   lastValidationOutcome?: ValidationOutcome;
   /**
-   * ISO 8601 timestamp when the task was created.
+   * ISO 8601 timestamp when this task was created by the processor's createTask action.
    */
   createdAt: string;
   /**
-   * ISO 8601 timestamp when the task state last changed.
+   * ISO 8601 timestamp when this task's state last changed (assignment, claim, escalation, or partial save).
    */
   updatedAt: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this active task.
+   * This interface was referenced by `ActiveTask`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -184,61 +197,69 @@ export interface ActiveTask {
  */
 export interface FormspecTaskContext {
   /**
-   * Processor task identifier. Stable for idempotency and provenance.
+   * Processor-assigned task identifier. Stable for idempotency, provenance, and delegation lookups throughout the task lifecycle.
    */
   taskId: string;
   /**
-   * WOS CaseInstance identifier.
+   * Identifier of the WOS CaseInstance this task belongs to. Used by the form renderer to route task completion events back to the correct instance. Reserved family prefix: `case`.
    */
   instanceId: string;
   /**
-   * Kernel contract map key used by the task.
+   * Key into the Kernel Document's contracts map governing this task's form definition and response schema.
    */
   contractRef: string;
   /**
-   * Formspec Definition URL. Must match response.definitionUrl.
+   * Formspec Definition URL. Pinned at task creation time; must match response.definitionUrl to pass envelope validation.
    */
   definitionUrl: string;
   /**
-   * Pinned Formspec Definition version. Must match response.definitionVersion.
+   * Pinned Formspec Definition version. Must match response.definitionVersion to pass envelope validation.
    */
   definitionVersion: string;
   /**
-   * Task binding discriminator.
+   * Task binding discriminator. Always 'formspec' in FormspecTaskContext — identifies this context shape as requiring Formspec rendering.
    */
   binding: 'formspec';
   /**
-   * Actor assigned by the createTask action.
+   * Actor assigned to complete this task, as set by the createTask action. The form renderer uses this to authorize task access.
    */
   assignedActor: string;
   /**
-   * Host-provided initial values for rendering.
+   * Host-provided initial field values pre-populated into the form before the actor sees it. Applied after prefillMappingRef if both are present.
    */
   prefillData?: {
     [k: string]: unknown;
   };
   /**
-   * Mapping document used to prefill the Response.
+   * URI of the Mapping document used to derive prefill field values from current case state before rendering the form.
    */
   prefillMappingRef?: string;
   /**
-   * Mapping document used to project a completed Response into case state.
+   * URI of the Mapping document used to project a completed Formspec Response into case state on task completion.
    */
   responseMappingRef?: string;
   /**
-   * Task deadline.
+   * Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.
    */
   deadline?: string;
   /**
-   * Effective task impact level.
+   * Effective task impact level. Drives UI warnings and access-control enforcement in the Formspec renderer.
    */
   impactLevel?: 'rights-impacting' | 'safety-impacting' | 'operational' | 'informational';
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this task context.
+   * This interface was referenced by `FormspecTaskContext`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }
 /**
  * Most recent Formspec task validation outcome, if validation has run.
@@ -268,40 +289,54 @@ export interface ValidationOutcome {
   validationResults?: {
     [k: string]: unknown;
   }[];
+  /**
+   * This interface was referenced by `ValidationOutcome`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Records completed actions within a compensable scope for potential reverse-order compensation (Lifecycle Detail S5).
  */
 export interface CompensationLog {
   /**
-   * Identifier of the compensable scope this log belongs to.
+   * Identifier of the compensable scope this log belongs to. Matches a compensableScope state identifier in the Kernel Document (Lifecycle Detail S5).
    */
   scopeId: string;
   /**
    * Completed actions in forward completion order. On compensation, these are executed in reverse order (Lifecycle Detail S5.4).
    */
   entries: CompensationEntry[];
+  /**
+   * This interface was referenced by `CompensationLog`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * A single entry in the compensation log -- one completed action with its compensating counterpart.
  */
 export interface CompensationEntry {
   /**
-   * Identifier of the original action that completed.
+   * Identifier of the original Kernel action that completed and was recorded for potential compensation.
    */
   actionId: string;
   /**
-   * Type of the original action (e.g., invokeService, setData).
+   * Type of the original action that completed (e.g., invokeService, setData, createTask). Matches a Kernel action type (Kernel S9.2).
    */
   actionType: string;
   /**
-   * The compensating action to execute during backward recovery. Structure matches a Kernel Action (Kernel S9.2).
+   * The compensating action to execute during backward recovery in reverse entry order. Structure matches a Kernel Action (Kernel S9.2).
    */
   compensatingAction: {
     [k: string]: unknown;
   };
   /**
-   * ISO 8601 timestamp when the original action completed.
+   * ISO 8601 timestamp when the original action completed and was logged for compensation purposes.
    */
   completedAt: string;
   /**
@@ -310,33 +345,47 @@ export interface CompensationEntry {
   output?: {
     [k: string]: unknown;
   };
+  /**
+   * This interface was referenced by `CompensationEntry`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * An event enqueued for processing but not yet consumed by the evaluation engine.
  */
 export interface PendingEvent {
   /**
-   * Event name matching a transition's event property.
+   * Event name matching a transition's event property in the Kernel Document. May also be a kernel-generated event like '$timeout.task' (Kernel S9.1).
    */
   event: string;
   /**
-   * Identifier of the actor who submitted this event.
+   * Identifier of the actor who submitted this event. Used for audit trails and role-based transition guards.
    */
   actorId?: string;
   /**
-   * Event payload, available in the evaluation context as 'event' (Kernel S7.2).
+   * Arbitrary event payload, available in guard expression evaluation context as 'event' (Kernel S7.2). Structure is workflow-specific.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * ISO 8601 timestamp of event submission.
+   * ISO 8601 timestamp when this event was enqueued by the actor or system component.
    */
   timestamp: string;
   /**
-   * Token for exactly-once delivery deduplication (Runtime Companion S4.3).
+   * Opaque token for exactly-once delivery deduplication (Runtime Companion S4.3). The processor rejects duplicate events with the same token.
    */
   idempotencyToken?: string;
+  /**
+   * This interface was referenced by `PendingEvent`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Runtime state for governance enforcement. Present only when a Governance Document is attached to the workflow. Tracks delegation chains, active holds, and review protocol state.
@@ -356,17 +405,24 @@ export interface GovernanceState {
   reviewState?: {
     [k: string]: unknown;
   };
+  /**
+   * This interface was referenced by `GovernanceState`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * A currently active delegation of authority from one actor to another.
  */
 export interface ActiveDelegation {
   /**
-   * Actor who delegated authority.
+   * Identifier of the actor who granted this delegation. Must be an actor with the relevant authority at the time of granting.
    */
   delegatorId: string;
   /**
-   * Actor who received delegated authority.
+   * Identifier of the actor who received the delegated authority. This actor may act on behalf of the delegator within the declared scope.
    */
   delegateId: string;
   /**
@@ -374,17 +430,24 @@ export interface ActiveDelegation {
    */
   scope: string;
   /**
-   * Type of authority delegated (Governance S11.2).
+   * Type of authority delegated (Governance S11.2). Determines which governed transitions the delegate may trigger.
    */
   authority?: 'signing' | 'determination' | 'review' | 'override';
   /**
-   * ISO 8601 timestamp when the delegation was granted.
+   * ISO 8601 timestamp when this delegation was recorded by the governance system.
    */
   grantedAt: string;
   /**
    * ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry.
    */
   expiresAt?: string;
+  /**
+   * This interface was referenced by `ActiveDelegation`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * A currently active hold on the workflow instance.
@@ -395,7 +458,7 @@ export interface ActiveHold {
    */
   holdType: string;
   /**
-   * ISO 8601 timestamp when the hold began.
+   * ISO 8601 timestamp when this hold was placed on the instance by the governance system.
    */
   startedAt: string;
   /**
@@ -403,13 +466,20 @@ export interface ActiveHold {
    */
   expectedEnd?: string;
   /**
-   * Event name that will resume the case from this hold.
+   * Event name that, when received, will lift this hold and allow the instance to resume normal processing.
    */
   resumeTrigger: string;
   /**
-   * The lifecycle state the instance was in when the hold started.
+   * The lifecycle state the instance was in when the hold started. Stored to verify state has not changed on hold removal.
    */
   holdState?: string;
+  /**
+   * This interface was referenced by `ActiveHold`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Counters for AI Integration volume constraints (AI Integration S11). Present only when an AI Integration Document is attached. Tracks autonomous actions per hour/day for autonomy cap enforcement.
@@ -427,17 +497,31 @@ export interface VolumeCounters {
   daily?: {
     [k: string]: VolumeCounter;
   };
+  /**
+   * This interface was referenced by `VolumeCounters`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * A single volume counter tracking autonomous actions within a time window.
  */
 export interface VolumeCounter {
   /**
-   * Number of autonomous actions in the current window.
+   * Number of autonomous actions taken by this agent in the current counting window. Compared to the cap declared in the AI Integration Document.
    */
   count: number;
   /**
-   * ISO 8601 timestamp of the current counting window start.
+   * ISO 8601 timestamp marking the start of the current counting window. Resets each hour (hourly) or each UTC midnight (daily).
    */
   windowStart: string;
+  /**
+   * This interface was referenced by `VolumeCounter`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }

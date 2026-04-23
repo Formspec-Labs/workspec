@@ -1,0 +1,34 @@
+{
+  "binding": "formspec",
+  "id": "SIG-004-expiry-timer",
+  "rule": "SIG-RT",
+  "description": "Signature expiry records pending task expiration and follows the configured expiry event.",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    { "event": "start", "actor": "caseworker" },
+    { "event": "noop", "actor": "system", "delay": "P7D" }
+  ],
+  "expected_transitions": [
+    { "from": "draft", "to": "signing", "event": "start" },
+    { "from": "signing", "to": "expired", "event": "signature.expired" }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "timerFired",
+      "data": { "timerId": "signatureExpiry", "firesEvent": "signature.expired" }
+    },
+    {
+      "recordKind": "taskFailed",
+      "data": {
+        "details": {
+          "signatureStatus": "expired",
+          "pendingSignerIds": ["applicant", "agency", "witness", "notary", "caseworker"],
+          "expiredDocumentIds": ["application"]
+        }
+      }
+    }
+  ]
+}

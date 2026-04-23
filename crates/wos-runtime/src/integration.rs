@@ -151,8 +151,7 @@ mod tests {
         ];
 
         for (variant, expected_str) in cases {
-            let serialized = serde_json::to_value(variant)
-                .expect("serialization must succeed");
+            let serialized = serde_json::to_value(variant).expect("serialization must succeed");
             assert_eq!(
                 serialized.as_str(),
                 Some(expected_str),

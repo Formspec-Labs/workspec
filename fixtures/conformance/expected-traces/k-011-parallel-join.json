@@ -1,0 +1,152 @@
+{
+  "fixtureId": "K-011-parallel-join",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "applicationComplete",
+        "sourceActor": "intakeWorker",
+        "payload": {
+          "application": {
+            "applicantId": "APP-2026-001",
+            "isComplete": true
+          }
+        }
+      },
+      "stateBefore": "intake",
+      "stateAfter": "incomeVerification",
+      "expectedStateAfter": "incomeVerification",
+      "guardsEvaluated": [
+        {
+          "guardId": "intake->incomeVerification:applicationComplete",
+          "sourceState": "intake",
+          "targetState": "incomeVerification",
+          "event": "applicationComplete",
+          "expression": "caseFile.application.isComplete = true",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "application": {
+                "isComplete": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 1,
+      "event": {
+        "name": "verificationComplete",
+        "sourceActor": "verificationSystem",
+        "payload": {
+          "verification": {
+            "status": "verified",
+            "verifiedIncome": 28000
+          }
+        }
+      },
+      "stateBefore": "incomeVerification",
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "eligibilityReview",
+      "guardsEvaluated": [
+        {
+          "guardId": "incomeVerification->eligibilityReview:verificationComplete",
+          "sourceState": "incomeVerification",
+          "targetState": "eligibilityReview",
+          "event": "verificationComplete",
+          "expression": "caseFile.verification.status = 'verified'",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "verification": {
+                "status": "verified"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 2,
+      "event": {
+        "name": "reviewAComplete",
+        "sourceActor": "caseworkerA",
+        "payload": {
+          "reviewA": {
+            "decision": "eligible",
+            "notes": "Income within threshold"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewA",
+      "stateAfter": "reviewADone",
+      "expectedStateAfter": "reviewADone"
+    },
+    {
+      "stepIndex": 3,
+      "event": {
+        "name": "reviewBComplete",
+        "sourceActor": "caseworkerB",
+        "payload": {
+          "reviewB": {
+            "decision": "eligible",
+            "notes": "Confirmed eligibility"
+          }
+        }
+      },
+      "stateBefore": "pendingReviewB",
+      "stateAfter": "reviewBDone",
+      "expectedStateAfter": "reviewBDone"
+    },
+    {
+      "stepIndex": 4,
+      "event": {
+        "name": "$join"
+      },
+      "stateBefore": "eligibilityReview",
+      "stateAfter": "determination",
+      "expectedStateAfter": "determination",
+      "guardsEvaluated": [
+        {
+          "guardId": "eligibilityReview->reconciliation:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "reconciliation",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision != caseFile.reviewB.decision",
+          "result": false,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "eligible"
+              },
+              "reviewB": {
+                "decision": "eligible"
+              }
+            }
+          }
+        },
+        {
+          "guardId": "eligibilityReview->determination:$join",
+          "sourceState": "eligibilityReview",
+          "targetState": "determination",
+          "event": "$join",
+          "expression": "caseFile.reviewA.decision = caseFile.reviewB.decision",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "reviewA": {
+                "decision": "eligible"
+              },
+              "reviewB": {
+                "decision": "eligible"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "outcome": "pass"
+}

@@ -111,9 +111,9 @@ pub struct AdverseDecisionPolicy {
     #[serde(default)]
     pub notice_grace_period: Option<String>,
 
-    /// Notification template reference.
+    /// Notification template key.
     #[serde(default)]
-    pub notice_template_ref: Option<String>,
+    pub notice_template_key: Option<String>,
 
     /// Required explanation level.
     #[serde(default)]
@@ -562,9 +562,9 @@ pub struct HoldPolicy {
     /// Action when duration expires without resume trigger.
     pub timeout_action: TimeoutAction,
 
-    /// Notification template reference.
+    /// Notification template key.
     #[serde(default)]
-    pub notification_template_ref: Option<String>,
+    pub notification_template_key: Option<String>,
 
     /// FEL expression scoping when this policy applies.
     #[serde(default)]

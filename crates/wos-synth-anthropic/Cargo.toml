@@ -1,0 +1,13 @@
+[package]
+name = "wos-synth-anthropic"
+version = "0.0.1"
+edition = "2021"
+publish = false
+description = "Anthropic-API Prompter implementation for wos-synth-core. Crate-level separation keeps reqwest/tokio/anthropic-sdk out of wos-synth-core's dependency graph."
+
+[dependencies]
+wos-synth-core = { path = "../wos-synth-core" }
+anthropic-sdk = "0.1.5"
+async-trait   = "0.1"
+serde_json    = "1"
+tokio         = { version = "1", features = ["full"] }

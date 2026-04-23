@@ -440,11 +440,36 @@ fn k006_same_scope_valid_target_clean() {
 }
 
 // ========================================================================
-// K-007: Event names MUST NOT use the $ prefix.
+// K-007: Message event names MUST NOT use the $ prefix; signal `$` only for
+// `$join` / `$compensation.complete` (typed TransitionEvent after parse).
 // ========================================================================
 
 #[test]
 fn k007_dollar_prefix_event_flagged() {
+    let doc = json!({
+        "$wosKernel": "1.0",
+        "lifecycle": {
+            "initialState": "open",
+            "states": {
+                "open": {
+                    "type": "atomic",
+                    "transitions": [
+                        { "event": { "kind": "message", "name": "$custom" }, "target": "closed" }
+                    ]
+                },
+                "closed": { "type": "final" }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-007"),
+        "expected K-007 for $custom event: {diags:?}"
+    );
+}
+
+#[test]
+fn k007_legacy_string_dollar_custom_flagged() {
     let doc = json!({
         "$wosKernel": "1.0",
         "lifecycle": {
@@ -463,7 +488,7 @@ fn k007_dollar_prefix_event_flagged() {
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "K-007"),
-        "expected K-007 for $custom event: {diags:?}"
+        "expected K-007 for legacy string $custom: {diags:?}"
     );
 }
 
@@ -495,6 +520,43 @@ fn k007_join_event_is_exempt_clean() {
     assert!(
         !has_rule(&diags, "K-007"),
         "unexpected K-007 for $join event: {diags:?}"
+    );
+}
+
+#[test]
+fn k007_typed_join_signal_parallel_clean() {
+    let doc = json!({
+        "$wosKernel": "1.0",
+        "lifecycle": {
+            "initialState": "review",
+            "states": {
+                "review": {
+                    "type": "parallel",
+                    "regions": {
+                        "r1": {
+                            "initialState": "a",
+                            "states": { "a": { "type": "atomic" } }
+                        }
+                    },
+                    "transitions": [
+                        {
+                            "event": { "kind": "signal", "name": "$join", "scope": "instance" },
+                            "target": "done"
+                        }
+                    ]
+                },
+                "done": { "type": "final" }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        !has_rule(&diags, "K-007"),
+        "unexpected K-007 for typed $join signal: {diags:?}"
+    );
+    assert!(
+        !has_rule(&diags, "K-008"),
+        "unexpected K-008 for typed parallel join: {diags:?}"
     );
 }
 
@@ -1888,10 +1950,10 @@ fn multiple_violations_reported_together() {
                 "done": {
                     "type": "final",
                     "transitions": [
-                        { "event": "$badEvent", "target": "review" }
+                        { "event": { "kind": "message", "name": "$badEvent" }, "target": "review" }
                     ]
                     // K-001: final with transitions
-                    // K-007: $badEvent prefix
+                    // K-007: $badEvent prefix on typed message event
                 }
             }
         },

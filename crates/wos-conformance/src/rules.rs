@@ -11,7 +11,11 @@
 //! Metadata types (`RuleMetadata`, `Tier`, `Graduation`, `Severity`) are
 //! re-exported from `wos-lint` to keep the ladder definition singular.
 
-pub use wos_lint::{Graduation, RuleMetadata, Severity, Tier};
+// Use the registry Tier (wos_lint::rules::Tier) explicitly so this module
+// stays decoupled from the diagnostic::Tier added in §5.2, which wos_lint
+// now re-exports under the same short name.
+pub use wos_lint::rules::{Graduation, Tier};
+pub use wos_lint::{RuleMetadata, Severity};
 
 /// Return the full static registry of currently-implemented T3 conformance rules.
 ///
@@ -29,26 +33,48 @@ pub fn all_rules() -> &'static [RuleMetadata] {
 /// not yet reified as metadata entries — that tracking is part of the
 /// rule-coverage plan follow-up.
 static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
+    // AI-001: Fixture links are indirect — the linked files carry rule IDs
+    // AI-005, AI-009, and AI-034, not AI-001 directly. The conformance verifier
+    // runs by batch number (see AI_REGISTRATION_BATCHES) so the structural
+    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
+    // (See 2026-04-18 review.)
+    // Verified by processor manifest test against fixtures with batches 3, 4, 5, 10.
     RuleMetadata {
         id: "AI-001",
         tier: Tier::T3,
         severity: Severity::Error,
         summary: "Processor MUST implement agent registration (AI S3).",
-        fixtures: &[],
-        graduation: Graduation::Draft,
+        fixtures: &[
+            "crates/wos-conformance/tests/fixtures/ai-005-no-override-human.json",
+            "crates/wos-conformance/tests/fixtures/ai-009-permission-bounds.json",
+            "crates/wos-conformance/tests/fixtures/ai-034-confidence-report-required.json",
+        ],
+        graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-002: Fixture links are indirect — the linked files carry rule IDs
+    // AI-034, AI-035, and AI-036, not AI-002 directly. The conformance verifier
+    // runs by batch number (see AI_CONFIDENCE_BATCHES) so the structural
+    // coverage holds. Mirror of the AI-004 / AI-050 inline-evidence pattern.
+    // (See 2026-04-18 review.)
+    // Verified by processor manifest test against batch 5 (confidence framework) fixtures.
     RuleMetadata {
         id: "AI-002",
         tier: Tier::T3,
         severity: Severity::Error,
         summary: "Processor MUST implement the confidence framework (AI S7).",
-        fixtures: &[],
-        graduation: Graduation::Draft,
+        fixtures: &[
+            "crates/wos-conformance/tests/fixtures/ai-034-confidence-report-required.json",
+            "crates/wos-conformance/tests/fixtures/ai-035-calibrated-confidence.json",
+            "crates/wos-conformance/tests/fixtures/ai-036-confidence-below-floor.json",
+        ],
+        graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-004: verified by inline evidence construction in processor_conformance tests only —
+    // no standalone JSON fixture file exists. Remains Draft until a fixture file is authored.
     RuleMetadata {
         id: "AI-004",
         tier: Tier::T3,
@@ -59,6 +85,8 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-050: verified by inline evidence construction in processor_conformance tests only —
+    // no standalone JSON fixture file exists. Remains Draft until a fixture file is authored.
     RuleMetadata {
         id: "AI-050",
         tier: Tier::T3,
@@ -69,23 +97,103 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // AI-AUTO-001: Escalation-expiry revocation emits an autonomyDemotion
+    // provenance record on the next invocation (AI S5.5). Verified by the
+    // trace-parity + happy-path tests in `tests/trace_parity.rs`. Pairs with
+    // AI-028 (humanOverride trigger) and AC-001 (calibration-expiry cap)
+    // to close the autonomy-lifecycle revocation matrix.
+    RuleMetadata {
+        id: "AI-AUTO-001",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Escalation expiry MUST revoke elevated autonomy and emit an autonomyDemotion record (AI S5.5).",
+        fixtures: &[
+            "crates/wos-conformance/fixtures/AI-AUTO-001-escalation-expiry-revocation.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
+    // AI-AUTO-002: Drift-alert-triggered demotion produces both an
+    // autonomyDemotion record and a driftReclassification record, and the
+    // runtime reroutes the event through `escalated` so the kernel lands on
+    // the human-review state (AI S5.5; DriftMonitor AlertThreshold→DemotionRule
+    // binding). Verified by the trace-parity + happy-path tests in
+    // `tests/trace_parity.rs`.
+    RuleMetadata {
+        id: "AI-AUTO-002",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Drift-alert thresholds with action=demoteToAssistive MUST emit autonomyDemotion + driftReclassification and reroute the event through escalation (AI S5.5).",
+        fixtures: &["crates/wos-conformance/fixtures/AI-AUTO-002-drift-alert-demotion.json"],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
+    // G-051: verified by governance-basic profile execution over G-002, G-006, G-007, G-010,
+    // G-016, G-017, and G-018 fixtures in the conformance test suite.
     RuleMetadata {
         id: "G-051",
         tier: Tier::T3,
         severity: Severity::Error,
         summary: "Governance Basic processor MUST enforce due process and review protocols.",
-        fixtures: &[],
-        graduation: Graduation::Draft,
+        fixtures: &[
+            "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
+            "crates/wos-conformance/tests/fixtures/g-006-appeal-independent-reviewer.json",
+            "crates/wos-conformance/tests/fixtures/g-007-appeal-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-010-independent-first.json",
+            "crates/wos-conformance/tests/fixtures/g-016-review-sampling.json",
+            "crates/wos-conformance/tests/fixtures/g-017-reviewer-separation.json",
+            "crates/wos-conformance/tests/fixtures/g-018-override-rationale.json",
+        ],
+        graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
     },
+    // G-052: verified by governance-complete profile execution over all G-*
+    // fixtures. The runtime selects fixtures via `rule.starts_with("G-")` in
+    // `meta::evaluate_governance_complete`, so every `g-*.json` fixture in
+    // `crates/wos-conformance/tests/fixtures/` participates. Listed exhaustively
+    // below so the registry reflects the full coverage set rather than a
+    // representative sample. (See 2026-04-18 review.)
     RuleMetadata {
         id: "G-052",
         tier: Tier::T3,
         severity: Severity::Error,
         summary: "Governance Complete processor MUST enforce all normative sections.",
-        fixtures: &[],
-        graduation: Graduation::Draft,
+        fixtures: &[
+            "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
+            "crates/wos-conformance/tests/fixtures/g-006-appeal-independent-reviewer.json",
+            "crates/wos-conformance/tests/fixtures/g-007-appeal-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-010-independent-first.json",
+            "crates/wos-conformance/tests/fixtures/g-012-pipeline-stage-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-013-weakest-link-risk.json",
+            "crates/wos-conformance/tests/fixtures/g-016-review-sampling.json",
+            "crates/wos-conformance/tests/fixtures/g-017-reviewer-separation.json",
+            "crates/wos-conformance/tests/fixtures/g-018-override-rationale.json",
+            "crates/wos-conformance/tests/fixtures/g-019-override-immutable.json",
+            "crates/wos-conformance/tests/fixtures/g-020-rejection-detail.json",
+            "crates/wos-conformance/tests/fixtures/g-021-task-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-025-delegation-required.json",
+            "crates/wos-conformance/tests/fixtures/g-026-delegation-in-provenance.json",
+            "crates/wos-conformance/tests/fixtures/g-030-hold-timer-start.json",
+            "crates/wos-conformance/tests/fixtures/g-032-temporal-resolution.json",
+            "crates/wos-conformance/tests/fixtures/g-049-binding-type-neutral.json",
+            "crates/wos-conformance/tests/fixtures/g-054-resume-cancels-hold-timer.json",
+            "crates/wos-conformance/tests/fixtures/g-061-expired-calendar-ignored.json",
+            "crates/wos-conformance/tests/fixtures/g-064-notification-missing-variables.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: None,
+        suggested_fix: None,
+    },
+    RuleMetadata {
+        id: "K-DET-001",
+        tier: Tier::T3,
+        severity: Severity::Error,
+        summary: "Determination-tagged transitions MUST emit the pre-transition case-file snapshot in Facts-tier provenance.",
+        fixtures: &["crates/wos-conformance/tests/fixtures/k-det-001-determination-snapshot.json"],
+        graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
     },

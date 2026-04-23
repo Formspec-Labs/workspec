@@ -72,7 +72,7 @@ Governance attaches via `lifecycleHook` keyed on **semantic tags** (`determinati
 - `impactLevel` lives in kernel but is consumed only by governance (decided: stays)
 - Kernel fixtures named after Layer 1/2/3 concerns (relocate under TODO #22)
 - `wos-correspondence-metadata.schema.json` under `schemas/kernel/` self-describes as sidecar (relocate under TODO #22)
-- `DRAFTS/` contains 12 kernel version proposals — triage before any schema/spec PR lands
+- Historical kernel drafts archived to `thoughts/archive/drafts/` on 2026-04-20 (triage complete)
 
 **BPMN relationship** — Harel statechart semantics, not BPMN topology (`kernel/spec.md:636`). Appendix A acknowledges BPMN event-taxonomy adoption; TODO #20 makes that adoption normative (typed union) rather than informative. Any durable execution runtime is valid (Kernel §A). Export path is via a `wos-bpmn-export` crate; WOS is the authoring surface.
 

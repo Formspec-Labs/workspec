@@ -10,6 +10,7 @@
       "noticeRequired": true,
       "noticeTiming": "beforeEffective",
       "noticeGracePeriod": "P30D",
+      "noticeTemplateKey": "adverseDecisionNotice",
       "explanationLevel": "individualized",
       "counterfactualRequired": true,
       "appealMechanism": {

@@ -1,0 +1,176 @@
+{
+  "fixtureId": "G-030-hold-resume",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "applicationComplete",
+        "sourceActor": "caseworker",
+        "payload": {
+          "application": {
+            "isComplete": true
+          }
+        }
+      },
+      "stateBefore": "intake",
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "eligibilityReview",
+      "guardsEvaluated": [
+        {
+          "guardId": "intake->eligibilityReview:applicationComplete",
+          "sourceState": "intake",
+          "targetState": "eligibilityReview",
+          "event": "applicationComplete",
+          "expression": "caseFile.application.isComplete = true",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "application": {
+                "isComplete": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "stepIndex": 1,
+      "event": {
+        "name": "verificationComplete",
+        "sourceActor": "verificationSystem",
+        "payload": {
+          "verification": {
+            "status": "verified"
+          }
+        }
+      },
+      "stateBefore": "incomeVerification",
+      "stateAfter": "caseworkerReview",
+      "expectedStateAfter": "caseworkerReview"
+    },
+    {
+      "stepIndex": 2,
+      "event": {
+        "name": "determinationComplete",
+        "sourceActor": "caseworker",
+        "payload": {
+          "eligibility": {
+            "decision": "eligible"
+          }
+        }
+      },
+      "stateBefore": "caseworkerReview",
+      "stateAfter": "reviewComplete",
+      "expectedStateAfter": "reviewComplete"
+    },
+    {
+      "stepIndex": 3,
+      "event": {
+        "name": "eligible",
+        "sourceActor": "caseworker",
+        "payload": {}
+      },
+      "stateBefore": "eligibilityReview",
+      "stateAfter": "activeBenefits",
+      "expectedStateAfter": "activeBenefits"
+    },
+    {
+      "stepIndex": 4,
+      "event": {
+        "name": "$timeout.state",
+        "sourceActor": "system",
+        "payload": {}
+      },
+      "stateBefore": "activeBenefits",
+      "stateAfter": "redeterminationDue",
+      "expectedStateAfter": "redeterminationDue"
+    },
+    {
+      "stepIndex": 5,
+      "event": {
+        "name": "redeterminationSubmitted",
+        "sourceActor": "applicant",
+        "payload": {}
+      },
+      "stateBefore": "redeterminationDue",
+      "stateAfter": "eligibilityReview",
+      "expectedStateAfter": "eligibilityReview"
+    },
+    {
+      "stepIndex": 6,
+      "event": {
+        "name": "verificationComplete",
+        "sourceActor": "verificationSystem",
+        "payload": {
+          "verification": {
+            "status": "verified"
+          }
+        }
+      },
+      "stateBefore": "incomeVerification",
+      "stateAfter": "caseworkerReview",
+      "expectedStateAfter": "caseworkerReview"
+    },
+    {
+      "stepIndex": 7,
+      "event": {
+        "name": "determinationComplete",
+        "sourceActor": "caseworker",
+        "payload": {}
+      },
+      "stateBefore": "caseworkerReview",
+      "stateAfter": "reviewComplete",
+      "expectedStateAfter": "reviewComplete"
+    },
+    {
+      "stepIndex": 8,
+      "event": {
+        "name": "eligible",
+        "sourceActor": "caseworker",
+        "payload": {}
+      },
+      "stateBefore": "eligibilityReview",
+      "stateAfter": "activeBenefits",
+      "expectedStateAfter": "activeBenefits"
+    },
+    {
+      "stepIndex": 9,
+      "event": {
+        "name": "$timeout.state",
+        "sourceActor": "system",
+        "payload": {}
+      },
+      "stateBefore": "activeBenefits",
+      "stateAfter": "redeterminationDue",
+      "expectedStateAfter": "redeterminationDue"
+    },
+    {
+      "stepIndex": 10,
+      "event": {
+        "name": "$timeout.state",
+        "sourceActor": "system",
+        "payload": {}
+      },
+      "stateBefore": "redeterminationDue",
+      "stateAfter": "pendingApplicantResponse",
+      "expectedStateAfter": "pendingApplicantResponse"
+    },
+    {
+      "stepIndex": 11,
+      "event": {
+        "name": "applicantResponse",
+        "sourceActor": "applicant",
+        "payload": {
+          "application": {
+            "isComplete": true
+          }
+        }
+      },
+      "stateBefore": "pendingApplicantResponse",
+      "stateAfter": "intake",
+      "expectedStateAfter": "intake"
+    }
+  ],
+  "outcome": "pass"
+}

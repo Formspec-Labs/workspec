@@ -90,7 +90,14 @@ pub fn next_business_moment(
     let naive_local = naive_utc.with_timezone(&tz);
 
     // Step 3: snap forward to a valid business moment.
-    let result = snap_forward(naive_local, &calendar.work_week, &calendar.holidays, op_start, op_end, &tz)?;
+    let result = snap_forward(
+        naive_local,
+        &calendar.work_week,
+        &calendar.holidays,
+        op_start,
+        op_end,
+        &tz,
+    )?;
 
     // Step 4: return in UTC.
     Ok(result.with_timezone(&Utc))
@@ -175,10 +182,9 @@ fn parse_operating_hours(hours: Option<&OperatingHours>) -> (NaiveTime, NaiveTim
             NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
         );
     };
-    let start = parse_hhmm(&hours.start)
-        .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-    let end = parse_hhmm(&hours.end)
-        .unwrap_or_else(|| NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+    let start =
+        parse_hhmm(&hours.start).unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+    let end = parse_hhmm(&hours.end).unwrap_or_else(|| NaiveTime::from_hms_opt(17, 0, 0).unwrap());
     (start, end)
 }
 
@@ -364,7 +370,10 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(BusinessCalendarError::DidNotConverge { iterations: 366, .. })
+                Err(BusinessCalendarError::DidNotConverge {
+                    iterations: 366,
+                    ..
+                })
             ),
             "expected DidNotConverge, got {result:?}"
         );

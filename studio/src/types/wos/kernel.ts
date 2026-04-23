@@ -5,6 +5,10 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+/**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
 export type State = {
   [k: string]: unknown;
 } & {
@@ -25,41 +29,43 @@ export type State = {
    */
   transitions?: Transition[];
   /**
-   * Semantic tags for governance attachment via lifecycleHook (Kernel S4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.
+   * Semantic tags for governance attachment via lifecycleHook (Kernel §4.12). Conventional tags: determination, review, adverse-decision, quality-check, intake, appeal, notification, hold.
    */
   tags?: string[];
   /**
-   * Initial substate identifier. REQUIRED when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3).
+   * Initial substate identifier for a compound state (Kernel §4.3). REQUIRED when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). When the enclosing compound state is entered, execution proceeds to this substate unless a `historyState` override restores a prior configuration.
    */
   initialState?: string;
   /**
-   * Substates within a compound state. REQUIRED (non-empty) when type = 'compound'. MUST NOT appear on atomic, parallel, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3).
+   * Substates within a compound state (Kernel §4.3). REQUIRED (non-empty) when `type` = 'compound'; MUST NOT appear on atomic, parallel, or final states (enforced structurally by the allOf block on this State). The compound state's `initialState` MUST match a key in this map.
    */
   states?: {
     [k: string]: State;
   };
   /**
-   * Named concurrent regions within a parallel state. REQUIRED (non-empty) when type = 'parallel'. MUST NOT appear on atomic, compound, or final states. Enforced structurally by the allOf block on this State (Kernel S4.3, S4.4).
+   * Named concurrent regions within a parallel state (Kernel §4.3, §4.4, §4.8). REQUIRED (non-empty) when `type` = 'parallel'; MUST NOT appear on atomic, compound, or final states (enforced structurally by the allOf block on this State). Each region executes concurrently; the parallel state exits per the `cancellationPolicy`.
    */
   regions?: {
     [k: string]: Region;
   };
   /**
-   * Cancellation policy for parallel states (Kernel S4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.
+   * Cancellation policy for parallel states (Kernel §4.4). 'wait-all': exit when all regions reach final state (default). 'cancel-siblings': exit when any region reaches final, cancel others. 'fail-fast': exit immediately on any error final state. Only permitted when type = 'parallel'; enforced structurally by the allOf block on this State.
    */
   cancellationPolicy?: 'wait-all' | 'cancel-siblings' | 'fail-fast';
   /**
-   * History state mode for compound states (Kernel S4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.
+   * History state mode for compound states (Kernel §4.14). When present, overrides initialState on reentry: 'shallow' resumes the last active direct substate, 'deep' restores the full nested configuration. Semantics defined in the Lifecycle Detail Companion (S3). Only permitted when type = 'compound'; enforced structurally by the allOf block on this State.
    */
   historyState?: 'shallow' | 'deep';
   /**
-   * Human-readable description of this state.
+   * Free-text description of this state's purpose within the workflow (e.g., what the case is waiting for, which actors act here). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this state.
+   * This interface was referenced by `undefined`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 };
@@ -69,31 +75,28 @@ export type State = {
  */
 export interface WOSKernelDocument {
   /**
-   * WOS Kernel specification version. MUST be '1.0'. Identifies this document as a WOS Kernel Document and pins the specification version.
+   * WOS Kernel specification version marker. MUST be the literal string '1.0'. This marker is what identifies the surrounding JSON object as a WOS Kernel Document and pins it to the 1.0 line of the Kernel Specification; a processor selects the schema and evaluation semantics from this marker alone. Every Kernel Document MUST carry this key at the root (see Kernel §1, §2).
    */
   $wosKernel: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation and autocompletion.
-   */
-  $schema?: string;
-  /**
-   * Canonical URI identifier for this Kernel Document. Stable across versions -- the pair (url, version) SHOULD be globally unique.
+   * Canonical URI identifier for this Kernel Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Processors use this identifier for cross-document references (governance, correspondence metadata, integration profiles) and for instance-version pinning under Kernel §9.6. Prefer stable, resolvable URIs under a namespace the authoring organization controls.
    */
   url?: string;
   /**
-   * Version of this Kernel Document. SemVer is RECOMMENDED.
+   * Version string for this Kernel Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so that processors and governance layers can reason about compatibility. Instance versioning (Kernel §9.6) pins each running workflow instance to the (url, version) pair of the definition that created it.
    */
   version?: string;
   /**
-   * Human-readable name for this workflow.
+   * Short human-readable name for this workflow, suitable for lists, navigation, and audit summaries. Not interpreted by the processor.
    */
   title?: string;
   /**
-   * Human-readable description of the workflow's purpose and scope.
+   * Free-text description of this workflow's purpose, scope, and intended audience. Consumed by documentation tooling and LLM authoring agents; not interpreted by the processor.
    */
   description?: string;
   /**
-   * Workflow lifecycle state. Transitions: draft -> active -> retired.
+   * Publication status of this workflow definition. 'draft' means the definition is being authored and SHOULD NOT instantiate production cases. 'active' means the definition is in effect and new instances MAY be created against it. 'retired' means no new instances SHOULD be created, though existing pinned instances continue executing. Transitions move forward: draft → active → retired.
    */
   status?: 'draft' | 'active' | 'retired';
   /**
@@ -107,7 +110,7 @@ export interface WOSKernelDocument {
   lifecycle: Lifecycle;
   caseFile?: CaseFile;
   /**
-   * Named contract references for typed data exchanges (Kernel S11). Maps contract names to contract references. Two bindings: Formspec (recommended) and JSON Schema (baseline).
+   * Named contract references for typed data exchanges in this workflow (Kernel §11). Each key is a contract name referenced from `createTask` actions via `contractRef`; each value is a ContractReference declaring the binding type (Formspec or JSON Schema) and the document URI. Contracts are the kernel's abstract validation interface — the processor delegates actual validation to a conformant contract processor.
    */
   contracts?: {
     [k: string]: ContractReference;
@@ -119,19 +122,21 @@ export interface WOSKernelDocument {
    */
   evaluationMode?: 'event-driven' | 'continuous';
   /**
-   * Maximum cascade depth for relationship-triggered events ($related.*) before the processor halts generation (Kernel S4.10). Prevents unbounded cascading in cyclically related cases. Default: 3.
+   * Maximum cascade depth for relationship-triggered events (`$related.*`) before the processor halts further generation (Kernel §4.10). A state change in case A may trigger a `$related.*` event in case B (depth 1), in case C (depth 2), and so on; beyond this cap the processor records a `relationshipDepthCapReached` provenance entry and stops. Prevents unbounded cascading in cyclically related cases. Default: 3.
    */
   maxRelationshipEventDepth?: number;
   /**
-   * Custody posture declaration seam (S10.5). Opaque to the kernel; bindings populate this with declared posture semantics. A monolithic binding may declare a single posture; a distributed binding may declare a full Trust Profile object.
+   * Custody posture declaration seam (Kernel §10.5). The kernel treats this content as opaque — the concrete shape is supplied by the binding. A monolithic binding typically declares a single posture (e.g., who may read content, whether recovery requires the user, whether delegated compute exposes content); a distributed binding such as Trellis binds a full Trust Profile object here. When Governance (Layer 1) is adopted, changes to this object are recorded as canonical lifecycle facts.
    */
   custodyHook?: {
     [k: string]: unknown;
   };
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'. The standard extensibility mechanism for implementation-specific or experimental features (Kernel S10.6).
+   * This interface was referenced by `WOSKernelDocument`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -145,52 +150,67 @@ export interface ActorDeclaration {
    */
   type: 'human' | 'system';
   /**
-   * Human-readable description of this actor's role in the workflow.
+   * Free-text description of this actor's role in the workflow (e.g., which tasks they perform, what decisions they make). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this actor declaration.
+   * This interface was referenced by `ActorDeclaration`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }
 /**
  * Lifecycle topology defining states, transitions, events, and milestones (Kernel S4). The lifecycle is a deterministic pure function: (current states x event x guards -> next states).
  */
 export interface Lifecycle {
   /**
-   * Identifier of the initial state. Execution begins here when a workflow instance is created.
+   * Identifier of the state where execution begins when a new workflow instance is created. MUST match a key in the sibling `states` map. The entry point drives onEntry actions of the initial state (Kernel §4.1, §4.7) and pins the starting active configuration used by the deterministic evaluation algorithm (§4.2).
    */
   initialState: string;
   /**
-   * Map of state identifiers to state definitions. At least two states (initial and one final) are needed for a meaningful workflow.
+   * Map of state identifiers to State definitions (Kernel §4.3). Keys are state identifiers referenced from transitions' `target`, compound `initialState`, and the lifecycle-level `initialState`. The map defines the complete statechart topology; a Kernel Complete processor rejects documents whose transitions reference undeclared keys.
    */
   states: {
     [k: string]: State;
   };
   /**
-   * Named conditions on case state that indicate meaningful progress (Kernel S4.13). Milestones are observable but do not affect lifecycle state.
+   * Named conditions on case state that indicate meaningful progress (Kernel §4.13). Keys are milestone identifiers; values are Milestone objects whose FEL `condition` is evaluated against case state. Milestones are observable — they surface in provenance and audit views — but they do NOT affect lifecycle state directly. Use milestones when a caller needs to ask "has the case crossed this point?" without introducing a lifecycle branch.
    */
   milestones?: {
     [k: string]: Milestone;
   };
+  /**
+   * This interface was referenced by `Lifecycle`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface Action {
   /**
-   * Action type (Kernel S9.2).
+   * Discriminator selecting which action semantics apply to this object (Kernel §9.2). The value determines which sibling fields are used: `createTask` (human / Formspec-backed task — `taskRef`, `assignTo`, `contractRef`), `invokeService` (external service — `serviceRef`, `idempotencyKey`), `setData` (case-file mutation — `path`, `value`), `emitEvent` (`eventType`, `data`), `startTimer` (`timerId`, `duration` or `deadline`, `event`), `cancelTimer` (`timerId`), and `log` (provenance entry — `message`, `data`).
    */
   action: 'createTask' | 'invokeService' | 'setData' | 'emitEvent' | 'startTimer' | 'cancelTimer' | 'log';
   /**
-   * Reference to a task definition. Used with createTask.
+   * Reference to a task definition used when `action` = `createTask`. The reference identifies the task template the binding resolves to create a new task instance; the binding's registry defines how `taskRef` values are resolved.
    */
   taskRef?: string;
   /**
-   * Actor identifier to assign the task to. Used with createTask.
+   * Actor identifier for task assignment when `action` = `createTask`. MUST match the `id` of a declared actor (Kernel §3). The runtime uses binding-specific routing policies (role-based queues, load balancing, manual claim) to map the assignment onto a concrete actor instance.
    */
   assignTo?: string;
   /**
-   * Reference to an external service. Used with invokeService.
+   * Reference to an external service used when `action` = `invokeService` (Kernel §9.2, §9.3). The binding's registry resolves this name to a concrete integration (e.g., HTTP endpoint, queue, local plugin).
    */
   serviceRef?: string;
   /**
@@ -202,95 +222,189 @@ export interface Action {
    */
   correlationKey?: string;
   /**
-   * Case file field path. Used with setData.
+   * Dotted case-file field path when `action` = `setData` (Kernel §5, §9.2). Identifies the case-file slot to be mutated; every mutation is recorded in the case state history (§5.4).
    */
   path?: string;
   /**
-   * Value to set. Used with setData. May be a literal or FEL expression string.
+   * Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. Real kernel fixtures use template-interpolation form (`${event.actorId}`) to pull evaluation-context values; bare FEL MAY also be supported depending on the binding. The resolved value MUST be consistent with the declared type of the target case-file field.
    */
   value?: {
     [k: string]: unknown;
   };
   /**
-   * Event type identifier. Used with emitEvent.
+   * Identifier of the event to emit when `action` = `emitEvent`. The emitted event is routed back into the lifecycle and MAY trigger transitions on the current instance or correlated instances. MUST NOT start with `$` (reserved for kernel-generated events per §4.10).
    */
   eventType?: string;
   /**
-   * Event data payload. Used with emitEvent.
+   * Optional payload carried by the emitted event when `action` = `emitEvent`. Any JSON value; bindings MAY define payload schemas per event type.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * Timer identifier. Used with startTimer and cancelTimer.
+   * Identifier used to correlate `startTimer` and `cancelTimer` actions against the same durable timer (Kernel §9.2, §9.7). MUST be unique within the set of currently-running timers for a workflow instance.
    */
   timerId?: string;
   /**
-   * ISO 8601 duration. Used with startTimer.
+   * Relative timer duration as an ISO 8601 duration string, used with `action` = `startTimer` when the deadline is relative to the moment the timer starts. Either `duration` or `deadline` MUST be supplied (not both).
    */
   duration?: string;
   /**
-   * ISO 8601 datetime deadline. Used with startTimer and createTask.
+   * Absolute timer deadline as an ISO 8601 datetime, used with `action` = `startTimer` (or on `createTask` to set a task deadline). Either `duration` or `deadline` MUST be supplied on `startTimer` (not both).
    */
   deadline?: string;
   /**
-   * Event to emit when timer fires. Used with startTimer.
+   * Typed event emitted when a startTimer timer fires (Kernel §9.2). In practice this is almost always a timer branch; firesAs supplies dotted author names when they are not derivable as $timeout.* strings.
    */
-  event?: string;
+  event?:
+    | TransitionEventTimer
+    | TransitionEventMessage
+    | TransitionEventSignal
+    | TransitionEventCondition
+    | TransitionEventError;
   /**
-   * Log message. Used with log.
+   * Free-text message recorded to the provenance Facts tier when `action` = `log` (Kernel §8.2, §9.2). Useful for explanatory audit entries that do not change lifecycle or case state.
    */
   message?: string;
   /**
-   * Human-readable description of what this action does.
+   * Free-text explanation of what this action does. Consumed by documentation and authoring tooling; not interpreted by the processor.
    */
   description?: string;
   compensatingAction?: Action1;
   /**
-   * Reference to a contract in the contracts map for validation or Formspec-backed task presentation.
+   * Name of a contract in the enclosing document's `contracts` map (Kernel §11). Used with `createTask` to bind the created task to a Formspec Definition or JSON Schema; the binding (formspec vs jsonSchema) is determined by the referenced ContractReference. The kernel delegates all validation to a conformant contract processor.
    */
   contractRef?: string;
   /**
-   * Mapping document used to prefill a Formspec-backed task response. Used with createTask; overrides the ContractReference value for this task.
+   * URI of a Mapping document used to prefill the initial Response of a Formspec-backed task (Runtime Companion §S15). Used with `createTask`; overrides any `prefillMappingRef` declared on the referenced ContractReference for this task.
    */
   prefillMappingRef?: string;
   /**
-   * Mapping document used to project a completed Formspec Response into case state. Used with createTask; overrides the ContractReference value for this task.
+   * URI of a Mapping document used to project a completed Formspec Response into case state (Runtime Companion §S15). Used with `createTask`; overrides any `responseMappingRef` declared on the referenced ContractReference for this task. If absent (and none is declared on the ContractReference), Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.
    */
   responseMappingRef?: string;
   /**
-   * Event emitted when a Formspec-backed task completes successfully.
+   * Lifecycle event emitted when a Formspec-backed task reaches the `completed` state (Runtime Companion §S15). Used with `createTask` to route successful task completion back into the workflow; the event is processed via the standard lifecycle rules.
    */
   completionEvent?: string;
   /**
-   * Event emitted when a Formspec-backed task fails validation, ledger gating, abandonment, or post-pass checks.
+   * Lifecycle event emitted when a Formspec-backed task reaches the `failed` state — e.g., validation failure, ledger gating denial, task abandonment, or post-pass check failure (Runtime Companion §S15). Used with `createTask`.
    */
   failureEvent?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this action.
+   * This interface was referenced by `Action1`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   *
+   * This interface was referenced by `Action`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
+}
+export interface TransitionEventTimer {
+  /**
+   * Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel §4.5–§4.10). The literal MUST equal this branch’s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal "$error"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.
+   */
+  kind: 'timer';
+  /**
+   * Timer correlation identifier within the workflow instance (Kernel §9.2, §9.7). Paired with startTimer and cancelTimer actions. Together with source and optional firesAs it determines which process_event string the runtime delivers when the timer elapses; authors SHOULD reuse the same timerId on the matching startTimer action.
+   */
+  timerId: string;
+  /**
+   * Kernel §4.10 timeout category used when synthesizing $timeout.* dispatch names. task, service, state, signal, and workflow map to fixed $timeout.<category> strings; custom covers author-defined timers and dotted names, often combined with firesAs.
+   */
+  source: 'task' | 'service' | 'state' | 'signal' | 'workflow' | 'custom';
+  /**
+   * ISO 8601 duration when authoring a relative timer alongside this transition (optional).
+   */
+  duration?: string;
+  /**
+   * Absolute deadline when authoring an absolute timer alongside this transition (optional).
+   */
+  expiresAt?: string;
+  /**
+   * Exact process_event name emitted when a startTimer expires if it cannot be derived from timerId and source alone (Kernel §9.2). Use for dotted author timer names such as deadline.exceeded instead of a synthesized $timeout.* name.
+   */
+  firesAs?: string;
+}
+export interface TransitionEventMessage {
+  /**
+   * Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel §4.5–§4.10). The literal MUST equal this branch’s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal "$error"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.
+   */
+  kind: 'message';
+  /**
+   * Author-defined message event name for explicit process_event delivery (Kernel §4.5). MUST NOT begin with `$` because reserved kernel prefixes are modeled as other TransitionEvent kinds. Dots are allowed as a namespacing convention only.
+   */
+  name: string;
+  /**
+   * Optional correlation key for external message routing (Kernel §4.5 companion).
+   */
+  correlationKey?: string;
+  /**
+   * Optional opaque payload carried with the message for bindings that support structured events.
+   */
+  data?: {
+    [k: string]: unknown;
+  };
+}
+export interface TransitionEventSignal {
+  /**
+   * Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel §4.5–§4.10). The literal MUST equal this branch’s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal "$error"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.
+   */
+  kind: 'signal';
+  /**
+   * Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel §4.8) and `$compensation.complete` (LCD §5.9), plus author-defined identifiers without a leading `$`.
+   */
+  name: string;
+  /**
+   * Delivery scope for signals (Kernel §4.10). instance targets the current workflow instance; related targets correlated cases; broadcast targets all subscribed instances per binding rules.
+   */
+  scope: 'instance' | 'related' | 'broadcast';
+}
+export interface TransitionEventCondition {
+  /**
+   * Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel §4.5–§4.10). The literal MUST equal this branch’s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal "$error"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.
+   */
+  kind: 'condition';
+  /**
+   * FEL predicate evaluated in continuous evaluation mode after case-file mutation (Runtime Companion §10.3). In event-driven mode this branch does not participate in explicit process_event name matching; guards still constrain firing order.
+   */
+  expression: string;
+}
+export interface TransitionEventError {
+  /**
+   * Closed TransitionEvent branch discriminator for the five-kind kernel union (Kernel §4.5–§4.10). The literal MUST equal this branch’s kind; processors map the full object to a runtime process_event string via TransitionEvent::runtime_dispatch_label (error events dispatch as the literal "$error"; the typed code field carries the error discriminant). Authors MUST NOT invent additional kind strings beyond timer, message, signal, condition, and error.
+   */
+  kind: 'error';
+  /**
+   * Normative error code for synthetic `$error` class dispatch (Kernel §4.10). Dot-separated codes align with integration failures, contract violations, and processor faults.
+   */
+  code: string;
+  /**
+   * JSON Pointer to the failing action when the runtime attaches structural context (optional).
+   */
+  actionPath?: string;
 }
 /**
  * Semantically meaningful reversal action (Kernel S9.5). The compensation seam only -- detailed execution semantics deferred to Lifecycle Detail companion.
  */
 export interface Action1 {
   /**
-   * Action type (Kernel S9.2).
+   * Discriminator selecting which action semantics apply to this object (Kernel §9.2). The value determines which sibling fields are used: `createTask` (human / Formspec-backed task — `taskRef`, `assignTo`, `contractRef`), `invokeService` (external service — `serviceRef`, `idempotencyKey`), `setData` (case-file mutation — `path`, `value`), `emitEvent` (`eventType`, `data`), `startTimer` (`timerId`, `duration` or `deadline`, `event`), `cancelTimer` (`timerId`), and `log` (provenance entry — `message`, `data`).
    */
   action: 'createTask' | 'invokeService' | 'setData' | 'emitEvent' | 'startTimer' | 'cancelTimer' | 'log';
   /**
-   * Reference to a task definition. Used with createTask.
+   * Reference to a task definition used when `action` = `createTask`. The reference identifies the task template the binding resolves to create a new task instance; the binding's registry defines how `taskRef` values are resolved.
    */
   taskRef?: string;
   /**
-   * Actor identifier to assign the task to. Used with createTask.
+   * Actor identifier for task assignment when `action` = `createTask`. MUST match the `id` of a declared actor (Kernel §3). The runtime uses binding-specific routing policies (role-based queues, load balancing, manual claim) to map the assignment onto a concrete actor instance.
    */
   assignTo?: string;
   /**
-   * Reference to an external service. Used with invokeService.
+   * Reference to an external service used when `action` = `invokeService` (Kernel §9.2, §9.3). The binding's registry resolves this name to a concrete integration (e.g., HTTP endpoint, queue, local plugin).
    */
   serviceRef?: string;
   /**
@@ -302,84 +416,99 @@ export interface Action1 {
    */
   correlationKey?: string;
   /**
-   * Case file field path. Used with setData.
+   * Dotted case-file field path when `action` = `setData` (Kernel §5, §9.2). Identifies the case-file slot to be mutated; every mutation is recorded in the case state history (§5.4).
    */
   path?: string;
   /**
-   * Value to set. Used with setData. May be a literal or FEL expression string.
+   * Value assigned to `path` when `action` = `setData`. MAY be a JSON literal or an FEL expression string evaluated against the current evaluation context (Kernel §7); bindings document which interpretation applies. Real kernel fixtures use template-interpolation form (`${event.actorId}`) to pull evaluation-context values; bare FEL MAY also be supported depending on the binding. The resolved value MUST be consistent with the declared type of the target case-file field.
    */
   value?: {
     [k: string]: unknown;
   };
   /**
-   * Event type identifier. Used with emitEvent.
+   * Identifier of the event to emit when `action` = `emitEvent`. The emitted event is routed back into the lifecycle and MAY trigger transitions on the current instance or correlated instances. MUST NOT start with `$` (reserved for kernel-generated events per §4.10).
    */
   eventType?: string;
   /**
-   * Event data payload. Used with emitEvent.
+   * Optional payload carried by the emitted event when `action` = `emitEvent`. Any JSON value; bindings MAY define payload schemas per event type.
    */
   data?: {
     [k: string]: unknown;
   };
   /**
-   * Timer identifier. Used with startTimer and cancelTimer.
+   * Identifier used to correlate `startTimer` and `cancelTimer` actions against the same durable timer (Kernel §9.2, §9.7). MUST be unique within the set of currently-running timers for a workflow instance.
    */
   timerId?: string;
   /**
-   * ISO 8601 duration. Used with startTimer.
+   * Relative timer duration as an ISO 8601 duration string, used with `action` = `startTimer` when the deadline is relative to the moment the timer starts. Either `duration` or `deadline` MUST be supplied (not both).
    */
   duration?: string;
   /**
-   * ISO 8601 datetime deadline. Used with startTimer and createTask.
+   * Absolute timer deadline as an ISO 8601 datetime, used with `action` = `startTimer` (or on `createTask` to set a task deadline). Either `duration` or `deadline` MUST be supplied on `startTimer` (not both).
    */
   deadline?: string;
   /**
-   * Event to emit when timer fires. Used with startTimer.
+   * Typed event emitted when a startTimer timer fires (Kernel §9.2). In practice this is almost always a timer branch; firesAs supplies dotted author names when they are not derivable as $timeout.* strings.
    */
-  event?: string;
+  event?:
+    | TransitionEventTimer
+    | TransitionEventMessage
+    | TransitionEventSignal
+    | TransitionEventCondition
+    | TransitionEventError;
   /**
-   * Log message. Used with log.
+   * Free-text message recorded to the provenance Facts tier when `action` = `log` (Kernel §8.2, §9.2). Useful for explanatory audit entries that do not change lifecycle or case state.
    */
   message?: string;
   /**
-   * Human-readable description of what this action does.
+   * Free-text explanation of what this action does. Consumed by documentation and authoring tooling; not interpreted by the processor.
    */
   description?: string;
   compensatingAction?: Action1;
   /**
-   * Reference to a contract in the contracts map for validation or Formspec-backed task presentation.
+   * Name of a contract in the enclosing document's `contracts` map (Kernel §11). Used with `createTask` to bind the created task to a Formspec Definition or JSON Schema; the binding (formspec vs jsonSchema) is determined by the referenced ContractReference. The kernel delegates all validation to a conformant contract processor.
    */
   contractRef?: string;
   /**
-   * Mapping document used to prefill a Formspec-backed task response. Used with createTask; overrides the ContractReference value for this task.
+   * URI of a Mapping document used to prefill the initial Response of a Formspec-backed task (Runtime Companion §S15). Used with `createTask`; overrides any `prefillMappingRef` declared on the referenced ContractReference for this task.
    */
   prefillMappingRef?: string;
   /**
-   * Mapping document used to project a completed Formspec Response into case state. Used with createTask; overrides the ContractReference value for this task.
+   * URI of a Mapping document used to project a completed Formspec Response into case state (Runtime Companion §S15). Used with `createTask`; overrides any `responseMappingRef` declared on the referenced ContractReference for this task. If absent (and none is declared on the ContractReference), Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.
    */
   responseMappingRef?: string;
   /**
-   * Event emitted when a Formspec-backed task completes successfully.
+   * Lifecycle event emitted when a Formspec-backed task reaches the `completed` state (Runtime Companion §S15). Used with `createTask` to route successful task completion back into the workflow; the event is processed via the standard lifecycle rules.
    */
   completionEvent?: string;
   /**
-   * Event emitted when a Formspec-backed task fails validation, ledger gating, abandonment, or post-pass checks.
+   * Lifecycle event emitted when a Formspec-backed task reaches the `failed` state — e.g., validation failure, ledger gating denial, task abandonment, or post-pass check failure (Runtime Companion §S15). Used with `createTask`.
    */
   failureEvent?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for this action.
+   * This interface was referenced by `Action1`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   *
+   * This interface was referenced by `Action`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface Transition {
   /**
-   * Triggering event identifier.
+   * Typed event that triggers this transition for explicit process_event delivery (Kernel §4.5–§4.6). When omitted the transition is guard-only and never matches external event names; in continuous evaluation mode transitions without an event or with a condition event still participate in post-mutation guard re-scan per Runtime Companion §10.3.
    */
-  event: string;
+  event?:
+    | TransitionEventTimer
+    | TransitionEventMessage
+    | TransitionEventSignal
+    | TransitionEventCondition
+    | TransitionEventError;
   /**
-   * Target state identifier.
+   * Identifier of the destination state for this transition. MUST name a state declared somewhere in the lifecycle's `states` map (or a substate reachable by dotted path where the binding supports it). When the transition fires, the processor runs the source state's `onExit` actions, the transition's own `actions`, and the target state's `onEntry` actions in that order (Kernel §4.7). A Kernel Complete processor rejects undeclared targets (§13.3).
    */
   target: string;
   /**
@@ -391,24 +520,38 @@ export interface Transition {
    */
   actions?: Action[];
   /**
-   * Semantic tags for governance attachment via lifecycleHook (Kernel S4.12).
+   * Semantic tags for governance attachment via lifecycleHook (Kernel §4.12).
    */
   tags?: string[];
   /**
-   * Human-readable explanation of this transition.
+   * Free-text explanation of this transition (e.g., which business condition it represents, who triggers it). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
+  /**
+   * This interface was referenced by `Transition`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface Region {
   /**
-   * Initial state identifier for this parallel region.
+   * Identifier of the state where this parallel region begins execution when the enclosing parallel state is entered (Kernel §4.4, §4.8). MUST match a key in this region's sibling `states` map.
    */
   initialState: string;
   /**
-   * States within this parallel region.
+   * States contained within this parallel region (Kernel §4.4). Each region carries its own independent statechart that runs concurrently with sibling regions. The region exits when it reaches a final state; the overall parallel state exits per its `cancellationPolicy`.
    */
   states: {
     [k: string]: State;
+  };
+  /**
+   * This interface was referenced by `Region`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
   };
 }
 export interface Milestone {
@@ -417,16 +560,27 @@ export interface Milestone {
    */
   condition: string;
   /**
-   * Human-readable description of what this milestone represents.
+   * Free-text description of what this milestone represents (e.g., which business event it marks). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
+  /**
+   * When the processor evaluates this milestone's condition (Kernel §4.13). `writeSettled` (the default and only currently defined mode) means the condition is evaluated after every durable case-state write — i.e., once the write has been persisted and is observable to subsequent reads. Each milestone fires at most once per case instance: once the condition has evaluated true and a `MilestoneFired` provenance record has been appended, the milestone id is recorded on the case instance and never re-evaluated. Future modes (e.g., reactive event-based firing) will extend this enum without changing existing semantics.
+   */
+  triggerMode?: 'writeSettled';
+  /**
+   * This interface was referenced by `Milestone`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Typed data schema for the case state (Kernel S5). Case state is an append-only log independent of lifecycle state.
  */
 export interface CaseFile {
   /**
-   * Named fields with type declarations. Each field defines a typed data slot in the case state.
+   * Map of field names to FieldDefinition entries. Each entry defines one typed data slot in the case file — a named column in the case's typed data schema. Fields are append-only at the value level: every mutation is recorded in the case state history (Kernel §5.4), never overwritten in place. Field names MUST be unique within the case file; FEL expressions address them as `caseFile.<fieldName>` (Kernel §7.2).
    */
   fields: {
     [k: string]: FieldDefinition;
@@ -435,40 +589,67 @@ export interface CaseFile {
    * Typed relationships to other case instances (Kernel S5.5). Relationships are metadata -- they do NOT affect lifecycle evaluation. Cross-case behavioral interaction uses correlationKey (Kernel S9.4).
    */
   relationships?: CaseRelationship[];
+  /**
+   * This interface was referenced by `CaseFile`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface FieldDefinition {
   /**
-   * Data type of this field.
+   * Primitive data type of this case-file field (Kernel §5.3). Used for structural validation of case-state values and for type-aware FEL evaluation. `date` and `datetime` carry ISO 8601 values; `object` and `array` are structurally unconstrained at the kernel layer — richer contracts attach via the contract mechanism (§11).
    */
   type: 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'object' | 'array';
   /**
-   * Human-readable description of this field.
+   * Free-text description of what this field represents (e.g., the source of its data, its units, who is expected to populate it). Consumed by documentation and authoring tooling; not interpreted by the processor.
    */
   description?: string;
   /**
-   * Default value for this field.
+   * Default value assigned to this field when a case instance is created and the field has not yet been explicitly set. If omitted, the field begins unset (null under FEL reads). The value MUST be consistent with the declared `type`.
    */
   default?: {
+    [k: string]: unknown;
+  };
+  /**
+   * This interface was referenced by `FieldDefinition`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface CaseRelationship {
   /**
-   * Relationship type. Standard values: parent, child, sibling, related, supersedes. Extensible via x- prefixed values.
+   * Classifier for this cross-case relationship (Kernel §5.5). MUST be one of the five standard values OR an `x-` prefixed vendor extension. Standard values: `parent` (this case is a child of the target), `child` (this case is a parent of the target), `sibling` (peer cases under a shared parent), `related` (generic association), and `supersedes` (this case replaces the target). Vendor extensions MUST match `^x-[a-z][a-z0-9-]*$`; processors MUST ignore unknown `x-` types for forward compatibility. Relationships are metadata — they do NOT affect lifecycle evaluation. The schema enum mirrors lint rule K-048 so invalid relationship vocabulary fails at schema validation rather than only at lint time.
    */
-  type: string;
+  type: (
+    | ('parent' | 'child' | 'sibling' | 'related' | 'supersedes')
+    | {
+        [k: string]: unknown;
+      }
+  ) &
+    string;
   /**
-   * URI reference to the related case instance.
+   * URI reference to the related case instance. Typically a URN under the authoring organization's namespace; any resolvable URI scheme is permitted. The target case MAY reside in the same WOS deployment or in a federated one.
    */
   targetCase: string;
   /**
-   * Semantic label describing the relationship.
+   * Free-text semantic label describing the nature of the relationship beyond the coarse `type` classifier. Useful for human-oriented audit views and for domain-specific relationship taxonomies.
    */
   relationship?: string;
   /**
-   * When true, the target case SHOULD also record the inverse relationship.
+   * When `true`, the target case SHOULD also record the inverse relationship so the two cases are mutually discoverable. The kernel does not enforce the inverse link — it is an authoring guidance flag for binding implementations and tooling.
    */
   bidirectional?: boolean;
+  /**
+   * This interface was referenced by `CaseRelationship`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface ContractReference {
   /**
@@ -480,17 +661,24 @@ export interface ContractReference {
    */
   ref: string;
   /**
-   * Human-readable description of this contract's purpose.
+   * Free-text description of this contract's purpose within the workflow. Consumed by documentation and authoring tooling; not interpreted by the processor.
    */
   description?: string;
   /**
-   * Mapping document used to prefill Formspec-backed tasks that use this contract. Prefer the same bidirectional Mapping document as responseMappingRef when the host supports Mapping Bidirectional.
+   * URI of a Mapping document used to prefill Formspec-backed tasks that use this contract (Runtime Companion §S15). Prefer the same bidirectional Mapping document as `responseMappingRef` when the host supports Mapping Bidirectional.
    */
   prefillMappingRef?: string;
   /**
-   * Mapping document used to project completed Formspec Responses into WOS case state. If absent, Runtime Companion S15 forbids automatic host-defined Response-to-case projection.
+   * URI of a Mapping document used to project completed Formspec Responses into WOS case state (Runtime Companion §S15). If absent, Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.
    */
   responseMappingRef?: string;
+  /**
+   * This interface was referenced by `ContractReference`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Provenance configuration for the Facts tier (Kernel S8).
@@ -500,10 +688,12 @@ export interface ProvenanceConfig {
    * Cryptographic digest algorithm for input/output tamper detection (Kernel S8.3). Implementation-defined but recorded here for auditability.
    */
   digestAlgorithm?: string;
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for provenance configuration.
+   * This interface was referenced by `ProvenanceConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -516,7 +706,7 @@ export interface ExecutionConfig {
    */
   workflowTimeout?: string;
   /**
-   * Default timeout for human tasks as ISO 8601 duration.
+   * Default timeout for human tasks as an ISO 8601 duration (Kernel §9.7). Applied when a `createTask` action does not specify its own `deadline`; fires a `$timeout.task` event on expiry.
    */
   defaultTaskTimeout?: string;
   /**
@@ -524,17 +714,19 @@ export interface ExecutionConfig {
    */
   defaultServiceTimeout?: string;
   /**
-   * When true, the workflow scope is compensable (Kernel S9.5). Enables the compensation seam.
+   * When `true`, the workflow scope is compensable (Kernel §9.5). Enables the compensation seam so that Actions carrying a `compensatingAction` participate in semantically meaningful reversal. Detailed execution semantics (reverse ordering, pivot steps) live in the Lifecycle Detail companion.
    */
   compensable?: boolean;
   /**
-   * Instance versioning policy (Kernel S9.6). 'pinned': instance bound to creation-time definition version. 'migrateable': instance may be explicitly migrated to a newer version.
+   * Instance versioning policy (Kernel §9.6). 'pinned' (default): each running instance stays bound to the (url, version) of the Kernel Document that created it. 'migrateable': instances MAY be explicitly migrated to a newer version via a recorded migration operation.
    */
   instanceVersioning?: 'pinned' | 'migrateable';
+  extensions?: ExtensionsMap;
   /**
-   * Extension data for execution configuration.
+   * This interface was referenced by `ExecutionConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }

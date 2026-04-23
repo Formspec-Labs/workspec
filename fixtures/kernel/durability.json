@@ -7,22 +7,38 @@
   "description": "Minimal workflow for testing crash recovery, idempotency, persist-before-advance, lifecycle/case separation, history clearing, contract validation, and instance migration provenance.",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
-    { "id": "operator", "type": "human", "description": "Operator" },
-    { "id": "verificationSystem", "type": "system", "description": "External verification" }
+    {
+      "id": "operator",
+      "type": "human",
+      "description": "Operator"
+    },
+    {
+      "id": "verificationSystem",
+      "type": "system",
+      "description": "External verification"
+    }
   ],
-
   "lifecycle": {
     "initialState": "intake",
     "states": {
       "intake": {
         "type": "atomic",
         "onEntry": [
-          { "action": "setData", "path": "caseFile.intakeRecorded", "value": "true" }
+          {
+            "action": "setData",
+            "path": "caseFile.intakeRecorded",
+            "value": "true"
+          }
         ],
         "transitions": [
-          { "event": "submit", "target": "review" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "submit"
+            },
+            "target": "review"
+          }
         ]
       },
       "review": {
@@ -41,33 +57,50 @@
               }
             ],
             "transitions": [
-              { "event": "verified", "target": "reviewComplete" }
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "verified"
+                },
+                "target": "reviewComplete"
+              }
             ]
           },
-          "reviewComplete": { "type": "final" }
+          "reviewComplete": {
+            "type": "final"
+          }
         },
         "transitions": [
-          { "event": "approved", "target": "done" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "approved"
+            },
+            "target": "done"
+          }
         ]
       },
-      "done": { "type": "final" }
+      "done": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "intakeRecorded": { "type": "boolean" },
-      "reviewResult": { "type": "string" }
+      "intakeRecorded": {
+        "type": "boolean"
+      },
+      "reviewResult": {
+        "type": "string"
+      }
     }
   },
-
   "contracts": {
     "reviewContract": {
       "binding": "formspec",
       "ref": "urn:formspec:test:review:1.0.0"
     }
   },
-
   "execution": {
     "workflowTimeout": "P30D",
     "instanceVersioning": "pinned"

@@ -1,0 +1,18 @@
+[package]
+name = "wos-synth-cli"
+version = "0.0.1"
+edition = "2021"
+publish = false
+description = "wos-synth binary — wires AnthropicPrompter (or MockPrompter for dry-run) and DirectToolContext into the wos-synth-core loop."
+
+[[bin]]
+name = "wos-synth"
+path = "src/main.rs"
+
+[dependencies]
+wos-synth-core      = { path = "../wos-synth-core" }
+wos-synth-anthropic = { path = "../wos-synth-anthropic" }
+wos-synth-mock      = { path = "../wos-synth-mock" }
+clap                = { version = "4", features = ["derive"] }
+tokio               = { version = "1", features = ["full"] }
+serde_json          = "1"

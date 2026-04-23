@@ -1,0 +1,35 @@
+{
+  "fixtureId": "K-033-document-order",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "approve",
+        "sourceActor": "approver",
+        "payload": {
+          "amount": 3000
+        }
+      },
+      "stateBefore": "pending",
+      "stateAfter": "fastApproved",
+      "expectedStateAfter": "fastApproved",
+      "guardsEvaluated": [
+        {
+          "guardId": "pending->fastApproved:approve",
+          "sourceState": "pending",
+          "targetState": "fastApproved",
+          "event": "approve",
+          "expression": "caseFile.amount <= 50000",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "amount": 3000
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "outcome": "pass"
+}

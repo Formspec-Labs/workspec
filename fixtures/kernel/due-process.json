@@ -7,29 +7,71 @@
   "description": "Minimal workflow for testing due process requirements: notice timing, appeal independence, review sampling, override authority, and separation of duties.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
-    { "id": "caseworker", "type": "human", "description": "Primary caseworker" },
-    { "id": "supervisor", "type": "human", "description": "Supervisor for overrides" },
-    { "id": "appealReviewer", "type": "human", "description": "Independent appeal reviewer" },
-    { "id": "notificationSystem", "type": "system", "description": "Notification system" },
-    { "id": "triageAgent", "type": "system", "description": "AI triage agent" }
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Primary caseworker"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor for overrides"
+    },
+    {
+      "id": "appealReviewer",
+      "type": "human",
+      "description": "Independent appeal reviewer"
+    },
+    {
+      "id": "notificationSystem",
+      "type": "system",
+      "description": "Notification system"
+    },
+    {
+      "id": "triageAgent",
+      "type": "system",
+      "description": "AI triage agent"
+    }
   ],
-
   "lifecycle": {
     "initialState": "pendingDetermination",
     "states": {
       "pendingDetermination": {
         "type": "atomic",
-        "tags": ["determination"],
+        "tags": [
+          "determination"
+        ],
         "transitions": [
-          { "event": "approved", "target": "benefitsActive", "tags": ["determination"] },
-          { "event": "denied", "target": "adverseNotice", "tags": ["determination", "adverse-decision"] }
+          {
+            "event": {
+              "kind": "message",
+              "name": "approved"
+            },
+            "target": "benefitsActive",
+            "tags": [
+              "determination"
+            ]
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "denied"
+            },
+            "target": "adverseNotice",
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
+          }
         ]
       },
       "adverseNotice": {
         "type": "atomic",
-        "tags": ["notification", "adverse-decision"],
+        "tags": [
+          "notification",
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -40,39 +82,95 @@
             "action": "startTimer",
             "timerId": "appealWindow",
             "duration": "P30D",
-            "event": "appealWindowExpired"
+            "event": {
+              "kind": "timer",
+              "timerId": "appealWindow",
+              "source": "custom",
+              "firesAs": "appealWindowExpired"
+            }
           }
         ],
         "transitions": [
-          { "event": "appealFiled", "target": "appealReview", "tags": ["appeal"] },
-          { "event": "appealWindowExpired", "target": "deniedFinal" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "appealFiled"
+            },
+            "target": "appealReview",
+            "tags": [
+              "appeal"
+            ]
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "appealWindowExpired"
+            },
+            "target": "deniedFinal"
+          }
         ]
       },
       "appealReview": {
         "type": "atomic",
-        "tags": ["appeal", "review"],
+        "tags": [
+          "appeal",
+          "review"
+        ],
         "onEntry": [
-          { "action": "createTask", "taskRef": "reviewAppeal", "assignTo": "appealReviewer" }
+          {
+            "action": "createTask",
+            "taskRef": "reviewAppeal",
+            "assignTo": "appealReviewer"
+          }
         ],
         "transitions": [
-          { "event": "appealGranted", "target": "benefitsActive", "tags": ["determination"] },
-          { "event": "appealDenied", "target": "deniedFinal", "tags": ["determination", "adverse-decision"] }
+          {
+            "event": {
+              "kind": "message",
+              "name": "appealGranted"
+            },
+            "target": "benefitsActive",
+            "tags": [
+              "determination"
+            ]
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "appealDenied"
+            },
+            "target": "deniedFinal",
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
+          }
         ]
       },
-      "benefitsActive": { "type": "final" },
-      "deniedFinal": { "type": "final" }
+      "benefitsActive": {
+        "type": "final"
+      },
+      "deniedFinal": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "determination": { "type": "string" },
-      "reasonCodes": { "type": "array" },
-      "noticeDate": { "type": "datetime" },
-      "appealDate": { "type": "datetime" }
+      "determination": {
+        "type": "string"
+      },
+      "reasonCodes": {
+        "type": "array"
+      },
+      "noticeDate": {
+        "type": "datetime"
+      },
+      "appealDate": {
+        "type": "datetime"
+      }
     }
   },
-
   "execution": {
     "workflowTimeout": "P365D",
     "instanceVersioning": "pinned"

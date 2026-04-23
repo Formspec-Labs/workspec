@@ -9,15 +9,15 @@
 use std::collections::HashMap;
 
 use fel_core::{evaluate, fel_to_json, has_error_diagnostics, parse};
-use wos_core::eval::{ObservedAction};
+use wos_core::EvalContext;
+use wos_core::eval::ObservedAction;
 use wos_core::instance::CaseInstance;
 use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
-use wos_core::EvalContext;
 
 use crate::integration::{IntegrationBinding, IntegrationBindingKind, IntegrationContractRef};
 use crate::milestones::evaluate_milestones;
-use crate::runtime::{RuntimeError, InvokeServicesDyn, ValidateContractsDyn};
+use crate::runtime::{InvokeServicesDyn, RuntimeError, ValidateContractsDyn};
 use crate::store::{RuntimeRecord, StepResultRecord};
 
 use super::{IntegrationBindingHandler, value_to_idempotency_key};
@@ -78,6 +78,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
 
         if reused_persisted_result {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::IdempotencyDedup,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -98,9 +99,14 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         } else {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::StepResultPersisted,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -123,6 +129,10 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -144,6 +154,7 @@ impl IntegrationBindingHandler for RequestResponseHandler {
         )?;
         if !updates.is_empty() {
             provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
                 record_kind: ProvenanceKind::DataMapping,
                 timestamp: String::new(),
                 actor_id: observed.actor_id.clone(),
@@ -163,6 +174,10 @@ impl IntegrationBindingHandler for RequestResponseHandler {
                 outputs: Vec::new(),
                 input_digest: None,
                 output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
             });
         }
 
@@ -211,6 +226,7 @@ pub(crate) fn validate_integration_contract(
     }
 
     Ok(Some(ProvenanceRecord {
+        id: ProvenanceRecord::mint_id(),
         record_kind: ProvenanceKind::ContractValidation,
         timestamp: String::new(),
         actor_id: actor_id.map(str::to_string),
@@ -233,6 +249,10 @@ pub(crate) fn validate_integration_contract(
         outputs: Vec::new(),
         input_digest: None,
         output_digest: None,
+        canonical_event_hash: None,
+        transition_tags: Vec::new(),
+        case_file_snapshot: None,
+        outcome: None,
     }))
 }
 
@@ -675,7 +695,8 @@ pub(crate) fn parse_json_path(json_path: &str) -> Result<Vec<JsonPathSegment>, R
                     token
                         .strip_prefix('"')
                         .and_then(|inner| inner.strip_suffix('"'))
-                }) {
+                })
+            {
                 // Quoted key: ['key'] or ["key"]
                 JsonPathSegment::Key(unescape_json_path_key(quoted))
             } else if token.contains(':') {

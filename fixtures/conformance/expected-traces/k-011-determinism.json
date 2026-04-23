@@ -1,0 +1,37 @@
+{
+  "fixtureId": "K-011-determinism",
+  "kernelVersion": "1.0",
+  "steps": [
+    {
+      "stepIndex": 0,
+      "event": {
+        "name": "approve",
+        "sourceActor": "approver",
+        "payload": {
+          "amount": 3000,
+          "orderId": "PO-2026-001",
+          "vendor": "Acme Corp"
+        }
+      },
+      "stateBefore": "submitted",
+      "stateAfter": "approved",
+      "expectedStateAfter": "approved",
+      "guardsEvaluated": [
+        {
+          "guardId": "submitted->approved:approve",
+          "sourceState": "submitted",
+          "targetState": "approved",
+          "event": "approve",
+          "expression": "caseFile.amount <= 50000",
+          "result": true,
+          "inputs": {
+            "caseFile": {
+              "amount": 3000
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "outcome": "pass"
+}

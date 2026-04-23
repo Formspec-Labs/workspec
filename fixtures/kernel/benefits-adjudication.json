@@ -7,7 +7,6 @@
   "description": "Pure-human benefits adjudication: intake, review, determination, notice, appeal. No AI. Due process, dual-blind review, separation of duties, data validation for income verification, structured reasoning trace. Proves Kernel + Layer 1 fully supports complex governed human workflows.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
     {
       "id": "applicant",
@@ -50,13 +49,14 @@
       "description": "System that sends notices to applicants"
     }
   ],
-
   "lifecycle": {
     "initialState": "intake",
     "states": {
       "intake": {
         "type": "atomic",
-        "tags": ["intake"],
+        "tags": [
+          "intake"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -66,51 +66,71 @@
         ],
         "transitions": [
           {
-            "event": "applicationComplete",
+            "event": {
+              "kind": "message",
+              "name": "applicationComplete"
+            },
             "target": "incomeVerification",
             "guard": "caseFile.application.isComplete = true",
             "description": "Complete application proceeds to income verification"
           },
           {
-            "event": "applicationIncomplete",
+            "event": {
+              "kind": "message",
+              "name": "applicationIncomplete"
+            },
             "target": "returnedToApplicant",
             "guard": "caseFile.application.isComplete = false",
             "description": "Incomplete application returned to applicant"
           }
         ]
       },
-
       "returnedToApplicant": {
         "type": "atomic",
         "onEntry": [
           {
             "action": "emitEvent",
             "eventType": "applicationReturned",
-            "data": { "reason": "${caseFile.returnReason}" }
+            "data": {
+              "reason": "${caseFile.returnReason}"
+            }
           },
           {
             "action": "startTimer",
             "timerId": "resubmitDeadline",
             "duration": "P30D",
-            "event": "resubmitExpired"
+            "event": {
+              "kind": "timer",
+              "timerId": "resubmitDeadline",
+              "source": "custom",
+              "firesAs": "resubmitExpired"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "resubmit",
+            "event": {
+              "kind": "message",
+              "name": "resubmit"
+            },
             "target": "intake",
             "actions": [
-              { "action": "cancelTimer", "timerId": "resubmitDeadline" }
+              {
+                "action": "cancelTimer",
+                "timerId": "resubmitDeadline"
+              }
             ]
           },
           {
-            "event": "resubmitExpired",
+            "event": {
+              "kind": "message",
+              "name": "resubmitExpired"
+            },
             "target": "closed",
             "description": "Application closed after 30-day resubmit window"
           }
         ]
       },
-
       "incomeVerification": {
         "type": "atomic",
         "onEntry": [
@@ -124,19 +144,24 @@
         ],
         "transitions": [
           {
-            "event": "verificationComplete",
+            "event": {
+              "kind": "message",
+              "name": "verificationComplete"
+            },
             "target": "eligibilityReview",
             "guard": "caseFile.verification.status = 'verified'",
             "description": "Income verified -- proceed to eligibility review"
           },
           {
-            "event": "verificationFailed",
+            "event": {
+              "kind": "message",
+              "name": "verificationFailed"
+            },
             "target": "manualVerification",
             "description": "Automated verification failed -- route to manual review"
           }
         ]
       },
-
       "manualVerification": {
         "type": "atomic",
         "onEntry": [
@@ -148,15 +173,20 @@
         ],
         "transitions": [
           {
-            "event": "manualVerificationComplete",
+            "event": {
+              "kind": "message",
+              "name": "manualVerificationComplete"
+            },
             "target": "eligibilityReview"
           }
         ]
       },
-
       "eligibilityReview": {
         "type": "parallel",
-        "tags": ["review", "determination"],
+        "tags": [
+          "review",
+          "determination"
+        ],
         "cancellationPolicy": "wait-all",
         "regions": {
           "reviewerA": {
@@ -173,12 +203,17 @@
                 ],
                 "transitions": [
                   {
-                    "event": "reviewAComplete",
+                    "event": {
+                      "kind": "message",
+                      "name": "reviewAComplete"
+                    },
                     "target": "reviewADone"
                   }
                 ]
               },
-              "reviewADone": { "type": "final" }
+              "reviewADone": {
+                "type": "final"
+              }
             }
           },
           "reviewerB": {
@@ -195,34 +230,48 @@
                 ],
                 "transitions": [
                   {
-                    "event": "reviewBComplete",
+                    "event": {
+                      "kind": "message",
+                      "name": "reviewBComplete"
+                    },
                     "target": "reviewBDone"
                   }
                 ]
               },
-              "reviewBDone": { "type": "final" }
+              "reviewBDone": {
+                "type": "final"
+              }
             }
           }
         },
         "transitions": [
           {
-            "event": "$join",
+            "event": {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
+            },
             "target": "reconciliation",
             "guard": "caseFile.reviewA.decision != caseFile.reviewB.decision",
             "description": "Reviewers disagree -- escalate to supervisor"
           },
           {
-            "event": "$join",
+            "event": {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
+            },
             "target": "determination",
             "guard": "caseFile.reviewA.decision = caseFile.reviewB.decision",
             "description": "Reviewers agree -- proceed to determination"
           }
         ]
       },
-
       "reconciliation": {
         "type": "atomic",
-        "tags": ["review"],
+        "tags": [
+          "review"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -232,34 +281,51 @@
         ],
         "transitions": [
           {
-            "event": "reconciled",
+            "event": {
+              "kind": "message",
+              "name": "reconciled"
+            },
             "target": "determination"
           }
         ]
       },
-
       "determination": {
         "type": "atomic",
-        "tags": ["determination"],
+        "tags": [
+          "determination"
+        ],
         "transitions": [
           {
-            "event": "approved",
+            "event": {
+              "kind": "message",
+              "name": "approved"
+            },
             "target": "benefitsActive",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Applicant found eligible"
           },
           {
-            "event": "denied",
+            "event": {
+              "kind": "message",
+              "name": "denied"
+            },
             "target": "adverseNotice",
-            "tags": ["determination", "adverse-decision"],
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ],
             "description": "Applicant found ineligible -- triggers due process"
           }
         ]
       },
-
       "adverseNotice": {
         "type": "atomic",
-        "tags": ["notification", "adverse-decision"],
+        "tags": [
+          "notification",
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "invokeService",
@@ -270,34 +336,54 @@
             "action": "startTimer",
             "timerId": "appealWindow",
             "duration": "P30D",
-            "event": "appealWindowExpired"
+            "event": {
+              "kind": "timer",
+              "timerId": "appealWindow",
+              "source": "custom",
+              "firesAs": "appealWindowExpired"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "appealFiled",
+            "event": {
+              "kind": "message",
+              "name": "appealFiled"
+            },
             "target": "appeal",
-            "tags": ["appeal"],
+            "tags": [
+              "appeal"
+            ],
             "actions": [
-              { "action": "cancelTimer", "timerId": "appealWindow" },
+              {
+                "action": "cancelTimer",
+                "timerId": "appealWindow"
+              },
               {
                 "action": "log",
                 "message": "Appeal filed",
-                "data": { "appealDate": "${event.timestamp}" }
+                "data": {
+                  "appealDate": "${event.timestamp}"
+                }
               }
             ]
           },
           {
-            "event": "appealWindowExpired",
+            "event": {
+              "kind": "message",
+              "name": "appealWindowExpired"
+            },
             "target": "deniedFinal",
             "description": "Appeal window expired without filing"
           }
         ]
       },
-
       "appeal": {
         "type": "atomic",
-        "tags": ["appeal", "review"],
+        "tags": [
+          "appeal",
+          "review"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -307,20 +393,30 @@
         ],
         "transitions": [
           {
-            "event": "appealGranted",
+            "event": {
+              "kind": "message",
+              "name": "appealGranted"
+            },
             "target": "benefitsActive",
-            "tags": ["determination"],
+            "tags": [
+              "determination"
+            ],
             "description": "Appeal successful -- benefits granted"
           },
           {
-            "event": "appealDenied",
+            "event": {
+              "kind": "message",
+              "name": "appealDenied"
+            },
             "target": "deniedFinal",
-            "tags": ["determination", "adverse-decision"],
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ],
             "description": "Appeal denied -- final determination"
           }
         ]
       },
-
       "benefitsActive": {
         "type": "final"
       },
@@ -331,7 +427,6 @@
         "type": "final"
       }
     },
-
     "milestones": {
       "applicationReceived": {
         "condition": "caseFile.application != null",
@@ -347,7 +442,6 @@
       }
     }
   },
-
   "caseFile": {
     "fields": {
       "application": {
@@ -380,7 +474,6 @@
       }
     }
   },
-
   "contracts": {
     "applicationForm": {
       "binding": "formspec",
@@ -398,7 +491,6 @@
       "description": "Formspec Definition for the eligibility determination form"
     }
   },
-
   "execution": {
     "workflowTimeout": "P365D",
     "defaultTaskTimeout": "P30D",

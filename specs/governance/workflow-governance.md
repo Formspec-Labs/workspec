@@ -120,6 +120,8 @@ The affected individual MUST receive notice before the decision takes effect. Th
 
 A `noticeGracePeriod` (ISO 8601 duration) defines the minimum delay between notice delivery and the decision taking effect.
 
+Notice assembly is deterministic. When an `adverse-decision` transition fires under an `AdverseDecisionPolicy` with `noticeRequired: true`, the processor MUST derive the notice from the pre-transition Facts-tier `caseFileSnapshot` captured for the same determination transition, the policy's appeal configuration, and the Notification Template referenced by `noticeTemplateKey`. The emitted `noticeSent` provenance record MUST carry `data.source = "deterministic"`, a machine-readable `data.machineReadable.kind = "adverseDecisionNotice"` artifact, the same `snapshotSha256` used by the Facts-tier snapshot, and human-readable prose rendered from the same inputs. Identical snapshot, policy, template, transition, appeal, and transition-firing-timestamp inputs MUST produce byte-identical machine-readable content and byte-identical human-readable prose. The transition-firing timestamp (the processor wall-clock value captured when the adverse transition is drained) is a determining input because it is used to derive the concrete `appealDeadline` rendered into human-readable prose; holding it constant alongside the other inputs is required for byte-identity. Processors MUST NOT use model-generated Narrative-tier content as the authoritative adverse-decision notice.
+
 For `rights-impacting` workflows, the processor MUST maintain a respondent ledger that records notice delivery, receipt confirmation, and appeal deadlines for each affected individual. Formspec Definitions that collect personal data in rights-impacting workflows MUST use the Respondent Ledger (Formspec Response S4) to track consent and data subject rights.
 
 ### 3.3 Explanation
@@ -148,6 +150,8 @@ This is a legal and due process requirement that predates AI. It exists because 
 ### 3.6 Continuation of Service
 
 When the appeal mechanism's `continuationOfServices` property is `true`, the workflow MUST include topology that freezes adverse impacts and maintains current service levels during the appeal window. This is a structural workflow requirement, not a policy preference.
+
+The exact services maintained — and for how long — are declared by `AppealMechanism.continuationPolicyRef`, which resolves to a `ContinuationPolicy.id` in the targeted Due Process Config sidecar (`schemas/governance/wos-due-process.schema.json`). The processor MUST resolve the reference against ContinuationPolicy entries in any Due Process Config sidecar targeting this governance document. An unresolvable reference MUST emit a configuration warning in provenance; the processor MAY then fall back to the looser `AppealMechanism.continuationScope` string when present, or to implementation-defined behavior. When `continuationOfServices` is true and neither `continuationPolicyRef` nor `continuationScope` resolves, the processor MUST emit a configuration error — silently shipping a workflow that promises continuation without specifying its scope is a due-process failure.
 
 ### 3.7 Governance Attachment
 
@@ -240,6 +244,8 @@ This section is normative.
 
 Structured audit extends the kernel's Facts tier (Kernel S8) with two interpretive tiers. These tiers serve human decisions as much as any future AI decisions.
 
+Audit claims must be **testable** in the sense of Kernel §1.2 Design Goal 6 (verifiability): every normative Reasoning or Counterfactual tier requirement in this section MUST either (a) be enforceable by schema constraint, (b) produce a lint rule that rejects documents violating it, or (c) reduce to a conformance fixture demonstrating compliant vs. non-compliant behavior. Prose describing audit shape without a corresponding test is not normative — it belongs in the companion or in non-normative commentary. Authors adding a new audit obligation here MUST also add the corresponding test artifact.
+
 ### 6.2 Reasoning Tier
 
 The Reasoning tier records how a decision was reached:
@@ -320,7 +326,7 @@ When a reviewer overrides a prior decision, the override MUST include:
 2. **Authority verification** confirming the reviewer has override authority.
 3. **Supporting evidence** referenced by the rationale.
 
-Override records are immutable provenance entries.
+The runtime record shape is the `OverrideRecord` `$def` in the [Workflow Governance schema](../../schemas/governance/wos-workflow-governance.schema.json) (`#/$defs/OverrideRecord`). Each accepted override appends one OverrideRecord to provenance; records are immutable. The three required fields (`rationale`, `authorityVerification`, `supportingEvidence`) correspond to the three switches on `OverrideAuthority`: when a switch is `true`, the corresponding field MUST be non-empty in every emitted record.
 
 ### 7.4 Governance Attachment
 
@@ -450,6 +456,84 @@ Breach policies:
 
 SLA evaluation uses business calendar days when a Business Calendar sidecar is present. Otherwise, SLA evaluation uses wall-clock time.
 
+### 10.4 Task SLA Authoring
+
+§10.3 specifies normative processor behaviour for SLAs, but without authoring surface those obligations are only fulfillable by out-of-band configuration. This subsection adds four first-class properties on `TaskPattern` (governance schema `TaskPattern` $def) so governance documents can declaratively author the SLA policy the §10.3 processor will enforce. All four properties are OPTIONAL on `TaskPattern`; when present, they MUST conform to the shapes below.
+
+| Property | Type | Required | Description |
+| -------- | ---- | -------- | ----------- |
+| `slaDefinitions` | array of `SlaDefinition` | OPTIONAL | Named SLA windows measured against this task pattern. Multiple entries MAY coexist on one task (e.g. `firstResponse` plus `fullResolution`). |
+| `warningThresholds` | array of `WarningThreshold` | OPTIONAL | Pre-breach notifications fired at declared lead times before any matching `slaDefinitions` entry elapses. |
+| `breachPolicy` | `BreachPolicy` | OPTIONAL | Processor action when an SLA window elapses without completion: `notify`, `escalate`, `autoReassign`, or `fail`. |
+| `escalationChain` | array of `EscalationStep` | OPTIONAL | Ordered ladder activated when `breachPolicy.action = escalate` or when a prior step's grace period exhausts. |
+
+#### 10.4.1 `slaDefinitions`
+
+Each `SlaDefinition` declares one named SLA window: `{ id, expectedDuration, calendarType, calendarRef?, startAt, startEvent? }`. `expectedDuration` MUST be an ISO 8601 duration (for example `P1D`, `PT4H`); the `P<N>BD` business-day form is a WOS extension resolved against `calendarRef`. The `"indefinite"` form is deliberately rejected here (it is valid on `HoldPolicy.expectedDuration` but not on SLAs: an indefinite SLA has no elapse point for `warningThresholds` or `breachPolicy` to fire against). `calendarType` is `wall-clock` or `business`; when `business`, the processor SHOULD resolve `calendarRef` to a Business Calendar sidecar (lint G-023). `startAt` selects the clock origin -- `assignment`, `activation`, or `custom-event`. When `startAt = custom-event`, `startEvent` is REQUIRED and MUST name a kernel event matching `^[a-zA-Z][a-zA-Z0-9_-]*$`. The pattern rejects empty strings, whitespace, and the reserved `$`-prefixed kernel event names (for example `$continuous`, `$join`, `$timeout.*`, `$compensation.complete`) which are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.
+
+Examples:
+
+```json
+{ "id": "firstResponse", "expectedDuration": "PT4H", "calendarType": "wall-clock", "startAt": "assignment" }
+```
+
+```json
+{ "id": "fullResolution", "expectedDuration": "P5BD", "calendarType": "business", "calendarRef": "urn:wos:sidecar:business-calendar:fy2026-federal", "startAt": "custom-event", "startEvent": "applicantResponseReceived" }
+```
+
+#### 10.4.2 `warningThresholds`
+
+Each `WarningThreshold` is `{ beforeBreach, templateKey, notify }`. `beforeBreach` is an ISO 8601 duration specifying the lead time before any matching `slaDefinitions.expectedDuration` elapses at which the warning fires; the processor evaluates every threshold independently, so escalating leads (for example `P1D`, `PT4H`, `PT30M`) fan out multiple notifications. `templateKey` MUST resolve into a Notification Template sidecar (lint G-063) and SHOULD carry the `sla-warning` category. `notify` is a non-empty array of actor identifiers resolved per Governance §10.2 / §11.
+
+Examples:
+
+```json
+{ "beforeBreach": "P1D", "templateKey": "slaWarning1Day", "notify": ["taskOwner"] }
+```
+
+```json
+{ "beforeBreach": "PT30M", "templateKey": "firstResponseImminentBreach", "notify": ["taskOwner", "caseSupervisor"] }
+```
+
+#### 10.4.3 `breachPolicy`
+
+`BreachPolicy` is `{ action, templateKey?, escalationStepId?, timeoutPolicy? }`. `action` is `notify` (send breach template, no state change), `escalate` (advance through `escalationChain`), `autoReassign` (rotate to another `potentialOwner`), or `fail` (transition task to `failed`, invoking the rejection policy). `templateKey` is a Notification Template sidecar key rendered on breach. `escalationStepId` is meaningful only when `action = escalate`; it names a step in this task's `escalationChain`. `timeoutPolicy.onRepeatedBreach` controls behaviour when the same pattern breaches repeatedly (`suspend`, `fail`, or `continue`). Template-key integrity is enforced by lint G-063; escalation-step integrity is enforced by lint G-066.
+
+Examples:
+
+```json
+{ "action": "escalate", "escalationStepId": "level-1", "timeoutPolicy": { "onRepeatedBreach": "suspend" } }
+```
+
+```json
+{ "action": "notify", "templateKey": "slaBreachNotice" }
+```
+
+#### 10.4.4 `escalationChain`
+
+Each `EscalationStep` is `{ id?, level, assignTo, gracePeriod, onExhaustion }`. `id` is an OPTIONAL stable identifier matching `^[a-zA-Z][a-zA-Z0-9_-]*$`; `BreachPolicy.escalationStepId` matches a step either by numeric `level` (e.g. `level-1`) or by `id` (e.g. `supervisor`), letting authors point a breach policy at a named step without pinning to its ordinal position so inserting a new level does not silently retarget existing refs. `level` is an integer `>= 1`; levels SHOULD be contiguous starting at 1 and the processor walks them in ascending order. `assignTo` is the actor the task reassigns to when this step activates; the reassignment is recorded in provenance as a delegated task. `gracePeriod` is an ISO 8601 duration (`P<N>BD` also permitted, resolved against the SLA's declared calendar). `onExhaustion` is `escalate` (advance to the next step), `fail` (transition task to `failed`), or `ticketCreate` (open an out-of-band ticket and park the task pending manual intervention).
+
+Examples:
+
+```json
+{ "level": 1, "assignTo": "teamLead", "gracePeriod": "PT4H", "onExhaustion": "escalate" }
+```
+
+```json
+{ "level": 2, "assignTo": "divisionDirector", "gracePeriod": "P1D", "onExhaustion": "ticketCreate" }
+```
+
+#### 10.4.5 Cross-reference integrity
+
+Cross-reference integrity across the four SLA authoring shapes is enforced by the following lint rules:
+
+- `SlaDefinition.startEvent` MUST name a kernel event declared on the target Kernel Document (when `startAt = custom-event`; lint **G-029**).
+- `BreachPolicy.escalationStepId` MUST resolve to an `EscalationStep` (by `level` or id) on the same `TaskPattern` (lint **G-066**).
+- `WarningThreshold.templateKey` and `BreachPolicy.templateKey` MUST resolve through a Notification Template sidecar (lint **G-063**).
+- When `SlaDefinition.calendarType = business`, `calendarRef` SHOULD be present and resolvable to a Business Calendar sidecar (lint **G-023**).
+
+Schema enforcement in this release covers shape only; resolvability is an authoring-time lint concern. The §10.3 processor obligations remain normative regardless of which of the four properties a governance document chooses to author.
+
 ---
 
 ## 11. Delegation of Authority
@@ -533,11 +617,11 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `holdType` | enum | REQUIRED | The reason for the hold. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`. Extensible via `x-` prefixed values. |
+| `holdType` | enum | REQUIRED | The reason for the hold. Standard values: `pending-applicant-response`, `pending-external-verification`, `pending-legal-review`, `pending-legislation`, `pending-related-case`, `voluntary-hold`, `legal-hold`. Extensible via `x-` prefixed values. |
 | `expectedDuration` | string | REQUIRED | ISO 8601 duration or the string `"indefinite"`. |
-| `resumeTrigger` | string | REQUIRED | Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule. |
-| `timeoutAction` | enum | REQUIRED | Action when `expectedDuration` expires without the resume trigger: `escalate`, `auto-resume`, or `cancel`. |
-| `notificationTemplateRef` | string | OPTIONAL | Reference to a Notification Template sidecar for hold notifications. |
+| `resumeTrigger` | string | REQUIRED except `legal-hold` | Event name that resumes the case from this hold. The processor listens for this event -- NOT a FEL condition polled on a schedule. `legal-hold` has no event-based resume trigger and is released only by an explicit legal-hold-release fact. |
+| `timeoutAction` | enum | REQUIRED except `legal-hold` | Action when `expectedDuration` expires without the resume trigger: `escalate`, `auto-resume`, or `cancel`. `legal-hold` has no timeout action. |
+| `notificationTemplateKey` | string | OPTIONAL | Key into a Notification Template sidecar for hold notifications. |
 | `description` | string | OPTIONAL | Human-readable description of this hold policy. |
 
 ### 12.3 Hold Type Semantics
@@ -550,6 +634,7 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 | `pending-legislation` | indefinite | `legislationEnacted` | N/A |
 | `pending-related-case` | indefinite | `relatedCaseResolved` | N/A |
 | `voluntary-hold` | P90D | `holdReleased` | `auto-resume` |
+| `legal-hold` | indefinite | N/A | N/A |
 
 ### 12.4 Interaction with Timers
 
@@ -639,4 +724,4 @@ The `targetWorkflow` value MUST match the `url` property of the target Kernel Do
 - Vaccaro, M. et al., "When combinations of humans and AI are useful: A systematic review and meta-analysis", Nature Human Behaviour, 2024.
 - Bucinca, Z. et al., "To trust or to think: Cognitive forcing functions can reduce overreliance on AI in AI-assisted decision-making", CSCW, 2021.
 - Li, B. et al., "Calibrated confidence in AI decision-making", 2024.
-- OpenFisca, "Open Source Platform for Tax and Benefit Systems", https://openfisca.org.
+- OpenFisca, "Open Source Platform for Tax and Benefit Systems", <https://openfisca.org>.

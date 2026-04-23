@@ -7,12 +7,18 @@
   "description": "Minimal parallel state with two regions, each starting a timer. Tests that timer events are routed to the creating region only (LCD S6.5).",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
-    { "id": "system", "type": "system", "description": "System actor" },
-    { "id": "operator", "type": "human", "description": "Operator" }
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System actor"
+    },
+    {
+      "id": "operator",
+      "type": "human",
+      "description": "Operator"
+    }
   ],
-
   "lifecycle": {
     "initialState": "processing",
     "states": {
@@ -30,17 +36,27 @@
                     "action": "startTimer",
                     "timerId": "timerA",
                     "duration": "PT10S",
-                    "event": "$timeout.regionA"
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "regionA",
+                      "source": "custom"
+                    }
                   }
                 ],
                 "transitions": [
                   {
-                    "event": "$timeout.regionA",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "regionA",
+                      "source": "custom"
+                    },
                     "target": "doneA"
                   }
                 ]
               },
-              "doneA": { "type": "final" }
+              "doneA": {
+                "type": "final"
+              }
             }
           },
           "regionB": {
@@ -53,35 +69,49 @@
                     "action": "startTimer",
                     "timerId": "timerB",
                     "duration": "PT30S",
-                    "event": "$timeout.regionB"
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "regionB",
+                      "source": "custom"
+                    }
                   }
                 ],
                 "transitions": [
                   {
-                    "event": "$timeout.regionB",
+                    "event": {
+                      "kind": "timer",
+                      "timerId": "regionB",
+                      "source": "custom"
+                    },
                     "target": "doneB"
                   }
                 ]
               },
-              "doneB": { "type": "final" }
+              "doneB": {
+                "type": "final"
+              }
             }
           }
         },
         "transitions": [
           {
-            "event": "$join",
+            "event": {
+              "kind": "signal",
+              "name": "$join",
+              "scope": "instance"
+            },
             "target": "completed"
           }
         ]
       },
-      "completed": { "type": "final" }
+      "completed": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {}
   },
-
   "execution": {
     "workflowTimeout": "P1D",
     "instanceVersioning": "pinned"

@@ -981,9 +981,7 @@ fn invalid_fixture_delay_produces_stamped_auxiliary_provenance() {
     let invalid_records: Vec<_> = result
         .provenance
         .iter()
-        .filter(|record| {
-            record.record_kind == wos_conformance::ProvenanceKind::InvalidDuration
-        })
+        .filter(|record| record.record_kind == wos_conformance::ProvenanceKind::InvalidDuration)
         .collect();
 
     assert_eq!(

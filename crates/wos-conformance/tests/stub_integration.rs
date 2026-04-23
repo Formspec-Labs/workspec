@@ -79,7 +79,10 @@ fn int_emit_002_full_envelope_captured_in_provenance() {
         .expect("EventEmitted provenance must be present");
 
     let data = emitted.data.as_ref().expect("EventEmitted must carry data");
-    assert_eq!(data.get("specversion").and_then(|v| v.as_str()), Some("1.0"));
+    assert_eq!(
+        data.get("specversion").and_then(|v| v.as_str()),
+        Some("1.0")
+    );
     assert_eq!(
         data.get("source").and_then(|v| v.as_str()),
         Some("https://example.com/orders")
@@ -143,9 +146,18 @@ fn int_consume_001_event_consumed_and_state_updated() {
         .find(|p| p.record_kind == ProvenanceKind::EventConsumed)
         .expect("EventConsumed provenance must be present");
 
-    let data = consumed.data.as_ref().expect("EventConsumed must carry data");
-    assert_eq!(data.get("id").and_then(|v| v.as_str()), Some("evt-external-001"));
-    assert_eq!(data.get("specversion").and_then(|v| v.as_str()), Some("1.0"));
+    let data = consumed
+        .data
+        .as_ref()
+        .expect("EventConsumed must carry data");
+    assert_eq!(
+        data.get("id").and_then(|v| v.as_str()),
+        Some("evt-external-001")
+    );
+    assert_eq!(
+        data.get("specversion").and_then(|v| v.as_str()),
+        Some("1.0")
+    );
 }
 
 /// INT-CONSUME-002: inbound CloudEvent with empty id is rejected — engine errors with EventIngressInvalid.
@@ -310,10 +322,7 @@ fn int_tool_001_tool_invoked_provenance_present() {
         data.get("toolId").and_then(|v| v.as_str()),
         Some("risk-analysis-v2")
     );
-    assert_eq!(
-        data.get("outcome").and_then(|v| v.as_str()),
-        Some("ok")
-    );
+    assert_eq!(data.get("outcome").and_then(|v| v.as_str()), Some("ok"));
 }
 
 /// INT-TOOL-002: tool binding with response contract — ContractValidation provenance present.
@@ -423,7 +432,11 @@ fn int_arazzo_002_mid_sequence_failure_halts_sequence() {
         })
         .expect("step-one ArazzoStep must be present");
     assert_eq!(
-        step_one.data.as_ref().and_then(|d| d.get("outcome")).and_then(|v| v.as_str()),
+        step_one
+            .data
+            .as_ref()
+            .and_then(|d| d.get("outcome"))
+            .and_then(|v| v.as_str()),
         Some("ok")
     );
 
@@ -439,7 +452,11 @@ fn int_arazzo_002_mid_sequence_failure_halts_sequence() {
         })
         .expect("step-two ArazzoStep must be present");
     assert_eq!(
-        step_two.data.as_ref().and_then(|d| d.get("outcome")).and_then(|v| v.as_str()),
+        step_two
+            .data
+            .as_ref()
+            .and_then(|d| d.get("outcome"))
+            .and_then(|v| v.as_str()),
         Some("failed")
     );
 
@@ -606,8 +623,16 @@ fn int_policy_003_indeterminate_not_coerced() {
     let decision = data.get("decision").and_then(|v| v.as_str());
     assert_eq!(decision, Some("indeterminate"));
     // Explicitly verify it was NOT coerced.
-    assert_ne!(decision, Some("allow"), "indeterminate must not be coerced to allow");
-    assert_ne!(decision, Some("deny"), "indeterminate must not be coerced to deny");
+    assert_ne!(
+        decision,
+        Some("allow"),
+        "indeterminate must not be coerced to allow"
+    );
+    assert_ne!(
+        decision,
+        Some("deny"),
+        "indeterminate must not be coerced to deny"
+    );
 }
 
 /// INT-POLICY-004: OPA adapter — engineType='opa', result:true normalizes to decision='allow'.

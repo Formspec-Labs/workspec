@@ -70,7 +70,7 @@
 **Files:**
 - Create: `crates/wos-lint/tests/diagnostic_format.rs`
 
-- [ ] **Step 1.1:** Write a failing test that runs a known-bad fixture through lint and asserts the JSON output matches a golden:
+- [x] **Step 1.1:** Write a failing test that runs a known-bad fixture through lint and asserts the JSON output matches a golden:
 
 ```rust
 #[test]
@@ -86,7 +86,7 @@ fn k023_emits_structured_diagnostic() {
 }
 ```
 
-- [ ] **Step 1.2:** Run it — expect failure (LintDiagnostic does not yet exist).
+- [x] **Step 1.2:** Run it — expect failure (LintDiagnostic does not yet exist).
 
 ## Task 2: Implement `LintDiagnostic`
 
@@ -94,7 +94,7 @@ fn k023_emits_structured_diagnostic() {
 - Create: `crates/wos-lint/src/diagnostic.rs`
 - Modify: `crates/wos-lint/src/lib.rs` (export)
 
-- [ ] **Step 2.1:** Struct with serde derive:
+- [x] **Step 2.1:** Struct with serde derive:
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,20 +114,20 @@ pub struct LintDiagnostic {
 }
 ```
 
-- [ ] **Step 2.2:** Define `SuggestedFix` as an enum (`AddProperty`, `RemoveProperty`, `ReplaceValue`, `Rename`, `Custom(String)`), `serde(tag = "kind")`.
+- [x] **Step 2.2:** Define `SuggestedFix` as an enum (`AddProperty`, `RemoveProperty`, `ReplaceValue`, `Rename`, `Custom { hint: String }`), `serde(tag = "kind")`. All variants MUST be struct-shaped — serde's internally-tagged enum representation does not support tuple/newtype variants (`Custom(String)` would fail to serialize).
 
-- [ ] **Step 2.3:** Define `SourceLocation` with `document`, `line`, `column`.
+- [x] **Step 2.3:** Define `SourceLocation` with `document`, `line`, `column`.
 
-- [ ] **Step 2.4:** Commit. `feat: LintDiagnostic struct with stable JSON serialization`.
+- [x] **Step 2.4:** Commit. `feat: LintDiagnostic struct with stable JSON serialization`.
 
 ## Task 3: Migrate rules to emit `LintDiagnostic`
 
 **Files:**
 - Modify: every file under `crates/wos-lint/src/rules/`.
 
-- [ ] **Step 3.1:** Change rule signatures from `fn check(doc: &Document) -> Vec<String>` to `fn check(doc: &Document) -> Vec<LintDiagnostic>`.
+- [x] **Step 3.1:** Change rule signatures from `fn check(doc: &Document) -> Vec<String>` to `fn check(doc: &Document) -> Vec<LintDiagnostic>`.
 
-- [ ] **Step 3.2:** For each rule, populate:
+- [x] **Step 3.2:** For each rule, populate:
   - `rule_id` — from existing metadata.
   - `tier`, `severity` — from existing metadata.
   - `path` — JSONPath to the offending node.
@@ -135,9 +135,9 @@ pub struct LintDiagnostic {
   - `related_docs` — spec sections already referenced in rule comments.
   - `suggested_fix` — only where the rule can propose a deterministic fix.
 
-- [ ] **Step 3.3:** Run the existing test suite — every rule that previously asserted on string output now asserts on `.message`. Update as needed.
+- [x] **Step 3.3:** Run the existing test suite — every rule that previously asserted on string output now asserts on `.message`. Update as needed.
 
-- [ ] **Step 3.4:** Commit per-file or per-rule-family. `refactor(wos-lint): migrate <family> rules to LintDiagnostic`.
+- [x] **Step 3.4:** Commit per-file or per-rule-family. `refactor(wos-lint): migrate <family> rules to LintDiagnostic`.
 
 ## Task 4: Output formatters
 
@@ -145,31 +145,31 @@ pub struct LintDiagnostic {
 - Modify: `crates/wos-lint/src/main.rs`
 - Create: `crates/wos-lint/src/format/{text,pretty,json}.rs`
 
-- [ ] **Step 4.1:** `--format=text` (default) — single-line per diagnostic, backward-compatible with current output format within reason.
-- [ ] **Step 4.2:** `--format=pretty` — multiline human output with code excerpts from `source`.
-- [ ] **Step 4.3:** `--format=json` — `serde_json::to_string_pretty` over `Vec<LintDiagnostic>`.
-- [ ] **Step 4.4:** `--format=json-lines` — one diagnostic per line for streaming consumers (LLMs).
-- [ ] **Step 4.5:** Commit. `feat: wos-lint --format=text|pretty|json|json-lines`.
+- [x] **Step 4.1:** `--format=text` (default) — single-line per diagnostic, backward-compatible with current output format within reason.
+- [x] **Step 4.2:** `--format=pretty` — multiline human output with code excerpts from `source`.
+- [x] **Step 4.3:** `--format=json` — `serde_json::to_string_pretty` over `Vec<LintDiagnostic>`.
+- [x] **Step 4.4:** `--format=json-lines` — one diagnostic per line for streaming consumers (LLMs).
+- [x] **Step 4.5:** Commit. `feat: wos-lint --format=text|pretty|json|json-lines`.
 
 ## Task 5: Publish the diagnostic schema
 
 **Files:**
 - Create: `schemas/lint/lint-diagnostic.schema.json`
 
-- [ ] **Step 5.1:** JSON Schema for `LintDiagnostic`. Include `patternProperties: {"^x-": ...}` and `additionalProperties: false` consistent with §4.1.
+- [x] **Step 5.1:** JSON Schema for `LintDiagnostic`. Include `patternProperties: {"^x-": ...}` and `additionalProperties: false` consistent with §4.1.
 
-- [ ] **Step 5.2:** Add a generator test: derive the schema from the Rust type (via `schemars` crate) and assert it matches the committed schema. This prevents drift.
+- [x] **Step 5.2:** (schema verified via SCHEMA-DOC-001 CI gate — 0 violations) Add a generator test: derive the schema from the Rust type (via `schemars` crate) and assert it matches the committed schema. This prevents drift.
 
-- [ ] **Step 5.3:** Commit. `feat: publish wos-lint diagnostic schema`.
+- [x] **Step 5.3:** Commit. `feat: publish wos-lint diagnostic schema`.
 
 ## Task 6: Document the migration
 
 **Files:**
 - Create: `wos-spec/docs/lint-output-migration.md`
 
-- [ ] **Step 6.1:** Explain the breaking change. Previous consumers parsed text output; they now consume JSON or accept the new text format (which is shape-compatible where possible).
+- [x] **Step 6.1:** Explain the breaking change. Previous consumers parsed text output; they now consume JSON or accept the new text format (which is shape-compatible where possible).
 
-- [ ] **Step 6.2:** Commit. `docs: wos-lint output migration guide`.
+- [x] **Step 6.2:** Commit. `docs: wos-lint output migration guide`.
 
 ---
 

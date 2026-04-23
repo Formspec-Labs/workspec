@@ -1,0 +1,13 @@
+[package]
+name = "wos-synth-mock"
+version = "0.0.1"
+edition = "2021"
+publish = false
+description = "Deterministic Prompter implementation for testing wos-synth-core without network access."
+
+[dependencies]
+wos-synth-core = { path = "../wos-synth-core" }
+async-trait    = "0.1"
+
+[dev-dependencies]
+pollster = "0.4"

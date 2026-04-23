@@ -7,52 +7,104 @@
   "description": "Minimal workflow for testing autonomy level computation, escalation/demotion, tool governance, and impact-level caps.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
-    { "id": "triageAgent", "type": "system", "description": "AI triage agent" },
-    { "id": "caseworker", "type": "human", "description": "Human caseworker" },
-    { "id": "supervisor", "type": "human", "description": "Supervisor" }
+    {
+      "id": "triageAgent",
+      "type": "system",
+      "description": "AI triage agent"
+    },
+    {
+      "id": "caseworker",
+      "type": "human",
+      "description": "Human caseworker"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "description": "Supervisor"
+    }
   ],
-
   "lifecycle": {
     "initialState": "triage",
     "states": {
       "triage": {
         "type": "atomic",
-        "tags": ["triage"],
+        "tags": [
+          "triage"
+        ],
         "transitions": [
-          { "event": "triaged", "target": "review" },
-          { "event": "escalated", "target": "humanTriage" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "triaged"
+            },
+            "target": "review"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "escalated"
+            },
+            "target": "humanTriage"
+          }
         ]
       },
       "humanTriage": {
         "type": "atomic",
         "onEntry": [
-          { "action": "createTask", "taskRef": "manualTriage", "assignTo": "caseworker" }
+          {
+            "action": "createTask",
+            "taskRef": "manualTriage",
+            "assignTo": "caseworker"
+          }
         ],
         "transitions": [
-          { "event": "triageComplete", "target": "review" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "triageComplete"
+            },
+            "target": "review"
+          }
         ]
       },
       "review": {
         "type": "atomic",
-        "tags": ["determination"],
+        "tags": [
+          "determination"
+        ],
         "transitions": [
-          { "event": "approved", "target": "completed" },
-          { "event": "denied", "target": "completed" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "approved"
+            },
+            "target": "completed"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "denied"
+            },
+            "target": "completed"
+          }
         ]
       },
-      "completed": { "type": "final" }
+      "completed": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {
-      "priority": { "type": "string" },
-      "category": { "type": "string" }
+      "priority": {
+        "type": "string"
+      },
+      "category": {
+        "type": "string"
+      }
     }
   },
-
   "execution": {
     "workflowTimeout": "P30D",
     "instanceVersioning": "pinned"

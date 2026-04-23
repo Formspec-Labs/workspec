@@ -179,6 +179,13 @@ pub struct Capability {
     /// Formspec Definition or JSON Schema for output.
     #[serde(default)]
     pub output_contract_ref: Option<String>,
+
+    /// FEL boolean expressions evaluated before capability invocation
+    /// (AI Integration §3.3.1). All entries MUST evaluate to `true`;
+    /// otherwise the capability is skipped and the processor falls
+    /// through to the fallback chain.
+    #[serde(default)]
+    pub preconditions: Vec<String>,
 }
 
 /// Model version policy (AI Integration S3.4).

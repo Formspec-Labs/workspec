@@ -17,6 +17,7 @@
 //! | G-042  | expression-validity | Assertion `expression` fields are valid FEL    |
 //! | G-043  | expression-validity | Delegation scope `conditions` are valid FEL    |
 //! | AI-024 | expression-validity | Escalation conditions are valid FEL + use `@agent` |
+//! | AI-057 | expression-validity | Capability `preconditions` entries are valid FEL |
 //! | AG-010 | smt-compatibility   | Verifiable constraints satisfy all SMT rules   |
 //! | AG-011 | smt-compatibility   | `let` bindings are not recursive               |
 //! | AG-012 | smt-compatibility   | `every`/`some` with arity ≠ 2 need manual review |
@@ -28,14 +29,15 @@
 //! WOS enumeration field or listed in `finiteDomainDeclarations`.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use fel_core::{
-    ast::{BinaryOp, Expr, PathSegment},
+    ast::{BinaryOp, Expr, PathSegment, UnaryOp},
     builtin_function_catalog, parse,
 };
 use serde_json::Value;
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosDocument, WosProject};
 
 // ---------------------------------------------------------------------------
@@ -43,7 +45,7 @@ use crate::document::{DocumentKind, WosDocument, WosProject};
 // ---------------------------------------------------------------------------
 
 /// Run all FEL AST analysis checks across every document in the project.
-pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     for doc in project.documents() {
         match doc.kind {
             DocumentKind::Kernel => check_kernel_fel(doc, diagnostics),
@@ -61,7 +63,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 /// Check FEL in a Kernel document (K-012, K-013, K-017, K-019).
-fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(states) = doc
         .value
         .pointer("/lifecycle/states")
@@ -73,7 +75,7 @@ fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 /// Check FEL in a WorkflowGovernance document (G-043).
-fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(delegations) = doc.value.get("delegations").and_then(Value::as_array) {
         for (i, delegation) in delegations.iter().enumerate() {
             let base_path = format!("/delegations/{i}");
@@ -82,18 +84,143 @@ fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-/// Check FEL in an AI Integration document (AI-024).
-fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+/// Check FEL in an AI Integration document (AI-024, AI-057).
+fn check_ai_integration_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(agents) = doc.value.get("agents").and_then(Value::as_object) {
         for (agent_name, agent) in agents {
             let base_path = format!("/agents/{agent_name}");
             check_escalation_conditions(agent, &base_path, diagnostics);
+            check_capability_preconditions(agent, &base_path, diagnostics);
         }
     }
 }
 
+/// AI-057 + AI-058: Each capability `preconditions` entry MUST be valid FEL
+/// (AI-057) AND its AST root MUST be a boolean-shaped expression (AI-058).
+///
+/// The two rules fire on the same inputs: AI-057 catches parse failures
+/// (hard error); AI-058 catches parse-clean expressions whose AST root does
+/// not type to `boolean` (warning). Core §4.3.1 / §5.2.1 type bind/shape
+/// slots as `→ boolean` and §3.4.3 forbids truthy coercion, so a
+/// parse-clean `caseFile.amount` or `"open"` in a boolean slot is a bug.
+fn check_capability_preconditions(
+    agent: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(capabilities) = agent.get("capabilities").and_then(Value::as_array) else {
+        return;
+    };
+    for (cap_idx, capability) in capabilities.iter().enumerate() {
+        let Some(preconditions) = capability.get("preconditions").and_then(Value::as_array) else {
+            continue;
+        };
+        for (pre_idx, entry) in preconditions.iter().enumerate() {
+            let Some(expr_str) = entry.as_str() else {
+                continue;
+            };
+            let path = format!("{base_path}/capabilities/{cap_idx}/preconditions/{pre_idx}");
+            match parse(expr_str) {
+                Err(err) => {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "AI-057",
+                        path,
+                        format!("capability precondition is not valid FEL: {err}"),
+                    ));
+                }
+                Ok(expr) => {
+                    if !is_boolean_shaped(&expr) {
+                        diagnostics.push(LintDiagnostic::t2_warning(
+                            "AI-058",
+                            path,
+                            format!(
+                                "capability precondition `{expr_str}` does not have a \
+                                 boolean-shaped AST root; preconditions must evaluate to a \
+                                 boolean (AI Integration §3.3.1; Core §3.4.3 forbids truthy \
+                                 coercion)"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Return true when `expr`'s AST root syntactically produces a boolean.
+///
+/// The predicate is deliberately conservative: it matches operator shapes
+/// whose FEL semantics return boolean, and a hard-coded set of
+/// boolean-returning builtins. Anything else — bare field refs, string
+/// literals, arithmetic — is treated as non-boolean. Ternary / if-then-else
+/// require both branches to satisfy the predicate recursively.
+///
+/// See AI Integration §3.3.1 and Core §4.3.1 / §5.2.1 for the slot-type
+/// requirement this predicate enforces at lint time.
+pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
+    match expr {
+        Expr::Boolean(_) => true,
+        Expr::BinaryOp { op, .. } => matches!(
+            op,
+            BinaryOp::Or
+                | BinaryOp::And
+                | BinaryOp::Eq
+                | BinaryOp::NotEq
+                | BinaryOp::Lt
+                | BinaryOp::LtEq
+                | BinaryOp::Gt
+                | BinaryOp::GtEq
+        ),
+        Expr::UnaryOp {
+            op: UnaryOp::Not, ..
+        } => true,
+        Expr::Membership { .. } => true,
+        Expr::Ternary {
+            then_branch,
+            else_branch,
+            ..
+        }
+        | Expr::IfThenElse {
+            then_branch,
+            else_branch,
+            ..
+        } => is_boolean_shaped(then_branch) && is_boolean_shaped(else_branch),
+        Expr::FunctionCall { name, .. } => is_boolean_returning_builtin(name),
+        Expr::LetBinding { body, .. } => is_boolean_shaped(body),
+        // `a ?? b` is boolean-shaped when both operands are boolean-shaped,
+        // e.g. `$flag ?? true`. One branch returning a non-boolean (a path,
+        // a number) taints the whole expression — fall through to the `_`
+        // arm by short-circuiting here. Review A Finding 4.
+        Expr::NullCoalesce { left, right } => is_boolean_shaped(left) && is_boolean_shaped(right),
+        _ => false,
+    }
+}
+
+/// Set of Core FEL builtins whose return type is boolean.
+///
+/// Derived at first use from `fel_core::builtin_function_catalog()` by
+/// filtering entries whose signature string ends with `-> boolean`. This
+/// keeps AI-058 honest against spec drift: adding a new boolean-returning
+/// builtin in `fel-core` immediately makes it allowlisted here, and a
+/// name like `isBoolean` that never existed in the catalog correctly
+/// fails the check.
+///
+/// See `specs/ai/ai-integration.md` §3.3.1 and Core §4.3.1 / §5.2.1 for
+/// the boolean-slot typing obligation this predicate enforces.
+static BOOLEAN_RETURNING_BUILTINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    builtin_function_catalog()
+        .iter()
+        .filter(|entry| entry.signature.trim_end().ends_with("-> boolean"))
+        .map(|entry| entry.name)
+        .collect()
+});
+
+fn is_boolean_returning_builtin(name: &str) -> bool {
+    BOOLEAN_RETURNING_BUILTINS.contains(name)
+}
+
 /// Check FEL in an Advanced Governance document (AG-010 through AG-014).
-fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(constraints) = doc
         .value
         .get("verifiableConstraints")
@@ -111,7 +238,7 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagno
 }
 
 /// Check FEL in an Assertion Library document (G-042).
-fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(assertions) = doc.value.get("assertions").and_then(Value::as_array) {
         for (i, assertion) in assertions.iter().enumerate() {
             let path = format!("/assertions/{i}/expression");
@@ -130,7 +257,7 @@ fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<Diagnost
 fn check_states_fel(
     states: &serde_json::Map<String, Value>,
     path_prefix: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (state_name, state) in states {
         let state_path = format!("{path_prefix}/{state_name}");
@@ -163,11 +290,11 @@ fn check_states_fel(
 }
 
 /// K-012 + K-017 + K-019: Parse a guard expression and run structural checks.
-fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     let expr = match parse(expr_str) {
         Ok(e) => e,
         Err(err) => {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "K-012",
                 path,
                 format!("guard expression is not valid FEL: {err}"),
@@ -184,7 +311,7 @@ fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Diag
 }
 
 /// K-013: Milestone condition fields must be valid FEL.
-fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
+fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(milestones) = root
         .pointer("/lifecycle/milestones")
         .and_then(Value::as_array)
@@ -208,7 +335,7 @@ fn check_milestones_fel(root: &Value, diagnostics: &mut Vec<Diagnostic>) {
 fn check_delegation_conditions(
     delegation: &Value,
     base_path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(conditions) = delegation.get("conditions").and_then(Value::as_array) else {
         return;
@@ -227,7 +354,11 @@ fn check_delegation_conditions(
 // ---------------------------------------------------------------------------
 
 /// AI-024: Escalation conditions must be valid FEL that references `@agent` context.
-fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_escalation_conditions(
+    agent: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let Some(escalation) = agent.get("escalation") else {
         return;
     };
@@ -242,7 +373,7 @@ fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut
             let expr = match parse(expr_str) {
                 Ok(e) => e,
                 Err(err) => {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "AI-024",
                         &path,
                         format!("escalation condition is not valid FEL: {err}"),
@@ -252,7 +383,7 @@ fn check_escalation_conditions(agent: &Value, base_path: &str, diagnostics: &mut
             };
 
             if !references_agent_context(&expr) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "AI-024",
                     &path,
                     "escalation condition should reference @agent context",
@@ -294,13 +425,13 @@ fn parse_finite_domain_declarations(value: Option<&Value>) -> HashMap<String, ()
 fn check_smt_expression(
     expr_str: &str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
     finite_domain_paths: &HashMap<String, ()>,
 ) {
     let expr = match parse(expr_str) {
         Ok(e) => e,
         Err(err) => {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "AG-010",
                 path,
                 format!("verifiable constraint is not valid FEL: {err}"),
@@ -335,10 +466,10 @@ fn check_expression_syntax(
     rule_id: &'static str,
     expr_str: &str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if let Err(err) = parse(expr_str) {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             rule_id,
             path,
             format!("expression is not valid FEL: {err}"),
@@ -360,13 +491,13 @@ fn check_no_related_case_refs(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         match e {
             Expr::FieldRef { name, .. } => {
                 if name.as_deref().is_some_and(is_related_case_name) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -379,7 +510,7 @@ fn check_no_related_case_refs(
             }
             Expr::ContextRef { name, .. } => {
                 if is_related_case_name(name) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -399,7 +530,7 @@ fn check_no_related_case_refs(
                         // We only warn if the base is a field ref without its own name,
                         // meaning it could be a bare `$` dereferencing into relatedCase.
                         if matches!(inner.as_ref(), Expr::FieldRef { name: None, .. }) {
-                            diagnostics.push(Diagnostic::error(
+                            diagnostics.push(LintDiagnostic::t2_error(
                                 rule_id,
                                 path,
                                 format!(
@@ -439,14 +570,14 @@ fn check_only_builtin_functions(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
             if !builtin_names.contains(name.as_str()) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     rule_id,
                     path,
                     format!(
@@ -470,7 +601,7 @@ fn check_no_recursive_let(
     outer_names: &mut HashSet<String>,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     match expr {
         Expr::LetBinding { name, value, body } => {
@@ -482,7 +613,7 @@ fn check_no_recursive_let(
             self_set.insert(name.clone());
 
             if let_value_references_name(value, &self_set) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t2_error(
                     rule_id,
                     path,
                     format!("let binding '{name}' references itself recursively"),
@@ -527,12 +658,12 @@ fn check_finite_quantifiers(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, args } = e {
             if (name == "every" || name == "some") && args.len() != 2 {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     rule_id,
                     path,
                     format!(
@@ -555,7 +686,7 @@ fn check_linear_arithmetic(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     walk_expr(expr, &mut |e| {
         if let Expr::BinaryOp { op, left, right } = e {
@@ -565,7 +696,7 @@ fn check_linear_arithmetic(
 
                 if left_has_var && right_has_var {
                     let op_symbol = if *op == BinaryOp::Mul { "*" } else { "/" };
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         rule_id,
                         path,
                         format!(
@@ -602,14 +733,14 @@ fn check_no_extension_functions(
     expr: &Expr,
     rule_id: &'static str,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
             if !builtin_names.contains(name.as_str()) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t2_error(
                     rule_id,
                     path,
                     format!(
@@ -634,7 +765,7 @@ fn check_no_extension_functions(
 fn check_finite_domain_equality(
     expr: &Expr,
     path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
     finite_paths: &HashMap<String, ()>,
 ) {
     let mut warned_path_pairs: HashSet<(String, String)> = HashSet::new();
@@ -662,7 +793,7 @@ fn check_finite_domain_equality(
                 if skip_duplicate {
                     return false;
                 }
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "AG-010",
                     path,
                     "`==` or `!=` compares two non-literal field or context accesses; use a \
@@ -716,7 +847,7 @@ fn is_simple_access_expr(expr: &Expr) -> bool {
 }
 
 /// Dotted path for a simple field or context access (`$a.b` → `a.b`). Indices/wildcards excluded.
-fn simple_access_path_string(expr: &Expr) -> Option<String> {
+pub(super) fn simple_access_path_string(expr: &Expr) -> Option<String> {
     match expr {
         Expr::FieldRef {
             name,
@@ -786,7 +917,7 @@ fn references_agent_context(expr: &Expr) -> bool {
 ///
 /// Children are iterated inline via `visit_children` to avoid allocating
 /// a `Vec` per node (Finding #2).
-fn walk_expr(expr: &Expr, visitor: &mut impl FnMut(&Expr) -> bool) {
+pub(super) fn walk_expr(expr: &Expr, visitor: &mut impl FnMut(&Expr) -> bool) {
     if visitor(expr) {
         return;
     }
@@ -881,7 +1012,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::diagnostic::Severity;
+    use crate::diagnostic::LintSeverity;
     use crate::document::{DocumentKind, WosDocument};
     use serde_json::json;
 
@@ -934,7 +1065,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-012" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "K-012" && d.severity == LintSeverity::Error),
             "expected K-012 error, got: {diag:?}"
         );
     }
@@ -985,7 +1116,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-017" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "K-017" && d.severity == LintSeverity::Error),
             "expected K-017 error, got: {diag:?}"
         );
     }
@@ -1042,7 +1173,7 @@ mod tests {
         check_kernel_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "K-019" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "K-019" && d.severity == LintSeverity::Warning),
             "expected K-019 warning, got: {diag:?}"
         );
     }
@@ -1150,7 +1281,7 @@ mod tests {
         check_ai_integration_fel(&doc, &mut diag);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AI-024" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AI-024" && d.severity == LintSeverity::Warning),
             "expected AI-024 warning, got: {diag:?}"
         );
     }
@@ -1175,6 +1306,286 @@ mod tests {
         assert!(
             !diag.iter().any(|d| d.rule_id == "AI-024"),
             "unexpected AI-024: {diag:?}"
+        );
+    }
+
+    // --- AI-057: capability precondition FEL validity ---
+
+    #[test]
+    fn ai057_valid_precondition_is_clean() {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.documentsReceived = true"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-057"),
+            "unexpected AI-057: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai057_invalid_precondition_fails() {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["!!! not FEL !!!"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-057" && d.severity == LintSeverity::Error),
+            "expected AI-057 error, got: {diag:?}"
+        );
+    }
+
+    // --- AI-058: capability precondition boolean-AST-root ---
+
+    #[test]
+    fn ai058_binary_comparison_is_boolean_shaped() {
+        // `caseFile.amount > 0` — binary comparison, boolean-shaped root.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.amount > 0"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_bare_field_ref_fires() {
+        // `caseFile.amount` alone is a path, not a boolean.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["caseFile.amount"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_string_literal_fires() {
+        // `"open"` parses (as a string literal) but is not boolean-shaped.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["\"open\""]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    /// Helper: run AI-058 over a single precondition string; return the
+    /// diagnostics that fired. Keeps the per-builtin allowlist tests compact.
+    fn run_ai058(precondition: &str) -> Vec<LintDiagnostic> {
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": [precondition]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        diag
+    }
+
+    // --- §4.3b #F4a: AI-058 allowlist derives from fel-core catalog ---
+    //
+    // These four tests pin the bugs Review A surfaced: the old hand-rolled
+    // allowlist omitted `every`, `some`, and the `boolean(any)` cast, and
+    // listed a bogus `isBoolean` that does not exist in `fel-core`.
+
+    #[test]
+    fn ai058_every_builtin_is_clean() {
+        // `every(array, predicate) -> boolean` — aggregate builtin that was
+        // missing from the pre-§4.3b hand-rolled allowlist (extensions.rs:114).
+        let diag = run_ai058("every(caseFile.flags, $ = true)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_some_builtin_is_clean() {
+        // `some(array, predicate) -> boolean` — also missing from the old
+        // allowlist (extensions.rs:120).
+        let diag = run_ai058("some(caseFile.flags, $ = true)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_boolean_cast_is_clean() {
+        // `boolean(any) -> boolean` — the cast builtin (extensions.rs:378)
+        // that was absent from the old allowlist.
+        let diag = run_ai058("boolean(caseFile.flag)");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_is_boolean_is_not_a_builtin() {
+        // Behavior change introduced by §4.3b #F4a: `isBoolean` was in the
+        // old hand-rolled allowlist but does not exist in `fel-core`
+        // (grep-verified). The new catalog-derived predicate correctly
+        // refuses it, so AI-058 now fires on a bare `isBoolean(...)` call.
+        let diag = run_ai058("isBoolean(caseFile.flag)");
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_boolean_returning_builtin_is_clean() {
+        // `present(caseFile.documentsReceived)` — builtin returning boolean.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{
+                            "id": "extract",
+                            "preconditions": ["present(caseFile.documentsReceived)"]
+                        }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058: {diag:?}"
+        );
+    }
+
+    // --- §4.3b Finding 4: NullCoalesce in is_boolean_shaped ---
+
+    #[test]
+    fn ai058_null_coalesce_of_booleans_is_clean() {
+        // `caseFile.flag ?? true` — null-coalesce of two boolean-shaped
+        // operands. Before Finding 4, `is_boolean_shaped` had no arm for
+        // `Expr::NullCoalesce` and fell into `_ => false`, firing AI-058
+        // on a valid boolean expression.
+        let diag = run_ai058("boolean(caseFile.flag) ?? true");
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-058"),
+            "unexpected AI-058 on boolean null-coalesce: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai058_null_coalesce_with_non_boolean_fires() {
+        // `caseFile.amount ?? 0` — operands are a path and a number, neither
+        // boolean-shaped. The new NullCoalesce arm must still fail this
+        // expression (both branches boolean-shaped ⇒ whole is boolean).
+        let diag = run_ai058("caseFile.amount ?? 0");
+        assert!(
+            diag.iter()
+                .any(|d| d.rule_id == "AI-058" && d.severity == LintSeverity::Warning),
+            "expected AI-058 warning on non-boolean null-coalesce, got: {diag:?}"
+        );
+    }
+
+    #[test]
+    fn ai057_missing_preconditions_is_noop() {
+        // A capability without any preconditions MUST NOT trigger AI-057.
+        let doc = make_doc(
+            DocumentKind::AiIntegration,
+            json!({
+                "$wosAIIntegration": true,
+                "agents": {
+                    "extractor": {
+                        "capabilities": [{ "id": "extract" }]
+                    }
+                }
+            }),
+        );
+        let mut diag = Vec::new();
+        check_ai_integration_fel(&doc, &mut diag);
+        assert!(
+            !diag.iter().any(|d| d.rule_id == "AI-057"),
+            "unexpected AI-057: {diag:?}"
         );
     }
 
@@ -1226,7 +1637,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-013" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "AG-013" && d.severity == LintSeverity::Error),
             "expected AG-013 error, got: {diag:?}"
         );
     }
@@ -1261,7 +1672,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-014" && d.severity == Severity::Error),
+                .any(|d| d.rule_id == "AG-014" && d.severity == LintSeverity::Error),
             "expected AG-014 error, got: {diag:?}"
         );
     }
@@ -1297,7 +1708,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1315,7 +1726,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1333,7 +1744,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1351,7 +1762,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1368,7 +1779,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning, got: {diag:?}"
         );
     }
@@ -1385,7 +1796,7 @@ mod tests {
         );
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning for !=, got: {diag:?}"
         );
     }
@@ -1402,7 +1813,7 @@ mod tests {
         );
         let n = diag
             .iter()
-            .filter(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning)
+            .filter(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning)
             .count();
         assert_eq!(n, 1, "expected one deduped AG-010 warning, got: {diag:?}");
     }
@@ -1417,7 +1828,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }
@@ -1431,7 +1842,7 @@ mod tests {
         check_smt_expression(expr_str, "/verifiableConstraints/0", &mut diag, &decls);
         assert!(
             diag.iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "expected AG-010 warning, got: {diag:?}"
         );
     }
@@ -1459,7 +1870,7 @@ mod tests {
         assert!(
             !diag
                 .iter()
-                .any(|d| d.rule_id == "AG-010" && d.severity == Severity::Warning),
+                .any(|d| d.rule_id == "AG-010" && d.severity == LintSeverity::Warning),
             "unexpected AG-010 warning: {diag:?}"
         );
     }

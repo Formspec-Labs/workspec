@@ -5,6 +5,9 @@
   "documents": {
     "kernel": "inline"
   },
+  "initial_case_state": {
+    "amount": 3000
+  },
   "inline_documents": {
     "kernel": {
       "$wosKernel": "1.0",
@@ -92,9 +95,9 @@
   ],
   "expected_provenance": [
     {
-      "type": "stateTransition",
-      "from": "pending",
-      "to": "fastApproved",
+      "recordKind": "stateTransition",
+      "fromState": "pending",
+      "toState": "fastApproved",
       "actorId": "approver"
     }
   ],

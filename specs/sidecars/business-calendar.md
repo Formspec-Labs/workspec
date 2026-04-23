@@ -178,11 +178,42 @@ The Business Calendar sidecar composes with temporal parameter resolution (Gover
 
 ## 7. Multi-Calendar Scenarios
 
-A workflow MAY be targeted by multiple Business Calendar sidecars (e.g., federal and state calendars). When multiple calendars target the same workflow:
+A workflow MAY be targeted by multiple Business Calendar sidecars (e.g., federal and state calendars, or one calendar per US state in a national benefits program). When multiple calendars target the same workflow, the processor selects which calendars apply to a given case via the `appliesWhen` FEL expression on each calendar.
 
-1. The processor MUST identify which calendar applies to each SLA evaluation. The selection mechanism is implementation-defined but SHOULD be documented.
-2. A date is a non-working day if ANY applicable calendar marks it as a holiday or non-working day.
-3. Operating hours use the MOST RESTRICTIVE intersection of all applicable calendars' operating periods.
+### 7.1 Calendar Selection Algorithm
+
+For each SLA evaluation or temporal-parameter resolution, the processor MUST:
+
+1. Collect every Business Calendar sidecar whose `targetWorkflow` matches the active kernel document URI.
+2. Filter out calendars whose `expirationDate` is in the past (§8.1 item 5).
+3. Filter out calendars whose `effectiveDate` is in the future relative to the SLA evaluation timestamp.
+4. For each remaining calendar, evaluate `appliesWhen` against the case file. A calendar with no `appliesWhen` field applies unconditionally (equivalent to `appliesWhen: "true"`).
+5. The set of calendars whose expression evaluated true is the **applicable set** for this case.
+6. If the applicable set is empty, the processor MUST fall back to wall-clock time (§8.2 absence behavior) and SHOULD record a warning in provenance citing the workflow URI and case-file fields consulted.
+
+The selection is deterministic given the same case file and clock — no implementation-defined ordering or tiebreakers.
+
+### 7.2 Composition When Multiple Calendars Apply
+
+When the applicable set contains more than one calendar:
+
+1. A date is a non-working day if **any** applicable calendar marks it as a holiday or non-working day.
+2. Operating hours use the **most restrictive intersection** of all applicable calendars' operating periods.
+3. Timezone disagreement is a deployment error — applicable calendars MUST share the same `timezone`. A processor MUST raise a configuration error if they do not.
+
+### 7.3 Worked Example: Multi-State Benefits Workflow
+
+A national benefits adjudication workflow ships three Business Calendar sidecars:
+
+```json
+[
+  { "targetWorkflow": "https://agency.gov/benefits/v1", "appliesWhen": "applicant.address.state == 'NY'", "timezone": "America/New_York", "...": "..." },
+  { "targetWorkflow": "https://agency.gov/benefits/v1", "appliesWhen": "applicant.address.state == 'CA'", "timezone": "America/Los_Angeles", "...": "..." },
+  { "targetWorkflow": "https://agency.gov/benefits/v1", "appliesWhen": "true", "timezone": "America/New_York", "title": "Federal fallback", "...": "..." }
+]
+```
+
+For a case where `applicant.address.state == 'NY'`, the applicable set is the NY calendar plus the federal fallback (timezone agreement OK because both are `America/New_York`). For a case where `applicant.address.state == 'CA'`, the applicable set is the CA calendar plus the federal fallback — and the processor raises a configuration error because the timezones disagree, surfacing the modelling mistake at evaluation time rather than silently picking one.
 
 ---
 

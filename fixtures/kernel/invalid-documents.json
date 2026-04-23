@@ -74,9 +74,9 @@
       }
     },
     {
-      "id": "transition-missing-event",
-      "description": "Transition missing required event property",
-      "expectedError": "Required property 'event' is missing in transition",
+      "id": "transition-message-dollar-prefix",
+      "description": "Transition event with message kind using reserved $ prefix",
+      "expectedError": "message event name must not start with '$'",
       "document": {
         "$wosKernel": "1.0",
         "lifecycle": {
@@ -85,7 +85,10 @@
             "start": {
               "type": "atomic",
               "transitions": [
-                { "target": "end" }
+                {
+                  "event": { "kind": "message", "name": "$custom" },
+                  "target": "end"
+                }
               ]
             },
             "end": { "type": "final" }

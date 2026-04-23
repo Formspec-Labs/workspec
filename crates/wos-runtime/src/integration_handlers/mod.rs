@@ -111,28 +111,55 @@ pub(crate) fn dispatch_integration_binding(
     now_iso: &str,
 ) -> Result<Vec<ProvenanceRecord>, RuntimeError> {
     match binding.kind {
-        IntegrationBindingKind::RequestResponse => {
-            request_response::RequestResponseHandler.execute(
-                ctx, record, kernel, observed, service_ref, binding, now_iso,
-            )
-        }
+        IntegrationBindingKind::RequestResponse => request_response::RequestResponseHandler
+            .execute(ctx, record, kernel, observed, service_ref, binding, now_iso),
         IntegrationBindingKind::EventEmit => event_emit::EventEmitHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
+            ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
         ),
         IntegrationBindingKind::EventConsume => event_consume::EventConsumeHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
+            ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
         ),
         IntegrationBindingKind::Callback => callback::CallbackHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
+            ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
         ),
-        IntegrationBindingKind::Tool => tool::ToolHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
-        ),
+        IntegrationBindingKind::Tool => {
+            tool::ToolHandler.execute(ctx, record, kernel, observed, service_ref, binding, now_iso)
+        }
         IntegrationBindingKind::ArazzoSequence => arazzo_sequence::ArazzoHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
+            ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
         ),
         IntegrationBindingKind::PolicyEngine => policy_engine::PolicyEngineHandler.execute(
-            ctx, record, kernel, observed, service_ref, binding, now_iso,
+            ctx,
+            record,
+            kernel,
+            observed,
+            service_ref,
+            binding,
+            now_iso,
         ),
     }
 }

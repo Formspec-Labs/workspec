@@ -12,6 +12,7 @@
 //! |-----------|---------|----------------------------------------------------------------------|
 //! | K-010     | error   | createTask assignTo MUST reference a declared kernel actor          |
 //! | K-037     | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
+//! | K-049     | warning (LoadBearing) | Continuous-mode setData/guard dependency cycles (see `continuous_mode`) |
 //! | K-EXT-002 | warning | Keys using the reserved `x-wos-*` namespace (Kernel §10.6)           |
 //!
 //! ## Governance — due process
@@ -33,7 +34,8 @@
 //! | G-022 | warning | Actor in both potentialOwner and excludedOwner                       |
 //! | G-023 | warning | SLA should set calendarType=business when scoped calendar sidecar present |
 //! | G-060 | error   | SLA MUST use business days when a Business Calendar targets this workflow (no kernel required) |
-//! | G-063 | error   | notificationTemplateRef / noticeTemplateRef MUST resolve to template keys (no kernel required) |
+//! | G-063 | error   | `templateKey`, `notificationTemplateKey`, and `noticeTemplateKey` MUST resolve to template keys (no kernel required) |
+//! | G-066 | error   | `BreachPolicy.escalationStepId` MUST resolve within the same task pattern (no kernel required) |
 //! | G-024 | warning | Delegation verification config present when kernel has determination  |
 //! | G-027 | error   | Sub-delegation chain depth must not exceed maxDelegationDepth        |
 //! | G-028 | error   | hold policies MUST attach to hold-tagged kernel states               |
@@ -71,11 +73,14 @@
 //! | DM-002 | warning | rights/safety workflows should follow shadow→canary→production      |
 //! | VR-003 | error   | counterexample required when result is proven-unsafe                |
 
+use std::collections::{HashMap, HashSet};
+
 use serde_json::Value;
 
+use wos_core::model::kernel::ActorKind;
 use wos_core::model::kernel::{CancellationPolicy, ImpactLevel, KernelDocument, State, StateKind};
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosProject};
 
 use super::fel_analysis;
@@ -97,6 +102,8 @@ struct KernelCollections {
     case_fields: std::collections::HashSet<String>,
     /// All declared actor IDs from the kernel `actors` array.
     actor_ids: std::collections::HashSet<String>,
+    /// All human actor IDs from the kernel `actors` array.
+    human_actor_ids: std::collections::HashSet<String>,
 }
 
 impl KernelCollections {
@@ -115,12 +122,19 @@ impl KernelCollections {
             .unwrap_or_default();
 
         let actor_ids = kernel.actors.iter().map(|a| a.id.clone()).collect();
+        let human_actor_ids = kernel
+            .actors
+            .iter()
+            .filter(|actor| actor.kind == ActorKind::Human)
+            .map(|actor| actor.id.clone())
+            .collect();
 
         Self {
             tags,
             events,
             case_fields,
             actor_ids,
+            human_actor_ids,
         }
     }
 }
@@ -153,7 +167,9 @@ fn collect_events_typed(
 ) {
     for state in states.values() {
         for transition in &state.transitions {
-            events.insert(transition.event.clone());
+            if let Some(ev) = &transition.event {
+                events.insert(ev.runtime_dispatch_label());
+            }
         }
         collect_events_typed(&state.states, events);
         for region in state.regions.values() {
@@ -167,7 +183,7 @@ fn collect_events_typed(
 // ---------------------------------------------------------------------------
 
 /// Run all Tier 2 cross-document checks across the project.
-pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     // K-EXT-002: Reserved `x-wos-*` namespace check runs across every document
     // in the project, regardless of kind.
     for doc in project.documents() {
@@ -183,15 +199,17 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
     if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
         check_action_actor_references_typed(kernel, &kc.actor_ids, diagnostics);
         check_fail_fast_error_final_states_typed(kernel, diagnostics);
+        super::continuous_mode::check(kernel, diagnostics);
     }
 
     for gov in project.of_kind(DocumentKind::WorkflowGovernance) {
         let typed_gov =
             serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
 
-        // G-023 / G-060 / G-063 only need governance + project sidecars (no typed kernel).
+        // G-023 / G-060 / G-063 / G-066 only need governance + project sidecars (no typed kernel).
         check_sla_business_calendar(gov, project, diagnostics);
         check_notification_template_refs(gov, project, diagnostics);
+        check_sla_escalation_step_ids(gov, diagnostics);
 
         if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
             check_target_workflow_match_typed(gov, kernel, diagnostics);
@@ -256,6 +274,14 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
         check_autonomy_is_action_site_property(ai, diagnostics);
     }
 
+    for profile in project.of_kind(DocumentKind::SignatureProfile) {
+        if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+            check_signature_profile(profile, kernel, kc, diagnostics);
+        } else {
+            check_signature_profile_without_kernel(profile, diagnostics);
+        }
+    }
+
     // Policy parameters documents.
     for pp in project.of_kind(DocumentKind::PolicyParameters) {
         if let Some(kc) = kernel_collections.as_ref() {
@@ -289,11 +315,389 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<Diagnostic>) {
 // K-010: createTask assignTo MUST reference a declared kernel actor
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// SIG-* Signature Profile rules
+// ---------------------------------------------------------------------------
+
+/// Run Signature Profile cross-document checks.
+fn check_signature_profile(
+    profile: &crate::document::WosDocument,
+    kernel: &KernelDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_target_workflow(profile, kernel, diagnostics);
+    check_signature_roles(profile, kc, diagnostics);
+    check_signature_auth_policies(profile, diagnostics);
+    check_signature_steps(profile, diagnostics);
+    check_signature_guards(profile, diagnostics);
+    check_signature_lifecycle_tags(profile, kc, diagnostics);
+    check_signature_timer_events(profile, kc, diagnostics);
+    check_signature_evidence_inputs(profile, kc, diagnostics);
+    check_signature_naming(profile, diagnostics);
+}
+
+/// Run Signature Profile checks that do not require a kernel document.
+fn check_signature_profile_without_kernel(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_auth_policies(profile, diagnostics);
+    check_signature_steps(profile, diagnostics);
+    check_signature_guards(profile, diagnostics);
+    check_signature_naming(profile, diagnostics);
+}
+
+fn check_signature_target_workflow(
+    profile: &crate::document::WosDocument,
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let target = pointer_str(&profile.value, "/targetWorkflow/url");
+    let kernel_url = kernel.url.as_deref();
+    if let (Some(target), Some(kernel_url)) = (target, kernel_url)
+        && target != kernel_url
+    {
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-001",
+            "/targetWorkflow/url",
+            format!("Signature Profile targetWorkflow.url '{target}' does not match kernel url '{kernel_url}'"),
+        ));
+    }
+}
+
+fn check_signature_roles(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(roles) = profile.value.pointer("/roles").and_then(Value::as_array) else {
+        return;
+    };
+    for (index, role) in roles.iter().enumerate() {
+        let actor_id = role.get("actorId").and_then(Value::as_str);
+        if let Some(actor_id) = actor_id {
+            if !kc.actor_ids.contains(actor_id) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "SIG-002",
+                    &format!("/roles/{index}/actorId"),
+                    format!(
+                        "signature role actorId '{actor_id}' does not resolve to a kernel actor"
+                    ),
+                ));
+            } else if !kc.human_actor_ids.contains(actor_id) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "SIG-003",
+                    &format!("/roles/{index}/actorId"),
+                    format!("signature role actorId '{actor_id}' is not a human kernel actor"),
+                ));
+            }
+        }
+    }
+}
+
+fn check_signature_auth_policies(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let policy_keys = string_set_at(profile, "/authenticationPolicies", "key");
+    let Some(roles) = profile.value.pointer("/roles").and_then(Value::as_array) else {
+        return;
+    };
+    for (index, role) in roles.iter().enumerate() {
+        let Some(policy_key) = role.get("authenticationPolicyKey").and_then(Value::as_str) else {
+            continue;
+        };
+        if !policy_keys.contains(policy_key) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-004",
+                &format!("/roles/{index}/authenticationPolicyKey"),
+                format!("authenticationPolicyKey '{policy_key}' does not resolve to authenticationPolicies[*].key"),
+            ));
+        }
+    }
+}
+
+fn check_signature_steps(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let role_ids = string_set_at(profile, "/roles", "id");
+    let document_ids = string_set_at(profile, "/documents", "id");
+    let Some(steps) = profile
+        .value
+        .pointer("/signingFlow/steps")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+
+    let step_ids: HashSet<&str> = steps
+        .iter()
+        .filter_map(|step| step.get("id").and_then(Value::as_str))
+        .collect();
+
+    for (index, step) in steps.iter().enumerate() {
+        if let Some(role_id) = step.get("roleId").and_then(Value::as_str)
+            && !role_ids.contains(role_id)
+        {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-005",
+                &format!("/signingFlow/steps/{index}/roleId"),
+                format!("signing step roleId '{role_id}' does not resolve to roles[*].id"),
+            ));
+        }
+        if let Some(document_id) = step.get("documentId").and_then(Value::as_str)
+            && !document_ids.contains(document_id)
+        {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-006",
+                &format!("/signingFlow/steps/{index}/documentId"),
+                format!(
+                    "signing step documentId '{document_id}' does not resolve to documents[*].id"
+                ),
+            ));
+        }
+        if let Some(depends_on) = step.get("dependsOn").and_then(Value::as_array) {
+            for (dep_index, dependency) in depends_on.iter().enumerate() {
+                let Some(dependency) = dependency.as_str() else {
+                    continue;
+                };
+                if !step_ids.contains(dependency) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-007",
+                        &format!("/signingFlow/steps/{index}/dependsOn/{dep_index}"),
+                        format!("signing step dependency '{dependency}' does not resolve to a sibling step id"),
+                    ));
+                }
+            }
+        }
+    }
+
+    if signature_step_graph_has_cycle(steps) {
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-007",
+            "/signingFlow/steps",
+            "signing step dependencies MUST NOT cycle",
+        ));
+    }
+}
+
+fn check_signature_guards(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(steps) = profile
+        .value
+        .pointer("/signingFlow/steps")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for (index, step) in steps.iter().enumerate() {
+        let Some(guard) = step.get("guard").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Err(error) = fel_core::parse(guard) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-008",
+                &format!("/signingFlow/steps/{index}/guard"),
+                format!("routed signing guard failed to parse as FEL: {error}"),
+            ));
+        }
+    }
+}
+
+fn check_signature_lifecycle_tags(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    for tag in [
+        "awaiting-signature",
+        "signature-complete",
+        "signature-declined",
+        "signature-expired",
+        "signature-voided",
+    ] {
+        if !kc.tags.contains(tag) {
+            diagnostics.push(LintDiagnostic::t2_warning(
+                "SIG-009",
+                "/signingFlow",
+                format!(
+                    "Signature Profile lifecycle tag '{tag}' does not appear in the target kernel"
+                ),
+            ));
+        }
+    }
+    let _ = profile;
+}
+
+fn check_signature_timer_events(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    for path in ["/reminders/eventName", "/expiryPolicy/eventName"] {
+        let Some(event_name) = pointer_str(&profile.value, path) else {
+            continue;
+        };
+        if !kc.events.contains(event_name) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "SIG-010",
+                path,
+                format!("signature timer eventName '{event_name}' does not map to a typed kernel timer/message event"),
+            ));
+        }
+    }
+}
+
+fn check_signature_evidence_inputs(
+    profile: &crate::document::WosDocument,
+    kc: &KernelCollections,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(required_fields) = profile
+        .value
+        .pointer("/evidence/requiredFields")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for (index, field) in required_fields.iter().enumerate() {
+        let Some(field) = field.as_str() else {
+            continue;
+        };
+        if field.starts_with("response.") {
+            continue;
+        }
+        if field.starts_with("caseFile.") && kc.case_fields.contains(field) {
+            continue;
+        }
+        diagnostics.push(LintDiagnostic::t2_error(
+            "SIG-011",
+            &format!("/evidence/requiredFields/{index}"),
+            format!("SignatureAffirmation evidence field '{field}' is not satisfiable from response.* or the kernel caseFile"),
+        ));
+    }
+}
+
+fn check_signature_naming(
+    profile: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_signature_naming_recursive(&profile.value, "", diagnostics);
+}
+
+fn check_signature_naming_recursive(
+    value: &Value,
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let child_path = format!("{path}/{}", escape_json_pointer(key));
+                if key.ends_with("Ref") && !child.as_str().is_some_and(is_uri_like) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-012",
+                        &child_path,
+                        format!("Signature Profile field '{key}' ends with Ref and MUST carry a URI-like cross-artifact reference"),
+                    ));
+                }
+                if key.ends_with("Key") && child.as_str().is_some_and(is_uri_like) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "SIG-012",
+                        &child_path,
+                        format!("Signature Profile field '{key}' ends with Key and MUST carry a package-local key, not a URI"),
+                    ));
+                }
+                check_signature_naming_recursive(child, &child_path, diagnostics);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                check_signature_naming_recursive(child, &format!("{path}/{index}"), diagnostics);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn signature_step_graph_has_cycle(steps: &[Value]) -> bool {
+    let graph: HashMap<&str, Vec<&str>> = steps
+        .iter()
+        .filter_map(|step| {
+            let id = step.get("id")?.as_str()?;
+            let deps = step
+                .get("dependsOn")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                .unwrap_or_default();
+            Some((id, deps))
+        })
+        .collect();
+
+    fn visit<'a>(
+        id: &'a str,
+        graph: &HashMap<&'a str, Vec<&'a str>>,
+        visiting: &mut HashSet<&'a str>,
+        visited: &mut HashSet<&'a str>,
+    ) -> bool {
+        if visited.contains(id) {
+            return false;
+        }
+        if !visiting.insert(id) {
+            return true;
+        }
+        for dependency in graph.get(id).into_iter().flatten() {
+            if graph.contains_key(dependency) && visit(dependency, graph, visiting, visited) {
+                return true;
+            }
+        }
+        visiting.remove(id);
+        visited.insert(id);
+        false
+    }
+
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    graph
+        .keys()
+        .any(|id| visit(id, &graph, &mut visiting, &mut visited))
+}
+
+fn string_set_at<'a>(
+    doc: &'a crate::document::WosDocument,
+    pointer: &str,
+    field: &str,
+) -> HashSet<&'a str> {
+    doc.value
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get(field).and_then(Value::as_str))
+        .collect()
+}
+
+fn pointer_str<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
+    value.pointer(pointer).and_then(Value::as_str)
+}
+
+fn is_uri_like(value: &str) -> bool {
+    value.contains(':')
+}
+
+fn escape_json_pointer(value: &str) -> String {
+    value.replace('~', "~0").replace('/', "~1")
+}
+
 /// K-010 (typed): Action `assignTo` fields MUST reference a declared kernel actor.
 fn check_action_actor_references_typed(
     kernel: &KernelDocument,
     actor_ids: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     check_action_actors_recursive_typed(
         &kernel.lifecycle.states,
@@ -307,7 +711,7 @@ fn check_action_actors_recursive_typed(
     states: &indexmap::IndexMap<String, State>,
     parent_path: &str,
     actor_ids: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, state) in states {
         let state_path = format!("{parent_path}/{name}");
@@ -315,7 +719,7 @@ fn check_action_actors_recursive_typed(
         for (i, action) in state.on_entry.iter().enumerate() {
             if let Some(assign_to) = &action.assign_to {
                 if !actor_ids.contains(assign_to.as_str()) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "K-010",
                         &format!("{state_path}/onEntry/{i}/assignTo"),
                         format!(
@@ -329,7 +733,7 @@ fn check_action_actors_recursive_typed(
         for (i, action) in state.on_exit.iter().enumerate() {
             if let Some(assign_to) = &action.assign_to {
                 if !actor_ids.contains(assign_to.as_str()) {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "K-010",
                         &format!("{state_path}/onExit/{i}/assignTo"),
                         format!(
@@ -344,7 +748,7 @@ fn check_action_actors_recursive_typed(
             for (ai, action) in transition.actions.iter().enumerate() {
                 if let Some(assign_to) = &action.assign_to {
                     if !actor_ids.contains(assign_to.as_str()) {
-                        diagnostics.push(Diagnostic::error(
+                        diagnostics.push(LintDiagnostic::t2_error(
                             "K-010",
                             &format!("{state_path}/transitions/{ti}/actions/{ai}/assignTo"),
                             format!(
@@ -381,7 +785,7 @@ fn check_action_actors_recursive_typed(
 /// K-037 (typed): Fail-fast parallel regions MUST have an error-tagged final state.
 fn check_fail_fast_error_final_states_typed(
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     check_fail_fast_recursive_typed(&kernel.lifecycle.states, "/lifecycle/states", diagnostics);
 }
@@ -389,7 +793,7 @@ fn check_fail_fast_error_final_states_typed(
 fn check_fail_fast_recursive_typed(
     states: &indexmap::IndexMap<String, State>,
     parent_path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, state) in states {
         let state_path = format!("{parent_path}/{name}");
@@ -403,7 +807,7 @@ fn check_fail_fast_recursive_typed(
                     .values()
                     .any(|s| s.kind == StateKind::Final && s.tags.iter().any(|t| t == "error"));
                 if !has_error_final {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "K-037",
                         &format!("{state_path}/regions/{region_name}"),
                         format!(
@@ -438,14 +842,14 @@ fn check_fail_fast_recursive_typed(
 fn check_target_workflow_match_typed(
     doc: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let target = doc.value.get("targetWorkflow").and_then(Value::as_str);
     let kernel_url = kernel.url.as_deref();
 
     if let (Some(target), Some(url)) = (target, kernel_url) {
         if target != url {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-034",
                 "/targetWorkflow",
                 format!("targetWorkflow '{target}' does not match kernel url '{url}'"),
@@ -462,13 +866,13 @@ fn check_target_workflow_match_typed(
 fn check_due_process_for_impact_typed(
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !is_rights_or_safety_impacting_typed(kernel) {
         return;
     }
     if gov.value.get("dueProcess").is_none() {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-001",
             "/dueProcess",
             "kernel impactLevel is rights/safety-impacting; governance MUST declare a dueProcess section",
@@ -484,7 +888,7 @@ fn check_due_process_for_impact_typed(
 fn check_notice_individualized_for_rights_typed(
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
@@ -495,7 +899,7 @@ fn check_notice_individualized_for_rights_typed(
     let path = "/dueProcess/notice";
     for field in ["determinationField", "reasonCodes", "appealInstructions"] {
         if notice.get(field).is_none() {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-003",
                 path,
                 format!(
@@ -514,7 +918,7 @@ fn check_notice_individualized_for_rights_typed(
 fn check_explanation_level_for_rights_typed(
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
@@ -524,7 +928,7 @@ fn check_explanation_level_for_rights_typed(
         .pointer("/dueProcess/explanationLevel")
         .and_then(Value::as_str);
     if level != Some("individualized") {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-004",
             "/dueProcess/explanationLevel",
             "rights-impacting kernel requires explanationLevel 'individualized' in governance dueProcess",
@@ -540,13 +944,13 @@ fn check_explanation_level_for_rights_typed(
 fn check_counterfactual_for_rights_typed(
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
     }
     match gov.value.pointer("/dueProcess/counterfactuals") {
-        None => diagnostics.push(Diagnostic::error(
+        None => diagnostics.push(LintDiagnostic::t2_error(
             "G-005",
             "/dueProcess/counterfactuals",
             "rights-impacting kernel requires counterfactuals section with positive and negative entries",
@@ -554,7 +958,7 @@ fn check_counterfactual_for_rights_typed(
         Some(cf) => {
             for polarity in ["positive", "negative"] {
                 if cf.get(polarity).is_none() {
-                    diagnostics.push(Diagnostic::error(
+                    diagnostics.push(LintDiagnostic::t2_error(
                         "G-005",
                         &format!("/dueProcess/counterfactuals/{polarity}"),
                         format!("rights-impacting adverse decision must declare '{polarity}' counterfactual"),
@@ -576,7 +980,7 @@ fn check_counterfactual_for_rights_typed(
 fn check_continuation_of_services(
     gov: &crate::document::WosDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let declared = gov
         .value
@@ -587,7 +991,7 @@ fn check_continuation_of_services(
         return;
     }
     if !kernel_tags.contains("hold") {
-        diagnostics.push(Diagnostic::warning(
+        diagnostics.push(LintDiagnostic::t2_warning(
             "G-008",
             "/dueProcess/continuationOfServices",
             "continuationOfServices is true but kernel has no state tagged 'hold'; topology may not support service continuation during appeal",
@@ -606,13 +1010,13 @@ fn check_continuation_of_services(
 fn check_adverse_decision_due_process(
     gov: &crate::document::WosDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if gov.value.get("adverseDecisionPolicy").is_none() {
         return;
     }
     if !kernel_tags.contains("adverse-decision") {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-009",
             "/adverseDecisionPolicy",
             "governance declares adverseDecisionPolicy but kernel has no transition tagged 'adverse-decision'",
@@ -629,7 +1033,7 @@ fn check_adverse_decision_due_process(
 fn check_governance_tags_exist(
     gov: &crate::document::WosDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(protocols) = gov.value.get("reviewProtocols").and_then(Value::as_array) else {
         return;
@@ -640,7 +1044,7 @@ fn check_governance_tags_exist(
         };
         for tag in tags.iter().filter_map(Value::as_str) {
             if !kernel_tags.contains(tag) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "G-011",
                     &format!("/reviewProtocols/{i}/tags"),
                     format!("tag '{tag}' not found on any kernel state or transition"),
@@ -659,7 +1063,7 @@ fn check_governance_tags_exist(
 fn check_reasoning_tier_for_determination(
     gov: &crate::document::WosDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !kernel_tags.contains("determination") {
         return;
@@ -667,7 +1071,7 @@ fn check_reasoning_tier_for_determination(
     let has_reasoning = gov.value.get("reasoningTier").is_some()
         || gov.value.pointer("/provenanceTiers/reasoning").is_some();
     if !has_reasoning {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-014",
             "/reasoningTier",
             "kernel has determination-tagged transitions; governance MUST declare a reasoning tier",
@@ -684,7 +1088,7 @@ fn check_counterfactual_tier_for_adverse_typed(
     gov: &crate::document::WosDocument,
     kernel: &KernelDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if kernel.impact_level != Some(ImpactLevel::RightsImpacting) {
         return;
@@ -698,7 +1102,7 @@ fn check_counterfactual_tier_for_adverse_typed(
             .pointer("/provenanceTiers/counterfactual")
             .is_some();
     if !has_counterfactual {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-015",
             "/counterfactualTier",
             "rights-impacting workflow with adverse-decision transitions MUST declare a counterfactual tier",
@@ -714,7 +1118,7 @@ fn check_counterfactual_tier_for_adverse_typed(
 /// `excludedOwner` takes precedence — warn so authors can verify the intent.
 fn check_excluded_owner_override(
     gov: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(tasks) = gov.value.get("tasks").and_then(Value::as_object) else {
         return;
@@ -731,7 +1135,7 @@ fn check_excluded_owner_override(
             .map(|a| a.iter().filter_map(Value::as_str).collect())
             .unwrap_or_default();
         for actor in potential.intersection(&excluded) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-022",
                 &format!("/tasks/{task_name}"),
                 format!("actor '{actor}' is in both potentialOwner and excludedOwner; excludedOwner takes precedence — verify this is intentional"),
@@ -782,7 +1186,9 @@ fn notification_template_keys_for_workflow(
     keys
 }
 
-/// Collect `(jsonPath, refValue)` for every `notificationTemplateRef` / `noticeTemplateRef`.
+/// Collect `(jsonPath, keyValue)` for notification-template catalog surfaces:
+/// `templateKey` (SLA warning/breach), `notificationTemplateKey` (hold
+/// policies), and `noticeTemplateKey` (due process notices).
 fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(String, String)>) {
     match value {
         Value::Object(map) => {
@@ -792,7 +1198,9 @@ fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(St
                 } else {
                     format!("{base}/{k}")
                 };
-                if (k == "notificationTemplateRef" || k == "noticeTemplateRef")
+                if (k == "notificationTemplateKey"
+                    || k == "noticeTemplateKey"
+                    || k == "templateKey")
                     && let Some(s) = v.as_str()
                 {
                     out.push((p, s.to_string()));
@@ -816,7 +1224,7 @@ fn collect_governance_template_refs(value: &Value, base: &str, out: &mut Vec<(St
 fn check_sla_business_calendar(
     gov: &crate::document::WosDocument,
     project: &WosProject,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(target_wf) = gov.value.get("targetWorkflow").and_then(Value::as_str) else {
         return;
@@ -838,12 +1246,12 @@ fn check_sla_business_calendar(
             let path = format!("/tasks/{task_name}/sla");
             // G-023 (Governance S10): authoring SHOULD; G-060 (BC S6.1): normative MUST — both fire so
             // authors get a warning-level hint plus the error-level obligation.
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-023",
                 &path,
                 "a business calendar sidecar targets this workflow; SLA should set calendarType to 'business'",
             ));
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-060",
                 &path,
                 "when a Business Calendar sidecar targets this workflow, SLA evaluation MUST use business days (set calendarType to 'business')",
@@ -856,12 +1264,13 @@ fn check_sla_business_calendar(
 // G-063: Notification template references resolve
 // ---------------------------------------------------------------------------
 
-/// G-063: `notificationTemplateRef` / `noticeTemplateRef` MUST resolve to a
-/// template key in a Notification Template sidecar for the same `targetWorkflow`.
+/// G-063: `templateKey`, `notificationTemplateKey`, and `noticeTemplateKey`
+/// MUST resolve to a template key in a Notification Template sidecar for the
+/// same `targetWorkflow`.
 fn check_notification_template_refs(
     gov: &crate::document::WosDocument,
     project: &WosProject,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(target_wf) = gov.value.get("targetWorkflow").and_then(Value::as_str) else {
         return;
@@ -877,11 +1286,11 @@ fn check_notification_template_refs(
 
     if keys.is_empty() {
         for (path, r) in refs {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-063",
                 &path,
                 format!(
-                    "notification template ref '{r}' but no Notification Template sidecar targets this workflow"
+                    "notification template key '{r}' but no Notification Template sidecar targets this workflow"
                 ),
             ));
         }
@@ -890,15 +1299,90 @@ fn check_notification_template_refs(
 
     for (path, r) in refs {
         if !keys.contains(&r) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-063",
                 &path,
                 format!(
-                    "notification template ref '{r}' does not match any template key in the Notification Template sidecar"
+                    "notification template key '{r}' does not match any template key in the Notification Template sidecar"
                 ),
             ));
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// G-066: BreachPolicy escalation step ids resolve within task pattern
+// ---------------------------------------------------------------------------
+
+/// G-066: `BreachPolicy.escalationStepId` MUST resolve to an
+/// `EscalationStep` in the same task pattern by explicit `id` or `level-N`.
+fn check_sla_escalation_step_ids(
+    gov: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if let Some(task_catalog) = gov.value.get("taskCatalog").and_then(Value::as_array) {
+        for (idx, task) in task_catalog.iter().enumerate() {
+            check_task_pattern_escalation_step_id(
+                task,
+                &format!("/taskCatalog/{idx}"),
+                diagnostics,
+            );
+        }
+    }
+
+    if let Some(tasks) = gov.value.get("tasks").and_then(Value::as_object) {
+        for (task_name, task) in tasks {
+            check_task_pattern_escalation_step_id(
+                task,
+                &format!("/tasks/{task_name}"),
+                diagnostics,
+            );
+        }
+    }
+}
+
+fn check_task_pattern_escalation_step_id(
+    task: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(step_id) = task
+        .pointer("/breachPolicy/escalationStepId")
+        .and_then(Value::as_str)
+    else {
+        return;
+    };
+
+    let targets = escalation_step_targets(task);
+    if targets.contains(step_id) {
+        return;
+    }
+
+    diagnostics.push(LintDiagnostic::t2_error(
+        "G-066",
+        &format!("{base_path}/breachPolicy/escalationStepId"),
+        format!(
+            "BreachPolicy escalationStepId '{step_id}' does not match any escalationChain step id or level token in this task pattern"
+        ),
+    ));
+}
+
+fn escalation_step_targets(task: &Value) -> std::collections::HashSet<String> {
+    let mut targets = std::collections::HashSet::new();
+    let Some(chain) = task.get("escalationChain").and_then(Value::as_array) else {
+        return targets;
+    };
+
+    for step in chain {
+        if let Some(id) = step.get("id").and_then(Value::as_str) {
+            targets.insert(id.to_string());
+        }
+        if let Some(level) = step.get("level").and_then(Value::as_u64) {
+            targets.insert(format!("level-{level}"));
+        }
+    }
+
+    targets
 }
 
 // ---------------------------------------------------------------------------
@@ -910,7 +1394,7 @@ fn check_notification_template_refs(
 fn check_delegation_verification_on_determination(
     gov: &crate::document::WosDocument,
     kernel_tags: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !kernel_tags.contains("determination") {
         return;
@@ -922,7 +1406,7 @@ fn check_delegation_verification_on_determination(
             .and_then(Value::as_array)
             .is_some_and(|a| !a.is_empty());
     if !has_verification {
-        diagnostics.push(Diagnostic::warning(
+        diagnostics.push(LintDiagnostic::t2_warning(
             "G-024",
             "/delegationVerification",
             "kernel has determination-tagged transitions; governance should declare delegationVerification or delegations",
@@ -937,7 +1421,7 @@ fn check_delegation_verification_on_determination(
 /// G-027 (typed): Sub-delegation MUST respect `maxDelegationDepth`.
 fn check_sub_delegation_depth_typed(
     gov: &wos_core::GovernanceDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let max_depth = gov.max_delegation_depth as usize;
     if gov.delegations.is_empty() {
@@ -953,7 +1437,7 @@ fn check_sub_delegation_depth_typed(
     for (i, delegation) in gov.delegations.iter().enumerate() {
         let depth = delegation_chain_depth(&delegation.delegate, &links, 0);
         if depth > max_depth {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-027",
                 &format!("/delegations/{i}"),
                 format!(
@@ -988,14 +1472,14 @@ fn delegation_chain_depth(actor: &str, links: &[(&str, &str)], current: usize) -
 fn check_hold_policies_attach_to_hold_states_typed(
     gov: &wos_core::GovernanceDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if gov.hold_policies.is_empty() {
         return;
     }
     let hold_states = collect_states_with_tag_typed(&kernel.lifecycle.states, "hold");
     if hold_states.is_empty() {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-028",
             "/holdPolicies",
             "hold policies declare tag-based attachment, but the kernel has no state tagged 'hold'",
@@ -1037,12 +1521,12 @@ fn collect_states_with_tag_recursive_typed(
 fn check_hold_resume_triggers_typed(
     gov: &wos_core::GovernanceDocument,
     kernel_events: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (i, hold) in gov.hold_policies.iter().enumerate() {
         let trigger = hold.resume_trigger.as_str();
         if !kernel_events.contains(trigger) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-029",
                 &format!("/holdPolicies/{i}/resumeTrigger"),
                 format!("resumeTrigger '{trigger}' not found as a kernel event"),
@@ -1064,14 +1548,14 @@ fn check_hold_resume_triggers_typed(
 fn check_resolution_date_refs(
     gov: &crate::document::WosDocument,
     kernel_case_fields: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let fields = kernel_case_fields;
 
     if let Some(sla_config) = gov.value.get("slaConfig") {
         if let Some(date_ref) = sla_config.get("resolutionDateRef").and_then(Value::as_str) {
             if !fields.contains(date_ref) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "G-031",
                     "/slaConfig/resolutionDateRef",
                     format!("resolutionDateRef '{date_ref}' not found in kernel caseFile.fields"),
@@ -1087,14 +1571,17 @@ fn check_resolution_date_refs(
 
 /// G-033: A parameter `values` array that is empty means no resolution date
 /// is covered — warn because behavior is undefined.
-fn check_parameter_coverage(gov: &crate::document::WosDocument, diagnostics: &mut Vec<Diagnostic>) {
+fn check_parameter_coverage(
+    gov: &crate::document::WosDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let Some(params) = gov.value.get("parameters").and_then(Value::as_object) else {
         return;
     };
     for (name, param) in params {
         if let Some(values) = param.get("values").and_then(Value::as_array) {
             if values.is_empty() {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "G-033",
                     &format!("/parameters/{name}/values"),
                     format!("parameter '{name}' has no values entries; resolution date may not be covered"),
@@ -1113,7 +1600,7 @@ fn check_parameter_coverage(gov: &crate::document::WosDocument, diagnostics: &mu
 fn check_target_governance_valid(
     dp: &crate::document::WosDocument,
     project: &WosProject,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(target) = dp.value.get("targetGovernance").and_then(Value::as_str) else {
         return;
@@ -1123,7 +1610,7 @@ fn check_target_governance_valid(
         .filter_map(|g| g.value.get("url").and_then(Value::as_str))
         .collect();
     if !governance_urls.contains(target) {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "G-035",
             "/targetGovernance",
             format!("targetGovernance '{target}' does not match any governance document url in the project"),
@@ -1142,13 +1629,13 @@ fn check_target_governance_valid(
 /// the constraint content is a T3 property.
 fn check_independence_constraint(
     gov: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if gov.value.get("reviewProtocols").is_none() {
         return;
     }
     match gov.value.get("independenceConstraint") {
-        None => diagnostics.push(Diagnostic::warning(
+        None => diagnostics.push(LintDiagnostic::t2_warning(
             "G-036",
             "/independenceConstraint",
             "governance has reviewProtocols but no independenceConstraint; must encode prevention of self-review",
@@ -1158,7 +1645,7 @@ fn check_independence_constraint(
                 || c.as_object().is_some_and(|m| m.is_empty())
                 || c.as_array().is_some_and(|a| a.is_empty());
             if is_empty {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "G-036",
                     "/independenceConstraint",
                     "independenceConstraint is empty; must encode an actual prevention mechanism",
@@ -1171,11 +1658,11 @@ fn check_independence_constraint(
 /// G-036 (DueProcess variant): same check applied to DueProcess documents.
 fn check_independence_constraint_in_due_process(
     dp: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if dp.value.get("reviewProtocols").is_some() && dp.value.get("independenceConstraint").is_none()
     {
-        diagnostics.push(Diagnostic::warning(
+        diagnostics.push(LintDiagnostic::t2_warning(
             "G-036",
             "/independenceConstraint",
             "due-process document has reviewProtocols but no independenceConstraint",
@@ -1192,7 +1679,7 @@ fn check_independence_constraint_in_due_process(
 fn check_consistency_reference_stage(
     al: &crate::document::WosDocument,
     project: &WosProject,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(assertions) = al.value.get("assertions").and_then(Value::as_array) else {
         return;
@@ -1212,7 +1699,7 @@ fn check_consistency_reference_stage(
             continue; // G-039 (T1) handles the missing-field case.
         };
         if !pipeline_stages.contains(ref_stage) {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-040",
                 &format!("/assertions/{i}/referenceStage"),
                 format!("referenceStage '{ref_stage}' is not a pipeline stage id in any governance document"),
@@ -1230,7 +1717,7 @@ fn check_consistency_reference_stage(
 fn check_pipeline_assertion_ids(
     gov: &crate::document::WosDocument,
     project: &WosProject,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(pipeline) = gov.value.get("pipeline").and_then(Value::as_array) else {
         return;
@@ -1254,7 +1741,7 @@ fn check_pipeline_assertion_ids(
                 .or_else(|| assertion_ref.as_str());
             let Some(id) = id else { continue };
             if !library_ids.contains(id) {
-                diagnostics.push(Diagnostic::error(
+                diagnostics.push(LintDiagnostic::t2_error(
                     "G-041",
                     &format!("/pipeline/{si}/assertions/{ai}"),
                     format!(
@@ -1274,7 +1761,7 @@ fn check_pipeline_assertion_ids(
 fn check_delegation_actors_exist_typed(
     gov: &wos_core::GovernanceDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let kernel_actors: std::collections::HashSet<&str> =
         kernel.actors.iter().map(|a| a.id.as_str()).collect();
@@ -1287,7 +1774,7 @@ fn check_delegation_actors_exist_typed(
                 _ => unreachable!(),
             };
             if !kernel_actors.contains(actor) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "G-046",
                     &path,
                     format!("{field} '{actor}' not found in kernel actors"),
@@ -1306,7 +1793,7 @@ fn check_delegation_actors_exist_typed(
 /// G-053 (Value): Sub-delegation only if original permits.
 fn check_sub_delegation_permission_value(
     gov: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(delegations) = gov.value.get("delegations").and_then(Value::as_array) else {
         return;
@@ -1329,7 +1816,7 @@ fn check_sub_delegation_permission_value(
                     .unwrap_or(false)
         });
         if !original_permits {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "G-053",
                 &format!("/delegations/{i}"),
                 format!("delegator '{delegator}' is sub-delegating but their original delegation does not set allowsSubDelegation: true"),
@@ -1347,7 +1834,7 @@ fn check_sub_delegation_permission_value(
 fn check_binding_resolution_date_refs(
     gov: &crate::document::WosDocument,
     kernel_case_fields: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let fields = kernel_case_fields;
     let Some(bindings) = gov.value.get("bindings").and_then(Value::as_object) else {
@@ -1358,7 +1845,7 @@ fn check_binding_resolution_date_refs(
             continue;
         };
         if !fields.contains(date_ref) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-056",
                 &format!("/bindings/{binding_name}/resolutionDateRef"),
                 format!("resolutionDateRef '{date_ref}' not found in kernel caseFile.fields"),
@@ -1376,7 +1863,7 @@ fn check_binding_resolution_date_refs(
 fn check_policy_param_date_refs(
     pp: &crate::document::WosDocument,
     kernel_case_fields: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let fields = kernel_case_fields;
     let Some(params) = pp.value.get("parameters").and_then(Value::as_object) else {
@@ -1387,7 +1874,7 @@ fn check_policy_param_date_refs(
             continue;
         };
         if !fields.contains(date_ref) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "G-031",
                 &format!("/parameters/{name}/resolutionDateRef"),
                 format!("resolutionDateRef '{date_ref}' not found in kernel caseFile.fields"),
@@ -1434,7 +1921,7 @@ fn iter_agents(ai: &crate::document::WosDocument) -> Vec<(String, &serde_json::V
 /// `cascadingInvocations` MUST be declared in the AI document.
 fn check_cascading_invocations_declared(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let agents = iter_agents(ai);
     if agents.is_empty() {
@@ -1462,7 +1949,7 @@ fn check_cascading_invocations_declared(
             })
     });
     if cascades && ai.value.get("cascadingInvocations").is_none() {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "AI-007",
             "/cascadingInvocations",
             "autonomous agents invoke other autonomous agents; cascadingInvocations MUST be declared",
@@ -1477,7 +1964,7 @@ fn check_cascading_invocations_declared(
 /// AI-018: `autonomous` agents MUST have associated deontic constraints.
 fn check_autonomous_actions_have_deontic(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").and_then(Value::as_str) != Some("autonomous") {
@@ -1488,7 +1975,7 @@ fn check_autonomous_actions_have_deontic(
             || agent.get("prohibitions").is_some()
             || agent.get("obligations").is_some();
         if !has_deontic {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-018",
                 &format!("/agents/{name}"),
                 format!("autonomous agent '{name}' should have deontic constraints (permissions, prohibitions, or obligations)"),
@@ -1504,14 +1991,14 @@ fn check_autonomous_actions_have_deontic(
 /// AI-020: `supervisory` agents MUST define `reviewWindow`.
 fn check_supervisory_actions_review_window(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").and_then(Value::as_str) != Some("supervisory") {
             continue;
         }
         if agent.get("reviewWindow").is_none() {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-020",
                 &format!("/agents/{name}"),
                 format!("supervisory agent '{name}' should define reviewWindow"),
@@ -1527,7 +2014,7 @@ fn check_supervisory_actions_review_window(
 /// AI-026: Escalation MUST have `escalationExpiry`; agent reverts when expired.
 fn check_escalation_expiry_present(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         let Some(rules) = agent.get("escalationRules").and_then(Value::as_array) else {
@@ -1535,7 +2022,7 @@ fn check_escalation_expiry_present(
         };
         for (i, rule) in rules.iter().enumerate() {
             if rule.get("escalationExpiry").is_none() {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "AI-026",
                     &format!("/agents/{name}/escalationRules/{i}"),
                     format!("escalation rule in agent '{name}' should declare escalationExpiry"),
@@ -1554,7 +2041,7 @@ fn check_escalation_expiry_present(
 fn check_agent_output_contract(
     ai: &crate::document::WosDocument,
     kernel: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(kernel_form_url) = kernel.value.get("formUrl").and_then(Value::as_str) else {
         return; // No human-facing form declared; nothing to compare.
@@ -1565,7 +2052,7 @@ fn check_agent_output_contract(
         };
         let contract_form = contract.get("formUrl").and_then(Value::as_str);
         if contract_form != Some(kernel_form_url) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-031",
                 &format!("/agents/{name}/outputContract/formUrl"),
                 format!(
@@ -1584,7 +2071,7 @@ fn check_agent_output_contract(
 /// AI-042: Agent config MUST disclose training data characteristics.
 fn check_training_data_disclosure(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         let has_disclosure = agent
@@ -1592,7 +2079,7 @@ fn check_training_data_disclosure(
             .and_then(|c| c.get("trainingDataCharacteristics"))
             .is_some();
         if !has_disclosure {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-042",
                 &format!("/agents/{name}/modelConfig/trainingDataCharacteristics"),
                 format!(
@@ -1606,7 +2093,7 @@ fn check_training_data_disclosure(
 /// AI-043: Agent config MUST disclose optimization objective.
 fn check_optimization_objective_disclosure(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         let has_objective = agent
@@ -1614,7 +2101,7 @@ fn check_optimization_objective_disclosure(
             .and_then(|c| c.get("optimizationObjective"))
             .is_some();
         if !has_objective {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-043",
                 &format!("/agents/{name}/modelConfig/optimizationObjective"),
                 format!("agent '{name}' should disclose optimization objective in modelConfig"),
@@ -1631,7 +2118,7 @@ fn check_optimization_objective_disclosure(
 fn check_ai_disclosure_for_impact_typed(
     ai: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !is_rights_impacting_typed(kernel) {
         return;
@@ -1643,7 +2130,7 @@ fn check_ai_disclosure_for_impact_typed(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     if !disclosed {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "AI-046",
             "/agentDisclosure/discloseThatAgentAssisted",
             "rights-impacting workflow requires discloseThatAgentAssisted: true",
@@ -1661,7 +2148,7 @@ fn check_ai_disclosure_for_impact_typed(
 /// site overrides, which hides site-specific autonomy differences.
 fn check_autonomy_is_action_site_property(
     ai: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     for (name, agent) in iter_agents(ai) {
         if agent.get("autonomy").is_none() {
@@ -1673,7 +2160,7 @@ fn check_autonomy_is_action_site_property(
                 .and_then(Value::as_array)
                 .is_some_and(|a| a.iter().any(|action| action.get("autonomy").is_some()));
         if !has_action_sites {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AI-056",
                 &format!("/agents/{name}/autonomy"),
                 format!("agent '{name}' sets autonomy at agent level; autonomy should be declared per action site"),
@@ -1702,7 +2189,7 @@ fn check_autonomy_is_action_site_property(
 fn check_agent_free_completion_path(
     ai: &crate::document::WosDocument,
     kernel: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     // Collect agent IDs from the AI document. Support both array and object formats.
     let agent_ids: std::collections::HashSet<String> = collect_ai_agent_ids(ai);
@@ -1750,7 +2237,7 @@ fn check_agent_free_completion_path(
     // If no final state is reachable without agents, emit an error.
     let can_complete = reachable.iter().any(|s| final_states.contains(s.as_str()));
     if !can_complete {
-        diagnostics.push(Diagnostic::error(
+        diagnostics.push(LintDiagnostic::t2_error(
             "AI-023",
             "/lifecycle",
             "no agent-free path from the initial state to a final state exists; \
@@ -1937,7 +2424,7 @@ fn collect_ai_agent_ids(ai: &crate::document::WosDocument) -> std::collections::
 /// `sideEffectPolicy`.
 fn check_side_effect_tools_policy(
     adv: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(tools) = adv.value.get("tools").and_then(Value::as_object) else {
         return;
@@ -1952,7 +2439,7 @@ fn check_side_effect_tools_policy(
             && autonomy == Some("autonomous")
             && tool.get("sideEffectPolicy").is_none()
         {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "AG-008",
                 &format!("/tools/{tool_name}"),
                 format!("tool '{tool_name}' has side effects at autonomous level but no sideEffectPolicy"),
@@ -1969,7 +2456,7 @@ fn check_side_effect_tools_policy(
 fn check_shadow_mode_recommended_typed(
     adv: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !is_rights_impacting_typed(kernel) {
         return;
@@ -1985,7 +2472,7 @@ fn check_shadow_mode_recommended_typed(
                     .any(|s| s.get("mode").and_then(Value::as_str) == Some("shadow"))
             });
     if !has_shadow {
-        diagnostics.push(Diagnostic::warning(
+        diagnostics.push(LintDiagnostic::t2_warning(
             "AG-017",
             "/shadowMode",
             "rights-impacting workflow: shadow mode is recommended before granting operational authority",
@@ -2001,7 +2488,7 @@ fn check_shadow_mode_recommended_typed(
 fn check_deployment_sequence_typed(
     dm: &crate::document::WosDocument,
     kernel: &KernelDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     if !is_rights_or_safety_impacting_typed(kernel) {
         return;
@@ -2012,7 +2499,7 @@ fn check_deployment_sequence_typed(
 /// DM-002 shared implementation (operates on the drift monitor document).
 fn check_deployment_sequence_impl(
     dm: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let stages: Vec<&str> = dm
         .value
@@ -2023,7 +2510,7 @@ fn check_deployment_sequence_impl(
 
     for phase in ["shadow", "canary", "production"] {
         if !stages.contains(&phase) {
-            diagnostics.push(Diagnostic::warning(
+            diagnostics.push(LintDiagnostic::t2_warning(
                 "DM-002",
                 "/deploymentSequence",
                 format!("rights/safety-impacting workflow: deployment sequence should include '{phase}' phase"),
@@ -2037,7 +2524,7 @@ fn check_deployment_sequence_impl(
         let later_pos = stages.iter().position(|&s| s == later);
         if let (Some(ep), Some(lp)) = (earlier_pos, later_pos) {
             if ep > lp {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "DM-002",
                     "/deploymentSequence",
                     format!(
@@ -2057,7 +2544,7 @@ fn check_deployment_sequence_impl(
 /// `proven-unsafe`.
 fn check_counterexample_on_unsafe(
     vr: &crate::document::WosDocument,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     let Some(results) = vr.value.get("results").and_then(Value::as_array) else {
         return;
@@ -2066,7 +2553,7 @@ fn check_counterexample_on_unsafe(
         if result.get("result").and_then(Value::as_str) == Some("proven-unsafe")
             && result.get("counterexample").is_none()
         {
-            diagnostics.push(Diagnostic::error(
+            diagnostics.push(LintDiagnostic::t2_error(
                 "VR-003",
                 &format!("/results/{i}/counterexample"),
                 "result is 'proven-unsafe' but counterexample is missing",
@@ -2106,16 +2593,12 @@ fn is_rights_impacting_typed(kernel: &KernelDocument) -> bool {
 /// suffix. The bare prefix `x-wos-` (no suffix) is malformed but not a
 /// reserved-namespace usage, so it is ignored here. Other vendor prefixes
 /// like `x-acme-` or `x-vendor-` are unaffected.
-fn check_reserved_wos_namespace(
-    value: &Value,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_reserved_wos_namespace(value: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(obj) = value.as_object() {
         for (key, child) in obj {
             let child_path = format!("{path}/{}", json_pointer_escape(key));
             if is_reserved_wos_key(key) {
-                diagnostics.push(Diagnostic::warning(
+                diagnostics.push(LintDiagnostic::t2_warning(
                     "K-EXT-002",
                     &child_path,
                     format!(
@@ -2154,7 +2637,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn run(value: Value) -> Vec<Diagnostic> {
+    fn run(value: Value) -> Vec<LintDiagnostic> {
         let mut diags = Vec::new();
         check_reserved_wos_namespace(&value, "", &mut diags);
         diags
@@ -2168,8 +2651,12 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
-        assert_eq!(matches[0].severity, crate::Severity::Warning);
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
+        assert_eq!(matches[0].severity, crate::LintSeverity::Warning);
         assert_eq!(matches[0].path, "/x-wos-future");
         assert!(matches[0].message.contains("x-wos-future"));
         assert!(matches[0].message.contains("§10.6"));
@@ -2189,7 +2676,11 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
         assert_eq!(
             matches[0].path,
             "/lifecycle/states/approved/x-wos-experimental"
@@ -2241,7 +2732,11 @@ mod tests {
         });
         let diags = run(doc);
         let hits: Vec<&_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(hits.len(), 1, "expected exactly 1 K-EXT-002, got: {diags:?}");
+        assert_eq!(
+            hits.len(),
+            1,
+            "expected exactly 1 K-EXT-002, got: {diags:?}"
+        );
         assert_eq!(hits[0].path, "/extensions/x-wos-future");
     }
 
@@ -2272,7 +2767,11 @@ mod tests {
         });
         let diags = run(doc);
         let matches: Vec<_> = diags.iter().filter(|d| d.rule_id == "K-EXT-002").collect();
-        assert_eq!(matches.len(), 1, "expected exactly one K-EXT-002: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one K-EXT-002: {diags:?}"
+        );
         assert_eq!(matches[0].path, "/actors/0/x-wos-trait");
     }
 

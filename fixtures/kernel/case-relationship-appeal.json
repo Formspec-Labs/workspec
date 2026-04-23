@@ -7,7 +7,6 @@
   "description": "An appeal case that is a child of the original benefits adjudication case. Demonstrates case relationships (Kernel S5.5): the appeal case declares a parent/child relationship to the original case. Cross-case interaction uses correlationKey -- when the appeal enters determination, it emits an event that the original case receives via correlation.",
   "status": "active",
   "impactLevel": "rights-impacting",
-
   "actors": [
     {
       "id": "appellant",
@@ -25,13 +24,15 @@
       "description": "Sends notices to involved parties"
     }
   ],
-
   "lifecycle": {
     "initialState": "filed",
     "states": {
       "filed": {
         "type": "atomic",
-        "tags": ["intake", "appeal"],
+        "tags": [
+          "intake",
+          "appeal"
+        ],
         "onEntry": [
           {
             "action": "log",
@@ -44,14 +45,19 @@
         ],
         "transitions": [
           {
-            "event": "assignedForReview",
+            "event": {
+              "kind": "message",
+              "name": "assignedForReview"
+            },
             "target": "underReview"
           }
         ]
       },
       "underReview": {
         "type": "atomic",
-        "tags": ["review"],
+        "tags": [
+          "review"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -61,25 +67,43 @@
         ],
         "transitions": [
           {
-            "event": "appealGranted",
+            "event": {
+              "kind": "message",
+              "name": "appealGranted"
+            },
             "target": "granted",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           },
           {
-            "event": "appealDenied",
+            "event": {
+              "kind": "message",
+              "name": "appealDenied"
+            },
             "target": "denied",
-            "tags": ["determination", "adverse-decision"]
+            "tags": [
+              "determination",
+              "adverse-decision"
+            ]
           },
           {
-            "event": "remanded",
+            "event": {
+              "kind": "message",
+              "name": "remanded"
+            },
             "target": "remanded",
-            "tags": ["determination"]
+            "tags": [
+              "determination"
+            ]
           }
         ]
       },
       "granted": {
         "type": "atomic",
-        "tags": ["notification"],
+        "tags": [
+          "notification"
+        ],
         "onEntry": [
           {
             "action": "emitEvent",
@@ -97,14 +121,20 @@
         ],
         "transitions": [
           {
-            "event": "acknowledged",
+            "event": {
+              "kind": "message",
+              "name": "acknowledged"
+            },
             "target": "closed"
           }
         ]
       },
       "denied": {
         "type": "atomic",
-        "tags": ["notification", "adverse-decision"],
+        "tags": [
+          "notification",
+          "adverse-decision"
+        ],
         "onEntry": [
           {
             "action": "emitEvent",
@@ -122,14 +152,19 @@
         ],
         "transitions": [
           {
-            "event": "acknowledged",
+            "event": {
+              "kind": "message",
+              "name": "acknowledged"
+            },
             "target": "closed"
           }
         ]
       },
       "remanded": {
         "type": "atomic",
-        "tags": ["notification"],
+        "tags": [
+          "notification"
+        ],
         "onEntry": [
           {
             "action": "emitEvent",
@@ -142,7 +177,10 @@
         ],
         "transitions": [
           {
-            "event": "remandComplete",
+            "event": {
+              "kind": "message",
+              "name": "remandComplete"
+            },
             "target": "underReview",
             "description": "Original case completed remand instructions -- return to appeal review"
           }
@@ -153,7 +191,6 @@
       }
     }
   },
-
   "caseFile": {
     "fields": {
       "parentCaseRef": {
@@ -186,7 +223,6 @@
       }
     ]
   },
-
   "execution": {
     "workflowTimeout": "P180D",
     "defaultTaskTimeout": "P30D",

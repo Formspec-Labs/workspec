@@ -5,6 +5,11 @@
   "documents": {
     "kernel": "fixtures/kernel/purchase-order-approval.json"
   },
+  "initial_case_state": {
+    "amount": 3000,
+    "orderId": "PO-2026-042",
+    "vendor": "Office Supplies Inc"
+  },
   "event_sequence": [
     {
       "event": "approve",
@@ -38,23 +43,23 @@
   ],
   "expected_provenance": [
     {
-      "type": "stateTransition",
-      "from": "submitted",
-      "to": "approved",
+      "recordKind": "stateTransition",
+      "fromState": "submitted",
+      "toState": "approved",
       "actorId": "approver"
     },
     {
-      "type": "dataMutation",
-      "path": "caseFile.approvedBy"
+      "recordKind": "caseStateMutation",
+      "data": { "path": "caseFile.approvedBy" }
     },
     {
-      "type": "dataMutation",
-      "path": "caseFile.approvedAt"
+      "recordKind": "caseStateMutation",
+      "data": { "path": "caseFile.approvedAt" }
     },
     {
-      "type": "stateTransition",
-      "from": "approved",
-      "to": "completed",
+      "recordKind": "stateTransition",
+      "fromState": "approved",
+      "toState": "completed",
       "actorId": "procurementSystem"
     }
   ],

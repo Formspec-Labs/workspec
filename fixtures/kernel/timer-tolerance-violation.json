@@ -7,11 +7,13 @@
   "description": "Minimal workflow with a short timer (PT5S). Tests that firing the timer far beyond its tolerance window (Runtime S7.2: under 1h = 1s tolerance) produces a conformance violation diagnostic (LCD S6.6).",
   "status": "active",
   "impactLevel": "operational",
-
   "actors": [
-    { "id": "system", "type": "system", "description": "System actor" }
+    {
+      "id": "system",
+      "type": "system",
+      "description": "System actor"
+    }
   ],
-
   "lifecycle": {
     "initialState": "waiting",
     "states": {
@@ -22,24 +24,32 @@
             "action": "startTimer",
             "timerId": "shortTimer",
             "duration": "PT5S",
-            "event": "$timeout.state"
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            }
           }
         ],
         "transitions": [
           {
-            "event": "$timeout.state",
+            "event": {
+              "kind": "timer",
+              "timerId": "state",
+              "source": "state"
+            },
             "target": "done"
           }
         ]
       },
-      "done": { "type": "final" }
+      "done": {
+        "type": "final"
+      }
     }
   },
-
   "caseFile": {
     "fields": {}
   },
-
   "execution": {
     "workflowTimeout": "P1D",
     "instanceVersioning": "pinned"

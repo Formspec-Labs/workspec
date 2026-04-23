@@ -1,0 +1,30 @@
+{
+  "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+  "recordKind": "stateTransition",
+  "timestamp": "2026-04-21T14:30:00Z",
+  "actorId": "worker",
+  "fromState": "intake",
+  "toState": "review",
+  "event": "submitted",
+  "data": {
+    "attempt": 1,
+    "flags": [
+      "priority",
+      "expedite"
+    ],
+    "queue": "initial"
+  },
+  "auditLayer": "facts",
+  "actorType": "human",
+  "lifecycleState": "review",
+  "definitionVersion": "1.0.0",
+  "inputs": [
+    "application"
+  ],
+  "outputs": [
+    "reviewPacket"
+  ],
+  "transitionTags": [
+    "determination-ready"
+  ]
+}

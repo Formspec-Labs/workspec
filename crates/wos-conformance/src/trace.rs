@@ -41,14 +41,13 @@ pub struct Event {
     pub payload: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GuardEvaluation {
-    pub guard_id: String,
-    pub expression: String,
-    pub result: bool,
-    pub inputs: serde_json::Value,
-}
+// `GuardEvaluation` is the canonical runtime-observation type defined in
+// `wos-core`. Re-exported here so the trace JSON schema uses one source-of-
+// truth type across the runtime → conformance boundary. Adds source_state /
+// target_state / event fields beyond the original 4-field sketch; these are
+// load-bearing for the teaching signal (§5.3) so an LLM reading a failing
+// trace can reason about which transition's guard blocked its expected path.
+pub use wos_core::eval::GuardEvaluation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +57,11 @@ pub struct PolicyApplication {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum Delta {
     /// Actual state differs from expected.
     StateMismatch {
@@ -67,8 +70,16 @@ pub enum Delta {
         cause: Option<String>,
     },
     /// Guard evaluated false unexpectedly.
+    ///
+    /// `guard_id` is the synthesized `{source}->{target}:{event}` id from
+    /// `wos_core::eval::GuardEvaluation`. Since the kernel allows two
+    /// transitions to share that triple (differing only by their `guard`
+    /// expression), the synthesized id alone is ambiguous — `expression`
+    /// is the load-bearing teaching signal that lets a repair prompt
+    /// target the specific FEL expression that blocked the expected path.
     GuardFalse {
         guard_id: String,
+        expression: String,
         inputs: serde_json::Value,
     },
     /// Policy application changed the outcome.
@@ -140,8 +151,7 @@ mod tests {
         trace.push_step(sample_step(2));
 
         let json_str = serde_json::to_string(&trace).expect("serialize");
-        let deserialized: ConformanceTrace =
-            serde_json::from_str(&json_str).expect("deserialize");
+        let deserialized: ConformanceTrace = serde_json::from_str(&json_str).expect("deserialize");
 
         assert_eq!(trace, deserialized);
     }
@@ -160,10 +170,13 @@ mod tests {
             state_after: "review".into(),
             expected_state_after: Some("review".into()),
             guards_evaluated: vec![GuardEvaluation {
-                guard_id: "G-01".into(),
+                guard_id: "initial->review:application.submitted".into(),
+                source_state: "initial".into(),
+                target_state: "review".into(),
+                event: "application.submitted".into(),
                 expression: "amount > 0".into(),
                 result: true,
-                inputs: json!({ "amount": 5 }),
+                inputs: json!({ "caseFile": { "amount": 5 } }),
             }],
             policies_applied: vec![PolicyApplication {
                 policy_id: "P-01".into(),
@@ -241,13 +254,15 @@ mod tests {
     #[test]
     fn delta_guard_false_round_trips_with_kind_tag() {
         let delta = Delta::GuardFalse {
-            guard_id: "G-02".into(),
-            inputs: json!({ "benefit_amount": 520, "income_limit": 500 }),
+            guard_id: "reviewed->approved:decide".into(),
+            expression: "caseFile.benefit_amount <= caseFile.income_limit".into(),
+            inputs: json!({ "caseFile": { "benefit_amount": 520, "income_limit": 500 } }),
         };
 
         let json_str = serde_json::to_string(&delta).expect("serialize");
         assert!(json_str.contains("\"kind\":\"guardFalse\""));
-        assert!(json_str.contains("\"guardId\":\"G-02\""));
+        assert!(json_str.contains("\"guardId\":\"reviewed->approved:decide\""));
+        assert!(json_str.contains("\"expression\":\"caseFile.benefit_amount"));
 
         let parsed: Delta = serde_json::from_str(&json_str).expect("deserialize");
         assert_eq!(parsed, delta);

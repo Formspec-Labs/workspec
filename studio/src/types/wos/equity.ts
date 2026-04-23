@@ -6,19 +6,30 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Equity Config sidecar document. Provides detailed equity monitoring configuration -- protected category definitions, disparity calculation methods, reporting schedules, remediation triggers. Equity monitoring applies to human AND AI decisions.
  */
 export interface WOSEquityConfig {
   /**
-   * WOS Equity Config specification version. MUST be '1.0'.
+   * WOS Equity Config specification version. MUST be '1.0'. Identifies this document as a WOS Equity Config sidecar and pins the specification version. Processors reject documents with unsupported versions.
    */
   $wosEquityConfig: '1.0';
-  $schema?: string;
+  $schema?: JsonSchemaUri;
   /**
-   * URI of the WOS Kernel Document this config targets. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars.
+   * URI of the WOS Kernel Document this equity config targets. Follows the same targetWorkflow binding pattern as Layer 1 and Layer 2 sidecars. The equity monitoring engine applies this configuration to outcomes from the identified workflow.
    */
   targetWorkflow: string;
+  /**
+   * Version of this Equity Config document. SemVer is RECOMMENDED. Increment when protected categories, methods, or remediation triggers change.
+   */
   version?: string;
+  /**
+   * Human-readable name for this equity monitoring configuration. Displayed in equity reports and administrative dashboards.
+   */
   title?: string;
   /**
    * Demographic or categorical groupings for equity monitoring.
@@ -33,50 +44,107 @@ export interface WOSEquityConfig {
    * Conditions that trigger structured remediation review.
    */
   remediationTriggers?: RemediationTrigger[];
-  extensions?: {
+  extensions?: ExtensionsMap;
+  /**
+   * This interface was referenced by `WOSEquityConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
     [k: string]: unknown;
   };
 }
 export interface ProtectedCategory {
+  /**
+   * Unique identifier for this protected category within the equity config. Referenced by disparity method configurations and report labels.
+   */
   id: string;
   /**
-   * Case file path for grouping.
+   * Case file path used to assign each case to a group for disparity analysis. Must be a valid FEL path into the case state that resolves to a categorical string value.
    */
   groupByPath: string;
+  /**
+   * Human-readable description of this protected category and the equity concern it addresses. Documents the regulatory basis or policy rationale for monitoring this dimension.
+   */
   description?: string;
   /**
    * Expected group values for validation.
    */
   groups?: string[];
+  /**
+   * This interface was referenced by `ProtectedCategory`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface DisparityMethod {
+  /**
+   * Unique identifier for this disparity method within the equity config. Referenced in reports to attribute results to a specific statistical approach.
+   */
   id: string;
   /**
-   * Statistical method for disparity calculation.
+   * Statistical method used to quantify disparity between groups. 'rateDifference': absolute difference between group rates. 'rateRatio': ratio of highest to lowest group rate. 'standardizedDifference': normalized effect size. 'chi2': chi-squared test for distributional independence.
    */
   method: 'rateDifference' | 'rateRatio' | 'standardizedDifference' | 'chi2';
+  /**
+   * Human-readable description of this disparity method's statistical properties and interpretation. Documents thresholds and significance levels used in conjunction with this method.
+   */
   description?: string;
+  /**
+   * This interface was referenced by `DisparityMethod`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Automated equity reporting configuration.
  */
 export interface ReportingSchedule {
   /**
-   * ISO 8601 duration.
+   * How often to generate and distribute automated equity reports. ISO 8601 duration. Typical values: P7D for weekly monitoring, P30D for monthly oversight, P90D for quarterly regulatory reporting.
    */
   frequency?: string;
   recipientRoles?: string[];
+  /**
+   * Whether to include historical trend data in the automated equity report. When true, reports show disparity trends across previous reporting periods for pattern analysis.
+   */
   includeHistoricalTrend?: boolean;
+  /**
+   * This interface was referenced by `ReportingSchedule`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface RemediationTrigger {
   /**
-   * Condition expression.
+   * Condition expression that triggers structured remediation review. Typically references disparity statistics from the monitoring system relative to thresholds and evaluation windows.
    */
   condition: string;
   /**
-   * Action to take.
+   * Remediation action to take when the condition is met. 'review': escalate to equity officer for manual review. 'audit': trigger a formal equity audit. 'suspend': suspend processing and notify. 'notify': send notification to configured roles.
    */
   action: 'review' | 'audit' | 'suspend' | 'notify';
   notifyRoles?: string[];
+  /**
+   * Human-readable description of this remediation trigger and the equity concern it addresses. Documents the regulatory basis or policy rationale for this threshold.
+   */
   description?: string;
+  /**
+   * This interface was referenced by `RemediationTrigger`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }

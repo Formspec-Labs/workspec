@@ -6,31 +6,33 @@
  */
 
 /**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
+/**
  * A WOS Agent Config sidecar document. Provides detailed operational configuration for an agent declared in a WOS AI Integration Document -- endpoint configuration, credential references, approved model version lists, calibration requirements, autonomy escalation and demotion policies, and per-action overrides. Operational parameters can be updated independently of the governance document.
  */
 export interface WOSAgentConfig {
   /**
-   * WOS Agent Config specification version. MUST be '1.0'.
+   * WOS Agent Config specification version marker. MUST be '1.0'. Identifies this document as a WOS Agent Config sidecar and pins the schema version. Processors MUST reject documents with an unrecognized value. See AI Integration §6.1.
    */
   $wosAgentConfig: '1.0';
+  $schema?: JsonSchemaUri;
   /**
-   * Optional JSON Schema URI for editor validation.
-   */
-  $schema?: string;
-  /**
-   * Agent identifier within the AI Integration Document this config targets.
+   * Agent identifier within the AI Integration Document this config targets. MUST match the 'id' of an AgentDeclaration in the target AI Integration Document. Used by processors to associate operational parameters with the correct agent at runtime. See AI Integration §6.1.
    */
   targetAgent: string;
   /**
-   * URI of the AI Integration Document, if not co-located.
+   * URI of the WOS AI Integration Document this config extends, when the sidecar is not co-located alongside the integration document. Used by processors to resolve the binding when separate deployment is required.
    */
   targetIntegration?: string;
   /**
-   * Version of this Agent Config document.
+   * Version of this Agent Config document. RECOMMENDED to use semantic versioning (major.minor.patch) so that config changes can be tracked in provenance records independently of the AI Integration Document.
    */
   version?: string;
   /**
-   * Human-readable name for this agent configuration.
+   * Human-readable name for this agent configuration. Displayed in administrative tooling and audit reports to help operators distinguish multiple config documents targeting the same agent.
    */
   title?: string;
   endpoint?: EndpointConfig;
@@ -44,10 +46,12 @@ export interface WOSAgentConfig {
    * Per-action autonomy and constraint overrides.
    */
   actionOverrides?: ActionOverride[];
+  extensions?: ExtensionsMap;
   /**
-   * Extension data. All keys MUST be prefixed with 'x-'.
+   * This interface was referenced by `WOSAgentConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
    */
-  extensions?: {
+  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -56,28 +60,35 @@ export interface WOSAgentConfig {
  */
 export interface EndpointConfig {
   /**
-   * Agent service endpoint URL.
+   * Agent service endpoint URL. The WOS Processor calls this URL when invoking the agent. MUST be an HTTPS URI in production deployments.
    */
   url: string;
   /**
-   * Reference to credential store entry.
+   * Reference to the credential store entry used to authenticate against the agent endpoint. Format is implementation-defined (e.g., Vault path, AWS Secrets Manager ARN). Credential is injected by the WOS Processor at invocation time.
    */
   credentialRef?: string;
   /**
-   * Maximum invocation time as ISO 8601 duration.
+   * Maximum invocation time as ISO 8601 duration. Exceeded invocations are cancelled and the fallback chain is triggered. Recommended to set shorter timeouts for synchronous review-path agents.
    */
   timeout?: string;
   /**
-   * Health check endpoint for availability monitoring.
+   * Health check endpoint for availability monitoring. The WOS Processor MAY poll this URL before routing invocations to detect agent unavailability and trigger the fallback chain proactively.
    */
   healthCheckUrl?: string;
+  /**
+   * This interface was referenced by `EndpointConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Calibration requirements and schedule. When calibration has expired, effective autonomy is capped at assistive.
  */
 export interface CalibrationConfig {
   /**
-   * Whether calibration is required for this agent.
+   * Whether calibration is required for this agent before it may operate above assistive autonomy. When true and calibration has expired or never occurred, the effective autonomy is capped at assistive regardless of the configured level.
    */
   required: boolean;
   /**
@@ -85,13 +96,20 @@ export interface CalibrationConfig {
    */
   frequency?: string;
   /**
-   * Minimum reviewed outputs for valid calibration.
+   * Minimum number of human-reviewed outputs required for a valid calibration run. Calibration results based on fewer samples than this threshold are considered insufficient and MUST be treated as expired.
    */
   minimumSamples?: number;
   /**
-   * Calibration method.
+   * Statistical calibration method used to align agent confidence scores with empirical accuracy. 'plattScaling': sigmoid-fit logistic regression. 'isotonic': non-parametric isotonic regression. 'binning': equal-width histogram binning. 'custom': implementation-defined.
    */
   method?: 'plattScaling' | 'isotonic' | 'binning' | 'custom';
+  /**
+   * This interface was referenced by `CalibrationConfig`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Dynamic autonomy escalation and demotion rules.
@@ -106,9 +124,16 @@ export interface AutonomyPolicy {
    */
   demotion?: DemotionRule[];
   /**
-   * Maximum autonomy level this agent may reach.
+   * Hard ceiling on the autonomy level this agent may reach, regardless of escalation rules or dynamic calibration results. Escalation rules can only raise autonomy up to this ceiling. Useful for enforcing org-wide policy that certain agents never exceed supervisory level.
    */
   maxAutonomy?: 'autonomous' | 'supervisory' | 'assistive' | 'manual';
+  /**
+   * This interface was referenced by `AutonomyPolicy`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface EscalationRule {
   /**
@@ -116,7 +141,7 @@ export interface EscalationRule {
    */
   condition: string;
   /**
-   * Autonomy level to escalate to when condition is met.
+   * Autonomy level to escalate to when the condition is met. MUST NOT exceed the AutonomyPolicy.maxAutonomy ceiling. Agent reverts to baseline when escalationExpiry elapses or when a demotion rule fires.
    */
   targetLevel: 'autonomous' | 'supervisory' | 'assistive';
   /**
@@ -124,17 +149,28 @@ export interface EscalationRule {
    */
   escalationExpiry?: string;
   /**
-   * Human-readable explanation.
+   * Human-readable explanation of why this escalation rule exists. Included in audit records when the escalation fires to document the governance rationale.
    */
   description?: string;
+  /**
+   * This interface was referenced by `EscalationRule`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface DemotionRule {
+  /**
+   * Stable identifier for this demotion rule, unique within the parent AutonomyPolicy.demotion array. MUST match the pattern of a JSON object key (no whitespace). Drift Monitor AlertThreshold entries reference this id via 'policyRef' to invoke this rule's structured demotion (condition / targetLevel / pendingRecalibration) instead of the implementation-defined 'action' enum. Audit records cite this id so operators know exactly which demotion rule fired.
+   */
+  id: string;
   /**
    * FEL expression evaluated against agent operational state and case data.
    */
   condition: string;
   /**
-   * Autonomy level to demote to when condition is met.
+   * Autonomy level to demote to when the demotion condition is met. Demotion takes immediate effect at the next agent invocation. The agent remains at this level until an escalation condition is met or an administrator manually restores its level.
    */
   targetLevel: 'supervisory' | 'assistive' | 'manual';
   /**
@@ -142,17 +178,24 @@ export interface DemotionRule {
    */
   pendingRecalibration?: boolean;
   /**
-   * Human-readable explanation.
+   * Human-readable explanation of why this demotion rule exists. Included in audit records when the demotion fires to document the governance rationale.
    */
   description?: string;
+  /**
+   * This interface was referenced by `DemotionRule`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
 }
 export interface ActionOverride {
   /**
-   * Reference to the action in the kernel lifecycle.
+   * Reference to the specific action in the kernel lifecycle that this override applies to. Format is 'stage.actionId' matching the kernel document's lifecycle definition. Per-action overrides take precedence over the workflow-level defaultAutonomy.
    */
   actionRef: string;
   /**
-   * Override autonomy level for this action.
+   * Override autonomy level for this specific action. Takes precedence over the workflow default and agent default, subject to the impact-level cap and the maxAutonomy ceiling.
    */
   autonomy?: 'autonomous' | 'supervisory' | 'assistive' | 'manual';
   /**
@@ -160,7 +203,20 @@ export interface ActionOverride {
    */
   reviewWindow?: string;
   /**
-   * Override confidence floor for this action.
+   * Override the confidence floor threshold for this specific action. When the agent's confidence falls below this value the action falls back to the next fallback level rather than proceeding at the configured autonomy level.
    */
   confidenceFloor?: number;
+  /**
+   * This interface was referenced by `ActionOverride`'s JSON-Schema definition
+   * via the `patternProperty` "^x-".
+   */
+  [k: string]: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
+ */
+export interface ExtensionsMap {
+  [k: string]: unknown;
 }
