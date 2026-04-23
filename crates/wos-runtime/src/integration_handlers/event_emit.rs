@@ -42,7 +42,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
         let outbound_event_id = next_outbound_event_id(record, service_ref, "emit");
         let subject = compute_subject(
             binding,
-            &record.instance.instance_id,
+            record.instance.correlation_instance_id(),
             service_ref,
             &outbound_event_id,
         );
@@ -119,7 +119,7 @@ impl IntegrationBindingHandler for EventEmitHandler {
 /// If the binding declares an explicit `subject` extension field, that value is
 /// used verbatim, enabling custom routing keys or override templates.
 /// Otherwise the canonical WOS correlation format is used:
-/// `{instanceId}:{bindingId}:{outbound_event_id}`.
+/// `{correlationInstanceId}:{bindingId}:{outbound_event_id}`.
 fn compute_subject(
     binding: &IntegrationBinding,
     instance_id: &str,

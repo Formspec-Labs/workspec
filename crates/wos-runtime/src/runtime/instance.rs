@@ -84,7 +84,7 @@ impl WosRuntime {
         let mut instance = instance;
         if let Some(alias) = legacy_alias {
             instance.extensions.insert(
-                "x-wos-legacy-instance-alias".to_string(),
+                CaseInstance::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY.to_string(),
                 serde_json::Value::String(alias),
             );
         }

@@ -82,9 +82,10 @@ pub struct CaseInstance {
     /// Pending callback registrations awaiting inbound CloudEvents (NB.3).
     ///
     /// Keyed by the CloudEvents `subject` string used for correlation:
-    /// `{instanceId}:{bindingId}:{invocationId}`. When a matching inbound
-    /// event arrives its entry is removed and a `CallbackReceived` provenance
-    /// record is emitted.
+    /// `{correlationInstanceId}:{bindingId}:{invocationId}` where
+    /// `correlationInstanceId` is `CaseInstance::correlation_instance_id`.
+    /// When a matching inbound event arrives its entry is removed and a
+    /// `CallbackReceived` provenance record is emitted.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub pending_callbacks: HashMap<String, PendingCallback>,
 
@@ -94,6 +95,10 @@ pub struct CaseInstance {
 }
 
 impl CaseInstance {
+    /// Extension key where the runtime preserves a creator-supplied identifier
+    /// when a canonical case TypeID was minted at `create_instance`.
+    pub const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
+
     /// Mints a new case identifier.
     #[must_use]
     pub fn mint_id() -> String {
@@ -104,6 +109,22 @@ impl CaseInstance {
     #[must_use]
     pub fn is_case_id(value: &str) -> bool {
         typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX))
+    }
+
+    /// Returns the identifier used for external correlation (CloudEvents
+    /// `subject`, broker routing keys, conformance fixtures).
+    ///
+    /// When the host supplied a non-TypeID `instance_id` at creation, the
+    /// runtime mints a canonical id and stores the original value in
+    /// [`Self::extensions`] under [`Self::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY`].
+    /// This method returns that original id when present; otherwise the
+    /// canonical [`CaseInstance::instance_id`].
+    #[must_use]
+    pub fn correlation_instance_id(&self) -> &str {
+        self.extensions
+            .get(Self::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(self.instance_id.as_str())
     }
 }
 

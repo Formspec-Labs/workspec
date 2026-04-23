@@ -12,8 +12,6 @@ use crate::intake::{
 };
 use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 
-const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
-
 /// Atomic runtime record for a single instance.
 #[derive(Debug, Clone)]
 pub struct RuntimeRecord {
@@ -273,7 +271,7 @@ impl RuntimeStore for InMemoryStore {
 fn legacy_instance_alias(instance: &CaseInstance) -> Option<String> {
     instance
         .extensions
-        .get(LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
+        .get(CaseInstance::LEGACY_INSTANCE_ALIAS_EXTENSION_KEY)
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned)
 }

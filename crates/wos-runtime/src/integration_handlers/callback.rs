@@ -7,7 +7,8 @@
 //! **Outbound phase** (binding fires during a transition action):
 //! The handler emits a CloudEvent outbound request and registers a
 //! `PendingCallback` in `instance.pending_callbacks`. The correlation key
-//! (CloudEvents `subject`) is `{instanceId}:{bindingId}:{invocationId}`.
+//! (CloudEvents `subject`) is `{correlationInstanceId}:{bindingId}:{invocationId}`
+//! (`correlationInstanceId` from `CaseInstance::correlation_instance_id`).
 //! A `CallbackPending` provenance record captures the subject and optional
 //! deadline.
 //!
@@ -132,7 +133,7 @@ fn handle_outbound(
     let outbound_event_id = next_outbound_event_id(record, service_ref, "cb");
     let subject = compute_subject(
         binding,
-        &record.instance.instance_id,
+        record.instance.correlation_instance_id(),
         service_ref,
         &outbound_event_id,
     );
@@ -335,7 +336,7 @@ fn handle_inbound(
 
 /// Derive the CloudEvents `subject` for a callback outbound invocation.
 ///
-/// Canonical format: `{instanceId}:{bindingId}:{invocationId}`.
+/// Canonical format: `{correlationInstanceId}:{bindingId}:{invocationId}`.
 /// The binding may override this via an `extensions.subject` field.
 fn compute_subject(
     binding: &IntegrationBinding,
