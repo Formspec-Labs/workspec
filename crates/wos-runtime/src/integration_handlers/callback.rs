@@ -340,12 +340,12 @@ fn handle_inbound(
 /// The binding may override this via an `extensions.subject` field.
 fn compute_subject(
     binding: &IntegrationBinding,
-    instance_id: &str,
+    correlation_instance_id: &str,
     binding_id: &str,
     outbound_event_id: &str,
 ) -> String {
     if let Some(template) = binding.extensions.get("subject").and_then(|v| v.as_str()) {
         return template.to_string();
     }
-    format!("{instance_id}:{binding_id}:{outbound_event_id}")
+    format!("{correlation_instance_id}:{binding_id}:{outbound_event_id}")
 }

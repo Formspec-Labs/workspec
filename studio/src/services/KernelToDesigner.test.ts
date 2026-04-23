@@ -244,4 +244,51 @@ describe('KernelToDesigner round-trip', () => {
     }
     walk(kernel.lifecycle.states, roundTripped.lifecycle.states, []);
   });
+
+  it('maps legacy bare $error connection trigger to TransitionEventError, not signal', () => {
+    const base = makeKernel({
+      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
+      b: { type: 'final' },
+    }, 'a');
+    const designer = designerFromKernel(base);
+    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
+    expect(out).toBeDefined();
+    out!.trigger = '$error';
+    const rt = designerToKernel(designer, base);
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({
+      kind: 'error',
+      code: 'wos.designer.unspecified',
+    });
+    expect(validateKernelDocument(rt).isValid).toBe(true);
+  });
+
+  it('does not throw on corrupt __wos_te_v1 JSON; yields a synthetic error event', () => {
+    const base = makeKernel({
+      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
+      b: { type: 'final' },
+    }, 'a');
+    const designer = designerFromKernel(base);
+    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
+    expect(out).toBeDefined();
+    out!.trigger = '__wos_te_v1:{not valid json';
+    const rt = designerToKernel(designer, base);
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({
+      kind: 'error',
+      code: 'wos.designer.invalid_trigger_json',
+    });
+  });
+
+  it('still maps $join to a parallel-completion signal', () => {
+    const base = makeKernel({
+      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
+      b: { type: 'final' },
+    }, 'a');
+    const designer = designerFromKernel(base);
+    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
+    expect(out).toBeDefined();
+    out!.trigger = '$join';
+    const rt = designerToKernel(designer, base);
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual(joinSignal());
+    expect(validateKernelDocument(rt).isValid).toBe(true);
+  });
 });

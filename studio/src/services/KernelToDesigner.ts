@@ -10,9 +10,24 @@ const DESIGNER_EVENT_TRIGGER_PREFIX = '__wos_te_v1:';
 /** Wire value for transitions with no `event` (guard-only / continuous rescan). */
 const DESIGNER_NO_EVENT_TRIGGER = '__wos_no_event__';
 
+/**
+ * Placeholder `TransitionEventError.code` when a legacy designer connection used
+ * the bare kernel dispatch label `$error` with no typed payload (Kernel §4.10).
+ */
+const LEGACY_BARE_ERROR_CODE = 'wos.designer.unspecified';
+
+/**
+ * Synthetic error code when the `__wos_te_v1:` suffix is not valid JSON — avoids
+ * throwing on corrupt or crafted `trigger` strings.
+ */
+const CORRUPT_DESIGNER_TRIGGER_JSON_CODE = 'wos.designer.invalid_trigger_json';
+
 /** Serialize `Transition.event` for `WorkflowConnection.trigger` (string wire). */
 function transitionEventToTriggerString(event: Transition['event'] | undefined): string {
   if (event === undefined) return DESIGNER_NO_EVENT_TRIGGER;
+  // Historically the kernel allowed `event` as a plain string (message name).
+  // On the wire we always emit the prefixed JSON shape so round-trips preserve
+  // the message kind and forbid ambiguous `$`-prefixed names at the facts tier.
   if (typeof event === 'string') {
     const legacy = { kind: 'message' as const, name: event };
     return `${DESIGNER_EVENT_TRIGGER_PREFIX}${JSON.stringify(legacy)}`;
@@ -24,7 +39,16 @@ function transitionEventToTriggerString(event: Transition['event'] | undefined):
 function triggerStringToTransitionEvent(trigger: string): Transition['event'] | undefined {
   if (trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
   if (trigger.startsWith(DESIGNER_EVENT_TRIGGER_PREFIX)) {
-    return JSON.parse(trigger.slice(DESIGNER_EVENT_TRIGGER_PREFIX.length)) as Transition['event'];
+    const json = trigger.slice(DESIGNER_EVENT_TRIGGER_PREFIX.length);
+    try {
+      return JSON.parse(json) as Transition['event'];
+    } catch {
+      return { kind: 'error', code: CORRUPT_DESIGNER_TRIGGER_JSON_CODE };
+    }
+  }
+  // Bare `$error` is the kernel error class dispatch label, not a signal name (Kernel §4.10).
+  if (trigger === '$error') {
+    return { kind: 'error', code: LEGACY_BARE_ERROR_CODE };
   }
   if (trigger === '$join' || trigger === '$compensation.complete' || trigger.startsWith('$')) {
     return { kind: 'signal', name: trigger, scope: 'instance' };
