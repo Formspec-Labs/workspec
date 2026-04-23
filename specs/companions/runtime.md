@@ -16,7 +16,7 @@ status: draft
 
 ## Abstract
 
-The WOS Runtime Companion defines the behavioral contract between the WOS evaluation engine and its host environment. A processor that implements this companion can host any WOS workflow at any scale, on any infrastructure. The companion defines WHAT a conformant processor must do -- not HOW. It specifies instance serialization (CaseInstance), event delivery semantics, action execution ordering, durability guarantees, timer management, governance enforcement, explanation assembly, evaluation modes, multi-version coexistence, host interfaces, security boundaries, relationship-triggered events, and Formspec-backed task completion.
+The WOS Runtime Companion defines the behavioral contract between the WOS evaluation engine and its host environment. A processor that implements this companion can host any WOS workflow at any scale, on any infrastructure. The companion defines WHAT a conformant processor must do -- not HOW. It specifies instance serialization (CaseInstance), event delivery semantics, action execution ordering, durability guarantees, timer management, governance enforcement, explanation assembly, evaluation modes, multi-version coexistence, host interfaces, security boundaries, relationship-triggered events, intake-handoff acceptance, governed-case initiation, and Formspec-backed task completion.
 
 This is a companion specification, not a layer. It elaborates kernel runtime semantics defined in the Kernel Specification (S4, S5, S8, S9) and the Lifecycle Detail Companion (S2-S6) without adding new document types, seams, or governance structures. It does not prescribe infrastructure: database technology, message queue implementation, cloud provider, or deployment architecture are host decisions, not engine concerns.
 
@@ -56,7 +56,7 @@ If YES, this companion defines the behavior normatively. If NO, this companion d
 
 ### 1.2 Scope
 
-**Within scope:** CaseInstance serialization format; instance operations; event delivery contract; action execution model; durability checkpoint semantics; timer precision and persistence; governance enforcement ordering; explanation assembly algorithm; evaluation modes; multi-version coexistence; host interfaces (traits); security model; relationship-triggered events; Formspec task presentation, draft persistence, response validation, and Response-to-case mapping.
+**Within scope:** CaseInstance serialization format; instance operations; event delivery contract; intake-handoff acceptance; governed-case initiation and attachment; action execution model; durability checkpoint semantics; timer precision and persistence; governance enforcement ordering; explanation assembly algorithm; evaluation modes; multi-version coexistence; host interfaces (traits); security model; relationship-triggered events; Formspec task presentation, draft persistence, response validation, and Response-to-case mapping.
 
 **Out of scope:** specific infrastructure choices (database, message queue, cloud provider); deployment architecture (serverless, container, on-premise); host interface implementations; rendered explanation formats (PDF, HTML); network protocols between processor and host.
 
@@ -132,7 +132,8 @@ A conformant processor MUST support the following operations on CaseInstance:
 
 | Operation | Input | Effect | Provenance |
 |-----------|-------|--------|------------|
-| `create` | Kernel Document URL + version, initial case state | Creates a new instance in the kernel's initial state. | `instanceCreated` |
+| `create` | Kernel Document URL + version, initial case state | Creates a new runtime instance in the kernel's initial state. Runtime allocation, not governed-case birth. | `instanceCreated` |
+| `acceptIntakeHandoff` | IntakeHandoff, policy decision, idempotency token | Acknowledges a Formspec intake handoff, records WOS-owned intake provenance, and either attaches it to an existing governed case or births a new governed case. | `intakeAccepted`, `intakeRejected`, or `intakeDeferred`; `caseCreated` when a new governed case is born |
 | `processEvent` | Event (name, actor, data, idempotency token) | Evaluates the transition algorithm (Lifecycle Detail S2). | `stateTransition` or `unmatchedEvent` |
 | `advanceTime` | Target timestamp | Fires all timers whose deadline is at or before the target timestamp, in deadline order. | `timer.fired` per timer |
 | `migrate` | New definition URL + version, migration map | Changes the governing definition (S11). | `instanceMigrated` |
@@ -142,7 +143,59 @@ A conformant processor MUST support the following operations on CaseInstance:
 
 Every operation produces at least one provenance record. A `processEvent` that fires a transition produces the transition provenance defined in Kernel S4.7 and Kernel S8.2.
 
-### 3.4 Status Transitions
+### 3.4 Intake Acceptance
+
+The `create` operation allocates runtime state. It does not, by itself, establish a governed case. Intake acceptance is a separate host operation: the processor consumes a Formspec `IntakeHandoff`, records intake provenance, and only then decides whether the handoff attaches to an existing governed case or births a new one. In a public-intake flow, `instanceCreated` and `caseCreated` MAY both occur, but they remain distinct records with distinct meanings.
+
+#### 3.4.1 Normative `acceptIntakeHandoff` Algorithm
+
+A conformant processor implementing `acceptIntakeHandoff` MUST apply the following sequence:
+
+1. Resolve the configured intake adapter for the requested binding. Unsupported bindings fail before any receipt, provenance, or case mutation is written.
+2. Parse and validate the binding-native handoff through that adapter. For Formspec this means validating the `IntakeHandoff` document and deriving at least:
+   - stable intake identity,
+   - whether the handoff targets an existing governed case or requests governed-case creation,
+   - the binding-owned evidence references carried by the handoff.
+3. Resolve replay identity before host policy runs. At minimum, replay identity MUST distinguish:
+   - binding discriminator,
+   - stable intake identity,
+   - the full host request fields that can affect acceptance outcome.
+   A replay with the same binding and intake identity but different policy-relevant request metadata MUST fail as a conflict, not silently replay.
+4. Persist a durable intake receipt before applying any accepted side effects. A crash between receipt creation and case mutation MUST replay to exactly one accepted/rejected/deferred outcome; it MUST NOT duplicate provenance on an existing case nor mint a second governed case for the same intake identity.
+5. Evaluate host acceptance policy against the adapter interpretation. The policy outcome space is closed to:
+   - `accepted` with either `attachToExistingCase` or `createGovernedCase`,
+   - `rejected`,
+   - `deferred`.
+6. Finalize binding-owned provenance after the policy outcome is known. The runtime owns the intake decision records; bindings MAY add seam-specific provenance such as Formspec-facing `caseCreated` evidence for accepted public-intake creation.
+7. Apply accepted side effects only after steps 1-6 have succeeded:
+   - `attachToExistingCase` appends intake provenance to an already-governed case,
+   - `createGovernedCase` creates runtime instance state if needed and then appends intake provenance.
+   The processor MUST canonicalize any host alias or legacy case handle before persisting accepted outcome and case provenance, while still preserving the handoff-carried attach string for any adapter finalization step that compares against the source handoff.
+8. Persist the applied intake receipt after case mutation or detached provenance completion. Subsequent replays MUST return the applied durable decision.
+
+#### 3.4.2 Required Checks
+
+The runtime layer owns the acceptance algorithm even when concrete storage and transport are host-specific. A conformant processor SHOULD verify, before accepted case mutation:
+
+- the handoff's pinned definition still resolves to the exact referenced Definition version;
+- the stored canonical Response envelope still matches `responseHash`;
+- any stored ValidationReport referenced by the handoff still resolves;
+- the requested attach target or create target remains valid for the current tenant/scope boundary;
+- public-intake creation is authorized by host policy for the current route or product profile.
+
+When the processor cannot perform one of these checks itself because the relevant artifact store or identity system is host-supplied, it MUST expose a host seam for that verification and MUST NOT redefine the check as adapter-private behavior.
+
+#### 3.4.3 Outcome Semantics
+
+The runtime owns the intake decision records:
+
+- `intakeAccepted` means the handoff was accepted into WOS-managed workflow handling.
+- `intakeRejected` means the handoff was declined and did not create or update governed case state.
+- `intakeDeferred` means the handoff was received but withheld from governed case mutation pending a later host decision.
+
+When acceptance births a governed case, `caseCreated` records the governed-case boundary. It is not interchangeable with `instanceCreated`, which only records runtime allocation of instance state.
+
+### 3.5 Status Transitions
 
 ```
         create

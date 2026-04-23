@@ -8,7 +8,7 @@
 
 ## One paragraph
 
-The stack **will** converge on **one append-only evidentiary spine per case**: intake (respondent ledger events), the **coprocessor bridge** (`case.created` and related), WOS governance and provenance, and lifecycle events (`ledger.*`)—with **hash chain / Merkle / signed checkpoints**, **encrypt-then-hash** for payloads where policy requires it, and **disposable projections** (Postgres dashboards, materialized views) over that spine. **Execution** (Restate/Temporal, timers, retries) stays **out of band** as orchestration durability; **evidence** lives on the ledger. That end state is **Phase 3 — portable case files** in [`../../trellis/thoughts/product-vision.md`](../../trellis/thoughts/product-vision.md).
+The stack **will** converge on **one append-only evidentiary spine per case**: intake (respondent ledger events), the **case-initiation handoff** plus WOS-owned `case.created` event ([ADR 0073](../../../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md)), WOS governance and provenance, and lifecycle events (`ledger.*`)—with **hash chain / Merkle / signed checkpoints**, **encrypt-then-hash** for payloads where policy requires it, and **disposable projections** (Postgres dashboards, materialized views) over that spine. **Execution** (Restate/Temporal, timers, retries) stays **out of band** as orchestration durability; **evidence** lives on the ledger. That end state is **Phase 3 — portable case files** in [`../../trellis/thoughts/product-vision.md`](../../trellis/thoughts/product-vision.md).
 
 ---
 
@@ -33,7 +33,7 @@ Invariant from product vision: **Phase 1 export event shape is the Phase 3 case-
 
 ## WOS responsibilities toward 0059
 
-- **Today:** Emit **Facts-tier** provenance (e.g. `SignatureAffirmation`) and other records; **`wos-export`** maps to Trellis **`custodyHook`** append shape ([`../adr/0061-custody-hook-trellis-wire-format.md`](../adr/0061-custody-hook-trellis-wire-format.md)). Provenance remains **`ProvenanceRecord`** in runtime storage; **semantic alignment** with future unified ledger event types is tracked as spec work (`case.created`, governance event type registry).
+- **Today:** Emit **Facts-tier** provenance (e.g. `SignatureAffirmation`) and other records; **`wos-export`** maps to Trellis **`custodyHook`** append shape ([`../adr/0061-custody-hook-trellis-wire-format.md`](../adr/0061-custody-hook-trellis-wire-format.md)). Provenance remains **`ProvenanceRecord`** in runtime storage; **semantic alignment** with future unified ledger event types is tracked as spec work (WOS-owned `case.created` / intake handoff per ADR 0073, governance event type registry).
 - **Toward Phase 3:** Each provenance / governance emission **MUST** be mappable to a **stable event type + payload** in the unified taxonomy (ADR-0059 Part 4); no ad hoc Postgres-only shapes that cannot serialize to the Trellis envelope.
 
 ---

@@ -4,6 +4,9 @@
 //!
 //! `wos-runtime` owns WOS orchestration. Binding adapters own
 //! binding-specific validation and projection semantics.
+//! This seam currently covers task presentation, task submission validation,
+//! and task-to-case mutation. Host-side intake-handoff acceptance is a
+//! separate boundary and does not yet have a dedicated runtime hook here.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -48,6 +51,10 @@ pub enum BindingError {
 }
 
 /// Binding-specific task adapter.
+///
+/// This trait is intentionally scoped to task-bound contract flows. It does not
+/// currently model host-side intake-handoff acceptance or binding-owned
+/// auxiliary provenance emission outside task submission.
 pub trait ContractBindingAdapter: Send + Sync {
     /// Binding discriminator handled by this adapter.
     fn binding(&self) -> &'static str;

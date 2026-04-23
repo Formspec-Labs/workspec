@@ -7,6 +7,9 @@ use std::collections::HashMap;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 
+use crate::intake::{
+    IntakeAcceptanceDecision, IntakeAcceptanceOutcome, IntakeAcceptanceRequest, IntakeRecordStatus,
+};
 use crate::runtime::{PersistDraftResult, TaskSubmissionResult};
 
 const LEGACY_INSTANCE_ALIAS_EXTENSION_KEY: &str = "x-wos-legacy-instance-alias";
@@ -85,6 +88,8 @@ pub enum ReplayOperation {
     PersistDraft,
     /// Completed submission replay.
     SubmitTaskResponse,
+    /// Intake acceptance replay.
+    AcceptIntakeHandoff,
 }
 
 /// Idempotency replay key.
@@ -107,6 +112,29 @@ pub enum ReplayValue {
     Draft(PersistDraftResult),
     /// Replay of task submission.
     Submission(TaskSubmissionResult),
+    /// Replay of intake acceptance.
+    Intake(IntakeAcceptanceDecision),
+}
+
+/// Persisted intake-acceptance result.
+#[derive(Debug, Clone)]
+pub struct IntakeRecord {
+    /// Binding discriminator that interpreted the intake handoff.
+    pub binding: String,
+    /// Stable idempotency identifier for the intake handoff.
+    pub intake_id: String,
+    /// Original host-side intake request.
+    pub request: IntakeAcceptanceRequest,
+    /// Final host-visible outcome.
+    pub outcome: IntakeAcceptanceOutcome,
+    /// Provenance emitted for this intake decision.
+    pub provenance_log: Vec<ProvenanceRecord>,
+    /// Persistence state of this intake record.
+    pub status: IntakeRecordStatus,
+    /// Timestamp when the intake record was first persisted.
+    pub recorded_at: String,
+    /// Timestamp of the latest intake-record update.
+    pub updated_at: String,
 }
 
 /// Errors from runtime persistence.
@@ -135,6 +163,19 @@ pub trait RuntimeStore {
 
     /// Atomically replace an instance record.
     fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError>;
+
+    /// Create a brand-new intake record.
+    fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError>;
+
+    /// Load a persisted intake record.
+    fn load_intake_record(
+        &self,
+        binding: &str,
+        intake_id: &str,
+    ) -> Result<IntakeRecord, StoreError>;
+
+    /// Atomically replace an intake record.
+    fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError>;
 }
 
 /// In-memory runtime record store.
@@ -142,6 +183,7 @@ pub trait RuntimeStore {
 pub struct InMemoryStore {
     records: HashMap<String, RuntimeRecord>,
     aliases: HashMap<String, String>,
+    intake_records: HashMap<(String, String), IntakeRecord>,
 }
 
 impl InMemoryStore {
@@ -192,6 +234,38 @@ impl RuntimeStore for InMemoryStore {
         }
 
         self.records.insert(instance_id, record);
+        Ok(())
+    }
+
+    fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+        let key = (record.binding.clone(), record.intake_id.clone());
+        if self.intake_records.contains_key(&key) {
+            return Err(StoreError::AlreadyExists(format!(
+                "intake:{}:{}",
+                key.0, key.1
+            )));
+        }
+        self.intake_records.insert(key, record);
+        Ok(())
+    }
+
+    fn load_intake_record(
+        &self,
+        binding: &str,
+        intake_id: &str,
+    ) -> Result<IntakeRecord, StoreError> {
+        self.intake_records
+            .get(&(binding.to_string(), intake_id.to_string()))
+            .cloned()
+            .ok_or_else(|| StoreError::NotFound(format!("intake:{binding}:{intake_id}")))
+    }
+
+    fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+        let key = (record.binding.clone(), record.intake_id.clone());
+        if !self.intake_records.contains_key(&key) {
+            return Err(StoreError::NotFound(format!("intake:{}:{}", key.0, key.1)));
+        }
+        self.intake_records.insert(key, record);
         Ok(())
     }
 }

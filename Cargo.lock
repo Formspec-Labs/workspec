@@ -3438,6 +3438,7 @@ dependencies = [
 name = "wos-formspec-binding"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "wos-core",
@@ -3496,7 +3497,7 @@ dependencies = [
 
 [[package]]
 name = "wos-synth-anthropic"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anthropic-sdk",
  "async-trait",
@@ -3507,7 +3508,7 @@ dependencies = [
 
 [[package]]
 name = "wos-synth-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "clap",
  "serde_json",
@@ -3519,7 +3520,7 @@ dependencies = [
 
 [[package]]
 name = "wos-synth-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "jsonschema",
@@ -3534,7 +3535,7 @@ dependencies = [
 
 [[package]]
 name = "wos-synth-mock"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "pollster",
@@ -3543,7 +3544,7 @@ dependencies = [
 
 [[package]]
 name = "wos-synth-spike"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anthropic-sdk",
  "clap",

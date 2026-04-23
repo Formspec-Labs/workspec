@@ -41,17 +41,28 @@ def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
     return Draft202012Validator(composed)
 
 
-def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+def _facts_record(record_kind: str, **extra) -> dict:
     record = {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "capabilityInvocation",
-        "data": {
+        "recordKind": record_kind,
+        "timestamp": "2026-04-22T14:30:00Z",
+        "auditLayer": "facts",
+        "definitionVersion": "1.0.0",
+    }
+    record.update(extra)
+    return record
+
+
+def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
+    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    record = _facts_record(
+        "capabilityInvocation",
+        data={
             "invocationBlocked": True,
             "capabilityId": "documentExtraction",
         },
-        "outcome": "preconditionNotSatisfied",
-    }
+        outcome="preconditionNotSatisfied",
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -63,11 +74,11 @@ def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
 
 def test_blocked_invocation_missing_outcome_is_rejected(schema):
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
-    record = {
-        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
-        "recordKind": "capabilityInvocation",
-        "data": {"invocationBlocked": True},
-    }
+    record = _facts_record(
+        "capabilityInvocation",
+        id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+        data={"invocationBlocked": True},
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -79,12 +90,12 @@ def test_blocked_invocation_missing_outcome_is_rejected(schema):
 
 def test_blocked_invocation_with_wrong_outcome_is_rejected(schema):
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
-    record = {
-        "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
-        "recordKind": "capabilityInvocation",
-        "data": {"invocationBlocked": True},
-        "outcome": "somethingElse",
-    }
+    record = _facts_record(
+        "capabilityInvocation",
+        id="sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
+        data={"invocationBlocked": True},
+        outcome="somethingElse",
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -101,14 +112,14 @@ def test_unblocked_invocation_without_outcome_is_accepted(schema):
     happy-path record shape unconstrained.
     """
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
-    record = {
-        "id": "sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
-        "recordKind": "capabilityInvocation",
-        "data": {
+    record = _facts_record(
+        "capabilityInvocation",
+        id="sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
+        data={
             "invocationBlocked": False,
             "capabilityId": "eligibilityScreener",
         },
-    }
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -125,13 +136,12 @@ def test_absent_invocation_blocked_not_required_outcome(schema):
     validate without carrying an `outcome` -- otherwise the MUST would
     over-fire on records that predate the precondition gate."""
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
-    record = {
-        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "capabilityInvocation",
-        "data": {
+    record = _facts_record(
+        "capabilityInvocation",
+        data={
             "capabilityId": "documentExtraction",
         },
-    }
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -150,13 +160,13 @@ def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(schem
     AI §3.3.1 capability-invocation path, not every provenance record
     whose payload reuses the field name."""
     validator = _validator_for_def(schema, "CapabilityInvocationRecord")
-    record = {
-        "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
-        "recordKind": "stateTransition",
-        "data": {
+    record = _facts_record(
+        "stateTransition",
+        id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+        data={
             "invocationBlocked": True,
         },
-    }
+    )
 
     errors = list(validator.iter_errors(record))
 

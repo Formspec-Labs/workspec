@@ -16,7 +16,7 @@ status: draft
 
 ## Abstract
 
-The WOS Correspondence Metadata Config is a sidecar document that declares the metadata schema for correspondence entries stored in case state. Government workflows track correspondence -- letters, phone calls, emails, portal submissions, in-person interactions -- as part of the case record. The kernel's existing event mechanism handles correspondence events: events that match no transition are recorded in provenance (Kernel S4.9). This sidecar defines the structured metadata that each correspondence entry carries, enabling consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.
+The WOS Correspondence Metadata Config is a sidecar document that declares the metadata schema for correspondence entries stored in case state. Government workflows track correspondence -- letters, phone calls, emails, portal submissions that have been acknowledged as correspondence, in-person interactions -- as part of the case record. The kernel's existing event mechanism handles correspondence events: events that match no transition are recorded in provenance (Kernel S4.9). This sidecar defines the structured metadata that each correspondence entry carries, enabling consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.
 
 This sidecar is additive. It does not alter kernel processing semantics, lifecycle evaluation, or the event matching algorithm.
 

@@ -44,6 +44,10 @@ impl From<K> for ProvenanceAuditTier {
             K::StateTransition
             | K::UnmatchedEvent
             | K::CaseStateMutation
+            | K::CaseCreated
+            | K::IntakeAccepted
+            | K::IntakeRejected
+            | K::IntakeDeferred
             | K::TimerCreated
             | K::TimerFired
             | K::TimerCancelled

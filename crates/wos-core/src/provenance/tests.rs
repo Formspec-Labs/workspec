@@ -290,6 +290,10 @@ fn audit_layer_for_kind_maps_narrative_only() {
         audit_layer_for_kind(ProvenanceKind::CaseStateMutation),
         "facts"
     );
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::IntakeAccepted),
+        "facts"
+    );
     assert_eq!(audit_layer_for_kind(ProvenanceKind::TaskCompleted), "facts");
     assert_eq!(audit_layer_for_kind(ProvenanceKind::EventEmitted), "facts");
     assert_eq!(
@@ -309,6 +313,10 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::StateTransition,
         ProvenanceKind::UnmatchedEvent,
         ProvenanceKind::CaseStateMutation,
+        ProvenanceKind::CaseCreated,
+        ProvenanceKind::IntakeAccepted,
+        ProvenanceKind::IntakeRejected,
+        ProvenanceKind::IntakeDeferred,
         ProvenanceKind::TimerCreated,
         ProvenanceKind::TimerFired,
         ProvenanceKind::TimerCancelled,

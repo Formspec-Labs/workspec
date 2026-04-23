@@ -7,6 +7,10 @@
 //!
 //! Split across `snapshot`, `kind`, `audit_tier`, `record`, and `log` so
 //! `ProvenanceKind` growth does not monopolize a single merge-bottleneck file.
+//! Binding-specific payload assembly stays outside this module unless WOS owns
+//! the exact record shape in normative prose and schema. That keeps `wos-core`
+//! aligned with shared provenance vocabulary instead of adapter-local evidence
+//! conventions.
 
 mod audit_tier;
 mod kind;

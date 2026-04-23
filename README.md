@@ -130,7 +130,7 @@ DCR-style constraint zones for flexible investigation work (drawn from DCR Graph
 ### Companions
 
 - **Lifecycle Detail** — Evaluation order, nested entry/exit, parallel region activation, compensation (saga), history-state resumption, and a bidirectional SCXML mapping.
-- **Runtime** — Case instance serialization, event delivery contract, and the Formspec coprocessor handoff (how form submissions become case data).
+- **Runtime** — Case instance serialization, event delivery contract, intake-handoff acceptance, and the Formspec coprocessor handoff (how accepted intake becomes a governed case or attaches to one).
 
 ---
 
@@ -202,6 +202,18 @@ cargo test -p wos-core
 cargo test -p wos-runtime
 cargo test -p wos-conformance
 ```
+
+### Intake acceptance tests (`FormspecBinding` + `WosRuntime`)
+
+`wos-formspec-binding` already depends on `wos-runtime`. Do **not** add
+`wos-formspec-binding` as a **dev-dependency** of `wos-runtime` to register
+`FormspecBinding` in `wos-runtime` unit tests: Cargo can compile two incompatible
+`wos-runtime` packages, so `IntakeAcceptanceAdapter` implementations no longer
+match the registry's trait object.
+
+Integration tests that need both crates live under
+`crates/wos-formspec-binding/tests/` (for example `runtime_intake_workflow_alias.rs`).
+Run: `cargo test -p wos-formspec-binding`.
 
 ---
 

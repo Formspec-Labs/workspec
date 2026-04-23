@@ -197,7 +197,11 @@ pub async fn wos_case_workflow(
 
         ctx.execute_activity(
             append_provenance,
-            ProvenanceRecord::case_created(&instance),
+            formspec_binding::case_created_provenance(
+                &submission.intake_handoff,
+                &instance.case_ref,
+                Some("intake-service"),
+            )?,
             activity_options(Duration::from_secs(5)),
         ).await?;
     }

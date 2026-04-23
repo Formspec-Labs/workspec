@@ -52,13 +52,24 @@ def _snapshot() -> dict:
     }
 
 
-def test_determination_transition_without_snapshot_is_rejected(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def _facts_record(record_kind: str, **extra) -> dict:
     record = {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "stateTransition",
-        "transitionTags": ["determination"],
+        "recordKind": record_kind,
+        "timestamp": "2026-04-19T12:00:00Z",
+        "auditLayer": "facts",
+        "definitionVersion": "1.0.0",
     }
+    record.update(extra)
+    return record
+
+
+def test_determination_transition_without_snapshot_is_rejected(schema):
+    validator = _validator_for_def(schema, "FactsTierRecord")
+    record = _facts_record(
+        "stateTransition",
+        transitionTags=["determination"],
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -67,12 +78,11 @@ def test_determination_transition_without_snapshot_is_rejected(schema):
 
 def test_determination_transition_with_snapshot_is_accepted(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
-    record = {
-        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "stateTransition",
-        "transitionTags": ["determination"],
-        "caseFileSnapshot": _snapshot(),
-    }
+    record = _facts_record(
+        "stateTransition",
+        transitionTags=["determination"],
+        caseFileSnapshot=_snapshot(),
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -81,11 +91,10 @@ def test_determination_transition_with_snapshot_is_accepted(schema):
 
 def test_non_determination_transition_without_snapshot_is_accepted(schema):
     validator = _validator_for_def(schema, "FactsTierRecord")
-    record = {
-        "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "recordKind": "stateTransition",
-        "transitionTags": ["review"],
-    }
+    record = _facts_record(
+        "stateTransition",
+        transitionTags=["review"],
+    )
 
     errors = list(validator.iter_errors(record))
 
@@ -112,8 +121,7 @@ def test_full_document_rejects_determination_record_missing_snapshot(schema):
     document = {
         "provenanceLog": [
             {
-                "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-                "recordKind": "stateTransition",
+                **_facts_record("stateTransition"),
                 "transitionTags": ["determination"],
             }
         ]
@@ -132,14 +140,15 @@ def test_full_document_accepts_determination_record_with_snapshot(schema):
     document = {
         "provenanceLog": [
             {
-                "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
-                "recordKind": "stateTransition",
+                **_facts_record("stateTransition"),
                 "transitionTags": ["determination"],
                 "caseFileSnapshot": _snapshot(),
             },
             {
-                "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
-                "recordKind": "caseStateMutation",
+                **_facts_record(
+                    "caseStateMutation",
+                    id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+                ),
                 "transitionTags": [],
             },
         ]

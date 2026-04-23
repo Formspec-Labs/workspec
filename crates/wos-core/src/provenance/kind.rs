@@ -12,6 +12,18 @@ pub enum ProvenanceKind {
     UnmatchedEvent,
     /// Case state field mutation (Kernel S5.4).
     CaseStateMutation,
+    /// Governed case identity was created.
+    ///
+    /// `wos-core` owns the shared provenance kind, but binding crates or host
+    /// runtime code own payload assembly until WOS specifies a canonical
+    /// binding-agnostic `caseCreated` data shape in spec and schema.
+    CaseCreated,
+    /// Intake handoff was accepted by host runtime policy.
+    IntakeAccepted,
+    /// Intake handoff was rejected by host runtime policy.
+    IntakeRejected,
+    /// Intake handoff was deferred by host runtime policy.
+    IntakeDeferred,
     /// Timer created (Lifecycle Detail S6.7).
     TimerCreated,
     /// Timer fired (Lifecycle Detail S6.7).

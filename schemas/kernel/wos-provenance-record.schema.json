@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/kernel/provenance-record/1.0",
   "title": "WOS Kernel Provenance Log Document",
-  "description": "A WOS Kernel Provenance Log export document per Kernel §8 (Provenance). Carries an append-only array of Facts-tier provenance records emitted by runtime execution. State-transition records whose transitionTags include 'determination' MUST carry a caseFileSnapshot so notices, appeals, and override reviews can reproduce the exact factual basis used by the decision. This schema is the canonical validation target for provenance log exports -- kernel documents themselves do not embed the log.",
+  "description": "A WOS Kernel Provenance Log export document per Kernel §8 (Provenance). Carries an append-only array of persisted provenance records emitted by runtime execution. Facts-tier records are normative in the kernel; higher tiers reuse the same envelope with `auditLayer` set accordingly. State-transition records whose transitionTags include 'determination' MUST carry a caseFileSnapshot so notices, appeals, and override reviews can reproduce the exact factual basis used by the decision. This schema validates the post-append export shape -- not unstamped in-memory constructors.",
   "type": "object",
   "required": [
     "provenanceLog"
@@ -11,16 +11,20 @@
   "properties": {
     "provenanceLog": {
       "type": "array",
-      "description": "Ordered sequence of Facts-tier provenance records emitted during a workflow run. Records are append-only and their order matches emission order; consumers MUST preserve ordering when re-exporting.",
+      "description": "Ordered sequence of persisted provenance records emitted during a workflow run. Records are append-only and their order matches emission order; consumers MUST preserve ordering when re-exporting.",
       "examples": [
         [
           {
             "recordKind": "stateTransition",
             "timestamp": "2026-04-19T12:00:00Z",
+            "auditLayer": "facts",
             "actorId": "caseworker",
+            "actorType": "human",
             "fromState": "review",
             "toState": "decided",
             "event": "decide",
+            "definitionVersion": "1.0.0",
+            "lifecycleState": "review",
             "transitionTags": [
               "determination"
             ],
@@ -43,19 +47,27 @@
   "$defs": {
     "FactsTierRecord": {
       "type": "object",
-      "description": "A WOS Facts-tier provenance record emitted by runtime execution. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
+      "description": "A persisted WOS provenance record emitted by runtime execution. Facts-tier semantics are normative in the kernel; higher tiers reuse the same envelope and advertise their tier through `auditLayer`. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
       "required": [
-        "id"
+        "id",
+        "recordKind",
+        "timestamp",
+        "auditLayer",
+        "definitionVersion"
       ],
       "examples": [
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
           "recordKind": "stateTransition",
           "timestamp": "2026-04-19T12:00:00Z",
+          "auditLayer": "facts",
           "actorId": "caseworker",
+          "actorType": "human",
           "fromState": "review",
           "toState": "decided",
           "event": "decide",
+          "definitionVersion": "1.0.0",
+          "lifecycleState": "review",
           "transitionTags": [
             "determination"
           ],
@@ -91,6 +103,136 @@
           "examples": [
             "stateTransition",
             "caseStateMutation"
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 / ISO 8601 timestamp stamped by the runtime append path before persistence.",
+          "examples": [
+            "2026-04-19T12:00:00Z"
+          ]
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the actor who triggered the record, when the processor can name one.",
+          "examples": [
+            "caseworker",
+            "intake-service"
+          ]
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source lifecycle state for transition-oriented records.",
+          "examples": [
+            "review"
+          ]
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target lifecycle state for transition-oriented records.",
+          "examples": [
+            "decided"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event or reserved event literal carried by the record kind.",
+          "examples": [
+            "decide",
+            "case.intake.accepted"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Record-kind-specific context payload.",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "path": "eligibility.result"
+            }
+          ]
+        },
+        "auditLayer": {
+          "type": "string",
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative"
+          ],
+          "description": "Audit tier for the persisted/exported record. Facts-tier records are normative in the kernel; higher layers reuse the same envelope and set a different tier literal.",
+          "examples": [
+            "facts",
+            "narrative"
+          ]
+        },
+        "actorType": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "human",
+                "system",
+                "agent"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix.",
+          "examples": [
+            "human",
+            "system",
+            "agent"
+          ]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state at the time of the action when the processor can determine it canonically.",
+          "examples": [
+            "review",
+            "open"
+          ]
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document stamped at append time.",
+          "examples": [
+            "1.0.0"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Input entity references used by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "handoff-public-2026-0001"
+            ]
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output entity references generated by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
           ]
         },
         "outcome": {
@@ -156,6 +298,18 @@
           "$ref": "#/$defs/CapabilityInvocationRecord"
         },
         {
+          "$ref": "#/$defs/CaseCreatedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeAcceptedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeRejectedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeDeferredRecord"
+        },
+        {
           "$ref": "#/$defs/SignatureAffirmationRecord"
         }
       ]
@@ -167,6 +321,9 @@
         {
           "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
           "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:30:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
           "data": {
             "invocationBlocked": true,
             "capabilityId": "documentExtraction"
@@ -176,6 +333,9 @@
         {
           "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
           "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:31:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
           "data": {
             "invocationBlocked": false,
             "capabilityId": "documentExtraction"
@@ -257,6 +417,345 @@
         }
       ]
     },
+    "CaseCreatedRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records that mark the governed-case boundary. The kernel reserves the `caseCreated` kind and the canonical event literal `case.created`, and it requires the created governed-case reference in `data.caseRef`. The kernel does not freeze the rest of the binding-specific `data` keys; bindings may carry different evidence references inside `data` as long as the record still identifies the created governed case.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "caseCreated",
+          "timestamp": "2026-04-23T12:00:00Z",
+          "auditLayer": "facts",
+          "event": "case.created",
+          "definitionVersion": "1.0.0",
+          "inputs": [
+            "handoff-public-2026-0001"
+          ],
+          "outputs": [
+            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+          ],
+          "data": {
+            "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc",
+            "initiationMode": "publicIntake"
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "caseCreated"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event",
+              "data",
+              "outputs"
+            ],
+            "properties": {
+              "event": {
+                "const": "case.created"
+              },
+              "outputs": {
+                "type": "array",
+                "minItems": 1
+              },
+              "data": {
+                "$ref": "#/$defs/CaseCreatedData"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "IntakeAcceptedRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted when runtime intake acceptance succeeds. Accepted intake creates or updates governed-case handling, so the record MUST carry the canonical event literal `case.intake.accepted`, binding/intake context in `data`, the accepted case disposition, the canonical governed-case reference, and at least one governed-case output reference.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqt0f0wm8f4b7n1j6m2r3k4p",
+          "recordKind": "intakeAccepted",
+          "timestamp": "2026-04-23T12:00:00Z",
+          "auditLayer": "facts",
+          "event": "case.intake.accepted",
+          "definitionVersion": "1.0.0",
+          "inputs": [
+            "handoff-public-2026-0001"
+          ],
+          "outputs": [
+            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+          ],
+          "data": {
+            "binding": "formspec",
+            "intakeId": "handoff-public-2026-0001",
+            "caseIntent": "requestGovernedCaseCreation",
+            "caseDisposition": "createGovernedCase",
+            "caseRef": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeAccepted"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event",
+              "data",
+              "outputs"
+            ],
+            "properties": {
+              "event": {
+                "const": "case.intake.accepted"
+              },
+              "outputs": {
+                "type": "array",
+                "minItems": 1
+              },
+              "data": {
+                "$ref": "#/$defs/IntakeAcceptedData"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "IntakeRejectedRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted when runtime intake acceptance rejects a handoff. Rejection records remain detached from governed case mutation and therefore do not require governed-case outputs.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqt0f0wm8f4b7n1j6m2r3k4p",
+          "recordKind": "intakeRejected",
+          "timestamp": "2026-04-23T12:00:00Z",
+          "auditLayer": "facts",
+          "event": "case.intake.rejected",
+          "definitionVersion": "1.0.0",
+          "inputs": [
+            "handoff-public-2026-0001"
+          ],
+          "data": {
+            "binding": "formspec",
+            "intakeId": "handoff-public-2026-0001",
+            "caseIntent": "requestGovernedCaseCreation",
+            "code": "publicIntakeDisabled"
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeRejected"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "const": "case.intake.rejected"
+              },
+              "data": {
+                "$ref": "#/$defs/IntakeDecisionData"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "IntakeDeferredRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted when runtime intake acceptance defers a handoff. Deferred records preserve intake context and reason code without creating or updating governed case state.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqt0f0wm8f4b7n1j6m2r3k4p",
+          "recordKind": "intakeDeferred",
+          "timestamp": "2026-04-23T12:00:00Z",
+          "auditLayer": "facts",
+          "event": "case.intake.deferred",
+          "definitionVersion": "1.0.0",
+          "inputs": [
+            "handoff-public-2026-0001"
+          ],
+          "data": {
+            "binding": "formspec",
+            "intakeId": "handoff-public-2026-0001",
+            "caseIntent": "requestGovernedCaseCreation",
+            "code": "manualReviewRequired"
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "intakeDeferred"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "event",
+              "data"
+            ],
+            "properties": {
+              "event": {
+                "const": "case.intake.deferred"
+              },
+              "data": {
+                "$ref": "#/$defs/IntakeDecisionData"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CaseCreatedData": {
+      "type": "object",
+      "description": "Kernel-owned minimum payload for a governed-case boundary record. `caseRef` identifies the created governed case; bindings may add their own evidence references alongside it.",
+      "required": [
+        "caseRef"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "caseRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Governed-case reference created or acknowledged by the boundary event.",
+          "examples": [
+            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+          ]
+        }
+      }
+    },
+    "IntakeDecisionData": {
+      "type": "object",
+      "description": "Minimum runtime-owned payload for non-accepted intake decision provenance. The kernel fixes the intake identity, binding discriminator, and case intent fields so exports and offline verifiers can trace the rejection or deferral back to a concrete handoff. Bindings or host profiles may add more fields.",
+      "required": [
+        "binding",
+        "intakeId",
+        "caseIntent"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "binding": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Binding discriminator that interpreted the handoff, such as `formspec`.",
+          "examples": [
+            "formspec"
+          ]
+        },
+        "intakeId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable intake identity used for replay and provenance correlation.",
+          "examples": [
+            "handoff-public-2026-0001"
+          ]
+        },
+        "caseIntent": {
+          "type": "string",
+          "enum": [
+            "attachToExistingCase",
+            "requestGovernedCaseCreation"
+          ],
+          "description": "Binding-derived intent before host policy chose attach, create, reject, or defer.",
+          "examples": [
+            "requestGovernedCaseCreation"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Machine-readable rejection or deferral code when intake was not accepted.",
+          "examples": [
+            "publicIntakeDisabled",
+            "manualReviewRequired"
+          ]
+        }
+      }
+    },
+    "IntakeAcceptedData": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IntakeDecisionData"
+        }
+      ],
+      "type": "object",
+      "description": "Kernel-owned minimum payload for an accepted intake decision. Accepted intake records MUST identify the runtime's final case disposition and canonical governed-case reference so exports and offline verifiers can bind the intake handoff to the governed case that was created or attached.",
+      "required": [
+        "binding",
+        "intakeId",
+        "caseIntent",
+        "caseDisposition",
+        "caseRef"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "caseDisposition": {
+          "type": "string",
+          "enum": [
+            "attachToExistingCase",
+            "createGovernedCase"
+          ],
+          "description": "Final accepted case disposition when the runtime accepted the handoff.",
+          "examples": [
+            "createGovernedCase"
+          ]
+        },
+        "caseRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Governed-case reference selected by the runtime when acceptance attaches or creates a case.",
+          "examples": [
+            "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+          ]
+        },
+        "definitionUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Kernel definition URL used when acceptance created a governed case.",
+          "examples": [
+            "https://example.gov/wos/benefits-intake"
+          ]
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel definition version used when acceptance created a governed case.",
+          "examples": [
+            "1.0.0"
+          ]
+        }
+      }
+    },
     "SignatureAffirmationRecord": {
       "type": "object",
       "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, hash, timestamp, identity-binding, consent, provider, ceremony, profile, Formspec response, and custody eligibility fields required by Signature Profile §2.8.",
@@ -264,6 +763,9 @@
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
           "recordKind": "signatureAffirmation",
+          "timestamp": "2026-04-22T14:30:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
           "data": {
             "signerId": "applicant",
             "roleId": "applicantSigner",

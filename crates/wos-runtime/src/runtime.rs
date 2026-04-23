@@ -6,6 +6,7 @@ mod actions;
 mod drain;
 mod durable_impl;
 mod instance;
+mod intake;
 mod provenance;
 mod signature;
 mod support;
@@ -29,6 +30,7 @@ use wos_core::traits::{
 
 use crate::binding::{BindingError, BindingRegistry};
 use crate::custody::CustodyAppendError;
+use crate::intake::{IntakeAcceptancePolicy, IntakeAcceptanceRegistry, NoopIntakeAcceptancePolicy};
 use crate::integration::IntegrationProfileDocument;
 use crate::store::{RuntimeStore, StoreError};
 
@@ -248,6 +250,10 @@ pub enum RuntimeError {
     #[error("binding unsupported: {0}")]
     UnsupportedBinding(String),
 
+    /// Intake handoff id replay conflicted with a different document payload.
+    #[error("intake handoff id conflict: {0}")]
+    IntakeConflict(String),
+
     /// The integration binding kind is not yet implemented by the runtime.
     #[error("integration binding kind unsupported: {0:?}")]
     UnsupportedBindingKind(crate::integration::IntegrationBindingKind),
@@ -395,6 +401,8 @@ pub struct WosRuntime {
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
+    intake_acceptors: IntakeAcceptanceRegistry,
+    intake_policy: Box<dyn IntakeAcceptancePolicy>,
     signature_profiles: Vec<signature::SignatureProfileRegistration>,
 }
 
@@ -435,6 +443,8 @@ impl WosRuntime {
             integration_profile: None,
             business_calendar: None,
             bindings,
+            intake_acceptors: IntakeAcceptanceRegistry::new(),
+            intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
         }
     }
@@ -465,6 +475,21 @@ impl WosRuntime {
         self.business_calendar = Some(calendar);
         self
     }
+
+    /// Attach host-side intake-acceptance adapters.
+    pub fn with_intake_acceptors(mut self, intake_acceptors: IntakeAcceptanceRegistry) -> Self {
+        self.intake_acceptors = intake_acceptors;
+        self
+    }
+
+    /// Replace the default no-op intake-acceptance policy.
+    pub fn with_intake_policy<P>(mut self, intake_policy: P) -> Self
+    where
+        P: IntakeAcceptancePolicy + 'static,
+    {
+        self.intake_policy = Box::new(intake_policy);
+        self
+    }
 }
 
 #[cfg(test)]
@@ -477,7 +502,14 @@ mod tests {
 
     use crate::DurableRuntime;
     use crate::binding::{CaseMutationBundle, PreparedTask, SubmissionValidation};
-    use crate::store::{InMemoryStore, RuntimeRecord, RuntimeStore, StoreError};
+    use crate::intake::{
+        AutoCreatePublicIntakePolicy, IntakeAcceptanceAdapter, IntakeAcceptanceDecision,
+        IntakeAcceptanceOutcome, IntakeAcceptancePolicy, IntakeAcceptanceRegistry,
+        IntakeAcceptanceRequest, IntakeCaseDefinition, IntakeCaseDisposition, IntakeCaseIntent,
+        IntakeInterpretation, IntakePolicyContext, ManualReviewIntakePolicy,
+        NoopIntakeAcceptancePolicy, PublicIntakeDisabledPolicy,
+    };
+    use crate::store::{InMemoryStore, IntakeRecord, RuntimeRecord, RuntimeStore, StoreError};
     use wos_core::instance::{ActiveTask, ActiveTaskStatus, ValidationOutcome};
     use wos_core::traits::{DocumentResolver, ExternalService, TaskPresenter};
 
@@ -1211,6 +1243,25 @@ mod tests {
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
             self.0.lock().unwrap().save_record(record)
         }
+
+        fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.0.lock().unwrap().create_intake_record(record)
+        }
+
+        fn load_intake_record(
+            &self,
+            binding: &str,
+            intake_id: &str,
+        ) -> Result<IntakeRecord, StoreError> {
+            self.0
+                .lock()
+                .unwrap()
+                .load_intake_record(binding, intake_id)
+        }
+
+        fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.0.lock().unwrap().save_intake_record(record)
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -1396,6 +1447,145 @@ mod tests {
     }
 
     #[derive(Debug, Default)]
+    struct TestIntakeAdapter;
+
+    impl IntakeAcceptanceAdapter for TestIntakeAdapter {
+        fn binding(&self) -> &'static str {
+            "formspec"
+        }
+
+        fn interpret_intake_handoff(
+            &self,
+            request: &IntakeAcceptanceRequest,
+        ) -> Result<IntakeInterpretation, BindingError> {
+            let initiation_mode = request
+                .document
+                .get("initiationMode")
+                .and_then(serde_json::Value::as_str);
+            if initiation_mode == Some("publicIntake") {
+                Ok(IntakeInterpretation {
+                    intake_id: request
+                        .document
+                        .get("handoffId")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("test-intake")
+                        .to_string(),
+                    case_intent: IntakeCaseIntent::RequestGovernedCaseCreation,
+                })
+            } else if let Some(case_ref) = request.governed_case_ref.clone() {
+                Ok(IntakeInterpretation {
+                    intake_id: request
+                        .document
+                        .get("handoffId")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("test-intake")
+                        .to_string(),
+                    case_intent: IntakeCaseIntent::AttachToExistingCase { case_ref },
+                })
+            } else {
+                Ok(IntakeInterpretation {
+                    intake_id: request
+                        .document
+                        .get("handoffId")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("test-intake")
+                        .to_string(),
+                    case_intent: IntakeCaseIntent::RequestGovernedCaseCreation,
+                })
+            }
+        }
+
+        fn finalize_intake_acceptance(
+            &self,
+            request: &IntakeAcceptanceRequest,
+            outcome: &IntakeAcceptanceOutcome,
+        ) -> Result<Vec<ProvenanceRecord>, BindingError> {
+            let case_ref = match outcome {
+                IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
+                    IntakeCaseDisposition::AttachToExistingCase { .. } => return Ok(Vec::new()),
+                    IntakeCaseDisposition::CreateGovernedCase { case_ref, .. } => case_ref.clone(),
+                },
+                IntakeAcceptanceOutcome::Rejected { .. }
+                | IntakeAcceptanceOutcome::Deferred { .. } => return Ok(Vec::new()),
+            };
+
+            Ok(vec![ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
+                record_kind: ProvenanceKind::CaseCreated,
+                timestamp: String::new(),
+                actor_id: request.actor_id.clone(),
+                from_state: None,
+                to_state: None,
+                event: Some("case.created".to_string()),
+                data: Some(serde_json::json!({
+                    "caseRef": case_ref,
+                    "source": "test-intake-adapter"
+                })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
+            }])
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, Default)]
+    struct RejectAllIntakePolicy;
+
+    impl IntakeAcceptancePolicy for RejectAllIntakePolicy {
+        fn evaluate_intake_acceptance(
+            &self,
+            _context: &IntakePolicyContext,
+        ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+            Ok(IntakeAcceptanceDecision::rejected("manualReviewRequired"))
+        }
+    }
+
+    /// Policy that forwards to [`NoopIntakeAcceptancePolicy`] and appends a marker provenance row.
+    #[derive(Debug, Clone, Copy, Default)]
+    struct PolicyEmittingMarkerProvenance;
+
+    impl IntakeAcceptancePolicy for PolicyEmittingMarkerProvenance {
+        fn evaluate_intake_acceptance(
+            &self,
+            context: &IntakePolicyContext,
+        ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+            let mut decision = NoopIntakeAcceptancePolicy.evaluate_intake_acceptance(context)?;
+            decision.provenance.push(ProvenanceRecord {
+                id: ProvenanceRecord::mint_id(),
+                record_kind: ProvenanceKind::NarrativeTierRecorded,
+                timestamp: String::new(),
+                actor_id: None,
+                from_state: None,
+                to_state: None,
+                event: Some("case.intake.policyMarker".to_string()),
+                data: Some(serde_json::json!({ "marker": "policyEmitted" })),
+                audit_layer: None,
+                actor_type: None,
+                lifecycle_state: None,
+                definition_version: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_digest: None,
+                output_digest: None,
+                canonical_event_hash: None,
+                transition_tags: Vec::new(),
+                case_file_snapshot: None,
+                outcome: None,
+            });
+            Ok(decision)
+        }
+    }
+
+    #[derive(Debug, Default)]
     struct FailingStore {
         inner: InMemoryStore,
         fail_on_save_call: usize,
@@ -1409,6 +1599,59 @@ mod tests {
                 fail_on_save_call,
                 save_calls: 0,
             }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct IntakeSaveFailingStore {
+        inner: InMemoryStore,
+        fail_on_save_call: usize,
+        save_calls: usize,
+    }
+
+    impl IntakeSaveFailingStore {
+        fn new(fail_on_save_call: usize) -> Self {
+            Self {
+                inner: InMemoryStore::new(),
+                fail_on_save_call,
+                save_calls: 0,
+            }
+        }
+    }
+
+    impl RuntimeStore for IntakeSaveFailingStore {
+        fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+            self.inner.create_record(record)
+        }
+
+        fn load_record(&self, instance_id: &str) -> Result<RuntimeRecord, StoreError> {
+            self.inner.load_record(instance_id)
+        }
+
+        fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
+            self.inner.save_record(record)
+        }
+
+        fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.create_intake_record(record)
+        }
+
+        fn load_intake_record(
+            &self,
+            binding: &str,
+            intake_id: &str,
+        ) -> Result<IntakeRecord, StoreError> {
+            self.inner.load_intake_record(binding, intake_id)
+        }
+
+        fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.save_calls += 1;
+            if self.save_calls == self.fail_on_save_call {
+                return Err(StoreError::Failed(
+                    "injected intake save failure".to_string(),
+                ));
+            }
+            self.inner.save_intake_record(record)
         }
     }
 
@@ -1427,6 +1670,22 @@ mod tests {
                 return Err(StoreError::Failed("injected save failure".to_string()));
             }
             self.inner.save_record(record)
+        }
+
+        fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.create_intake_record(record)
+        }
+
+        fn load_intake_record(
+            &self,
+            binding: &str,
+            intake_id: &str,
+        ) -> Result<IntakeRecord, StoreError> {
+            self.inner.load_intake_record(binding, intake_id)
+        }
+
+        fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.save_intake_record(record)
         }
     }
 
@@ -1447,6 +1706,22 @@ mod tests {
         fn save_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
             self.inner.save_record(record)
         }
+
+        fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.create_intake_record(record)
+        }
+
+        fn load_intake_record(
+            &self,
+            binding: &str,
+            intake_id: &str,
+        ) -> Result<IntakeRecord, StoreError> {
+            self.inner.load_intake_record(binding, intake_id)
+        }
+
+        fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+            self.inner.save_intake_record(record)
+        }
     }
 
     fn formspec_bindings() -> BindingRegistry {
@@ -1461,9 +1736,18 @@ mod tests {
         bindings
     }
 
-    fn runtime_with_kernel(kernel: KernelDocument) -> WosRuntime {
+    fn intake_acceptors() -> IntakeAcceptanceRegistry {
+        let mut acceptors = IntakeAcceptanceRegistry::new();
+        acceptors.register(TestIntakeAdapter);
+        acceptors
+    }
+
+    fn runtime_with_store<S>(store: S, kernel: KernelDocument) -> WosRuntime
+    where
+        S: RuntimeStore + 'static,
+    {
         WosRuntime::new(
-            InMemoryStore::new(),
+            store,
             TestResolver::with_kernel(kernel),
             RecordingPresenter::default(),
             wos_core::traits::DefaultRuntime::new(),
@@ -1474,6 +1758,47 @@ mod tests {
             },
             formspec_bindings(),
         )
+        .with_intake_acceptors(intake_acceptors())
+    }
+
+    fn runtime_with_kernel(kernel: KernelDocument) -> WosRuntime {
+        runtime_with_store(InMemoryStore::new(), kernel)
+    }
+
+    fn workflow_intake_request(handoff_id: &str, case_ref: &str) -> IntakeAcceptanceRequest {
+        IntakeAcceptanceRequest {
+            document: serde_json::json!({
+                "$formspecIntakeHandoff": "1.0",
+                "handoffId": handoff_id,
+                "initiationMode": "workflowInitiated",
+            }),
+            actor_id: Some("intake-service".to_string()),
+            governed_case_ref: Some(case_ref.to_string()),
+            governed_case_definition: None,
+            initial_case_state: None,
+        }
+    }
+
+    fn public_intake_request(
+        handoff_id: &str,
+        case_ref: &str,
+        definition_url: &str,
+        definition_version: &str,
+    ) -> IntakeAcceptanceRequest {
+        IntakeAcceptanceRequest {
+            document: serde_json::json!({
+                "$formspecIntakeHandoff": "1.0",
+                "handoffId": handoff_id,
+                "initiationMode": "publicIntake",
+            }),
+            actor_id: Some("intake-service".to_string()),
+            governed_case_ref: Some(case_ref.to_string()),
+            governed_case_definition: Some(IntakeCaseDefinition {
+                definition_url: definition_url.to_string(),
+                definition_version: definition_version.to_string(),
+            }),
+            initial_case_state: Some(serde_json::json!({ "source": "publicIntake" })),
+        }
     }
 
     #[test]
@@ -1644,6 +1969,688 @@ mod tests {
         .expect("kernel json");
         let mut runtime = runtime_with_kernel(kernel);
         exercise_all_trait_methods(&mut runtime);
+    }
+
+    #[test]
+    fn accept_intake_handoff_attaches_provenance_to_existing_case() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-dispatch",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        );
+
+        let created = runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "urn:wos:case:case-2026-0042".to_string(),
+                definition_url: "urn:test:intake-dispatch".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create case before attach");
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                workflow_intake_request("ih-attach", "urn:wos:case:case-2026-0042"),
+            )
+            .expect("intake accepted");
+
+        assert_eq!(
+            result.outcome,
+            IntakeAcceptanceOutcome::Accepted {
+                case_disposition: IntakeCaseDisposition::AttachToExistingCase {
+                    case_ref: created.instance_id.clone()
+                }
+            }
+        );
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+        );
+        let provenance = runtime
+            .load_provenance_window(&created.instance_id, 0, 20)
+            .expect("load attached provenance");
+        assert!(
+            provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_intake_policy_provenance_survives_prepare() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-policy-prov",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(PolicyEmittingMarkerProvenance);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "urn:wos:case:case-policy-prov".to_string(),
+                definition_url: "urn:test:intake-policy-prov".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create case");
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                workflow_intake_request("ih-policy-prov", "urn:wos:case:case-policy-prov"),
+            )
+            .expect("intake accepted");
+
+        assert!(
+            result.provenance.iter().any(|record| {
+                record.event.as_deref() == Some("case.intake.policyMarker")
+                    && record.record_kind == ProvenanceKind::NarrativeTierRecorded
+            }),
+            "policy-emitted provenance must survive pending persistence and prepare"
+        );
+        assert!(
+            result
+                .provenance
+                .iter()
+                .any(|record| record.record_kind == ProvenanceKind::IntakeAccepted),
+            "runtime outcome provenance must still be present"
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_creates_case_for_public_intake() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-public-create",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(AutoCreatePublicIntakePolicy);
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-public-create",
+                    "urn:wos:case:case-2026-0050",
+                    "urn:test:intake-public-create",
+                    "1.0.0",
+                ),
+            )
+            .expect("intake decision");
+
+        let created_case_ref = match &result.outcome {
+            IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
+                IntakeCaseDisposition::CreateGovernedCase {
+                    case_ref,
+                    definition,
+                    initial_case_state,
+                } => {
+                    assert_eq!(
+                        definition,
+                        &IntakeCaseDefinition {
+                            definition_url: "urn:test:intake-public-create".to_string(),
+                            definition_version: "1.0.0".to_string(),
+                        }
+                    );
+                    assert_eq!(
+                        initial_case_state,
+                        &Some(serde_json::json!({ "source": "publicIntake" }))
+                    );
+                    assert!(
+                        CaseInstance::is_case_id(case_ref),
+                        "public intake create must return canonical case id"
+                    );
+                    case_ref.clone()
+                }
+                other => panic!("unexpected case disposition: {other:?}"),
+            },
+            other => panic!("unexpected intake outcome: {other:?}"),
+        };
+        let created = runtime
+            .load_instance("urn:wos:case:case-2026-0050")
+            .expect("created intake case by alias");
+        assert_eq!(created.instance_id, created_case_ref);
+        assert_eq!(
+            created.case_state.get("source"),
+            Some(&serde_json::Value::String("publicIntake".to_string()))
+        );
+        let provenance = runtime
+            .load_provenance_window(&created_case_ref, 0, 20)
+            .expect("load create provenance");
+        let intake_accepted = provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+            .expect("intake accepted provenance");
+        assert_eq!(intake_accepted.actor_id.as_deref(), Some("intake-service"));
+        assert_eq!(intake_accepted.actor_type.as_deref(), Some("system"));
+        assert_eq!(intake_accepted.lifecycle_state.as_deref(), Some("open"));
+
+        let case_created = provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::CaseCreated)
+            .expect("case created provenance");
+        assert_eq!(case_created.actor_id.as_deref(), Some("intake-service"));
+        assert_eq!(case_created.actor_type.as_deref(), Some("system"));
+        assert_eq!(case_created.lifecycle_state.as_deref(), Some("open"));
+    }
+
+    #[test]
+    fn accept_intake_handoff_allows_policy_rejection() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-policy-reject",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(RejectAllIntakePolicy);
+
+        runtime
+            .create_instance(CreateInstanceRequest {
+                instance_id: "urn:wos:case:case-2026-0042".to_string(),
+                definition_url: "urn:test:intake-policy-reject".to_string(),
+                definition_version: "1.0.0".to_string(),
+                initial_case_state: None,
+            })
+            .expect("create case before rejection");
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                workflow_intake_request("ih-reject", "urn:wos:case:case-2026-0042"),
+            )
+            .expect("intake decision");
+
+        assert_eq!(
+            result.outcome,
+            IntakeAcceptanceOutcome::Rejected {
+                code: "manualReviewRequired".to_string()
+            }
+        );
+        assert_eq!(result.provenance.len(), 1);
+        assert_eq!(
+            result.provenance[0].record_kind,
+            ProvenanceKind::IntakeRejected
+        );
+    }
+
+    #[test]
+    fn public_intake_disabled_policy_rejects_public_case_creation() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-disabled",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(PublicIntakeDisabledPolicy);
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-disabled",
+                    "urn:wos:case:case-2026-0052",
+                    "urn:test:intake-disabled",
+                    "1.0.0",
+                ),
+            )
+            .expect("disabled policy decision");
+
+        assert_eq!(
+            result.outcome,
+            IntakeAcceptanceOutcome::Rejected {
+                code: "publicIntakeDisabled".to_string()
+            }
+        );
+        assert_eq!(
+            result.provenance[0].record_kind,
+            ProvenanceKind::IntakeRejected
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_replays_existing_decision_by_intake_id() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-replay",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(ManualReviewIntakePolicy);
+
+        let first = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-replay",
+                    "urn:wos:case:case-2026-0051",
+                    "urn:test:intake-replay",
+                    "1.0.0",
+                ),
+            )
+            .expect("first intake decision");
+        let second = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-replay",
+                    "urn:wos:case:case-2026-0051",
+                    "urn:test:intake-replay",
+                    "1.0.0",
+                ),
+            )
+            .expect("replayed intake decision");
+
+        assert_eq!(first.outcome, second.outcome);
+        assert_eq!(first.provenance.len(), second.provenance.len());
+        assert_eq!(first.provenance[0].id, second.provenance[0].id);
+        assert_eq!(
+            first.provenance[0].record_kind,
+            ProvenanceKind::IntakeDeferred
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_rejects_request_mismatch_on_replay() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-replay-conflict",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(ManualReviewIntakePolicy);
+
+        runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-replay-conflict",
+                    "urn:wos:case:case-2026-0053",
+                    "urn:test:intake-replay-conflict",
+                    "1.0.0",
+                ),
+            )
+            .expect("first intake decision");
+
+        let mut actor_changed = public_intake_request(
+            "ih-replay-conflict",
+            "urn:wos:case:case-2026-0053",
+            "urn:test:intake-replay-conflict",
+            "1.0.0",
+        );
+        actor_changed.actor_id = Some("different-intake-service".to_string());
+        let actor_conflict = runtime
+            .accept_intake_handoff("formspec", actor_changed)
+            .expect_err("actor mismatch must conflict");
+        assert!(matches!(actor_conflict, RuntimeError::IntakeConflict(_)));
+
+        let case_ref_conflict = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-replay-conflict",
+                    "urn:wos:case:case-2026-0054",
+                    "urn:test:intake-replay-conflict",
+                    "1.0.0",
+                ),
+            )
+            .expect_err("case metadata mismatch must conflict");
+        assert!(matches!(case_ref_conflict, RuntimeError::IntakeConflict(_)));
+    }
+
+    #[test]
+    fn accept_intake_handoff_replays_after_applied_receipt_save_failure_without_duplicate_provenance()
+     {
+        let mut runtime = runtime_with_store(
+            IntakeSaveFailingStore::new(2),
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-save-failure",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(AutoCreatePublicIntakePolicy);
+
+        let first_error = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-save-failure",
+                    "legacy-intake-case",
+                    "urn:test:intake-save-failure",
+                    "1.0.0",
+                ),
+            )
+            .expect_err("applied intake receipt save should fail once");
+        assert!(matches!(
+            first_error,
+            RuntimeError::Store(StoreError::Failed(_))
+        ));
+
+        let replayed = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-save-failure",
+                    "legacy-intake-case",
+                    "urn:test:intake-save-failure",
+                    "1.0.0",
+                ),
+            )
+            .expect("retry should replay prepared create");
+
+        let created_case_ref = match &replayed.outcome {
+            IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
+                IntakeCaseDisposition::CreateGovernedCase { case_ref, .. } => case_ref.clone(),
+                other => panic!("unexpected case disposition: {other:?}"),
+            },
+            other => panic!("unexpected intake outcome: {other:?}"),
+        };
+
+        let provenance = runtime
+            .load_provenance_window(&created_case_ref, 0, 20)
+            .expect("load created case provenance");
+        assert_eq!(
+            provenance
+                .iter()
+                .filter(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+                .count(),
+            1
+        );
+        assert_eq!(
+            provenance
+                .iter()
+                .filter(|record| record.record_kind == ProvenanceKind::CaseCreated)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_returns_canonical_case_ref_for_legacy_public_intake_id() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-legacy-alias",
+                "version": "1.0.0",
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(AutoCreatePublicIntakePolicy);
+
+        let decision = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-legacy-alias",
+                    "legacy-intake-case-42",
+                    "urn:test:intake-legacy-alias",
+                    "1.0.0",
+                ),
+            )
+            .expect("legacy create must succeed");
+
+        let case_ref = match &decision.outcome {
+            IntakeAcceptanceOutcome::Accepted { case_disposition } => match case_disposition {
+                IntakeCaseDisposition::CreateGovernedCase { case_ref, .. } => case_ref.clone(),
+                other => panic!("unexpected case disposition: {other:?}"),
+            },
+            other => panic!("unexpected intake outcome: {other:?}"),
+        };
+        assert!(
+            CaseInstance::is_case_id(&case_ref),
+            "legacy create must return canonical TypeID, got {case_ref}"
+        );
+        assert_ne!(case_ref, "legacy-intake-case-42");
+
+        let loaded_by_alias = runtime
+            .load_instance("legacy-intake-case-42")
+            .expect("load created case by alias");
+        assert_eq!(loaded_by_alias.instance_id, case_ref);
+
+        let intake_record = decision
+            .provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::IntakeAccepted)
+            .expect("runtime intake accepted provenance");
+        assert_eq!(
+            intake_record
+                .data
+                .as_ref()
+                .and_then(|data| data.get("caseRef"))
+                .and_then(serde_json::Value::as_str),
+            Some(case_ref.as_str())
+        );
+
+        let case_created = decision
+            .provenance
+            .iter()
+            .find(|record| record.record_kind == ProvenanceKind::CaseCreated)
+            .expect("binding case created provenance");
+        assert_eq!(
+            case_created
+                .data
+                .as_ref()
+                .and_then(|data| data.get("caseRef"))
+                .and_then(serde_json::Value::as_str),
+            Some(case_ref.as_str())
+        );
+    }
+
+    #[test]
+    fn rejected_intake_provenance_is_runtime_populated() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-reject-populated",
+                "version": "1.0.0",
+                "actors": [{ "id": "intake-service", "type": "system" }],
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(PublicIntakeDisabledPolicy);
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-reject-populated",
+                    "urn:wos:case:case-2026-0055",
+                    "urn:test:intake-reject-populated",
+                    "1.0.0",
+                ),
+            )
+            .expect("reject decision");
+
+        let record = result
+            .provenance
+            .iter()
+            .find(|entry| entry.record_kind == ProvenanceKind::IntakeRejected)
+            .expect("rejected provenance");
+        assert_eq!(record.actor_id.as_deref(), Some("intake-service"));
+        assert_eq!(record.actor_type.as_deref(), Some("system"));
+        assert_eq!(record.lifecycle_state.as_deref(), Some("open"));
+        assert_eq!(record.audit_layer.as_deref(), Some("facts"));
+        assert_eq!(record.definition_version.as_deref(), Some("1.0.0"));
+        assert!(
+            !record.timestamp.is_empty(),
+            "rejected intake provenance must be stamped"
+        );
+    }
+
+    #[test]
+    fn deferred_intake_provenance_is_runtime_populated() {
+        let mut runtime = runtime_with_kernel(
+            serde_json::from_value(serde_json::json!({
+                "$wosKernel": "1.0",
+                "url": "urn:test:intake-defer-populated",
+                "version": "1.0.0",
+                "actors": [{ "id": "intake-service", "type": "system" }],
+                "lifecycle": {
+                    "initialState": "open",
+                    "states": {
+                        "open": { "type": "atomic" }
+                    }
+                }
+            }))
+            .expect("kernel json"),
+        )
+        .with_intake_policy(ManualReviewIntakePolicy);
+
+        let result = runtime
+            .accept_intake_handoff(
+                "formspec",
+                public_intake_request(
+                    "ih-defer-populated",
+                    "urn:wos:case:case-2026-0056",
+                    "urn:test:intake-defer-populated",
+                    "1.0.0",
+                ),
+            )
+            .expect("defer decision");
+
+        let record = result
+            .provenance
+            .iter()
+            .find(|entry| entry.record_kind == ProvenanceKind::IntakeDeferred)
+            .expect("deferred provenance");
+        assert_eq!(record.actor_id.as_deref(), Some("intake-service"));
+        assert_eq!(record.actor_type.as_deref(), Some("system"));
+        assert_eq!(record.lifecycle_state.as_deref(), Some("open"));
+        assert_eq!(record.audit_layer.as_deref(), Some("facts"));
+        assert_eq!(record.definition_version.as_deref(), Some("1.0.0"));
+        assert!(
+            !record.timestamp.is_empty(),
+            "deferred intake provenance must be stamped"
+        );
+    }
+
+    #[test]
+    fn accept_intake_handoff_rejects_unsupported_binding() {
+        let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
+            "$wosKernel": "1.0",
+            "url": "urn:test:intake-unsupported",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "open",
+                "states": {
+                    "open": { "type": "atomic" }
+                }
+            }
+        }))
+        .expect("kernel json");
+        let mut runtime = WosRuntime::new(
+            InMemoryStore::new(),
+            TestResolver::with_kernel(kernel),
+            RecordingPresenter::default(),
+            wos_core::traits::DefaultRuntime::new(),
+            RecordingService::with_response(serde_json::Value::Null),
+            wos_core::traits::DefaultRuntime::new(),
+            FixedClock {
+                now_ms: 1_710_000_000_000,
+            },
+            formspec_bindings(),
+        );
+
+        let error = runtime
+            .accept_intake_handoff(
+                "unknown",
+                IntakeAcceptanceRequest {
+                    document: serde_json::json!({}),
+                    actor_id: None,
+                    governed_case_ref: None,
+                    governed_case_definition: None,
+                    initial_case_state: None,
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, RuntimeError::UnsupportedBinding(_)));
+        assert!(
+            error
+                .to_string()
+                .contains("intake acceptance binding unsupported")
+        );
     }
 
     #[test]

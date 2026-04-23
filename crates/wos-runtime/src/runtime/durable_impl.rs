@@ -12,6 +12,7 @@ use wos_core::provenance::ProvenanceRecord;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
 use crate::durable::DurableRuntime;
+use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 
 use super::{
     CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
@@ -71,6 +72,14 @@ impl DurableRuntime for WosRuntime {
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError> {
         WosRuntime::submit_task_response(self, task_id, response, actor_id, idempotency_token)
+    }
+
+    fn accept_intake_handoff(
+        &mut self,
+        binding: &str,
+        request: IntakeAcceptanceRequest,
+    ) -> Result<IntakeAcceptanceDecision, RuntimeError> {
+        WosRuntime::accept_intake_handoff(self, binding, request)
     }
 
     fn load_provenance_window(

@@ -11,6 +11,7 @@ pub mod cloudevents;
 pub mod companion;
 pub mod custody;
 mod durable;
+pub mod intake;
 pub mod integration;
 pub mod integration_handlers;
 pub mod milestones;
@@ -30,6 +31,13 @@ pub use custody::{
 };
 #[doc(inline)]
 pub use durable::DurableRuntime;
+pub use intake::{
+    AutoCreatePublicIntakePolicy, IntakeAcceptanceAdapter, IntakeAcceptanceDecision,
+    IntakeAcceptanceOutcome, IntakeAcceptancePolicy, IntakeAcceptanceRegistry,
+    IntakeAcceptanceRequest, IntakeCaseDefinition, IntakeCaseDisposition, IntakeCaseIntent,
+    IntakeInterpretation, IntakePolicyContext, IntakeRecordStatus, ManualReviewIntakePolicy,
+    NoopIntakeAcceptancePolicy, PublicIntakeDisabledPolicy,
+};
 pub use integration::{
     IntegrationBinding, IntegrationBindingKind, IntegrationContractRef, IntegrationProfileDocument,
     TargetWorkflow,
@@ -42,7 +50,7 @@ pub use runtime::{
     stamp_provenance,
 };
 pub use store::{
-    InMemoryStore, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
-    StoreError, TaskArtifact, TaskArtifactKind,
+    InMemoryStore, IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord,
+    RuntimeStore, StoreError, TaskArtifact, TaskArtifactKind,
 };
 pub use wos_core::business_calendar::BusinessCalendarDocument;

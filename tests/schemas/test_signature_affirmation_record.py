@@ -34,6 +34,9 @@ def _record() -> dict:
     return {
         "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
         "recordKind": "signatureAffirmation",
+        "timestamp": "2026-04-22T14:30:00Z",
+        "auditLayer": "facts",
+        "definitionVersion": "1.0.0",
         "data": {
             "signerId": "applicant",
             "roleId": "applicantSigner",

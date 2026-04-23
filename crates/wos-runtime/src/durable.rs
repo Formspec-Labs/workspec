@@ -10,6 +10,7 @@ use wos_core::instance::{CaseInstance, PendingEvent};
 use wos_core::provenance::ProvenanceRecord;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput, CustodyAppendReceipt};
+use crate::intake::{IntakeAcceptanceDecision, IntakeAcceptanceRequest};
 use crate::runtime::{
     CreateInstanceRequest, DrainOnceResult, PersistDraftResult, RuntimeError, TaskSubmissionResult,
 };
@@ -90,6 +91,17 @@ pub trait DurableRuntime {
         actor_id: &str,
         idempotency_token: Option<&str>,
     ) -> Result<TaskSubmissionResult, RuntimeError>;
+
+    /// Accepts a binding-native intake handoff through the host-side intake seam.
+    ///
+    /// # Errors
+    /// Returns an error when the binding is unsupported or the adapter rejects
+    /// the intake handoff.
+    fn accept_intake_handoff(
+        &mut self,
+        binding: &str,
+        request: IntakeAcceptanceRequest,
+    ) -> Result<IntakeAcceptanceDecision, RuntimeError>;
 
     /// Loads an append-only provenance window.
     ///

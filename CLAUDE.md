@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working on the WOS (Workflow Orchestration Standard) spec — the **governance layer** of the three-spec stack.
 
+## HIGH PRIORITY — Writing backlog / TODO / task items
+
+**Every backlog entry, TODO, or task description MUST carry its own context.** A reader (human or agent) opening the item cold — no surrounding conversation, no memory of the session that produced it — must know *what the work is*, *why it matters*, and *what "done" looks like*, from the words on the page alone.
+
+Write dense, not verbose. The model is a poem or a well-contextualized meme: few words, heavy payload, still easy to read. Every sentence pulls weight — if a phrase can be cut without losing meaning, cut it; if a phrase that looks redundant is actually the anchor that makes the rest make sense, keep it. No orphan pronouns, no "see above", no "the thing we discussed" — name the thing.
+
+**The test:** if this item sat untouched for six weeks and a different agent picked it up, could they act on it without asking a clarifying question? If no, rewrite until yes.
+
+Applies to `TODO.md`, `T*-TODO.md`, plan files in `thoughts/plans/`, ADR follow-ups, lint-rule backlog entries, conformance-fixture stubs, and any inline `// TODO` comments that escape a single session.
+
 ## Project Overview
 
 WOS is the governance layer between **Formspec** (intake) and **Trellis** (integrity). It is a JSON-native specification for sensitive workflows — benefits adjudication, permit reviews, fraud investigations, any process where a decision affects someone's rights. It defines what protections apply, what constraints bind AI agents, what the audit trail must contain, and what the reasoning was behind each determination.
@@ -64,7 +74,7 @@ From the vision model:
 |---|---|---|
 | Form fields, FEL, validation, response shape | Intake | **Formspec** |
 | Canonical response (Formspec → WOS) | Seam 1 | Formspec declares; WOS consumes |
-| Governance coprocessor (WOS ↔ Formspec prefill/validate) | Seam 2 | WOS + Formspec jointly |
+| Governance coprocessor (WOS ↔ Formspec prefill/validate + intake handoff) | Seam 2 | WOS + Formspec jointly |
 | Lifecycle, transitions, actors, case data | Governance — Kernel | **WOS** |
 | Due process, review protocols, deontic rules, provenance, signature workflow | Governance — L1/L2/L3 | **WOS** |
 | Governance custody hook (WOS → Trellis) | Seam 5 | **WOS** declares the record; Trellis anchors |
@@ -74,6 +84,8 @@ From the vision model:
 | Merkle provenance chains, SCITT alignment, Federation Profile | Integrity | **Trellis** |
 
 **Trellis-boundary check (first heuristic):** is the question about cryptographic integrity, content-addressed storage, signed envelopes, checkpoint seals, export bundles, or federation/transparency logs? If yes — Trellis concern. Don't invent WOS-side primitives. WOS emits `SignatureAffirmation` and other provenance records; Trellis anchors them through `custodyHook`.
+
+**Case initiation rule:** WOS owns governed case identity and `case.created`. Formspec may start an intake session and hand off validated public intake, but it does not emit the governed case boundary. Support both workflow-initiated and public-intake-initiated routes via the accepted `IntakeHandoff` contract in [ADR 0073](../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md); the reference parser/classifier lives in `crates/wos-formspec-binding`, and WOS provenance has a factual `caseCreated` constructor with `event = "case.created"`.
 
 **Signature shortcut rule:** product shortcuts may exist only as workflow-lite paths over the same WOS `SignatureAffirmation` semantics and Trellis custody/export path. Do not create a second meaning of "signed" in product code, intake-only code, or exporter glue.
 
@@ -96,7 +108,7 @@ WOS has one required layer and three optional ones. Cross-cutting profiles and c
   - **`wos-core`** — typed models, lifecycle evaluation, deontic rules, provenance, contract ordering. Semantics library.
   - **`wos-lint`** — static analysis; 116 rules across three tiers, all with test witnesses. See [`LINT-MATRIX.md`](LINT-MATRIX.md).
   - **`wos-conformance`** — dynamic scenario runner; JSON test fixtures drive the runtime and assert correct behavior.
-  - **`wos-runtime`** — orchestration layer; persistence, queues, simulated time, milestone evaluation. The `DurableRuntime` trait extracts below the center-vs-adapter line; Restate, Temporal, and other engines are adapter choices unless a recorded spike and owner decision close the fork.
+  - **`wos-runtime`** — orchestration layer; persistence, queues, simulated time, milestone evaluation. The `DurableRuntime` trait extracts below the center-vs-adapter line; Restate is the initial default reference adapter, while Temporal and other engines remain replaceable adapter choices behind the same trait.
   - **`wos-formspec-binding`** — Formspec coprocessor; prefill, response validation, mapping form data into case state. Seam 2 implementation.
   - **`wos-export`** — exporter; provenance → Trellis `custodyHook` records.
   - **`wos-authoring`**, **`wos-mcp`**, **`wos-synth-*`** — MVP authoring/tooling surfaces.
@@ -112,7 +124,7 @@ WOS has one required layer and three optional ones. Cross-cutting profiles and c
 
 ### Logic ownership — Rust is the spec authority
 
-WOS business logic lives in Rust crates. The `wos-core` crate is the semantics library; `wos-runtime` is the in-memory durable-execution adapter and conformance oracle; production adapters (Restate, Temporal, trigger-gated Camunda / Step Functions, or another engine) sit below the `DurableRuntime` trait. Do NOT add spec behavior in a scripting layer when it belongs in the Rust center; extend `wos-core` and expose it through the trait.
+WOS business logic lives in Rust crates. The `wos-core` crate is the semantics library; `wos-runtime` is the in-memory durable-execution adapter and conformance oracle; Restate is the initial default reference adapter below the `DurableRuntime` trait. Temporal, trigger-gated Camunda / Step Functions, or another engine may implement the same trait later. Do NOT add spec behavior in a scripting layer when it belongs in the Rust center; extend `wos-core` and expose it through the trait.
 
 ### FEL reuse
 
@@ -126,7 +138,7 @@ Provenance records are tiered (`ProvenanceKind` tier-typing, WOS-T1 closed). Eve
 
 - **Center:** `wos-core` + `wos-runtime` (semantics + in-memory oracle).
 - **Trait:** `DurableRuntime` (below runtime; the line between spec-authoritative semantics and adapter-tier orchestration).
-- **Adapters:** in-memory (dev/test + conformance oracle), Restate or Temporal as production SaaS runtime after spike evidence and owner decision, Camunda / Step Functions (trigger-gated).
+- **Adapters:** in-memory (dev/test + conformance oracle), Restate (initial default reference adapter), Temporal (alternate/future), Camunda / Step Functions (trigger-gated).
 
 New runtime capabilities MUST be implementable in the in-memory adapter AND the production adapter; conformance fixtures pass against both. Three-way agreement (spec + reference + production adapter) is the verification posture.
 
@@ -177,7 +189,7 @@ Current 1.0 scope, active uncertainties, and trigger-gated items are canonically
 
 Highlights (see vision model for full list):
 
-- **Must close:** Kernel closure (#20, #F3b §10.3 Tasks 1/2/4/5, #22a provenance tier-typing **closed**, cross-reference shape ADR); §4.5 structural merges (owner decision pending); durable-execution trait plus one production adapter selected by recorded spike/owner decision; `custodyHook` shape (**WOS-T1 closed**); Signature Profile (**WOS-T4 active**); every normative MUST has a passing Tested fixture.
+- **Must close:** Kernel closure (#20, #F3b §10.3 Tasks 1/2/4/5, #22a provenance tier-typing **closed**, cross-reference shape ADR); §4.5 structural merges (owner decision pending); durable-execution trait plus Restate as the initial default reference adapter; `custodyHook` shape (**WOS-T1 closed**); Signature Profile (**WOS-T4 active**); every normative MUST has a passing Tested fixture.
 - **Trigger-gated:** additional engine adapters (Camunda, Step Functions), SCXML interop, additional statutory-deadline profiles beyond the shared stack clock contract.
 - **NOT WOS scope (Trellis territory):** Merkle provenance chains, full SCITT strictness, Federation Profile, checkpoint seals, transparency-log submission, certificate-of-completion export bundle format.
 
