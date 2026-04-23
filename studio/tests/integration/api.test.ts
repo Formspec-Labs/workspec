@@ -127,7 +127,10 @@ describe('real server — kernel validation endpoint', () => {
       lifecycle: {
         initialState: 'start',
         states: {
-          start: { type: 'atomic', transitions: [{ event: 'go', target: 'done' }] },
+          start: {
+            type: 'atomic',
+            transitions: [{ event: { kind: 'message', name: 'go' }, target: 'done' }],
+          },
           done: { type: 'final' },
         },
       },

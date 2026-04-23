@@ -1,5 +1,41 @@
 import type { WOSKernelDocument, State, Transition, Action as WosAction, Region } from '../types/wos/kernel';
 
+/**
+ * Prefix for transition triggers on designer connections. The suffix is JSON
+ * encoding a facts-tier `Transition.event` object so round-trips preserve
+ * message vs signal vs timer/condition/error shapes (Kernel §4.5–§4.10).
+ */
+const DESIGNER_EVENT_TRIGGER_PREFIX = '__wos_te_v1:';
+
+/** Wire value for transitions with no `event` (guard-only / continuous rescan). */
+const DESIGNER_NO_EVENT_TRIGGER = '__wos_no_event__';
+
+/** Serialize `Transition.event` for `WorkflowConnection.trigger` (string wire). */
+function transitionEventToTriggerString(event: Transition['event'] | undefined): string {
+  if (event === undefined) return DESIGNER_NO_EVENT_TRIGGER;
+  if (typeof event === 'string') {
+    const legacy = { kind: 'message' as const, name: event };
+    return `${DESIGNER_EVENT_TRIGGER_PREFIX}${JSON.stringify(legacy)}`;
+  }
+  return `${DESIGNER_EVENT_TRIGGER_PREFIX}${JSON.stringify(event)}`;
+}
+
+/** Inverse of {@link transitionEventToTriggerString} with legacy plain-name fallbacks. */
+function triggerStringToTransitionEvent(trigger: string): Transition['event'] | undefined {
+  if (trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
+  if (trigger.startsWith(DESIGNER_EVENT_TRIGGER_PREFIX)) {
+    return JSON.parse(trigger.slice(DESIGNER_EVENT_TRIGGER_PREFIX.length)) as Transition['event'];
+  }
+  if (trigger === '$join' || trigger === '$compensation.complete' || trigger.startsWith('$')) {
+    return { kind: 'signal', name: trigger, scope: 'instance' };
+  }
+  return { kind: 'message', name: trigger };
+}
+
+function defaultSyntheticTrigger(from: string, to: string): string {
+  return transitionEventToTriggerString({ kind: 'message', name: `${from}_to_${to}` });
+}
+
 export interface WorkflowStage {
   id: string;
   name: string;
@@ -159,7 +195,7 @@ export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerRes
       from,
       to: targetId,
       condition: transition.guard,
-      trigger: transition.event,
+      trigger: transitionEventToTriggerString(transition.event),
     });
   }
 
@@ -266,9 +302,11 @@ function buildStateFromStage(stage: WorkflowStage, connections: WorkflowConnecti
   const transitions: Transition[] = connections
     .filter(c => c.from === stage.id)
     .map(c => {
+      const rawTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
+      const ev = triggerStringToTransitionEvent(rawTrigger);
       const t: Transition = {
-        event: c.trigger ?? `${c.from}_to_${c.to}`,
         target: scopeLocalTarget(c.from, c.to),
+        ...(ev !== undefined ? { event: ev } : {}),
       };
       if (c.condition) t.guard = c.condition;
       return t;
@@ -364,12 +402,6 @@ function overlayDesignerEdits(original: State, stage: WorkflowStage, connections
   // verbatim (including descriptions, compensating actions, extensions).
   // Otherwise rebuild from connections — the user has explicitly edited them.
   const outgoing = connections.filter(c => c.from === stage.id);
-  const originalResolved: { event: string; resolvedTarget: string | null; transition: Transition }[] =
-    (original.transitions ?? []).map(t => ({
-      event: t.event,
-      resolvedTarget: null,
-      transition: t,
-    }));
 
   // We can only compare resolved targets if we have a topology context. In
   // overlay mode we match against the connection's `from` id to resolve the
@@ -380,9 +412,11 @@ function overlayDesignerEdits(original: State, stage: WorkflowStage, connections
     else delete merged.transitions;
   } else {
     const rebuilt = outgoing.map(c => {
+      const rawTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
+      const ev = triggerStringToTransitionEvent(rawTrigger);
       const t: Transition = {
-        event: c.trigger ?? `${c.from}_to_${c.to}`,
         target: scopeLocalTarget(c.from, c.to),
+        ...(ev !== undefined ? { event: ev } : {}),
       };
       if (c.condition) t.guard = c.condition;
       return t;
@@ -407,15 +441,16 @@ function compareConnectionSet(
 ): boolean {
   if (outgoing.length !== originalTransitions.length) return false;
   const originalKeys = new Set(
-    originalTransitions.map(t => `${t.event}::${t.target}`),
+    originalTransitions.map(t => `${transitionEventToTriggerString(t.event)}::${t.target}`),
   );
   for (const c of outgoing) {
     const localTarget = scopeLocalTarget(c.from, c.to);
-    const key = `${c.trigger ?? `${c.from}_to_${c.to}`}::${localTarget}`;
+    const wireTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
+    const key = `${wireTrigger}::${localTarget}`;
     if (!originalKeys.has(key)) return false;
     // Also verify guard equivalence when present.
     const matching = originalTransitions.find(t =>
-      t.event === (c.trigger ?? `${c.from}_to_${c.to}`) && t.target === localTarget,
+      transitionEventToTriggerString(t.event) === wireTrigger && t.target === localTarget,
     );
     if (matching && (matching.guard ?? undefined) !== (c.condition ?? undefined)) return false;
   }

@@ -18,6 +18,16 @@ function stripUndefined<T>(value: T): T {
   return value;
 }
 
+/** Typed message event for kernel transitions (Kernel §4.5). */
+function msg(name: string) {
+  return { kind: 'message' as const, name };
+}
+
+/** Typed parallel-completion signal (Kernel §4.8). */
+function joinSignal() {
+  return { kind: 'signal' as const, name: '$join' as const, scope: 'instance' as const };
+}
+
 function makeKernel(states: WOSKernelDocument['lifecycle']['states'], initialState?: string): WOSKernelDocument {
   const firstKey = initialState ?? Object.keys(states)[0] ?? 'start';
   return {
@@ -63,8 +73,8 @@ function getState(kernel: WOSKernelDocument, path: string[]): State | undefined 
 describe('KernelToDesigner round-trip', () => {
   it('round-trips a flat kernel (atomic states only) and validates against the schema', () => {
     const kernel = makeKernel({
-      intake: { type: 'atomic', transitions: [{ event: 'submit', target: 'review' }] },
-      review: { type: 'atomic', transitions: [{ event: 'approve', target: 'done' }] },
+      intake: { type: 'atomic', transitions: [{ event: msg('submit'), target: 'review' }] },
+      review: { type: 'atomic', transitions: [{ event: msg('approve'), target: 'done' }] },
       done: { type: 'final' },
     }, 'intake');
 
@@ -77,13 +87,13 @@ describe('KernelToDesigner round-trip', () => {
 
   it('preserves compound initialState, transitions, and substate shape through round-trip', () => {
     const kernel = makeKernel({
-      intake: { type: 'atomic', transitions: [{ event: 'submit', target: 'review' }] },
+      intake: { type: 'atomic', transitions: [{ event: msg('submit'), target: 'review' }] },
       review: {
         type: 'compound',
         initialState: 'gathering',
         states: {
-          gathering: { type: 'atomic', transitions: [{ event: 'ready', target: 'deliberating' }] },
-          deliberating: { type: 'atomic', transitions: [{ event: 'decide', target: 'done' }] },
+          gathering: { type: 'atomic', transitions: [{ event: msg('ready'), target: 'deliberating' }] },
+          deliberating: { type: 'atomic', transitions: [{ event: msg('decide'), target: 'done' }] },
         },
       },
       done: { type: 'final' },
@@ -98,29 +108,29 @@ describe('KernelToDesigner round-trip', () => {
 
     const gathering = review.states?.gathering;
     const deliberating = review.states?.deliberating;
-    expect(gathering?.transitions).toEqual([{ event: 'ready', target: 'deliberating' }]);
-    expect(deliberating?.transitions).toEqual([{ event: 'decide', target: 'done' }]);
+    expect(gathering?.transitions).toEqual([{ event: msg('ready'), target: 'deliberating' }]);
+    expect(deliberating?.transitions).toEqual([{ event: msg('decide'), target: 'done' }]);
 
     expect(validateKernelDocument(roundTripped).isValid).toBe(true);
   });
 
   it('preserves parallel regions, cancellationPolicy, and region-local transitions', () => {
     const kernel = makeKernel({
-      intake: { type: 'atomic', transitions: [{ event: 'submit', target: 'parallelReview' }] },
+      intake: { type: 'atomic', transitions: [{ event: msg('submit'), target: 'parallelReview' }] },
       parallelReview: {
         type: 'parallel',
         cancellationPolicy: 'wait-all',
         regions: {
           pathA: {
             initialState: 'stepA1',
-            states: { stepA1: { type: 'atomic', transitions: [{ event: 'doneA', target: 'stepADone' }] }, stepADone: { type: 'final' } },
+            states: { stepA1: { type: 'atomic', transitions: [{ event: msg('doneA'), target: 'stepADone' }] }, stepADone: { type: 'final' } },
           },
           pathB: {
             initialState: 'stepB1',
-            states: { stepB1: { type: 'atomic', transitions: [{ event: 'doneB', target: 'stepBDone' }] }, stepBDone: { type: 'final' } },
+            states: { stepB1: { type: 'atomic', transitions: [{ event: msg('doneB'), target: 'stepBDone' }] }, stepBDone: { type: 'final' } },
           },
         },
-        transitions: [{ event: '$join', target: 'done' }],
+        transitions: [{ event: joinSignal(), target: 'done' }],
       },
       done: { type: 'final' },
     }, 'intake');
@@ -135,13 +145,13 @@ describe('KernelToDesigner round-trip', () => {
 
     // Region-local transitions must survive verbatim.
     expect(parallel.regions?.pathA.states.stepA1.transitions).toEqual([
-      { event: 'doneA', target: 'stepADone' },
+      { event: msg('doneA'), target: 'stepADone' },
     ]);
     expect(parallel.regions?.pathB.states.stepB1.transitions).toEqual([
-      { event: 'doneB', target: 'stepBDone' },
+      { event: msg('doneB'), target: 'stepBDone' },
     ]);
     // The outer parallel-state transition (`$join`) is preserved.
-    expect(parallel.transitions).toEqual([{ event: '$join', target: 'done' }]);
+    expect(parallel.transitions).toEqual([{ event: joinSignal(), target: 'done' }]);
 
     expect(validateKernelDocument(roundTripped).isValid).toBe(true);
   });
