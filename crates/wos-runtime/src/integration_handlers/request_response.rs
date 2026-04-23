@@ -598,7 +598,7 @@ fn resolve_slice_bound(bound: Option<i64>, len: i64, default_value: i64) -> i64 
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum JsonPathSegment {
+pub(crate) enum JsonPathSegment {
     Key(String),
     Index(usize),
     Wildcard,
