@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use wos_synth_core::{synthesize, DirectToolContext, Layer, Prompter, SynthOutcome, SynthTrace};
+use wos_synth_core::{DirectToolContext, Layer, Prompter, SynthOutcome, SynthTrace, synthesize};
 
 #[derive(Parser, Debug)]
 #[command(name = "wos-synth", version, about = "WOS LLM synthesis loop")]

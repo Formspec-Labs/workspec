@@ -22,7 +22,7 @@ pub mod trace;
 pub use errors::SynthError;
 pub use prompter::{CacheAnchor, Completion, Prompter, PrompterError};
 pub use prompts::Layer;
-pub use synth_loop::{synthesize, SynthOutcome};
+pub use synth_loop::{SynthOutcome, synthesize};
 pub use tool_context::{
     ConformanceVerdict, DirectToolContext, LintFinding, Severity, ToolContext, ToolError,
 };

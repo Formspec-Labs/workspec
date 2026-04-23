@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 
 use wos_core::{
-    model::kernel::{Actor, ContractReference, Milestone, State, Transition, TransitionEvent},
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
+    model::kernel::{Actor, ContractReference, Milestone, State, Transition, TransitionEvent},
 };
 
 use crate::{

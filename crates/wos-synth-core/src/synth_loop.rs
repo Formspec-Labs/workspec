@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::SynthError;
 use crate::prompter::{Completion, Prompter};
-use crate::prompts::{build_generate_prompt, build_repair_prompt, Layer};
+use crate::prompts::{Layer, build_generate_prompt, build_repair_prompt};
 use crate::tool_context::{LintFinding, Severity, ToolContext};
 use crate::trace::{IterationRecord, SynthTrace};
 
