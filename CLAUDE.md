@@ -20,7 +20,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 
 For public-facing stack framing, see [`../STACK.md`](../STACK.md) — lookup-only.
 
-**Conflict resolution:** owner signals > these docs > this CLAUDE.md > parent CLAUDE.md > generic defaults. Update the doc when it conflicts with owner signals.
+**Conflict resolution:** see [`../.claude/operating-mode.md`](../.claude/operating-mode.md).
 
 ## Identity
 
