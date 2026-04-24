@@ -24,7 +24,8 @@ CREATE INDEX idx_event_queue_instance ON event_queue(instance_id);
 
 -- Task table denormalises wos-runtime's task artifacts for SQL queryability.
 -- The authoritative store is still RuntimeRecord.artifacts; this mirror is
--- written by SocketIoTaskPresenter.
+-- intended for a task presenter / sync path (the bundled reference presenter
+-- emits Socket.IO only and does not write here yet).
 CREATE TABLE tasks (
     task_id          TEXT PRIMARY KEY,
     instance_id      TEXT NOT NULL,

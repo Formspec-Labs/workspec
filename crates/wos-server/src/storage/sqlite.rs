@@ -7,8 +7,8 @@ use std::str::FromStr;
 
 use super::{
     AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator,
-    InstanceQuery, InstanceRow, KernelRow, Page, ProvenanceRow, SessionRow, Storage,
-    StorageError, StorageResult, UserRow,
+    InstanceQuery, InstanceRow, IntakeRecordRow, KernelRow, Page, ProvenanceRow, SessionRow,
+    Storage, StorageError, StorageResult, UserRow, LIST_INSTANCES_PAGE_SIZE_MAX,
 };
 
 pub struct SqliteStorage {
@@ -123,6 +123,17 @@ fn map_inbound_event(r: &SqliteRow) -> StorageResult<InboundCloudEventRow> {
     })
 }
 
+fn map_intake_record(r: &SqliteRow) -> StorageResult<IntakeRecordRow> {
+    Ok(IntakeRecordRow {
+        binding: r.try_get("binding")?,
+        intake_id: r.try_get("intake_id")?,
+        status: r.try_get("status")?,
+        record_json: serde_json::from_str(&r.try_get::<String, _>("record_json")?)?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
+    })
+}
+
 fn map_user(r: &SqliteRow) -> StorageResult<UserRow> {
     Ok(UserRow {
         id: r.try_get("id")?,
@@ -131,6 +142,7 @@ fn map_user(r: &SqliteRow) -> StorageResult<UserRow> {
         role: r.try_get("role")?,
         password_hash: r.try_get("password_hash")?,
         avatar: r.try_get("avatar")?,
+        auth_epoch: r.try_get("auth_epoch")?,
         created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
     })
 }
@@ -224,25 +236,31 @@ impl Storage for SqliteStorage {
 
     async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>> {
         let page = q.page.max(1);
-        let page_size = q.page_size.clamp(1, 200);
+        let page_size = q.page_size.clamp(1, LIST_INSTANCES_PAGE_SIZE_MAX);
         let offset = ((page - 1) * page_size) as i64;
         let limit = page_size as i64;
 
         let mut where_clauses: Vec<String> = Vec::new();
         if let Some(xs) = &q.status {
-            where_clauses.push(format!("status IN ({})", vec!["?"; xs.len()].join(",")));
+            if !xs.is_empty() {
+                where_clauses.push(format!("status IN ({})", vec!["?"; xs.len()].join(",")));
+            }
         }
         if let Some(xs) = &q.impact_level {
-            where_clauses.push(format!(
-                "impact_level IN ({})",
-                vec!["?"; xs.len()].join(",")
-            ));
+            if !xs.is_empty() {
+                where_clauses.push(format!(
+                    "impact_level IN ({})",
+                    vec!["?"; xs.len()].join(",")
+                ));
+            }
         }
         if let Some(xs) = &q.definition_url {
-            where_clauses.push(format!(
-                "definition_url IN ({})",
-                vec!["?"; xs.len()].join(",")
-            ));
+            if !xs.is_empty() {
+                where_clauses.push(format!(
+                    "definition_url IN ({})",
+                    vec!["?"; xs.len()].join(",")
+                ));
+            }
         }
         let where_sql = if where_clauses.is_empty() {
             String::new()
@@ -259,9 +277,11 @@ impl Storage for SqliteStorage {
         let mut list_q = sqlx::query(&list_sql);
         for bucket in [&q.status, &q.impact_level, &q.definition_url].into_iter() {
             if let Some(xs) = bucket {
-                for x in xs {
-                    count_q = count_q.bind(x.clone());
-                    list_q = list_q.bind(x.clone());
+                if !xs.is_empty() {
+                    for x in xs {
+                        count_q = count_q.bind(x.clone());
+                        list_q = list_q.bind(x.clone());
+                    }
                 }
             }
         }
@@ -530,10 +550,10 @@ impl Storage for SqliteStorage {
     async fn insert_inbound_cloud_event(
         &self,
         row: &InboundCloudEventRow,
-    ) -> StorageResult<()> {
+    ) -> StorageResult<bool> {
         let payload = serde_json::to_string(&row.payload_json)?;
-        sqlx::query(
-            "INSERT INTO integration_inbound (cloud_event_id, instance_id, binding, received_at, payload_json)
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO integration_inbound (cloud_event_id, instance_id, binding, received_at, payload_json)
              VALUES (?, ?, ?, ?, ?)",
         )
         .bind(&row.cloud_event_id)
@@ -543,7 +563,67 @@ impl Storage for SqliteStorage {
         .bind(&payload)
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn get_intake_record(
+        &self,
+        binding: &str,
+        intake_id: &str,
+    ) -> StorageResult<Option<IntakeRecordRow>> {
+        let row = sqlx::query(
+            "SELECT * FROM intake_records WHERE binding = ? AND intake_id = ?",
+        )
+        .bind(binding)
+        .bind(intake_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.as_ref().map(map_intake_record).transpose()
+    }
+
+    async fn insert_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()> {
+        let record_json = serde_json::to_string(&row.record_json)?;
+        let result = sqlx::query(
+            "INSERT INTO intake_records (binding, intake_id, status, record_json, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&row.binding)
+        .bind(&row.intake_id)
+        .bind(&row.status)
+        .bind(&record_json)
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(sqlx::Error::Database(db)) if db.is_unique_violation() => Err(
+                StorageError::Conflict(format!("intake:{}:{}", row.binding, row.intake_id)),
+            ),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn update_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()> {
+        let record_json = serde_json::to_string(&row.record_json)?;
+        let affected = sqlx::query(
+            "UPDATE intake_records
+             SET status = ?, record_json = ?, updated_at = ?
+             WHERE binding = ? AND intake_id = ?",
+        )
+        .bind(&row.status)
+        .bind(&record_json)
+        .bind(row.updated_at)
+        .bind(&row.binding)
+        .bind(&row.intake_id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        if affected == 0 {
+            Err(StorageError::NotFound)
+        } else {
+            Ok(())
+        }
     }
 
     async fn get_user_by_email(&self, email: &str) -> StorageResult<Option<UserRow>> {
@@ -564,13 +644,12 @@ impl Storage for SqliteStorage {
 
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()> {
         sqlx::query(
-            "INSERT INTO users (id, email, name, role, password_hash, avatar, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO users (id, email, name, role, password_hash, avatar, auth_epoch, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                email = excluded.email,
                name = excluded.name,
                role = excluded.role,
-               password_hash = excluded.password_hash,
                avatar = excluded.avatar",
         )
         .bind(&row.id)
@@ -579,9 +658,45 @@ impl Storage for SqliteStorage {
         .bind(&row.role)
         .bind(&row.password_hash)
         .bind(&row.avatar)
+        .bind(row.auth_epoch)
         .bind(row.created_at)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    async fn bump_user_auth_epoch(&self, user_id: &str) -> StorageResult<()> {
+        sqlx::query("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn set_user_password_hash(
+        &self,
+        user_id: &str,
+        password_hash: &str,
+    ) -> StorageResult<()> {
+        let mut tx = self.pool.begin().await?;
+        let n = sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
+            .bind(password_hash)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        if n == 0 {
+            return Err(StorageError::NotFound);
+        }
+        sqlx::query("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id = ?")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("UPDATE sessions SET revoked = 1 WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -607,6 +722,14 @@ impl Storage for SqliteStorage {
     async fn revoke_session(&self, jti: &str) -> StorageResult<()> {
         sqlx::query("UPDATE sessions SET revoked = 1 WHERE jti = ?")
             .bind(jti)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()> {
+        sqlx::query("UPDATE sessions SET revoked = 1 WHERE user_id = ?")
+            .bind(user_id)
             .execute(&self.pool)
             .await?;
         Ok(())

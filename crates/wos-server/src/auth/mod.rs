@@ -70,12 +70,19 @@ pub struct TokenPair {
 pub struct AuthContext {
     pub user: AuthUser,
     pub jti: String,
+    /// Raw access JWT from the `Authorization: Bearer` header, set only by
+    /// [`crate::auth::middleware::attach_auth`] so [`AuthProvider::logout`] can
+    /// decode and revoke the correct session.
+    pub access_token: Option<String>,
 }
 
 #[async_trait]
 pub trait AuthProvider: Send + Sync + 'static {
     async fn login(&self, email: &str, password: &str) -> AuthResult<TokenPair>;
     async fn refresh(&self, refresh_token: &str) -> AuthResult<TokenPair>;
+    /// End the caller's session. For JWT, implementations should invalidate
+    /// refresh as well as access (for example by revoking all session rows
+    /// for the user) so a stolen refresh token cannot continue after logout.
     async fn logout(&self, access_token: &str) -> AuthResult<()>;
     async fn verify(&self, access_token: &str) -> AuthResult<AuthContext>;
 }

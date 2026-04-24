@@ -4,6 +4,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use crate::AppState;
+use crate::auth::{AuthCtx, require_role};
 use crate::domain::{BundleView, KernelSummaryView, ValidationResultView};
 use crate::error::{ApiError, ApiResult};
 use crate::services::bundle_service::validate_kernel;
@@ -47,8 +48,10 @@ async fn get_kernel(
 async fn put_kernel(
     State(s): State<AppState>,
     Path(url): Path<String>,
+    AuthCtx(ctx): AuthCtx,
     Json(doc): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    require_role(&ctx, "Supervisor")?;
     let result = validate_kernel(&doc);
     if !result.is_valid {
         return Err(ApiError::Validation {

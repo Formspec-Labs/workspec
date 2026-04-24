@@ -16,6 +16,12 @@ struct Claims {
     role: String,
     name: String,
     email: String,
+    /// Omitted in tokens issued before this field existed.
+    #[serde(default)]
+    avatar: Option<String>,
+    /// Must match `users.auth_epoch`; bumped on logout.
+    #[serde(default)]
+    auth_epoch: i64,
     exp: i64,
     iat: i64,
     /// `access` or `refresh`.
@@ -46,7 +52,14 @@ impl JwtAuth {
         }
     }
 
-    fn issue(&self, user: &AuthUser, kind: &str, ttl: Duration, jti: &str) -> AuthResult<(String, chrono::DateTime<Utc>)> {
+    fn issue(
+        &self,
+        user: &AuthUser,
+        kind: &str,
+        ttl: Duration,
+        jti: &str,
+        auth_epoch: i64,
+    ) -> AuthResult<(String, chrono::DateTime<Utc>)> {
         let now = Utc::now();
         let exp = now + ttl;
         let claims = Claims {
@@ -55,6 +68,8 @@ impl JwtAuth {
             role: user.role.clone(),
             name: user.name.clone(),
             email: user.email.clone(),
+            avatar: user.avatar.clone(),
+            auth_epoch,
             exp: exp.timestamp(),
             iat: now.timestamp(),
             kind: kind.to_string(),
@@ -95,12 +110,13 @@ impl AuthProvider for JwtAuth {
             avatar: user_row.avatar.clone(),
         };
 
+        let epoch = user_row.auth_epoch;
         let access_jti = Uuid::new_v4().to_string();
         let refresh_jti = Uuid::new_v4().to_string();
         let (access_token, access_exp) =
-            self.issue(&user, "access", self.access_ttl, &access_jti)?;
+            self.issue(&user, "access", self.access_ttl, &access_jti, epoch)?;
         let (refresh_token, refresh_exp) =
-            self.issue(&user, "refresh", self.refresh_ttl, &refresh_jti)?;
+            self.issue(&user, "refresh", self.refresh_ttl, &refresh_jti, epoch)?;
 
         for (jti, exp) in [(&access_jti, access_exp), (&refresh_jti, refresh_exp)] {
             self.storage
@@ -127,17 +143,20 @@ impl AuthProvider for JwtAuth {
         if claims.kind != "refresh" {
             return Err(AuthError::InvalidToken);
         }
+        let user_row = self
+            .storage
+            .get_user(&claims.sub)
+            .await?
+            .ok_or(AuthError::InvalidToken)?;
+        if claims.auth_epoch != user_row.auth_epoch {
+            return Err(AuthError::Revoked);
+        }
         if !self.storage.session_is_valid(&claims.jti).await? {
             return Err(AuthError::Revoked);
         }
         // Rotate: revoke old refresh jti, issue a fresh pair.
         self.storage.revoke_session(&claims.jti).await?;
 
-        let user_row = self
-            .storage
-            .get_user(&claims.sub)
-            .await?
-            .ok_or(AuthError::InvalidToken)?;
         let user = AuthUser {
             id: user_row.id.clone(),
             name: user_row.name.clone(),
@@ -148,10 +167,11 @@ impl AuthProvider for JwtAuth {
 
         let access_jti = Uuid::new_v4().to_string();
         let refresh_jti = Uuid::new_v4().to_string();
+        let epoch = user_row.auth_epoch;
         let (access_token, access_exp) =
-            self.issue(&user, "access", self.access_ttl, &access_jti)?;
+            self.issue(&user, "access", self.access_ttl, &access_jti, epoch)?;
         let (refresh_token_new, refresh_exp) =
-            self.issue(&user, "refresh", self.refresh_ttl, &refresh_jti)?;
+            self.issue(&user, "refresh", self.refresh_ttl, &refresh_jti, epoch)?;
 
         for (jti, exp) in [(&access_jti, access_exp), (&refresh_jti, refresh_exp)] {
             self.storage
@@ -175,7 +195,11 @@ impl AuthProvider for JwtAuth {
 
     async fn logout(&self, access_token: &str) -> AuthResult<()> {
         let claims = self.decode_claims(access_token)?;
-        self.storage.revoke_session(&claims.jti).await?;
+        if claims.kind != "access" {
+            return Err(AuthError::InvalidToken);
+        }
+        self.storage.bump_user_auth_epoch(&claims.sub).await?;
+        self.storage.revoke_sessions_for_user(&claims.sub).await?;
         Ok(())
     }
 
@@ -184,18 +208,27 @@ impl AuthProvider for JwtAuth {
         if claims.kind != "access" {
             return Err(AuthError::InvalidToken);
         }
+        let user_row = self
+            .storage
+            .get_user(&claims.sub)
+            .await?
+            .ok_or(AuthError::InvalidToken)?;
+        if claims.auth_epoch != user_row.auth_epoch {
+            return Err(AuthError::Revoked);
+        }
         if !self.storage.session_is_valid(&claims.jti).await? {
             return Err(AuthError::Revoked);
         }
         Ok(AuthContext {
             user: AuthUser {
-                id: claims.sub,
-                name: claims.name,
-                email: claims.email,
-                role: claims.role,
-                avatar: None,
+                id: user_row.id,
+                name: user_row.name,
+                email: user_row.email,
+                role: user_row.role,
+                avatar: user_row.avatar,
             },
             jti: claims.jti,
+            access_token: None,
         })
     }
 }

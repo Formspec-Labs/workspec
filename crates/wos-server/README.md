@@ -101,13 +101,14 @@ All config via flags or env vars (flags win). Full list in `src/config.rs`.
 | `WOS_JWT_ACCESS_TTL_SECS` | `--jwt-access-ttl-secs` | `900` | Access token lifetime |
 | `WOS_JWT_REFRESH_TTL_SECS` | `--jwt-refresh-ttl-secs` | `2592000` | Refresh token lifetime (30d) |
 | `WOS_CORS_ORIGIN` | `--cors-origin` | `*` | CORS allow-origin (specific origin enables credentials) |
-| `WOS_SEED` | `--seed` | `false` | Seed DB from `fixtures/` on empty |
+| `WOS_SEED` | `--seed` | `false` | Seed DB from `fixtures/` on empty (demo users share password **`wos-dev`** — dev only) |
 | `WOS_AI_CHAT` | `--ai-chat` | `disabled` | AI chat backend (`disabled` \| `gemini`) |
 | `GEMINI_API_KEY` | `--gemini-api-key` | *(required for gemini)* | Gemini API key |
 | `WOS_CURSOR_THROTTLE_MS` | `--cursor-throttle-ms` | `50` | Socket.IO cursor throttle |
 | `WOS_TIMER_POLL_MS` | `--timer-poll-ms` | `1000` | Timer tick interval |
 
 Planned additions (from the active plan, not shipped yet):
+
 - `WOS_SIGNER` — signer backend (`noop` \| `ed25519-file` \| `external`). Track A1.
 - `WOS_RENDERER` — report renderer (`json` \| `html`). Track A2.
 - `WOS_SUBMIT_POLICY` — `default` (ledger-gated per §15.7) \| `permissive`. Track B1 placement.
@@ -118,10 +119,14 @@ Planned additions (from the active plan, not shipped yet):
 
 SQLite only today. Schema under `migrations/`:
 
-- `0001_initial.sql` — users, sessions, bundles, instances, tasks, provenance.
-- `0002_...` — subsequent migrations.
+- `0001_init.sql` — users, sessions, kernels, instances, provenance, delegations.
+- `0002_runtime_tables.sql` — runtime aux, event queue, tasks, agents, identity facts, equity cache, inbound integration.
+- `0003_intake_records.sql` — durable intake-acceptance records.
+- `0004_user_auth_epoch.sql` — per-user `auth_epoch` for coordinated JWT invalidation.
 
-Planned: `TaskStore` trait extraction (plan G8), drift-report storage (plan B8, migration 0003), external task table (plan G8, migration 0004). Backend-pluggability beyond SQLite waits until a consumer asks.
+User rows: on `id` conflict, `upsert_user` updates only `email`, `name`, `role`, and `avatar` — it **does not** overwrite `password_hash` or `auth_epoch`, so profile edits cannot bypass token invalidation. Password changes must use `Storage::set_user_password_hash`; logout uses `bump_user_auth_epoch` plus session revocation.
+
+Planned: `TaskStore` trait extraction (plan G8), drift-report storage (plan B8). Backend-pluggability beyond SQLite waits until a consumer asks.
 
 ---
 
@@ -130,7 +135,11 @@ Planned: `TaskStore` trait extraction (plan G8), drift-report storage (plan B8, 
 Two providers ship today:
 
 - **`jwt`** — HS256 tokens, local user table, argon2 passwords. Default.
-- **`mock`** — unauthenticated, returns a fixed admin user. For studio dev only.
+- **`mock`** — anonymous reads work; send `Authorization: Bearer <any>` to attach the fixed Jane Doe supervisor context (required for mutating routes such as `PUT /api/bundles/{url}/kernel`). For studio dev only.
+
+**JWT logout (`POST /api/auth/logout` with Bearer access token)** is a **global sign-out** for that user: it increments `users.auth_epoch`, revokes every `sessions` row for that user, and embeds `auth_epoch` in new tokens so in-flight refresh cannot mint a valid pair after logout (refresh and verify compare the claim to the row).
+
+**Password or admin credential changes** should go through `Storage::set_user_password_hash`, which updates the hash, bumps `auth_epoch`, and revokes sessions in one transaction so old passwords and old tokens both stop working.
 
 Pending (Track G1 in the active plan): narrow the trait to `AuthVerifier` (drop `login`), widen `AuthUser` to `roles + groups + claims`, add OIDC support. Today's trait shape forecloses real external IdPs — fix is trait-shape compounding debt (D=5).
 
@@ -151,6 +160,7 @@ cargo test -p wos-server
 ```
 
 Test harness:
+
 - `tests/http_smoke.rs` — route reachability + schema validation across the whole API surface.
 - `tests/auth_jwt.rs` — JWT auth flows.
 - `tests/bundle_validation.rs` — kernel + companion validation round-trip.

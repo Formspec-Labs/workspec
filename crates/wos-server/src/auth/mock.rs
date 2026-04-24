@@ -59,6 +59,7 @@ impl AuthProvider for MockAuth {
         Ok(AuthContext {
             user: self.user.clone(),
             jti: self.jti.clone(),
+            access_token: None,
         })
     }
 }

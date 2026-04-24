@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::error::{ApiError, ApiResult};
 use crate::services::bundle_service::BundleService;
 use crate::services::json_util::lookup_dotted;
-use crate::storage::{InstanceQuery, StorageHandle};
+use crate::storage::{InstanceQuery, StorageHandle, LIST_INSTANCES_PAGE_SIZE_MAX};
 
 // ── Verification (SMT stub) ────────────────────────────────────────
 
@@ -148,24 +148,32 @@ pub async fn evaluate_equity(
     storage: &StorageHandle,
     req: &EquityEvaluateRequest,
 ) -> ApiResult<EquityReport> {
-    let page = storage
-        .list_instances(InstanceQuery {
+    if req.outcome_predicate.is_some() {
+        return Err(ApiError::BadRequest(
+            "outcomePredicate is not implemented; omit it to use the default positive outcome \
+             (instance status == \"completed\")"
+                .into(),
+        ));
+    }
+
+    let rows = crate::storage::list_instances_all_pages(
+        storage,
+        InstanceQuery {
             definition_url: Some(vec![req.workflow_url.clone()]),
             page: 1,
-            page_size: 10_000,
+            page_size: LIST_INSTANCES_PAGE_SIZE_MAX,
             ..Default::default()
-        })
-        .await?;
+        },
+        LIST_INSTANCES_PAGE_SIZE_MAX,
+    )
+    .await?;
 
     let mut by_group: std::collections::HashMap<String, (u64, u64)> =
         std::collections::HashMap::new();
-    for row in &page.items {
+    for row in &rows {
         let case_state = row.case_state();
         let group = lookup_dotted(&case_state, &req.group_by_path).unwrap_or_else(|| "_".into());
-        let positive = match &req.outcome_predicate {
-            Some(_) => false, // expression eval stubbed — treat as false for now
-            None => row.status == "completed",
-        };
+        let positive = row.status == "completed";
         let entry = by_group.entry(group).or_insert((0, 0));
         entry.0 += 1;
         if positive {

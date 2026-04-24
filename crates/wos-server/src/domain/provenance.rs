@@ -24,7 +24,9 @@ pub struct ProvenanceResponse {
     pub instance_id: String,
     /// 1-indexed sequence number within the instance's chain.
     pub seq: i64,
-    /// Integrity hash: `sha256(previous_hash || canonical_json(record))`.
+    /// Integrity hash: same preimage as [`crate::services::provenance_service::chain_hash`]
+    /// — `sha256` over UTF-8 `previous_hash` bytes plus canonical JSON of
+    /// `{ instanceId, seq, timestamp, tier, payload }` (not the raw record alone).
     pub hash: String,
     /// Hash of the preceding row, or `sha256:0…` for the genesis record.
     pub previous_hash: String,

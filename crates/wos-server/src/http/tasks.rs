@@ -8,7 +8,7 @@ use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 use crate::AppState;
 use crate::domain::{ListQuery, PaginatedView, TaskListItem};
 use crate::error::{ApiError, ApiResult};
-use crate::storage::InstanceQuery;
+use crate::storage::{self, InstanceQuery, LIST_INSTANCES_PAGE_SIZE_MAX};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -25,17 +25,22 @@ async fn list(
 ) -> ApiResult<Json<PaginatedView<TaskListItem>>> {
     let page = q.page.unwrap_or(1);
     let page_size = q.page_size.unwrap_or(25);
-    let storage_query = InstanceQuery {
+    let filter = InstanceQuery {
         status: ListQuery::csv(&q.status),
         impact_level: ListQuery::csv(&q.impact_level),
         definition_url: q.definition_url.map(|d| vec![d]),
         page: 1,
-        page_size: 500,
+        page_size: LIST_INSTANCES_PAGE_SIZE_MAX,
     };
-    let source = s.storage.list_instances(storage_query).await?;
+    let rows = storage::list_instances_all_pages(
+        &s.storage,
+        filter,
+        LIST_INSTANCES_PAGE_SIZE_MAX,
+    )
+    .await?;
     let mut all_tasks: Vec<TaskListItem> = Vec::new();
-    for row in &source.items {
-        all_tasks.extend(s.services.instance.tasks_for(row).await?);
+    for row in rows {
+        all_tasks.extend(s.services.instance.tasks_for(&row).await?);
     }
     let total = all_tasks.len() as u64;
     let start = ((page.saturating_sub(1)) * page_size) as usize;
@@ -52,14 +57,14 @@ async fn get_one(
     State(s): State<AppState>,
     Path(task_id): Path<String>,
 ) -> ApiResult<Json<TaskListItem>> {
-    let storage_query = InstanceQuery {
-        page: 1,
-        page_size: 500,
-        ..Default::default()
-    };
-    let source = s.storage.list_instances(storage_query).await?;
-    for row in &source.items {
-        for t in s.services.instance.tasks_for(row).await? {
+    let rows = storage::list_instances_all_pages(
+        &s.storage,
+        InstanceQuery::default(),
+        LIST_INSTANCES_PAGE_SIZE_MAX,
+    )
+    .await?;
+    for row in rows {
+        for t in s.services.instance.tasks_for(&row).await? {
             if t.task.task_id == task_id {
                 return Ok(Json(t));
             }

@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 /// `DashboardMetrics` in `WosPorts.ts:187`.
+///
+/// Fields listed in `synthetic_fields` are fixture values produced by the
+/// reference server and do not reflect measured data. Consumers MUST check
+/// this list before treating any metric as authoritative.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardMetricsView {
@@ -14,7 +18,14 @@ pub struct DashboardMetricsView {
     pub sla_compliance_trend: f64,
     pub avg_processing_time_trend: f64,
     pub ai_acceptance_rate_trend: f64,
+    /// Names of metric fields whose values in this payload are synthetic
+    /// stubs rather than measured observations.
+    #[serde(default)]
+    pub synthetic_fields: Vec<String>,
 }
+
+/// `DriftDataPoint` values are synthetic unless the response carries
+/// non-empty measurement metadata. See `DashboardMetricsView.synthetic_fields`.
 
 /// `StageMetricView` in `WosPorts.ts:200`.
 #[derive(Debug, Clone, Serialize, Deserialize)]

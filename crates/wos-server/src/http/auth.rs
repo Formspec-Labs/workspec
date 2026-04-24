@@ -32,9 +32,11 @@ async fn logout(
     State(state): State<AppState>,
     AuthCtx(ctx): AuthCtx,
 ) -> ApiResult<Json<serde_json::Value>> {
-    // Logout is idempotent — revoking by jti via the access-token's claim is
-    // already done; the `access_token` arg is required for API shape only.
-    state.auth.logout(&ctx.jti).await.ok();
+    let access = ctx
+        .access_token
+        .as_deref()
+        .ok_or(ApiError::Unauthorized)?;
+    state.auth.logout(access).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

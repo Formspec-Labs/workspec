@@ -5,7 +5,13 @@
 //! Client → Server
 //! * `user:join`     `{ id?, name? }`   — register collaborator
 //! * `cursor:move`   `{ x, y }`         — broadcast cursor position
-//! * `kernel:update` `{ url, kernel }`  — persist + broadcast kernel edit
+//! * `kernel:update` `{ url, kernel }`  — persist + broadcast kernel edit.
+//!   **`WOS_AUTH=jwt`:** handshake must include `auth: { token: "<access_jwt>" }`
+//!   (same access JWT as HTTP). Each `kernel:update` re-runs
+//!   [`AuthProvider::verify`](crate::auth::AuthProvider::verify) on that token
+//!   and requires **Supervisor** from the current user row (so logout, expiry,
+//!   revocation, and role changes apply without relying on connect-time cache).
+//!   **`WOS_AUTH=mock`:** updates allowed without a token (local studio).
 //!
 //! Server → Client
 //! * `kernel:init`           — bootstrap with the primary kernel on connect
@@ -18,11 +24,12 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use socketioxide::SocketIo;
-use socketioxide::extract::{Data, SocketRef, State as SocketState};
+use socketioxide::extract::{Data, SocketRef, State as SocketState, TryData};
 use socketioxide::layer::SocketIoLayer;
 use tokio::sync::RwLock;
 
 use crate::AppState;
+use crate::config::AuthKind;
 use crate::services::bundle_service::validate_kernel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +49,10 @@ pub struct Cursor {
 pub struct RealtimeState {
     /// `sid -> collaborator` registry for `users:update` broadcasts.
     pub collaborators: RwLock<std::collections::HashMap<String, Collaborator>>,
+    /// JWT mode only: `sid ->` access JWT presented at connect when
+    /// [`AuthProvider::verify`] succeeded. Each `kernel:update` re-verifies this
+    /// token (see module docs). Missing entry or `None` means no usable token.
+    pub socket_access_token: RwLock<std::collections::HashMap<String, Option<String>>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +65,13 @@ struct UserJoin {
 struct KernelUpdate {
     url: String,
     kernel: serde_json::Value,
+}
+
+/// Socket.IO client `auth` payload from `studio` (`auth: { token }`).
+#[derive(Debug, Clone, Deserialize)]
+struct HandshakeAuth {
+    #[serde(default)]
+    token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -83,13 +101,37 @@ pub fn build_io_only() -> (SocketIoLayer, SocketIo) {
 /// Register the server's namespace handlers on the given `SocketIo` handle.
 /// Must be called exactly once, after `AppState` is fully assembled.
 pub fn attach_namespaces(io: &SocketIo, state: AppState) {
-    io.ns("/", move |socket: SocketRef| {
-        let state = state.clone();
-        async move { on_connect(socket, state).await }
-    });
+    io.ns(
+        "/",
+        move |socket: SocketRef,
+              TryData(handshake): TryData<HandshakeAuth>,
+              SocketState(rt): SocketState<Arc<RealtimeState>>| {
+            let state = state.clone();
+            let token = match handshake.as_ref() {
+                Ok(h) => h.token.clone(),
+                Err(_) => None,
+            };
+            async move { on_connect(socket, state, rt, token).await }
+        },
+    );
 }
 
-async fn on_connect(socket: SocketRef, state: AppState) {
+async fn on_connect(
+    socket: SocketRef,
+    state: AppState,
+    rt: Arc<RealtimeState>,
+    token: Option<String>,
+) {
+    if matches!(state.cfg.auth, AuthKind::Jwt) {
+        let stored = match &token {
+            Some(t) if state.auth.verify(t).await.is_ok() => Some(t.clone()),
+            _ => None,
+        };
+        rt.socket_access_token
+            .write()
+            .await
+            .insert(socket.id.to_string(), stored);
+    }
     // Emit the primary kernel straight away so the studio's `onKernelInit`
     // handler has something to render even on a cold connection.
     if let Some(primary) = state.services.bundle.primary_kernel().await {
@@ -139,9 +181,41 @@ async fn on_connect(socket: SocketRef, state: AppState) {
     let state_for_kernel = state.clone();
     socket.on(
         "kernel:update",
-        move |s: SocketRef, Data::<KernelUpdate>(body)| {
+        move |s: SocketRef,
+              Data::<KernelUpdate>(body),
+              SocketState::<Arc<RealtimeState>>(rt)| {
             let state = state_for_kernel.clone();
             async move {
+                let allowed = match state.cfg.auth {
+                    AuthKind::Mock => true,
+                    AuthKind::Jwt => {
+                        let token = rt
+                            .socket_access_token
+                            .read()
+                            .await
+                            .get(&s.id.to_string())
+                            .and_then(|v| v.clone());
+                        match token {
+                            Some(t) => match state.auth.verify(&t).await {
+                                Ok(ctx) => {
+                                    ctx.user.role.eq_ignore_ascii_case("Supervisor")
+                                }
+                                Err(_) => false,
+                            },
+                            None => false,
+                        }
+                    }
+                };
+                if !allowed {
+                    let _ = s.emit(
+                        "kernel:update-rejected",
+                        &KernelRejected {
+                            reason: "unauthorized".into(),
+                            issues: None,
+                        },
+                    );
+                    return;
+                }
                 let validation = validate_kernel(&body.kernel);
                 if !validation.is_valid {
                     let _ = s.emit(
@@ -179,6 +253,7 @@ async fn on_connect(socket: SocketRef, state: AppState) {
 
     socket.on_disconnect(async |s: SocketRef, SocketState::<Arc<RealtimeState>>(rt)| {
         rt.collaborators.write().await.remove(&s.id.to_string());
+        rt.socket_access_token.write().await.remove(&s.id.to_string());
         broadcast_users(&s, &rt).await;
     });
 }

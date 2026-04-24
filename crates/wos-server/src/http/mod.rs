@@ -81,6 +81,12 @@ fn build_cors(origin: &str) -> CorsLayer {
         cors = cors.allow_origin(tower_http::cors::Any);
     } else if let Ok(val) = HeaderValue::from_str(origin) {
         cors = cors.allow_origin(val).allow_credentials(true);
+    } else {
+        tracing::warn!(
+            origin = %origin,
+            "WOS CORS_ORIGIN is not a valid HTTP header value; using permissive origins without credentials"
+        );
+        cors = cors.allow_origin(tower_http::cors::Any);
     }
     cors
 }

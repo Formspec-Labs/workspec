@@ -29,6 +29,11 @@ const SIDECARS: &[(&str, &str)] = &[
     ("case-instance", "caseInstances"),
 ];
 
+/// Kernel registry + bundle projection. [`Self::full_bundle`] joins the
+/// kernel from SQLite with sidecar JSON files under
+/// `{fixtures_dir}/{governance|semantic-profile|…}/{url_slug}.json}` only —
+/// sidecars are not read from the database. See [`url_slug`] for how
+/// fixture filenames are derived from workflow URLs.
 pub struct BundleService {
     cfg: Arc<ServerConfig>,
     storage: StorageHandle,
@@ -136,6 +141,8 @@ impl BundleService {
         Ok(row)
     }
 
+    /// Kernel from the in-memory cache plus optional sidecars from the
+    /// fixture tree on disk (not from persistent sidecar storage).
     pub async fn full_bundle(&self, url: &str) -> Option<BundleView> {
         let row = self.get(url).await?;
         let mut bundle = BundleView {
@@ -285,7 +292,7 @@ fn severity_to_str(s: wos_lint::Severity) -> &'static str {
     match s {
         wos_lint::Severity::Error => "error",
         wos_lint::Severity::Warning => "warning",
-        wos_lint::Severity::Info => "warning", // studio has no "info" bucket
+        wos_lint::Severity::Info => "info",
     }
 }
 
@@ -302,6 +309,9 @@ fn rule_id_to_category(rule_id: &str) -> &'static str {
     }
 }
 
+/// Slug for fixture filenames: second segment from the right when split by
+/// `:`, otherwise the last `/` path segment (trimming `.json`). Example:
+/// `urn:wos:workflow:demo:1.0.0` → `demo` → `fixtures/governance/demo.json`.
 fn url_slug(url: &str) -> String {
     url.rsplit(':')
         .nth(1)

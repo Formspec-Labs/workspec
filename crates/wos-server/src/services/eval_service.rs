@@ -44,14 +44,19 @@ impl EvalService {
                     row.definition_url
                 ))
             })?;
-        let kernel: KernelDocument = match serde_json::from_value(kernel_row.document.clone()) {
-            Ok(k) => k,
-            Err(_) => return Ok(Vec::new()),
-        };
-        let instance: CaseInstance = match serde_json::from_value(row.instance_json.clone()) {
-            Ok(i) => i,
-            Err(_) => return Ok(Vec::new()),
-        };
+        let kernel: KernelDocument = serde_json::from_value(kernel_row.document.clone())
+            .map_err(|e| {
+                ApiError::ServiceUnavailable(format!(
+                    "kernel `{}` failed to deserialise: {e}",
+                    row.definition_url
+                ))
+            })?;
+        let instance: CaseInstance = serde_json::from_value(row.instance_json.clone())
+            .map_err(|e| {
+                ApiError::ServiceUnavailable(format!(
+                    "instance `{instance_id}` failed to deserialise: {e}"
+                ))
+            })?;
 
         let active: std::collections::HashSet<String> = instance.configuration.into_iter().collect();
         let mut out = Vec::new();

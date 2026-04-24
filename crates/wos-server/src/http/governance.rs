@@ -96,8 +96,8 @@ async fn equity_config(
 async fn delegations_list(
     State(s): State<AppState>,
     Path(url): Path<String>,
-) -> Json<Vec<DelegationEntryView>> {
-    Json(s.services.governance.delegations(&url).await)
+) -> ApiResult<Json<Vec<DelegationEntryView>>> {
+    Ok(Json(s.services.governance.delegations(&url).await?))
 }
 
 async fn delegation_create(

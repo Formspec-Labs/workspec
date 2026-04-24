@@ -7,7 +7,6 @@
 //! via the [`AppRuntime`](crate::runtime::AppRuntime) wrapper. Calling these
 //! methods directly from a tokio async worker will panic.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -20,14 +19,13 @@ use wos_runtime::store::{
 };
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 
-use super::{InstanceRow, StorageHandle};
+use super::{InstanceRow, IntakeRecordRow, StorageHandle};
 use crate::services::provenance_service::ProvenanceService;
 
 pub struct SqliteRuntimeStore {
     storage: StorageHandle,
     provenance: Arc<ProvenanceService>,
     handle: Handle,
-    intake_records: HashMap<(String, String), IntakeRecord>,
 }
 
 impl SqliteRuntimeStore {
@@ -40,8 +38,16 @@ impl SqliteRuntimeStore {
             storage,
             provenance,
             handle,
-            intake_records: HashMap::new(),
         }
+    }
+}
+
+fn intake_status_str(s: &wos_runtime::intake::IntakeRecordStatus) -> &'static str {
+    use wos_runtime::intake::IntakeRecordStatus::*;
+    match s {
+        Pending => "pending",
+        Prepared => "prepared",
+        Applied => "applied",
     }
 }
 
@@ -87,13 +93,14 @@ impl RuntimeStore for SqliteRuntimeStore {
                     .prepare_batch(&instance_id, &log_snapshot)
                     .await
                     .map_err(storage_err)?;
+                let update_ctx = instance_id.clone();
                 storage
                     .update_instance_atomic(
                         &instance_id,
                         &move |_current| Ok(rows.clone()),
                     )
                     .await
-                    .map_err(storage_err)?;
+                    .map_err(|e| storage_err_with(e, &update_ctx))?;
             }
             Ok(())
         })
@@ -158,6 +165,7 @@ impl RuntimeStore for SqliteRuntimeStore {
             let instance_json_shared = std::sync::Arc::new(instance_json);
             let aux_json_shared = std::sync::Arc::new(aux_json);
             let appended_rows_shared = std::sync::Arc::new(appended_rows);
+            let update_ctx = instance_id.clone();
             storage
                 .update_instance_atomic(&instance_id, &move |current| {
                     current.instance_json = (*instance_json_shared).clone();
@@ -167,21 +175,18 @@ impl RuntimeStore for SqliteRuntimeStore {
                     Ok((*appended_rows_shared).clone())
                 })
                 .await
-                .map_err(storage_err)?;
+                .map_err(|e| storage_err_with(e, &update_ctx))?;
             Ok(())
         })
     }
 
     fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
-        let key = (record.binding.clone(), record.intake_id.clone());
-        if self.intake_records.contains_key(&key) {
-            return Err(StoreError::AlreadyExists(format!(
-                "intake:{}:{}",
-                key.0, key.1
-            )));
-        }
-        self.intake_records.insert(key, record);
-        Ok(())
+        let row = build_intake_row(&record)?;
+        let storage = self.storage.clone();
+        let ctx = format!("intake:{}:{}", record.binding, record.intake_id);
+        self.handle
+            .block_on(async move { storage.insert_intake_record(&row).await })
+            .map_err(|e| storage_err_with(e, &ctx))
     }
 
     fn load_intake_record(
@@ -189,25 +194,50 @@ impl RuntimeStore for SqliteRuntimeStore {
         binding: &str,
         intake_id: &str,
     ) -> Result<IntakeRecord, StoreError> {
-        self.intake_records
-            .get(&(binding.to_string(), intake_id.to_string()))
-            .cloned()
-            .ok_or_else(|| StoreError::NotFound(format!("intake:{binding}:{intake_id}")))
+        let storage = self.storage.clone();
+        let binding = binding.to_string();
+        let intake_id = intake_id.to_string();
+        let ctx = format!("intake:{binding}:{intake_id}");
+        let row_opt = self
+            .handle
+            .block_on(async move { storage.get_intake_record(&binding, &intake_id).await })
+            .map_err(|e| storage_err_with(e, &ctx))?;
+        let row = row_opt.ok_or_else(|| StoreError::NotFound(ctx.clone()))?;
+        serde_json::from_value(row.record_json)
+            .map_err(|e| StoreError::Failed(format!("deserialise {ctx}: {e}")))
     }
 
     fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
-        let key = (record.binding.clone(), record.intake_id.clone());
-        if !self.intake_records.contains_key(&key) {
-            return Err(StoreError::NotFound(format!("intake:{}:{}", key.0, key.1)));
-        }
-        self.intake_records.insert(key, record);
-        Ok(())
+        let row = build_intake_row(&record)?;
+        let storage = self.storage.clone();
+        let ctx = format!("intake:{}:{}", record.binding, record.intake_id);
+        self.handle
+            .block_on(async move { storage.update_intake_record(&row).await })
+            .map_err(|e| storage_err_with(e, &ctx))
     }
 }
 
+fn build_intake_row(record: &IntakeRecord) -> Result<IntakeRecordRow, StoreError> {
+    let record_json = serde_json::to_value(record)
+        .map_err(|e| StoreError::Failed(format!("serialise intake record: {e}")))?;
+    let now = Utc::now();
+    Ok(IntakeRecordRow {
+        binding: record.binding.clone(),
+        intake_id: record.intake_id.clone(),
+        status: intake_status_str(&record.status).to_string(),
+        record_json,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
 fn storage_err(e: crate::storage::StorageError) -> StoreError {
+    storage_err_with(e, "")
+}
+
+fn storage_err_with(e: crate::storage::StorageError, ctx: &str) -> StoreError {
     match e {
-        crate::storage::StorageError::NotFound => StoreError::NotFound(String::new()),
+        crate::storage::StorageError::NotFound => StoreError::NotFound(ctx.to_string()),
         crate::storage::StorageError::Conflict(m) => StoreError::AlreadyExists(m),
         other => StoreError::Failed(other.to_string()),
     }
@@ -311,9 +341,13 @@ pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                         serde_json::json!({ "kind": "rejected", "code": code })
                     }
                 },
-                ReplayValue::Intake(_) => serde_json::json!({
+                ReplayValue::Intake(decision) => {
+                    let decision_json = serde_json::to_value(decision).unwrap_or(serde_json::json!({}));
+                    serde_json::json!({
                         "kind": "intake",
-                    }),
+                        "decision": decision_json,
+                    })
+                }
             };
             serde_json::json!({
                 "key": {
@@ -402,6 +436,7 @@ pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
                     let op = match k.get("operation").and_then(|x| x.as_str())? {
                         "persistDraft" => ReplayOperation::PersistDraft,
                         "submitTaskResponse" => ReplayOperation::SubmitTaskResponse,
+                        "acceptIntakeHandoff" => ReplayOperation::AcceptIntakeHandoff,
                         _ => return None,
                     };
                     let key = ReplayKey {
@@ -435,7 +470,12 @@ pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
                         "rejected" => ReplayValue::Submission(TaskSubmissionResult::Rejected {
                             code: v.get("code")?.as_str()?.to_string(),
                         }),
-                        "intake" => return None,
+                        "intake" => {
+                            let decision_val = v.get("decision")?.clone();
+                            let decision: wos_runtime::intake::IntakeAcceptanceDecision =
+                                serde_json::from_value(decision_val).ok()?;
+                            ReplayValue::Intake(decision)
+                        }
                         _ => return None,
                     };
                     Some((key, value))

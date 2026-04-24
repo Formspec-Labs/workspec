@@ -10,6 +10,7 @@ use crate::domain::{
     ServiceHealthView, SolverView, VerificationCounterexampleView, VerificationReportView,
     VerificationResultView, VerificationSummaryView,
 };
+use crate::error::ApiResult;
 use crate::storage::StorageHandle;
 
 use super::bundle_service::BundleService;
@@ -189,24 +190,22 @@ impl GovernanceService {
         })
     }
 
-    pub async fn delegations(&self, workflow_url: &str) -> Vec<DelegationEntryView> {
-        match self.storage.list_delegations(workflow_url).await {
-            Ok(rows) => rows
-                .into_iter()
-                .map(|r| DelegationEntryView {
-                    id: r.id,
-                    delegator: r.delegator,
-                    delegate: r.delegate,
-                    scope: r.scope,
-                    authority: r.authority,
-                    legal_instrument: r.legal_instrument,
-                    start_date: r.start_date.to_rfc3339(),
-                    end_date: r.end_date.map(|t| t.to_rfc3339()),
-                    status: r.status,
-                })
-                .collect(),
-            Err(_) => Vec::new(),
-        }
+    pub async fn delegations(&self, workflow_url: &str) -> ApiResult<Vec<DelegationEntryView>> {
+        let rows = self.storage.list_delegations(workflow_url).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| DelegationEntryView {
+                id: r.id,
+                delegator: r.delegator,
+                delegate: r.delegate,
+                scope: r.scope,
+                authority: r.authority,
+                legal_instrument: r.legal_instrument,
+                start_date: r.start_date.to_rfc3339(),
+                end_date: r.end_date.map(|t| t.to_rfc3339()),
+                status: r.status,
+            })
+            .collect())
     }
 
     pub async fn revoke_delegation(

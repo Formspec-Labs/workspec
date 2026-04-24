@@ -10,6 +10,9 @@ use crate::error::ApiError;
 /// Attach an [`AuthContext`] to the request extensions if a valid bearer is
 /// present. Does NOT reject anonymous requests — handlers that require auth
 /// use the [`RequireAuth`] extractor instead.
+///
+/// A malformed or expired `Authorization: Bearer …` header is ignored and
+/// the request continues without auth (optional-auth pattern), not 401.
 pub async fn attach_auth(
     axum::extract::State(state): axum::extract::State<AppState>,
     mut req: Request,
@@ -23,7 +26,8 @@ pub async fn attach_auth(
         .map(|s| s.trim().to_string());
 
     if let Some(tok) = token {
-        if let Ok(ctx) = state.auth.verify(&tok).await {
+        if let Ok(mut ctx) = state.auth.verify(&tok).await {
+            ctx.access_token = Some(tok);
             req.extensions_mut().insert(ctx);
         }
     }

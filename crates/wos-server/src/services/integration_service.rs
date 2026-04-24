@@ -1,9 +1,11 @@
 //! Integration Profile — inbound CloudEvents + integration-profile reads.
 //!
 //! Inbound CloudEvent handling is idempotent: the `id` field is used as
-//! a dedupe key against `integration_inbound`. The envelope is persisted
-//! and the `data` payload is enqueued as an event on the target instance
-//! (if `instanceId` is present in the envelope).
+//! a dedupe key against `integration_inbound` via `INSERT OR IGNORE`, so
+//! concurrent duplicates return a clean `deduplicated: true` ack instead of
+//! a primary-key error. The envelope is persisted and the `data` payload is
+//! enqueued as an event on the target instance (if `instanceId` is present
+//! in the envelope).
 //!
 //! Tool / Arazzo / policy-engine binding invocation currently echoes the
 //! binding + inputs — enough for consumers to assert shape conformance
@@ -55,15 +57,6 @@ impl IntegrationService {
             .validate_ingress()
             .map_err(|e| ApiError::BadRequest(format!("invalid CloudEvent: {e}")))?;
 
-        if state.storage.get_inbound_cloud_event(&envelope.id).await?.is_some() {
-            return Ok(InboundAck {
-                cloud_event_id: envelope.id,
-                deduplicated: true,
-                enqueued: false,
-                reason: Some("already received".into()),
-            });
-        }
-
         let row = InboundCloudEventRow {
             cloud_event_id: envelope.id.clone(),
             instance_id: instance_id.clone().unwrap_or_default(),
@@ -71,7 +64,15 @@ impl IntegrationService {
             received_at: Utc::now(),
             payload_json: envelope.to_provenance_data(),
         };
-        state.storage.insert_inbound_cloud_event(&row).await?;
+        let inserted = state.storage.insert_inbound_cloud_event(&row).await?;
+        if !inserted {
+            return Ok(InboundAck {
+                cloud_event_id: envelope.id,
+                deduplicated: true,
+                enqueued: false,
+                reason: Some("already received".into()),
+            });
+        }
 
         match &instance_id {
             Some(id) if !id.is_empty() => {

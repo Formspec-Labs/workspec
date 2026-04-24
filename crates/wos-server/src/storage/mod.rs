@@ -3,6 +3,9 @@
 //! All persistence goes through the [`Storage`] trait so storage engines
 //! (SQLite, Postgres, JSONFS, ledger sinks) can be swapped behind the same
 //! service layer. SQLite is the default and only backend shipped today.
+//!
+//! Migrations may define tables (for example `equity_reports`) ahead of
+//! trait methods; those surfaces are wired when the corresponding APIs land.
 
 use std::sync::Arc;
 
@@ -42,6 +45,13 @@ pub enum StorageError {
 }
 
 pub type StorageResult<T> = Result<T, StorageError>;
+
+/// Upper bound for [`Storage::list_instances`] `page_size`.
+///
+/// Every [`Storage`] implementation must clamp `InstanceQuery::page_size` to
+/// at most this value (and at least `1`) so services that walk the full
+/// instance set agree on page geometry regardless of which backend is wired.
+pub const LIST_INSTANCES_PAGE_SIZE_MAX: u32 = 200;
 
 /// A stored kernel document (`$wosKernel` definition + metadata).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +163,10 @@ pub struct UserRow {
     pub role: String,
     pub password_hash: String,
     pub avatar: Option<String>,
+    /// Incremented on logout and password changes; embedded in JWTs and
+    /// checked on verify/refresh. On [`Storage::upsert_user`] conflict,
+    /// concrete stores may preserve the existing value (insert still uses this field).
+    pub auth_epoch: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -205,13 +219,34 @@ pub struct InboundCloudEventRow {
     pub payload_json: serde_json::Value,
 }
 
+/// A persisted `wos_runtime::store::IntakeRecord`. `record_json` is a
+/// serde round-tripped encoding of the full record. `status` is denormalised
+/// for cheap filters but the authoritative value lives inside `record_json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntakeRecordRow {
+    pub binding: String,
+    pub intake_id: String,
+    pub status: String,
+    pub record_json: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Query for listing instances. For each filter field, `Some(vec![])` is
+/// treated like `None` (no constraint) so callers never produce invalid
+/// `IN ()` SQL.
+///
+/// **`page_size`:** [`Storage::list_instances`] implementations clamp to
+/// \[1, [`LIST_INSTANCES_PAGE_SIZE_MAX`]\].
 #[derive(Debug, Clone, Default)]
 pub struct InstanceQuery {
     pub status: Option<Vec<String>>,
     pub impact_level: Option<Vec<String>>,
     pub definition_url: Option<Vec<String>>,
-    pub page: u32,      // 1-indexed to match the studio contract
-    pub page_size: u32, // capped downstream
+    /// 1-indexed to match the studio contract.
+    pub page: u32,
+    pub page_size: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,6 +255,36 @@ pub struct Page<T> {
     pub total: u64,
     pub page: u32,
     pub page_size: u32,
+}
+
+/// Walk [`Storage::list_instances`] until every row matching `query` filters is
+/// collected. The requested `page_size` argument is clamped to
+/// \[1, [`LIST_INSTANCES_PAGE_SIZE_MAX`]\] per page so callers never silently
+/// cap the instance universe at one page when a backend enforces the port
+/// maximum.
+pub async fn list_instances_all_pages(
+    storage: &StorageHandle,
+    mut query: InstanceQuery,
+    page_size: u32,
+) -> StorageResult<Vec<InstanceRow>> {
+    let page_size = page_size.clamp(1, LIST_INSTANCES_PAGE_SIZE_MAX);
+    let mut out = Vec::new();
+    let mut page_num = 1u32;
+    loop {
+        query.page = page_num;
+        query.page_size = page_size;
+        let page = storage.list_instances(query.clone()).await?;
+        if page.items.is_empty() {
+            break;
+        }
+        let n = page.items.len();
+        out.extend(page.items);
+        if n < page_size as usize {
+            break;
+        }
+        page_num = page_num.saturating_add(1);
+    }
+    Ok(out)
 }
 
 /// Mutation passed to [`Storage::update_instance_atomic`]. Returning `Err`
@@ -238,6 +303,9 @@ pub trait Storage: Send + Sync + 'static {
     // --- Instances ---
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()>;
     async fn get_instance(&self, id: &str) -> StorageResult<Option<InstanceRow>>;
+    /// Paginated instance listing. Implementations MUST clamp `q.page_size` to
+    /// \[1, [`LIST_INSTANCES_PAGE_SIZE_MAX`]\] so full-table walks see a stable
+    /// page bound across backends.
     async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>>;
     async fn update_instance_atomic(
         &self,
@@ -270,14 +338,41 @@ pub trait Storage: Send + Sync + 'static {
         &self,
         cloud_event_id: &str,
     ) -> StorageResult<Option<InboundCloudEventRow>>;
-    async fn insert_inbound_cloud_event(&self, row: &InboundCloudEventRow) -> StorageResult<()>;
+    /// Insert a row if `cloud_event_id` is new. Returns `true` when a row
+    /// was inserted, `false` when the id already existed (idempotent dedupe).
+    async fn insert_inbound_cloud_event(&self, row: &InboundCloudEventRow) -> StorageResult<bool>;
+
+    // --- Intake records (durable replay of intake-acceptance decisions) ---
+    async fn get_intake_record(
+        &self,
+        binding: &str,
+        intake_id: &str,
+    ) -> StorageResult<Option<IntakeRecordRow>>;
+    async fn insert_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()>;
+    async fn update_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()>;
 
     // --- Auth ---
     async fn get_user_by_email(&self, email: &str) -> StorageResult<Option<UserRow>>;
     async fn get_user(&self, id: &str) -> StorageResult<Option<UserRow>>;
+    /// Insert a full row, or update profile fields on `id` conflict (not
+    /// `password_hash` or `auth_epoch` — those stay on the row until
+    /// [`Self::set_user_password_hash`] or [`Self::bump_user_auth_epoch`] /
+    /// session revoke).
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()>;
+    /// Bump after invalidating tokens (logout) so old JWT generations fail.
+    async fn bump_user_auth_epoch(&self, user_id: &str) -> StorageResult<()>;
+    /// Atomically set password hash, bump `auth_epoch`, and revoke all sessions
+    /// for the user. Call from admin or self-service password-change paths.
+    async fn set_user_password_hash(
+        &self,
+        user_id: &str,
+        password_hash: &str,
+    ) -> StorageResult<()>;
     async fn upsert_session(&self, row: &SessionRow) -> StorageResult<()>;
     async fn revoke_session(&self, jti: &str) -> StorageResult<()>;
+    /// Revokes every session row for the user (used on logout so refresh
+    /// tokens cannot mint new access tokens).
+    async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()>;
     async fn session_is_valid(&self, jti: &str) -> StorageResult<bool>;
 }
 

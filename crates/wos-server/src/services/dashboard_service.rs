@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use crate::domain::{
     AlertView, DashboardMetricsView, DriftDataPointView, PipelineDataPointView, StageMetricView,
 };
-use crate::storage::{InstanceQuery, StorageHandle};
+use crate::storage::{self, InstanceQuery, StorageHandle, LIST_INSTANCES_PAGE_SIZE_MAX};
 
 pub struct DashboardService {
     storage: StorageHandle,
@@ -17,13 +17,14 @@ impl DashboardService {
     }
 
     pub async fn metrics(&self) -> DashboardMetricsView {
-        let q = InstanceQuery {
-            page: 1,
-            page_size: 200,
-            ..Default::default()
-        };
-        let page = self.storage.list_instances(q).await.ok();
-        let items = page.as_ref().map(|p| p.items.as_slice()).unwrap_or(&[]);
+        let items: Vec<_> = storage::list_instances_all_pages(
+            &self.storage,
+            InstanceQuery::default(),
+            LIST_INSTANCES_PAGE_SIZE_MAX,
+        )
+        .await
+        .unwrap_or_default();
+        let items = items.as_slice();
         let active = items.iter().filter(|r| r.status == "active").count() as u64;
         let completed_7d = items
             .iter()
@@ -41,21 +42,32 @@ impl DashboardService {
             sla_compliance_trend: 0.0,
             avg_processing_time_trend: 0.0,
             ai_acceptance_rate_trend: 0.0,
+            synthetic_fields: vec![
+                "slaCompliance".into(),
+                "avgProcessingTimeDays".into(),
+                "aiAcceptanceRate".into(),
+                "activeInstancesTrend".into(),
+                "completed7dTrend".into(),
+                "slaComplianceTrend".into(),
+                "avgProcessingTimeTrend".into(),
+                "aiAcceptanceRateTrend".into(),
+            ],
         }
     }
 
     pub async fn stage_metrics(&self) -> Vec<StageMetricView> {
-        let q = InstanceQuery {
-            page: 1,
-            page_size: 500,
-            ..Default::default()
-        };
-        let Ok(page) = self.storage.list_instances(q).await else {
+        let Ok(rows) = storage::list_instances_all_pages(
+            &self.storage,
+            InstanceQuery::default(),
+            LIST_INSTANCES_PAGE_SIZE_MAX,
+        )
+        .await
+        else {
             return Vec::new();
         };
         use std::collections::BTreeMap;
         let mut by_state: BTreeMap<String, u64> = BTreeMap::new();
-        for row in &page.items {
+        for row in &rows {
             for name in row.configuration() {
                 *by_state.entry(name).or_default() += 1;
             }
@@ -75,6 +87,10 @@ impl DashboardService {
         Vec::new()
     }
 
+    /// Returns a synthetic weekly drift series. Values are stub fixtures
+    /// (`override_rate` and `time_on_task`) — not measured observations.
+    /// The reference server carries no drift telemetry; an analytics-backed
+    /// implementation will replace this.
     pub async fn drift_data(&self) -> Vec<DriftDataPointView> {
         let now = Utc::now();
         (0..6)

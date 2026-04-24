@@ -41,11 +41,12 @@ async fn seed_users(state: &AppState) -> anyhow::Result<()> {
                 role: role.into(),
                 password_hash: hash,
                 avatar: None,
+                auth_epoch: 0,
                 created_at: Utc::now(),
             })
             .await?;
     }
-    tracing::info!("seeded 3 demo users (password: wos-dev)");
+    tracing::info!("seeded 3 demo users (shared dev password is documented in wos-server README)");
     Ok(())
 }
 
