@@ -7,6 +7,23 @@ _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO su
 > **DI seam rework applied** (2026-04-18). Re-framed the gap list around Runtime §12 host-interface seams. Two seams are unwired (`ProvenanceSigner`, `ReportRenderer`) — both top-ROI. Three seams are wired-but-stubbed (`AccessControl` permissive, `ContractValidator` permissive, `ExternalService` echo) — tightening them to policy-composing impls is the bulk of envelope-stack readiness. The "provenance attestation" row was dropped from the ranking entirely: it's a consumer-injected plug via `ProvenanceSigner`, not a server gap. Runtime §15.7 ledger-gating enforcement (missed in the prior validation pass) was added as the `PolicyLayeredValidator` item. The `/explain` handler line-count drops from 1-day to ~2-hours once `ReportRenderer` is wired.
 >
 > Paired spec-side planning lives in [`../../TODO.md §4.7`](../../TODO.md) — three new spec items (#58 envelope status, #59 CloudEvent envelope-flow catalog, #60 envelope reference fixtures) plus cross-ref annotations on existing items (#2, #20, #30, #38, #40, #43) that serve envelope-stack composition once they land.
+>
+> ▎ **Drift refresh applied** (2026-04-24). Pre-flight: `cargo check -p wos-server` and `cargo test -p wos-conformance` run green after removing stale `crates/wos-synth` workspace member (root `Cargo.toml:9`), upgrading `socketioxide` 0.17→0.18, and fixing 11 type-drift errors between wos-server and current wos-core / wos-runtime types. Net status movement on the 22-row gap ranking: zero rows moved — all server-side seam work still pending per Day 1 / Day 2 / Day 3 sequence. Refresh covers: (a) new subsection ### custody-hook-encoding under Kernel; (b) new top-level ## Signature Profile alongside Integration/Semantic profiles; (c) new ## Extension Registry section; (d) new Kernel §8.2.1 Facts-tier snapshot row (status full, oracle `determination_transition_emits_case_file_snapshot`); (e) verified TODO cross-references — #20 #21 closed; #30 #38 #40 #43 #58 #59 #60 open with correct scoping (note #38 / #40 have closed authoring surfaces but open runtime/lint tails); (f) SignatureAffirmation emission recognised as runtime-wired (`signature.rs:447` / `tasks.rs:364`), status partial pending dedicated read surface; (g) schema-slug asymmetry subsection; (h) two footnotes on Ranked table. Methodology, rubric, and DI-seam framing preserved.
+
+> | # | Item | State | Source |
+> > |---|---|---|---|
+> > | #2 | Deterministic adverse-decision notice (dual-form) | closed | COMPLETED.md:136 |
+> > | #20 | Typed event meta-vocabulary (TransitionEvent) | closed | COMPLETED.md:326 |
+> > | #21 | Extension registry (seams-only MVP) | closed (3550fad) | COMPLETED.md:137 |
+> > | #30 | WS-HumanTask lifecycle completion (Suspended, Cancelled, Return with rework counter) | open | TODO.md:108 |
+> > | #38 | G-064 Assertion Library resolution lint (spec/protocol closed separately) | open | TODO.md:104 |
+> > | #40 | Task SLA runtime implementation, incl. signature-class ↔ assurance binding | open, independent of #21 | TODO.md:105 |
+> > | #43 | Assurance × impact-level composition | open, not started | TODO.md:58 |
+> > | #58 | Envelope status extension | open, not started | TODO.md:59 |
+> > | #59 | CloudEvent envelope-flow catalog | open, not started | TODO.md:59 |
+> > | #60 | Envelope reference fixtures | open, not started | TODO.md:60 |
+> >
+> > Do NOT claim #30 / #38 / #40 as closed. Do NOT couple #43 to #21.
 
 **Methodology.** Walked each spec extracting every imperative observable (MUST statements on processor behaviour, enumerated operations, processor-obligation tables). Cross-referenced against `crates/wos-server/src/http/*.rs` routes, `realtime/mod.rs` events, and `runtime/mod.rs` methods. Schema files that define document shapes (not observables) are marked "spec-side" — they're consumed as validation inputs to `POST /api/lint/document`, not served as first-class resources.
 
@@ -25,12 +42,12 @@ _Cross-references `/specs` + `/schemas` against the server's HTTP + Socket.IO su
 
 | Status | Count |
 |---|---|
-| full | 27 |
-| partial | 11 |
-| stub | 6 |
-| none | 11 |
-| spec-side | 13 |
-| **total** | **68** |
+| full | 30 |
+| partial | 13 |
+| stub | 9 |
+| none | 16 |
+| spec-side | 22 |
+| **total** | **90** |
 
 Kernel + runtime companion are mostly implemented (Runtime §12 has six of the spec's nine host interfaces wired). Governance L1 read-side and sidecar operations are solid. The gaps cluster in three places: (1) two unwired DI seams (`ProvenanceSigner`, `ReportRenderer`) that unblock attestation + explanation work, (2) integration-profile real dispatch (currently echo) plus correlation tokens, (3) semantic profile's SHACL / SPARQL (triplestore adapter needed). Stubs are concentrated in advanced L3 (SMT verification, drift detection) — both require external adapters; their response shapes are spec-correct so consumers can integrate today.
 
@@ -63,6 +80,12 @@ Three seams are wired but stubbed. Tightening them from stub to policy-composing
 - `ContractValidator` permissive → `PolicyLayeredValidator` with §15.7 ledger-gating + #43 signature-class check
 - `ExternalService` echo → `IntegrationDispatchService` with real binding dispatch
 
+**Notes:**
+
+- As of 2026-04-24, no seam wiring has shipped since the 2026-04-18 DI-seam-rework validation pass.
+- SignatureAffirmation emission is wired in runtime (`signature.rs:447` / `tasks.rs:364`) via the `InstanceStore` + provenance path; below the seam layer, does NOT change the nine-seam wiring status.
+- Pre-flight compile gate confirmed (`cargo check -p wos-server` + `cargo test -p wos-conformance` green on 2026-04-24) that wos-server remains type-compatible with current wos-core / wos-runtime types and passes all existing conformance fixtures, including K-DET-001 Facts-tier snapshot.
+
 **Framing consequence:** Every "build attestation" / "build explanation rendering" / "build identity proofing" concern the enterprise gap docs flag as a DocuSign-competitive requirement is a **seam composition** problem, not a net-new server module. The server's job is to accept the seam implementations consumers inject, enforce that they're wired for rights-impacting workflows, and stay out of the signing ceremony.
 
 ---
@@ -81,6 +104,7 @@ Spec: `specs/kernel/spec.md` — the authoritative WOS Kernel Specification. Sch
 | Kernel §3 Actor Model | Actor type resolution | wos-kernel | — | spec-side | Embedded in kernel doc; evaluator uses it internally |
 | Kernel §4 Lifecycle | Deterministic event evaluation | wos-kernel | `POST /api/instances/:id/events` | full | Routes through `AppRuntime` → `WosRuntime` |
 | Kernel §8 Provenance | Append-only provenance with hash chain | wos-kernel | `GET /api/instances/:id/provenance` | full | `ProvenanceService::prepare_batch` enforces chain on write |
+| Kernel §8.2.1 | caseFileSnapshot on determination transitions | wos-kernel + wos-provenance-record | via `POST /api/instances/:id/events` → drain | full | Wired in wos-runtime; oracle test `determination_transition_emits_case_file_snapshot` at `runtime.rs:715`; conformance gate K-DET-001. Confirmed green in pre-flight gate 4 |
 | Kernel §8 Provenance | Chain integrity verification | wos-kernel | — | **none** | Chain is enforced on write but never re-verified on read; `ProvenanceService::verify_chain` helper exists with zero callers. **User value: medium** — auditors want an explicit "chain valid" response |
 | Kernel §11 Contracts | Contract reference resolution | wos-kernel | — | spec-side | Internal to evaluator |
 
@@ -93,6 +117,21 @@ Spec: `specs/kernel/correspondence-metadata.md`. Schema: `schemas/kernel/wos-cor
 | Corr §1 Document | Validate correspondence metadata | wos-correspondence-metadata | `POST /api/lint/document` | full | Generic lint endpoint handles it |
 | Corr §1.4 Event model | Correspondence entries as provenance records | wos-correspondence-metadata | `GET /api/instances/:id/provenance` | full | Captured via normal provenance flow |
 | Corr §1.2 Templates | Correspondence template application | — | — | **none** | No endpoint for rendering correspondence from a template. **User value: low** — overlaps with notification-template render; consider deduplicating the two spec-side. |
+
+### custody-hook-encoding
+
+Spec: `specs/kernel/custody-hook-encoding.md`. Schema: `schemas/kernel/wos-custody-hook-encoding.schema.json`.
+
+| section | capability | schema | endpoint | status | notes |
+|---|---|---|---|---|---|
+| Custody §1.2 | One-authored-record → one-append invariant | wos-custody-hook-encoding | runtime custodyHook seam | spec-side | Runtime-internal seam obligation; no HTTP endpoint obligated |
+| Custody §1.4 | TypeID format on caseId / recordId | wos-custody-hook-encoding | `POST /api/lint/document` | partial | No dedicated lint rule for TypeID format; schema regex enforces shape only. Grep `crates/wos-lint/src` for `wos-case-typeid` / `wos-record-typeid` returns zero hits |
+| Custody §1.6 | wos.* eventType namespace ownership | wos-custody-hook-encoding | `POST /api/lint/document` | spec-side | Schema-enforceable |
+| Custody §1.6 | Deterministic dCBOR conversion | wos-custody-hook-encoding | runtime custody emitter | spec-side | Runtime-internal at custodyHook seam |
+| Custody §1.7 | Rejection list (NaN / Infinity / ill-formed UTF-8) | wos-custody-hook-encoding | runtime custody emitter | spec-side | Runtime-internal |
+| Custody §1.10 | WOS MUST stamp returned canonical_event_hash | — | — | none | Trellis computes hash; WOS consumes + stamps into downstream records. No evidence today |
+| Custody §1.11 | Surface reconciliation when record admits but posture-transition does not | — | — | none | Observable runtime obligation |
+| Custody §3.4 | Byte-authority fixture corpus (record.json / record.dcbor / record.sha256) | — | — | spec-side | Fixture obligation |
 
 ---
 
@@ -304,6 +343,39 @@ Spec: `specs/profiles/semantic.md`. Schema: `schemas/profiles/wos-semantic-profi
 
 ---
 
+## Signature Profile
+
+Spec: `specs/profiles/signature.md`. Schema: `schemas/profiles/wos-signature-profile.schema.json`.
+
+_Product shortcuts may exist only as workflow-lite paths over the same `SignatureAffirmation` semantics; no second meaning of "signed." (Signature shortcut rule, `wos-spec/CLAUDE.md`.)_
+
+| section | capability | schema | endpoint | status | notes |
+|---|---|---|---|---|---|
+| Signature §2 | Serve signature profile | wos-signature-profile | `GET /api/bundles/:url` | full | Part of bundle join |
+| Signature §2.5 | Consent-evidence capture on submit | wos-signature-profile | `POST /api/tasks/:id/response` | stub | Rides `ContractValidator` → `PermissiveValidator` accepts without consent-evidence check |
+| Signature §2.7 | Document-binding (digest) on submit | wos-signature-profile | `POST /api/tasks/:id/response` | stub | Same `ContractValidator` seam |
+| Signature §2.8 | SignatureAffirmation emission | — | runtime emission; read via `GET /api/instances/:id/provenance` (filter on kind) | partial | Emission wired at `crates/wos-runtime/src/runtime/signature.rs:447` + `tasks.rs:364`; no dedicated `GET /signature-affirmations` read surface. Pre-flight gate 3+4 proves this is current |
+| Signature §2.9 | Reassignment MUST NOT erase accountability for original assignment | — | — | none | No dedicated reassignment endpoint; provenance trail observability unclear |
+| Signature §2.10 | Witness / notary in-person authentication method | wos-signature-profile | `POST /api/tasks/:id/response` | stub | `ContractValidator` gate |
+| Signature §signer-roles | Signer role declaration | wos-signature-profile | via bundle | spec-side | |
+| Signature §signing-flow | Signing flow declaration | wos-signature-profile | via bundle | spec-side | |
+| Signature §identity-binding | Identity-binding policy hook | wos-signature-profile | via bundle | spec-side | Consumer-provided policy |
+
+---
+
+## Extension Registry
+
+Spec: `specs/registry/extension-registry.md`. Schema: `schemas/registry/wos-extension-registry.schema.json`.
+
+| section | capability | schema | endpoint | status | notes |
+|---|---|---|---|---|---|
+| Registry §2 | Load extension registry | wos-extension-registry | `GET /api/bundles/:url` | full | Bundle join |
+| Registry §4.3 | Reject runtime registry conflict on composition | — | `POST /api/lint/document` | none | Grep `crates/wos-lint/src` for `composition`; no lint rule. Multi-registry conflict obligation |
+| Registry §5.3 | Reject replacedBy cycles | — | `POST /api/lint/document` | none | Grep `crates/wos-lint/src` for `replacedBy`; no lint rule. Partial if lint rule exists, none otherwise |
+| Registry §6.1 (per-obligation) | Enumerated MUST statements | — | — | classify per row | Six MUST behaviours: (1) reject invalid registry doc — none; (2) reject retired entry — none; (3) reject replacedBy cycles — none; (4) reject conflicting composition — none; (5) opaque seam identifiers — spec-side; (6) preserve x- keys — spec-side |
+
+---
+
 ## Sidecars
 
 ### Business Calendar
@@ -387,6 +459,14 @@ These are document-shape specs that are (correctly) not exposed as resources; th
 - `schemas/advanced/wos-equity.schema.json` — bundle projection
 - `schemas/assurance/wos-assurance.schema.json` — embedded in identity facts
 
+### Schema-slug asymmetries (authoring smell, not correctness gap)
+
+Schema-only (runtime artifacts, no governing spec): `conformance-trace.schema.json`, `wos-lint-diagnostic.schema.json`, `wos-mcp-tools.schema.json`, `wos-synth-trace.schema.json`. (`wos-provenance-record.schema.json` is governed inline by `kernel/spec.md` but has no standalone spec peer.)
+
+Slug mismatches: `wos-assertion-gate` ↔ `assertion-library`, `wos-case-instance` ↔ `runtime`, `wos-integration-profile` ↔ `integration`, `wos-semantic-profile` ↔ `semantic`, `wos-advanced` ↔ `advanced-governance`, `wos-equity` ↔ `equity-config`, `wos-due-process` ↔ `due-process-config`.
+
+Recommendation: standardise slugs to enable generated-anted parity checking; track as candidate for `TODO.md §4.7`.
+
 ---
 
 ## Gap ranking — priority × complexity × tech-debt burden
@@ -410,9 +490,9 @@ Sorted by ROI (= P × D / C; higher is more value-per-effort). **DI seam rework 
 | `PolicyLayeredValidator` (§15.7 ledger-gating) | Runtime §15.7 | 5 | 2 | 5 | 12.5 | Replace `PermissiveValidator` with layered impl |
 | `RoleBasedAccessControl` (separation-of-duties) | Gov §7.2 / AI §1.5 | 5 | 2 | 5 | 12.5 | Replace `PermissiveAccessControl` |
 | Chain-integrity verify endpoint | Kernel §8 | 4 | 1 | 2 | 8.0 | Wrap existing `verify_chain` helper |
-| `/instances/:id/explain` handler | Runtime §9 / Gov §3.3 | 5 | 2 | 5 | 12.5 | ~50 lines once `ReportRenderer` is wired + #2 lands |
+| `/instances/:id/explain` handler | Runtime §9 / Gov §3.3 | 5 | 2 | 5 | 12.5 | ~50 lines once `ReportRenderer` is wired + #2 lands. _§4.1 prose updated 2026-04-18..04-24 (commit 25026dd); handler still blocked on ReportRenderer seam wiring._ |
 | Event-idempotency on `POST /events` | Runtime §4.3 | 4 | 2 | 4 | 8.0 | `idempotency_token` on event queue |
-| Pipeline validation endpoint | Gov §5.4 | 4 | 3 | 5 | 6.7 | Depends on TODO #38 |
+| Pipeline validation endpoint | Gov §5.4 | 4 | 3 | 5 | 6.7 | Depends on TODO #38. _Assertion Library spec-side protocol landed (§4.4); TODO #38 G-064 resolution lint still open; complexity unchanged._ |
 | `IntegrationDispatchService` + correlation tokens | Integ §3, §6 | 4 | 3 | 5 | 6.7 | Replace `EchoExternalService` |
 | Policy-parameters as-of resolution | PolicyParam §1.3 | 4 | 2 | 3 | 6.0 | Date-indexed lookup |
 | Hold create / release CRUD | Gov §3.6 | 3 | 2 | 3 | 4.5 |  |
