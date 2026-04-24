@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use serde_json::json;
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
@@ -145,6 +146,14 @@ async fn dashboard_metrics_returns_deterministic_shape() {
             "dashboard metrics missing `{key}`: {m}"
         );
     }
+    let synthetic = m
+        .get("syntheticFields")
+        .and_then(|v| v.as_array())
+        .expect("dashboard metrics should include syntheticFields array");
+    assert!(
+        !synthetic.is_empty(),
+        "syntheticFields should list stub metric keys for studio consumers: {m:?}"
+    );
 }
 
 #[tokio::test]
@@ -160,6 +169,27 @@ async fn nonexistent_instance_returns_404() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn put_kernel_requires_bearer_token() {
+    let state = build_app_state().await;
+    let response = app(state)
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/bundles/foo/kernel")
+                .header("content-type", "application/json")
+                .body(Body::from(json!({"url": "x"}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "PUT /api/bundles/.../kernel must require Authorization"
+    );
 }
 
 #[tokio::test]
