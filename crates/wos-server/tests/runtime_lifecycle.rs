@@ -13,8 +13,6 @@ use wos_server::runtime::AppRuntime;
 use wos_server::storage::KernelRow;
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 
-/// Minimal kernel stub sufficient for `Evaluator::new(kernel)` to succeed
-/// when wos-runtime enters the initial state.
 fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
     serde_json::json!({
         "$wosKernel": "1.0.0",
@@ -54,7 +52,6 @@ async fn bring_up() -> AppState {
     });
     let storage = storage::build(&cfg).await.unwrap();
 
-    // Plant a kernel row so AppRuntime's resolver can find it.
     storage
         .upsert_kernel(&KernelRow {
             url: "urn:wos:workflow:test:1.0.0".into(),
@@ -95,10 +92,11 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let state = bring_up().await;
     let app = http::router(state.clone());
 
+    let requested_id = "urn:wos:instance:test:smoke";
     let body = serde_json::json!({
         "definitionUrl": "urn:wos:workflow:test:1.0.0",
         "definitionVersion": "1.0.0",
-        "instanceId": "urn:wos:instance:test:smoke"
+        "instanceId": requested_id
     });
     let response = app
         .clone()
@@ -113,12 +111,24 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK, "POST /api/instances should succeed");
+    let post_bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
+    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
 
-    // Fetch back through GET /instances/:id
+    let actual_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
+    assert!(
+        actual_id.starts_with("default_case_"),
+        "runtime should mint a TypeID-based instance ID, got: {actual_id}"
+    );
+    let alias = post_val
+        .pointer("/extensions/x-wos-legacy-instance-alias")
+        .and_then(|x| x.as_str());
+    assert_eq!(alias, Some(requested_id), "legacy alias should match requested ID");
+
+    let encoded_id = actual_id.replace(':', "%3A");
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/instances/urn%3Awos%3Ainstance%3Atest%3Asmoke")
+                .uri(format!("/api/instances/{encoded_id}").as_str())
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -129,9 +139,9 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
         v.get("instanceId").and_then(|x| x.as_str()),
-        Some("urn:wos:instance:test:smoke")
+        Some(actual_id),
+        "GET should return the same TypeID instance ID"
     );
-    // The runtime should have entered the initial "intake" state.
     let config = v.get("configuration").and_then(|x| x.as_array()).unwrap();
     assert_eq!(config.len(), 1);
     assert_eq!(config[0].as_str(), Some("intake"));
