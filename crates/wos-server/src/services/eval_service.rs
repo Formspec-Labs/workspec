@@ -69,7 +69,7 @@ fn walk_states(
         if active.contains(id) {
             for t in &state.transitions {
                 out.push(AvailableTransitionView {
-                    event: t.event.clone(),
+                    event: t.event.as_ref().map(|e| e.runtime_dispatch_label()).unwrap_or_default(),
                     target: t.target.clone(),
                     guard: t.guard.clone(),
                     // Unguarded transitions are reported satisfied; guarded

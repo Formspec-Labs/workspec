@@ -34,27 +34,14 @@ pub mod validator;
 
 use access::PermissiveAccessControl;
 use presenter::SocketIoTaskPresenter;
-use resolver::{BundleServiceResolver, ResolverError};
-use service::{EchoExternalService, EchoServiceError};
-use validator::{PermissiveValidator, ValidatorError};
-
-/// Concrete type of the underlying `WosRuntime` with every trait hook
-/// pinned. Everywhere we need to name the runtime, we go through this
-/// alias so the generic parameter list stays in one place.
-pub type ConcreteWosRuntime = WosRuntime<
-    SqliteRuntimeStore,
-    BundleServiceResolver,
-    SocketIoTaskPresenter,
-    PermissiveAccessControl,
-    EchoExternalService,
-    PermissiveValidator,
-    SystemClock,
->;
+use resolver::BundleServiceResolver;
+use service::EchoExternalService;
+use validator::PermissiveValidator;
 
 /// The server's runtime handle. Clone freely — it's backed by an `Arc`.
 #[derive(Clone)]
 pub struct AppRuntime {
-    inner: Arc<Mutex<ConcreteWosRuntime>>,
+    inner: Arc<Mutex<WosRuntime>>,
 }
 
 impl AppRuntime {
@@ -122,8 +109,10 @@ impl AppRuntime {
         let inner = self.inner.clone();
         let id = instance_id.to_string();
         tokio::task::spawn_blocking(move || {
+            let pending: wos_core::instance::PendingEvent = serde_json::from_value(event)
+                .map_err(|e| RuntimeError::Resolver(format!("invalid event payload: {e}")))?;
             let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
-            guard.enqueue_event(&id, event)
+            guard.enqueue_event(&id, pending)
         })
         .await
         .expect("wos-runtime blocking task panicked")
@@ -231,14 +220,11 @@ impl AppRuntime {
         let id = instance_id.to_string();
         tokio::task::spawn_blocking(move || {
             let guard = inner.lock().expect("AppRuntime mutex poisoned");
-            guard.load_provenance_window(&id, offset, limit)
+            guard.load_provenance_window(&id, offset as usize, limit)
         })
         .await
         .expect("wos-runtime blocking task panicked")
     }
 }
 
-// Expose the resolver/validator errors so downstream code can reference them.
-pub use resolver::ResolverError as AppResolverError;
-pub use service::EchoServiceError as AppServiceError;
-pub use validator::ValidatorError as AppValidatorError;
+

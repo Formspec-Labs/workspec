@@ -102,14 +102,12 @@ pub struct TaskDismissRequest {
 #[serde(rename_all = "camelCase")]
 pub struct TaskDraftView {
     pub artifact_id: String,
-    pub recorded_at: String,
 }
 
 impl From<PersistDraftResult> for TaskDraftView {
     fn from(r: PersistDraftResult) -> Self {
         Self {
             artifact_id: r.artifact_id,
-            recorded_at: r.recorded_at,
         }
     }
 }

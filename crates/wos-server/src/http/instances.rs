@@ -15,7 +15,7 @@ use crate::domain::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::services::provenance_service::row_to_response;
-use crate::services::semantic_service::{ExportPayload, Format as ExportFormat, SemanticService};
+use crate::services::semantic_service::{Format as ExportFormat, SemanticService};
 use crate::storage::InstanceQuery;
 
 pub fn routes() -> Router<AppState> {
@@ -203,7 +203,7 @@ async fn submit_event(
     // captures the right range; for the head we need the first of the new
     // tail, which is the one at seq = prev_tail_len + 1.
     let head_record = match s.storage.last_provenance(&id).await? {
-        Some(tail) if drain.provenance.is_empty() => None,
+        Some(_tail) if drain.provenance.is_empty() => None,
         Some(tail) => {
             let head_seq = tail.seq - drain.provenance.len() as i64 + 1;
             let rows = s.storage.list_provenance(&id).await?;

@@ -97,9 +97,9 @@ pub fn list_rules() -> Vec<RuleMetadataView> {
         .map(|r| RuleMetadataView {
             id: r.id,
             tier: match r.tier {
-                wos_lint::Tier::T1 => "T1",
-                wos_lint::Tier::T2 => "T2",
-                wos_lint::Tier::T3 => "T3",
+                wos_lint::rules::Tier::T1 => "T1",
+                wos_lint::rules::Tier::T2 => "T2",
+                wos_lint::rules::Tier::T3 => "T3",
             },
             severity: match r.severity {
                 Severity::Error => "error",

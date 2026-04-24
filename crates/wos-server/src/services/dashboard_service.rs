@@ -56,12 +56,8 @@ impl DashboardService {
         use std::collections::BTreeMap;
         let mut by_state: BTreeMap<String, u64> = BTreeMap::new();
         for row in &page.items {
-            if let Some(arr) = row.configuration.as_array() {
-                for v in arr {
-                    if let Some(name) = v.as_str() {
-                        *by_state.entry(name.to_string()).or_default() += 1;
-                    }
-                }
+            for name in row.configuration() {
+                *by_state.entry(name).or_default() += 1;
             }
         }
         by_state

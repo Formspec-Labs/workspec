@@ -119,7 +119,7 @@ impl BundleService {
             .get_kernel(url)
             .await?
             .ok_or(StorageError::NotFound)?;
-        let mut row = kernel_row_from_doc(document)?;
+        let mut row = kernel_row_from_doc(document).map_err(|e| StorageError::Other(e.to_string()))?;
         // Keep the URL the PUT was addressed to — the client is the authority
         // on the path; spare them from surprising us if the body's `url`
         // differs from the path slug.

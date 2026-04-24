@@ -7,6 +7,7 @@
 //! via the [`AppRuntime`](crate::runtime::AppRuntime) wrapper. Calling these
 //! methods directly from a tokio async worker will panic.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -14,8 +15,8 @@ use tokio::runtime::Handle;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_runtime::store::{
-    ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StepResultRecord,
-    StoreError, TaskArtifact, TaskArtifactKind,
+    IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
+    StepResultRecord, StoreError, TaskArtifact, TaskArtifactKind,
 };
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 
@@ -26,6 +27,7 @@ pub struct SqliteRuntimeStore {
     storage: StorageHandle,
     provenance: Arc<ProvenanceService>,
     handle: Handle,
+    intake_records: HashMap<(String, String), IntakeRecord>,
 }
 
 impl SqliteRuntimeStore {
@@ -38,6 +40,7 @@ impl SqliteRuntimeStore {
             storage,
             provenance,
             handle,
+            intake_records: HashMap::new(),
         }
     }
 }
@@ -168,6 +171,38 @@ impl RuntimeStore for SqliteRuntimeStore {
             Ok(())
         })
     }
+
+    fn create_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+        let key = (record.binding.clone(), record.intake_id.clone());
+        if self.intake_records.contains_key(&key) {
+            return Err(StoreError::AlreadyExists(format!(
+                "intake:{}:{}",
+                key.0, key.1
+            )));
+        }
+        self.intake_records.insert(key, record);
+        Ok(())
+    }
+
+    fn load_intake_record(
+        &self,
+        binding: &str,
+        intake_id: &str,
+    ) -> Result<IntakeRecord, StoreError> {
+        self.intake_records
+            .get(&(binding.to_string(), intake_id.to_string()))
+            .cloned()
+            .ok_or_else(|| StoreError::NotFound(format!("intake:{binding}:{intake_id}")))
+    }
+
+    fn save_intake_record(&mut self, record: IntakeRecord) -> Result<(), StoreError> {
+        let key = (record.binding.clone(), record.intake_id.clone());
+        if !self.intake_records.contains_key(&key) {
+            return Err(StoreError::NotFound(format!("intake:{}:{}", key.0, key.1)));
+        }
+        self.intake_records.insert(key, record);
+        Ok(())
+    }
 }
 
 fn storage_err(e: crate::storage::StorageError) -> StoreError {
@@ -246,13 +281,13 @@ pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
             let op = match k.operation {
                 ReplayOperation::PersistDraft => "persistDraft",
                 ReplayOperation::SubmitTaskResponse => "submitTaskResponse",
+                ReplayOperation::AcceptIntakeHandoff => "acceptIntakeHandoff",
             };
             let value_json = match v {
                 ReplayValue::Draft(d) => serde_json::json!({
-                    "kind": "draft",
-                    "artifactId": d.artifact_id,
-                    "recordedAt": d.recorded_at,
-                }),
+                        "kind": "draft",
+                        "artifactId": d.artifact_id,
+                    }),
                 ReplayValue::Submission(s) => match s {
                     TaskSubmissionResult::Completed {
                         artifact_id,
@@ -276,6 +311,9 @@ pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                         serde_json::json!({ "kind": "rejected", "code": code })
                     }
                 },
+                ReplayValue::Intake(_) => serde_json::json!({
+                        "kind": "intake",
+                    }),
             };
             serde_json::json!({
                 "key": {
@@ -375,11 +413,6 @@ pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
                     let value = match v.get("kind").and_then(|x| x.as_str())? {
                         "draft" => ReplayValue::Draft(PersistDraftResult {
                             artifact_id: v.get("artifactId")?.as_str()?.to_string(),
-                            recorded_at: v
-                                .get("recordedAt")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("")
-                                .to_string(),
                         }),
                         "completed" => ReplayValue::Submission(TaskSubmissionResult::Completed {
                             artifact_id: v.get("artifactId")?.as_str()?.to_string(),
@@ -402,6 +435,7 @@ pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
                         "rejected" => ReplayValue::Submission(TaskSubmissionResult::Rejected {
                             code: v.get("code")?.as_str()?.to_string(),
                         }),
+                        "intake" => return None,
                         _ => return None,
                     };
                     Some((key, value))

@@ -64,6 +64,7 @@ async fn instance_pagination_and_filters() {
                 status: status.into(),
                 impact_level: impact.into(),
                 instance_json: serde_json::json!({ "configuration": ["intake"] }),
+                runtime_aux_json: serde_json::json!({}),
                 created_at: now,
                 updated_at: now,
             })
@@ -117,6 +118,7 @@ async fn atomic_update_appends_provenance_in_same_txn() {
             status: "active".into(),
             impact_level: "operational".into(),
             instance_json: serde_json::json!({"caseState": {}}),
+            runtime_aux_json: serde_json::json!({}),
             created_at: now,
             updated_at: now,
         })

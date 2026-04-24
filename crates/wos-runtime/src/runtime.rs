@@ -389,20 +389,20 @@ where
 
 /// Generic WOS runtime.
 pub struct WosRuntime {
-    store: Box<dyn RuntimeStore>,
-    resolver: Box<dyn ResolveDocumentsDyn>,
-    presenter: Box<dyn PresentTasksDyn>,
-    access_control: Box<dyn AccessControl>,
-    service: Box<dyn InvokeServicesDyn>,
-    validator: Box<dyn ValidateContractsDyn>,
-    clock: Box<dyn Clock>,
-    companion_policy: Box<dyn CompanionPolicy>,
+    store: Box<dyn RuntimeStore + Send + Sync>,
+    resolver: Box<dyn ResolveDocumentsDyn + Send + Sync>,
+    presenter: Box<dyn PresentTasksDyn + Send + Sync>,
+    access_control: Box<dyn AccessControl + Send + Sync>,
+    service: Box<dyn InvokeServicesDyn + Send + Sync>,
+    validator: Box<dyn ValidateContractsDyn + Send + Sync>,
+    clock: Box<dyn Clock + Send + Sync>,
+    companion_policy: Box<dyn CompanionPolicy + Send + Sync>,
     integration_profile: Option<IntegrationProfileDocument>,
     /// Attached business calendar for SLA deadline computation (BC.1).
     business_calendar: Option<BusinessCalendarDocument>,
     bindings: BindingRegistry,
     intake_acceptors: IntakeAcceptanceRegistry,
-    intake_policy: Box<dyn IntakeAcceptancePolicy>,
+    intake_policy: Box<dyn IntakeAcceptancePolicy + Send + Sync>,
     signature_profiles: Vec<signature::SignatureProfileRegistration>,
 }
 
@@ -419,17 +419,17 @@ impl WosRuntime {
         bindings: BindingRegistry,
     ) -> Self
     where
-        S: RuntimeStore + 'static,
-        R: DocumentResolver + 'static,
+        S: RuntimeStore + Send + Sync + 'static,
+        R: DocumentResolver + Send + Sync + 'static,
         R::Error: StdError + Send + Sync + 'static,
-        P: TaskPresenter + 'static,
+        P: TaskPresenter + Send + Sync + 'static,
         P::Error: StdError + Send + Sync + 'static,
-        A: AccessControl + 'static,
-        E: ExternalService + 'static,
+        A: AccessControl + Send + Sync + 'static,
+        E: ExternalService + Send + Sync + 'static,
         E::Error: StdError + Send + Sync + 'static,
-        V: ContractValidator + 'static,
+        V: ContractValidator + Send + Sync + 'static,
         V::Error: StdError + Send + Sync + 'static,
-        C: Clock + 'static,
+        C: Clock + Send + Sync + 'static,
     {
         Self {
             store: Box::new(store),
@@ -452,7 +452,7 @@ impl WosRuntime {
     /// Replace the default no-op companion-policy hook.
     pub fn with_companion_policy<P>(mut self, companion_policy: P) -> Self
     where
-        P: CompanionPolicy + 'static,
+        P: CompanionPolicy + Send + Sync + 'static,
     {
         self.companion_policy = Box::new(companion_policy);
         self
@@ -485,7 +485,7 @@ impl WosRuntime {
     /// Replace the default no-op intake-acceptance policy.
     pub fn with_intake_policy<P>(mut self, intake_policy: P) -> Self
     where
-        P: IntakeAcceptancePolicy + 'static,
+        P: IntakeAcceptancePolicy + Send + Sync + 'static,
     {
         self.intake_policy = Box::new(intake_policy);
         self
@@ -1744,7 +1744,7 @@ mod tests {
 
     fn runtime_with_store<S>(store: S, kernel: KernelDocument) -> WosRuntime
     where
-        S: RuntimeStore + 'static,
+        S: RuntimeStore + Send + Sync + 'static,
     {
         WosRuntime::new(
             store,

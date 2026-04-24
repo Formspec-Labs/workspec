@@ -10,7 +10,7 @@ use chrono::Utc;
 use tower::ServiceExt;
 use wos_server::config::{AiChatKind, AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
-use wos_server::storage::{KernelRow, Storage};
+use wos_server::storage::KernelRow;
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 
 /// Minimal kernel stub sufficient for `Evaluator::new(kernel)` to succeed
