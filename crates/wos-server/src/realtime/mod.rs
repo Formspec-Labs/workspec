@@ -206,7 +206,16 @@ async fn on_connect(
                         match token {
                             Some(t) => match state.auth.verify(&t).await {
                                 Ok(ctx) => {
-                                    ctx.user.role.eq_ignore_ascii_case("Supervisor")
+                                    // Last non-typed-role check post-WS-083 sweep:
+                                    // `kernel:update` is a Socket.IO event, not a
+                                    // `FromRequestParts` extractor, so the
+                                    // `RequireRole<Supervisor>` axum extractor does
+                                    // not reach this site. Use `Supervisor::NAME`
+                                    // (via the `Role` trait) so role-typo bugs are
+                                    // caught at compile time.
+                                    ctx.user.role.eq_ignore_ascii_case(
+                                        <crate::auth::Supervisor as crate::auth::Role>::NAME,
+                                    )
                                 }
                                 Err(_) => false,
                             },

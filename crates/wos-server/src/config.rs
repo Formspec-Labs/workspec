@@ -168,10 +168,12 @@ pub struct ServerConfig {
     )]
     pub session_sweep_enabled: bool,
 
-    /// Provenance signer backend. `noop` ships spec-correct empty-signature
-    /// attestation blocks; `ed25519-file` (WS-043) and `external` are
-    /// reserved variants that today fall back to `noop` until the impls
-    /// land. Wired through [`crate::runtime::AppRuntimeConfig::from_server_config`].
+    /// Provenance signer backend. **Today only `noop` is wired.** `noop`
+    /// ships spec-correct empty-signature attestation blocks. `Ed25519File`
+    /// (WS-043) and `External` will be added with their impls; until then,
+    /// `WOS_SIGNER=ed25519-file` (or any other non-`noop` value) currently
+    /// produces a clap error — there is no fallback. Wired through
+    /// [`crate::runtime::AppRuntimeConfig::from_server_config`].
     #[arg(long, env = "WOS_SIGNER", value_enum, default_value_t = SignerKind::Noop)]
     pub signer_kind: SignerKind,
 }
@@ -204,9 +206,11 @@ pub enum AiChatKind {
     Gemini,
 }
 
-/// Provenance signer selection. `Noop` is the only impl that actually
-/// signs today; the other variants are reserved so `WOS_SIGNER=…` is
-/// stable while implementations land (WS-043 for `Ed25519File`).
+/// Provenance signer selection. **Today only `Noop` is wired** — there
+/// is no fallback. `Ed25519File` (WS-043) and `External` will be added
+/// as variants when their impls land; until then, any non-`noop` value
+/// passed via `WOS_SIGNER=…` produces a clap parse error rather than
+/// silently degrading.
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignerKind {
     Noop,

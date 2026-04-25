@@ -80,6 +80,8 @@ Everything mounted under `/api/*`. Route groups:
 | `/agents/*` | `http/agents.rs` | Agent registry + AI lifecycle |
 | `/advanced/*` | `http/advanced.rs` | L3 stubs (SMT, equity, zones) |
 
+**Auth scope (WS-003 close-out):** the writes-require-Supervisor rule applies to instances / tasks / holds / agents / assurance / governance / equity / integration. The `lint`, `notifications`, `calendar`, and `conformance` POST routes remain anonymous (WS-014 / WS-091 territory).
+
 **Realtime**: Socket.IO at `/socket.io/`. Namespaces registered in `realtime/`. Task events, cursor presence, governance updates.
 
 **Reference wire contract**: `studio/src/services/WosBackend.ts` + `WosPorts.ts`. Handler response shapes match these contracts.

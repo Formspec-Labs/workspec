@@ -75,8 +75,10 @@ impl Default for AppRuntimeConfig {
 
 impl AppRuntimeConfig {
     /// Read [`crate::config::ServerConfig::signer_kind`] (env `WOS_SIGNER`)
-    /// and pick a concrete signer. Today only `noop` is wired; `ed25519-file`
-    /// and `external` are placeholders for WS-043 and an out-of-process signer.
+    /// and pick a concrete signer. **Today only `noop` is wired.**
+    /// `Ed25519File` (WS-043) and `External` will be added with their impls;
+    /// `WOS_SIGNER=ed25519-file` (or any other non-`noop` value) currently
+    /// produces a clap error at startup — there is no fallback.
     pub fn from_server_config(cfg: &crate::config::ServerConfig) -> Self {
         let signer: Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync> =
             match cfg.signer_kind {

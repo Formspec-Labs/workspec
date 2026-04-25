@@ -111,6 +111,12 @@ pub struct UpgradeRequest {
 pub struct AssuranceChainResponse {
     pub facts: Vec<IdentityFactView>,
     pub chain_valid: bool,
+    /// **Polarity:** the **child** fact id whose `upgraded_from` link is
+    /// dangling — i.e. the fact in `facts` whose `upgraded_from` does not
+    /// resolve to any id present in the returned set. Callers seeking the
+    /// dangling reference itself must consult
+    /// `facts.iter().find(|f| f.id == broken_at).and_then(|f| f.upgraded_from.clone())`.
+    /// `None` when the chain is intact.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub broken_at: Option<String>,
 }
