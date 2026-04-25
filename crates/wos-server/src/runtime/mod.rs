@@ -55,6 +55,12 @@ use validator::{PermissiveValidator, PolicyLayeredValidator};
 pub struct AppRuntimeConfig {
     pub signer: Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync>,
     pub renderer: Arc<dyn ReportRenderer<Error = renderer::RendererError> + Send + Sync>,
+    /// Contract binding adapters for task submission. Production registers
+    /// nothing here (matching pre-WS-011 behaviour); tests inject a
+    /// `formspec` adapter so HTTP-level task submission fixtures can drive
+    /// `submit_task_response` to a `Completed` outcome without adding a
+    /// runtime-tier seam.
+    pub bindings: BindingRegistry,
 }
 
 impl Default for AppRuntimeConfig {
@@ -62,6 +68,7 @@ impl Default for AppRuntimeConfig {
         Self {
             signer: Arc::new(NoopSigner),
             renderer: Arc::new(JsonRenderer),
+            bindings: BindingRegistry::new(),
         }
     }
 }
@@ -78,6 +85,7 @@ impl AppRuntimeConfig {
         Self {
             signer,
             renderer: Arc::new(JsonRenderer),
+            bindings: BindingRegistry::new(),
         }
     }
 }
@@ -121,7 +129,6 @@ impl AppRuntime {
         let store = SqliteRuntimeStore::new(storage.clone(), provenance.clone(), handle.clone());
         let resolver = BundleServiceResolver::new(bundle.clone(), handle.clone());
         let presenter = SocketIoTaskPresenter::new(storage, io, handle);
-        let bindings = BindingRegistry::new();
         let rt = WosRuntime::new(
             store,
             resolver,
@@ -130,7 +137,7 @@ impl AppRuntime {
             EchoExternalService,
             PolicyLayeredValidator::new(PermissiveValidator),
             SystemClock,
-            bindings,
+            config.bindings,
         );
         Self {
             inner: Arc::new(Mutex::new(rt)),

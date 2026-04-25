@@ -247,6 +247,7 @@ async fn app_runtime_build_with_swaps_in_custom_signer() {
         AppRuntimeConfig {
             signer: signer_ref,
             renderer: Arc::new(JsonRenderer),
+            bindings: wos_runtime::BindingRegistry::new(),
         },
     );
 
