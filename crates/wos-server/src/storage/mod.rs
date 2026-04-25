@@ -382,6 +382,14 @@ pub trait Storage: Send + Sync + 'static {
     /// tokens cannot mint new access tokens).
     async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()>;
     async fn session_is_valid(&self, jti: &str) -> StorageResult<bool>;
+    /// Delete session rows that are no longer audit-relevant: rows whose
+    /// `expires_at < now - 7d`, plus revoked rows whose `expires_at < now - 30d`
+    /// (the longer revoked-grace window keeps recent revocations queryable
+    /// during incident response). Returns the number of rows deleted.
+    async fn sweep_expired_sessions(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> StorageResult<u64>;
 }
 
 /// Build the storage backend selected by the config.

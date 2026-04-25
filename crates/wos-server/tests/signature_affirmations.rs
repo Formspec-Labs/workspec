@@ -34,6 +34,7 @@ fn stub_config() -> Arc<ServerConfig> {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        session_sweep_enabled: true,
         signer_kind: wos_server::config::SignerKind::Noop,
     })
 }

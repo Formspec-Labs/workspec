@@ -739,6 +739,24 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
+    async fn sweep_expired_sessions(
+        &self,
+        now: DateTime<Utc>,
+    ) -> StorageResult<u64> {
+        let cutoff_unrevoked = now - chrono::Duration::days(7);
+        let cutoff_revoked = now - chrono::Duration::days(30);
+        let result = sqlx::query(
+            "DELETE FROM sessions
+             WHERE expires_at < ?
+                OR (revoked = 1 AND expires_at < ?)",
+        )
+        .bind(cutoff_unrevoked)
+        .bind(cutoff_revoked)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     async fn session_is_valid(&self, jti: &str) -> StorageResult<bool> {
         let row = sqlx::query("SELECT revoked, expires_at FROM sessions WHERE jti = ?")
             .bind(jti)

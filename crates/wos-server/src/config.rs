@@ -156,12 +156,35 @@ pub struct ServerConfig {
     #[arg(long, env = "WOS_TIMER_POLL_MS", default_value_t = 1000)]
     pub timer_poll_ms: u64,
 
+    /// Run the daily session-table sweep inside `timer_task` (deletes rows
+    /// where `expires_at < now - 7d`, plus revoked rows older than 30d).
+    /// Set `WOS_SESSION_SWEEP=off|false|0` to opt out for ops parity with
+    /// external schedulers; default `true`.
+    #[arg(
+        long = "session-sweep",
+        env = "WOS_SESSION_SWEEP",
+        default_value_t = true,
+        value_parser = parse_session_sweep
+    )]
+    pub session_sweep_enabled: bool,
+
     /// Provenance signer backend. `noop` ships spec-correct empty-signature
     /// attestation blocks; `ed25519-file` (WS-043) and `external` are
     /// reserved variants that today fall back to `noop` until the impls
     /// land. Wired through [`crate::runtime::AppRuntimeConfig::from_server_config`].
     #[arg(long, env = "WOS_SIGNER", value_enum, default_value_t = SignerKind::Noop)]
     pub signer_kind: SignerKind,
+}
+
+/// Parse `WOS_SESSION_SWEEP` / `--session-sweep`. Recognises `off`, `false`,
+/// and `0` as `false`; everything else (including the empty string) is
+/// `true` so the daily sweep is opt-out, matching the env-var contract
+/// documented on [`ServerConfig::session_sweep_enabled`].
+fn parse_session_sweep(s: &str) -> Result<bool, String> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "off" | "false" | "0" => Ok(false),
+        _ => Ok(true),
+    }
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,6 +258,7 @@ mod tests {
             gemini_api_key: String::new(),
             cursor_throttle_ms: 50,
             timer_poll_ms: 1000,
+            session_sweep_enabled: true,
             signer_kind: SignerKind::Noop,
         }
     }

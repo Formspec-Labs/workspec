@@ -10,7 +10,7 @@ Live spec-vs-impl status (full / partial / stub / none) and the ranked gap table
 
 Compact dependency-ordered view of open work. **`→`** marks a hard dependency; **`∥`** marks tasks that can run concurrently. Each id is a clickable handle into the body sections below. Closed (`[✓]`) and indefinitely-deferred (WS-049, WS-050) items omitted; demand-gated and soft items live at the bottom of this block, not in the linear sequence.
 
-**Decisions locked (2026-04-25):** WS-088 → layered traits + rename `SqliteRuntimeStore` to `StorageBackedRuntimeStore` in `wos-server-runtime-local`. WS-020 → datalake-shaped second adapter (Parquet-style append/columnar, framed as WS-090 because the right port is sink-shaped, not full `Storage`). WS-003 → finish Supervisor-write sweep as scoped, then per-actor read scoping lands as WS-091. WS-083 → const-generic `RequireRole<R: Role>` over zero-sized marker types (works on stable; avoids `adt_const_params` nightly-gating of `&'static str` const generics). WS-034 → `GET` with `?asOf=`. WS-043 + WS-028 → promoted into the linear sequence.
+**Decisions locked (2026-04-25, refined post-research):** WS-088 → layered traits (`RuntimeOps` + `SeamAccess` + `TimerCoord`) in `wos-server-ports`; rename `SqliteRuntimeStore` → `StorageBackedRuntimeStore` in `wos-server-runtime-local`. **WS-020 → Postgres operational `Storage` adapter** (revised from earlier "in-memory baseline"; data-intensive-systems research showed every named production system in this space — Restate, Temporal, Cadence, Zeebe — keeps operational + audit on **separate ports** with a transactional DB on the operational side, and in-memory was the wrong production posture at SBA-Q1 scale). **WS-090 → audit/provenance sink port (`AuditSink`) with Postgres-append-only-table as the SBA-Q1 reference impl, NOT a Parquet/Delta `Storage` replacement.** Wire shape MUST serialize 1:1 to Trellis Phase-1 CDDL event format ([`trellis/specs/trellis-core.md` §1.4](../../../trellis/specs/trellis-core.md) phase-superset commitment is normative); Postgres preserves the existing `ProvenanceRow` `seq`/`hash`/`previous_hash` shape losslessly. Datalake formats (`delta-rs`) become a Phase-2 archival impl behind the same port if/when audit volume justifies columnar compression. WS-003 → Supervisor-write sweep; per-actor read scoping moves to WS-091. WS-083 → const-generic `RequireRole<R: Role>` over zero-sized marker types (stable Rust; avoids `adt_const_params` nightly). WS-034 → `GET` with `?asOf=`. WS-043 + WS-028 → promoted into linear sequence. **New tasks** WS-093 (Trellis exporter) + WS-094 (Restate runtime adapter — the named production target per parent [`CLAUDE.md`](../../CLAUDE.md)).
 
 **Phase 1 — foundation (four tracks in parallel):**
 
@@ -27,18 +27,21 @@ Compact dependency-ordered view of open work. **`→`** marks a hard dependency;
 
 - **WS-034** → **WS-036**
 
-**Phase 4 — storage adapters + signer (gated on Phase 1 Track A; parallel within phase):**
+**Phase 4 — storage adapters + signer (gated on Phase 1 Track A; widest parallelism window):**
 
-- **WS-020** (operational second `Storage` impl — start in-memory to ratchet the trait surface) ∥ **WS-090** (analytical / datalake sink — Parquet-shaped append-only port; new task) ∥ **WS-080** (now lives inside `wos-server-runtime-local`) ∥ **WS-043** (Ed25519 signer)
+- **WS-020** (Postgres operational `Storage`) ∥ **WS-090** (Postgres-append-only `AuditSink`; outbox pattern, Trellis-CDDL-aligned wire shape) ∥ **WS-080** (`AppRuntimeConfig` seam wiring inside `runtime-local`) ∥ **WS-043** (Ed25519 signer)
 - **WS-030** lands once WS-043 is green (sequential — disclosure block emits only when the signer makes claims)
-- **WS-021** is the close-out marker once WS-020 + WS-089 are both green
+- **WS-021** close-out marker once WS-020 + WS-089 are both green
 
-**Phase 5 — production seam impls + per-actor RBAC:**
+**Phase 5 — production seam impls (parallel within phase):**
 
-- **WS-028** (real integration dispatch — correlation-token wiring is a trait-signature change; do it once, before more adapters land)
-- **WS-091** (per-actor read scoping — full RBAC, NEW task) — gated on WS-003 close so Supervisor-write rule is locked first
+- **WS-028** (real integration dispatch — correlation-token wiring is a trait-signature change; do it once, before more adapters land) ∥ **WS-094** (Restate `RuntimeAdapter` — the named production runtime; mechanical wrap of Restate's Rust SDK behind the WS-088 trait surface)
 
-**Phase 6 — ops hygiene:**
+**Phase 6 — governance/integrity hand-offs + RBAC (parallel within phase):**
+
+- **WS-093** (WOS → Trellis exporter — reads `AuditSink`, produces signed Trellis envelopes via `trellis-core` + `trellis-cose`) ∥ **WS-091** (per-actor read scoping / RBAC — gated on WS-003 close)
+
+**Phase 7 — ops hygiene:**
 
 - **WS-052** ∥ **WS-055**
 
@@ -200,7 +203,7 @@ Recorded for transparency — these are explicit spec-smell parking, not work. D
 Internal hygiene. Items that don't affect wire protocol but reduce long-tail operational debt.
 
 - [✓] **WS-051 · Timer poll → use `list_instances_all_pages`** `[3 / 3 / 1]` *(ROI 9.0)* — [`services/timer_task.rs:42-112`](src/services/timer_task.rs) re-implements the paginated walk over `list_instances` that [`storage::list_instances_all_pages`](src/storage/mod.rs) already provides (same 200-row SQLite clamp). Replace the local loop with a call to the helper. **Done:** `timer_task::tick_once` loses its pagination loop; `tests/timer_list_pagination.rs` passes unchanged; helper is the single source of pagination semantics. **Gate:** none.
-- [ ] **WS-052 · Session table hygiene** `[3 / 3 / 2]` *(ROI 4.5)* — `sessions` grows unboundedly on long-lived deployments. Add a daily background sweep inside the existing `timer_task` loop that deletes rows where `expires_at < now - 7d` OR (`revoked = true` AND `expires_at < now - 30d`). No archival — these rows are audit-footprint-only. **Done:** sweep deletes expected rows on a seeded fixture; emits a `tracing::info!` row count each sweep; opt-out env var `WOS_SESSION_SWEEP=off` for ops parity with external schedulers. **Gate:** none.
+- [✓] **WS-052 · Session table hygiene** `[3 / 3 / 2]` *(ROI 4.5)* — `Storage::sweep_expired_sessions` ([`storage/sqlite.rs`](src/storage/sqlite.rs)) deletes rows where `expires_at < now - 7d` OR (`revoked = 1 AND expires_at < now - 30d`). [`services/timer_task.rs`](src/services/timer_task.rs) `spawn` tracks `last_sweep_at` and runs the sweep at most once per 24h, gated by `cfg.session_sweep_enabled` (`WOS_SESSION_SWEEP=off|false|0` opts out; default on). Each sweep emits `tracing::info!(deleted_rows = …, "session sweep")`. Tests in [`tests/session_sweep.rs`](tests/session_sweep.rs) cover the seeded fixture (one fresh, one expired-8d, one revoked-31d, one revoked-5d → returns 2; survivors verified) plus the all-fresh no-op path. **Gate:** none.
 - [✓] **WS-053 · `tasks` table vs presenter — mark deferred** `[2 / 2 / 1]` *(ROI 4.0)* — `0002_runtime_tables.sql` anticipates SQL mirroring of runtime tasks; reference [`SocketIoTaskPresenter`](src/runtime/mod.rs) emits events only, and `wos-runtime` owns task state. Pick the lean: **defer the mirror**, not implement write-through. **Done:** migration `0002` comments on the `tasks` table block mark it "RESERVED — see TODO; not populated by the reference presenter"; a parallel row lands in [`PARITY.md`](PARITY.md) noting the deferral. **Gate:** a consumer needs SQL-queryable tasks beyond the Socket.IO feed.
 - [✓] **WS-054 · `equity_reports` storage — mark reserved** `[2 / 2 / 1]` *(ROI 4.0)* — Table exists from `0002`; no `Storage` trait methods yet and no caller. Mark as reserved in the migration comment and a matching PARITY row; implement trait + SQLite methods only when the L3 equity cache work (Advanced §3.3 scheduled runs) is funded. **Done:** migration comment names the reserved status; no trait methods added prematurely. **Gate:** L3 equity scheduler lands.
 - [ ] **WS-055 · Dashboard metrics — replace synthetic fixtures with measured data** `[3 / 4 / 5]` *(ROI 2.4)* — `services/dashboard_service.rs::metrics` still returns fixed fixtures for `slaCompliance` (0.94), `avgProcessingTimeDays` (3.2), `aiAcceptanceRate` (0.82), every `*Trend` field (0.0), and the full `drift_data` series (override_rate 0.08, time_on_task 25.0). Responses disclose this via `DashboardMetricsView.synthetic_fields` per review finding F7 so consumers can distinguish stubs from measurements — but the reference server still has no real telemetry. Wire measured aggregations (SLA = transition timestamps in provenance vs. kernel deadlines; avg processing time = `case.created` → `case.completed` from provenance; AI acceptance = agent decision outcomes filtered by autonomy band) and drop each field from `synthetic_fields` as it gains real backing. When the list is empty, keep the field as an always-empty signal to avoid wire-contract churn. **Gate:** none.
