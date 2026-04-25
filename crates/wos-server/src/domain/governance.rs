@@ -53,6 +53,22 @@ pub struct PolicyVersionView {
     pub status: String,
 }
 
+/// `ResolvedPolicyView` — payload for `/governance/{url}/policy-resolve` and
+/// `/policy/{url}/resolve` (WS-034). Returns the version of the
+/// `policy-parameters` sidecar active at the requested instant, with the full
+/// parameters object inlined so callers do not need a second fetch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedPolicyView {
+    pub id: String,
+    pub label: String,
+    pub effective_date: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiry_date: Option<String>,
+    pub parameters: serde_json::Value,
+    pub resolved_as_of: String,
+}
+
 /// `CalendarEventView` in `WosPorts.ts:86`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

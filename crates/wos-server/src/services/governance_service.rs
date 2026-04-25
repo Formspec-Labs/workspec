@@ -6,9 +6,9 @@ use crate::domain::{
     AgentCapabilityView, AgentView, CalendarEventView, DelegationEntryView, DeonticConstraintView,
     EquityCategoryView, EquityConfigView, EquityDisparityMethodView, EquityRemediationTriggerView,
     EquityReportingScheduleView, OverrideAuthorityView, PipelineAssertionView, PipelineStageView,
-    PipelineView, PolicyVersionView, QualityControlsView, ReviewSamplingView, SeparationOfDutiesView,
-    ServiceHealthView, SolverView, VerificationCounterexampleView, VerificationReportView,
-    VerificationResultView, VerificationSummaryView,
+    PipelineView, PolicyVersionView, QualityControlsView, ResolvedPolicyView, ReviewSamplingView,
+    SeparationOfDutiesView, ServiceHealthView, SolverView, VerificationCounterexampleView,
+    VerificationReportView, VerificationResultView, VerificationSummaryView,
 };
 use crate::error::ApiResult;
 use crate::storage::StorageHandle;
@@ -292,6 +292,62 @@ impl GovernanceService {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Resolve the `policy-parameters` version active at `as_of`. WS-034 backs
+    /// both `POST /governance/{url}/policy-resolve` (legacy body form) and
+    /// `GET /policy/{url}/resolve?asOf=` (decided 2026-04-25). A version is
+    /// "active" when `effectiveDate <= as_of < (expiryDate or +inf)`.
+    /// Returns `None` if the workflow has no `policy-parameters` sidecar or
+    /// the requested instant falls in a gap (before the earliest effective
+    /// date, or inside an unbounded gap between versions).
+    pub async fn resolve_policy(
+        &self,
+        workflow_url: &str,
+        as_of: &chrono::DateTime<chrono::Utc>,
+    ) -> Option<ResolvedPolicyView> {
+        let bundle = self.bundle.full_bundle(workflow_url).await?;
+        let pp = bundle.policy_parameters.as_ref()?;
+        let versions = pp.get("versions").and_then(|a| a.as_array())?;
+        let parse = |s: &str| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|x| x.with_timezone(&chrono::Utc))
+        };
+
+        let mut best: Option<&serde_json::Value> = None;
+        for v in versions {
+            let eff = match s(v, "effectiveDate").as_deref().and_then(parse) {
+                Some(t) => t,
+                None => continue,
+            };
+            if &eff > as_of {
+                continue;
+            }
+            if let Some(exp_str) = s(v, "expiryDate").as_deref() {
+                if let Some(exp) = parse(exp_str) {
+                    if &exp <= as_of {
+                        continue;
+                    }
+                }
+            }
+            best = Some(v);
+        }
+
+        best.map(|v| {
+            let params = v
+                .get("parameters")
+                .cloned()
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            ResolvedPolicyView {
+                id: s(v, "id").unwrap_or_default(),
+                label: s(v, "label").unwrap_or_default(),
+                effective_date: s(v, "effectiveDate").unwrap_or_default(),
+                expiry_date: s(v, "expiryDate"),
+                parameters: params,
+                resolved_as_of: as_of.to_rfc3339(),
+            }
+        })
     }
 
     pub async fn calendar_events(&self, workflow_url: &str) -> Vec<CalendarEventView> {

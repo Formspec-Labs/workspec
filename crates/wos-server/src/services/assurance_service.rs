@@ -103,6 +103,18 @@ pub struct UpgradeRequest {
     pub basis: serde_json::Value,
 }
 
+/// Response for `GET /api/subjects/{ref}/assurance-chain` (WS-037). Wraps
+/// the assurance-chain list with chain-continuity metadata so callers can
+/// detect a broken `upgradedFrom` link without re-walking the chain.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssuranceChainResponse {
+    pub facts: Vec<IdentityFactView>,
+    pub chain_valid: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub broken_at: Option<String>,
+}
+
 pub struct AssuranceService;
 
 impl AssuranceService {
@@ -174,6 +186,37 @@ impl AssuranceService {
             .into_iter()
             .map(Into::into)
             .collect())
+    }
+
+    /// Walks the assurance chain for `subject_ref` and reports whether each
+    /// `upgraded_from` reference resolves within the returned set. Used by
+    /// WS-037 to surface broken upgrade links without forcing the caller to
+    /// re-walk the chain client-side.
+    pub async fn assurance_chain_with_validation(
+        storage: &StorageHandle,
+        subject_ref: &str,
+    ) -> ApiResult<AssuranceChainResponse> {
+        let facts: Vec<IdentityFactView> = storage
+            .list_assurance_chain(subject_ref)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        let known: std::collections::HashSet<&str> =
+            facts.iter().map(|f| f.id.as_str()).collect();
+        let broken_at = facts
+            .iter()
+            .find(|f| {
+                f.upgraded_from
+                    .as_deref()
+                    .is_some_and(|prior| !known.contains(prior))
+            })
+            .map(|f| f.id.clone());
+        Ok(AssuranceChainResponse {
+            chain_valid: broken_at.is_none(),
+            broken_at,
+            facts,
+        })
     }
 }
 

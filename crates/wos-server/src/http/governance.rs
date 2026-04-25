@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::Router;
 use serde::Deserialize;
@@ -37,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         )
         .route("/governance/{url}/policy-versions", get(policy_versions))
         .route("/governance/{url}/policy-resolve", post(policy_resolve))
+        .route("/policy/{url}/resolve", get(policy_resolve_get))
         .route("/governance/{url}/calendar-events", get(calendar_events))
         .route("/health", get(health))
 }
@@ -140,6 +141,32 @@ async fn policy_resolve(
     Json(req): Json<PolicyResolveRequest>,
 ) -> ApiResult<Json<ResolvedPolicyView>> {
     let as_of = chrono::DateTime::parse_from_rfc3339(&req.as_of)
+        .map_err(|e| ApiError::BadRequest(format!("invalid asOf: {e}")))?
+        .with_timezone(&chrono::Utc);
+    s.services
+        .governance
+        .resolve_policy(&url, &as_of)
+        .await
+        .map(Json)
+        .ok_or(ApiError::NotFound)
+}
+
+/// Query string for `GET /api/policy/{url}/resolve?asOf=...` (WS-034). Picks
+/// GET over the legacy POST `/governance/{url}/policy-resolve` so callers can
+/// link, cache, and pin a date-resolved parameter set by URL alone — that
+/// round-trip is the whole point of the `policy-parameters` sidecar.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolicyResolveQuery {
+    pub as_of: String,
+}
+
+async fn policy_resolve_get(
+    State(s): State<AppState>,
+    Path(url): Path<String>,
+    Query(q): Query<PolicyResolveQuery>,
+) -> ApiResult<Json<ResolvedPolicyView>> {
+    let as_of = chrono::DateTime::parse_from_rfc3339(&q.as_of)
         .map_err(|e| ApiError::BadRequest(format!("invalid asOf: {e}")))?
         .with_timezone(&chrono::Utc);
     s.services
