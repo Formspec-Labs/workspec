@@ -15,10 +15,10 @@ use crate::domain::{
     SubmitEventRequest,
 };
 use crate::error::{ApiError, ApiResult};
-use crate::services::hold_service::{HoldService, HOLD_NOT_FOUND_SENTINEL};
+use crate::services::hold_service::{HoldService, HoldServiceError};
 use crate::services::provenance_service::{row_to_response, verify_chain};
 use crate::services::semantic_service::{Format as ExportFormat, SemanticService};
-use crate::storage::{InstanceQuery, StorageError};
+use crate::storage::InstanceQuery;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -296,8 +296,9 @@ async fn submit_event(
 
     let envelope = serde_json::json!({
         "event": req.event,
-        "actor": req.actor_id,
+        "actorId": req.actor_id,
         "data": req.data,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
         "idempotencyToken": req.idempotency_token,
     });
     s.runtime
@@ -454,10 +455,8 @@ async fn release_hold(
                 serde_json::json!({ "ok": true, "released": released_value }),
             ))
         }
-        Err(StorageError::Other(msg)) if msg == HOLD_NOT_FOUND_SENTINEL => {
-            Err(ApiError::NotFound)
-        }
-        Err(other) => Err(other.into()),
+        Err(HoldServiceError::NotFound { .. }) => Err(ApiError::NotFound),
+        Err(HoldServiceError::Storage(other)) => Err(other.into()),
     }
 }
 

@@ -48,6 +48,16 @@ pub enum ApiError {
     Other(#[from] anyhow::Error),
 }
 
+impl From<crate::services::hold_service::HoldServiceError> for ApiError {
+    fn from(e: crate::services::hold_service::HoldServiceError) -> Self {
+        use crate::services::hold_service::HoldServiceError as H;
+        match e {
+            H::NotFound { .. } => ApiError::NotFound,
+            H::Storage(s) => ApiError::Storage(s),
+        }
+    }
+}
+
 impl From<wos_runtime::RuntimeError> for ApiError {
     fn from(e: wos_runtime::RuntimeError) -> Self {
         use wos_runtime::RuntimeError as R;

@@ -133,12 +133,22 @@ session must address.
    error, not a fallback. Either rewrite the doc or add the variants
    with a fallback warning.
 6. **WS-014 lint-failure pinning + xes/ocel format coverage.**
-7. **WS-082 string-sentinel → typed `StorageError` variant.**
-8. **kernel:update string `"Supervisor"` literal** — last non-typed-role
+7. **kernel:update string `"Supervisor"` literal** — last non-typed-role
    check missed by the WS-083 sweep.
-9. **WS-091** still gated on actor-identity strategy decision.
-10. **Workspace refactor** (WS-084 → 085-088 → 089 → 081) untouched —
-    multi-day epic, sequential-only.
+8. **WS-091** still gated on actor-identity strategy decision.
+9. **Workspace refactor** (WS-084 → 085-088 → 089 → 081) untouched —
+   multi-day epic, sequential-only.
+
+**Closed this session:**
+- **WS-082 string-sentinel → typed error.** Replaced
+  `StorageError::Other("hold-not-found")` with
+  `HoldServiceError::NotFound { index }` at the service boundary;
+  `HOLD_NOT_FOUND_SENTINEL` is now a private impl detail of
+  `services/hold_service.rs`. The `Mutex` workaround in
+  `append`/`release` stays (the `update_instance_atomic` trait shape is
+  the constraint) but is now annotated with the single-shot invariant;
+  drop the sentinel entirely once `Storage` grows a typed-return
+  variant (`update_instance_atomic_returns<T>`).
 
 ## Completed — Phase 1 sprint (2026-04-25)
 
@@ -150,7 +160,7 @@ Nine actionable items shipped this sprint, mostly Phase 1 + WS-080 / WS-083:
 - **WS-009** realtime/mod.rs::on_connect rejects malformed/missing/expired JWT handshake at connect time.
 - **WS-002** test coverage for the change-password endpoint (4 new fixtures, including hash-rotation invalidating in-flight access tokens).
 - **WS-083** `Role` trait + `Supervisor` / `Adjudicator` / `Applicant` zero-sized markers + `RequireRole<R>` extractor; all 12 `require_role(...)` call sites swept; the free function is `#[deprecated]`.
-- **WS-003** every mutator demands the typed role; `/applicant/:id/appeal` is `RequireAuth`-gated until WS-091; `tests/ws_003_auth_breadth.rs` spot-checks 6 representative routes.
+- **WS-003** every mutator on instances / tasks / holds / agents / assurance / governance / equity / integration demands the typed Supervisor role; `/applicant/:id/appeal` is `RequireAuth`-gated until WS-091; `lint` / `notifications` / `calendar` / `conformance` POST routes remain anonymous (WS-014 / WS-091 territory). `tests/ws_003_auth_breadth.rs` spot-checks 6 representative routes.
 - **WS-080** `AppRuntimeConfig { signer, renderer }` + `AppRuntime::build_with(...)` + `WOS_SIGNER` env wire-up; tests/ws_di_seams.rs proves the swap path. **Outstanding follow-up:** validator / access / external / clock seams stay hard-coded until upstream `Box<dyn>` blanket impls land in wos-core::traits — not blocking, fire when a real consumer needs to swap one of them.
 
 Suite: 88 tests across 16 binaries, all green. Five commits: docs sprint → WS-003 close-out → WS-080.
@@ -188,7 +198,7 @@ Reference-server defaults are permissive (anonymous reads, mock auth, single-use
 
 - [✓] **WS-001 · `/ai/chat` Supervisor gate** `[3 / 2 / 1]` *(ROI 6.0)* — [`http/ai_chat.rs:37`](src/http/ai_chat.rs) takes `_auth: AuthCtx` only, so any authenticated caller can hit Gemini and spend budget. Swap for `require_role(..., "Supervisor")` (or a dedicated `AIUser` role when the role taxonomy expands). **Done:** non-Supervisor caller gets 403; Supervisor caller reaches Gemini; fixture covers both cases. **Gate:** none.
 - [✓] **WS-002 · HTTP change-password (and/or admin reset)** `[4 / 4 / 3]` *(ROI 5.33)* — Endpoint already shipped at [`http/auth.rs:18`](src/http/auth.rs); the 2026-04-25 work added the missing test coverage in [`tests/http_change_password.rs`](tests/http_change_password.rs) (wrong-current-password→400, short new password→400, anonymous→401, and the rotate-hash + invalidate-old-token round-trip including old-password no-longer-logs-in and new-password works). Studio wiring (`WosBackend` / `authedFetch`) deferred — separate package, not in scope for this crate. **Gate:** none.
-- [✓] **WS-003 · HTTP auth breadth (2026-04-25)** `[4 / 4 / 3]` *(ROI 5.33)* — Every mutator on instances / tasks / holds / agents / assurance / governance delegations / equity / integration / events demands the right typed role through [`RequireRole<R: Role>`](src/auth/middleware.rs) (WS-083). The final write-side route `POST /api/applicant/:id/appeal` is `RequireAuth`-gated until per-actor scoping (WS-091) lands. Spot-check fixture: [`tests/ws_003_auth_breadth.rs`](tests/ws_003_auth_breadth.rs) locks anon→401 + non-Supervisor→403 across drain / agents-register / equity-evaluate / applicant-appeal / integration-events-inbound / instances-identity-facts. **Gate:** none.
+- [✓] **WS-003 · HTTP auth breadth (2026-04-25)** `[4 / 4 / 3]` *(ROI 5.33)* — Every mutator on instances / tasks / holds / agents / assurance / governance delegations / equity / integration / events demands the right typed role through [`RequireRole<R: Role>`](src/auth/middleware.rs) (WS-083). The final write-side route `POST /api/applicant/:id/appeal` is `RequireAuth`-gated until per-actor scoping (WS-091) lands. **Carve-out:** `lint`, `notifications`, `calendar`, and `conformance` POST routes remain anonymous (WS-014 coverage / WS-091 actor-scoping territory) — the Supervisor-write rule does not apply to them. Spot-check fixture: [`tests/ws_003_auth_breadth.rs`](tests/ws_003_auth_breadth.rs) locks anon→401 + non-Supervisor→403 across drain / agents-register / equity-evaluate / applicant-appeal / integration-events-inbound / instances-identity-facts. **Gate:** none.
 - [ ] **WS-004 · Account freeze / admin epoch bump** `[3 / 3 / 2]` *(ROI 4.5)* — `POST /auth/logout` bumps `auth_epoch` for the self-session only. Admins have no way to "disable user" or "sign out everywhere" without impersonating the target. Add a Supervisor-gated `POST /api/admin/users/:id/freeze` that calls a new `Storage::bump_user_auth_epoch(user_id)` (one-row update, same transaction as `revoke_sessions_for_user`) without routing through JWT logout. **Done:** frozen user's existing access + refresh tokens are rejected on next verify; fixture covers a token minted pre-freeze failing on a post-freeze request. **Gate:** product signals "disable user" requirement.
 - [✓] **WS-005 · CORS startup mode** `[2 / 2 / 1]` *(ROI 4.0)* — Invalid `WOS_CORS_ORIGIN` today warns and falls back to `allow_origin(Any)` (see [`PARITY.md`](PARITY.md) ▎ Server aggregation + surface refresh). Add `WOS_CORS_STRICT=1` that fails fast at startup when the origin string is not a valid `HeaderValue`, for stricter deployments. **Done:** with strict set, an invalid origin aborts bind with a clear diagnostic; with it unset, the current warn-and-fallback behaviour is preserved. **Gate:** none.
 - [ ] **WS-006 · Per-device logout** `[2 / 3 / 3]` *(ROI 2.0)* — Today `POST /auth/logout` revokes every session for the user (global). Some clients want "log out of this browser only." Add a `session_family` id to the JWT claims at login time, thread it through `SessionRow`, and expose a `targeted` variant of logout that revokes only the matching row without bumping `auth_epoch`. **Done:** two concurrent sessions for one user; targeted logout kills one without affecting the other; a follow-up global logout still works. **Gate:** client need for device-level granularity surfaces.
