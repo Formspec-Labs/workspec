@@ -173,10 +173,12 @@ async fn lint_document_validation_failure() {
     let app = http::router(state);
 
     // No `$wosKernel` (or any other recognised `$wos*` marker) → wos-lint
-    // returns `LintError::Parse`, which the handler maps to a 200 OK with
-    // `isValid: false` and a synthetic `PARSE-001` diagnostic. We pin that
-    // current behaviour: status is 200 OK *or* non-200, but the response
-    // must signal failure (non-empty diagnostics or `isValid: false`).
+    // returns `LintError::Parse`, which `lint_service::lint_document` maps
+    // to a 200 OK with `isValid: false` and exactly one synthetic
+    // `PARSE-001` diagnostic (`crates/wos-server/src/services/lint_service.rs`).
+    // Pin that contract precisely — a future refactor that drops the
+    // synthetic diagnostic or renames the rule must surface as a test
+    // failure here, not silently slip through a permissive disjunction.
     let body = serde_json::json!({ "not_a_wos_marker": true });
     let res = app
         .oneshot(
@@ -192,24 +194,23 @@ async fn lint_document_validation_failure() {
 
     let status = res.status();
     let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
-    if status == StatusCode::OK {
-        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        let is_valid = v.get("isValid").and_then(|b| b.as_bool()).unwrap_or(true);
-        let diag_count = v
-            .get("diagnostics")
-            .and_then(|d| d.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0);
-        assert!(
-            !is_valid || diag_count > 0,
-            "expected failure signal (isValid=false or non-empty diagnostics), got: {v}"
-        );
-    } else {
-        assert!(
-            status.is_client_error() || status.is_server_error(),
-            "expected non-success status for malformed lint body, got {status}"
-        );
-    }
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(status, StatusCode::OK, "lint parse-failure path must respond 200: {v}");
+    assert_eq!(
+        v.get("isValid"),
+        Some(&serde_json::Value::Bool(false)),
+        "isValid must be exactly false on parse failure: {v}",
+    );
+    let diags = v
+        .get("diagnostics")
+        .and_then(|d| d.as_array())
+        .expect("diagnostics array required on parse failure");
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.get("ruleId").and_then(|r| r.as_str()) == Some("PARSE-001")),
+        "expected PARSE-001 in diagnostics, got: {diags:?}",
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +218,7 @@ async fn lint_document_validation_failure() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn provenance_export_returns_format() {
+async fn provenance_export_prov_o_returns_jsonld() {
     let state = bring_up().await;
     let instance_id = "urn:wos:instance:test:export";
     seed_instance_with_one_provenance(&state.storage, instance_id).await;
@@ -251,6 +252,89 @@ async fn provenance_export_returns_format() {
         v.is_object() || v.is_array(),
         "PROV-O document must be a JSON object/array, got: {v}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn provenance_export_xes_returns_xml() {
+    let state = bring_up().await;
+    let instance_id = "urn:wos:instance:test:export-xes";
+    seed_instance_with_one_provenance(&state.storage, instance_id).await;
+    let app = http::router(state);
+
+    let encoded = instance_id.replace(':', "%3A");
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/instances/{encoded}/provenance/export?format=xes").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let ct = res
+        .headers()
+        .get("content-type")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(
+        ct, "application/xml",
+        "XES export must serve content-type=application/xml, got `{ct}`"
+    );
+    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
+    let body = std::str::from_utf8(&bytes).expect("XES body must be UTF-8");
+    // XES is XML — the serializer emits a `<log>` root, optionally preceded
+    // by `<?xml ...?>`. Pin both prologues so a future serialiser change
+    // does not silently drop the XML envelope.
+    assert!(
+        body.contains("<?xml") || body.contains("<log"),
+        "XES body must look like XML (got prefix: {:?})",
+        body.chars().take(120).collect::<String>(),
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn provenance_export_ocel_returns_json() {
+    let state = bring_up().await;
+    let instance_id = "urn:wos:instance:test:export-ocel";
+    seed_instance_with_one_provenance(&state.storage, instance_id).await;
+    let app = http::router(state);
+
+    let encoded = instance_id.replace(':', "%3A");
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/instances/{encoded}/provenance/export?format=ocel").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let ct = res
+        .headers()
+        .get("content-type")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(
+        ct, "application/json",
+        "OCEL export must serve content-type=application/json, got `{ct}`"
+    );
+    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&bytes)
+        .expect("OCEL export body must be valid JSON");
+    let obj = v.as_object().expect("OCEL document must be a JSON object");
+    // OCEL 2.0 top-level shape — see `wos-export::ocel::export`. All four
+    // arrays are emitted even when the log is small; pinning the keys
+    // guards against silent reshape under refactor.
+    for key in ["objectTypes", "eventTypes", "objects", "events"] {
+        assert!(
+            obj.contains_key(key),
+            "OCEL document missing top-level key `{key}`; got: {v}",
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

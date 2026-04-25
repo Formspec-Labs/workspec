@@ -265,7 +265,7 @@ async fn submit_event_advances_configuration_and_emits_provenance() {
         }),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "submit_event should succeed");
+    assert_eq!(status, StatusCode::OK, "submit_event should succeed: {view}");
 
     // (a) head_record present and non-null.
     let head = view
@@ -310,6 +310,29 @@ async fn submit_event_advances_configuration_and_emits_provenance() {
         "drain should emit at least one new provenance row \
          (before={prov_before_len}, after={})",
         prov_after.len()
+    );
+
+    // (d) typed-field assertions on the new rows. Walk the rows added by
+    // this drain and pin the exact `event` + `actorId` shape — substring
+    // matches are fragile, this contract pins the canonical field names.
+    let new_rows = &prov_after[prov_before_len..];
+    let advance_row = new_rows
+        .iter()
+        .find(|r| r.get("event").and_then(|v| v.as_str()) == Some("advance"))
+        .unwrap_or_else(|| {
+            panic!(
+                "expected at least one new provenance row with `event == \"advance\"`; got new_rows={new_rows:?}"
+            )
+        });
+    assert_eq!(
+        advance_row.get("actorId").and_then(|v| v.as_str()),
+        Some("adj"),
+        "advance row must record actorId == \"adj\"; row={advance_row:?}"
+    );
+    assert_eq!(
+        advance_row.get("event").and_then(|v| v.as_str()),
+        Some("advance"),
+        "advance row event must be exactly \"advance\"; row={advance_row:?}"
     );
 }
 
