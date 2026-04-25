@@ -183,6 +183,24 @@ impl AgentService {
         req: LifecycleTransitionRequest,
     ) -> ApiResult<AgentView> {
         Self::mutate(storage, id, |agent| {
+            // WS-038 (AI §5.3): block activation when calibrationExpiresAt
+            // is in the past. Other lifecycle targets (paused, retired) are
+            // unaffected — only "active" requires fresh calibration.
+            if matches!(req.target_state, LifecycleState::Active) {
+                if let Some(expiry) = agent
+                    .config_json
+                    .get("calibrationExpiresAt")
+                    .and_then(|v| v.as_str())
+                {
+                    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(expiry) {
+                        if parsed.with_timezone(&Utc) <= Utc::now() {
+                            return Err(ApiError::BadRequest(format!(
+                                "agent activation blocked: calibration expired at {expiry} (AI §5.3)"
+                            )));
+                        }
+                    }
+                }
+            }
             agent.status = req.target_state.as_wire().to_string();
             if let Some(reason) = req.reason.as_deref() {
                 if let Some(obj) = agent.config_json.as_object_mut() {
@@ -238,7 +256,10 @@ impl AgentService {
         })
     }
 
-    /// `POST /api/agents/:id/tool-invocation-check` — stub authorization.
+    /// `POST /api/agents/:id/tool-invocation-check` — runtime authorization.
+    /// WS-038 (AI §5.3): calibration expiry is a hard block on the
+    /// `allowed: true` path; agents whose `calibrationExpiresAt` has passed
+    /// are caught here even when their lifecycle state still says active.
     pub async fn tool_invocation_check(
         storage: &StorageHandle,
         id: &str,
@@ -247,6 +268,25 @@ impl AgentService {
             .get_agent(id)
             .await?
             .ok_or(ApiError::NotFound)?;
+
+        // WS-038: calibration check overrides everything else.
+        if let Some(expiry) = agent
+            .config_json
+            .get("calibrationExpiresAt")
+            .and_then(|v| v.as_str())
+        {
+            if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(expiry) {
+                if parsed.with_timezone(&Utc) <= Utc::now() {
+                    return Ok(ToolInvocationCheck {
+                        allowed: false,
+                        reason: format!(
+                            "agent blocked: calibration expired at {expiry} (AI §5.3)"
+                        ),
+                    });
+                }
+            }
+        }
+
         let allowed = agent.status == "active" && agent.deployment_state == "production";
         Ok(ToolInvocationCheck {
             allowed,
