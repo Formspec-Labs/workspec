@@ -16,26 +16,50 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::AppState;
 use crate::storage::{InstanceQuery, LIST_INSTANCES_PAGE_SIZE_MAX, list_instances_all_pages};
+
+/// Cadence for the session-table sweep (WS-052). Runs once per ticker
+/// iteration where `now - last_sweep_at >= SESSION_SWEEP_INTERVAL`, so the
+/// fast timer-poll cadence is not used for cleanup work.
+const SESSION_SWEEP_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
 
 pub fn spawn(state: AppState) -> tokio::task::JoinHandle<()> {
     let interval = Duration::from_millis(state.cfg.timer_poll_ms.max(250));
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut last_sweep_at: Option<DateTime<Utc>> = None;
         loop {
             ticker.tick().await;
             if let Err(e) = tick_once(&state).await {
                 tracing::warn!(error = %e, "timer tick failed");
             }
+            if state.cfg.session_sweep_enabled {
+                let now = Utc::now();
+                let due = last_sweep_at
+                    .map(|prev| now - prev >= SESSION_SWEEP_INTERVAL)
+                    .unwrap_or(true);
+                if due {
+                    match state.storage.sweep_expired_sessions(now).await {
+                        Ok(count) => {
+                            tracing::info!(deleted_rows = count, "session sweep");
+                            last_sweep_at = Some(now);
+                        }
+                        Err(e) => tracing::warn!(error = %e, "session sweep failed"),
+                    }
+                }
+            }
         }
     })
 }
 
-async fn tick_once(state: &AppState) -> anyhow::Result<()> {
+/// Run a single sweep of the timer-poll loop. Visible for integration tests
+/// (WS-010) so a fixture can drive timer firing deterministically without
+/// spawning the periodic task.
+pub async fn tick_once(state: &AppState) -> anyhow::Result<()> {
     let now = Utc::now();
     let all = list_instances_all_pages(
         &state.storage,
@@ -57,7 +81,8 @@ async fn tick_once(state: &AppState) -> anyhow::Result<()> {
             }
             let envelope = serde_json::json!({
                 "event": event_name,
-                "actor": "system:timer",
+                "actorId": "system:timer",
+                "timestamp": now.to_rfc3339(),
                 "data": {
                     "timerId": t.get("timerId").cloned(),
                     "firedAt": now.to_rfc3339(),
