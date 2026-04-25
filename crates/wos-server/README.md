@@ -100,7 +100,9 @@ All config via flags or env vars (flags win). Full list in `src/config.rs`.
 | `WOS_JWT_SECRET` | `--jwt-secret` | *(required for jwt)* | HS256 secret (raw or hex) |
 | `WOS_JWT_ACCESS_TTL_SECS` | `--jwt-access-ttl-secs` | `900` | Access token lifetime |
 | `WOS_JWT_REFRESH_TTL_SECS` | `--jwt-refresh-ttl-secs` | `2592000` | Refresh token lifetime (30d) |
-| `WOS_CORS_ORIGIN` | `--cors-origin` | `*` | CORS allow-origin (specific origin enables credentials) |
+| `WOS_CORS_ORIGIN` | `--cors-origin` | `http://localhost:3000` | CORS allow-origin (`*` disables credentials; a valid origin enables credentials) |
+| `WOS_CORS_STRICT` | `--cors-strict` | `false` | When `true`, refuse startup if `WOS_CORS_ORIGIN` is not `*` and not a valid HTTP header value (otherwise invalid origins log a warning and fall back to permissive CORS) |
+| `WOS_BEARER_STRICT` | `--bearer-strict` | `false` | When `true`, any `Authorization` header must be `Bearer <token>` with a token that verifies; otherwise `401` (default ignores bad bearer and treats the caller as anonymous) |
 | `WOS_SEED` | `--seed` | `false` | Seed DB from `fixtures/` on empty (demo users share password **`wos-dev`** — dev only) |
 | `WOS_AI_CHAT` | `--ai-chat` | `disabled` | AI chat backend (`disabled` \| `gemini`) |
 | `GEMINI_API_KEY` | `--gemini-api-key` | *(required for gemini)* | Gemini API key |

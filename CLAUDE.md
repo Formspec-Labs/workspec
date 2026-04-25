@@ -42,7 +42,7 @@ Ships as four independent release streams: `wos-kernel`, `wos-governance`, `wos-
 - **Cross-cutting profiles:** Integration, Semantic, Signature.
 - **Companions:** Lifecycle Detail, Runtime.
 
-Six kernel seams are the only extension surface: `actorExtension`, `attachmentExtension`, `caseFieldExtension`, `eventExtension`, `outcomeExtension`, `sidecarExtension`.
+Six kernel seams are the only extension surface, per Kernel §10: `actorExtension` (§10.1), `contractHook` (§10.2), `provenanceLayer` (§10.3), `lifecycleHook` (§10.4), `custodyHook` (§10.5), and `extensions` / `x-` keys (§10.6). See [ADR 0077](../thoughts/adr/0077-canonical-kernel-extension-seams.md) for canonical enumeration and disposition of prior alternate names.
 
 ## Decision heuristics
 

@@ -107,7 +107,9 @@ Work in Trellis after WOS `SignatureAffirmation` shape is stable.
 
 ## T4-11 — Studio Support
 
-- [ ] Add generated type consumption for Signature Profile.
+- [x] Keep `npm run types:gen` output TypeScript-clean: post-process strips json-schema-to-typescript’s `patternProperties: { "^x-": ... }` vendor index signatures (without breaking nested maps such as `VerifiableConstraint.finiteDomainDeclarations`); generated `types/wos/index.ts` namespaces every module except `kernel` so inlined `ExtensionsMap` / `JsonSchemaUri` do not TS2308 across star exports; `types:check` compares post-processed output.
+- [x] Add generated type consumption for Signature Profile (`WOSSignatureProfileDocument` types generated via `npm run types:gen`; consumed by `ISignatureProfilePort`, `FixtureSignatureProfilePort`, `HttpSignatureProfilePort`, wired into `WosContext` via `useSignatureProfile()` hook).
+- [x] Add port/adapter layer for Signature Profile (`ISignatureProfilePort` interface in `WosPorts.ts`; `FixtureSignatureProfilePort` with structural validation + cross-reference checks; `HttpSignatureProfilePort` delegating to `/api/lint/document`; `GET /instances/{id}/signature-affirmations` endpoint in `wos-server`).
 - [ ] Add authoring UI for:
   - [ ] Signer roles.
   - [ ] Signing order.
@@ -121,8 +123,8 @@ Work in Trellis after WOS `SignatureAffirmation` shape is stable.
   - [ ] Reassignment.
   - [ ] Linked Formspec signature/consent fields.
 - [ ] Add validation UI for lint results.
-- [ ] Add fixture-backed Studio tests for a sequential signing profile.
-- [ ] Add fixture-backed Studio tests for a parallel signing profile.
+- [x] Add fixture-backed Studio tests for a sequential signing profile (12 tests in `SignatureProfileAdapter.test.ts`; load/validate/policy-section checks/step-resolution/save round-trip).
+- [x] Add fixture-backed Studio tests for a parallel signing profile (covered in same suite; distinct-role validation, structural soundness).
 
 ---
 
