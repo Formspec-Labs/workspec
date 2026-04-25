@@ -432,23 +432,16 @@ async fn task_submit_response_returns_completed_view() {
         Some("completed"),
         "expected `TaskSubmissionView::Completed` discriminator, got: {json}"
     );
-    // NOTE: `TaskSubmissionView` declares `#[serde(rename_all = "camelCase")]`
-    // at the enum level, but with `#[serde(tag = "outcome")]` that rename
-    // only applies to the variant tag, not to per-variant fields. As a
-    // result the wire body comes back snake-cased: `case_mutated` /
-    // `artifact_id` / `emitted_event`. WS-011 locks the *current* wire
-    // shape — fixing the rename leak is a separate task; this test will
-    // need a follow-up flip when that lands.
     assert_eq!(
-        json["case_mutated"],
+        json["caseMutated"],
         serde_json::Value::Bool(true),
         "body: {json}"
     );
     assert!(
-        json["artifact_id"]
+        json["artifactId"]
             .as_str()
             .is_some_and(|s| !s.is_empty()),
-        "expected non-empty artifact_id in Completed view: {json}"
+        "expected non-empty artifactId in Completed view: {json}"
     );
 }
 

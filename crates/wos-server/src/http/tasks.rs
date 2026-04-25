@@ -122,15 +122,18 @@ impl From<PersistDraftResult> for TaskDraftView {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "outcome")]
 pub enum TaskSubmissionView {
+    #[serde(rename_all = "camelCase")]
     Completed {
         artifact_id: String,
         case_mutated: bool,
         emitted_event: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
     Failed {
         code: String,
         emitted_event: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
     Rejected {
         code: String,
     },
