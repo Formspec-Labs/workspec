@@ -249,6 +249,14 @@ pub struct InstanceQuery {
     pub page_size: u32,
 }
 
+/// One page of results from a paginated storage query.
+///
+/// The `total` field is a **best-effort** row count for the current filters: the
+/// SQLite adapter issues `COUNT(*)` and the paged `SELECT` as separate queries,
+/// so `total` can drift slightly from the number of rows you would see if you
+/// walked all pages under concurrent writes. Callers that need an exact census
+/// use [`list_instances_all_pages`]; do not rely on `total` for a stable-page
+/// guarantee unless the API contract explicitly adds one.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Page<T> {
     pub items: Vec<T>,
@@ -305,7 +313,7 @@ pub trait Storage: Send + Sync + 'static {
     async fn get_instance(&self, id: &str) -> StorageResult<Option<InstanceRow>>;
     /// Paginated instance listing. Implementations MUST clamp `q.page_size` to
     /// \[1, [`LIST_INSTANCES_PAGE_SIZE_MAX`]\] so full-table walks see a stable
-    /// page bound across backends.
+    /// page bound across backends. See [`Page`] regarding `total` under concurrent writes.
     async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>>;
     async fn update_instance_atomic(
         &self,

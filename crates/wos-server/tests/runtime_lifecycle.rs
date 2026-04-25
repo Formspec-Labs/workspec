@@ -2,7 +2,8 @@
 //! case instance through the HTTP surface, and confirm it persists and is
 //! readable through the instance endpoints.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -44,6 +45,8 @@ async fn bring_up() -> AppState {
         jwt_access_ttl_secs: 900,
         jwt_refresh_ttl_secs: 7 * 24 * 3600,
         cors_origin: "http://localhost:3000".into(),
+        cors_strict: false,
+        bearer_strict: false,
         seed: false,
         ai_chat: AiChatKind::Disabled,
         gemini_api_key: String::new(),
@@ -84,6 +87,7 @@ async fn bring_up() -> AppState {
         auth,
         services,
         runtime,
+        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 

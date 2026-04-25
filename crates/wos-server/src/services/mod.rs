@@ -24,6 +24,7 @@ pub mod lint_service;
 pub mod notifications_service;
 pub mod provenance_service;
 pub mod semantic_service;
+pub mod signature_service;
 pub mod timer_task;
 
 pub use applicant_service::ApplicantService;

@@ -22,26 +22,34 @@ use wos_core::provenance::ProvenanceRecord;
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, WosRuntime};
 use wos_runtime::{BindingRegistry, PersistDraftResult, RuntimeError, SystemClock, TaskSubmissionResult};
 
+use wos_core::traits::{ProvenanceSigner, ReportRenderer};
+
 use crate::services::bundle_service::BundleService;
 use crate::services::provenance_service::ProvenanceService;
 use crate::storage::{SqliteRuntimeStore, StorageHandle};
 
 pub mod access;
 pub mod presenter;
+pub mod renderer;
 pub mod resolver;
 pub mod service;
+pub mod signer;
 pub mod validator;
 
-use access::PermissiveAccessControl;
+use access::RoleBasedAccessControl;
 use presenter::SocketIoTaskPresenter;
+use renderer::JsonRenderer;
 use resolver::BundleServiceResolver;
 use service::EchoExternalService;
-use validator::PermissiveValidator;
+use signer::NoopSigner;
+use validator::{PermissiveValidator, PolicyLayeredValidator};
 
 /// The server's runtime handle. Clone freely — it's backed by an `Arc`.
 #[derive(Clone)]
 pub struct AppRuntime {
     inner: Arc<Mutex<WosRuntime>>,
+    signer: Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync>,
+    renderer: Arc<dyn ReportRenderer<Error = renderer::RendererError> + Send + Sync>,
 }
 
 impl AppRuntime {
@@ -62,15 +70,31 @@ impl AppRuntime {
             store,
             resolver,
             presenter,
-            PermissiveAccessControl,
+            RoleBasedAccessControl::new(),
             EchoExternalService,
-            PermissiveValidator,
+            PolicyLayeredValidator::new(PermissiveValidator),
             SystemClock,
             bindings,
         );
         Self {
             inner: Arc::new(Mutex::new(rt)),
+            signer: Arc::new(NoopSigner),
+            renderer: Arc::new(JsonRenderer),
         }
+    }
+
+    /// Access the injected provenance signer (exported for use by provenance
+    /// export and future attestation surfaces).
+    pub fn signer(&self) -> &Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync> {
+        &self.signer
+    }
+
+    /// Access the injected report renderer (exported for use by `/explain`
+    /// and future rendered-output surfaces).
+    pub fn renderer(
+        &self,
+    ) -> &Arc<dyn ReportRenderer<Error = renderer::RendererError> + Send + Sync> {
+        &self.renderer
     }
 
     /// Create a fresh instance from a kernel+version.

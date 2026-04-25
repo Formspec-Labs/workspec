@@ -234,6 +234,10 @@ impl Storage for SqliteStorage {
         row.as_ref().map(map_instance).transpose()
     }
 
+    /// Paginated listing. `Page::total` comes from a separate `COUNT(*)` query
+    /// from the same filter SQL as the page body, so it may disagree slightly
+    /// with the rows returned across pages when instances are inserted or
+    /// deleted between those two statements (acceptable for reference-tier dashboards).
     async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>> {
         let page = q.page.max(1);
         let page_size = q.page_size.clamp(1, LIST_INSTANCES_PAGE_SIZE_MAX);

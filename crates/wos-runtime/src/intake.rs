@@ -10,13 +10,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use wos_core::provenance::ProvenanceRecord;
 
 use crate::binding::BindingError;
 use crate::runtime::RuntimeError;
 
 /// Binding-derived case intent before host policy decides what to do.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
 pub enum IntakeCaseIntent {
     /// The handoff targets an already-governed case.
     AttachToExistingCase {
@@ -28,7 +30,8 @@ pub enum IntakeCaseIntent {
     RequestGovernedCaseCreation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntakeCaseDefinition {
     /// Governing kernel URL for a newly created case.
     pub definition_url: String,
@@ -37,7 +40,8 @@ pub struct IntakeCaseDefinition {
 }
 
 /// Host-visible accepted case action.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
 pub enum IntakeCaseDisposition {
     /// Acceptance attaches evidence to an already-governed case.
     AttachToExistingCase {
@@ -57,7 +61,8 @@ pub enum IntakeCaseDisposition {
 }
 
 /// Input for an intake-interpretation adapter.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntakeAcceptanceRequest {
     /// Binding-native intake handoff document to parse and validate.
     pub document: serde_json::Value,
@@ -95,7 +100,8 @@ pub struct IntakePolicyContext {
 }
 
 /// Final host-visible outcome of intake acceptance.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
 pub enum IntakeAcceptanceOutcome {
     /// Intake was accepted and attached or promoted to a governed case.
     Accepted {
@@ -117,7 +123,8 @@ pub enum IntakeAcceptanceOutcome {
 }
 
 /// Final result returned by the runtime intake command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntakeAcceptanceDecision {
     /// Final host-visible outcome.
     pub outcome: IntakeAcceptanceOutcome,
@@ -126,7 +133,8 @@ pub struct IntakeAcceptanceDecision {
 }
 
 /// Persistence state for a durable intake receipt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum IntakeRecordStatus {
     /// The intake receipt exists, but the command has not completed.
     Pending,

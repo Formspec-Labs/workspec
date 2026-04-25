@@ -115,7 +115,8 @@ pub enum ReplayValue {
 }
 
 /// Persisted intake-acceptance result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IntakeRecord {
     /// Binding discriminator that interpreted the intake handoff.
     pub binding: String,

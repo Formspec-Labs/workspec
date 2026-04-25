@@ -14,7 +14,7 @@ use crate::domain::{
     SubmitEventRequest,
 };
 use crate::error::{ApiError, ApiResult};
-use crate::services::provenance_service::row_to_response;
+use crate::services::provenance_service::{row_to_response, verify_chain};
 use crate::services::semantic_service::{Format as ExportFormat, SemanticService};
 use crate::storage::InstanceQuery;
 
@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/instances", get(list).post(create))
         .route("/instances/{id}", get(get_one))
         .route("/instances/{id}/provenance", get(provenance))
+        .route("/instances/{id}/provenance/verify", get(verify_provenance))
         .route("/instances/{id}/provenance/export", get(export_provenance))
         .route("/instances/{id}/transitions", get(transitions))
         .route("/instances/{id}/events", post(submit_event))
@@ -120,6 +121,41 @@ async fn provenance(
     Ok(Json(s.services.provenance.list(&id).await?))
 }
 
+/// Response shape for `GET /api/instances/{id}/provenance/verify`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainVerifyResponse {
+    pub valid: bool,
+    pub broken_at: Option<i64>,
+}
+
+/// `GET /api/instances/:id/provenance/verify` — verify the sha256 hash-chain
+/// integrity of every provenance row for the instance. Returns `{ valid,
+/// brokenAt }` where `brokenAt` is the 1-indexed `seq` of the first broken
+/// link, or `null` when the chain is clean.
+async fn verify_provenance(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<ChainVerifyResponse>> {
+    let rows = s.storage.list_provenance(&id).await?;
+    if rows.is_empty() {
+        return Ok(Json(ChainVerifyResponse {
+            valid: true,
+            broken_at: None,
+        }));
+    }
+    match verify_chain(&rows) {
+        Ok(()) => Ok(Json(ChainVerifyResponse {
+            valid: true,
+            broken_at: None,
+        })),
+        Err(idx) => Ok(Json(ChainVerifyResponse {
+            valid: false,
+            broken_at: Some(rows[idx].seq),
+        })),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportQuery {
@@ -161,11 +197,25 @@ async fn transitions(
 /// `POST /api/instances/:id/events` — enqueue an event and immediately
 /// `drain_once` so the response carries the transitions / provenance /
 /// case-state mutations produced by this step.
+///
+/// When `idempotencyToken` is present, a duplicate request with the same
+/// `(instance_id, token)` pair returns the cached result without
+/// re-processing. The Restate adapter handles this natively via journaled
+/// execution; this cache is the reference-server defense-in-depth.
 async fn submit_event(
     State(s): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<SubmitEventRequest>,
 ) -> ApiResult<Json<EvaluationResultView>> {
+    if let Some(ref token) = req.idempotency_token {
+        let cache_key = format!("{id}::{token}");
+        if let Ok(cache) = s.event_idempotency.lock() {
+            if let Some(cached) = cache.get(&cache_key) {
+                return Ok(Json(cached.clone()));
+            }
+        }
+    }
+
     // Capture previous configuration before we touch the runtime.
     let before = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
     let before_instance: wos_core::instance::CaseInstance =
@@ -178,6 +228,7 @@ async fn submit_event(
         "event": req.event,
         "actor": req.actor_id,
         "data": req.data,
+        "idempotencyToken": req.idempotency_token,
     });
     s.runtime
         .enqueue_event(&id, envelope)
@@ -196,12 +247,6 @@ async fn submit_event(
     let new_configuration = after_instance.configuration.clone();
     let mutations = diff_case_state(&case_state_before, &after_instance.case_state);
 
-    // The first stored provenance row appended by this step is the "head" —
-    // look it up by computing the tail count before vs after. The storage
-    // layer writes provenance in order within a single atomic txn so
-    // `last_provenance` with seq <= tail.seq + drain.provenance.len()
-    // captures the right range; for the head we need the first of the new
-    // tail, which is the one at seq = prev_tail_len + 1.
     let head_record = match s.storage.last_provenance(&id).await? {
         Some(_tail) if drain.provenance.is_empty() => None,
         Some(tail) => {
@@ -215,7 +260,7 @@ async fn submit_event(
         None => None,
     };
 
-    Ok(Json(EvaluationResultView {
+    let result = EvaluationResultView {
         previous_configuration,
         new_configuration,
         events_fired: drain
@@ -225,7 +270,16 @@ async fn submit_event(
             .collect(),
         head_record,
         case_state_mutations: mutations,
-    }))
+    };
+
+    if let Some(ref token) = req.idempotency_token {
+        let cache_key = format!("{id}::{token}");
+        if let Ok(mut cache) = s.event_idempotency.lock() {
+            cache.entry(cache_key).or_insert(result.clone());
+        }
+    }
+
+    Ok(Json(result))
 }
 
 /// `POST /api/instances/:id/drain` — drain every queued event for this

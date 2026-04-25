@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
+use clap::builder::BoolishValueParser;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use http::HeaderValue;
 
 /// Top-level CLI: the default invocation is `wos-server` (no subcommand),
 /// which boots the server. Add `wos-server export <id>` to dump provenance
@@ -111,6 +113,29 @@ pub struct ServerConfig {
     )]
     pub cors_origin: String,
 
+    /// When set, refuse to start if `WOS_CORS_ORIGIN` is not `*` and is not a
+    /// valid HTTP header value for `Access-Control-Allow-Origin`. When unset,
+    /// an invalid origin logs a warning and the server falls back to
+    /// permissive origins without credentials.
+    #[arg(
+        long,
+        env = "WOS_CORS_STRICT",
+        default_value_t = false,
+        value_parser = BoolishValueParser::new()
+    )]
+    pub cors_strict: bool,
+
+    /// When set, a present `Authorization` header must be `Bearer <token>` with a
+    /// non-empty token that passes verification; otherwise the response is 401
+    /// instead of treating the caller as anonymous.
+    #[arg(
+        long,
+        env = "WOS_BEARER_STRICT",
+        default_value_t = false,
+        value_parser = BoolishValueParser::new()
+    )]
+    pub bearer_strict: bool,
+
     /// Seed the database from `--fixtures-dir` if empty.
     #[arg(long, env = "WOS_SEED", default_value_t = false)]
     pub seed: bool,
@@ -162,6 +187,59 @@ impl ServerConfig {
         if self.cors_origin == "*" && matches!(self.auth, AuthKind::Mock) {
             anyhow::bail!("Refusing to start with WOS_CORS_ORIGIN=* and WOS_AUTH=mock (unsafe)");
         }
+        if self.cors_strict && self.cors_origin != "*" && HeaderValue::from_str(&self.cors_origin).is_err()
+        {
+            anyhow::bail!(
+                "WOS_CORS_STRICT is enabled but WOS_CORS_ORIGIN is not a valid HTTP header value ({:?}); set a valid origin URL, use \"*\", or unset WOS_CORS_STRICT",
+                self.cors_origin
+            );
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn minimal_jwt_cfg() -> ServerConfig {
+        ServerConfig {
+            port: 0,
+            fixtures_dir: PathBuf::from("."),
+            storage: StorageKind::Sqlite,
+            database_url: "sqlite::memory:".into(),
+            auth: AuthKind::Jwt,
+            jwt_secret: "x".into(),
+            jwt_access_ttl_secs: 900,
+            jwt_refresh_ttl_secs: 3600,
+            cors_origin: "http://localhost:3000".into(),
+            cors_strict: false,
+            bearer_strict: false,
+            seed: false,
+            ai_chat: AiChatKind::Disabled,
+            gemini_api_key: String::new(),
+            cursor_throttle_ms: 50,
+            timer_poll_ms: 1000,
+        }
+    }
+
+    #[test]
+    fn cors_strict_rejects_invalid_origin() {
+        let mut cfg = minimal_jwt_cfg();
+        cfg.cors_strict = true;
+        cfg.cors_origin = "http://bad\nhost".into();
+        let err = cfg.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("WOS_CORS_STRICT"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn cors_strict_allows_wildcard_without_header_parse() {
+        let mut cfg = minimal_jwt_cfg();
+        cfg.cors_strict = true;
+        cfg.cors_origin = "*".into();
+        cfg.validate().unwrap();
     }
 }

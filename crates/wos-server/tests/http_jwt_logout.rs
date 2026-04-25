@@ -1,7 +1,8 @@
 //! HTTP `/api/auth/logout` uses the Bearer access JWT and must end the whole
 //! login session (access + refresh), not only the access `jti`.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use axum::body::Body;
@@ -15,6 +16,10 @@ use wos_server::{AppState, auth, http, realtime, services::AppServices};
 use wos_server::storage::{SqliteStorage, Storage, UserRow};
 
 async fn jwt_app_state() -> AppState {
+    jwt_app_state_with(false).await
+}
+
+async fn jwt_app_state_with(bearer_strict: bool) -> AppState {
     let store = Arc::new(
         SqliteStorage::connect("sqlite::memory:?cache=shared")
             .await
@@ -63,6 +68,8 @@ async fn jwt_app_state() -> AppState {
         jwt_access_ttl_secs: 900,
         jwt_refresh_ttl_secs: 7 * 24 * 3600,
         cors_origin: "http://localhost:3000".into(),
+        cors_strict: false,
+        bearer_strict,
         seed: false,
         ai_chat: wos_server::config::AiChatKind::Disabled,
         gemini_api_key: String::new(),
@@ -91,6 +98,7 @@ async fn jwt_app_state() -> AppState {
         auth,
         services,
         runtime,
+        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
@@ -295,4 +303,40 @@ async fn put_kernel_forbidden_for_non_supervisor() {
         .await
         .unwrap();
     assert_eq!(put.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn bearer_strict_rejects_invalid_jwt_on_anonymous_route() {
+    let state = jwt_app_state_with(true).await;
+    let app = http::router(state);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/healthz")
+                .header("authorization", "Bearer not-a-real-jwt")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn bearer_strict_off_invalid_bearer_does_not_block_anonymous_route() {
+    let state = jwt_app_state_with(false).await;
+    let app = http::router(state);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/healthz")
+                .header("authorization", "Bearer not-a-real-jwt")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 }

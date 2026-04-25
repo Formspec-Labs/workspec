@@ -106,6 +106,8 @@ pub struct SubmitEventRequest {
     pub actor_id: String,
     #[serde(default)]
     pub data: Option<serde_json::Value>,
+    #[serde(default)]
+    pub idempotency_token: Option<String>,
 }
 
 /// Shared query-string shape for list endpoints.

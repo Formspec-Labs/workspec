@@ -24,6 +24,7 @@ pub mod instances;
 pub mod integration;
 pub mod lint;
 pub mod notifications;
+pub mod signature;
 pub mod tasks;
 
 pub fn router(state: AppState) -> Router {
@@ -48,6 +49,7 @@ pub fn router(state: AppState) -> Router {
         .merge(integration::routes())
         .merge(agents::routes())
         .merge(advanced::routes())
+        .merge(signature::routes())
         .with_state(state.clone())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

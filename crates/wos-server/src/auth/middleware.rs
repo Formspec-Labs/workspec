@@ -1,7 +1,8 @@
 use axum::extract::{FromRequestParts, Request};
 use axum::http::request::Parts;
+use axum::http::header;
 use axum::middleware::Next;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 
 use super::{AuthContext, AuthError};
 use crate::AppState;
@@ -11,26 +12,46 @@ use crate::error::ApiError;
 /// present. Does NOT reject anonymous requests — handlers that require auth
 /// use the [`RequireAuth`] extractor instead.
 ///
-/// A malformed or expired `Authorization: Bearer …` header is ignored and
-/// the request continues without auth (optional-auth pattern), not 401.
+/// A malformed or expired `Authorization: Bearer …` header is ignored and the
+/// request continues without auth (optional-auth pattern), not 401 — unless
+/// `WOS_BEARER_STRICT` is set on [`crate::config::ServerConfig`], in which case
+/// any `Authorization` header must be a non-empty Bearer token that verifies.
 pub async fn attach_auth(
     axum::extract::State(state): axum::extract::State<AppState>,
     mut req: Request,
     next: Next,
 ) -> Response {
-    let token = req
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.trim().to_string());
+    let strict = state.cfg.bearer_strict;
+    let authz = req.headers().get(header::AUTHORIZATION);
 
-    if let Some(tok) = token {
-        if let Ok(mut ctx) = state.auth.verify(&tok).await {
-            ctx.access_token = Some(tok);
-            req.extensions_mut().insert(ctx);
+    let bearer_token: Option<String> = match authz {
+        None => None,
+        Some(h) => match h.to_str() {
+            Ok(s) => s
+                .strip_prefix("Bearer ")
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(|t| t.to_string()),
+            Err(_) if strict => return ApiError::Unauthorized.into_response(),
+            Err(_) => None,
+        },
+    };
+
+    if authz.is_some() && bearer_token.is_none() {
+        if strict {
+            return ApiError::Unauthorized.into_response();
+        }
+    } else if let Some(tok) = bearer_token {
+        match state.auth.verify(&tok).await {
+            Ok(mut ctx) => {
+                ctx.access_token = Some(tok);
+                req.extensions_mut().insert(ctx);
+            }
+            Err(_) if strict => return ApiError::Unauthorized.into_response(),
+            Err(_) => {}
         }
     }
+
     next.run(req).await
 }
 

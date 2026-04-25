@@ -19,12 +19,15 @@ pub mod storage;
 pub use config::ServerConfig;
 pub use error::{ApiError, ApiResult};
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::auth::AuthHandle;
 use crate::runtime::AppRuntime;
 use crate::services::AppServices;
 use crate::storage::StorageHandle;
+
+use crate::domain::EvaluationResultView;
 
 /// Shared application state injected into every handler and Socket.IO namespace.
 #[derive(Clone)]
@@ -34,6 +37,10 @@ pub struct AppState {
     pub auth: AuthHandle,
     pub services: Arc<AppServices>,
     pub runtime: AppRuntime,
+    /// HTTP-layer event idempotency cache: `(instance_id, idempotency_token) → EvaluationResultView`.
+    /// The Restate adapter handles dedup natively via journaled execution; this
+    /// cache is the reference-server defense-in-depth.
+    pub event_idempotency: Arc<Mutex<HashMap<String, EvaluationResultView>>>,
 }
 
 /// Boot the server with the given config, wiring storage, auth, services, and
@@ -62,6 +69,7 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
         auth,
         services,
         runtime: app_runtime,
+        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
     };
 
     // Now that the state exists, register the realtime namespace handlers

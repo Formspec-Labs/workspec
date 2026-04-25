@@ -1,4 +1,13 @@
-//! `wos_runtime::RuntimeStore` impl over the server's async `Storage` trait.
+//! `wos_runtime::RuntimeStore` over the server's durable [`Storage`](super::Storage) port.
+//!
+//! **Roles:** [`Storage`](super::Storage) owns SQL rows (instances, provenance,
+//! sessions, …). [`RuntimeStore`](wos_runtime::store::RuntimeStore) is the
+//! synchronous bridge `wos-runtime` uses for projections, replay keys, and
+//! atomic instance updates — this module implements it on top of
+//! [`StorageHandle`](super::StorageHandle) (see [`SqliteRuntimeStore::new`](SqliteRuntimeStore::new)).
+//! **Call sites:** durable reads/writes go through [`Storage`](super::Storage)
+//! in HTTP handlers; the runtime path goes through [`AppRuntime`](crate::runtime::AppRuntime)
+//! → `spawn_blocking` → these `RuntimeStore` methods.
 //!
 //! `RuntimeStore` itself is synchronous. To bridge to our async storage we
 //! call `tokio::runtime::Handle::block_on` inside each method. This is safe

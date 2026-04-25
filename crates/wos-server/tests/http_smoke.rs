@@ -4,7 +4,8 @@
 //! axum router through `tower::ServiceExt::oneshot`, bypassing the TCP
 //! listener so the test stays fast and deterministic.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -25,6 +26,8 @@ async fn build_app_state() -> AppState {
         jwt_access_ttl_secs: 900,
         jwt_refresh_ttl_secs: 7 * 24 * 3600,
         cors_origin: "http://localhost:3000".into(),
+        cors_strict: false,
+        bearer_strict: false,
         seed: false,
         ai_chat: wos_server::config::AiChatKind::Disabled,
         gemini_api_key: String::new(),
@@ -47,6 +50,7 @@ async fn build_app_state() -> AppState {
         auth,
         services,
         runtime,
+        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
