@@ -39,13 +39,6 @@ export interface WOSDriftMonitorConfig {
   monitors: [AgentMonitor, ...AgentMonitor[]];
   deploymentSequence?: DeploymentSequence;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSDriftMonitorConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface AgentMonitor {
   /**
@@ -67,13 +60,6 @@ export interface AgentMonitor {
    * Conditions that generate alerts or trigger automatic governance actions.
    */
   alertThresholds?: AlertThreshold[];
-  /**
-   * This interface was referenced by `AgentMonitor`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface MonitorMetric {
   /**
@@ -88,13 +74,6 @@ export interface MonitorMetric {
    * Threshold value for drift detection. Semantics depend on the method.
    */
   threshold?: number;
-  /**
-   * This interface was referenced by `MonitorMetric`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Rubber-stamp detection for human reviewers of this agent's output.
@@ -116,13 +95,6 @@ export interface RubberStampConfig {
    * ISO 8601 duration of the evaluation window for rubber-stamp metrics.
    */
   evaluationWindow?: string;
-  /**
-   * This interface was referenced by `RubberStampConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface AlertThreshold {
   /**
@@ -145,13 +117,6 @@ export interface AlertThreshold {
    * Roles to notify when this threshold is crossed.
    */
   notifyRoles?: string[];
-  /**
-   * This interface was referenced by `AlertThreshold`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Shadow/canary/production deployment sequence policy. RECOMMENDED for rights-impacting and safety-impacting workflows.
@@ -177,13 +142,6 @@ export interface DeploymentSequence {
    * Elevated human review sampling rate applied to canary invocations during the canary phase. Set to 1.0 (100% sampling) for rights-impacting workflows to ensure maximum oversight while evaluating the new model version.
    */
   canaryReviewSamplingRate?: number;
-  /**
-   * This interface was referenced by `DeploymentSequence`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

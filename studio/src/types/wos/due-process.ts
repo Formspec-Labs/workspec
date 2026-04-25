@@ -37,13 +37,6 @@ export interface WOSDueProcessConfig {
    */
   continuationPolicies?: ContinuationPolicy[];
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSDueProcessConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ExplanationTemplate {
   /**
@@ -62,13 +55,6 @@ export interface ExplanationTemplate {
    * Human-readable description of this explanation template's purpose and scope. Intended for governance authors and auditors.
    */
   description?: string;
-  /**
-   * This interface was referenced by `ExplanationTemplate`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Detailed appeal routing configuration.
@@ -86,13 +72,6 @@ export interface AppealRouting {
    * Ordered escalation path for contested appeal reviews. If an appeal reviewer's decision is contested, the processor routes to the next level in this sequence.
    */
   escalationPath?: string[];
-  /**
-   * This interface was referenced by `AppealRouting`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ContinuationPolicy {
   /**
@@ -115,13 +94,6 @@ export interface ContinuationPolicy {
    * Human-readable description of this continuation-of-service policy and its regulatory basis. Intended for governance authors and auditors.
    */
   description?: string;
-  /**
-   * This interface was referenced by `ContinuationPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

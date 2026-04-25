@@ -35,13 +35,6 @@ export interface WOSLifecycleDetailConfiguration {
   timerConfig?: TimerConfig;
   scxmlMapping?: ScxmlMappingConfig;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSLifecycleDetailConfiguration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Compensation execution configuration (Lifecycle Detail S5). Elaborates the kernel's compensation seam (Kernel S9.5).
@@ -59,13 +52,6 @@ export interface CompensationConfig {
    * Per-scope compensation overrides for specific states or regions.
    */
   scopeOverrides?: CompensationScopeOverride[];
-  /**
-   * This interface was referenced by `CompensationConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface CompensationScopeOverride {
   /**
@@ -84,13 +70,6 @@ export interface CompensationScopeOverride {
    * Human-readable explanation of why this compensable scope has a non-default compensation policy. Intended for authors and auditors, not processed by the runtime.
    */
   description?: string;
-  /**
-   * This interface was referenced by `CompensationScopeOverride`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Timer behavior configuration (Lifecycle Detail S6).
@@ -104,13 +83,6 @@ export interface TimerConfig {
    * Whether timers created in a state's onEntry actions are automatically cancelled and recreated when that state is re-entered (Lifecycle Detail S6.4). Default: true. Set to false only when re-entry should continue the original deadline rather than reset it.
    */
   resetOnReentry?: boolean;
-  /**
-   * This interface was referenced by `TimerConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * SCXML interoperability mapping configuration (Lifecycle Detail S7).
@@ -132,13 +104,6 @@ export interface ScxmlMappingConfig {
    * Prefix added to kernel-generated events (which use '$' prefix in WOS) when exported to SCXML, since '$' may not be valid in all SCXML implementations.
    */
   eventPrefixMapping?: string;
-  /**
-   * This interface was referenced by `ScxmlMappingConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

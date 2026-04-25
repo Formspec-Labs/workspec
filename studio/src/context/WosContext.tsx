@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useMemo, useRef } from 'react';
-import { FixtureBackend, FixtureInboxPort, FixtureCaseViewerPort, FixtureWorkflowDesignPort, FixtureGovernancePort, FixtureDashboardPort, FixtureApplicantPort, FixtureAuthPort } from '../services/FixtureAdapter';
-import { HttpWosBackend, HttpInboxPort, HttpCaseViewerPort, HttpWorkflowDesignPort, HttpGovernancePort, HttpDashboardPort, HttpApplicantPort, HttpAuthPort } from '../services/HttpWosBackend';
+import { FixtureBackend, FixtureInboxPort, FixtureCaseViewerPort, FixtureWorkflowDesignPort, FixtureGovernancePort, FixtureDashboardPort, FixtureApplicantPort, FixtureAuthPort, FixtureSignatureProfilePort } from '../services/FixtureAdapter';
+import { HttpWosBackend, HttpInboxPort, HttpCaseViewerPort, HttpWorkflowDesignPort, HttpGovernancePort, HttpDashboardPort, HttpApplicantPort, HttpAuthPort, HttpSignatureProfilePort } from '../services/HttpWosBackend';
 import { SocketIORealtimePort } from '../services/SocketIORealtimePort';
 import type { IWosBackend } from '../services/WosBackend';
-import type { IInboxPort, ICaseViewerPort, IWorkflowDesignPort, IGovernancePort, IGovernanceWriter, IDashboardPort, IApplicantPort, IRealtimePort, IAuthPort } from '../services/WosPorts';
+import type { IInboxPort, ICaseViewerPort, IWorkflowDesignPort, IGovernancePort, IGovernanceWriter, IDashboardPort, IApplicantPort, IRealtimePort, IAuthPort, ISignatureProfilePort } from '../services/WosPorts';
 
 export interface WosPorts {
   backend: IWosBackend;
@@ -16,6 +16,7 @@ export interface WosPorts {
   applicant: IApplicantPort;
   realtime: IRealtimePort;
   auth: IAuthPort;
+  signatureProfile: ISignatureProfilePort;
 }
 
 export type WosBackendKind = 'fixture' | 'http';
@@ -34,6 +35,7 @@ function createFixturePorts(): WosPorts {
     applicant: new FixtureApplicantPort(backend),
     realtime: new SocketIORealtimePort(),
     auth: new FixtureAuthPort(),
+    signatureProfile: new FixtureSignatureProfilePort(),
   };
 }
 
@@ -48,6 +50,7 @@ function createHttpPorts(): WosPorts {
     applicant: new HttpApplicantPort(),
     realtime: new SocketIORealtimePort(),
     auth: new HttpAuthPort(),
+    signatureProfile: new HttpSignatureProfilePort(),
   };
 }
 
@@ -104,3 +107,4 @@ export const useDashboard = () => useWosContext().dashboard;
 export const useApplicant = () => useWosContext().applicant;
 export const useRealtime = () => useWosContext().realtime;
 export const useAuth = () => useWosContext().auth;
+export const useSignatureProfile = () => useWosContext().signatureProfile;

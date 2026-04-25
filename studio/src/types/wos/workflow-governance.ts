@@ -85,13 +85,6 @@ export interface WOSWorkflowGovernanceDocument {
     [k: string]: unknown;
   };
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSWorkflowGovernanceDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Due process requirements for adverse decisions (Governance S3). Normative for workflows with rights-impacting or safety-impacting impact level.
@@ -102,13 +95,6 @@ export interface DueProcess {
    */
   scope?: string;
   adverseDecisionPolicy?: AdverseDecisionPolicy;
-  /**
-   * This interface was referenced by `DueProcess`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Policy governing adverse decisions: denial, reduction, termination, or other unfavorable determinations.
@@ -139,13 +125,6 @@ export interface AdverseDecisionPolicy {
    */
   counterfactualRequired?: boolean;
   appealMechanism?: AppealMechanism;
-  /**
-   * This interface was referenced by `AdverseDecisionPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Appeal mechanism configuration (Governance S3.5).
@@ -179,13 +158,6 @@ export interface AppealMechanism {
    * Scope of services maintained during the appeal window. Determines what the individual continues to receive while their appeal is pending. Values mirror `ContinuationPolicy.scope` in the Due Process Config sidecar — the loose string fallback resolves to the same vocabulary as the typed `continuationPolicyRef` target. `currentLevel`: maintain services at their pre-decision level. `reducedLevel`: maintain at a reduced but non-zero level. `emergencyOnly`: maintain only emergency-tier services. Used as a fallback when `continuationPolicyRef` is absent or unresolvable (Governance §3.6).
    */
   continuationScope?: 'currentLevel' | 'reducedLevel' | 'emergencyOnly';
-  /**
-   * This interface was referenced by `AppealMechanism`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ReviewProtocolBinding {
   /**
@@ -215,13 +187,6 @@ export interface ReviewProtocolBinding {
    * Human-readable explanation of why this protocol combination was chosen and what it is intended to prevent. Used in governance documentation and audit reports.
    */
   description?: string;
-  /**
-   * This interface was referenced by `ReviewProtocolBinding`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Pipeline {
   /**
@@ -238,13 +203,6 @@ export interface Pipeline {
    * Human-readable description of what this pipeline validates and when it is invoked. Used in governance documentation and audit reports.
    */
   description?: string;
-  /**
-   * This interface was referenced by `Pipeline`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface PipelineStage {
   /**
@@ -272,13 +230,6 @@ export interface PipelineStage {
    */
   description?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `PipelineStage`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Assertion {
   /**
@@ -305,13 +256,6 @@ export interface Assertion {
    * Override rejection policy for this specific assertion. Supersedes the enclosing stage's rejectionPolicy when present.
    */
   rejectionPolicy?: 'retryWithCorrections' | 'escalateToSupervisor' | 'holdPendingData' | 'failWithExplanation';
-  /**
-   * This interface was referenced by `Assertion`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
@@ -325,13 +269,6 @@ export interface ExtensionsMap {
 export interface AuditConfig {
   reasoningTier?: ReasoningTierConfig;
   counterfactualTier?: CounterfactualTierConfig;
-  /**
-   * This interface was referenced by `AuditConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Reasoning tier configuration (Governance S6.2). Attach to transitions tagged 'determination'.
@@ -345,13 +282,6 @@ export interface ReasoningTierConfig {
    * When true, Reasoning tier records MUST include decision requirements declarations (Governance S6.3).
    */
   requireDecisionRequirements?: boolean;
-  /**
-   * This interface was referenced by `ReasoningTierConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Counterfactual tier configuration (Governance S6.4). Attach to transitions tagged 'adverse-decision' in rights-impacting workflows.
@@ -365,13 +295,6 @@ export interface CounterfactualTierConfig {
    * When true, negative counterfactuals MUST explicitly address protected characteristics — confirming the decision is independent of any protected class (Governance S6.4).
    */
   requireProtectedCharacteristics?: boolean;
-  /**
-   * This interface was referenced by `CounterfactualTierConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Quality control configuration: review sampling, separation of duties, override authority (Governance S7).
@@ -380,13 +303,6 @@ export interface QualityControls {
   reviewSampling?: ReviewSampling;
   separationOfDuties?: SeparationOfDuties;
   overrideAuthority?: OverrideAuthority;
-  /**
-   * This interface was referenced by `QualityControls`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Review sampling configuration (Governance S7.1).
@@ -404,13 +320,6 @@ export interface ReviewSampling {
    * Sampling scope for the quality review program (Governance S7.1). 'workflow': the rate applies across all decisions in the workflow. 'actor': the rate applies independently per actor.
    */
   scope?: 'workflow' | 'actor';
-  /**
-   * This interface was referenced by `ReviewSampling`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Separation of duties rules (Governance S7.2).
@@ -424,13 +333,6 @@ export interface SeparationOfDuties {
    * Roles excluded from reviewing their own category of work. Actors holding these roles cannot review decisions they made in the same instance (or globally, per scope).
    */
   excludeRoles?: string[];
-  /**
-   * This interface was referenced by `SeparationOfDuties`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Override authority requirements (Governance S7.3).
@@ -448,13 +350,6 @@ export interface OverrideAuthority {
    * When true, overrides MUST reference supporting evidence documents or citations. The references are captured in `OverrideRecord.supportingEvidence`.
    */
   requireSupportingEvidence?: boolean;
-  /**
-   * This interface was referenced by `OverrideAuthority`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface TaskPattern {
   /**
@@ -486,13 +381,6 @@ export interface TaskPattern {
    * Ordered escalation ladder activated when `breachPolicy.action` = `escalate` or when a prior level's `gracePeriod` exhausts. Each step reassigns to `assignTo`; on exhaustion the step's `onExhaustion` policy advances the chain, fails the task, or opens a ticket.
    */
   escalationChain?: EscalationStep[];
-  /**
-   * This interface was referenced by `TaskPattern`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface SlaDefinition {
   /**
@@ -519,13 +407,6 @@ export interface SlaDefinition {
    * Kernel event name that starts the SLA clock when `startAt` = `custom-event`. MUST match the kernel event-name grammar `^[a-zA-Z][a-zA-Z0-9_-]*$`, which rejects empty strings, whitespace, and any `$`-prefixed kernel-reserved names (for example `$join`, `$timeout.*`, or internal dispatch labels such as `$postMutationRescan`) — those are not valid clock origins. Event-name resolution against the target kernel is enforced by lint G-029.
    */
   startEvent?: string;
-  /**
-   * This interface was referenced by `SlaDefinition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface WarningThreshold {
   /**
@@ -542,13 +423,6 @@ export interface WarningThreshold {
    * @minItems 1
    */
   notify: [string, ...string[]];
-  /**
-   * This interface was referenced by `WarningThreshold`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Action the processor MUST take when an `slaDefinitions` entry's expected duration elapses without task completion. Composes with `warningThresholds` (pre-breach) and `escalationChain` (post-breach). See Governance §10.3 and Runtime Companion §10.3.
@@ -575,13 +449,6 @@ export interface BreachPolicy {
      */
     onRepeatedBreach: 'suspend' | 'fail' | 'continue';
   };
-  /**
-   * This interface was referenced by `BreachPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface EscalationStep {
   /**
@@ -604,13 +471,6 @@ export interface EscalationStep {
    * Action when `gracePeriod` expires without resolution. `escalate`: advance to the next `EscalationStep` by `level`. `fail`: transition task to `failed` (invokes rejection policy). `ticketCreate`: open an out-of-band ticket and park the task pending manual intervention.
    */
   onExhaustion: 'escalate' | 'fail' | 'ticketCreate';
-  /**
-   * This interface was referenced by `EscalationStep`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Delegation {
   /**
@@ -662,13 +522,6 @@ export interface Delegation {
    * Eligible authority principal IDs forming the quorum pool (S4.9). Required when quorumCount is set.
    */
   quorumPool?: string[];
-  /**
-   * This interface was referenced by `Delegation`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Limits on the delegated authority.
@@ -690,13 +543,6 @@ export interface DelegationScope {
    * FEL expression (Runtime Companion §8.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.
    */
   conditions?: string;
-  /**
-   * This interface was referenced by `DelegationScope`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface HoldPolicy {
   /**
@@ -741,11 +587,4 @@ export interface HoldPolicy {
    * Human-readable description of this hold policy and its regulatory or procedural basis. Used in tooling and audit documentation.
    */
   description?: string;
-  /**
-   * This interface was referenced by `HoldPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }

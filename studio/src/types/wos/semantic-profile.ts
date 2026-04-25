@@ -37,13 +37,6 @@ export interface WOSSemanticProfileDocument {
   provMapping?: ProvMappingConfiguration;
   processMining?: ProcessMiningConfiguration;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSSemanticProfileDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * The WOS Kernel Document this profile targets. Specifies URL and compatible version range.
@@ -57,13 +50,6 @@ export interface TargetWorkflow {
    * SemVer range expression for compatible kernel document versions.
    */
   compatibleVersions?: string;
-  /**
-   * This interface was referenced by `TargetWorkflow`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * JSON-LD @context configuration. Declares the context document URL, version, additional namespaces, and domain vocabulary extensions.
@@ -90,13 +76,6 @@ export interface ContextConfiguration {
    * External domain vocabularies to incorporate into the @context. Each vocabulary declares a namespace prefix and IRI for domain-specific case data interoperability.
    */
   domainVocabularies?: DomainVocabulary[];
-  /**
-   * This interface was referenced by `ContextConfiguration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DomainVocabulary {
   /**
@@ -111,13 +90,6 @@ export interface DomainVocabulary {
    * Human-readable description of this vocabulary's purpose and scope. Documents which domain concepts are covered and why this vocabulary was selected for semantic interoperability.
    */
   description?: string;
-  /**
-   * This interface was referenced by `DomainVocabulary`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * SHACL shape configuration. Declares shape graph URIs for semantic validation of WOS documents interpreted as RDF.
@@ -137,13 +109,6 @@ export interface ShapeConfiguration {
    * What to validate with SHACL shapes. 'definition': the workflow definition only. 'provenance': provenance records only. 'all': both definition and provenance.
    */
   scope?: 'definition' | 'provenance' | 'all';
-  /**
-   * This interface was referenced by `ShapeConfiguration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * PROV-O vocabulary mapping configuration. Declares how WOS provenance records map to W3C PROV-O graphs.
@@ -178,20 +143,6 @@ export interface ProvMappingConfiguration {
      * RDF type IRI for Narrative tier prov:Bundle instances. Narrative bundles MUST include wos:authoritative false. Overrides the default wos:NarrativeBundle type for agency-specific vocabulary.
      */
     narrative?: string;
-    /**
-     * This interface was referenced by `undefined`'s JSON-Schema definition
-     * via the `patternProperty` "^x-".
-     */
-    [k: string]: {
-      [k: string]: unknown;
-    };
-  };
-  /**
-   * This interface was referenced by `ProvMappingConfiguration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
   };
 }
 /**
@@ -216,13 +167,6 @@ export interface ProcessMiningConfiguration {
    * For OCEL export: WOS object types (case file item types) to include in the object-centric event log. When omitted, all case file item types are included.
    */
   objectTypes?: string[];
-  /**
-   * This interface was referenced by `ProcessMiningConfiguration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

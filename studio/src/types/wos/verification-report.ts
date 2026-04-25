@@ -40,13 +40,6 @@ export interface WOSVerificationReport {
   results: [ConstraintResult, ...ConstraintResult[]];
   summary?: VerificationSummary;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSVerificationReport`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Information about the verification tool.
@@ -64,13 +57,6 @@ export interface SolverInfo {
    * Maximum time the solver is allowed per constraint before recording an 'inconclusive' result. ISO 8601 duration. Balances thoroughness against CI/CD pipeline time budgets.
    */
   timeout?: string;
-  /**
-   * This interface was referenced by `SolverInfo`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ConstraintResult {
   /**
@@ -90,13 +76,6 @@ export interface ConstraintResult {
    * Additional notes from the verification process explaining the result, including which verifiable subset restrictions apply or why the result is inconclusive.
    */
   notes?: string;
-  /**
-   * This interface was referenced by `ConstraintResult`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Counterexample data when result is 'proven-unsafe'.
@@ -112,13 +91,6 @@ export interface Counterexample {
    * Human-readable explanation of why this input assignment violates the constraint. Describes the logical path from the counterexample inputs to the constraint violation.
    */
   explanation?: string;
-  /**
-   * This interface was referenced by `Counterexample`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Aggregate verification summary.
@@ -144,13 +116,6 @@ export interface VerificationSummary {
    * Total wall-clock time in milliseconds the solver spent across all constraints in this run. Sum of all per-constraint solverTimeMs values.
    */
   totalSolverTimeMs?: number;
-  /**
-   * This interface was referenced by `VerificationSummary`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

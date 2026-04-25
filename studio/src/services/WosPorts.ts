@@ -5,6 +5,7 @@ import type { WOSAIIntegrationDocument } from '../types/wos/ai-integration';
 import type { WOSPolicyParameterConfig } from '../types/wos/policy-parameters';
 import type { WOSBusinessCalendarConfig } from '../types/wos/business-calendar';
 import type { WOSAgentConfig } from '../types/wos/agent-config';
+import type { WOSSignatureProfileDocument } from '../types/wos/signature-profile';
 import type { KernelSummary, InstanceFilter, PaginatedResult } from './WosBackend';
 
 export interface TaskListItem {
@@ -280,4 +281,19 @@ export interface IAuthPort {
   login(credentials: { email: string; password: string }): Promise<AuthUser>;
   logout(): Promise<void>;
   hasRole(role: string): Promise<boolean>;
+}
+
+export interface SignatureProfileSummary {
+  id: string;
+  targetWorkflowUrl: string;
+  flowType: 'sequential' | 'parallel' | 'routed' | 'free-for-all';
+  roleCount: number;
+  documentCount: number;
+}
+
+export interface ISignatureProfilePort {
+  list(): Promise<SignatureProfileSummary[]>;
+  load(profileId: string): Promise<WOSSignatureProfileDocument | null>;
+  save(profile: WOSSignatureProfileDocument): Promise<WosValidationResult>;
+  validate(profile: WOSSignatureProfileDocument): Promise<WosValidationResult>;
 }

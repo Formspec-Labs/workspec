@@ -66,13 +66,6 @@ export interface WOSBusinessCalendarConfig {
    */
   appliesWhen?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSBusinessCalendarConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Holiday {
   /**
@@ -91,13 +84,6 @@ export interface Holiday {
    * Whether this entry is an observed date rather than the actual holiday. When a fixed-date holiday falls on a non-working day, a separate entry with 'observed: true' marks the actual day off.
    */
   observed?: boolean;
-  /**
-   * This interface was referenced by `Holiday`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Working hours within a business day. When present and an SLA is specified in hours, the processor counts only elapsed time during these hours. When absent, a business day is the full 24-hour period.
@@ -111,13 +97,6 @@ export interface OperatingHours {
    * End of the operating period (HH:MM in 24-hour format, interpreted in the calendar's timezone). MUST be strictly after 'start'. Hour-based SLA counters stop accumulating at this time each business day and resume at 'start' the next business day.
    */
   end: string;
-  /**
-   * This interface was referenced by `OperatingHours`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

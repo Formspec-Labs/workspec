@@ -47,13 +47,6 @@ export interface WOSAgentConfig {
    */
   actionOverrides?: ActionOverride[];
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSAgentConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Agent service endpoint configuration.
@@ -75,13 +68,6 @@ export interface EndpointConfig {
    * Health check endpoint for availability monitoring. The WOS Processor MAY poll this URL before routing invocations to detect agent unavailability and trigger the fallback chain proactively.
    */
   healthCheckUrl?: string;
-  /**
-   * This interface was referenced by `EndpointConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Calibration requirements and schedule. When calibration has expired, effective autonomy is capped at assistive.
@@ -103,13 +89,6 @@ export interface CalibrationConfig {
    * Statistical calibration method used to align agent confidence scores with empirical accuracy. 'plattScaling': sigmoid-fit logistic regression. 'isotonic': non-parametric isotonic regression. 'binning': equal-width histogram binning. 'custom': implementation-defined.
    */
   method?: 'plattScaling' | 'isotonic' | 'binning' | 'custom';
-  /**
-   * This interface was referenced by `CalibrationConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Dynamic autonomy escalation and demotion rules.
@@ -127,13 +106,6 @@ export interface AutonomyPolicy {
    * Hard ceiling on the autonomy level this agent may reach, regardless of escalation rules or dynamic calibration results. Escalation rules can only raise autonomy up to this ceiling. Useful for enforcing org-wide policy that certain agents never exceed supervisory level.
    */
   maxAutonomy?: 'autonomous' | 'supervisory' | 'assistive' | 'manual';
-  /**
-   * This interface was referenced by `AutonomyPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface EscalationRule {
   /**
@@ -152,13 +124,6 @@ export interface EscalationRule {
    * Human-readable explanation of why this escalation rule exists. Included in audit records when the escalation fires to document the governance rationale.
    */
   description?: string;
-  /**
-   * This interface was referenced by `EscalationRule`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DemotionRule {
   /**
@@ -181,13 +146,6 @@ export interface DemotionRule {
    * Human-readable explanation of why this demotion rule exists. Included in audit records when the demotion fires to document the governance rationale.
    */
   description?: string;
-  /**
-   * This interface was referenced by `DemotionRule`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ActionOverride {
   /**
@@ -206,13 +164,6 @@ export interface ActionOverride {
    * Override the confidence floor threshold for this specific action. When the agent's confidence falls below this value the action falls back to the next fallback level rather than proceeding at the configured autonomy level.
    */
   confidenceFloor?: number;
-  /**
-   * This interface was referenced by `ActionOverride`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

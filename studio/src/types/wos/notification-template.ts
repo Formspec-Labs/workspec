@@ -42,13 +42,6 @@ export interface WOSNotificationTemplateConfig {
     [k: string]: NotificationTemplate;
   };
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSNotificationTemplateConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface NotificationTemplate {
   /**
@@ -92,13 +85,6 @@ export interface NotificationTemplate {
    */
   authority?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `NotificationTemplate`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface TemplateSection {
   /**
@@ -125,13 +111,6 @@ export interface TemplateSection {
    * FEL expression that controls section visibility. When the expression evaluates to false, the section is omitted from the rendered notification. Evaluated against the standard FEL evaluation context (Kernel S7.3).
    */
   condition?: string;
-  /**
-   * This interface was referenced by `TemplateSection`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

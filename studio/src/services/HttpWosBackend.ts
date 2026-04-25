@@ -9,7 +9,9 @@ import type {
   PolicyVersionView, CalendarEventView, ServiceHealthView,
   IDashboardPort, DashboardMetrics, StageMetricView, AlertView, DriftDataPoint, PipelineDataPoint,
   IApplicantPort, ApplicantDeterminationView, IAuthPort, AuthUser,
+  ISignatureProfilePort, SignatureProfileSummary,
 } from './WosPorts';
+import type { WOSSignatureProfileDocument } from '../types/wos/signature-profile';
 import type { WOSKernelDocument } from '../types/wos/kernel';
 import { validateKernelDocument } from './wos-kernel-validator';
 import { authedFetch, storeLogin, storeLogout, type TokenPair } from './authedFetch';
@@ -337,6 +339,54 @@ export class HttpAuthPort implements IAuthPort {
     if (!res.ok) throw new Error(`Failed to check role: ${res.status}`);
     const data = await res.json();
     return data.hasRole;
+  }
+}
+
+export class HttpSignatureProfilePort implements ISignatureProfilePort {
+  async list(): Promise<SignatureProfileSummary[]> {
+    const res = await fetch(`${API_BASE}/signature-profiles`);
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error(`Failed to list signature profiles: ${res.status}`);
+    return res.json();
+  }
+
+  async load(profileId: string): Promise<WOSSignatureProfileDocument | null> {
+    const res = await fetch(`${API_BASE}/signature-profiles/${encodeURIComponent(profileId)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Failed to load signature profile: ${res.status}`);
+    return res.json();
+  }
+
+  async save(profile: WOSSignatureProfileDocument): Promise<WosValidationResult> {
+    const validation = await this.validate(profile);
+    if (!validation.isValid) return validation;
+    const id = profile.targetWorkflow?.url ?? '';
+    const res = await fetch(`${API_BASE}/signature-profiles/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+    if (!res.ok) throw new Error(`Failed to save signature profile: ${res.status}`);
+    return validation;
+  }
+
+  async validate(profile: WOSSignatureProfileDocument): Promise<WosValidationResult> {
+    const res = await fetch(`${API_BASE}/lint/document`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document: profile, schemaType: 'signature-profile' }),
+    });
+    if (!res.ok) throw new Error(`Failed to validate signature profile: ${res.status}`);
+    const result = await res.json();
+    return {
+      isValid: result.isValid ?? true,
+      issues: (result.diagnostics ?? []).map((d: { ruleId: string; severity: string; message: string; path: string }) => ({
+        severity: d.severity === 'warning' ? 'warning' as const : 'error' as const,
+        category: 'policy' as const,
+        message: d.message,
+        targetId: d.path,
+      })),
+    };
   }
 }
 

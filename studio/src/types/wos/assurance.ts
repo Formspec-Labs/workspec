@@ -53,11 +53,4 @@ export interface WOSAssuranceDeclaration {
     validityScope?: string;
     [k: string]: unknown;
   };
-  /**
-   * This interface was referenced by `WOSAssuranceDeclaration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }

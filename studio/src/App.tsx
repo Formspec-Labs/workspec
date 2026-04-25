@@ -16,6 +16,7 @@ import { AdminConsole } from './components/admin/AdminConsole';
 import { AuditViewer } from './components/audit/AuditViewer';
 import { ApplicantPortal } from './components/portal/ApplicantPortal';
 import { ReportBuilder } from './components/reports/ReportBuilder';
+import { SignatureProfileEditor } from './components/signature-profile/SignatureProfileEditor';
 import { BackgroundJobTray } from './components/BackgroundJobTray';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { Toaster } from 'sonner';
@@ -38,7 +39,7 @@ const ViewErrorBoundary: React.FC<{ name: string; children: React.ReactNode }> =
   );
 };
 
-type ViewState = 'inbox' | 'workspace' | 'viewer' | 'dashboard' | 'outbound' | 'designer' | 'admin' | 'audit' | 'portal' | 'reports';
+type ViewState = 'inbox' | 'workspace' | 'viewer' | 'dashboard' | 'outbound' | 'designer' | 'admin' | 'audit' | 'portal' | 'reports' | 'signatures';
 
 export default function App() {
   const inbox = useInbox();
@@ -88,6 +89,8 @@ export default function App() {
         return <ViewErrorBoundary name="Designer"><WorkflowDesigner /></ViewErrorBoundary>;
       case 'admin':
         return <ViewErrorBoundary name="Admin"><AdminConsole /></ViewErrorBoundary>;
+      case 'signatures':
+        return <ViewErrorBoundary name="Signatures"><SignatureProfileEditor /></ViewErrorBoundary>;
       case 'audit':
         return <ViewErrorBoundary name="Audit"><AuditViewer /></ViewErrorBoundary>;
       case 'portal':
@@ -152,6 +155,7 @@ export default function App() {
             onViewAudit={() => setView('audit')}
             onViewPortal={() => setView('portal')}
             onViewReports={() => setView('reports')}
+            onViewSignatures={() => setView('signatures')}
             onViewSampleCase={() => { setViewingCaseId('urn:wos:instance:benefits-adj:2026-04-09:a1b2c3d4'); setView('viewer'); }}
             onNavigate={handleNavigate}
             currentView={view}

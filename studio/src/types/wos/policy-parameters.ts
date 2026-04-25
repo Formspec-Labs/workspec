@@ -48,13 +48,6 @@ export interface WOSPolicyParameterConfig {
     [k: string]: RegulatoryBinding;
   };
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSPolicyParameterConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ParameterDefinition {
   /**
@@ -83,13 +76,6 @@ export interface ParameterDefinition {
    * @minItems 1
    */
   values: [DateValue, ...DateValue[]];
-  /**
-   * This interface was referenced by `ParameterDefinition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DateValue {
   /**
@@ -106,13 +92,6 @@ export interface DateValue {
    * Specific regulatory or statutory authority for this individual value change. Used in audit traces and explanation generation.
    */
   authority?: string;
-  /**
-   * This interface was referenced by `DateValue`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface RegulatoryBinding {
   /**
@@ -141,13 +120,6 @@ export interface RegulatoryBinding {
    * @minItems 1
    */
   values: [BindingDateValue, ...BindingDateValue[]];
-  /**
-   * This interface was referenced by `RegulatoryBinding`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface BindingDateValue {
   /**
@@ -162,13 +134,6 @@ export interface BindingDateValue {
    * Specific regulatory or statutory authority for this individual version change. Used in audit traces and explanation generation.
    */
   authority?: string;
-  /**
-   * This interface was referenced by `BindingDateValue`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

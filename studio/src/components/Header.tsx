@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, User, ChevronDown, CheckCircle2, Clock, AlertTriangle, Inbox, LayoutDashboard, Mail, Search, Settings, Shield, History, BarChart3, Menu, X } from 'lucide-react';
+import { Bell, User, ChevronDown, CheckCircle2, Clock, AlertTriangle, Inbox, LayoutDashboard, Mail, Search, Settings, Shield, History, BarChart3, Menu, X, FileSignature } from 'lucide-react';
 import { NotificationTray } from './notifications/NotificationTray';
 import { useBackend } from '../context/WosContext';
 import { Notification } from '../types';
@@ -20,12 +20,13 @@ interface HeaderProps {
   onViewAudit: () => void;
   onViewPortal: () => void;
   onViewReports: () => void;
+  onViewSignatures: () => void;
   onViewSampleCase: () => void;
   onNavigate: (link: { type: string; id: string }) => void;
-  currentView: 'inbox' | 'dashboard' | 'outbound' | 'workspace' | 'viewer' | 'designer' | 'admin' | 'audit' | 'portal' | 'reports';
+  currentView: 'inbox' | 'dashboard' | 'outbound' | 'workspace' | 'viewer' | 'designer' | 'admin' | 'audit' | 'portal' | 'reports' | 'signatures';
 }
 
-export function Header({ onViewInbox, onViewDashboard, onViewOutbound, onViewDesigner, onViewAdmin, onViewAudit, onViewPortal, onViewReports, onViewSampleCase, onNavigate, currentView }: HeaderProps) {
+export function Header({ onViewInbox, onViewDashboard, onViewOutbound, onViewDesigner, onViewAdmin, onViewAudit, onViewPortal, onViewReports, onViewSignatures, onViewSampleCase, onNavigate, currentView }: HeaderProps) {
   useBackend();
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -55,6 +56,7 @@ export function Header({ onViewInbox, onViewDashboard, onViewOutbound, onViewDes
     { label: 'Dashboard', icon: LayoutDashboard, action: onViewDashboard, view: 'dashboard' },
     { label: 'Outbound', icon: Mail, action: onViewOutbound, view: 'outbound' },
     { label: 'Designer', icon: Settings, action: onViewDesigner, view: 'designer' },
+    { label: 'Signatures', icon: FileSignature, action: onViewSignatures, view: 'signatures' },
     { label: 'Admin', icon: Shield, action: onViewAdmin, view: 'admin' },
     { label: 'Audit', icon: History, action: onViewAudit, view: 'audit' },
     { label: 'Reports', icon: BarChart3, action: onViewReports, view: 'reports' },

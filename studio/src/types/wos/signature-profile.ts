@@ -44,13 +44,6 @@ export type CompletionRequirement = {
    * @minItems 1
    */
   roleIds?: [Identifier, ...Identifier[]];
-  /**
-   * This interface was referenced by `undefined`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 };
 /**
  * Path to evidence in a Formspec response, case file, or profile-supported evidence source.
@@ -123,13 +116,6 @@ export interface WOSSignatureProfileDocument {
   voidPolicy?: VoidPolicy;
   reassignmentPolicy?: ReassignmentPolicy;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSSignatureProfileDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * The WOS Kernel Document this signature profile targets.
@@ -143,13 +129,6 @@ export interface TargetWorkflow {
    * SemVer range expression for compatible kernel document versions.
    */
   compatibleVersions?: string;
-  /**
-   * This interface was referenced by `TargetWorkflow`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface SignatureRole {
   id: Identifier;
@@ -170,13 +149,6 @@ export interface SignatureRole {
    * Human-readable explanation of the signer role and why it participates in this profile.
    */
   description?: string;
-  /**
-   * This interface was referenced by `SignatureRole`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface SignatureDocument {
   id: Identifier;
@@ -197,13 +169,6 @@ export interface SignatureDocument {
    * Optional URI reference to the canonical Formspec response that supplied signature evidence.
    */
   formspecResponseRef?: string;
-  /**
-   * This interface was referenced by `SignatureDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Signing flow declaration.
@@ -218,13 +183,6 @@ export interface SigningFlow {
    */
   steps: [SigningStep, ...SigningStep[]];
   completion?: CompletionRequirement;
-  /**
-   * This interface was referenced by `SigningFlow`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface SigningStep {
   id: Identifier;
@@ -242,13 +200,6 @@ export interface SigningStep {
    * Whether this signing step must affirm before the configured flow completion requirement can pass.
    */
   required?: boolean;
-  /**
-   * This interface was referenced by `SigningStep`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Evidence inputs required before WOS emits SignatureAffirmation.
@@ -268,13 +219,6 @@ export interface SignatureEvidence {
    * Whether resulting SignatureAffirmation records are eligible for WOS custodyHook admission.
    */
   custodyHookEligible: true;
-  /**
-   * This interface was referenced by `SignatureEvidence`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ConsentReference {
   /**
@@ -293,13 +237,6 @@ export interface ConsentReference {
    * Path to evidence in a Formspec response, case file, or profile-supported evidence source.
    */
   affirmationPath: string;
-  /**
-   * This interface was referenced by `ConsentReference`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface IdentityBindingRequirement {
   method: AuthenticationMethod;
@@ -312,13 +249,6 @@ export interface IdentityBindingRequirement {
    * URI reference to an external identity attestation that supports this signature evidence.
    */
   externalAttestationRef?: string;
-  /**
-   * This interface was referenced by `IdentityBindingRequirement`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface AuthenticationPolicy {
   key: Key;
@@ -336,13 +266,6 @@ export interface AuthenticationPolicy {
    * Whether this authentication policy requires credential evidence from the ceremony provider.
    */
   requiresCredentialEvidence?: boolean;
-  /**
-   * This interface was referenced by `AuthenticationPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ReminderPolicy {
   eventName: EventName;
@@ -351,25 +274,11 @@ export interface ReminderPolicy {
    */
   schedule: [Duration, ...Duration[]];
   templateKey?: Key;
-  /**
-   * This interface was referenced by `ReminderPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ExpiryPolicy {
   eventName: EventName;
   after: Duration;
   transitionId?: Identifier;
-  /**
-   * This interface was referenced by `ExpiryPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DeclinePolicy {
   /**
@@ -380,13 +289,6 @@ export interface DeclinePolicy {
    * Whether a signer decline must include a non-empty reason before the runtime accepts it.
    */
   reasonRequired?: boolean;
-  /**
-   * This interface was referenced by `DeclinePolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface VoidPolicy {
   /**
@@ -397,13 +299,6 @@ export interface VoidPolicy {
    * Whether an authorized void operation must include a non-empty reason before it is accepted.
    */
   reasonRequired?: boolean;
-  /**
-   * This interface was referenced by `VoidPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ReassignmentPolicy {
   /**
@@ -418,13 +313,6 @@ export interface ReassignmentPolicy {
    * Whether reassignment must include a non-empty reason before the runtime accepts it.
    */
   reasonRequired?: boolean;
-  /**
-   * This interface was referenced by `ReassignmentPolicy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with x-.

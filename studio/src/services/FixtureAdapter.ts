@@ -9,12 +9,13 @@ import type {
   PolicyVersionView, CalendarEventView, ServiceHealthView,
   IDashboardPort, DashboardMetrics, StageMetricView, AlertView, DriftDataPoint, PipelineDataPoint,
   IApplicantPort, ApplicantDeterminationView, IRealtimePort, Unsubscribe,
-  IAuthPort, AuthUser,
+  IAuthPort, AuthUser, ISignatureProfilePort, SignatureProfileSummary,
 } from './WosPorts';
 import type { WOSKernelDocument } from '../types/wos/kernel';
+import type { WOSSignatureProfileDocument } from '../types/wos/signature-profile';
 
 import {
-  loadBenefitsAdjudicationBundle, loadPurchaseOrderBundle,
+  loadBenefitsAdjudicationBundle, loadPurchaseOrderBundle, loadSignatureProfiles,
 } from '../data/fixtures';
 
 export class FixtureBackend implements IWosBackend {
@@ -479,4 +480,62 @@ export class FixtureAuthPort implements IAuthPort {
   async login(): Promise<AuthUser> { return this.user; }
   async logout(): Promise<void> {}
   async hasRole(role: string): Promise<boolean> { return this.user.role === role; }
+}
+
+export class FixtureSignatureProfilePort implements ISignatureProfilePort {
+  private profiles: Map<string, WOSSignatureProfileDocument>;
+
+  constructor() {
+    this.profiles = loadSignatureProfiles();
+  }
+
+  async list(): Promise<SignatureProfileSummary[]> {
+    return Array.from(this.profiles.entries()).map(([id, p]) => ({
+      id,
+      targetWorkflowUrl: p.targetWorkflow?.url ?? '',
+      flowType: (p.signingFlow?.type ?? 'sequential') as SignatureProfileSummary['flowType'],
+      roleCount: p.roles?.length ?? 0,
+      documentCount: p.documents?.length ?? 0,
+    }));
+  }
+
+  async load(profileId: string): Promise<WOSSignatureProfileDocument | null> {
+    return this.profiles.get(profileId) ?? null;
+  }
+
+  async save(profile: WOSSignatureProfileDocument): Promise<WosValidationResult> {
+    const result = await this.validate(profile);
+    if (result.isValid) {
+      const id = profile.targetWorkflow?.url ?? `profile-${Date.now()}`;
+      this.profiles.set(id, structuredClone(profile));
+    }
+    return result;
+  }
+
+  async validate(profile: WOSSignatureProfileDocument): Promise<WosValidationResult> {
+    const issues: import('./WosPorts').WosValidationIssue[] = [];
+    if (!profile.targetWorkflow?.url) {
+      issues.push({ severity: 'error', category: 'structure', message: 'Missing targetWorkflow.url' });
+    }
+    if (!profile.roles || profile.roles.length === 0) {
+      issues.push({ severity: 'error', category: 'structure', message: 'At least one role is required' });
+    }
+    if (!profile.documents || profile.documents.length === 0) {
+      issues.push({ severity: 'error', category: 'structure', message: 'At least one document is required' });
+    }
+    if (!profile.signingFlow?.steps || profile.signingFlow.steps.length === 0) {
+      issues.push({ severity: 'error', category: 'structure', message: 'Signing flow must have at least one step' });
+    }
+    if (profile.signingFlow?.steps) {
+      for (const step of profile.signingFlow.steps) {
+        if (profile.roles && !profile.roles.some(r => r.id === step.roleId)) {
+          issues.push({ severity: 'error', category: 'policy', message: `Step ${step.id} references unknown roleId ${step.roleId}`, targetId: step.id });
+        }
+        if (profile.documents && !profile.documents.some(d => d.id === step.documentId)) {
+          issues.push({ severity: 'error', category: 'policy', message: `Step ${step.id} references unknown documentId ${step.documentId}`, targetId: step.id });
+        }
+      }
+    }
+    return { isValid: issues.filter(i => i.severity === 'error').length === 0, issues };
+  }
 }

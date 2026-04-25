@@ -60,14 +60,11 @@ export type State = {
    * Free-text description of this state's purpose within the workflow (e.g., what the case is waiting for, which actors act here). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
-  extensions?: ExtensionsMap;
   /**
-   * This interface was referenced by `undefined`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
+   * Machine-readable outcome code for final states (Kernel S4.3). Domain-defined; allows downstream systems to branch on terminal outcome without parsing tags or state names. OPTIONAL on all state types but only meaningful when type is 'final'. A lint rule MUST enforce that outcomeCode does not duplicate any entry in tags.
    */
-  [k: string]: {
-    [k: string]: unknown;
-  };
+  outcomeCode?: string;
+  extensions?: ExtensionsMap;
 };
 
 /**
@@ -132,13 +129,6 @@ export interface WOSKernelDocument {
     [k: string]: unknown;
   };
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSKernelDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ActorDeclaration {
   /**
@@ -154,13 +144,6 @@ export interface ActorDeclaration {
    */
   description?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `ActorDeclaration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
@@ -187,13 +170,6 @@ export interface Lifecycle {
    */
   milestones?: {
     [k: string]: Milestone;
-  };
-  /**
-   * This interface was referenced by `Lifecycle`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
   };
 }
 export interface Action {
@@ -292,16 +268,6 @@ export interface Action {
    */
   failureEvent?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `Action1`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `Action`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface TransitionEventTimer {
   /**
@@ -486,16 +452,6 @@ export interface Action1 {
    */
   failureEvent?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `Action1`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `Action`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Transition {
   /**
@@ -527,13 +483,6 @@ export interface Transition {
    * Free-text explanation of this transition (e.g., which business condition it represents, who triggers it). Consumed by documentation and audit tooling; not interpreted by the processor.
    */
   description?: string;
-  /**
-   * This interface was referenced by `Transition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Region {
   /**
@@ -545,13 +494,6 @@ export interface Region {
    */
   states: {
     [k: string]: State;
-  };
-  /**
-   * This interface was referenced by `Region`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
   };
 }
 export interface Milestone {
@@ -567,13 +509,6 @@ export interface Milestone {
    * When the processor evaluates this milestone's condition (Kernel §4.13). `writeSettled` (the default and only currently defined mode) means the condition is evaluated after every durable case-state write — i.e., once the write has been persisted and is observable to subsequent reads. Each milestone fires at most once per case instance: once the condition has evaluated true and a `MilestoneFired` provenance record has been appended, the milestone id is recorded on the case instance and never re-evaluated. Future modes (e.g., reactive event-based firing) will extend this enum without changing existing semantics.
    */
   triggerMode?: 'writeSettled';
-  /**
-   * This interface was referenced by `Milestone`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Typed data schema for the case state (Kernel S5). Case state is an append-only log independent of lifecycle state.
@@ -589,13 +524,6 @@ export interface CaseFile {
    * Typed relationships to other case instances (Kernel S5.5). Relationships are metadata -- they do NOT affect lifecycle evaluation. Cross-case behavioral interaction uses correlationKey (Kernel S9.4).
    */
   relationships?: CaseRelationship[];
-  /**
-   * This interface was referenced by `CaseFile`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface FieldDefinition {
   /**
@@ -610,13 +538,6 @@ export interface FieldDefinition {
    * Default value assigned to this field when a case instance is created and the field has not yet been explicitly set. If omitted, the field begins unset (null under FEL reads). The value MUST be consistent with the declared `type`.
    */
   default?: {
-    [k: string]: unknown;
-  };
-  /**
-   * This interface was referenced by `FieldDefinition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -643,13 +564,6 @@ export interface CaseRelationship {
    * When `true`, the target case SHOULD also record the inverse relationship so the two cases are mutually discoverable. The kernel does not enforce the inverse link — it is an authoring guidance flag for binding implementations and tooling.
    */
   bidirectional?: boolean;
-  /**
-   * This interface was referenced by `CaseRelationship`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ContractReference {
   /**
@@ -672,13 +586,6 @@ export interface ContractReference {
    * URI of a Mapping document used to project completed Formspec Responses into WOS case state (Runtime Companion §S15). If absent, Runtime Companion §S15 forbids automatic host-defined Response-to-case projection.
    */
   responseMappingRef?: string;
-  /**
-   * This interface was referenced by `ContractReference`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Provenance configuration for the Facts tier (Kernel S8).
@@ -689,13 +596,6 @@ export interface ProvenanceConfig {
    */
   digestAlgorithm?: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `ProvenanceConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Durable execution configuration (Kernel S9).
@@ -722,11 +622,4 @@ export interface ExecutionConfig {
    */
   instanceVersioning?: 'pinned' | 'migrateable';
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `ExecutionConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }

@@ -85,13 +85,6 @@ export interface WOSCaseInstance {
   governanceState?: GovernanceState;
   volumeCounters?: VolumeCounters;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSCaseInstance`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Captures the state of a pending durable timer.
@@ -113,13 +106,6 @@ export interface TimerState {
    * The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4).
    */
   scopeState?: string;
-  /**
-   * This interface was referenced by `TimerState`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Durable nonterminal task state for an active task.
@@ -184,13 +170,6 @@ export interface ActiveTask {
    */
   updatedAt: string;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `ActiveTask`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Presentation context for a Formspec-backed task.
@@ -247,13 +226,6 @@ export interface FormspecTaskContext {
    */
   impactLevel?: 'rights-impacting' | 'safety-impacting' | 'operational' | 'informational';
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `FormspecTaskContext`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
@@ -289,13 +261,6 @@ export interface ValidationOutcome {
   validationResults?: {
     [k: string]: unknown;
   }[];
-  /**
-   * This interface was referenced by `ValidationOutcome`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Records completed actions within a compensable scope for potential reverse-order compensation (Lifecycle Detail S5).
@@ -309,13 +274,6 @@ export interface CompensationLog {
    * Completed actions in forward completion order. On compensation, these are executed in reverse order (Lifecycle Detail S5.4).
    */
   entries: CompensationEntry[];
-  /**
-   * This interface was referenced by `CompensationLog`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * A single entry in the compensation log -- one completed action with its compensating counterpart.
@@ -345,13 +303,6 @@ export interface CompensationEntry {
   output?: {
     [k: string]: unknown;
   };
-  /**
-   * This interface was referenced by `CompensationEntry`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * An event enqueued for processing but not yet consumed by the evaluation engine.
@@ -379,13 +330,6 @@ export interface PendingEvent {
    * Opaque token for exactly-once delivery deduplication (Runtime Companion S4.3). The processor rejects duplicate events with the same token.
    */
   idempotencyToken?: string;
-  /**
-   * This interface was referenced by `PendingEvent`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Runtime state for governance enforcement. Present only when a Governance Document is attached to the workflow. Tracks delegation chains, active holds, and review protocol state.
@@ -403,13 +347,6 @@ export interface GovernanceState {
    * Runtime state for review protocols (Governance S4). Keyed by review protocol binding identifier. Tracks which reviews are pending, completed, and their outcomes.
    */
   reviewState?: {
-    [k: string]: unknown;
-  };
-  /**
-   * This interface was referenced by `GovernanceState`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
     [k: string]: unknown;
   };
 }
@@ -441,13 +378,6 @@ export interface ActiveDelegation {
    * ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry.
    */
   expiresAt?: string;
-  /**
-   * This interface was referenced by `ActiveDelegation`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * A currently active hold on the workflow instance.
@@ -473,13 +403,6 @@ export interface ActiveHold {
    * The lifecycle state the instance was in when the hold started. Stored to verify state has not changed on hold removal.
    */
   holdState?: string;
-  /**
-   * This interface was referenced by `ActiveHold`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Counters for AI Integration volume constraints (AI Integration S11). Present only when an AI Integration Document is attached. Tracks autonomous actions per hour/day for autonomy cap enforcement.
@@ -497,13 +420,6 @@ export interface VolumeCounters {
   daily?: {
     [k: string]: VolumeCounter;
   };
-  /**
-   * This interface was referenced by `VolumeCounters`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * A single volume counter tracking autonomous actions within a time window.
@@ -517,11 +433,4 @@ export interface VolumeCounter {
    * ISO 8601 timestamp marking the start of the current counting window. Resets each hour (hourly) or each UTC midnight (daily).
    */
   windowStart: string;
-  /**
-   * This interface was referenced by `VolumeCounter`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }

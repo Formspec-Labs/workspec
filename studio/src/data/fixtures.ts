@@ -14,6 +14,15 @@ import agentConfigFixture from '../../../fixtures/ai/document-extractor-config.j
 import purchaseOrderFixture from '../../../fixtures/kernel/purchase-order-approval.json';
 import verificationReportFixture from '../../../fixtures/advanced/verification-report.json';
 import correspondenceMetadataFixture from '../../../fixtures/kernel/benefits-correspondence-metadata.json';
+import sigSequential from '../../../fixtures/profiles/signature-runtime-sequential.json';
+import sigParallel from '../../../fixtures/profiles/signature-runtime-parallel.json';
+import sigRouted from '../../../fixtures/profiles/signature-runtime-routed.json';
+import sigFfa from '../../../fixtures/profiles/signature-runtime-free-for-all.json';
+import sigNotary from '../../../fixtures/profiles/signature-runtime-notary.json';
+import sigWitness from '../../../fixtures/profiles/signature-runtime-witness.json';
+import sigBenefits from '../../../fixtures/profiles/signature-benefits-attestation.json';
+import sigRoutedNotary from '../../../fixtures/profiles/signature-routed-notary.json';
+import sigCounter from '../../../fixtures/profiles/signature-parallel-countersignature.json';
 
 import type { WOSKernelDocument } from '../types/wos/kernel';
 import type { WOSWorkflowGovernanceDocument } from '../types/wos/workflow-governance';
@@ -30,6 +39,7 @@ import type { WOSIntegrationProfileDocument } from '../types/wos/integration-pro
 import type { WOSLifecycleDetailConfiguration } from '../types/wos/lifecycle-detail';
 import type { WOSDriftMonitorConfig } from '../types/wos/drift-monitor';
 import type { WOSAgentConfig } from '../types/wos/agent-config';
+import type { WOSSignatureProfileDocument } from '../types/wos/signature-profile';
 import type { WosDocumentBundle } from '../services/WosBackend';
 import { validateAndCast } from '../services/schema-validator';
 
@@ -59,4 +69,23 @@ export function loadPurchaseOrderBundle(): WosDocumentBundle {
   return {
     kernel: validateAndCast<WOSKernelDocument>(purchaseOrderFixture, 'WOSKernelDocument'),
   };
+}
+
+export function loadSignatureProfiles(): Map<string, WOSSignatureProfileDocument> {
+  const entries: [string, unknown][] = [
+    ['signature-runtime-sequential', sigSequential],
+    ['signature-runtime-parallel', sigParallel],
+    ['signature-runtime-routed', sigRouted],
+    ['signature-runtime-free-for-all', sigFfa],
+    ['signature-runtime-notary', sigNotary],
+    ['signature-runtime-witness', sigWitness],
+    ['signature-benefits-attestation', sigBenefits],
+    ['signature-routed-notary', sigRoutedNotary],
+    ['signature-parallel-countersignature', sigCounter],
+  ];
+  const map = new Map<string, WOSSignatureProfileDocument>();
+  for (const [id, raw] of entries) {
+    map.set(id, validateAndCast<WOSSignatureProfileDocument>(raw, 'WOSSignatureProfileDocument'));
+  }
+  return map;
 }

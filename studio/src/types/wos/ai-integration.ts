@@ -67,13 +67,6 @@ export interface WOSAIIntegrationDocument {
   driftDetection?: DriftDetectionConfig;
   assistGovernanceProxy?: AssistGovernanceProxy;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSAIIntegrationDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface AgentDeclaration {
   /**
@@ -119,13 +112,6 @@ export interface AgentDeclaration {
   cascadingInvocations?: string[];
   extensions?: ExtensionsMap;
   deonticConstraints?: DeonticConstraints;
-  /**
-   * This interface was referenced by `AgentDeclaration`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Capability {
   /**
@@ -148,13 +134,6 @@ export interface Capability {
    * FEL expressions evaluated against the current evaluation context (Kernel §7) before the capability is invoked (AI Integration §3.3.1). All entries MUST evaluate to boolean `true` for the capability to be invocable. If any entry evaluates to `false`, or fails to evaluate to a boolean, the capability is skipped and the processor falls through to the agent's fallback chain (§8). Expressions MAY reference `caseFile.*`, `@event`, `@agent`, and any context a guard may reference. Absent or empty array (default) means no preconditions — the capability is always invocable.
    */
   preconditions?: string[];
-  /**
-   * This interface was referenced by `Capability`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Agent-specific confidence decay configuration (AI Integration S7.5).
@@ -172,13 +151,6 @@ export interface ConfidenceDecay {
    * Events causing immediate confidence reduction.
    */
   triggers?: DecayTrigger[];
-  /**
-   * This interface was referenced by `ConfidenceDecay`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DecayTrigger {
   /**
@@ -189,13 +161,6 @@ export interface DecayTrigger {
    * Multiplicative decay factor (0-1). Effective confidence is multiplied by this factor when the event fires.
    */
   decayFactor: number;
-  /**
-   * This interface was referenced by `DecayTrigger`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface FallbackLevel {
   /**
@@ -226,13 +191,6 @@ export interface FallbackLevel {
    * Actor identifier to assign the escalated task to when action is 'escalateToHuman'. MUST match an actor declared in the kernel's actorRegistry. When omitted, assignment follows the kernel's default task routing rules.
    */
   assignTo?: string;
-  /**
-   * This interface was referenced by `FallbackLevel`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
@@ -260,19 +218,6 @@ export interface DeonticConstraints {
    * Rights specifying what agents are entitled to receive as input (AI Integration S4.5).
    */
   rights?: Right[];
-  /**
-   * This interface was referenced by `DeonticConstraints`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints1`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints2`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Permission {
   /**
@@ -297,13 +242,6 @@ export interface Permission {
    * Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).
    */
   bypassable?: boolean;
-  /**
-   * This interface was referenced by `Permission`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Prohibition {
   /**
@@ -324,13 +262,6 @@ export interface Prohibition {
    * Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).
    */
   bypassable?: boolean;
-  /**
-   * This interface was referenced by `Prohibition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Obligation {
   /**
@@ -351,13 +282,6 @@ export interface Obligation {
    * Whether an authorized actor may bypass this constraint with structured rationale (AI Integration S4.7).
    */
   bypassable?: boolean;
-  /**
-   * This interface was referenced by `Obligation`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface Right {
   /**
@@ -372,13 +296,6 @@ export interface Right {
    * Human-readable description of what this right entitles the agent to receive and why it is required for the agent to fulfill its role. Included in governance documentation.
    */
   description?: string;
-  /**
-   * This interface was referenced by `Right`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Deontic constraint framework governing agent behavior (AI Integration S4). Four constraint types from OASIS LegalRuleML: permissions, prohibitions, obligations, rights. Evaluated after contract validation, before output commit. The WOS Processor is the Policy Enforcement Point.
@@ -400,19 +317,6 @@ export interface DeonticConstraints1 {
    * Rights specifying what agents are entitled to receive as input (AI Integration S4.5).
    */
   rights?: Right[];
-  /**
-   * This interface was referenced by `DeonticConstraints`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints1`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints2`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Workflow-level minimum confidence threshold (AI Integration S7.4). Part of the enforcement ordering (step 4).
@@ -426,13 +330,6 @@ export interface ConfidenceFloor {
    * Enforcement action taken when the agent's confidence score falls below the configured threshold. 'escalateToHuman': route to a human reviewer via the fallback chain. 'reject': hard-fail the invocation and abort the action.
    */
   onViolation: 'escalateToHuman' | 'reject';
-  /**
-   * This interface was referenced by `ConfidenceFloor`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * AI-specific extensions to Layer 1 review protocols (AI Integration S10). Attach via lifecycleHook on review-tagged transitions.
@@ -443,13 +340,6 @@ export interface OversightExtensions {
    */
   suppressAgentOutput?: boolean;
   presentation?: OversightPresentation;
-  /**
-   * This interface was referenced by `OversightExtensions`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Presentation properties for AI-assisted review steps.
@@ -471,13 +361,6 @@ export interface OversightPresentation {
    * Highlight differences between the reviewer's independent assessment and the agent's recommendation after the independent assessment is submitted. Only meaningful with independentFirst protocol; ignored otherwise.
    */
   showDiffFromIndependent?: boolean;
-  /**
-   * This interface was referenced by `OversightPresentation`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Rate limits on autonomous agent actions (AI Integration S11). Part of the enforcement ordering (step 5).
@@ -491,13 +374,6 @@ export interface VolumeConstraints {
    * Maximum number of fully autonomous agent actions permitted in any rolling 24-hour window across this workflow. Provides a daily capacity ceiling complementing the per-hour rate limit.
    */
   maxAutonomousPerDay?: number;
-  /**
-   * This interface was referenced by `VolumeConstraints`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Agent-specific review sampling extending Layer 1 quality controls (AI Integration S11.2). Part of the enforcement ordering (step 6).
@@ -515,13 +391,6 @@ export interface AgentReviewSampling {
    * Whether sampling rate applies across all agents in the workflow ('workflow') or independently per agent ('agent'). Use 'agent' scope to apply different rates to each agent's invocations.
    */
   scope?: 'workflow' | 'agent';
-  /**
-   * This interface was referenced by `AgentReviewSampling`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Agent disclosure requirements extending Layer 1 due process (AI Integration S12). Attach via lifecycleHook on adverse-decision-tagged transitions.
@@ -539,13 +408,6 @@ export interface AgentDisclosure {
    * Whether to include the agent's overall confidence score in the adverse decision disclosure notice. Enables affected parties to understand how certain the AI system was when it contributed to the determination.
    */
   discloseConfidence?: boolean;
-  /**
-   * This interface was referenced by `AgentDisclosure`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Configuration for the Narrative provenance tier (AI Integration S13). Attach via provenanceLayer seam.
@@ -559,13 +421,6 @@ export interface NarrativeTierConfig {
    * Transition tags that require Narrative tier records from agent actors.
    */
   requiredForTags?: string[];
-  /**
-   * This interface was referenced by `NarrativeTierConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Decision drift detection configuration (AI Integration S9).
@@ -580,13 +435,6 @@ export interface DriftDetectionConfig {
    */
   optimizationObjectiveDisclosure?: boolean;
   rubberStampMonitoring?: RubberStampConfig;
-  /**
-   * This interface was referenced by `DriftDetectionConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Rubber-stamp detection configuration (AI Integration S9.2).
@@ -608,13 +456,6 @@ export interface RubberStampConfig {
    * ISO 8601 duration of the rolling window over which rubber-stamp metrics are aggregated. Reviews older than this window are excluded from the engagement rate calculation.
    */
   evaluationWindow?: string;
-  /**
-   * This interface was referenced by `RubberStampConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * WOS Assist Governance Proxy configuration (AI Integration S14). A WOS construct consuming the Formspec Assist protocol (Assist S2.1).
@@ -628,13 +469,6 @@ export interface AssistGovernanceProxy {
    * Per-tool-category governance configuration. The proxy consumes the Assist protocol (Assist S2.1, S7) and applies WOS deontic constraints.
    */
   toolCategories?: ToolCategoryGovernance[];
-  /**
-   * This interface was referenced by `AssistGovernanceProxy`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ToolCategoryGovernance {
   /**
@@ -646,13 +480,6 @@ export interface ToolCategoryGovernance {
    * Maximum number of tool invocations in this category permitted per workflow session instance. Prevents runaway tool usage by bounded-autonomy agents. When the limit is reached, further invocations in the category are blocked and the configured deontic violation action fires.
    */
   maxInvocationsPerSession?: number;
-  /**
-   * This interface was referenced by `ToolCategoryGovernance`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Deontic constraints specific to this tool category.
@@ -674,17 +501,4 @@ export interface DeonticConstraints2 {
    * Rights specifying what agents are entitled to receive as input (AI Integration S4.5).
    */
   rights?: Right[];
-  /**
-   * This interface was referenced by `DeonticConstraints`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints1`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   *
-   * This interface was referenced by `DeonticConstraints2`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }

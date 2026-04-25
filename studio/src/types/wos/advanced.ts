@@ -58,13 +58,6 @@ export interface WOSAdvancedGovernanceDocument {
   shadowMode?: ShadowMode;
   circuitBreaker?: CircuitBreaker;
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSAdvancedGovernanceDocument`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface EquityGuardrail {
   /**
@@ -107,13 +100,6 @@ export interface EquityGuardrail {
    * Human-readable explanation of why this guardrail exists and what equity concern it addresses. Documents the regulatory basis, policy rationale, or civil rights obligation being monitored.
    */
   reason?: string;
-  /**
-   * This interface was referenced by `EquityGuardrail`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ConstraintZone {
   /**
@@ -138,13 +124,6 @@ export interface ConstraintZone {
    * Event raised when all pending activities in this constraint zone are completed and no obligations remain. Triggers transition to the next workflow phase.
    */
   completionEvent?: string;
-  /**
-   * This interface was referenced by `ConstraintZone`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ZoneActivity {
   /**
@@ -167,13 +146,6 @@ export interface ZoneActivity {
    * Whether this activity starts as pending (must be executed at least once before the zone can complete). DCR condition and response relations may also add pending obligations.
    */
   initialPending?: boolean;
-  /**
-   * This interface was referenced by `ZoneActivity`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ZoneRelation {
   /**
@@ -192,13 +164,6 @@ export interface ZoneRelation {
    * Human-readable explanation of why this DCR relation exists and what compliance rule or workflow constraint it encodes.
    */
   description?: string;
-  /**
-   * This interface was referenced by `ZoneRelation`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface MultiStepSession {
   /**
@@ -227,13 +192,6 @@ export interface MultiStepSession {
    * @minItems 1
    */
   steps: [SessionStep, ...SessionStep[]];
-  /**
-   * This interface was referenced by `MultiStepSession`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface SessionStep {
   /**
@@ -256,13 +214,6 @@ export interface SessionStep {
    * Human-readable prompt displayed to the reviewer at this intervention point. Describes what intermediate results are available and what the reviewer should assess before allowing the session to continue.
    */
   interventionPrompt?: string;
-  /**
-   * This interface was referenced by `SessionStep`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Tool use governance: permitted/prohibited registries, side-effect policy (Advanced S6).
@@ -276,13 +227,6 @@ export interface ToolGovernance {
    * Default policy applied to tools with side effects when the agent is operating at autonomous autonomy level. 'block': prevent execution. 'allow': permit execution. 'requireApproval': pause and request human approval.
    */
   defaultSideEffectPolicy?: 'block' | 'allow' | 'requireApproval';
-  /**
-   * This interface was referenced by `ToolGovernance`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ToolDefinition {
   /**
@@ -308,13 +252,6 @@ export interface ToolDefinition {
    * Human-readable description of what this tool does, which external systems it connects to, and any data handling or privacy implications.
    */
   description?: string;
-  /**
-   * This interface was referenced by `ToolDefinition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface RateLimit {
   /**
@@ -325,13 +262,6 @@ export interface RateLimit {
    * Maximum number of times this tool may be invoked per hour across all agent sessions. Enforced independently of maxPerMinute; both limits must not be exceeded.
    */
   maxPerHour?: number;
-  /**
-   * This interface was referenced by `RateLimit`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Agent lifecycle state machine configuration (Advanced S7).
@@ -357,13 +287,6 @@ export interface AgentLifecycleConfig {
    * Roles to notify when an agent is suspended.
    */
   suspensionNotifyRoles?: string[];
-  /**
-   * This interface was referenced by `AgentLifecycleConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface LifecycleTransition {
   /**
@@ -378,13 +301,6 @@ export interface LifecycleTransition {
    * Human-readable description of when and why this lifecycle transition fires. Documents the monitoring rationale and expected administrative response.
    */
   description?: string;
-  /**
-   * This interface was referenced by `LifecycleTransition`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface VerifiableConstraint {
   /**
@@ -418,21 +334,7 @@ export interface VerifiableConstraint {
        * @minItems 1
        */
       domain: [string, ...string[]];
-      /**
-       * This interface was referenced by `undefined`'s JSON-Schema definition
-       * via the `patternProperty` "^x-".
-       */
-      [k: string]: {
-        [k: string]: unknown;
-      };
     };
-  };
-  /**
-   * This interface was referenced by `VerifiableConstraint`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
   };
 }
 /**
@@ -451,13 +353,6 @@ export interface CalibrationConfig {
    * How often to recalibrate confidence scores against accumulated reviewed outputs. ISO 8601 duration. Shorter intervals catch drift faster but require more frequent review accumulation.
    */
   retrainingFrequency?: string;
-  /**
-   * This interface was referenced by `CalibrationConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Drift detection method configuration (Advanced S10).
@@ -467,13 +362,6 @@ export interface DriftDetectionConfig {
    * Configured drift detection methods.
    */
   methods?: DriftMethod[];
-  /**
-   * This interface was referenced by `DriftDetectionConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DriftMethod {
   /**
@@ -489,13 +377,6 @@ export interface DriftMethod {
    */
   window?: string;
   dimensions?: DriftDimension[];
-  /**
-   * This interface was referenced by `DriftMethod`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DriftDimension {
   /**
@@ -506,13 +387,6 @@ export interface DriftDimension {
    * Statistical type of this drift dimension. 'continuous': numeric values (use PSI or KS). 'categorical': enumerated values (use chi2 or PSI on proportions).
    */
   type: 'continuous' | 'categorical';
-  /**
-   * This interface was referenced by `DriftDimension`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Shadow mode configuration (Advanced S11.1). RECOMMENDED starting point for agents in rights-impacting workflows.
@@ -534,13 +408,6 @@ export interface ShadowMode {
    * Minimum number of shadow cases required before the readiness evaluation is considered statistically valid. Shadow mode continues until both duration and minimumSamples are satisfied.
    */
   minimumSamples?: number;
-  /**
-   * This interface was referenced by `ShadowMode`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Circuit breaker pattern for automatic fallback on high error rates (Advanced S11.2).
@@ -570,13 +437,6 @@ export interface CircuitBreaker {
    * Number of successful probe invocations required to close the circuit breaker and restore normal agent participation after a cooldown period.
    */
   probeCount?: number;
-  /**
-   * This interface was referenced by `CircuitBreaker`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.

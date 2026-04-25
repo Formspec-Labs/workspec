@@ -32,7 +32,10 @@ const schemas = [
   { src: 'assurance/wos-assurance.schema.json', name: 'assurance' },
 ];
 
-const NAMESPACED_MODULES = new Set(['agent-config', 'drift-monitor', 'advanced', 'integration-profile']);
+/** Every schema module except `kernel` re-declares inlined kernel refs; star-exporting them together causes TS2308. */
+function namespacedModuleNames(presentNames: string[]): Set<string> {
+  return new Set(presentNames.filter((n) => n !== 'kernel'));
+}
 
 async function compileSchema(src: string, name: string): Promise<string | null> {
   const schemaPath = path.join(SCHEMAS_DIR, src);
@@ -53,10 +56,10 @@ async function compileSchema(src: string, name: string): Promise<string | null> 
   }
 }
 
-function buildBarrel(presentNames: string[]): string {
+function buildBarrel(presentNames: string[], namespaced: Set<string>): string {
   return presentNames
     .map((name) => {
-      if (NAMESPACED_MODULES.has(name)) {
+      if (namespaced.has(name)) {
         const pascal = name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('');
         return `export * as ${pascal} from './${name}';`;
       }
@@ -81,15 +84,44 @@ async function produceArtifacts(): Promise<ProducedArtifacts> {
   const presentNames = schemas
     .map(s => s.name)
     .filter(name => contents.has(`${name}.ts`));
-  contents.set('index.ts', buildBarrel(presentNames));
+  contents.set('index.ts', buildBarrel(presentNames, namespacedModuleNames(presentNames)));
   return { contents, skipped };
+}
+
+/**
+ * json-schema-to-typescript emits `patternProperties: { "^x-": ... }` as a
+ * `[k: string]: { [k: string]: unknown }` index signature plus a boilerplate
+ * JSDoc. That breaks assignability across many interfaces; WOS already models
+ * vendor extensions via `extensions?: ExtensionsMap`. Strip only this exact
+ * shape (not arbitrary nested `};`) so we do not corrupt nested objects like
+ * `finiteDomainDeclarations` inner types.
+ *
+ * Run repeatedly so inner `^x-` blocks are removed before outer ones.
+ */
+function stripPatternPropertyIndexSignatures(ts: string): string {
+  // Must anchor to the generator's boilerplate line so we never span from an
+  // unrelated `/**` across real properties (see `VerifiableConstraint`).
+  // One or more `* ...` lines (covers merged Action/Action1 refs), then the
+  // final `* via the patternProperty "^x-".` line and the vendor index signature.
+  const vendorXBlock =
+    /\n(\s+)\/\*\*\s*\n(?:\1 \*[^\n]*\n)+\1 \* via the `patternProperty` "\^x-"\.\s*\n\1 \*\/\n\1\[k: string\]: \{\n\1  \[k: string\]: unknown;\n\1\};\n/g;
+  let prev: string;
+  let next = ts;
+  do {
+    prev = next;
+    next = prev.replace(vendorXBlock, '\n');
+  } while (next !== prev);
+  return next;
 }
 
 async function writeAll(): Promise<void> {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   const { contents, skipped } = await produceArtifacts();
   for (const [filename, content] of contents) {
-    fs.writeFileSync(path.join(OUTPUT_DIR, filename), content);
+    const processed = filename.endsWith('.ts') && filename !== 'index.ts'
+      ? stripPatternPropertyIndexSignatures(content)
+      : content;
+    fs.writeFileSync(path.join(OUTPUT_DIR, filename), processed);
     console.log(`OK   ${filename}`);
   }
   if (skipped.size > 0) {
@@ -118,7 +150,11 @@ async function checkFreshness(): Promise<void> {
       continue;
     }
     const current = fs.readFileSync(filePath, 'utf-8');
-    if (current !== expected) {
+    const expectedProcessed =
+      filename.endsWith('.ts') && filename !== 'index.ts'
+        ? stripPatternPropertyIndexSignatures(expected)
+        : expected;
+    if (current !== expectedProcessed) {
       mismatches.push(`${filename} out of date`);
     }
   }

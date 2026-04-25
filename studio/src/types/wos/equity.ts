@@ -45,13 +45,6 @@ export interface WOSEquityConfig {
    */
   remediationTriggers?: RemediationTrigger[];
   extensions?: ExtensionsMap;
-  /**
-   * This interface was referenced by `WOSEquityConfig`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface ProtectedCategory {
   /**
@@ -70,13 +63,6 @@ export interface ProtectedCategory {
    * Expected group values for validation.
    */
   groups?: string[];
-  /**
-   * This interface was referenced by `ProtectedCategory`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface DisparityMethod {
   /**
@@ -91,13 +77,6 @@ export interface DisparityMethod {
    * Human-readable description of this disparity method's statistical properties and interpretation. Documents thresholds and significance levels used in conjunction with this method.
    */
   description?: string;
-  /**
-   * This interface was referenced by `DisparityMethod`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Automated equity reporting configuration.
@@ -112,13 +91,6 @@ export interface ReportingSchedule {
    * Whether to include historical trend data in the automated equity report. When true, reports show disparity trends across previous reporting periods for pattern analysis.
    */
   includeHistoricalTrend?: boolean;
-  /**
-   * This interface was referenced by `ReportingSchedule`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 export interface RemediationTrigger {
   /**
@@ -134,13 +106,6 @@ export interface RemediationTrigger {
    * Human-readable description of this remediation trigger and the equity concern it addresses. Documents the regulatory basis or policy rationale for this threshold.
    */
   description?: string;
-  /**
-   * This interface was referenced by `RemediationTrigger`'s JSON-Schema definition
-   * via the `patternProperty` "^x-".
-   */
-  [k: string]: {
-    [k: string]: unknown;
-  };
 }
 /**
  * Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.
