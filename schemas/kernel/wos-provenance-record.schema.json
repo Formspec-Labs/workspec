@@ -269,6 +269,14 @@
         "caseFileSnapshot": {
           "$ref": "#/$defs/CaseFileSnapshot"
         },
+        "mutationSource": {
+          "$ref": "#/$defs/MutationSource",
+          "description": "Origin of the mutation when recordKind is 'caseStateMutation'. OPTIONAL on other record kinds. Reserved literals trace the provenance chain from human entry through AI extraction to system-fetch and computed derivation."
+        },
+        "verificationLevel": {
+          "$ref": "#/$defs/VerificationLevel",
+          "description": "OPTIONAL verification strength of this mutation. When present, signals the degree of independent confirmation behind the written value. Tying this to 'determination'-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST."
+        },
         "canonicalEventHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$",
@@ -1159,6 +1167,63 @@
             "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
           ]
         }
+      }
+    },
+    "MutationSource": {
+      "type": "string",
+      "description": "Origin of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. `agent-extracted` supersedes the FlowSpec `ai-extracted` literal for WOS actor-vocabulary alignment.",
+      "examples": [
+        "human-entered",
+        "agent-extracted",
+        "system-fetched",
+        "computed",
+        "self-attested",
+        "human-corrected",
+        "x-vendor-batch-import"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "human-entered",
+            "human-corrected",
+            "agent-extracted",
+            "system-fetched",
+            "computed",
+            "self-attested"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "VerificationLevel": {
+      "type": "string",
+      "description": "Verification strength of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. OPTIONAL on mutation records; tying it to `determination`-tagged transitions is policy-shaped (governance profile / attachment pattern).",
+      "examples": [
+        "independent",
+        "attested",
+        "corroborated",
+        "authoritative"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "independent",
+            "attested",
+            "corroborated",
+            "authoritative"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
       }
     }
   }

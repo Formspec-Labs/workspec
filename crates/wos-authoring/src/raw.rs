@@ -61,6 +61,7 @@ fn empty_state(kind: StateKind) -> State {
         regions: indexmap::IndexMap::new(),
         cancellation_policy: None,
         history_state: None,
+        outcome_code: None,
         extensions: HashMap::new(),
     }
 }

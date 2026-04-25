@@ -767,6 +767,17 @@
             "Final state reached when the applicant has been found eligible"
           ]
         },
+        "outcomeCode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Machine-readable outcome code for final states (Kernel S4.3). Domain-defined; allows downstream systems to branch on terminal outcome without parsing tags or state names. OPTIONAL on all state types but only meaningful when type is 'final'. A lint rule MUST enforce that outcomeCode does not duplicate any entry in tags.",
+          "examples": [
+            "approved",
+            "denied",
+            "withdrawn",
+            "expired"
+          ]
+        },
         "extensions": {
           "$ref": "#/$defs/ExtensionsMap"
         }

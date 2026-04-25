@@ -225,14 +225,32 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         lifecycle_state: &str,
     ) -> Self {
+        Self::case_state_mutation_with_source(path, new_value, actor_id, lifecycle_state, None, None)
+    }
+
+    pub fn case_state_mutation_with_source(
+        path: &str,
+        new_value: &serde_json::Value,
+        actor_id: Option<&str>,
+        lifecycle_state: &str,
+        mutation_source: Option<&str>,
+        verification_level: Option<&str>,
+    ) -> Self {
         let mut record = Self::blank(ProvenanceKind::CaseStateMutation);
         record.actor_id = actor_id.map(String::from);
-        record.data = Some(serde_json::json!({
+        let mut data = serde_json::json!({
             "path": path,
             "newValue": new_value,
             "lifecycleState": lifecycle_state,
             "viaExplicitAction": true,
-        }));
+        });
+        if let Some(src) = mutation_source {
+            data["mutationSource"] = serde_json::Value::String(src.to_string());
+        }
+        if let Some(vl) = verification_level {
+            data["verificationLevel"] = serde_json::Value::String(vl.to_string());
+        }
+        record.data = Some(data);
         record
     }
 

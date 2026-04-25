@@ -55,6 +55,7 @@ fn atomic(transitions: Vec<Transition>) -> State {
         regions: IndexMap::new(),
         cancellation_policy: None,
         history_state: None,
+        outcome_code: None,
         extensions: HashMap::new(),
     }
 }
@@ -72,6 +73,7 @@ fn final_state() -> State {
         regions: IndexMap::new(),
         cancellation_policy: None,
         history_state: None,
+        outcome_code: None,
         extensions: HashMap::new(),
     }
 }

@@ -153,7 +153,7 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 
 **Parallel states** contain named regions executing concurrently. A parallel state is not exited until all regions reach a final state, unless the `cancellationPolicy` overrides this behavior. A parallel state MUST declare a non-empty `regions` map and MUST NOT declare `initialState` or `states`.
 
-**Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions and MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`.
+**Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions and MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`. A final state MAY carry an `outcomeCode` — a machine-readable string that allows downstream systems to branch on terminal outcome without parsing state names or tags. `outcomeCode` MUST NOT duplicate any entry in `tags`.
 
 The structural constraints above are enforced by the Kernel JSON Schema (`schemas/kernel/wos-kernel.schema.json`) via conditional `allOf` blocks on the `State` definition. A Kernel Structural processor MUST reject any document that violates them. The "final states MUST NOT have outgoing transitions" rule remains a semantic constraint enforced by a Kernel Complete processor (see S13.3).
 
@@ -309,6 +309,11 @@ Every mutation to case state MUST be recorded with:
 4. The actor who made the mutation.
 5. The timestamp of the mutation.
 6. The lifecycle state at the time of the mutation.
+
+Each mutation record MAY carry:
+
+7. `mutationSource` — the origin of the value change. Reserved literals: `human-entered`, `human-corrected`, `agent-extracted`, `system-fetched`, `computed`, `self-attested`. Vendor extensions MUST use an `x-` prefix.
+8. `verificationLevel` — the degree of independent confirmation behind the value. Reserved literals: `independent`, `attested`, `corroborated`, `authoritative`. Vendor extensions MUST use an `x-` prefix. OPTIONAL; tying it to `determination`-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST.
 
 The mutation history is append-only. Previous entries MUST NOT be modified or deleted.
 

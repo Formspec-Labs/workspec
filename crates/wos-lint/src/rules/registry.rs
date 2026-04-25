@@ -1043,6 +1043,16 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Break the write→read cycle (split transitions, narrow guards, or move writes off the hot path); use guard-only transitions (omit `event`) for §10.3 re-scan — never author `$`-prefixed event names on transitions (K-007).",
         ),
     },
+    RuleMetadata {
+        id: "K-050",
+        tier: Tier::T2,
+        severity: Severity::Error,
+        summary: "Final state `outcomeCode` MUST NOT duplicate any entry in `tags` (Kernel S4.3).",
+        fixtures: &[],
+        graduation: Graduation::Draft,
+        spec_ref: Some("Kernel S4.3"),
+        suggested_fix: Some("Remove the duplicate from `tags` or choose a different `outcomeCode` value."),
+    },
     // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
     // crates/wos-lint/src/rules/tier2.rs (e.g. `k_ext_002_root_level_x_wos_key_flagged`).
     // The two linked `fixtures/validation/x-wos-*.json` files are authoring

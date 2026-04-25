@@ -13,6 +13,7 @@
 //! | K-010     | error   | createTask assignTo MUST reference a declared kernel actor          |
 //! | K-037     | error   | Fail-fast parallel regions MUST have an error-tagged final state    |
 //! | K-049     | warning (LoadBearing) | Continuous-mode setData/guard dependency cycles (see `continuous_mode`) |
+//! | K-050     | error   | Final state `outcomeCode` MUST NOT duplicate any entry in `tags` (Kernel S4.3) |
 //! | K-EXT-002 | warning | Keys using the reserved `x-wos-*` namespace (Kernel §10.6)           |
 //!
 //! ## Governance — due process
@@ -107,7 +108,6 @@ struct KernelCollections {
 }
 
 impl KernelCollections {
-    /// Build from a typed `KernelDocument`.
     fn from_typed(kernel: &KernelDocument) -> Self {
         let mut tags = std::collections::HashSet::new();
         collect_tags_typed(&kernel.lifecycle.states, &mut tags);
@@ -135,6 +135,42 @@ impl KernelCollections {
             case_fields,
             actor_ids,
             human_actor_ids,
+        }
+    }
+}
+
+fn check_outcome_code_not_in_tags(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    check_outcome_code_recursive(&kernel.lifecycle.states, "/lifecycle/states", diagnostics);
+}
+
+fn check_outcome_code_recursive(
+    states: &indexmap::IndexMap<String, State>,
+    parent_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    for (name, state) in states {
+        let state_path = format!("{parent_path}/{name}");
+        if let Some(ref code) = state.outcome_code {
+            if state.tags.iter().any(|t| t == code) {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "K-050",
+                    &format!("{state_path}/outcomeCode"),
+                    format!(
+                        "state '{name}' outcomeCode '{code}' duplicates a tags entry; outcomeCode MUST be distinct from tags"
+                    ),
+                ));
+            }
+        }
+        check_outcome_code_recursive(&state.states, &format!("{state_path}/states"), diagnostics);
+        for (region_name, region) in &state.regions {
+            check_outcome_code_recursive(
+                &region.states,
+                &format!("{state_path}/regions/{region_name}/states"),
+                diagnostics,
+            );
         }
     }
 }
@@ -199,6 +235,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
         check_action_actor_references_typed(kernel, &kc.actor_ids, diagnostics);
         check_fail_fast_error_final_states_typed(kernel, diagnostics);
+        check_outcome_code_not_in_tags(kernel, diagnostics);
         super::continuous_mode::check(kernel, diagnostics);
     }
 

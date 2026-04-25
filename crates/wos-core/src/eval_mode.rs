@@ -162,6 +162,7 @@ mod tests {
             initial_state: None,
             history_state: None,
             cancellation_policy: None,
+            outcome_code: None,
             extensions: HashMap::new(),
         }
     }
@@ -179,6 +180,7 @@ mod tests {
             initial_state: None,
             history_state: None,
             cancellation_policy: None,
+            outcome_code: None,
             extensions: HashMap::new(),
         }
     }

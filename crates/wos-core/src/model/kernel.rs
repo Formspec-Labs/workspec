@@ -250,6 +250,10 @@ pub struct State {
     #[serde(default)]
     pub history_state: Option<HistoryMode>,
 
+    /// Machine-readable outcome code for final states (Kernel S4.3).
+    #[serde(default)]
+    pub outcome_code: Option<String>,
+
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
