@@ -4,6 +4,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use crate::AppState;
+use crate::auth::RequireAuth;
 use crate::domain::{AppealRequest, ApplicantDeterminationView};
 use crate::error::{ApiError, ApiResult};
 
@@ -27,6 +28,9 @@ async fn determination(
 
 async fn appeal(
     State(s): State<AppState>,
+    // WS-003 interim: any authenticated user. Per-actor scoping (own-case
+    // applicant only) lands with WS-091.
+    _: RequireAuth,
     Path(id): Path<String>,
     Json(body): Json<AppealRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
