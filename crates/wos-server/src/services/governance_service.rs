@@ -297,10 +297,16 @@ impl GovernanceService {
     /// Resolve the `policy-parameters` version active at `as_of`. WS-034 backs
     /// both `POST /governance/{url}/policy-resolve` (legacy body form) and
     /// `GET /policy/{url}/resolve?asOf=` (decided 2026-04-25). A version is
-    /// "active" when `effectiveDate <= as_of < (expiryDate or +inf)`.
+    /// "active" when `effectiveDate <= as_of < (expiryDate or +inf)` — a
+    /// half-open interval: `effectiveDate` is inclusive, `expiryDate` is
+    /// exclusive. When multiple versions cover `as_of`, returns the one with
+    /// the latest `effectiveDate` (versions are sorted descending by parsed
+    /// `effectiveDate` before the walk, so JSON-array order is irrelevant).
     /// Returns `None` if the workflow has no `policy-parameters` sidecar or
     /// the requested instant falls in a gap (before the earliest effective
-    /// date, or inside an unbounded gap between versions).
+    /// date, or inside an unbounded gap between versions). Versions whose
+    /// `effectiveDate` fails RFC3339 parsing are treated as missing and a
+    /// `tracing::warn!` is emitted so ops can find them.
     pub async fn resolve_policy(
         &self,
         workflow_url: &str,
@@ -315,13 +321,29 @@ impl GovernanceService {
                 .map(|x| x.with_timezone(&chrono::Utc))
         };
 
+        // Pair each version with its parsed effectiveDate; drop entries with
+        // missing or unparseable effectiveDate (with a warn for ops). Sort
+        // descending by effectiveDate so the first interval-matching entry
+        // wins regardless of JSON-array order.
+        let mut sorted: Vec<(chrono::DateTime<chrono::Utc>, &serde_json::Value)> = versions
+            .iter()
+            .filter_map(|v| match s(v, "effectiveDate").as_deref().and_then(parse) {
+                Some(t) => Some((t, v)),
+                None => {
+                    tracing::warn!(
+                        workflow_url = %workflow_url,
+                        version_id = %s(v, "id").unwrap_or_default(),
+                        "policy-parameters version has missing or unparseable effectiveDate; skipping",
+                    );
+                    None
+                }
+            })
+            .collect();
+        sorted.sort_by(|a, b| b.0.cmp(&a.0));
+
         let mut best: Option<&serde_json::Value> = None;
-        for v in versions {
-            let eff = match s(v, "effectiveDate").as_deref().and_then(parse) {
-                Some(t) => t,
-                None => continue,
-            };
-            if &eff > as_of {
+        for (eff, v) in &sorted {
+            if eff > as_of {
                 continue;
             }
             if let Some(exp_str) = s(v, "expiryDate").as_deref() {
@@ -332,6 +354,7 @@ impl GovernanceService {
                 }
             }
             best = Some(v);
+            break;
         }
 
         best.map(|v| {

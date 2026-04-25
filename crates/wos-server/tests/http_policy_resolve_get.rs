@@ -23,7 +23,7 @@ fn write_fixture(dir: &std::path::Path, subdir: &str, body: serde_json::Value) {
     std::fs::write(&file, serde_json::to_vec_pretty(&body).unwrap()).unwrap();
 }
 
-fn seed_fixtures(dir: &std::path::Path) {
+fn seed_kernel(dir: &std::path::Path) {
     write_fixture(
         dir,
         "kernel",
@@ -35,34 +35,46 @@ fn seed_fixtures(dir: &std::path::Path) {
             "impactLevel": "operational",
         }),
     );
+}
+
+fn seed_policy_parameters(dir: &std::path::Path, versions: serde_json::Value) {
     write_fixture(
         dir,
         "policy-parameters",
         serde_json::json!({
             "targetWorkflow": WORKFLOW_URL,
-            "versions": [
-                {
-                    "id": "v1",
-                    "label": "2025 schedule",
-                    "effectiveDate": "2025-01-01T00:00:00Z",
-                    "expiryDate": "2026-01-01T00:00:00Z",
-                    "parameters": {
-                        "incomeCeiling": 30000,
-                        "benefitFactor": 0.10
-                    }
-                },
-                {
-                    "id": "v2",
-                    "label": "2026 schedule",
-                    "effectiveDate": "2026-01-01T00:00:00Z",
-                    "parameters": {
-                        "incomeCeiling": 32000,
-                        "benefitFactor": 0.12
-                    }
-                }
-            ]
+            "versions": versions,
         }),
     );
+}
+
+fn default_versions() -> serde_json::Value {
+    serde_json::json!([
+        {
+            "id": "v1",
+            "label": "2025 schedule",
+            "effectiveDate": "2025-01-01T00:00:00Z",
+            "expiryDate": "2026-01-01T00:00:00Z",
+            "parameters": {
+                "incomeCeiling": 30000,
+                "benefitFactor": 0.10
+            }
+        },
+        {
+            "id": "v2",
+            "label": "2026 schedule",
+            "effectiveDate": "2026-01-01T00:00:00Z",
+            "parameters": {
+                "incomeCeiling": 32000,
+                "benefitFactor": 0.12
+            }
+        }
+    ])
+}
+
+fn seed_fixtures(dir: &std::path::Path) {
+    seed_kernel(dir);
+    seed_policy_parameters(dir, default_versions());
 }
 
 fn stub_config(fixtures_dir: std::path::PathBuf) -> Arc<ServerConfig> {
@@ -167,6 +179,156 @@ async fn policy_resolve_get_returns_404_for_gap_date() {
         .oneshot(
             Request::builder()
                 .uri(resolve_uri("2024-06-01T00:00:00Z").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+/// `effectiveDate` is the inclusive lower bound: `as_of == effectiveDate`
+/// hits that version. Locks the half-open `[effectiveDate, expiryDate)`
+/// semantics from the `resolve_policy` doc.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn policy_resolve_get_inclusive_at_effective_date() {
+    let tmp = TempDir::new().unwrap();
+    seed_fixtures(tmp.path());
+    let state = bring_up(tmp.path().to_path_buf()).await;
+    let app = http::router(state);
+
+    // v1.effectiveDate exactly — must hit v1.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(resolve_uri("2025-01-01T00:00:00Z").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v1"));
+}
+
+/// `expiryDate` is the exclusive upper bound: `as_of == expiryDate` does NOT
+/// hit that version. With v1.expiryDate == v2.effectiveDate, an `as_of` at
+/// that instant must hit v2 (the next version takes over).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn policy_resolve_get_exclusive_at_expiry_date() {
+    let tmp = TempDir::new().unwrap();
+    seed_fixtures(tmp.path());
+    let state = bring_up(tmp.path().to_path_buf()).await;
+    let app = http::router(state);
+
+    // Exactly v1.expiryDate (== v2.effectiveDate) — must hit v2, not v1.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(resolve_uri("2026-01-01T00:00:00Z").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v2"));
+}
+
+/// Reviewer FINDING 2: the precedence rule is "latest `effectiveDate` wins,"
+/// not "last array entry wins." Seed `[v2, v1]` (out of date order). At an
+/// `as_of` after both effectiveDates, v2 must win because its effectiveDate
+/// is later — even though it is the FIRST array entry.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn policy_resolve_get_picks_latest_effective_when_versions_out_of_order() {
+    let tmp = TempDir::new().unwrap();
+    seed_kernel(tmp.path());
+    seed_policy_parameters(
+        tmp.path(),
+        serde_json::json!([
+            {
+                "id": "v2",
+                "label": "2026 schedule",
+                "effectiveDate": "2026-01-01T00:00:00Z",
+                "parameters": {
+                    "incomeCeiling": 32000,
+                    "benefitFactor": 0.12
+                }
+            },
+            {
+                "id": "v1",
+                "label": "2025 schedule",
+                "effectiveDate": "2025-01-01T00:00:00Z",
+                "expiryDate": "2026-01-01T00:00:00Z",
+                "parameters": {
+                    "incomeCeiling": 30000,
+                    "benefitFactor": 0.10
+                }
+            }
+        ]),
+    );
+    let state = bring_up(tmp.path().to_path_buf()).await;
+    let app = http::router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(resolve_uri("2026-06-01T00:00:00Z").as_str())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v2"));
+}
+
+/// Mid-gap between two non-contiguous versions returns 404. v1 expires
+/// 2024-12-31; v2 starts 2025-06-01. `as_of = 2025-03-01` falls inside the
+/// gap and no version covers it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn policy_resolve_get_returns_404_in_mid_gap() {
+    let tmp = TempDir::new().unwrap();
+    seed_kernel(tmp.path());
+    seed_policy_parameters(
+        tmp.path(),
+        serde_json::json!([
+            {
+                "id": "v1",
+                "label": "2024 schedule",
+                "effectiveDate": "2024-01-01T00:00:00Z",
+                "expiryDate": "2024-12-31T00:00:00Z",
+                "parameters": {
+                    "incomeCeiling": 28000
+                }
+            },
+            {
+                "id": "v2",
+                "label": "Mid-2025 schedule",
+                "effectiveDate": "2025-06-01T00:00:00Z",
+                "parameters": {
+                    "incomeCeiling": 33000
+                }
+            }
+        ]),
+    );
+    let state = bring_up(tmp.path().to_path_buf()).await;
+    let app = http::router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(resolve_uri("2025-03-01T00:00:00Z").as_str())
                 .body(Body::empty())
                 .unwrap(),
         )
