@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 
 use crate::AppState;
+use crate::auth::{Adjudicator, RequireRole, Supervisor};
 use crate::domain::{ListQuery, PaginatedView, TaskListItem};
 use crate::error::{ApiError, ApiResult};
 use crate::storage::{self, InstanceQuery, LIST_INSTANCES_PAGE_SIZE_MAX};
@@ -161,6 +162,7 @@ impl From<TaskSubmissionResult> for TaskSubmissionView {
 
 async fn persist_draft(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Path(task_id): Path<String>,
     Json(req): Json<TaskDraftRequest>,
 ) -> ApiResult<Json<TaskDraftView>> {
@@ -179,6 +181,7 @@ async fn persist_draft(
 
 async fn submit_response(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Path(task_id): Path<String>,
     Json(req): Json<TaskSubmitRequest>,
 ) -> ApiResult<Json<TaskSubmissionView>> {
@@ -197,6 +200,7 @@ async fn submit_response(
 
 async fn dismiss(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path(task_id): Path<String>,
     Json(req): Json<TaskDismissRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {

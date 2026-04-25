@@ -1,13 +1,14 @@
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::routing::{delete, get};
+use axum::routing::{delete, get, post};
 use axum::Router;
+use serde::Deserialize;
 
 use crate::AppState;
-use crate::auth::{AuthCtx, require_role};
+use crate::auth::{RequireRole, Supervisor};
 use crate::domain::{
     AgentView, CalendarEventView, DelegationEntryView, DeonticConstraintView, EquityConfigView,
-    PipelineView, PolicyVersionView, QualityControlsView, ServiceHealthView,
+    PipelineView, PolicyVersionView, QualityControlsView, ResolvedPolicyView, ServiceHealthView,
     VerificationReportView,
 };
 use crate::error::{ApiError, ApiResult};
@@ -35,6 +36,7 @@ pub fn routes() -> Router<AppState> {
             delete(delegation_revoke),
         )
         .route("/governance/{url}/policy-versions", get(policy_versions))
+        .route("/governance/{url}/policy-resolve", post(policy_resolve))
         .route("/governance/{url}/calendar-events", get(calendar_events))
         .route("/health", get(health))
 }
@@ -103,10 +105,9 @@ async fn delegations_list(
 async fn delegation_create(
     State(s): State<AppState>,
     Path(url): Path<String>,
-    AuthCtx(ctx): AuthCtx,
+    _: RequireRole<Supervisor>,
     Json(entry): Json<DelegationEntryView>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require_role(&ctx, "Supervisor")?;
     s.services.governance.create_delegation(&url, &entry).await?;
     Ok(Json(serde_json::json!({ "ok": true, "id": entry.id })))
 }
@@ -114,9 +115,8 @@ async fn delegation_create(
 async fn delegation_revoke(
     State(s): State<AppState>,
     Path((url, id)): Path<(String, String)>,
-    AuthCtx(ctx): AuthCtx,
+    _: RequireRole<Supervisor>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require_role(&ctx, "Supervisor")?;
     s.services.governance.revoke_delegation(&url, &id).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -126,6 +126,28 @@ async fn policy_versions(
     Path(url): Path<String>,
 ) -> Json<Vec<PolicyVersionView>> {
     Json(s.services.governance.policy_versions(&url).await)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolicyResolveRequest {
+    pub as_of: String,
+}
+
+async fn policy_resolve(
+    State(s): State<AppState>,
+    Path(url): Path<String>,
+    Json(req): Json<PolicyResolveRequest>,
+) -> ApiResult<Json<ResolvedPolicyView>> {
+    let as_of = chrono::DateTime::parse_from_rfc3339(&req.as_of)
+        .map_err(|e| ApiError::BadRequest(format!("invalid asOf: {e}")))?
+        .with_timezone(&chrono::Utc);
+    s.services
+        .governance
+        .resolve_policy(&url, &as_of)
+        .await
+        .map(Json)
+        .ok_or(ApiError::NotFound)
 }
 
 async fn calendar_events(

@@ -84,6 +84,19 @@ Everything mounted under `/api/*`. Route groups:
 
 **Reference wire contract**: `studio/src/services/WosBackend.ts` + `WosPorts.ts`. Handler response shapes match these contracts.
 
+### Pagination semantics
+
+Two distinct categories — caller-driven cursors vs server-side fleet scans — and they are not interchangeable:
+
+- **Caller-paginated (cursor-driven).** `GET /api/instances` walks one SQLite page at a time; the caller supplies `page` / `pageSize` and decides when to stop. `Page<T>::total` is best-effort under concurrent writes (the `COUNT(*)` and the paged `SELECT … LIMIT/OFFSET` are separate statements; clients that need stable pagination should request the next page promptly or page by id).
+- **Server-side fleet-scan aggregates.** `GET /api/tasks`, `GET /api/dashboard/metrics`, `GET /api/dashboard/stage-metrics`, and `POST /api/equity/evaluate` aggregate across **every** matching instance. Internally they call [`storage::list_instances_all_pages`](src/storage/mod.rs), which loops the underlying paged read until exhaustion (200-row SQLite clamp per page). Results are not capped at the first page.
+
+The two categories share the same SQLite read path; the difference is who drives the loop. See [`PARITY.md`](PARITY.md) ▎ Server aggregation + surface refresh for the audit row.
+
+### Realtime auth model
+
+Under `WOS_AUTH=jwt`, each `kernel:update` socket event re-runs `AuthProvider::verify` against the connect-time access token (the same revocation model as HTTP — see [`tests/auth_jwt.rs`](tests/auth_jwt.rs)). A token revoked or epoch-bumped after the socket connects is rejected on the **next** event, not retroactively. Studio clients **must reconnect** to attach a fresh access token after logout, role change, or password reset; otherwise the existing socket continues to fail every event until the connection is dropped. Mock auth ignores the token and is permissive for local studio.
+
 ---
 
 ## Configuration

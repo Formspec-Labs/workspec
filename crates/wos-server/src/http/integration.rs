@@ -4,6 +4,7 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use crate::AppState;
+use crate::auth::{Adjudicator, RequireRole};
 use crate::error::ApiResult;
 use crate::services::integration_service::{InboundAck, IntegrationService, WosInboundEvent};
 
@@ -16,6 +17,7 @@ pub fn routes() -> Router<AppState> {
 
 async fn inbound(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Json(ev): Json<WosInboundEvent>,
 ) -> ApiResult<Json<InboundAck>> {
     Ok(Json(IntegrationService::accept_inbound(&s, ev).await?))
@@ -32,6 +34,7 @@ async fn profile(
 
 async fn invoke(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Path((url, binding)): Path<(String, String)>,
     Json(inputs): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {

@@ -4,9 +4,10 @@ use axum::routing::{get, post};
 use axum::Router;
 
 use crate::AppState;
+use crate::auth::{Adjudicator, RequireRole, Supervisor};
 use crate::error::ApiResult;
 use crate::services::assurance_service::{
-    AssuranceService, IdentityFactView, RecordFactRequest, UpgradeRequest,
+    AssuranceService, AssuranceChainResponse, IdentityFactView, RecordFactRequest, UpgradeRequest,
 };
 
 pub fn routes() -> Router<AppState> {
@@ -24,6 +25,7 @@ pub fn routes() -> Router<AppState> {
 
 async fn record(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Path(id): Path<String>,
     Json(req): Json<RecordFactRequest>,
 ) -> ApiResult<Json<IdentityFactView>> {
@@ -43,6 +45,7 @@ async fn list_for_instance(
 
 async fn upgrade(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path((_instance, fact_id)): Path<(String, String)>,
     Json(req): Json<UpgradeRequest>,
 ) -> ApiResult<Json<IdentityFactView>> {
@@ -54,8 +57,8 @@ async fn upgrade(
 async fn assurance_chain(
     State(s): State<AppState>,
     Path(subject_ref): Path<String>,
-) -> ApiResult<Json<Vec<IdentityFactView>>> {
+) -> ApiResult<Json<AssuranceChainResponse>> {
     Ok(Json(
-        AssuranceService::assurance_chain(&s.storage, &subject_ref).await?,
+        AssuranceService::assurance_chain_with_validation(&s.storage, &subject_ref).await?,
     ))
 }

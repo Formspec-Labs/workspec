@@ -5,6 +5,7 @@ use axum::Router;
 use serde::Deserialize;
 
 use crate::AppState;
+use crate::auth::{RequireRole, Supervisor};
 use crate::error::{ApiError, ApiResult};
 use crate::services::advanced_service::{
     self, ConstraintZoneView, EquityEvaluateRequest, EquityReport, ValidActionsResponse,
@@ -36,6 +37,7 @@ async fn verify(
 
 async fn evaluate_equity(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Json(req): Json<EquityEvaluateRequest>,
 ) -> ApiResult<Json<EquityReport>> {
     Ok(Json(

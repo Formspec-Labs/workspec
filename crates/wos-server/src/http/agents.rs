@@ -5,6 +5,7 @@ use axum::Router;
 use serde::Deserialize;
 
 use crate::AppState;
+use crate::auth::{RequireRole, Supervisor};
 use crate::error::{ApiError, ApiResult};
 use crate::services::agent_service::{
     AgentService, AgentView, DeploymentState, DriftReport, LifecycleTransitionRequest,
@@ -43,6 +44,7 @@ async fn list(
 
 async fn register(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Json(req): Json<RegisterAgentRequest>,
 ) -> ApiResult<Json<AgentView>> {
     Ok(Json(AgentService::register(&s.storage, req).await?))
@@ -57,6 +59,7 @@ async fn get_one(
 
 async fn lifecycle_transition(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path(id): Path<String>,
     Json(req): Json<LifecycleTransitionRequest>,
 ) -> ApiResult<Json<AgentView>> {
@@ -67,6 +70,7 @@ async fn lifecycle_transition(
 
 async fn canary(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<AgentView>> {
     Ok(Json(
@@ -76,6 +80,7 @@ async fn canary(
 
 async fn shadow(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<AgentView>> {
     Ok(Json(

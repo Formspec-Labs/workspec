@@ -2,12 +2,13 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::Router;
 use serde::Deserialize;
 use wos_runtime::runtime::CreateInstanceRequest;
 
 use crate::AppState;
+use crate::auth::{Adjudicator, RequireRole, Supervisor};
 use crate::domain::provenance::ProvenanceResponse;
 use crate::domain::{
     AvailableTransitionView, EvaluationResultView, InstanceResponse, ListQuery, PaginatedView,
@@ -22,12 +23,78 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/instances", get(list).post(create))
         .route("/instances/{id}", get(get_one))
+        .route("/instances/{id}/explain", get(explain))
         .route("/instances/{id}/provenance", get(provenance))
         .route("/instances/{id}/provenance/verify", get(verify_provenance))
         .route("/instances/{id}/provenance/export", get(export_provenance))
         .route("/instances/{id}/transitions", get(transitions))
         .route("/instances/{id}/events", post(submit_event))
         .route("/instances/{id}/drain", post(drain))
+        .route("/instances/{id}/holds", get(list_holds).post(create_hold))
+        .route("/instances/{id}/holds/{hold_idx}", delete(release_hold))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplainQuery {
+    pub transition_id: String,
+    #[serde(default)]
+    pub tags: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplainResponse {
+    #[serde(flatten)]
+    pub explanation: wos_core::explain::Explanation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rendered: Option<String>,
+}
+
+async fn explain(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+    Query(q): Query<ExplainQuery>,
+) -> ApiResult<Json<ExplainResponse>> {
+    let _instance = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
+
+    let prov_responses = s.services.provenance.list(&id).await?;
+    let records: Vec<wos_core::provenance::ProvenanceRecord> =
+        prov_responses.into_iter().map(|r| r.record).collect();
+
+    let tags: Vec<String> = q
+        .tags
+        .as_deref()
+        .map(|t| {
+            t.split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_else(|| vec!["adverse-decision".into()]);
+
+    let assembled_at = chrono::Utc::now().to_rfc3339();
+    let explanation = wos_core::explain::assemble_explanation(
+        &records,
+        &q.transition_id,
+        &tags,
+        &assembled_at,
+    );
+
+    let explanation_value = serde_json::to_value(&explanation)
+        .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
+
+    let rendered = s
+        .runtime
+        .renderer()
+        .render_explanation(&explanation_value, "default")
+        .ok();
+
+    Ok(Json(ExplainResponse {
+        explanation,
+        rendered,
+    }))
 }
 
 async fn list(
@@ -84,6 +151,7 @@ pub struct CreateInstanceBody {
 
 async fn create(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Json(body): Json<CreateInstanceBody>,
 ) -> ApiResult<Json<InstanceResponse>> {
     let kernel = s
@@ -204,6 +272,7 @@ async fn transitions(
 /// execution; this cache is the reference-server defense-in-depth.
 async fn submit_event(
     State(s): State<AppState>,
+    _: RequireRole<Adjudicator>,
     Path(id): Path<String>,
     Json(req): Json<SubmitEventRequest>,
 ) -> ApiResult<Json<EvaluationResultView>> {
@@ -286,6 +355,7 @@ async fn submit_event(
 /// instance, returning a summary per step.
 async fn drain(
     State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<DrainStepSummary>>> {
     let results = s
@@ -315,6 +385,148 @@ pub struct DrainStepSummary {
     pub provenance_count: usize,
     pub created_task_ids: Vec<String>,
     pub emitted_events: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateHoldRequest {
+    pub hold_type: String,
+    pub resume_trigger: String,
+    #[serde(default)]
+    pub expected_end: Option<String>,
+    #[serde(default)]
+    pub hold_state: Option<String>,
+}
+
+async fn list_holds(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Vec<serde_json::Value>>> {
+    let row = s
+        .storage
+        .get_instance(&id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let holds = row
+        .instance_json
+        .get("governanceState")
+        .and_then(|g| g.as_object())
+        .and_then(|g| g.get("activeHolds"))
+        .and_then(|h| h.as_array())
+        .cloned()
+        .unwrap_or_default();
+    Ok(Json(holds))
+}
+
+async fn create_hold(
+    State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
+    Path(id): Path<String>,
+    Json(req): Json<CreateHoldRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let req = std::sync::Arc::new(req);
+    let started_at = chrono::Utc::now().to_rfc3339();
+    let final_index = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+    let captured_index = final_index.clone();
+    s.storage
+        .update_instance_atomic(&id, &move |row| {
+            let inst = row.instance_json.as_object_mut().ok_or_else(|| {
+                crate::storage::StorageError::Other("instance_json is not an object".into())
+            })?;
+            let default_state = inst
+                .get("configuration")
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.first())
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            let hold_state = req.hold_state.clone().or(default_state);
+            let mut hold = serde_json::Map::new();
+            hold.insert("holdType".into(), serde_json::Value::String(req.hold_type.clone()));
+            hold.insert("startedAt".into(), serde_json::Value::String(started_at.clone()));
+            hold.insert(
+                "resumeTrigger".into(),
+                serde_json::Value::String(req.resume_trigger.clone()),
+            );
+            if let Some(end) = &req.expected_end {
+                hold.insert("expectedEnd".into(), serde_json::Value::String(end.clone()));
+            }
+            if let Some(state) = hold_state {
+                hold.insert("holdState".into(), serde_json::Value::String(state));
+            }
+            // Ensure governanceState is an object (replace nulls and missing).
+            let gov_value = inst
+                .entry("governanceState".to_string())
+                .or_insert_with(|| serde_json::json!({}));
+            if !gov_value.is_object() {
+                *gov_value = serde_json::json!({});
+            }
+            let gov = gov_value.as_object_mut().unwrap();
+            let holds_value = gov
+                .entry("activeHolds".to_string())
+                .or_insert_with(|| serde_json::json!([]));
+            if !holds_value.is_array() {
+                *holds_value = serde_json::json!([]);
+            }
+            let holds = holds_value.as_array_mut().unwrap();
+            holds.push(serde_json::Value::Object(hold));
+            *captured_index.lock().unwrap() = holds.len() - 1;
+            Ok(Vec::new())
+        })
+        .await?;
+    let idx = *final_index.lock().unwrap();
+    Ok(Json(
+        serde_json::json!({ "ok": true, "holdIndex": idx }),
+    ))
+}
+
+async fn release_hold(
+    State(s): State<AppState>,
+    _: RequireRole<Supervisor>,
+    Path((id, hold_idx)): Path<(String, usize)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let released = std::sync::Arc::new(std::sync::Mutex::new(None::<serde_json::Value>));
+    let captured = released.clone();
+    let result = s
+        .storage
+        .update_instance_atomic(&id, &move |row| {
+            let inst = row.instance_json.as_object_mut().ok_or_else(|| {
+                crate::storage::StorageError::Other("instance_json is not an object".into())
+            })?;
+            let holds = inst
+                .get_mut("governanceState")
+                .and_then(|g| g.as_object_mut())
+                .and_then(|g| g.get_mut("activeHolds"))
+                .and_then(|h| h.as_array_mut());
+            let Some(holds) = holds else {
+                return Err(crate::storage::StorageError::Other(
+                    "hold-not-found".into(),
+                ));
+            };
+            if hold_idx >= holds.len() {
+                return Err(crate::storage::StorageError::Other(
+                    "hold-not-found".into(),
+                ));
+            }
+            let removed = holds.remove(hold_idx);
+            *captured.lock().unwrap() = Some(removed);
+            Ok(Vec::new())
+        })
+        .await;
+    match result {
+        Ok(_) => {}
+        Err(crate::storage::StorageError::Other(msg)) if msg == "hold-not-found" => {
+            return Err(ApiError::NotFound);
+        }
+        Err(other) => return Err(other.into()),
+    }
+    let released_hold = released
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or(ApiError::NotFound)?;
+    Ok(Json(
+        serde_json::json!({ "ok": true, "released": released_hold }),
+    ))
 }
 
 fn diff_case_state(before: &serde_json::Value, after: &serde_json::Value) -> serde_json::Value {

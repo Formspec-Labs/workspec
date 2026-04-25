@@ -18,7 +18,11 @@ pub mod middleware;
 pub mod mock;
 
 pub use jwt::JwtAuth;
-pub use middleware::{AuthCtx, RequireAuth, require_role};
+#[allow(deprecated)]
+pub use middleware::require_role;
+pub use middleware::{
+    Adjudicator, Applicant, AuthCtx, RequireAuth, RequireRole, Role, Supervisor,
+};
 pub use mock::MockAuth;
 
 pub type AuthHandle = Arc<dyn AuthProvider>;

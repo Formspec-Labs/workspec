@@ -33,16 +33,28 @@ WOS does NOT replace the workflow engine. Targets Temporal / Restate / Camunda /
 
 Ships as four independent release streams: `wos-kernel`, `wos-governance`, `wos-ai`, `wos-advanced`. Compliance claims reference a pair of stream versions.
 
-## Layer structure
+## Schema structure
 
-- **Layer 0 — Kernel (required).** States, transitions, guards, case data, actors, relationships. Every transition emits provenance. Two conformant processors given the same kernel and same events produce the same result.
-- **Layer 1 — Governance (optional).** Due process, five structured review protocols (independent-first, consider-opposite, calibrated confidence, dual-blind, unassisted), validation pipelines, delegation of authority, hold policies, authority-ranked reasoning traces.
-- **Layer 2 — AI Integration (optional).** Agent registration with deontic constraints, autonomy levels capped by impact classification, confidence thresholds with decay, mandatory fallback chains terminating in human review, drift monitoring, disclosure requirements (EU AI Act Article 13, OMB M-24-10).
-- **Layer 3 — Advanced Governance (optional).** DCR-style constraint zones, equity guardrails, SMT verification reports.
-- **Cross-cutting profiles:** Integration, Semantic, Signature.
-- **Companions:** Lifecycle Detail, Runtime.
+One author-time core schema, three sidecars, two runtime artifact schemas, one tooling schema. See [ADR 0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md).
 
-Six kernel seams are the only extension surface, per Kernel §10: `actorExtension` (§10.1), `contractHook` (§10.2), `provenanceLayer` (§10.3), `lifecycleHook` (§10.4), `custodyHook` (§10.5), and `extensions` / `x-` keys (§10.6). See [ADR 0077](../thoughts/adr/0077-canonical-kernel-extension-seams.md) for canonical enumeration and disposition of prior alternate names.
+- **Author-time core: `wos-workflow.schema.json`.** Required: `$wosWorkflow`, `url`, `version`, `title`, `impactLevel`, `actors`, `lifecycle`. Carries the workflow lifecycle, case file, contracts, output bindings, and provenance config in one document.
+- **Optional embedded blocks** (appear when product behavior demands them; conditional schema rules + lint enforce presence):
+  - `governance` — due process, review protocols, validation pipelines, task catalog, delegation, holds, policy parameters, escalation. Required for `rightsImpacting` and `safetyImpacting` workflows.
+  - `agents[]` — per-agent declarations: model identity, autonomy (capped by impact), deontic constraints (`permission`/`prohibition`/`obligation`/`right` per OASIS LegalRuleML), confidence floor with decay, fallback chain terminating in human review, capabilities, drift monitoring. Required when any actor has `type == "agent"`.
+  - `aiOversight` — disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, volume constraints, narrative-tier templates. Paired with `agents`.
+  - `signature` — signers, order, identity verification, consent, reminders, void conditions, audit certificate. Required when any transition gates on `kind: "signature"` (signing order is load-bearing for DocuSign-tier workflows).
+  - `advanced` — DCR constraint zones, equity guardrails, SMT verifiable constraints, circuit breaker, shadow mode.
+  - `assurance` — assurance level, attestation, subject continuity.
+- **Sidecars (deployment-environment configuration; join by `targetWorkflow` URI):**
+  - `wos-delivery.schema.json` — business calendar, notification templates, correspondence metadata.
+  - `wos-ontology-alignment.schema.json` — JSON-LD `@context`, SHACL shapes, PROV-O / XES / OCEL export.
+  - `wos-custody-hook-encoding.schema.json` — Trellis custody binding declaration.
+- **Runtime artifacts (produced by processors):** `wos-case-instance.schema.json` (running-instance state), `wos-provenance-log.schema.json` (append-only audit log).
+- **Tooling:** `wos-tooling.schema.json` (lint diagnostics, conformance traces, synth traces, MCP tool catalog, extension registry).
+
+Release-stream identity is preserved via top-level version markers in one document: `$wosWorkflow`, `$wosGovernance`, `$wosAgents`, `$wosSignature`, `$wosAdvanced`. Compliance claims compose as before — "`$wosWorkflow@1.0` with `$wosGovernance@1.1` semantics" replaces "`wos-kernel@1.0 + wos-governance@1.1`."
+
+Six canonical kernel seams remain the only extension surface (ADR 0077): `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys. Inlining governance, agents, signature, and advanced into the core schema does not alter how higher-layer concerns attach.
 
 ## Decision heuristics
 
@@ -59,6 +71,7 @@ Apply after stack-wide heuristics (in vision-model.md):
 - **Signature shortcut rule.** Product shortcuts may exist only as workflow-lite paths over the same WOS `SignatureAffirmation` semantics and Trellis custody/export path. Do not create a second meaning of "signed."
 - **FEL is the only expression language.** FEEL / DMN / SHACL are on the rejection list. FEL drives guards, equity expressions, condition events, restricted-domain equity profile.
 - **Rust is the spec authority.** `wos-core` is the semantics library; `wos-runtime` is in-memory durable-execution adapter + conformance oracle; Restate is initial default production adapter behind `DurableRuntime`. Do not add spec behavior in a scripting layer when it belongs in the Rust center.
+- **Reference-server auth invariants.** Global logout bumps `auth_epoch` + revokes sessions in one txn; password rotation flows only through `Storage::set_user_password_hash` (hash + epoch + revoke atomic); `upsert_user` never touches `password_hash` / `auth_epoch`; realtime `kernel:update` re-runs `verify` per event so role/revoke changes apply without waiting for token expiry. Full contract: [`crates/wos-server/PARITY.md`](crates/wos-server/PARITY.md) ▎ Auth contract, mirrored in [`crates/wos-server/README.md`](crates/wos-server/README.md) Auth + Storage + Realtime auth model.
 
 ## Architecture
 

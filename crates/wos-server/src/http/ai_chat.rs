@@ -14,7 +14,7 @@ use axum::Router;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::AppState;
-use crate::auth::middleware::{AuthCtx, require_role};
+use crate::auth::{RequireRole, Supervisor};
 use crate::config::AiChatKind;
 use crate::error::{ApiError, ApiResult};
 
@@ -34,10 +34,9 @@ pub fn routes() -> Router<AppState> {
 
 async fn chat(
     State(s): State<AppState>,
-    auth: AuthCtx,
+    _: RequireRole<Supervisor>,
     Json(body): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require_role(&auth.0, "Supervisor")?;
     match s.cfg.ai_chat {
         AiChatKind::Disabled => Err(ApiError::ServiceUnavailable(
             "AI chat is not enabled on this server".into(),

@@ -123,14 +123,22 @@ async fn on_connect(
     token: Option<String>,
 ) {
     if matches!(state.cfg.auth, AuthKind::Jwt) {
-        let stored = match &token {
+        // WS-009: reject malformed/missing/expired handshake tokens at connect
+        // time so idle malicious connections do not hold server resources.
+        // Pre-WS-009 behavior cached `None` and let the first `kernel:update`
+        // surface the failure; that wasted a connection slot per bad client.
+        let valid_token = match &token {
             Some(t) if state.auth.verify(t).await.is_ok() => Some(t.clone()),
             _ => None,
+        };
+        let Some(valid_token) = valid_token else {
+            let _ = socket.disconnect();
+            return;
         };
         rt.socket_access_token
             .write()
             .await
-            .insert(socket.id.to_string(), stored);
+            .insert(socket.id.to_string(), Some(valid_token));
     }
     // Emit the primary kernel straight away so the studio's `onKernelInit`
     // handler has something to render even on a cold connection.
