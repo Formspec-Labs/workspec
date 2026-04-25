@@ -56,11 +56,12 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
     // broadcast task events.
     let (io_layer, io) = realtime::build_io_only();
 
-    let app_runtime = AppRuntime::build(
+    let app_runtime = AppRuntime::build_with(
         storage.clone(),
         services.provenance.clone(),
         services.bundle.clone(),
         io.clone(),
+        runtime::AppRuntimeConfig::from_server_config(&cfg),
     );
 
     let state = AppState {

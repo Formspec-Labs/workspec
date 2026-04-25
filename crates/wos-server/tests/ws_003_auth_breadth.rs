@@ -67,6 +67,7 @@ async fn jwt_state() -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        signer_kind: wos_server::config::SignerKind::Noop,
     });
 
     let storage_handle: wos_server::storage::StorageHandle = store.clone();

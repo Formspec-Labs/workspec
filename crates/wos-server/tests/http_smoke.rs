@@ -33,6 +33,7 @@ async fn build_app_state() -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        signer_kind: wos_server::config::SignerKind::Noop,
     });
     let storage = storage::build(&cfg).await.unwrap();
     let auth = auth::build(&cfg, storage.clone());

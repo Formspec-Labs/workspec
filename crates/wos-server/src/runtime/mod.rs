@@ -44,6 +44,44 @@ use service::EchoExternalService;
 use signer::NoopSigner;
 use validator::{PermissiveValidator, PolicyLayeredValidator};
 
+/// Selectable runtime seams that `AppRuntime` owns directly. WS-080: today
+/// covers `signer` (Runtime §12.6 ProvenanceSigner) and `renderer` (Runtime
+/// §12.7 ReportRenderer); the other Runtime §12 seams (validator, access,
+/// external, clock) are constructed inline by `build_with` and remain
+/// hard-coded until upstream `wos-core::traits` carries `Box<dyn>` blanket
+/// impls. Their planned shape lives in `validator` / `access` / `external`
+/// / `clock` fields below as `Option`s — `None` keeps today's defaults; a
+/// future commit can flip them on without changing this surface.
+pub struct AppRuntimeConfig {
+    pub signer: Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync>,
+    pub renderer: Arc<dyn ReportRenderer<Error = renderer::RendererError> + Send + Sync>,
+}
+
+impl Default for AppRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            signer: Arc::new(NoopSigner),
+            renderer: Arc::new(JsonRenderer),
+        }
+    }
+}
+
+impl AppRuntimeConfig {
+    /// Read [`crate::config::ServerConfig::signer_kind`] (env `WOS_SIGNER`)
+    /// and pick a concrete signer. Today only `noop` is wired; `ed25519-file`
+    /// and `external` are placeholders for WS-043 and an out-of-process signer.
+    pub fn from_server_config(cfg: &crate::config::ServerConfig) -> Self {
+        let signer: Arc<dyn ProvenanceSigner<Error = signer::SignerError> + Send + Sync> =
+            match cfg.signer_kind {
+                crate::config::SignerKind::Noop => Arc::new(NoopSigner),
+            };
+        Self {
+            signer,
+            renderer: Arc::new(JsonRenderer),
+        }
+    }
+}
+
 /// The server's runtime handle. Clone freely — it's backed by an `Arc`.
 #[derive(Clone)]
 pub struct AppRuntime {
@@ -53,13 +91,31 @@ pub struct AppRuntime {
 }
 
 impl AppRuntime {
-    /// Assemble the runtime from the server's service + storage handles.
-    /// Must be called from inside a tokio runtime (it uses `Handle::current`).
+    /// Assemble the runtime from the server's service + storage handles
+    /// using default seam impls. Equivalent to
+    /// `build_with(..., AppRuntimeConfig::default())`. Must be called from
+    /// inside a tokio runtime (it uses `Handle::current`).
     pub fn build(
         storage: StorageHandle,
         provenance: Arc<ProvenanceService>,
         bundle: Arc<BundleService>,
         io: SocketIo,
+    ) -> Self {
+        Self::build_with(storage, provenance, bundle, io, AppRuntimeConfig::default())
+    }
+
+    /// Assemble the runtime with an explicit seam config. Today the only
+    /// swappable seams are `signer` and `renderer`; the rest are still
+    /// hard-coded inline (see `AppRuntimeConfig` doc-comment). Tests use
+    /// this entry point to substitute fakes; production calls
+    /// [`Self::build`] which reads [`crate::config::ServerConfig::signer_kind`]
+    /// via `AppRuntimeConfig::from_server_config`.
+    pub fn build_with(
+        storage: StorageHandle,
+        provenance: Arc<ProvenanceService>,
+        bundle: Arc<BundleService>,
+        io: SocketIo,
+        config: AppRuntimeConfig,
     ) -> Self {
         let handle = Handle::current();
         let store = SqliteRuntimeStore::new(storage.clone(), provenance.clone(), handle.clone());
@@ -78,8 +134,8 @@ impl AppRuntime {
         );
         Self {
             inner: Arc::new(Mutex::new(rt)),
-            signer: Arc::new(NoopSigner),
-            renderer: Arc::new(JsonRenderer),
+            signer: config.signer,
+            renderer: config.renderer,
         }
     }
 

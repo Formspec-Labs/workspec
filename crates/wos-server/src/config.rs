@@ -155,6 +155,13 @@ pub struct ServerConfig {
     /// Timer poll interval (ms).
     #[arg(long, env = "WOS_TIMER_POLL_MS", default_value_t = 1000)]
     pub timer_poll_ms: u64,
+
+    /// Provenance signer backend. `noop` ships spec-correct empty-signature
+    /// attestation blocks; `ed25519-file` (WS-043) and `external` are
+    /// reserved variants that today fall back to `noop` until the impls
+    /// land. Wired through [`crate::runtime::AppRuntimeConfig::from_server_config`].
+    #[arg(long, env = "WOS_SIGNER", value_enum, default_value_t = SignerKind::Noop)]
+    pub signer_kind: SignerKind,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,6 +179,14 @@ pub enum AuthKind {
 pub enum AiChatKind {
     Disabled,
     Gemini,
+}
+
+/// Provenance signer selection. `Noop` is the only impl that actually
+/// signs today; the other variants are reserved so `WOS_SIGNER=…` is
+/// stable while implementations land (WS-043 for `Ed25519File`).
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignerKind {
+    Noop,
 }
 
 impl ServerConfig {
@@ -220,6 +235,7 @@ mod tests {
             gemini_api_key: String::new(),
             cursor_throttle_ms: 50,
             timer_poll_ms: 1000,
+            signer_kind: SignerKind::Noop,
         }
     }
 

@@ -52,6 +52,7 @@ async fn bring_up() -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        signer_kind: wos_server::config::SignerKind::Noop,
     });
     let storage = storage::build(&cfg).await.unwrap();
 
@@ -109,6 +110,7 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
                 .method("POST")
                 .uri("/api/instances")
                 .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )
