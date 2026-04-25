@@ -1,0 +1,97 @@
+{
+  "$wosWorkflow": "1.0",
+  "url": "https://example.org/wf/nda",
+  "version": "1.0.0",
+  "title": "Mutual NDA",
+  "description": "DocuSign-tier signature workflow. Sequential two-party signing with 30-day expiry, reminder cadence, and audit certificate. signature block is load-bearing: signing order IS the workflow. ~85 lines.",
+  "impactLevel": "operational",
+
+  "caseFile": {
+    "fields": {
+      "counterpartyName":  { "type": "string",  "required": true },
+      "counterpartyEmail": { "type": "string",  "required": true },
+      "effectiveDate":     { "type": "date",    "required": true },
+      "termYears":         { "type": "integer", "required": true },
+      "documentRef":       { "type": "string",  "required": true, "description": "Trellis-anchored document hash." },
+      "signedAt":          { "type": "datetime" },
+      "auditCertificateRef": { "type": "string" }
+    }
+  },
+
+  "actors": [
+    { "id": "requester",    "type": "human", "role": "internalCounsel" },
+    { "id": "counterparty", "type": "human", "role": "externalSigner"  }
+  ],
+
+  "lifecycle": {
+    "initial": "drafted",
+    "states": {
+      "drafted": {
+        "type": "atomic",
+        "transitions": [
+          { "to": "awaiting-requester", "actor": "requester", "tags": ["authorCompleted"] }
+        ]
+      },
+      "awaiting-requester": {
+        "type": "atomic",
+        "stateTimeout": "P30D",
+        "transitions": [
+          { "to": "awaiting-counterparty", "on": { "kind": "signature", "actorId": "requester" } },
+          { "to": "voided", "on": { "kind": "timer" } }
+        ]
+      },
+      "awaiting-counterparty": {
+        "type": "atomic",
+        "stateTimeout": "P30D",
+        "transitions": [
+          { "to": "fully-signed", "on": { "kind": "signature", "actorId": "counterparty" }, "tags": ["determination", "binding"] },
+          { "to": "declined",     "on": { "kind": "signal", "name": "decline" }, "actor": "counterparty" },
+          { "to": "voided",       "on": { "kind": "timer" } }
+        ]
+      },
+      "fully-signed": { "type": "final", "outcomeCode": "executed", "tags": ["determination", "binding"] },
+      "declined":     { "type": "final", "outcomeCode": "declined" },
+      "voided":       { "type": "final", "outcomeCode": "voided" }
+    }
+  },
+
+  "signature": {
+    "order": "sequential",
+    "signers": [
+      {
+        "actorId": "requester",
+        "identityVerification": "emailLink",
+        "consentText": "I have authority to bind my organization to this agreement.",
+        "signingMethod": "click"
+      },
+      {
+        "actorId": "counterparty",
+        "identityVerification": "emailLink",
+        "consentText": "I have authority to bind my organization to this agreement.",
+        "signingMethod": "click"
+      }
+    ],
+    "reminders": [
+      { "after": "P3D",  "channel": "email" },
+      { "after": "P7D",  "channel": "email" },
+      { "after": "P14D", "channel": "email" }
+    ],
+    "voidConditions": ["@case.elapsedDays > 30"],
+    "auditCertificate": {
+      "writeScope": ["auditCertificateRef", "signedAt"],
+      "mutationSource": "system-fetched",
+      "verificationLevel": "attested"
+    }
+  },
+
+  "provenance": { "tier": "facts" },
+
+  "bindings": [
+    {
+      "on": "fully-signed",
+      "writeScope": ["signedAt"],
+      "mutationSource": "computed",
+      "verificationLevel": "attested"
+    }
+  ]
+}

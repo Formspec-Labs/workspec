@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos.dev/schemas/wos-workflow.schema.json",
+  "title": "WOS Workflow",
+  "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rightsImpacting/safetyImpacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076.",
+  "type": "object",
+  "required": ["$wosWorkflow", "url", "version", "title", "impactLevel", "actors", "lifecycle"],
+  "properties": {
+    "$wosWorkflow": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Sole top-level version marker. Stream identity (governance, agents, signature, custody, advanced) is implicit in the workflow envelope version. Compliance claims compose as $wosWorkflow@X.Y. Replaces $wosKernel / $wosWorkflowGovernance / $wosAIIntegration / $wosAdvanced."
+    },
+    "url": { "type": "string", "format": "uri", "description": "Stable workflow identity. Sidecars join by this url." },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.+]+)?$" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "status": { "enum": ["draft", "active", "deprecated"] },
+    "impactLevel": {
+      "enum": ["informational", "operational", "rightsImpacting", "safetyImpacting"],
+      "description": "Drives conditional block requirements. rightsImpacting and safetyImpacting MUST embed governance."
+    },
+
+    "caseFile": { "$ref": "#/$defs/CaseFile" },
+    "intake": { "$ref": "#/$defs/IntakeReference" },
+    "actors": { "type": "array", "items": { "$ref": "#/$defs/Actor" }, "minItems": 1 },
+    "lifecycle": { "$ref": "#/$defs/Lifecycle" },
+    "contracts": { "$ref": "#/$defs/Contracts" },
+    "bindings": { "type": "array", "items": { "$ref": "#/$defs/OutputBinding" } },
+    "provenance": { "$ref": "#/$defs/ProvenanceConfig" },
+
+    "governance": { "$ref": "#/$defs/Governance" },
+    "agents": { "type": "array", "items": { "$ref": "#/$defs/AgentDeclaration" } },
+    "aiOversight": { "$ref": "#/$defs/AIOversight" },
+    "signature": { "$ref": "#/$defs/Signature" },
+    "custody": { "$ref": "#/$defs/Custody" },
+    "advanced": { "$ref": "#/$defs/Advanced" },
+    "assurance": { "$ref": "#/$defs/Assurance" },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^x-" },
+      "description": "Vendor-namespaced extension container. x-wos- reserved."
+    }
+  },
+  "patternProperties": { "^x-": true },
+  "additionalProperties": false,
+
+  "allOf": [
+    {
+      "title": "Rights-impacting and safety-impacting workflows MUST embed governance.",
+      "if": {
+        "properties": { "impactLevel": { "enum": ["rightsImpacting", "safetyImpacting"] } }
+      },
+      "then": { "required": ["governance"] }
+    },
+    {
+      "title": "Workflows whose actors include any agent-typed actor MUST declare agents[].",
+      "if": {
+        "properties": {
+          "actors": { "contains": { "properties": { "type": { "const": "agent" } } } }
+        }
+      },
+      "then": { "required": ["agents"] }
+    },
+    {
+      "$comment": "Cross-reference rule beyond JSON Schema expressivity: every actor with type=='agent' MUST have a matching agents[].id. Enforced by lint rule WOS-AGENT-XREF-001."
+    },
+    {
+      "$comment": "Cross-cutting rule beyond JSON Schema expressivity: any transition gated by signature (on.kind=='signature') requires a signature block, and signers[] MUST cover the gating actor. Enforced by lint rule WOS-SIG-COVER-001."
+    },
+    {
+      "title": "Workflows with both agents and advanced features SHOULD declare aiOversight.",
+      "if": {
+        "allOf": [
+          { "required": ["agents"] },
+          { "required": ["advanced"] }
+        ]
+      },
+      "then": { "required": ["aiOversight"] }
+    }
+  ],
+
+  "$defs": {
+    "CaseFile": {
+      "type": "object",
+      "description": "Structured case data. Either declared inline via fields, or referenced via contractRef. Formspec is the recommended contract binding (kernel contractHook seam).",
+      "oneOf": [
+        { "required": ["fields"] },
+        { "required": ["contractRef"] }
+      ],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/FieldDeclaration" }
+        },
+        "contractRef": { "type": "string", "format": "uri" },
+        "contractVersion": { "type": "string" }
+      }
+    },
+    "FieldDeclaration": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["string", "number", "integer", "boolean", "array", "object", "date", "datetime"] },
+        "required": { "type": "boolean" },
+        "description": { "type": "string" }
+      }
+    },
+    "IntakeReference": {
+      "type": "object",
+      "description": "Public-intake form. References a Formspec definition. Validated intake is converted to caseFile via IntakeHandoff (ADR 0073).",
+      "required": ["contractRef"],
+      "properties": {
+        "contractRef": { "type": "string", "format": "uri" },
+        "contractVersion": { "type": "string" },
+        "mode": { "enum": ["workflowInitiated", "publicIntake"] }
+      }
+    },
+    "Actor": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "type": "string",
+          "$comment": "Kernel: 'human' | 'system'. AI Integration adds 'agent' via actorExtension seam (ADR 0077). Open via x- prefix."
+        },
+        "role": { "type": "string" }
+      }
+    },
+    "Lifecycle": {
+      "type": "object",
+      "required": ["initial", "states"],
+      "properties": {
+        "initial": { "type": "string" },
+        "states": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/State" }
+        }
+      }
+    },
+    "State": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["atomic", "compound", "parallel", "foreach", "final"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "transitions": { "type": "array", "items": { "$ref": "#/$defs/Transition" } },
+        "states": { "type": "object", "additionalProperties": { "$ref": "#/$defs/State" } },
+        "regions": { "type": "object" },
+        "onEntry": { "type": "array" },
+        "onExit": { "type": "array" },
+        "stateTimeout": { "type": "string", "format": "duration" },
+
+        "collection": { "type": "string", "$comment": "Foreach only. FEL expression yielding a bounded array. ADR 0078." },
+        "itemVariable": { "type": "string", "default": "$item" },
+        "indexVariable": { "type": "string", "default": "$index" },
+        "concurrency": { "type": ["integer", "null"] },
+        "breakCondition": { "type": "string" },
+        "outputPath": { "type": "string" },
+        "mergeStrategy": { "enum": ["shallow", "deep", "collect"] },
+        "body": { "$ref": "#/$defs/State" },
+
+        "outcomeCode": { "type": "string", "$comment": "Final states only." }
+      }
+    },
+    "Transition": {
+      "type": "object",
+      "required": ["to"],
+      "properties": {
+        "to": { "type": "string" },
+        "on": { "$ref": "#/$defs/TransitionEvent" },
+        "guard": { "type": "string", "description": "FEL expression." },
+        "tags": { "type": "array", "items": { "type": "string" }, "$comment": "Governance attaches via tags." },
+        "actor": { "type": "string" },
+        "actions": { "type": "array" }
+      }
+    },
+    "TransitionEvent": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["signal", "message", "timer", "signature", "action", "completion"] },
+        "name": { "type": "string" },
+        "actorId": { "type": "string" },
+        "correlationKey": { "type": "string" },
+        "signalTimeout": { "type": "string", "format": "duration" },
+        "eventContract": { "type": "string", "format": "uri" }
+      }
+    },
+    "Contracts": {
+      "type": "object",
+      "$comment": "Validation/guard contracts and capability contracts. Pairs with bindings[] per ADR 0074 governed output-commit pipeline."
+    },
+    "OutputBinding": {
+      "type": "object",
+      "description": "Governed output-commit pipeline projection. Per ADR 0074: source surface + contractRef + projection map + writeScope + mutationSource + verificationLevel. Validated mutations + Facts-tier provenance emit deterministically.",
+      "properties": {
+        "on": { "type": "string", "$comment": "Source surface: state id, transition id, capability id, signal name." },
+        "contractRef": { "type": "string", "format": "uri" },
+        "projection": { "type": "object" },
+        "writeScope": { "type": "array", "items": { "type": "string" } },
+        "mutationSource": {
+          "oneOf": [
+            { "enum": ["agent-extracted", "system-fetched", "human-entered", "human-corrected", "computed", "self-attested"] },
+            { "type": "string", "pattern": "^x-" }
+          ]
+        },
+        "verificationLevel": {
+          "oneOf": [
+            { "enum": ["independent", "attested", "corroborated", "authoritative"] },
+            { "type": "string", "pattern": "^x-" }
+          ]
+        }
+      }
+    },
+    "ProvenanceConfig": {
+      "type": "object",
+      "properties": {
+        "tier": {
+          "enum": ["facts", "reasoning", "counterfactual", "narrative", "full"],
+          "default": "facts",
+          "description": "Minimum provenance tier emitted. Facts is kernel default. Higher tiers attach via provenanceLayer seam (ADR 0077)."
+        }
+      }
+    },
+
+    "Governance": {
+      "type": "object",
+      "description": "Embedded due-process, review, and pipeline governance. Required for rightsImpacting and safetyImpacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
+      "properties": {
+        "dueProcess": {
+          "type": "object",
+          "$comment": "Notice, opportunity to be heard, appeal mechanism, adverse-decision policy."
+        },
+        "reviewProtocols": {
+          "type": "array",
+          "$comment": "independent-first | consider-opposite | calibrated-confidence | dual-blind | unassisted."
+        },
+        "pipelines": {
+          "type": "array",
+          "$comment": "Validation pipelines with assertion gates."
+        },
+        "taskCatalog": { "type": "array" },
+        "delegation": { "type": "object" },
+        "holds": { "type": "object" },
+        "policyParameters": {
+          "type": "object",
+          "$comment": "Temporal parameters, deadline config, business calendar refs."
+        },
+        "escalationLevels": { "type": "array" }
+      }
+    },
+
+    "AgentDeclaration": {
+      "type": "object",
+      "required": ["id"],
+      "description": "Was wos-ai-integration.schema.json AgentDeclaration plus wos-agent-config.schema.json plus wos-drift-monitor.schema.json. Inlined per ADR 0076.",
+      "properties": {
+        "id": { "type": "string", "$comment": "MUST match an actor.id where actor.type=='agent'." },
+        "modelIdentifier": { "type": "string" },
+        "modelVersion": { "type": "string" },
+        "modelVersionPolicy": { "enum": ["pinned", "minor-allowed", "major-allowed"] },
+        "autonomy": {
+          "enum": ["readOnly", "assistive", "supervised", "autonomous"],
+          "$comment": "Capped by impactLevel. rightsImpacting MUST NOT exceed assistive without explicit governance permission."
+        },
+        "deonticConstraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "expression"],
+            "properties": {
+              "kind": {
+                "enum": ["permission", "prohibition", "obligation", "right"],
+                "$comment": "OASIS LegalRuleML."
+              },
+              "expression": { "type": "string", "description": "FEL." }
+            }
+          }
+        },
+        "confidenceFloor": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidenceDecay": { "type": "object" },
+        "fallbackChain": {
+          "type": "array",
+          "items": { "type": "string" },
+          "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rightsImpacting transitions."
+        },
+        "capabilities": {
+          "type": "array",
+          "$comment": "Capability sub-shape: declared write scope, contract refs, tool grants."
+        },
+        "driftMonitoring": { "type": "object" }
+      }
+    },
+    "AIOversight": {
+      "type": "object",
+      "description": "Cross-cutting AI policy. Disclosure, drift detection, narrative provenance, volume constraints. EU AI Act Art. 13 / OMB M-24-10 alignment.",
+      "properties": {
+        "disclosure": { "type": "object" },
+        "driftDetection": { "type": "object" },
+        "volumeConstraints": { "type": "object" },
+        "narrativeTier": { "type": "object", "$comment": "Required when provenance.tier == 'narrative' or 'full'." }
+      }
+    },
+
+    "Signature": {
+      "type": "object",
+      "description": "Embedded signature workflow semantics. LOAD-BEARING for any DocuSign-tier workflow: signing order IS the workflow. Routes through Signature Profile semantics; SignatureAffirmation provenance anchors to Trellis via custodyHook (ADR 0077).",
+      "required": ["signers", "order"],
+      "properties": {
+        "signers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["actorId"],
+            "properties": {
+              "actorId": { "type": "string" },
+              "identityVerification": {
+                "enum": ["none", "emailLink", "smsOtp", "idDocument", "kba", "biometric"]
+              },
+              "consentText": { "type": "string" },
+              "signingMethod": { "enum": ["click", "typed", "drawn", "certificate"] }
+            }
+          }
+        },
+        "order": {
+          "enum": ["sequential", "parallel", "conditional"],
+          "$comment": "conditional uses transition guards to route between signers."
+        },
+        "reminders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "after": { "type": "string", "format": "duration" },
+              "channel": { "type": "string" }
+            }
+          }
+        },
+        "voidConditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "$comment": "FEL guards that void the workflow before completion (e.g. expiry)."
+        },
+        "auditCertificate": {
+          "type": "object",
+          "$comment": "Output binding for the signed-document audit certificate."
+        }
+      }
+    },
+
+    "Custody": {
+      "type": "object",
+      "description": "Embedded Trellis custody declaration. Load-bearing whenever a workflow claims anchoring on transitions or signature events. Was wos-custody-hook-encoding.schema.json (sidecar); promoted to embedded per ADR 0076 D-2 / Q4.",
+      "properties": {
+        "trustProfileRef": { "type": "string", "format": "uri", "description": "Trust Profile binding (Trellis-side)." },
+        "anchorRequirements": {
+          "type": "array",
+          "description": "Per-transition or per-event anchoring rules.",
+          "items": {
+            "type": "object",
+            "required": ["on", "anchor"],
+            "properties": {
+              "on": { "type": "string", "$comment": "Transition id, signature event id, or determination tag." },
+              "anchor": { "enum": ["required", "optional", "deferred"] },
+              "trellisLedger": { "type": "string", "$comment": "Optional ledger hint." }
+            }
+          }
+        },
+        "exportBundleRef": { "type": "string", "format": "uri" }
+      }
+    },
+    "Advanced": {
+      "type": "object",
+      "description": "Optional. DCR constraint zones, equity guardrails, SMT verifiable constraints, multi-step session config, circuit breakers. Was wos-advanced.schema.json plus wos-equity.schema.json plus wos-verification-report.schema.json (author-time half).",
+      "properties": {
+        "dcrZones": { "type": "array" },
+        "equity": {
+          "type": "object",
+          "$comment": "Bias caps, disparity thresholds, equity FEL expressions."
+        },
+        "verifiableConstraints": {
+          "type": "array",
+          "$comment": "SMT constraint declarations. Verification report is a runtime artifact in wos-provenance-log."
+        },
+        "circuitBreaker": { "type": "object" },
+        "shadowMode": { "type": "object" }
+      }
+    },
+
+    "Assurance": {
+      "type": "object",
+      "description": "Optional. Assurance level declaration, attestation, subject continuity. Was wos-assurance.schema.json.",
+      "properties": {
+        "level": { "enum": ["baseline", "elevated", "high"] },
+        "attestation": { "type": "object" },
+        "subjectContinuity": { "type": "object" }
+      }
+    }
+  }
+}

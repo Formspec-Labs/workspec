@@ -43,16 +43,18 @@ One author-time core schema, three sidecars, two runtime artifact schemas, one t
   - `agents[]` — per-agent declarations: model identity, autonomy (capped by impact), deontic constraints (`permission`/`prohibition`/`obligation`/`right` per OASIS LegalRuleML), confidence floor with decay, fallback chain terminating in human review, capabilities, drift monitoring. Required when any actor has `type == "agent"`.
   - `aiOversight` — disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, volume constraints, narrative-tier templates. Paired with `agents`.
   - `signature` — signers, order, identity verification, consent, reminders, void conditions, audit certificate. Required when any transition gates on `kind: "signature"` (signing order is load-bearing for DocuSign-tier workflows).
+  - `custody` — Trellis trust-profile binding, per-transition or per-signature-event anchor requirements, export-bundle reference. Load-bearing whenever a workflow claims anchoring.
   - `advanced` — DCR constraint zones, equity guardrails, SMT verifiable constraints, circuit breaker, shadow mode.
   - `assurance` — assurance level, attestation, subject continuity.
 - **Sidecars (deployment-environment configuration; join by `targetWorkflow` URI):**
   - `wos-delivery.schema.json` — business calendar, notification templates, correspondence metadata.
   - `wos-ontology-alignment.schema.json` — JSON-LD `@context`, SHACL shapes, PROV-O / XES / OCEL export.
-  - `wos-custody-hook-encoding.schema.json` — Trellis custody binding declaration.
 - **Runtime artifacts (produced by processors):** `wos-case-instance.schema.json` (running-instance state), `wos-provenance-log.schema.json` (append-only audit log).
-- **Tooling:** `wos-tooling.schema.json` (lint diagnostics, conformance traces, synth traces, MCP tool catalog, extension registry).
+- **Tooling:** `wos-tooling.schema.json` (lint diagnostics, conformance traces, synth traces, MCP tool catalog, extension registry, authoring-tool view definitions).
 
-Release-stream identity is preserved via top-level version markers in one document: `$wosWorkflow`, `$wosGovernance`, `$wosAgents`, `$wosSignature`, `$wosAdvanced`. Compliance claims compose as before — "`$wosWorkflow@1.0` with `$wosGovernance@1.1` semantics" replaces "`wos-kernel@1.0 + wos-governance@1.1`."
+Single top-level version marker: `$wosWorkflow`. Stream identity (governance, agents, signature, custody, advanced) is implicit in the workflow envelope version; compliance claims compose as `$wosWorkflow@X.Y`. The historical "we comply with `wos-kernel@1.0 + wos-governance@1.1`" four-stream form translates to "`$wosWorkflow@1.0`" plus a one-paragraph claims-map in `RELEASE-STREAMS.md` enumerating which embedded blocks are exercised. T4 signature, governance, AI deontic, advanced equity conformance suites stay operationally separate but run against the workflow envelope at the claimed version.
+
+Specs do not physically merge: `kernel/spec.md`, `governance/spec.md`, `ai/ai-integration.md`, `advanced/spec.md` stay as separate documents with existing §-numbering preserved (citations like "Kernel §10.3" remain valid). Only the schema references inside each spec update to `wos-workflow.schema.json`.
 
 Six canonical kernel seams remain the only extension surface (ADR 0077): `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys. Inlining governance, agents, signature, and advanced into the core schema does not alter how higher-layer concerns attach.
 
