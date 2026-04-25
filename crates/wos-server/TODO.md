@@ -66,6 +66,80 @@ All blocking decisions resolved 2026-04-25. Remaining input touchpoints are with
 
 **Critical path summary:** Phase 1 Track A is the structural prerequisite for Phase 4 + 5 + 6. Phase 1 Track B closes before Phase 2 (test writes against in-flight auth = wasted) AND before Phase 6 (per-actor scoping layers on Supervisor-write). **Phase 4 is the widest parallelism window** — four tasks in flight (storage, audit sink, runtime config, signer). Phase 5 and 6 are independent of each other once their gates clear; can run concurrently. **WS-094 (Restate adapter) is when WS-020's role narrows** — `InstanceRow.instance_json` becomes a CDC-fed projection from Restate's authoritative durable state, not the source of truth. Audit/governance/Trellis hand-off (WS-090 + WS-093) is unaffected by which runtime owns the operational state.
 
+## Completed — Phase 2-6 parallel sprint (2026-04-25, second wave)
+
+Seven items landed in parallel across seven background agents, plus three
+reviewer agents using `formspec-specs:semi-formal-code-review`. Aggregate
+review verdicts captured below; **read those before claiming any of these
+items "done"** — several have blocker / request-changes findings the next
+session must address.
+
+- **WS-010** Timer poll e2e — APPROVE. Surfaced + fixed a real production
+  timer-event bug along the way (PendingEvent envelope was missing
+  `actorId` + `timestamp`; every fired timer was silently failing
+  `serde_json::from_value` in `enqueue_event` and the runtime never saw
+  the event — masked by `tracing::warn!`).
+- **WS-011** Task draft/submit/dismiss tests — NEEDS DISCUSSION. Three
+  fixtures pass and lock current behaviour. Reviewer flagged two real
+  wire bugs: (a) `TaskSubmissionView` per-variant fields serialize
+  snake_case (`case_mutated`, `artifact_id`, `emitted_event`) — TS
+  clients see `undefined`. (b) `dismiss_task` does NOT remove the task
+  from `active_tasks`; follow-up `/response` still succeeds. The test
+  pins this rather than implementing the TODO's aspirational
+  "task-missing" wording.
+- **WS-012** Event submit/drain tests — REQUEST CHANGES. **Two
+  fixtures fail at HEAD with 503** — bundle-service seeding race; the
+  kernel `upsert_kernel`'d via `Storage` is not visible to the in-memory
+  `BundleService` cache built earlier in `AppServices::new`. Test seed
+  must register through `services.bundle.replace(url, doc)` instead.
+  Reviewer also flagged the test claims to lock `replay_entries` but
+  actually exercises the HTTP-layer cache (`event_idempotency`) which
+  short-circuits before the runtime is reached.
+- **WS-014** HTTP coverage backfill — REQUEST CHANGES. Five fixtures
+  pass but two are weak: lint-failure is near-tautological; provenance
+  export covers `prov-o` only.
+- **WS-034** Policy resolve GET — REQUEST CHANGES. Endpoint mounts
+  correctly. `GovernanceService::resolve_policy` walks `versions[]` in
+  JSON-array order rather than effective-date order — last array match
+  wins, not most recent `effectiveDate`. Sort or document the array-
+  order invariant; add boundary fixtures.
+- **WS-052** Session table hygiene — APPROVE. `Storage::sweep_expired_
+  sessions` deletes 7d-expired + 30d-revoked rows; 24h cadence inside
+  `timer_task::spawn`; `WOS_SESSION_SWEEP=off|false|0` opts out.
+- **WS-082** Hold CRUD via typed HoldService — NEEDS DISCUSSION.
+  Refactor lands cleanly. Reviewer flagged the string-sentinel error
+  channel (`StorageError::Other(HOLD_NOT_FOUND_SENTINEL)` matched on
+  `==`) — fine for one service, brittle if 2-3 services adopt the
+  pattern. Promote to a typed variant before the next service needs it.
+
+**Reconciliation commit (`79a9c38`):**
+- Restored `POST /api/auth/change-password` handler — was WIP at session
+  start, never committed; the WS-002 close-out shipped four tests
+  against a non-existent endpoint (reviewer FINDING 1, BLOCKER).
+- Carried the `AppRuntimeConfig.bindings` field through after a
+  multi-agent file race lost it during commit `8caf3a9`.
+
+**Outstanding follow-ups (next session, priority order):**
+
+1. **WS-012 test fixture seeding** — bundle service vs storage kernel
+   path. Tests fail at HEAD.
+2. **WS-011 wire-shape leak** — `TaskSubmissionView` per-variant serde
+   `rename_all`.
+3. **WS-011 dismiss runtime semantics** — either delete the
+   "task-missing" TODO wording, or land the runtime change to pop
+   `active_tasks`.
+4. **WS-034 array-order precedence** — sort or document.
+5. **WS-080 doc-comment** — `WOS_SIGNER=ed25519-file` produces a clap
+   error, not a fallback. Either rewrite the doc or add the variants
+   with a fallback warning.
+6. **WS-014 lint-failure pinning + xes/ocel format coverage.**
+7. **WS-082 string-sentinel → typed `StorageError` variant.**
+8. **kernel:update string `"Supervisor"` literal** — last non-typed-role
+   check missed by the WS-083 sweep.
+9. **WS-091** still gated on actor-identity strategy decision.
+10. **Workspace refactor** (WS-084 → 085-088 → 089 → 081) untouched —
+    multi-day epic, sequential-only.
+
 ## Completed — Phase 1 sprint (2026-04-25)
 
 Nine actionable items shipped this sprint, mostly Phase 1 + WS-080 / WS-083:
