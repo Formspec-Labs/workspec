@@ -15,9 +15,10 @@ use crate::domain::{
     SubmitEventRequest,
 };
 use crate::error::{ApiError, ApiResult};
+use crate::services::hold_service::{HoldService, HOLD_NOT_FOUND_SENTINEL};
 use crate::services::provenance_service::{row_to_response, verify_chain};
 use crate::services::semantic_service::{Format as ExportFormat, SemanticService};
-use crate::storage::InstanceQuery;
+use crate::storage::{InstanceQuery, StorageError};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -402,20 +403,12 @@ async fn list_holds(
     State(s): State<AppState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<serde_json::Value>>> {
-    let row = s
-        .storage
-        .get_instance(&id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
-    let holds = row
-        .instance_json
-        .get("governanceState")
-        .and_then(|g| g.as_object())
-        .and_then(|g| g.get("activeHolds"))
-        .and_then(|h| h.as_array())
-        .cloned()
-        .unwrap_or_default();
-    Ok(Json(holds))
+    let holds = HoldService::list(&s.storage, &id).await?;
+    let json = holds
+        .into_iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Json(json))
 }
 
 async fn create_hold(
@@ -424,56 +417,26 @@ async fn create_hold(
     Path(id): Path<String>,
     Json(req): Json<CreateHoldRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let req = std::sync::Arc::new(req);
-    let started_at = chrono::Utc::now().to_rfc3339();
-    let final_index = std::sync::Arc::new(std::sync::Mutex::new(0usize));
-    let captured_index = final_index.clone();
-    s.storage
-        .update_instance_atomic(&id, &move |row| {
-            let inst = row.instance_json.as_object_mut().ok_or_else(|| {
-                crate::storage::StorageError::Other("instance_json is not an object".into())
-            })?;
-            let default_state = inst
-                .get("configuration")
-                .and_then(|v| v.as_array())
-                .and_then(|a| a.first())
-                .and_then(|s| s.as_str())
-                .map(|s| s.to_string());
-            let hold_state = req.hold_state.clone().or(default_state);
-            let mut hold = serde_json::Map::new();
-            hold.insert("holdType".into(), serde_json::Value::String(req.hold_type.clone()));
-            hold.insert("startedAt".into(), serde_json::Value::String(started_at.clone()));
-            hold.insert(
-                "resumeTrigger".into(),
-                serde_json::Value::String(req.resume_trigger.clone()),
-            );
-            if let Some(end) = &req.expected_end {
-                hold.insert("expectedEnd".into(), serde_json::Value::String(end.clone()));
-            }
-            if let Some(state) = hold_state {
-                hold.insert("holdState".into(), serde_json::Value::String(state));
-            }
-            // Ensure governanceState is an object (replace nulls and missing).
-            let gov_value = inst
-                .entry("governanceState".to_string())
-                .or_insert_with(|| serde_json::json!({}));
-            if !gov_value.is_object() {
-                *gov_value = serde_json::json!({});
-            }
-            let gov = gov_value.as_object_mut().unwrap();
-            let holds_value = gov
-                .entry("activeHolds".to_string())
-                .or_insert_with(|| serde_json::json!([]));
-            if !holds_value.is_array() {
-                *holds_value = serde_json::json!([]);
-            }
-            let holds = holds_value.as_array_mut().unwrap();
-            holds.push(serde_json::Value::Object(hold));
-            *captured_index.lock().unwrap() = holds.len() - 1;
-            Ok(Vec::new())
-        })
-        .await?;
-    let idx = *final_index.lock().unwrap();
+    // Resolve the default `holdState` (configuration[0]) before mutating.
+    // Done outside the service so HoldService stays a pure typed CRUD —
+    // append takes a fully-formed ActiveHold.
+    let row = s
+        .storage
+        .get_instance(&id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let instance: wos_core::instance::CaseInstance =
+        serde_json::from_value(row.instance_json.clone())
+            .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
+    let default_state = instance.configuration.first().cloned();
+    let hold = wos_core::instance::ActiveHold {
+        hold_type: req.hold_type,
+        started_at: chrono::Utc::now().to_rfc3339(),
+        expected_end: req.expected_end,
+        resume_trigger: req.resume_trigger,
+        hold_state: req.hold_state.or(default_state),
+    };
+    let idx = HoldService::append(&s.storage, &id, hold).await?;
     Ok(Json(
         serde_json::json!({ "ok": true, "holdIndex": idx }),
     ))
@@ -484,49 +447,18 @@ async fn release_hold(
     _: RequireRole<Supervisor>,
     Path((id, hold_idx)): Path<(String, usize)>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let released = std::sync::Arc::new(std::sync::Mutex::new(None::<serde_json::Value>));
-    let captured = released.clone();
-    let result = s
-        .storage
-        .update_instance_atomic(&id, &move |row| {
-            let inst = row.instance_json.as_object_mut().ok_or_else(|| {
-                crate::storage::StorageError::Other("instance_json is not an object".into())
-            })?;
-            let holds = inst
-                .get_mut("governanceState")
-                .and_then(|g| g.as_object_mut())
-                .and_then(|g| g.get_mut("activeHolds"))
-                .and_then(|h| h.as_array_mut());
-            let Some(holds) = holds else {
-                return Err(crate::storage::StorageError::Other(
-                    "hold-not-found".into(),
-                ));
-            };
-            if hold_idx >= holds.len() {
-                return Err(crate::storage::StorageError::Other(
-                    "hold-not-found".into(),
-                ));
-            }
-            let removed = holds.remove(hold_idx);
-            *captured.lock().unwrap() = Some(removed);
-            Ok(Vec::new())
-        })
-        .await;
-    match result {
-        Ok(_) => {}
-        Err(crate::storage::StorageError::Other(msg)) if msg == "hold-not-found" => {
-            return Err(ApiError::NotFound);
+    match HoldService::release(&s.storage, &id, hold_idx).await {
+        Ok(released) => {
+            let released_value = serde_json::to_value(released)?;
+            Ok(Json(
+                serde_json::json!({ "ok": true, "released": released_value }),
+            ))
         }
-        Err(other) => return Err(other.into()),
+        Err(StorageError::Other(msg)) if msg == HOLD_NOT_FOUND_SENTINEL => {
+            Err(ApiError::NotFound)
+        }
+        Err(other) => Err(other.into()),
     }
-    let released_hold = released
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or(ApiError::NotFound)?;
-    Ok(Json(
-        serde_json::json!({ "ok": true, "released": released_hold }),
-    ))
 }
 
 fn diff_case_state(before: &serde_json::Value, after: &serde_json::Value) -> serde_json::Value {

@@ -17,6 +17,7 @@ pub mod dashboard_service;
 pub mod deontic_service;
 pub mod eval_service;
 pub mod governance_service;
+pub mod hold_service;
 pub mod instance_service;
 pub mod integration_service;
 pub mod json_util;

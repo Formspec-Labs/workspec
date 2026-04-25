@@ -39,6 +39,7 @@ async fn test_app_state() -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        session_sweep_enabled: true,
         signer_kind: wos_server::config::SignerKind::Noop,
     });
 
@@ -544,10 +545,14 @@ async fn supervisor_bearer(state: &AppState) -> String {
 
 async fn seed_instance_with_state(state: &AppState, id: &str, configuration: Vec<&str>) {
     let now = Utc::now();
+    let now_iso = now.to_rfc3339();
     let cfg_json: Vec<serde_json::Value> = configuration
         .iter()
         .map(|s| serde_json::Value::String((*s).into()))
         .collect();
+    // Full CaseInstance shape — partial seeds break the typed
+    // `serde_json::from_value::<CaseInstance>` round-trip in
+    // `HoldService` (WS-082).
     state
         .storage
         .create_instance(&InstanceRow {
@@ -562,7 +567,12 @@ async fn seed_instance_with_state(state: &AppState, id: &str, configuration: Vec
                 "definitionVersion": "1.0",
                 "configuration": cfg_json,
                 "caseState": {},
-                "governanceState": null,
+                "provenancePosition": 0,
+                "timers": [],
+                "activeTasks": [],
+                "status": "active",
+                "createdAt": now_iso,
+                "updatedAt": now_iso,
             }),
             runtime_aux_json: serde_json::json!({}),
             created_at: now,
