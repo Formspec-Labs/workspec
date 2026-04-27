@@ -1,10 +1,10 @@
-;'# WOS Server — Architectural Vision
+# WOS Server — Architectural Vision
 
-**Status:** Architectural commitment, 2026-04-25 (reaggregated).
+**Status:** Architectural commitment, 2026-04-25. Target architecture; not an inventory of crates already split from the current server.
 **Authoritative spec for Formspec changes:** [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md).
 **Authoritative spec for Trellis byte protocol:** [`trellis/specs/trellis-core.md`](../../../trellis/specs/trellis-core.md).
 
-This document owns the cross-spec architectural framing for the WOS Server reference implementation and its place in the Formspec / WOS / Trellis stack. It defers Formspec-side specification to ADR-0074 and Trellis-side specification to `trellis-core.md`. It captures the wos-server-side commitments and the engineering discipline that makes them coherent.
+This document owns the cross-spec architectural framing for the WOS Server reference implementation and its place in the Formspec / WOS / Trellis stack. It defers Formspec-side specification to ADR-0074 and Trellis-side specification to `trellis-core.md`. It captures the wos-server commitments and the engineering discipline that makes them coherent.
 
 ---
 
@@ -71,13 +71,13 @@ Three deployment modes describe the **property** the deployment commits to, not 
 | **Federal** | Platform cannot reconstruct plaintext outside an attested or math-bound boundary | FedRAMP-Moderate+; HIPAA-regulated; rights-impacting |
 | **Sovereign** | As Federal, plus respondent's content uses client-origin keys (no platform-side custody for respondent-self class) | EU eIDAS 2.0; civil-liberties contexts |
 
-**Confidential compute is pluggable, not architecturally fixed.** Today's reference adapter is `processing-audited` — the simpler posture sufficient for SBA mode, and a viable interim for Federal mode under stricter KMS / role-separation policy. Future siblings under the same `ProcessingService` port:
+**Confidential compute is pluggable, not architecturally fixed.** The `processing-audited` adapter is the SBA reference: explicit server-side decryption, KMS authorization, and ledgered purpose. It does not satisfy Federal or Sovereign claims by itself. Stronger siblings under the same `ProcessingService` port supply those claims:
 
 - **`processing-tee`** — TEE-attested processing (AWS Nitro Enclaves, Intel SGX, Confidential VMs). Hardware-rooted confidentiality with attestation chain.
-- **`processing-fhe`** — Fully Homomorphic Encryption. Math-rooted confidentiality; computation on ciphertext without decryption. Production-ready today for narrow operations (predicate evaluation, simple aggregates), maturing for broader workloads.
+- **`processing-fhe`** — Fully Homomorphic Encryption. Math-rooted confidentiality; computation on ciphertext without decryption. Tractable for narrow operations (predicate evaluation, simple aggregates), maturing for broader workloads.
 - **`processing-mpc`** — Multi-Party Computation. No single party holds plaintext; computation is distributed across non-colluding services.
 
-TEE and FHE are peer **future options for true zero trust**. Our job is to build structures that admit them when they ship, not to depend on any specific one. Federal mode today commits to the property; the adapter that *delivers* the property evolves.
+TEE, FHE, and MPC are peer options for stronger processing confidentiality. The architecture admits all three without making any one of them load-bearing. Federal and Sovereign deployments must not claim "platform cannot reconstruct plaintext outside an attested or math-bound boundary" until the selected `ProcessingService` adapter actually delivers that property.
 
 This stack is **data-and-workflow zero trust** layered on conventional **identity-and-network zero trust**. NIST SP 800-207, CISA ZTMM v2.0 Data pillar, OMB M-22-09, and FedRAMP rev5 cross-reference cleanly.
 
@@ -94,18 +94,22 @@ This stack is **data-and-workflow zero trust** layered on conventional **identit
 
 **Each event payload is a key-bagged set of access-class buckets.** Field-level classification is declared in the Formspec Definition (per ADR-0074 `accessControl`). Each bucket has its own DEK. Each DEK is wrapped to the recipients authorized for that class. Crypto-shredding is GDPR Art. 17's structural mechanism: destroy the key, the bound content becomes irrecoverable, the chain stays intact.
 
-**Clients decrypt; servers broker.** The server returns ciphertext events plus the requesting user's wrapped key-bag entries. The client unwraps DEKs using its authenticator (WebAuthn PRF for respondents, hardware token / PIV / CAC / YubiKey for staff, OIDC-mediated wrapped key for non-government staff) and decrypts in browser memory. Server never holds plaintext content.
+**Clients decrypt; servers broker.** The server returns ciphertext events plus the requesting user's wrapped key-bag entries. The client unwraps DEKs using its authenticator (WebAuthn PRF for respondents, hardware token / PIV / CAC / YubiKey for staff, OIDC-mediated wrapped key for non-government staff) and decrypts in browser memory. Routine reads never give the server plaintext content.
 
-**Two-layer access control, structurally enforced:**
+**Two-layer access control on data, structurally enforced:**
 
 1. **OpenFGA** (Zanzibar-style ReBAC) decides metadata access AND per-class decryption authority. Reference model ships with `case`, `task`, `evidence`, `attachment` entities; `applicant`, `caseworker`, `supervisor`, `auditor`, `equity_service`, `medical_caseworker`, `financial_caseworker` user types; `can_list`, `can_decrypt_class:<class>` relations.
 2. **Key-bag membership** is the cryptographic enforcement of OpenFGA's authority. OpenFGA grants → server releases the wrapped DEK → client decrypts. OpenFGA denies → no DEK released → client cannot decrypt.
 
-OpenFGA misconfig leaks metadata, not content. Stolen key reveals one class for one recipient, not the case.
+OpenFGA misconfiguration alone cannot decrypt a class for an identity absent from the key bag. It can leak metadata, and it can release any wrapped class key the misconfigured identity already has. Key-bag issuance therefore remains governed and ledgered. A stolen recipient key reveals only the classes and scopes wrapped to that recipient, not the whole case.
+
+**Decision authority is an orthogonal axis.** Data access (above) and decision authority are distinct concerns. An identity may hold an OpenFGA grant AND a key-bag entry for a class — and still be denied authority to act on the decrypted content by a WOS deontic constraint or impact-tier autonomy cap (AI Integration §S4–§S5). Crypto/FGA say "you can decrypt"; WOS says "in this case state, with this autonomy posture, you may or may not act." The three concerns fail independently.
+
+**Recipient rotation across multi-year cases.** Trellis Phase-1 invariant #7 (key-bag immutability) applies per event, not per case. Recipient turnover (caseworker leaves, agency reorganizes) is handled by emitting subsequent events with key bags scoped to current recipients; superseded recipients remain in the chain (chain integrity preserved) but no new content is wrapped to them. Departed-recipient revocation is a governance event (named in `wos-event-types.md`); subsequent events MUST NOT wrap to revoked recipients. Historical decryption capability for already-emitted events is by design — a former caseworker who legitimately accessed an event in 2026 cannot have that access "un-granted" in 2030. Crypto-shredding via class-DEK destruction remains the mechanism for irrecoverability. Recipient revocation is a Privacy Profile concern; `lawfulBasis` (per-class, not per-recipient per ADR-0074 §1) carries no parallel retraction obligation.
 
 ### Story 2 — Adapters are plural; the seam is at the port
 
-Each capability is a port (a trait in `wos-server-ports`) with multiple concrete adapter crates. Cargo features at the composition root select which adapters ship. The reference server admits all three trust postures via configuration.
+Each capability is a port (a trait in `wos-server-ports`) with multiple concrete adapter crates. Cargo features at the composition root select which adapters ship. The target reference server admits all three trust postures via configuration.
 
 | Capability | Port | Adapters |
 |---|---|---|
@@ -115,7 +119,7 @@ Each capability is a port (a trait in `wos-server-ports`) with multiple concrete
 | Authorization (relationship-based access control) | `AuthzService` | `authz-openfga`, `authz-spicedb`, `authz-mock` |
 | Identity (respondent and staff) | `AuthProvider` | `identity-webauthn` (respondent), `identity-oidc` (staff multi-provider), `identity-mock` |
 | Key management | `KmsAdapter` | `kms-vault`, `kms-cloud` (AWS / GCP / Azure / GovCloud), `kms-local` |
-| Automated processing (validation, agent inference, aggregation) | `ProcessingService` | `processing-audited` (today's reference; KMS-logged server-side decryption for explicit purposes) — port admits `processing-tee` / `processing-fhe` / `processing-mpc` as future siblings for stronger zero-trust postures (see §III) |
+| Automated processing (validation, agent inference, aggregation) | `ProcessingService` | `processing-audited` (SBA reference; KMS-logged server-side decryption for explicit purposes), plus stronger siblings `processing-tee`, `processing-fhe`, and `processing-mpc` for Federal / Sovereign claims (see §III) |
 | Observability | (not a port — direct) | `wos-server-otel` (OTLP exporter) |
 | Trellis export packaging | (not a port — direct) | `wos-server-trellis-export` |
 
@@ -126,49 +130,33 @@ Each capability is a port (a trait in `wos-server-ports`) with multiple concrete
 - **Audit ⊥ observability.** Trellis events answer "who/what/why" for the regulator; OpenTelemetry answers "what failed" for the operator. Distinct concerns, distinct substrates, distinct verifiers. Conflating produces both bad audit and bad observability.
 - **Verifier independence is structural.** The `canonical` schema is read-only at the deployment role level. Trellis verifiers MUST NOT depend on workflow runtime, mutable databases, or derived artifacts (Trellis Core §16). Projections are explicitly application state.
 - **Crypto is fenced.** Following ADR-0074's `formspec-bucketing` precedent, the wos-server workspace adopts a `CRYPTO_OWNER` fence in `scripts/check-dep-fences.mjs` (or wos-server's equivalent). Only the crates that *must* perform cryptographic operations may import crypto libraries: `eventstore-postgres` (envelope encryption), `kms-*` (key wrapping/release), `identity-webauthn` (PRF derivation), and any `processing-*` adapter that performs decryption or attested computation (`processing-audited`, future `processing-tee` / `processing-fhe` / `processing-mpc`). HTTP handlers, services, runtime adapters, and the composition root MUST NOT import crypto directly. The dep graph is the security boundary.
-- **Cargo features select trust posture.** The composition root declares per-mode default-feature sets (SBA / Federal / Sovereign); CI ratchets prove `cargo check -p wos-server --no-default-features` compiles against ports only.
+- **Cargo features select trust posture.** The composition root declares per-mode feature bundles (SBA / Federal / Sovereign); CI ratchets prove `cargo check -p wos-server --no-default-features` compiles against ports only.
 - **Conformance fixtures pass against all runtime adapters.** Three-way agreement (spec + in-memory `runtime-local` + production `runtime-restate`) is the verification posture; conformance is non-negotiable.
+
+**Specific invariants the architecture protects** (wos-server-unique cases not covered by Trellis Core or ADR-0074):
+
+- **Projection rebuild against evolved Privacy Profile version.** Per ADR-0074 §3/§10, `profileUrl` + `profileVersion` are bound into AAD per event. Projection rebuilds read events at their pinned Profile version; a current-version Profile is never silently substituted.
+- **Deontic prohibition firing after key bag was wrapped.** A `prohibition` evaluated true after content was already wrapped to a recipient does NOT retract the wrapped DEK; the recipient retains historical decryption capability for already-emitted events (see Story 1 recipient rotation). The prohibition gates *new* events, not past wraps.
+- **KMS unavailability during decryption (`processing-audited`).** Returns explicit `kms.unavailable`; never falls back to a plaintext path; the access attempt is ledgered.
+- **TEE attestation failure mid-batch (Federal mode).** Batch aborts; partial results discarded; the boundary is recorded as a signed event.
+
+Trellis Core §16 (verifier independence) and the Phase-1 invariants cover corrupted key bag, chain verification failure, and key-destruction race; ADR-0074 §6/§11 cover cross-class FEL and non-relevant-field bucket emission. Cross-reference, do not duplicate.
 
 ---
 
-## V. Cross-Spec Changes
+## V. Cross-Spec Bindings
 
-The architecture spans three specs. Each owns one fact; nobody redefines below their layer.
+This vision binds three companion specs; each owns its content in full. VISION.md states the binding only and does not restate normative semantics.
 
-### Formspec — `accessControl` extension (per ADR-0074)
+- **Formspec** — [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md) is authoritative for `accessControl` semantics, the Privacy Profile sidecar, the bucketed Response wire shape, sensitivity ordering, Phase-5 emission, and the cross-class FEL definition error. Two callouts that load-bear on the WOS layer: (1) `flClassCompatibility` (ADR-0074 §7) is the only mechanism that relaxes cross-class FEL across `wos.*` + `formspec.*` namespaces — WOS guard authoring inherits this constraint, enforced at both lint time and processor load time; (2) the schema-omitted vs. explicit `unclassified` distinction is lint-relevant (ADR-0074 §1, §12) — only schema omission fires `every-field-classified`. Implementations MUST preserve both states distinctly.
 
-Authoritative spec is [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md). Summary of the cross-stack-relevant points:
+- **Respondent Ledger** — `specs/audit/respondent-ledger-spec.md` §7.7 (draft v0.2.0) already inverts inheritance: each `ChangeSetEntry` derives `accessClass` from the source field's `accessControl.class` when a Privacy Profile is loaded, and raw values for a class MUST NOT be exposed to a reader who lacks authority. Distinct identifiers — source = `accessControl.class` (ADR-0074 §1, on the item); derived = `accessClass` (ledger, on `ChangeSetEntry`). The broader class-aware redaction surface (groups, repeats, calculated fields, non-relevant fields) remains forward work per ADR-0074 §9.
 
-- **`accessControl` is a normative item property** on `field` and `group` items. Nested shape: `{ class, audience?, lawfulBasis?, cardinalityRationale? }`.
-- **Class names are opaque to Core.** The taxonomy is registry-tier infrastructure (`specs/registry/access-class-registry.md`). Core treats class tokens as opaque strings; presence of a token activates routing, not its semantics.
-- **Privacy Profile sidecar** is the per-deployment policy layer. It defines audience lists per class, lawful-basis declarations, class overrides, and `flClassCompatibility` declarations. Optional; no Profile loaded → flat Response, identical to pre-version-bump Formspec.
-- **Bucketed Response wire shape** when a Privacy Profile is loaded. Each event payload is a set of class-bucketed ciphertexts plus a key bag of per-class wrapped DEKs.
-- **Sensitivity ordering is audience-subset-defined.** Class A is more sensitive than class B iff `audience(A) ⊊ audience(B)`. Profile-loaded only.
-- **Cross-class FEL is a definition error at Core**, relaxable only via Profile `flClassCompatibility` with literal audience-set equality (verified at both lint time and processor load time).
-- **Phase 5 (Emission)** projects flat Instance into per-class plaintext, encrypts per bucket, wraps DEKs. Pure projection-and-encrypt; no FEL evaluation; no Instance mutation.
-- **Mapping spec** gains `reclassification` requirement: class-crossing Field Rules require explicit `targetClass` + `rationale` + optional `reviewer`, validated at mapping-document load time.
+- **Case Ledger composition + WOS event taxonomy** — Trellis Core §1.2 already defines the case ledger as composed sealed response-ledger heads + WOS governance events into one adjudicatory matter. WOS event-type definitions (including the recipient-revocation event referenced in §IV Story 1) live in the planned `wos-spec/specs/audit/wos-event-types.md`. This vision asserts the *requirements* (one chain per case; family-level `event_type` plaintext per Trellis Phase-1 invariant #9; specific tags / outcomes / actor identities encrypted in payload; encrypt-then-hash normative; recipient-revocation event in the taxonomy) without minting names. WOS authors own the `wos.*` namespace; Formspec authors own `formspec.*` and `respondent.*`.
 
-### Case Ledger (replaces Respondent Ledger spec)
+- **Custody seam** — the binding from `wos.*` event-type tags into Trellis envelope tags goes through the kernel `extensions` seam (`wos-spec/specs/kernel/spec.md` §10.6) and the `custodyHook` seam (`wos-spec/specs/kernel/custody-hook-encoding.md`): one authored WOS record per append, dCBOR-canonicalized, ingested into the Trellis chain. The wos-server `EventStore` composes `trellis-store-postgres` + projections through this seam.
 
-Trellis Core §1.2 already defines the **case ledger** as one of three nested append-only scopes: a hash-chained sequence of governance events composing one or more sealed response-ledger heads with WOS governance events into one adjudicatory matter.
-
-The existing `specs/audit/respondent-ledger-spec.md` is renamed and rewritten as `specs/audit/case-ledger-spec.md`. Adopting Trellis's existing term avoids parallel naming.
-
-Changes:
-
-- **Re-scope** from `responseId`-keyed to `caseId`-keyed. A case may have many responses across years (initial, RFI, amendment, appeal); the ledger spans them.
-- **Extend event taxonomy** with `wos.*` governance events (~25 types from ADR-0059 §4: `wos.transition.fired`, `wos.task.created/claimed/completed`, `wos.governance.evaluated`, `wos.deontic.evaluated`, `wos.delegation.verified`, `wos.review.protocol`, `wos.hold.entered/resumed`, `wos.provenance.reasoning/counterfactual/narrative`, `wos.explanation.assembled`, `wos.appeal.filed`, `wos.agent.invoked/fallback`, `wos.drift.detected`, `wos.autonomy.changed`, `wos.equity.alert`, `wos.timer.created/fired/cancelled`); add `case.created` (per ADR 0073); add lifecycle events (`ledger.checkpoint`, `ledger.archived`, `ledger.key.destroyed`, `ledger.redacted`, `ledger.exported`, `ledger.sealed`).
-- **Per-field classification inherits from `accessControl.class`** in the originating Formspec definition. WOS governance events also classify their fields per the `wos.*` namespace registered in the Access-Class Registry.
-- **Encrypt-then-hash is normative.**
-- **Header tag policy is explicit** per Trellis Phase-1 invariant #9: family-level `event_type` plaintext (e.g., `wos.transition.fired`); specific tags, outcome values, actor identities live in the encrypted payload.
-
-WOS authors own `wos.*` event-type definitions in `wos-spec/specs/audit/wos-event-types.md` (new); Formspec authors own `formspec.*` and `respondent.*`.
-
-### Trellis Phase 1 — we ship it
-
-Per Trellis Core, the Phase-1 envelope is a normative byte commitment. We author the Rust reference implementation (`trellis-core`, `trellis-cose`, `trellis-store-postgres`, `trellis-store-memory`, `trellis-verify`, `trellis-cli`, `trellis-conformance`) as part of our build sequence — not as a third-party dependency. The 15 Phase-1 envelope invariants (dCBOR canonicalization, `suite_id` registry, signing-key registry in export, hash-over-ciphertext, ordering model, registry-snapshot binding, key-bag immutability, redaction-aware commitment slots, plaintext-vs-committed header policy, Phase 1 envelope IS Phase 3 case-ledger event format, namespace deconfliction, head-format superset, append idempotency, snapshots/watermarks, trust-posture honesty floor) are the engineering commitments we honor.
-
-The wos-server `EventStore` composes `trellis-store-postgres` (canonical events table) with the projections-management layer.
+- **Trellis** — `trellis/specs/trellis-core.md` is authoritative for envelope format, hash construction, signing, export, and the 15 Phase-1 envelope invariants (we ship the Rust reference implementation per §II).
 
 ---
 
@@ -204,7 +192,7 @@ crates/
 ├── wos-server-kms-cloud            # Cloud KMS (AWS / GCP / Azure / GovCloud)
 ├── wos-server-kms-local            # Local key file (test / dev only)
 │
-├── wos-server-processing-audited   # Today's reference: KMS-logged audited decryption
+├── wos-server-processing-audited   # SBA reference: KMS-logged audited decryption
 │                                   #   Future siblings under the same ProcessingService port:
 │                                   #     wos-server-processing-tee   (TEE-attested; hardware-rooted)
 │                                   #     wos-server-processing-fhe   (FHE; math-rooted)
@@ -216,13 +204,13 @@ crates/
 └── wos-server                      # Composition root (Axum HTTP, services, ServerConfig)
 ```
 
-Per-deployment-mode default features (today's shippable configuration; future-adapter columns reflect what becomes available as TEE / FHE / MPC adapters land):
+Target feature bundles. These describe the architecture to build, not the crates currently present in the monolithic server:
 
-| Mode | Today (shippable) | Future-target |
+| Mode | Minimum claimable bundle | Stronger-processing path |
 |---|---|---|
-| **SBA** | `eventstore-postgres + blobstore-{fs,s3} + runtime-restate + authz-openfga + identity-{oidc,webauthn} + kms-vault + processing-audited + otel` | unchanged (SBA's commitment is met by audited-decryption posture) |
-| **Federal** | same as SBA + `kms-cloud` (replaces `kms-vault`) + stricter KMS / role-separation policy | swap `processing-audited` → `processing-tee` when TEE adapter ships; selectively `processing-fhe` for FHE-eligible operations |
-| **Sovereign** | same as Federal + client-origin sovereign respondent flows on Studio side | same future-adapter swaps; sovereignty axis (respondent client-origin keys) is identity-side, independent of `ProcessingService` selection |
+| **SBA** | `eventstore-postgres + blobstore-{fs,s3} + runtime-restate + authz-openfga + identity-{oidc,webauthn} + kms-vault + processing-audited + otel` | Optional; SBA's stated commitment is met by audited-decryption posture |
+| **Federal** | `eventstore-postgres + blobstore-{s3,azure,gcs} + runtime-restate + authz-openfga + identity-{oidc,webauthn} + kms-cloud + processing-tee` or another attested / math-bound adapter | Add `processing-fhe` for FHE-eligible operations; add `processing-mpc` when no single operator may hold plaintext |
+| **Sovereign** | Federal bundle + client-origin respondent keys for respondent-self classes | Same stronger-processing choices; sovereignty is primarily an identity and key-custody axis, not a separate event format |
 
 CI ratchets enforce abstraction:
 
@@ -242,8 +230,8 @@ The architecture serves multiple consumer shapes, not just browsers. Each is the
 | **CLI tools** (operator scripts, debugging, batch operations) | CLI process memory | OIDC-authenticated CLI receives wrapped key-bag entries; PIV/CAC card or KMS-fetched wrapped key resident in the CLI session; decrypts in process; plaintext lifetime bounded by session |
 | **Mobile clients** (caseworker on tablet, fieldwork) | Mobile webview / native app | WebAuthn + WebCrypto in mobile webview; native apps use platform-native equivalent (iOS Secure Enclave + CryptoKit; Android StrongBox + Tink) |
 | **M2M / API integrations** (state-to-federal data sharing, FAFSA → state grants, child support → tax intercept) | Receiving system | Sender returns bucketed Response with key bag wrapping a DEK to the receiving system's identity (registered as a per-class recipient in the Privacy Profile); receiver decrypts authorized classes; explicit `access.granted` ledger event records the cross-system handoff |
-| **Batch processing** (overnight re-eligibility runs, equity audits, SLA breach detection) | `ProcessingService` adapter selected at deployment (`processing-audited` today; `processing-tee` / `processing-fhe` / `processing-mpc` as future siblings) | Background job dispatches to the selected adapter; per-purpose KMS authorization releases the appropriate keys (or, for FHE/MPC adapters, computation runs without key release); output (aggregate or per-case decision) is itself emitted as a signed ledger event with the adapter-specific verification surface (KMS log entry, TEE attestation, FHE proof) |
-| **Analytics / equity monitoring** (federal disparate-impact reporting, OMB M-24-10) | Analytics service identity | Analytics service is a registered recipient with key-bag entries for `demographic` class; computes aggregates over decrypted demographic dimensions; published aggregate is a `wos.equity.report` ledger event signed by the analytics service |
+| **Batch processing** (overnight re-eligibility runs, equity audits, SLA breach detection) | `ProcessingService` adapter selected at deployment (`processing-audited` for SBA; `processing-tee` / `processing-fhe` / `processing-mpc` for stricter modes) | Background job dispatches to the selected adapter; per-purpose KMS authorization releases the appropriate keys (or, for FHE/MPC adapters, computation runs without key release); output (aggregate or per-case decision) is itself emitted as a signed ledger event with the adapter-specific verification surface (KMS log entry, TEE attestation, FHE proof) |
+| **Analytics / equity monitoring** (federal disparate-impact reporting, OMB M-24-10) | Analytics service identity | Analytics service is a registered recipient with key-bag entries for `demographic` class; computes aggregates over decrypted demographic dimensions. Reporting wire format (cadence vs. per-report event vs. threshold-breach event) is deferred to `wos-spec/specs/advanced/equity-config.md` and the planned `wos-event-types.md`; this vision does not mint event names |
 | **Trellis export** (FOIA, litigation discovery, auditor) | Recipient device | Standard Trellis export package per Core §18 — self-contained, machine-readable, verifiable on an air-gapped laptop with `trellis-cli verify` |
 
 The wire format is the same across all surfaces: Trellis envelopes with bucketed payloads and key bags. The decryption mechanism varies; the architecture does not.
@@ -252,7 +240,7 @@ The wire format is the same across all surfaces: Trellis envelopes with bucketed
 
 ## VIII. Build Sequence
 
-A single dependency DAG. No phases. Tracks run in parallel where dependencies permit.
+A single dependency DAG. **Dependency-ordered sequencing, not calendar phasing** — the foundation must close before adapters can compile against it; tracks within a layer run fully parallel.
 
 ```
                         ┌──────────────────────────────────┐
@@ -272,13 +260,12 @@ A single dependency DAG. No phases. Tracks run in parallel where dependencies pe
                                          │
    ┌──────────────┬──────────────┬───────┴──────┬──────────────┬──────────────┐
    ▼              ▼              ▼              ▼              ▼              ▼
-   eventstore     blobstore      runtime        authz          identity       kms /
-   × 2            × 4            × 2            × 3            × 3            processing
-                                                                              × 2
+   eventstore     blobstore      runtime        authz          identity       kms / processing
+   × 2            × 4            × 2            × 3            × 3            × 3 / × 4
 
    Cross-spec parallel tracks:
      - ADR-0074 Formspec spec edits + access-class-registry + privacy-profile
-     - Case Ledger spec rewrite + WOS event-type definitions
+     - Respondent Ledger class-aware edits + Case Ledger composition + WOS event-type definitions
      - WASM compile of wos-runtime (in wos-runtime crate)
      - Studio-side: client-side decryption, per-class rendering, WebAuthn registration UI
                                          │
@@ -289,7 +276,7 @@ A single dependency DAG. No phases. Tracks run in parallel where dependencies pe
                         └──────────────────────────────────┘
 ```
 
-**Trellis Phase 1 ships first** because the EventStore composes its crates. This is our work, on our build track — not an external dependency.
+**Trellis Phase 1 ships first** because the EventStore composes its crates (per §II — our work, our build track).
 
 **Adapter cluster runs in parallel** after the foundation closes. Each adapter is independent of the others. CI ratchets prove the composition root compiles against ports only.
 
@@ -306,8 +293,8 @@ A single dependency DAG. No phases. Tracks run in parallel where dependencies pe
 | Phase 1 / Phase 2 / Phase 3 sequencing as developer-time economy | Wrong economic model — calendar time, architectural debt, conceptual debt are scarce; tokens aren't |
 | Two-store split (`Storage` + separate `AuditSink` ports) | Trellis IS the database; one EventStore port covers both |
 | Parallel hash chains (WOS-internal `previous_hash` alongside Trellis chain) | One chain — Trellis. Postgres WAL covers torn writes; replay determinism is Trellis chain semantics |
-| Plaintext at rest in operational store | Metadata-only projections; plaintext lives only in encrypted events + transient confidential-compute memory (audited process today; TEE / FHE / MPC adapter as future stronger postures) |
-| Server-side plaintext outside the declared `ProcessingService` boundary | Strict modes (Federal/Sovereign) commit to "platform cannot reconstruct plaintext outside an attested or math-bound boundary." Today's reference adapter is `processing-audited` with KMS-logged events; future TEE / FHE / MPC adapters tighten the boundary. The trust posture declares the property; the adapter delivers it. |
+| Plaintext at rest in operational store | Metadata-only projections; plaintext lives only in encrypted events + transient `ProcessingService` memory (`processing-audited` for SBA; TEE / FHE / MPC adapters for stricter modes) |
+| Server-side plaintext outside the declared `ProcessingService` boundary | Strict modes (Federal/Sovereign) commit to "platform cannot reconstruct plaintext outside an attested or math-bound boundary." `processing-audited` is SBA-grade; Federal and Sovereign claims require TEE / FHE / MPC or an equivalent adapter that actually delivers the boundary. |
 | Hardcoding TEE as the architectural pillar | TEE is one confidential-compute strategy among several (peer to FHE, MPC). The architecture admits all via a pluggable `ProcessingService` port; no specific adapter is load-bearing for the architecture's correctness. Deployments select; the spec doesn't dictate. |
 | Application-layer dual-write to multiple stores | Outbox / event-sourcing pattern; never dual-write |
 | Server decrypts content for routine reads | Clients decrypt; server brokers wrapped DEKs |
@@ -315,7 +302,7 @@ A single dependency DAG. No phases. Tracks run in parallel where dependencies pe
 | Event-level encryption only (one DEK per event) | Per-class encryption — granular by access class within an event |
 | AI-authored "Locked narrative" treated as architectural authority | Treat as input; evaluate substance independently |
 | In-memory storage as production posture | Test / conformance oracle only; production is Postgres |
-| JSONFS / "datalake-as-Storage" interpretations | Operational ≠ analytical; conflating them is the design mistake |
+| Treating the operational EventStore as a generic datalake or JSON object store | The `canonical` schema is a Trellis-shaped artifact with specific Phase-1 invariants and verifier-independence requirements (Trellis Core §16); conflating it with general-purpose blob storage breaks both. Operational ≠ analytical |
 | Per-field DEKs (one DEK per field, not per class) | Per-class DEKs are right granularity; per-field is key explosion |
 | "Subject Ledger" as a parallel name for Trellis's "case ledger" | Adopt Trellis's term; one canonical name per concept |
 | Crypto distributed across the codebase | CRYPTO_OWNER fence concentrates crypto in adapter crates that need it; the dep graph is the security boundary |
@@ -333,36 +320,37 @@ Four resolved by ADR-0074:
 | Pre-allocated namespaces | **Resolved.** ADR specifies `wos.*`, `hipaa.*`, `ferpa.*`, `itar.*` as registry namespaces. |
 | Studio scope | **Resolved.** Per ADR-0074 §13: Theme `access.*` token names normative, visual implementation-defined; class-affordances UI is Studio work. |
 
-Six remaining (with first-order leans, deserve real evaluation before committing):
+Three additional commitments (resolved from earlier "leans"):
 
-1. **Anchor substrate adapter set.** Lean: ship OpenTimestamps + Sigstore Rekor + Trillian as siblings via Trellis's `AnchorAdapter` trait; default to Rekor for development.
-2. **Authz adapter default.** Lean: OpenFGA as reference impl, SpiceDB as sibling for enterprise procurement that demands it; Cedar as a third future sibling for analyzable-policy use cases.
-3. **WASM-compile track ownership.** Lean: lives in `wos-runtime` crate (not `wos-server`); pattern follows `formspec-engine`. Affects Studio more than wos-server.
-4. **wos-server existing TODO disposition.** Lean: discard and replace with fresh `BACKLOG.md` keyed to end-state crate cluster.
-5. **PARITY.md disposition.** Lean: rewrite in place once the new specs (ADR-0074 + Case Ledger + WOS event types) exist.
-6. **Confidential-compute adapter sequencing.** When does each future `ProcessingService` adapter ship? Lean: `processing-audited` is today's reference, sufficient for SBA and interim-Federal; `processing-tee` ships when a deployment requires hardware-rooted attestation (likely first FedRAMP-High customer); `processing-fhe` ships when a workload's operations are FHE-tractable and the customer values math-rooted confidentiality over hardware-rooted; `processing-mpc` ships when a multi-operator deployment surfaces. Trigger-driven, not calendar-driven; the architecture's commitment is admitting them via the port surface, not pre-shipping them.
+1. **Anchor substrate adapter set.** Ship OpenTimestamps + Sigstore Rekor + Trillian as siblings via Trellis's `AnchorAdapter` trait; default to Rekor in dev. Production default is per-deployment.
+2. **Authz adapter default.** OpenFGA as reference impl; SpiceDB as sibling for procurement that demands it. Cedar moves to roadmap (analyzable-policy use cases), not opens.
+3. **WASM-compile track ownership.** Lives in `wos-runtime` crate; pattern follows `formspec-engine`. Affects Studio more than wos-server.
+
+Genuinely open:
+
+4. **Confidential-compute adapter sequencing.** Trigger-driven, not calendar-driven. Each adapter ships when a deployment surfaces it: `processing-tee` when hardware-rooted attestation is required (FedRAMP-Moderate+ workloads); `processing-fhe` when a workload's operations are FHE-tractable AND the customer values math-rooted confidentiality over hardware-rooted; `processing-mpc` when a multi-operator deployment surfaces with no single party permitted to hold plaintext. Architectural commitment: admit all three via the `ProcessingService` port; do not pre-ship.
+
+(`wos-server` TODO/PARITY disposition is task hygiene tracked in the project board, not an architectural decision; not listed here.)
 
 ---
 
-## XI. Compliance / Positioning
+## XI. Architectural Constraints from Compliance
 
-| Framework | Mapping |
+The architecture's shape is constrained by a small number of frameworks whose requirements are mechanism-level (not procurement positioning). These are kept here because they explain *why* the architecture has its current shape:
+
+| Framework | What it constrains |
 |---|---|
-| NIST SP 800-207 (Zero Trust Architecture) | All seven tenets satisfied; "all data sources and computing services are considered resources" structurally enforced by per-class encryption + key-bag access |
-| CISA ZTMM v2.0 — Data pillar | Maturity Level 4–5 (Optimal): customer-managed keys, granular per-resource access, encrypted in transit + at rest |
-| OMB M-22-09 (Federal Zero Trust Strategy) | Data-layer requirements satisfied via per-class DEKs + KMS audit + ledger integrity |
-| OMB M-24-10 (AI in Federal Government) | Agent governance via WOS deontic constraints + Trellis attestation; per-class agent access boundaries |
-| FedRAMP rev5 | Federal-mode commitment ("platform cannot reconstruct plaintext outside an attested or math-bound boundary") + customer-managed keys + audit log integrity. Today's adapter is `processing-audited` with stricter KMS / role separation; future TEE / FHE / MPC adapters tighten the boundary. |
-| GDPR Art. 17 (right to erasure) | Crypto-shredding via key destruction; structurally provable |
-| GDPR Art. 20 (data portability) | Trellis export package self-contained, machine-readable, verifiable on air-gapped laptop |
-| HIPAA | Per-class encryption isolates PHI; medical class access restricted by key bag |
-| FRE 803(6) (business records exception) | Systematic, contemporaneous, attributed, routine, tamper-evident — by construction |
-| Title VI / disparate-impact analysis | Demographic class accessible to equity service; aggregates published as signed ledger events. Verification surface depends on the deployed `ProcessingService` adapter — KMS log entry (`processing-audited`), TEE attestation (`processing-tee`), or FHE proof (`processing-fhe`). |
-| NIST SP 800-63 (Digital Identity Guidelines) | IAL2/IAL3 supported via OIDC + Verifiable Credentials |
+| NIST SP 800-207 (Zero Trust Architecture) | All seven tenets satisfied structurally by per-class encryption + key-bag access; "all data sources and computing services are considered resources" enforced by the data path, not by network policy |
+| GDPR Art. 17 (right to erasure) | Crypto-shredding via class-DEK destruction is the structural mechanism; chain integrity preserved (the bound content becomes irrecoverable, the chain stays intact) |
+| GDPR Art. 20 (data portability) | Trellis export package self-contained, machine-readable, verifiable on air-gapped laptop per Trellis Core §18 |
+| HIPAA | Per-class encryption isolates PHI; medical class access restricted by key bag (mechanism, not procurement) |
+| FRE 803(6) (business records exception) | Systematic, contemporaneous, attributed, routine, tamper-evident — by construction of the canonical schema + chain |
+
+**Procurement-facing compliance framework mapping** (FedRAMP rev5, OMB M-22-09, OMB M-24-10, CISA ZTMM v2.0, Title VI / disparate-impact, NIST SP 800-63, etc.) lives in [`STACK.md`](../../../STACK.md) §Proof packages, not here. That mapping is buyer-facing and does not constrain wos-server architecture.
 
 **Positioning:**
 
-> Zero-trust workflow governance for high-stakes public-sector adjudication: the server can't read your data, you can prove who saw which fields, the operator can't quietly rewrite history, and a 2045 verifier can prove on an air-gapped laptop that the 2026 record is genuine. Open spec, Rust + WASM, federal-conformant.
+> Zero-trust workflow governance for high-stakes public-sector adjudication: routine server reads do not expose case content, every field disclosure is key-gated and ledgered, the operator cannot quietly rewrite history, and a 2045 verifier can prove on an air-gapped laptop that the 2026 record is genuine. Open spec, Rust + WASM, federal-oriented.
 
 ---
 
@@ -371,15 +359,16 @@ Six remaining (with first-order leans, deserve real evaluation before committing
 | Concern | Authoritative spec |
 |---|---|
 | Formspec field-level access classification, bucketed Response, per-class encryption mechanics | [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md) |
-| Case ledger event taxonomy and wire format | `specs/audit/case-ledger-spec.md` (rewrite of `respondent-ledger-spec.md`) |
-| WOS governance event-type definitions | `wos-spec/specs/audit/wos-event-types.md` (new) |
-| Access-class taxonomy + lint rules | `specs/registry/access-class-registry.md` (new, per ADR-0074) |
-| Per-deployment audience policy | `specs/privacy/privacy-profile.md` (new, per ADR-0074) |
+| Formspec response-scoped respondent history, including optional field-level editing changelog | `specs/audit/respondent-ledger-spec.md` |
+| Case ledger composition and wire format | `trellis/specs/trellis-core.md` §22 (current) plus planned cross-stack case-ledger binding if split out |
+| WOS governance event-type definitions | `wos-spec/specs/audit/wos-event-types.md` (planned) |
+| Access-class taxonomy + lint rules | `specs/registry/access-class-registry.md` (planned per ADR-0074) |
+| Per-deployment audience policy | `specs/privacy/privacy-profile.md` (planned per ADR-0074) |
 | Trellis byte protocol (envelope, hash construction, signing, export) | `trellis/specs/trellis-core.md` |
 | Trellis operational discipline (projections, watermarks, snapshots) | `trellis/specs/trellis-operational-companion.md` |
 | Case-creation boundary (Formspec → WOS handoff) | [ADR 0073](../../../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md) |
 | Stack evidence integrity (attachment binding) | [ADR 0072](../../../thoughts/adr/0072-stack-evidence-integrity-and-attachment-binding.md) |
-| Selective disclosure (BBS+) for FOIA / cross-agency export | ADR-0080 (follow-on) |
+| Selective disclosure (BBS+) for FOIA / cross-agency export | ADR-0081 (planned follow-on) |
 
 ---
 
