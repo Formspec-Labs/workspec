@@ -8,7 +8,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 |---|---|
 | Behavioral interrupts before any task | [`../.claude/operating-mode.md`](../.claude/operating-mode.md) |
 | Owner operating preferences | [`../.claude/user_profile.md`](../.claude/user_profile.md) |
-| Stack vision + fully-populated WOS section | [`../.claude/vision-model.md`](../.claude/vision-model.md) |
+| Stack vision + WOS section | [`../VISION.md`](../VISION.md) |
 | Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
 | **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md) |
 | Parent repo guide | [`../CLAUDE.md`](../CLAUDE.md) |
@@ -62,7 +62,7 @@ Six canonical kernel seams remain the only extension surface (ADR 0077): `actorE
 
 ## Decision heuristics
 
-Apply after stack-wide heuristics (in vision-model.md):
+Apply after stack-wide heuristics (in [`../VISION.md`](../VISION.md)):
 
 1. **Trellis-boundary check.** Cryptographic integrity / content-addressing / signed envelopes / checkpoint seals / export bundles / federation → Trellis. Do not invent WOS-side primitives. WOS emits `SignatureAffirmation` and other provenance records; Trellis anchors them through `custodyHook`.
 2. **Scope to SBA + SaaS (Q1).** Before adding 1.0 work, ask: does this directly serve SBA PoC or public SaaS within its first year? If no, defer (trigger-gate or out-of-scope).

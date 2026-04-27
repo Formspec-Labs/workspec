@@ -49,7 +49,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 ### ADR 0066 — execution checklist (WOS center) {#adr-0066-exec-checklist}
 
-**Gate:** [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) accepted (exit *Proposed*). Formspec Respondent Ledger work and Trellis vectors/verifier/export stay owned in parent [`TODO.md`](../../TODO.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **17**; this block is the **WOS spec + schema + runtime + export** slice.
+**Gate:** [ADR 0066](../thoughts/adr/0066-stack-amendment-and-supersession.md) accepted (exit *Proposed*). Formspec Respondent Ledger work and Trellis vectors/verifier/export stay owned in parent [`TODO-STACK.md`](../TODO-STACK.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **17**; this block is the **WOS spec + schema + runtime + export** slice.
 
 1. **Kernel / provenance**
    - [ ] Add six `ProvenanceKind` variants + `wos-provenance-record.schema.json` `recordKind` registrations: `correctionAuthorized`, `amendmentAuthorized`, `determinationAmended`, `rescissionAuthorized`, `determinationRescinded`, `authorizationAttestation` (camelCase per existing serde/schema convention — align names to ADR D-1/D-2 at authoring time).
@@ -72,7 +72,7 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 
 ### ADR 0067 — execution checklist (WOS center) {#adr-0067-exec-checklist}
 
-**Gate:** [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) accepted (exit *Proposed*). Trellis `open-clocks.json`, verifier advisories, and append vectors **014–017** stay in parent [`TODO.md`](../TODO.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **18**; Formspec **StatuteClock** origination on respondent acts stays in parent [`TODO.md`](../TODO.md); reference-server prove-out is [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-073**.
+**Gate:** [ADR 0067](../thoughts/adr/0067-stack-statutory-clocks.md) accepted (exit *Proposed*). Trellis `open-clocks.json`, verifier advisories, and append vectors **014–017** stay in parent [`TODO-STACK.md`](../TODO-STACK.md) and [`../trellis/TODO.md`](../trellis/TODO.md) item **18**; Formspec **StatuteClock** origination on respondent acts stays in parent [`TODO-STACK.md`](../TODO-STACK.md); reference-server prove-out is [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-073**.
 
 1. **Kernel / provenance**
    - [ ] Add `ProvenanceKind` variants + `schemas/kernel/wos-provenance-record.schema.json` `recordKind` branches: `clockStarted`, `clockResolved` (camelCase per existing serde/schema convention — align literal names and payload keys to ADR D-1 at authoring time).
@@ -212,7 +212,7 @@ JWT auth hardening and operator ergonomics landed in-session (2026-04-24); detai
 
 Normative prose (`specs/companions/runtime.md` §12.9 / §15), kernel + case-instance schemas, and `wos-formspec-binding` landed for the Formspec coprocessor handoff ([Phase 11 backlog closure §G.1](../../thoughts/plans/2026-04-11-phase11-coprocessor-open-backlog.md)). **`wos-runtime` still diverges** on several MUST-level submit-path behaviors (auth/agent rejection surface, optional Governance **`contractHook`** / S5 ordering, abandon vs skip lifecycle, amendment-task automation). **`wos-server`** §15.7 ledger gating is layered on `ContractValidator`; architecture review ([`thoughts/plans/2026-04-18-wos-remainder-di-seam-framing.md`](thoughts/plans/2026-04-18-wos-remainder-di-seam-framing.md) placement note) prefers default enforcement at the **runtime submit boundary** where `impactLevel` is known — reconcile and implement one coherent story.
 
-- **#66 Runtime §15 processor parity — `wos-runtime` center** `[7 / 5 / 5]` (**35**) — umbrella; decomposed below. **Gate: none** (spec already published). HTTP/tests: [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-011**, **WS-075**; PARITY table refresh **WS-074** when seams match shipped code. (**WS-072** remains ADR 0066 reference-server follow-on per parent [`TODO.md`](../../TODO.md).)
+- **#66 Runtime §15 processor parity — `wos-runtime` center** `[7 / 5 / 5]` (**35**) — umbrella; decomposed below. **Gate: none** (spec already published). HTTP/tests: [`crates/wos-server/TODO.md`](crates/wos-server/TODO.md) **WS-011**, **WS-075**; PARITY table refresh **WS-074** when seams match shipped code. (**WS-072** remains ADR 0066 reference-server follow-on per parent [`TODO-STACK.md`](../TODO-STACK.md).)
   - [ ] **#66a Typed submit rejections + replay** — Map failed actor authorization to `TaskSubmissionResult::Rejected` with `taskSubmitterUnauthorized` (not `RuntimeError::Unauthorized`); persist replay entries per Runtime §15.5 step 3.
   - [ ] **#66b Agent submitters** — `actorExtension` registration, `agentSubmitterUnauthorized`, provenance `actorType: "agent"` + model/version metadata, rights/safety human-delegation rules per §15.5 step 4 / backlog §G P11-BL-004.
   - [ ] **#66c `ledgerEvidenceMissing` placement** — Decide single enforcement layer: extend submit path in `wos-runtime` (kernel/instance `impactLevel`) vs validator-only; align with `PolicyLayeredValidator` so headless runtime and HTTP agree.
