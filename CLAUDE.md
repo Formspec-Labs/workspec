@@ -10,6 +10,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Owner operating preferences | [`../.claude/user_profile.md`](../.claude/user_profile.md) |
 | Stack vision + fully-populated WOS section | [`../.claude/vision-model.md`](../.claude/vision-model.md) |
 | Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
+| **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md) |
 | Parent repo guide | [`../CLAUDE.md`](../CLAUDE.md) |
 | Current tactical work | [`TODO.md`](TODO.md) |
 | Signature Profile active track | [`T4-TODO.md`](T4-TODO.md) |
@@ -17,6 +18,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Conventions (three-section spec rubric) | [`CONVENTIONS.md`](CONVENTIONS.md) |
 | Stream / compatibility / lint / feature matrices | [`RELEASE-STREAMS.md`](RELEASE-STREAMS.md), [`COMPATIBILITY-MATRIX.md`](COMPATIBILITY-MATRIX.md), [`LINT-MATRIX.md`](LINT-MATRIX.md), [`WOS-FEATURE-MATRIX.md`](WOS-FEATURE-MATRIX.md) |
 | Case initiation cross-spec contract | [`../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md`](../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md) |
+| Field-level transparency / class-aware response cross-spec contract | [`../thoughts/adr/0074-formspec-native-field-level-transparency.md`](../thoughts/adr/0074-formspec-native-field-level-transparency.md) |
 
 For public-facing stack framing, see [`../STACK.md`](../STACK.md) — lookup-only.
 
@@ -86,6 +88,19 @@ New runtime capabilities MUST be implementable in the in-memory adapter AND the 
 **FEL reuse.** WOS uses FEL via `fel-core` from the parent monorepo (`../crates/fel-core`). No alternative expression language.
 
 **Provenance architecture.** Records are tiered (`ProvenanceKind` tier-typing, WOS-T1 closed). Every WOS MUST that produces an audit event emits a provenance record. The exporter (`wos-export`) packages records into `custodyHook` four-field append shape for Trellis ingestion. Trellis anchors; WOS emits.
+
+## End-state wos-server architecture
+
+Detailed in [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md). Summary, load-bearing for any reference-server architectural decision:
+
+- **Data-and-workflow zero trust** layered on identity-and-network zero trust. Server processes never hold case content plaintext at rest. Three deployment modes (SBA / Federal / Sovereign) declared per deployment with declaration matching observable behavior.
+- **Trellis IS the database.** One Postgres database per tenant; two schemas — `canonical` (Trellis events: hash-chained, signed, encrypted payloads) and `projections` (derived metadata, mutable, rebuildable by replay, plaintext-content-free). Single `EventStore` port — no separate `Storage` + `AuditSink` split. Single transaction per write.
+- **Per-class encryption** per [ADR-0074](../thoughts/adr/0074-formspec-native-field-level-transparency.md). Each event payload is a key-bagged set of access-class buckets; clients decrypt classes their key bag admits via WebAuthn PRF (respondents) or hardware tokens / OIDC-mediated wrapped keys (staff). Server brokers wrapped DEK release; never holds plaintext content.
+- **Two-layer access control, structurally enforced.** OpenFGA Zanzibar-style ReBAC gates metadata access AND per-class decryption authority; key-bag membership cryptographically enforces it. Stolen key reveals one class for one recipient, not the case; OpenFGA misconfig leaks metadata, not content.
+- **Cargo-enforced adapter split.** ~20 adapter crates across seven seam axes (eventstore, blobstore, runtime, authz, identity, kms, processing). `CRYPTO_OWNER` fence (per ADR-0074 `formspec-bucketing` precedent) keeps crypto imports scoped to four specific adapters; the dep graph is the security boundary.
+- **Trellis is on our build track**, not external dependency. Phase-1 envelope invariants are byte commitments we ship; the Rust reference implementation (`trellis-core`, `trellis-cose`, `trellis-store-postgres`, `trellis-verify`, `trellis-export`) is co-engineered. wos-server's `EventStore` composes them.
+- **"Case Ledger"** (Trellis Core §1.2 term) is the canonical name for what was called "Subject Ledger" or extended "Respondent Ledger." Spec rewrite from `respondent-ledger-spec.md` → `case-ledger-spec.md` is pending; WOS authors own `wos.*` event-type definitions in a separate WOS-side spec consumed via cross-spec extension namespace.
+- **Audit ⊥ observability.** Trellis events answer "who/what/why" for the regulator; OpenTelemetry answers "what failed" for the operator. Distinct concerns, distinct substrates, distinct verifiers.
 
 ## Spec authoring contract
 
