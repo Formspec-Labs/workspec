@@ -190,11 +190,11 @@
     },
     "Contracts": {
       "type": "object",
-      "$comment": "Validation/guard contracts and capability contracts. Pairs with bindings[] per ADR 0074 governed output-commit pipeline."
+      "$comment": "Validation/guard contracts and capability contracts. Pairs with bindings[] per ADR 0080 governed output-commit pipeline."
     },
     "OutputBinding": {
       "type": "object",
-      "description": "Governed output-commit pipeline projection. Per ADR 0074: source surface + contractRef + projection map + writeScope + mutationSource + verificationLevel. Validated mutations + Facts-tier provenance emit deterministically.",
+      "description": "Governed output-commit pipeline projection. Per ADR 0080: source surface + contractRef + projection map + writeScope + mutationSource + verificationLevel. Validated mutations + Facts-tier provenance emit deterministically.",
       "properties": {
         "on": { "type": "string", "$comment": "Source surface: state id, transition id, capability id, signal name." },
         "contractRef": { "type": "string", "format": "uri" },
