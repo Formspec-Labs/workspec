@@ -11,13 +11,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -26,35 +26,36 @@
       }
     }
   },
-  "agents": {
-    "$schema": "https://wos-spec.org/schemas/agent-config/1.0",
-    "targetAgent": "triageAgent",
-    "targetIntegration": "https://test.wos-spec.org/ai/autonomy-caps",
-    "calibration": {
-      "required": true,
-      "frequency": "P90D",
-      "minimumSamples": 50,
-      "method": "binning"
-    },
-    "autonomyPolicy": {
-      "escalation": [
-        {
-          "condition": "agent.consecutiveSuccesses >= 50 and agent.calibration.recency < 30",
-          "targetLevel": "autonomous",
-          "escalationExpiry": "P30D",
-          "description": "Promote to autonomous after consistent performance"
-        }
-      ],
-      "demotion": [
-        {
-          "id": "demoteOnLowAccuracyOrViolation",
-          "condition": "agent.calibration.accuracy < 0.85 or agent.recentViolations > 0",
-          "targetLevel": "assistive",
-          "pendingRecalibration": true,
-          "description": "Demote on confidence floor violation, deontic violation, or human override"
-        }
-      ],
-      "maxAutonomy": "autonomous"
+  "agents": [
+    {
+      "id": "triageAgent",
+      "targetIntegration": "https://test.wos-spec.org/ai/autonomy-caps",
+      "calibration": {
+        "required": true,
+        "frequency": "P90D",
+        "minimumSamples": 50,
+        "method": "binning"
+      },
+      "autonomyPolicy": {
+        "escalation": [
+          {
+            "condition": "agent.consecutiveSuccesses >= 50 and agent.calibration.recency < 30",
+            "targetLevel": "autonomous",
+            "escalationExpiry": "P30D",
+            "description": "Promote to autonomous after consistent performance"
+          }
+        ],
+        "demotion": [
+          {
+            "id": "demoteOnLowAccuracyOrViolation",
+            "condition": "agent.calibration.accuracy < 0.85 or agent.recentViolations > 0",
+            "targetLevel": "assistive",
+            "pendingRecalibration": true,
+            "description": "Demote on confidence floor violation, deontic violation, or human override"
+          }
+        ],
+        "maxAutonomy": "autonomous"
+      }
     }
-  }
+  ]
 }

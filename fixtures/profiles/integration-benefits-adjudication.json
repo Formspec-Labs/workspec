@@ -12,13 +12,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -27,8 +27,8 @@
       }
     }
   },
-  "bindings": {
-    "$schema": "https://wos-spec.org/schemas/integration-profile/1.0",
+  "x-wos-integration-profile": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
     "targetWorkflow": {
       "url": "https://agency.gov/workflows/benefits-adjudication",
       "compatibleVersions": ">=1.0.0 <2.0.0"

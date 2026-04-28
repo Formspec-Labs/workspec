@@ -6,7 +6,7 @@
       "description": "Kernel Document missing required lifecycle property",
       "expectedError": "Required property 'lifecycle' is missing",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "impactLevel": "operational"
       }
     },
@@ -18,8 +18,12 @@
         "lifecycle": {
           "initialState": "start",
           "states": {
-            "start": { "type": "atomic" },
-            "end": { "type": "final" }
+            "start": {
+              "type": "atomic"
+            },
+            "end": {
+              "type": "final"
+            }
           }
         }
       }
@@ -29,12 +33,16 @@
       "description": "Document type marker with wrong version",
       "expectedError": "$wosKernel must be '1.0'",
       "document": {
-        "$wosKernel": "2.0",
+        "$wosWorkflow": "2.0",
         "lifecycle": {
           "initialState": "start",
           "states": {
-            "start": { "type": "atomic" },
-            "end": { "type": "final" }
+            "start": {
+              "type": "atomic"
+            },
+            "end": {
+              "type": "final"
+            }
           }
         }
       }
@@ -44,13 +52,17 @@
       "description": "Impact level not in the allowed enum",
       "expectedError": "impactLevel must be one of: rights-impacting, safety-impacting, operational, informational",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "impactLevel": "critical",
         "lifecycle": {
           "initialState": "start",
           "states": {
-            "start": { "type": "atomic" },
-            "end": { "type": "final" }
+            "start": {
+              "type": "atomic"
+            },
+            "end": {
+              "type": "final"
+            }
           }
         }
       }
@@ -60,15 +72,22 @@
       "description": "Actor type not in the allowed kernel enum",
       "expectedError": "actor type must be one of: human, system",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "actors": [
-          { "id": "bot", "type": "agent" }
+          {
+            "id": "bot",
+            "type": "agent"
+          }
         ],
         "lifecycle": {
           "initialState": "start",
           "states": {
-            "start": { "type": "atomic" },
-            "end": { "type": "final" }
+            "start": {
+              "type": "atomic"
+            },
+            "end": {
+              "type": "final"
+            }
           }
         }
       }
@@ -78,7 +97,7 @@
       "description": "Transition event with message kind using reserved $ prefix",
       "expectedError": "message event name must not start with '$'",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
           "initialState": "start",
           "states": {
@@ -86,12 +105,17 @@
               "type": "atomic",
               "transitions": [
                 {
-                  "event": { "kind": "message", "name": "$custom" },
+                  "event": {
+                    "kind": "message",
+                    "name": "$custom"
+                  },
                   "target": "end"
                 }
               ]
             },
-            "end": { "type": "final" }
+            "end": {
+              "type": "final"
+            }
           }
         }
       }
@@ -102,20 +126,26 @@
       "expectedError": "Final states MUST NOT have outgoing transitions",
       "note": "This is a semantic constraint. Schema validation alone may not catch this -- a Kernel Complete processor MUST reject it.",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
           "initialState": "start",
           "states": {
             "start": {
               "type": "atomic",
               "transitions": [
-                { "event": "go", "target": "end" }
+                {
+                  "event": "go",
+                  "target": "end"
+                }
               ]
             },
             "end": {
               "type": "final",
               "transitions": [
-                { "event": "restart", "target": "start" }
+                {
+                  "event": "restart",
+                  "target": "start"
+                }
               ]
             }
           }
@@ -127,13 +157,17 @@
       "description": "Document with undeclared top-level properties",
       "expectedError": "Additional property 'deonticConstraints' is not allowed",
       "document": {
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "deonticConstraints": {},
         "lifecycle": {
           "initialState": "start",
           "states": {
-            "start": { "type": "atomic" },
-            "end": { "type": "final" }
+            "start": {
+              "type": "atomic"
+            },
+            "end": {
+              "type": "final"
+            }
           }
         }
       }

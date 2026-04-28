@@ -8,15 +8,39 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "needInfo", "actor": "caseworker" },
-    { "event": "applicantResponse", "actor": "applicant" }
+    {
+      "event": "needInfo",
+      "actor": "caseworker"
+    },
+    {
+      "event": "applicantResponse",
+      "actor": "applicant"
+    }
   ],
   "expected_transitions": [
-    { "from": "processing", "to": "pendingResponse", "event": "needInfo" },
-    { "from": "pendingResponse", "to": "processing", "event": "applicantResponse" }
+    {
+      "from": "processing",
+      "target": "pendingResponse",
+      "event": "needInfo"
+    },
+    {
+      "from": "pendingResponse",
+      "target": "processing",
+      "event": "applicantResponse"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "timerCreated", "data": { "timerId": "holdTimer" } },
-    { "record_kind": "timerCancelled", "data": { "timerId": "holdTimer" } }
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "holdTimer"
+      }
+    },
+    {
+      "record_kind": "timerCancelled",
+      "data": {
+        "timerId": "holdTimer"
+      }
+    }
   ]
 }

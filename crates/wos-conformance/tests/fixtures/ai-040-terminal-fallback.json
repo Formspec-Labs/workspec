@@ -7,7 +7,9 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
@@ -19,9 +21,19 @@
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+    {
+      "from": "pendingDetermination",
+      "target": "humanReview",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "fallbackTerminal", "data": { "action": "escalateToHuman", "taskCreated": true } }
+    {
+      "record_kind": "fallbackTerminal",
+      "data": {
+        "action": "escalateToHuman",
+        "taskCreated": true
+      }
+    }
   ]
 }

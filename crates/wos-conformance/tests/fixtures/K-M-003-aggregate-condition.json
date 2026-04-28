@@ -97,12 +97,12 @@
   "expected_transitions": [
     {
       "from": "firstReview",
-      "to": "secondReview",
+      "target": "secondReview",
       "event": "secondReviewDone"
     },
     {
       "from": "secondReview",
-      "to": "done",
+      "target": "done",
       "event": "close"
     }
   ],

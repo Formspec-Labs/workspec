@@ -7,21 +7,45 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "denied", "reasonCodes": null, "confidenceReport": { "overall": 0.90 }, "evidenceCitations": ["doc-1"] },
-        "confidenceReport": { "overall": 0.90 }
+        "output": {
+          "income": 50000,
+          "determination": "denied",
+          "reasonCodes": null,
+          "confidenceReport": {
+            "overall": 0.9
+          },
+          "evidenceCitations": [
+            "doc-1"
+          ]
+        },
+        "confidenceReport": {
+          "overall": 0.9
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+    {
+      "from": "pendingDetermination",
+      "target": "humanReview",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "deonticViolation", "data": { "constraintId": "prohib-negative-without-reason", "action": "escalateToHuman" } }
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "constraintId": "prohib-negative-without-reason",
+        "action": "escalateToHuman"
+      }
+    }
   ]
 }

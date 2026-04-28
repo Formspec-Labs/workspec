@@ -22,7 +22,11 @@
     }
   ],
   "expected_transitions": [
-    { "from": "triage", "to": "review", "event": "triaged" }
+    {
+      "from": "triage",
+      "target": "review",
+      "event": "triaged"
+    }
   ],
   "expected_provenance": [
     {
@@ -30,7 +34,7 @@
       "data": {
         "agentId": "triageAgent",
         "from": "autonomous",
-        "to": "assistive",
+        "target": "assistive",
         "trigger": "escalation-expiry",
         "effectiveAt": "next-invocation"
       }

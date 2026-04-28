@@ -8,25 +8,51 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "caseworker" },
-    { "event": "noop", "actor": "system", "delay": "P7D" }
+    {
+      "event": "start",
+      "actor": "caseworker"
+    },
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P7D"
+    }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "expired", "event": "signature.expired" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "expired",
+      "event": "signature.expired"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "timerFired",
-      "data": { "timerId": "signatureExpiry", "firesEvent": "signature.expired" }
+      "data": {
+        "timerId": "signatureExpiry",
+        "firesEvent": "signature.expired"
+      }
     },
     {
       "recordKind": "taskFailed",
       "data": {
         "details": {
           "signatureStatus": "expired",
-          "pendingSignerIds": ["applicant", "agency", "witness", "notary", "caseworker"],
-          "expiredDocumentIds": ["application"]
+          "pendingSignerIds": [
+            "applicant",
+            "agency",
+            "witness",
+            "notary",
+            "caseworker"
+          ],
+          "expiredDocumentIds": [
+            "application"
+          ]
         }
       }
     }

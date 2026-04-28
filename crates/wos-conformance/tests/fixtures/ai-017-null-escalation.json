@@ -16,15 +16,27 @@
         "output": {
           "income": null,
           "determination": "eligible",
-          "confidenceReport": { "overall": 0.90 }
+          "confidenceReport": {
+            "overall": 0.9
+          }
         }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+    {
+      "from": "pendingDetermination",
+      "target": "humanReview",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "deonticViolation", "data": { "reason": "null-expression-escalation", "impactLevel": "rights-impacting" } }
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "reason": "null-expression-escalation",
+        "impactLevel": "rights-impacting"
+      }
+    }
   ]
 }

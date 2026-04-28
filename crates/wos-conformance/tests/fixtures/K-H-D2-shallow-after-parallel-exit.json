@@ -128,27 +128,27 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "review",
+      "target": "review",
       "event": "start"
     },
     {
       "from": "aWorking",
-      "to": "aAdvanced",
+      "target": "aAdvanced",
       "event": "advanceA"
     },
     {
       "from": "review",
-      "to": "interrupted",
+      "target": "interrupted",
       "event": "interrupt"
     },
     {
       "from": "interrupted",
-      "to": "review",
+      "target": "review",
       "event": "resume"
     },
     {
       "from": "aWorking",
-      "to": "aAdvanced",
+      "target": "aAdvanced",
       "event": "advanceA"
     }
   ],

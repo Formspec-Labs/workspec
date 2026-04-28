@@ -11,13 +11,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -26,58 +26,59 @@
       }
     }
   },
-  "agents": {
-    "$schema": "https://wos-spec.org/schemas/agent-config/1.0",
-    "targetAgent": "documentExtractor",
-    "targetIntegration": "https://agency.gov/ai/benefits-adjudication-ai",
-    "endpoint": {
-      "url": "https://ai.agency.gov/agents/doc-extractor/v2",
-      "credentialRef": "vault://agents/doc-extractor/api-key",
-      "timeout": "PT30S",
-      "healthCheckUrl": "https://ai.agency.gov/agents/doc-extractor/health"
-    },
-    "approvedVersions": [
-      "2025-05-14"
-    ],
-    "calibration": {
-      "required": true,
-      "frequency": "P30D",
-      "minimumSamples": 100,
-      "method": "binning"
-    },
-    "autonomyPolicy": {
-      "escalation": [
-        {
-          "condition": "agent.calibration.accuracy >= 0.97",
-          "targetLevel": "supervisory",
-          "description": "Escalate to supervisory when accuracy exceeds 97% in calibration"
-        }
+  "agents": [
+    {
+      "id": "documentExtractor",
+      "targetIntegration": "https://agency.gov/ai/benefits-adjudication-ai",
+      "endpoint": {
+        "url": "https://ai.agency.gov/agents/doc-extractor/v2",
+        "credentialRef": "vault://agents/doc-extractor/api-key",
+        "timeout": "PT30S",
+        "healthCheckUrl": "https://ai.agency.gov/agents/doc-extractor/health"
+      },
+      "approvedVersions": [
+        "2025-05-14"
       ],
-      "demotion": [
+      "calibration": {
+        "required": true,
+        "frequency": "P30D",
+        "minimumSamples": 100,
+        "method": "binning"
+      },
+      "autonomyPolicy": {
+        "escalation": [
+          {
+            "condition": "agent.calibration.accuracy >= 0.97",
+            "targetLevel": "supervisory",
+            "description": "Escalate to supervisory when accuracy exceeds 97% in calibration"
+          }
+        ],
+        "demotion": [
+          {
+            "id": "demoteToManualOnLowAccuracy",
+            "condition": "agent.calibration.accuracy < 0.90",
+            "targetLevel": "manual",
+            "pendingRecalibration": true,
+            "description": "Demote to manual when accuracy drops below 90%"
+          },
+          {
+            "id": "demoteToAssistiveOnDegradedAccuracy",
+            "condition": "agent.calibration.accuracy < 0.95",
+            "targetLevel": "assistive",
+            "pendingRecalibration": false,
+            "description": "Demote to assistive when accuracy drops below 95%"
+          }
+        ],
+        "maxAutonomy": "supervisory"
+      },
+      "actionOverrides": [
         {
-          "id": "demoteToManualOnLowAccuracy",
-          "condition": "agent.calibration.accuracy < 0.90",
-          "targetLevel": "manual",
-          "pendingRecalibration": true,
-          "description": "Demote to manual when accuracy drops below 90%"
-        },
-        {
-          "id": "demoteToAssistiveOnDegradedAccuracy",
-          "condition": "agent.calibration.accuracy < 0.95",
-          "targetLevel": "assistive",
-          "pendingRecalibration": false,
-          "description": "Demote to assistive when accuracy drops below 95%"
+          "actionRef": "incomeVerification.invokeDocExtractor",
+          "autonomy": "assistive",
+          "reviewWindow": "PT4H",
+          "confidenceFloor": 0.85
         }
-      ],
-      "maxAutonomy": "supervisory"
-    },
-    "actionOverrides": [
-      {
-        "actionRef": "incomeVerification.invokeDocExtractor",
-        "autonomy": "assistive",
-        "reviewWindow": "PT4H",
-        "confidenceFloor": 0.85
-      }
-    ]
-  }
+      ]
+    }
+  ]
 }

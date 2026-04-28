@@ -6,19 +6,49 @@
     "kernel": "../../../../fixtures/kernel/medicaid-redetermination.json"
   },
   "initial_case_state": {
-    "application": { "isComplete": true },
+    "application": {
+      "isComplete": true
+    },
     "currentCycle": 0
   },
   "event_sequence": [
-    { "event": "applicationComplete", "actor": "caseworker" },
-    { "event": "verificationComplete", "actor": "verificationSystem" },
-    { "event": "determinationComplete", "actor": "caseworker" },
-    { "event": "eligible", "actor": "caseworker" }
+    {
+      "event": "applicationComplete",
+      "actor": "caseworker"
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem"
+    },
+    {
+      "event": "determinationComplete",
+      "actor": "caseworker"
+    },
+    {
+      "event": "eligible",
+      "actor": "caseworker"
+    }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "eligibilityReview", "event": "applicationComplete" },
-    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
-    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
-    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" }
+    {
+      "from": "intake",
+      "target": "eligibilityReview",
+      "event": "applicationComplete"
+    },
+    {
+      "from": "incomeVerification",
+      "target": "caseworkerReview",
+      "event": "verificationComplete"
+    },
+    {
+      "from": "caseworkerReview",
+      "target": "reviewComplete",
+      "event": "determinationComplete"
+    },
+    {
+      "from": "eligibilityReview",
+      "target": "activeBenefits",
+      "event": "eligible"
+    }
   ]
 }

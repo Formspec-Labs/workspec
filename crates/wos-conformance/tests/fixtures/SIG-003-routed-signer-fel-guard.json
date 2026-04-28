@@ -7,9 +7,14 @@
     "kernel": "../../../../fixtures/kernel/signature-runtime.json",
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-routed.json"
   },
-  "initial_case_state": { "routeApplicant": true },
+  "initial_case_state": {
+    "routeApplicant": true
+  },
   "event_sequence": [
-    { "event": "start", "actor": "applicant" },
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -33,10 +38,23 @@
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "complete", "event": "signature.completed" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "complete",
+      "event": "signature.completed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "applicantSigner" } }
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "applicantSigner"
+      }
+    }
   ]
 }

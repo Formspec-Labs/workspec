@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "caseworker" },
+    {
+      "event": "start",
+      "actor": "caseworker"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -26,9 +29,22 @@
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "taskCompleted", "data": { "details": { "signatureStatus": "reassigned", "originalSigner": "caseworker", "newSigner": "agency" } } }
+    {
+      "recordKind": "taskCompleted",
+      "data": {
+        "details": {
+          "signatureStatus": "reassigned",
+          "originalSigner": "caseworker",
+          "newSigner": "agency"
+        }
+      }
+    }
   ]
 }

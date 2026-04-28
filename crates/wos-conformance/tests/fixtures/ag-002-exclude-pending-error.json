@@ -31,7 +31,7 @@
   "expected_transitions": [
     {
       "from": "evidenceGathering",
-      "to": "analysisReady",
+      "target": "analysisReady",
       "event": "evidenceCollected"
     }
   ],

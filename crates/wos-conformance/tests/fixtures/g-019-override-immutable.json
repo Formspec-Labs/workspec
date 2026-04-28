@@ -8,17 +8,36 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" },
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    },
     {
       "event": "override",
       "actor": "supervisor",
-      "data": { "overrideDecision": "approved", "rationale": "Clear eligibility per policy 42-A", "evidence": ["doc-1"] }
+      "data": {
+        "overrideDecision": "approved",
+        "rationale": "Clear eligibility per policy 42-A",
+        "evidence": [
+          "doc-1"
+        ]
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "overrideRecorded", "data": { "immutable": true, "actor": "supervisor" } }
+    {
+      "record_kind": "overrideRecorded",
+      "data": {
+        "immutable": true,
+        "actor": "supervisor"
+      }
+    }
   ]
 }

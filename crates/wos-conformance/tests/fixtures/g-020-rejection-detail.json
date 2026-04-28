@@ -23,12 +23,12 @@
   "expected_transitions": [
     {
       "from": "dataEntry",
-      "to": "validation",
+      "target": "validation",
       "event": "submit"
     },
     {
       "from": "validation",
-      "to": "rejected",
+      "target": "rejected",
       "event": "validationRejected"
     }
   ],

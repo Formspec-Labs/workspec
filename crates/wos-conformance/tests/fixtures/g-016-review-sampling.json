@@ -8,12 +8,25 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "approved", "actor": "caseworker" }
+    {
+      "event": "approved",
+      "actor": "caseworker"
+    }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+    {
+      "from": "pendingDetermination",
+      "target": "benefitsActive",
+      "event": "approved"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "samplingDecision", "data": { "rate": 0.10, "method": "random" } }
+    {
+      "record_kind": "samplingDecision",
+      "data": {
+        "rate": 0.1,
+        "method": "random"
+      }
+    }
   ]
 }

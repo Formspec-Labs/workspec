@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "applicant" },
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -32,10 +35,25 @@
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "complete", "event": "signature.completed" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "complete",
+      "event": "signature.completed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "applicantSigner", "documentId": "application", "custodyHookEligible": true } }
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "applicantSigner",
+        "documentId": "application",
+        "custodyHookEligible": true
+      }
+    }
   ]
 }

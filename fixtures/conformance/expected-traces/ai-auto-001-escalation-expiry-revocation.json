@@ -68,7 +68,7 @@
             "agentId": "triageAgent",
             "effectiveAt": "next-invocation",
             "from": "autonomous",
-            "to": "assistive",
+            "target": "assistive",
             "trigger": "escalation-expiry"
           }
         }

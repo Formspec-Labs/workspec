@@ -7,7 +7,9 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
@@ -16,17 +18,39 @@
         "output": {
           "income": 50000,
           "determination": "eligible",
-          "confidenceReport": { "overall": 0.90 },
-          "reasonCodes": ["R1"],
-          "evidenceCitations": ["doc1"]
+          "confidenceReport": {
+            "overall": 0.9
+          },
+          "reasonCodes": [
+            "R1"
+          ],
+          "evidenceCitations": [
+            "doc1"
+          ]
         }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+    {
+      "from": "pendingDetermination",
+      "target": "reviewComplete",
+      "event": "determined"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "deonticEvaluation", "data": { "order": ["permissions", "prohibitions", "obligations", "confidence", "volume", "sampling"] } }
+    {
+      "record_kind": "deonticEvaluation",
+      "data": {
+        "order": [
+          "permissions",
+          "prohibitions",
+          "obligations",
+          "confidence",
+          "volume",
+          "sampling"
+        ]
+      }
+    }
   ]
 }

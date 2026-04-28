@@ -56,7 +56,7 @@
   "expected_transitions": [
     {
       "from": "start",
-      "to": "nested",
+      "target": "nested",
       "event": "go"
     }
   ],

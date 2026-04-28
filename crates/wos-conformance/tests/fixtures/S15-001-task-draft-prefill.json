@@ -94,7 +94,7 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "review",
+      "target": "review",
       "event": "start"
     }
   ],

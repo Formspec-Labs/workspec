@@ -5,7 +5,6 @@
   "title": "Time-Off Request",
   "description": "Forms+ tier. Employee submits a time-off request; manager approves or rejects. Forms-style intake plus a thin two-step approval. No governance, no agents, no signature. ~30 lines.",
   "impactLevel": "operational",
-
   "intake": {
     "contractRef": "https://example.org/forms/timeoff.formspec.json",
     "mode": "workflowInitiated"
@@ -13,25 +12,51 @@
   "caseFile": {
     "contractRef": "https://example.org/forms/timeoff.formspec.json"
   },
-
   "actors": [
-    { "id": "submitter", "type": "human", "role": "employee" },
-    { "id": "manager",   "type": "human", "role": "approver" }
+    {
+      "id": "submitter",
+      "type": "human",
+      "role": "employee"
+    },
+    {
+      "id": "manager",
+      "type": "human",
+      "role": "approver"
+    }
   ],
-
   "lifecycle": {
-    "initial": "submitted",
+    "initialState": "submitted",
     "states": {
       "submitted": {
         "type": "atomic",
         "transitions": [
-          { "to": "approved", "actor": "manager", "guard": "$caseFile.totalDays <= 10" },
-          { "to": "approved", "actor": "manager", "tags": ["overrideRequired"], "guard": "$caseFile.totalDays > 10" },
-          { "to": "rejected", "actor": "manager" }
+          {
+            "target": "approved",
+            "actor": "manager",
+            "guard": "$caseFile.totalDays <= 10"
+          },
+          {
+            "target": "approved",
+            "actor": "manager",
+            "tags": [
+              "overrideRequired"
+            ],
+            "guard": "$caseFile.totalDays > 10"
+          },
+          {
+            "target": "rejected",
+            "actor": "manager"
+          }
         ]
       },
-      "approved": { "type": "final", "outcomeCode": "approved" },
-      "rejected": { "type": "final", "outcomeCode": "rejected" }
+      "approved": {
+        "type": "final",
+        "outcomeCode": "approved"
+      },
+      "rejected": {
+        "type": "final",
+        "outcomeCode": "rejected"
+      }
     }
   }
 }

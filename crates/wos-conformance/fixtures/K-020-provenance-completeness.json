@@ -1,7 +1,7 @@
 {
   "id": "K-020-provenance-completeness",
   "rule": "K-020",
-  "description": "Every state transition and case mutation must produce a Facts-tier provenance record. Walk the purchase order through its full happy path: submit → approve (amount=3000, guard passes) → orderProcessed. Expect a provenance record for each state transition and each setData mutation.",
+  "description": "Every state transition and case mutation must produce a Facts-tier provenance record. Walk the purchase order through its full happy path: submit \u2192 approve (amount=3000, guard passes) \u2192 orderProcessed. Expect a provenance record for each state transition and each setData mutation.",
   "documents": {
     "kernel": "fixtures/kernel/purchase-order-approval.json"
   },
@@ -32,12 +32,12 @@
   "expected_transitions": [
     {
       "from": "submitted",
-      "to": "approved",
+      "target": "approved",
       "event": "approve"
     },
     {
       "from": "approved",
-      "to": "completed",
+      "target": "completed",
       "event": "orderProcessed"
     }
   ],
@@ -50,11 +50,15 @@
     },
     {
       "recordKind": "caseStateMutation",
-      "data": { "path": "caseFile.approvedBy" }
+      "data": {
+        "path": "caseFile.approvedBy"
+      }
     },
     {
       "recordKind": "caseStateMutation",
-      "data": { "path": "caseFile.approvedAt" }
+      "data": {
+        "path": "caseFile.approvedAt"
+      }
     },
     {
       "recordKind": "stateTransition",

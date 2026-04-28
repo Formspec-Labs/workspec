@@ -7,21 +7,50 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"], "confidenceReport": { "overall": 0.70 } },
-        "confidenceReport": { "overall": 0.70, "modelNative": 0.70, "calibrated": true }
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "reasonCodes": [
+            "R1"
+          ],
+          "evidenceCitations": [
+            "doc1"
+          ],
+          "confidenceReport": {
+            "overall": 0.7
+          }
+        },
+        "confidenceReport": {
+          "overall": 0.7,
+          "modelNative": 0.7,
+          "calibrated": true
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+    {
+      "from": "pendingDetermination",
+      "target": "humanReview",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "confidenceViolation", "data": { "threshold": 0.85, "actual": 0.70, "action": "escalateToHuman" } }
+    {
+      "record_kind": "confidenceViolation",
+      "data": {
+        "threshold": 0.85,
+        "actual": 0.7,
+        "action": "escalateToHuman"
+      }
+    }
   ]
 }

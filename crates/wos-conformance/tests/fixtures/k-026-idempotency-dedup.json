@@ -7,23 +7,44 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "submit", "actor": "operator" },
     {
-      "event": "verified",
-      "actor": "verificationSystem",
-      "data": { "idempotencyKey": "test-dedup-key" }
+      "event": "submit",
+      "actor": "operator"
     },
     {
       "event": "verified",
       "actor": "verificationSystem",
-      "data": { "idempotencyKey": "test-dedup-key" }
+      "data": {
+        "idempotencyKey": "test-dedup-key"
+      }
+    },
+    {
+      "event": "verified",
+      "actor": "verificationSystem",
+      "data": {
+        "idempotencyKey": "test-dedup-key"
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "review", "event": "submit" },
-    { "from": "pendingReview", "to": "reviewComplete", "event": "verified" }
+    {
+      "from": "intake",
+      "target": "review",
+      "event": "submit"
+    },
+    {
+      "from": "pendingReview",
+      "target": "reviewComplete",
+      "event": "verified"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "idempotencyDedup", "data": { "key": "test-dedup-key", "duplicateIgnored": true } }
+    {
+      "record_kind": "idempotencyDedup",
+      "data": {
+        "key": "test-dedup-key",
+        "duplicateIgnored": true
+      }
+    }
   ]
 }

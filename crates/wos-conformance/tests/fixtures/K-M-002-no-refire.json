@@ -103,17 +103,17 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "approved",
+      "target": "approved",
       "event": "approve"
     },
     {
       "from": "approved",
-      "to": "closed",
+      "target": "closed",
       "event": "close"
     },
     {
       "from": "closed",
-      "to": "done",
+      "target": "done",
       "event": "archive"
     }
   ],

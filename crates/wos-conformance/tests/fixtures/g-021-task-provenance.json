@@ -8,14 +8,33 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" },
-    { "event": "appealFiled", "actor": "appealReviewer" }
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    },
+    {
+      "event": "appealFiled",
+      "actor": "appealReviewer"
+    }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
-    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    },
+    {
+      "from": "adverseNotice",
+      "target": "appealReview",
+      "event": "appealFiled"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "taskCreated", "data": { "taskRef": "reviewAppeal" } }
+    {
+      "record_kind": "taskCreated",
+      "data": {
+        "taskRef": "reviewAppeal"
+      }
+    }
   ]
 }

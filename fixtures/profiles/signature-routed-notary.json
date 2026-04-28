@@ -11,13 +11,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -27,7 +27,7 @@
     }
   },
   "signature": {
-    "$schema": "https://wos-spec.org/schemas/signature-profile/1.0",
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
     "targetWorkflow": {
       "url": "https://agency.gov/workflows/in-person-benefits-signing",
       "compatibleVersions": ">=1.0.0 <2.0.0"

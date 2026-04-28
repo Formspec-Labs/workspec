@@ -7,23 +7,62 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"], "confidenceReport": { "overall": 0.90 } },
-        "confidenceReport": { "overall": 0.90, "modelNative": 0.90, "calibrated": true },
-        "decayEvent": { "event": "caseFile.documents.added", "decayFactor": 0.7 }
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "reasonCodes": [
+            "R1"
+          ],
+          "evidenceCitations": [
+            "doc1"
+          ],
+          "confidenceReport": {
+            "overall": 0.9
+          }
+        },
+        "confidenceReport": {
+          "overall": 0.9,
+          "modelNative": 0.9,
+          "calibrated": true
+        },
+        "decayEvent": {
+          "event": "caseFile.documents.added",
+          "decayFactor": 0.7
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "humanReview", "event": "escalated" }
+    {
+      "from": "pendingDetermination",
+      "target": "humanReview",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "confidenceDecay", "data": { "original": 0.90, "factor": 0.7, "decayed": 0.63 } },
-    { "record_kind": "confidenceViolation", "data": { "threshold": 0.85, "actual": 0.63, "action": "escalateToHuman" } }
+    {
+      "record_kind": "confidenceDecay",
+      "data": {
+        "original": 0.9,
+        "factor": 0.7,
+        "decayed": 0.63
+      }
+    },
+    {
+      "record_kind": "confidenceViolation",
+      "data": {
+        "threshold": 0.85,
+        "actual": 0.63,
+        "action": "escalateToHuman"
+      }
+    }
   ]
 }

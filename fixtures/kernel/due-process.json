@@ -1,6 +1,6 @@
 {
   "$wosWorkflow": "1.0",
-  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow/1.0",
   "url": "https://test.wos-spec.org/workflows/due-process",
   "version": "1.0.0",
   "title": "Due Process Test",
@@ -174,5 +174,15 @@
   "execution": {
     "workflowTimeout": "P365D",
     "instanceVersioning": "pinned"
+  },
+  "governance": {
+    "dueProcess": {
+      "noticeRequirements": {
+        "minDaysBeforeDecision": 10
+      },
+      "appealProcess": {
+        "independentReviewRequired": true
+      }
+    }
   }
 }

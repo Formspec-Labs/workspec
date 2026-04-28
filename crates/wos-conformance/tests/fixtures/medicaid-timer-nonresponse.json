@@ -6,11 +6,16 @@
     "kernel": "../../../../fixtures/kernel/medicaid-redetermination.json"
   },
   "initial_case_state": {
-    "application": { "isComplete": true },
+    "application": {
+      "isComplete": true
+    },
     "currentCycle": 0
   },
   "event_sequence": [
-    { "event": "applicationIncomplete", "actor": "caseworker" },
+    {
+      "event": "applicationIncomplete",
+      "actor": "caseworker"
+    },
     {
       "event": "noop",
       "actor": "system",
@@ -18,7 +23,15 @@
     }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "pendingApplicantResponse", "event": "applicationIncomplete" },
-    { "from": "pendingApplicantResponse", "to": "deniedForNonResponse", "event": "$timeout.state" }
+    {
+      "from": "intake",
+      "target": "pendingApplicantResponse",
+      "event": "applicationIncomplete"
+    },
+    {
+      "from": "pendingApplicantResponse",
+      "target": "deniedForNonResponse",
+      "event": "$timeout.state"
+    }
   ]
 }

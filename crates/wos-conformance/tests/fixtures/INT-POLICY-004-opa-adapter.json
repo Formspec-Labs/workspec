@@ -70,13 +70,13 @@
         }
       ],
       "lifecycle": {
-        "initial": "start",
+        "initialState": "start",
         "states": {
           "start": {
             "type": "atomic",
             "transitions": [
               {
-                "to": "done"
+                "target": "done"
               }
             ]
           },
@@ -122,7 +122,7 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "evaluated",
+      "target": "evaluated",
       "event": "evaluate"
     }
   ],

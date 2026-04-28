@@ -12,13 +12,25 @@
     {
       "event": "denied",
       "actor": "caseworker",
-      "data": { "reasonCodes": null, "determination": null }
+      "data": {
+        "reasonCodes": null,
+        "determination": null
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "notificationSuppressed", "data": { "reason": "missing-required-variables" } }
+    {
+      "record_kind": "notificationSuppressed",
+      "data": {
+        "reason": "missing-required-variables"
+      }
+    }
   ]
 }

@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-witness.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "applicant" },
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -18,7 +21,10 @@
           "definitionUrl": "urn:test:formspec:signature",
           "definitionVersion": "1.0.0",
           "data": {
-            "identityBinding": { "method": "email-otp", "assuranceLevel": "standard" },
+            "identityBinding": {
+              "method": "email-otp",
+              "assuranceLevel": "standard"
+            },
             "signatureProvider": "formspec",
             "ceremonyId": "ceremony-primary",
             "signature": {
@@ -39,7 +45,10 @@
           "definitionUrl": "urn:test:formspec:signature",
           "definitionVersion": "1.0.0",
           "data": {
-            "identityBinding": { "method": "credential", "assuranceLevel": "high" },
+            "identityBinding": {
+              "method": "credential",
+              "assuranceLevel": "high"
+            },
             "signatureProvider": "formspec",
             "ceremonyId": "ceremony-witness",
             "signature": {
@@ -53,11 +62,29 @@
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "complete", "event": "signature.completed" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "complete",
+      "event": "signature.completed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "applicantSigner" } },
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "witnessRole" } }
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "applicantSigner"
+      }
+    },
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "witnessRole"
+      }
+    }
   ]
 }

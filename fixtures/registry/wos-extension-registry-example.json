@@ -1,7 +1,7 @@
 {
   "$wosTooling": "1.0",
   "kind": "extensionRegistry",
-  "$schema": "https://wos-spec.org/schemas/extension-registry/1.0",
+  "$schema": "https://wos-spec.org/schemas/tooling/1.0",
   "version": "1.0.0",
   "title": "WOS Core Extension Registry \u2014 Reference",
   "description": "Reference example registry cataloging the six kernel seams (Kernel \u00a710) plus a Trellis distributed-trust custody profile entry. Demonstrates lifecycle, composition, vendor prefix, and replacedBy fields. Not a normative WOS Working Group registry \u2014 illustrative only.",
@@ -67,7 +67,7 @@
       "lifecycle": "stable",
       "description": "AI Integration registers the `agent` actor type with model-endpoint, autonomy-level, and provenance-narrative requirements (AI Integration \u00a73). Binds to kernel actorExtension seam.",
       "specRef": "https://wos-spec.org/specs/ai-integration#3-agent-actor",
-      "schemaRef": "https://wos-spec.org/schemas/ai-integration/1.0#/$defs/AgentActorDeclaration",
+      "schemaRef": "https://wos-spec.org/schemas/workflow/1.0#/$defs/AgentActorDeclaration",
       "composition": "merge",
       "since": "1.0.0"
     },

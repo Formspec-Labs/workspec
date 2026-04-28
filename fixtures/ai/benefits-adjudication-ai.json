@@ -12,13 +12,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -28,7 +28,7 @@
     }
   },
   "aiOversight": {
-    "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
     "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
     "defaultAutonomy": "assistive",
     "agents": [

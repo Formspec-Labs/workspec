@@ -51,7 +51,7 @@
   "expected_transitions": [
     {
       "from": "waiting",
-      "to": "waiting",
+      "target": "waiting",
       "event": "reset"
     }
   ],

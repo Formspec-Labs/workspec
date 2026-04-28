@@ -7,24 +7,64 @@
     "kernel": "../../../../fixtures/kernel/dcr-zone.json",
     "advanced": "../../../../fixtures/advanced/dcr-zone-governance.json"
   },
-  "initial_case_state": { "evidence": ["doc-1"] },
+  "initial_case_state": {
+    "evidence": [
+      "doc-1"
+    ]
+  },
   "event_sequence": [
-    { "event": "evidenceCollected", "actor": "investigator" },
-    { "event": "analyzed", "actor": "investigator" },
-    { "event": "constraintZone.satisfied", "actor": "system" },
+    {
+      "event": "evidenceCollected",
+      "actor": "investigator"
+    },
+    {
+      "event": "analyzed",
+      "actor": "investigator"
+    },
+    {
+      "event": "constraintZone.satisfied",
+      "actor": "system"
+    },
     {
       "event": "decided",
       "actor": "investigator",
-      "data": { "equityAlert": { "active": true, "metric": "approvalRate", "disparity": 0.22 } }
+      "data": {
+        "equityAlert": {
+          "active": true,
+          "metric": "approvalRate",
+          "disparity": 0.22
+        }
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "evidenceGathering", "to": "analysisReady", "event": "evidenceCollected" },
-    { "from": "analysisReady", "to": "investigationDone", "event": "analyzed" },
-    { "from": "investigation", "to": "determination", "event": "constraintZone.satisfied" },
-    { "from": "determination", "to": "complete", "event": "decided" }
+    {
+      "from": "evidenceGathering",
+      "target": "analysisReady",
+      "event": "evidenceCollected"
+    },
+    {
+      "from": "analysisReady",
+      "target": "investigationDone",
+      "event": "analyzed"
+    },
+    {
+      "from": "investigation",
+      "target": "determination",
+      "event": "constraintZone.satisfied"
+    },
+    {
+      "from": "determination",
+      "target": "complete",
+      "event": "decided"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "equityAlert", "data": { "blockedIndividual": false } }
+    {
+      "record_kind": "equityAlert",
+      "data": {
+        "blockedIndividual": false
+      }
+    }
   ]
 }

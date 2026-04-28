@@ -2,10 +2,6 @@
   "$wosDelivery": "1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
   "correspondence": {
-    "$schema": "https://wos-spec.org/schemas/correspondence-metadata/1.0",
-    "version": "1.0.0",
-    "title": "Benefits Adjudication Correspondence Metadata",
-    "description": "Correspondence metadata for the benefits adjudication workflow. Defines templates for all inbound and outbound communications tracked in the case record.",
     "correspondenceField": "caseFile.correspondence",
     "entryTemplates": [
       {

@@ -4,7 +4,7 @@
     "url": "https://agency.gov/workflows/benefits-adjudication",
     "compatibleVersions": ">=1.0.0 <2.0.0"
   },
-  "$schema": "https://wos-spec.org/schemas/semantic-profile/1.0",
+  "$schema": "https://wos-spec.org/schemas/ontology-alignment/1.0",
   "version": "1.0.0",
   "title": "Benefits Adjudication Semantic Profile",
   "description": "Linked data semantics for the benefits adjudication workflow. Applies the WOS JSON-LD context with NIEM Human Services domain vocabulary for cross-agency case data interoperability. Enables SHACL validation of due process completeness, PROV-O provenance export for audit, and OCEL process mining for workflow analysis.",

@@ -1,6 +1,6 @@
 {
   "$wosWorkflow": "1.0",
-  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow/1.0",
   "url": "https://procurement.example.gov/workflows/purchase-order-approval",
   "version": "1.0.0",
   "title": "Government Procurement Approval",

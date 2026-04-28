@@ -8,7 +8,7 @@
   "inline_documents": {
     "kernel": {
       "$wosWorkflow": "1.0",
-      "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
       "url": "https://test.example/workflows/invalid-final-state",
       "version": "1.0.0",
       "title": "Invalid Final State Test",

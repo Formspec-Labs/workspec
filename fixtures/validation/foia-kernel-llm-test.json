@@ -1,6 +1,6 @@
 {
   "$wosWorkflow": "1.0",
-  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow/1.0",
   "url": "https://agency.gov/workflows/foia-request-processing",
   "version": "1.0.0",
   "title": "FOIA Request Processing Workflow",
@@ -509,5 +509,15 @@
     "x-defaultTaskTimeoutNote": "Calendar-day fallback for `P20BD` (20 business days); business-day semantics TBD when the businessCalendar sidecar binding lands.",
     "defaultTaskTimeout": "P20D",
     "instanceVersioning": "pinned"
+  },
+  "governance": {
+    "dueProcess": {
+      "noticeRequirements": {
+        "minDaysBeforeDecision": 10
+      },
+      "appealProcess": {
+        "independentReviewRequired": true
+      }
+    }
   }
 }

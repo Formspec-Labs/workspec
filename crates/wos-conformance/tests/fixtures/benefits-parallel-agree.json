@@ -6,24 +6,71 @@
     "kernel": "../../../../fixtures/kernel/benefits-adjudication.json"
   },
   "initial_case_state": {
-    "application": { "isComplete": true },
-    "verification": { "status": "verified" },
-    "reviewA": { "decision": "eligible" },
-    "reviewB": { "decision": "eligible" }
+    "application": {
+      "isComplete": true
+    },
+    "verification": {
+      "status": "verified"
+    },
+    "reviewA": {
+      "decision": "eligible"
+    },
+    "reviewB": {
+      "decision": "eligible"
+    }
   },
   "event_sequence": [
-    { "event": "applicationComplete", "actor": "intakeWorker" },
-    { "event": "verificationComplete", "actor": "verificationSystem" },
-    { "event": "reviewAComplete", "actor": "caseworkerA" },
-    { "event": "reviewBComplete", "actor": "caseworkerB" },
-    { "event": "approved", "actor": "supervisor" }
+    {
+      "event": "applicationComplete",
+      "actor": "intakeWorker"
+    },
+    {
+      "event": "verificationComplete",
+      "actor": "verificationSystem"
+    },
+    {
+      "event": "reviewAComplete",
+      "actor": "caseworkerA"
+    },
+    {
+      "event": "reviewBComplete",
+      "actor": "caseworkerB"
+    },
+    {
+      "event": "approved",
+      "actor": "supervisor"
+    }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "incomeVerification", "event": "applicationComplete" },
-    { "from": "incomeVerification", "to": "eligibilityReview", "event": "verificationComplete" },
-    { "from": "pendingReviewA", "to": "reviewADone", "event": "reviewAComplete" },
-    { "from": "pendingReviewB", "to": "reviewBDone", "event": "reviewBComplete" },
-    { "from": "eligibilityReview", "to": "determination", "event": "$join" },
-    { "from": "determination", "to": "benefitsActive", "event": "approved" }
+    {
+      "from": "intake",
+      "target": "incomeVerification",
+      "event": "applicationComplete"
+    },
+    {
+      "from": "incomeVerification",
+      "target": "eligibilityReview",
+      "event": "verificationComplete"
+    },
+    {
+      "from": "pendingReviewA",
+      "target": "reviewADone",
+      "event": "reviewAComplete"
+    },
+    {
+      "from": "pendingReviewB",
+      "target": "reviewBDone",
+      "event": "reviewBComplete"
+    },
+    {
+      "from": "eligibilityReview",
+      "target": "determination",
+      "event": "$join"
+    },
+    {
+      "from": "determination",
+      "target": "benefitsActive",
+      "event": "approved"
+    }
   ]
 }

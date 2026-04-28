@@ -86,7 +86,7 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "approved",
+      "target": "approved",
       "event": "approve"
     }
   ],

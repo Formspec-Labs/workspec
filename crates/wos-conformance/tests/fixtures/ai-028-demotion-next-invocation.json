@@ -29,7 +29,7 @@
       "data": {
         "agentId": "triageAgent",
         "from": "autonomous",
-        "to": "assistive",
+        "target": "assistive",
         "trigger": "humanOverride",
         "effectiveAt": "next-invocation"
       }

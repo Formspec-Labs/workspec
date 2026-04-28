@@ -7,17 +7,33 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "submit", "actor": "operator" },
+    {
+      "event": "submit",
+      "actor": "operator"
+    },
     {
       "event": "$migrate",
       "actor": "system",
-      "data": { "fromVersion": "1.0.0", "toVersion": "1.1.0" }
+      "data": {
+        "fromVersion": "1.0.0",
+        "toVersion": "1.1.0"
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "review", "event": "submit" }
+    {
+      "from": "intake",
+      "target": "review",
+      "event": "submit"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "instanceMigrated", "data": { "fromVersion": "1.0.0", "toVersion": "1.1.0" } }
+    {
+      "record_kind": "instanceMigrated",
+      "data": {
+        "fromVersion": "1.0.0",
+        "toVersion": "1.1.0"
+      }
+    }
   ]
 }

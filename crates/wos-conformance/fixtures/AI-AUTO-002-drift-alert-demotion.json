@@ -22,13 +22,13 @@
         }
       ],
       "lifecycle": {
-        "initial": "start",
+        "initialState": "start",
         "states": {
           "start": {
             "type": "atomic",
             "transitions": [
               {
-                "to": "done"
+                "target": "done"
               }
             ]
           },
@@ -85,7 +85,7 @@
   "expected_transitions": [
     {
       "from": "triage",
-      "to": "humanTriage",
+      "target": "humanTriage",
       "event": "escalated"
     }
   ],
@@ -95,7 +95,7 @@
       "data": {
         "agentId": "triageAgent",
         "from": "autonomous",
-        "to": "assistive",
+        "target": "assistive",
         "trigger": "drift-alert",
         "effectiveAt": "next-invocation",
         "policyRef": "demoteOnLowAccuracyOrViolation",

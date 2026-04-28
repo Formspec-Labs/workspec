@@ -7,14 +7,39 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "advance", "actor": "operator" },
-    { "event": "fail", "actor": "system" }
+    {
+      "event": "advance",
+      "actor": "operator"
+    },
+    {
+      "event": "fail",
+      "actor": "system"
+    }
   ],
   "expected_transitions": [
-    { "from": "stepA", "to": "stepB", "event": "advance" },
-    { "from": "stepB", "to": "compensating", "event": "fail" }
+    {
+      "from": "stepA",
+      "target": "stepB",
+      "event": "advance"
+    },
+    {
+      "from": "stepB",
+      "target": "compensating",
+      "event": "fail"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "compensationExecuted", "data": { "pivotStep": "stepB", "compensated": ["stepA"], "excluded": ["stepB"] } }
+    {
+      "record_kind": "compensationExecuted",
+      "data": {
+        "pivotStep": "stepB",
+        "compensated": [
+          "stepA"
+        ],
+        "excluded": [
+          "stepB"
+        ]
+      }
+    }
   ]
 }

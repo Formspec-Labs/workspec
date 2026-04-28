@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "caseworker" },
+    {
+      "event": "start",
+      "actor": "caseworker"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -17,13 +20,19 @@
           "status": "voided",
           "definitionUrl": "urn:test:formspec:signature",
           "definitionVersion": "1.0.0",
-          "data": { "reason": "Application withdrawn before signature." }
+          "data": {
+            "reason": "Application withdrawn before signature."
+          }
         }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    }
   ],
   "expected_provenance": [
     {

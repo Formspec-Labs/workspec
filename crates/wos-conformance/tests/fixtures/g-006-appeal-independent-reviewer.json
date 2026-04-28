@@ -8,19 +8,41 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" },
-    { "event": "appealFiled", "actor": "caseworker" },
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    },
+    {
+      "event": "appealFiled",
+      "actor": "caseworker"
+    },
     {
       "event": "appealGranted",
       "actor": "caseworker",
-      "data": { "sameActorAsDecisionMaker": true }
+      "data": {
+        "sameActorAsDecisionMaker": true
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
-    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    },
+    {
+      "from": "adverseNotice",
+      "target": "appealReview",
+      "event": "appealFiled"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "separationViolation", "data": { "actor": "caseworker", "reason": "original-decision-maker-cannot-review-appeal" } }
+    {
+      "record_kind": "separationViolation",
+      "data": {
+        "actor": "caseworker",
+        "reason": "original-decision-maker-cannot-review-appeal"
+      }
+    }
   ]
 }

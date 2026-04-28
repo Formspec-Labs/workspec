@@ -2,36 +2,67 @@
   "id": "AI-054-bypass-single-invocation",
   "rule": "AI-054",
   "batch": 3,
-  "description": "Deontic bypass applies to single invocation only; MUST produce provenance with rationale (AI S4.7). A bypass on one invocation does not carry to the next — the second invocation without bypass MUST detect the violation.",
+  "description": "Deontic bypass applies to single invocation only; MUST produce provenance with rationale (AI S4.7). A bypass on one invocation does not carry to the next \u2014 the second invocation without bypass MUST detect the violation.",
   "documents": {
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": -1000, "determination": "eligible" },
-        "confidenceReport": { "overall": 0.90 },
-        "deonticBypass": { "rationale": "Emergency override per supervisor directive", "authorizedBy": "supervisor" }
+        "output": {
+          "income": -1000,
+          "determination": "eligible"
+        },
+        "confidenceReport": {
+          "overall": 0.9
+        },
+        "deonticBypass": {
+          "rationale": "Emergency override per supervisor directive",
+          "authorizedBy": "supervisor"
+        }
       }
     },
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": -1000, "determination": "eligible" },
-        "confidenceReport": { "overall": 0.90 }
+        "output": {
+          "income": -1000,
+          "determination": "eligible"
+        },
+        "confidenceReport": {
+          "overall": 0.9
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "reviewComplete", "event": "determined" }
+    {
+      "from": "pendingDetermination",
+      "target": "reviewComplete",
+      "event": "determined"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "deonticBypass", "data": { "constraintId": "perm-income-range", "rationale": "Emergency override per supervisor directive" } },
-    { "record_kind": "deonticViolation", "data": { "constraintId": "perm-income-range", "action": "reject" } }
+    {
+      "record_kind": "deonticBypass",
+      "data": {
+        "constraintId": "perm-income-range",
+        "rationale": "Emergency override per supervisor directive"
+      }
+    },
+    {
+      "record_kind": "deonticViolation",
+      "data": {
+        "constraintId": "perm-income-range",
+        "action": "reject"
+      }
+    }
   ]
 }

@@ -7,20 +7,37 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "eligible" },
-        "confidenceReport": { "overall": 0.90 },
-        "agentStateChange": { "from": "active", "to": "suspended", "reason": "drift-detected" }
+        "output": {
+          "income": 50000,
+          "determination": "eligible"
+        },
+        "confidenceReport": {
+          "overall": 0.9
+        },
+        "agentStateChange": {
+          "from": "active",
+          "target": "suspended",
+          "reason": "drift-detected"
+        }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "agentStateTransition", "data": { "from": "active", "to": "suspended" } }
+    {
+      "record_kind": "agentStateTransition",
+      "data": {
+        "from": "active",
+        "target": "suspended"
+      }
+    }
   ]
 }

@@ -21,13 +21,29 @@
       "actor": "system",
       "data": {
         "reportId": "VR-2026-001",
-        "modification": { "field": "results[0].result", "from": "proven-safe", "to": "proven-unsafe" }
+        "modification": {
+          "field": "results[0].result",
+          "from": "proven-safe",
+          "target": "proven-unsafe"
+        }
       }
     }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "verificationReportProduced", "data": { "reportId": "VR-2026-001", "immutable": true } },
-    { "record_kind": "immutabilityViolation", "data": { "reportId": "VR-2026-001", "reason": "modification-after-production" } }
+    {
+      "record_kind": "verificationReportProduced",
+      "data": {
+        "reportId": "VR-2026-001",
+        "immutable": true
+      }
+    },
+    {
+      "record_kind": "immutabilityViolation",
+      "data": {
+        "reportId": "VR-2026-001",
+        "reason": "modification-after-production"
+      }
+    }
   ]
 }

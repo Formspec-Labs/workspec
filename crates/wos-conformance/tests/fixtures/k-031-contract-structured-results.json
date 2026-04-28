@@ -9,16 +9,33 @@
   "contract_outcomes": {
     "reviewContract": {
       "valid": false,
-      "errors": ["income: required field missing", "dependents: must be non-negative"]
+      "errors": [
+        "income: required field missing",
+        "dependents: must be non-negative"
+      ]
     }
   },
   "event_sequence": [
-    { "event": "submit", "actor": "operator" }
+    {
+      "event": "submit",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "review", "event": "submit" }
+    {
+      "from": "intake",
+      "target": "review",
+      "event": "submit"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "contractValidation", "data": { "contractRef": "reviewContract", "structured": true, "valid": false } }
+    {
+      "record_kind": "contractValidation",
+      "data": {
+        "contractRef": "reviewContract",
+        "structured": true,
+        "valid": false
+      }
+    }
   ]
 }

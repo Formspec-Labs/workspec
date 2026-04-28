@@ -10,8 +10,14 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" },
-    { "event": "appealFiled", "actor": "appealReviewer" },
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    },
+    {
+      "event": "appealFiled",
+      "actor": "appealReviewer"
+    },
     {
       "event": "appealGranted",
       "actor": "appealReviewer",
@@ -23,11 +29,29 @@
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" },
-    { "from": "adverseNotice", "to": "appealReview", "event": "appealFiled" },
-    { "from": "appealReview", "to": "benefitsActive", "event": "appealGranted" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    },
+    {
+      "from": "adverseNotice",
+      "target": "appealReview",
+      "event": "appealFiled"
+    },
+    {
+      "from": "appealReview",
+      "target": "benefitsActive",
+      "event": "appealGranted"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "independentFirstEnforced", "data": { "protocol": "independentFirst", "agentOutputSuppressed": true } }
+    {
+      "record_kind": "independentFirstEnforced",
+      "data": {
+        "protocol": "independentFirst",
+        "agentOutputSuppressed": true
+      }
+    }
   ]
 }

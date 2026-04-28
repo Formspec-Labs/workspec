@@ -5,15 +5,36 @@
   "documents": {
     "kernel": "../../../../fixtures/kernel/durability.json"
   },
-  "initial_case_state": { "intakeRecorded": false },
+  "initial_case_state": {
+    "intakeRecorded": false
+  },
   "event_sequence": [
-    { "event": "submit", "actor": "operator" }
+    {
+      "event": "submit",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "review", "event": "submit" }
+    {
+      "from": "intake",
+      "target": "review",
+      "event": "submit"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "stateTransition", "data": { "caseStateUnchangedByTransition": true } },
-    { "record_kind": "caseStateMutation", "data": { "path": "caseFile.intakeRecorded", "lifecycleState": "intake", "viaExplicitAction": true } }
+    {
+      "record_kind": "stateTransition",
+      "data": {
+        "caseStateUnchangedByTransition": true
+      }
+    },
+    {
+      "record_kind": "caseStateMutation",
+      "data": {
+        "path": "caseFile.intakeRecorded",
+        "lifecycleState": "intake",
+        "viaExplicitAction": true
+      }
+    }
   ]
 }

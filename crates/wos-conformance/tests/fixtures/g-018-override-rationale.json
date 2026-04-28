@@ -8,17 +8,33 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" },
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    },
     {
       "event": "override",
       "actor": "supervisor",
-      "data": { "overrideDecision": "approved", "rationale": null, "evidence": null }
+      "data": {
+        "overrideDecision": "approved",
+        "rationale": null,
+        "evidence": null
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+    {
+      "from": "pendingDetermination",
+      "target": "adverseNotice",
+      "event": "denied"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "overrideViolation", "data": { "reason": "missing-rationale-and-evidence" } }
+    {
+      "record_kind": "overrideViolation",
+      "data": {
+        "reason": "missing-rationale-and-evidence"
+      }
+    }
   ]
 }

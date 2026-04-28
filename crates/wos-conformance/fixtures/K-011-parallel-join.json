@@ -6,10 +6,22 @@
     "kernel": "fixtures/kernel/benefits-adjudication.json"
   },
   "initial_case_state": {
-    "application": { "isComplete": true, "applicantId": "APP-2026-001" },
-    "verification": { "status": "verified", "verifiedIncome": 28000 },
-    "reviewA": { "decision": "eligible", "notes": "Income within threshold" },
-    "reviewB": { "decision": "eligible", "notes": "Confirmed eligibility" }
+    "application": {
+      "isComplete": true,
+      "applicantId": "APP-2026-001"
+    },
+    "verification": {
+      "status": "verified",
+      "verifiedIncome": 28000
+    },
+    "reviewA": {
+      "decision": "eligible",
+      "notes": "Income within threshold"
+    },
+    "reviewB": {
+      "decision": "eligible",
+      "notes": "Confirmed eligibility"
+    }
   },
   "event_sequence": [
     {
@@ -56,27 +68,27 @@
   "expected_transitions": [
     {
       "from": "intake",
-      "to": "incomeVerification",
+      "target": "incomeVerification",
       "event": "applicationComplete"
     },
     {
       "from": "incomeVerification",
-      "to": "eligibilityReview",
+      "target": "eligibilityReview",
       "event": "verificationComplete"
     },
     {
       "from": "pendingReviewA",
-      "to": "reviewADone",
+      "target": "reviewADone",
       "event": "reviewAComplete"
     },
     {
       "from": "pendingReviewB",
-      "to": "reviewBDone",
+      "target": "reviewBDone",
       "event": "reviewBComplete"
     },
     {
       "from": "eligibilityReview",
-      "to": "determination",
+      "target": "determination",
       "event": "$join"
     }
   ],

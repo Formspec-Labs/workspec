@@ -90,13 +90,13 @@
         }
       ],
       "lifecycle": {
-        "initial": "start",
+        "initialState": "start",
         "states": {
           "start": {
             "type": "atomic",
             "transitions": [
               {
-                "to": "done"
+                "target": "done"
               }
             ]
           },
@@ -148,12 +148,12 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "pending",
+      "target": "pending",
       "event": "fire"
     },
     {
       "from": "pending",
-      "to": "done",
+      "target": "done",
       "event": "webhookInbound"
     }
   ],

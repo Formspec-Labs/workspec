@@ -1,6 +1,6 @@
 {
   "$wosWorkflow": "1.0",
-  "$schema": "https://wos-spec.org/schemas/kernel/1.0",
+  "$schema": "https://wos-spec.org/schemas/workflow/1.0",
   "url": "https://agency.gov/workflows/benefits-adjudication",
   "version": "1.0.0",
   "title": "Benefits Adjudication Workflow",
@@ -496,5 +496,15 @@
     "defaultTaskTimeout": "P30D",
     "defaultServiceTimeout": "PT5M",
     "instanceVersioning": "pinned"
+  },
+  "governance": {
+    "dueProcess": {
+      "noticeRequirements": {
+        "minDaysBeforeDecision": 10
+      },
+      "appealProcess": {
+        "independentReviewRequired": true
+      }
+    }
   }
 }

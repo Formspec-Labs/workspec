@@ -11,13 +11,25 @@
     {
       "event": "approved",
       "actor": "caseworker",
-      "data": { "delegationId": "DEL-001", "delegator": "supervisor" }
+      "data": {
+        "delegationId": "DEL-001",
+        "delegator": "supervisor"
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+    {
+      "from": "pendingDetermination",
+      "target": "benefitsActive",
+      "event": "approved"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "stateTransition", "data": { "delegationRef": "DEL-001" } }
+    {
+      "record_kind": "stateTransition",
+      "data": {
+        "delegationRef": "DEL-001"
+      }
+    }
   ]
 }

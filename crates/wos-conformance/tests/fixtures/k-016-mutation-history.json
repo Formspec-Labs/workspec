@@ -54,7 +54,7 @@
   "expected_transitions": [
     {
       "from": "idle",
-      "to": "idle",
+      "target": "idle",
       "event": "update"
     }
   ],

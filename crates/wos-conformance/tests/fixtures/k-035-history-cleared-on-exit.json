@@ -7,16 +7,43 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "submit", "actor": "operator" },
-    { "event": "verified", "actor": "verificationSystem" },
-    { "event": "approved", "actor": "operator" }
+    {
+      "event": "submit",
+      "actor": "operator"
+    },
+    {
+      "event": "verified",
+      "actor": "verificationSystem"
+    },
+    {
+      "event": "approved",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "review", "event": "submit" },
-    { "from": "pendingReview", "to": "reviewComplete", "event": "verified" },
-    { "from": "review", "to": "done", "event": "approved" }
+    {
+      "from": "intake",
+      "target": "review",
+      "event": "submit"
+    },
+    {
+      "from": "pendingReview",
+      "target": "reviewComplete",
+      "event": "verified"
+    },
+    {
+      "from": "review",
+      "target": "done",
+      "event": "approved"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "historyCleared", "data": { "state": "review", "reason": "parent-exit" } }
+    {
+      "record_kind": "historyCleared",
+      "data": {
+        "state": "review",
+        "reason": "parent-exit"
+      }
+    }
   ]
 }

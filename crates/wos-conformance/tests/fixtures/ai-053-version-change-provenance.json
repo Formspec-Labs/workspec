@@ -7,14 +7,27 @@
     "kernel": "../../../../fixtures/kernel/deontic-enforcement.json",
     "ai": "../../../../fixtures/ai/deontic-enforcement-ai.json"
   },
-  "initial_case_state": { "income": 50000 },
+  "initial_case_state": {
+    "income": 50000
+  },
   "event_sequence": [
     {
       "event": "determined",
       "actor": "eligibilityAgent",
       "data": {
-        "output": { "income": 50000, "determination": "eligible", "reasonCodes": ["R1"], "evidenceCitations": ["doc1"] },
-        "confidenceReport": { "overall": 0.90 },
+        "output": {
+          "income": 50000,
+          "determination": "eligible",
+          "reasonCodes": [
+            "R1"
+          ],
+          "evidenceCitations": [
+            "doc1"
+          ]
+        },
+        "confidenceReport": {
+          "overall": 0.9
+        },
         "modelVersionAtInvocation": "2.0",
         "expectedModelVersion": "1.0"
       }
@@ -22,6 +35,12 @@
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "agentVersionChange", "data": { "from": "1.0", "to": "2.0" } }
+    {
+      "record_kind": "agentVersionChange",
+      "data": {
+        "from": "1.0",
+        "target": "2.0"
+      }
+    }
   ]
 }

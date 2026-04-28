@@ -92,7 +92,7 @@
   "expected_transitions": [
     {
       "from": "pending",
-      "to": "done",
+      "target": "done",
       "event": "$timeout.slaTimer"
     }
   ],

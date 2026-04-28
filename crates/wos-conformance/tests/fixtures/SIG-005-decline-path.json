@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "applicant" },
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -17,16 +20,33 @@
           "status": "declined",
           "definitionUrl": "urn:test:formspec:signature",
           "definitionVersion": "1.0.0",
-          "data": { "reason": "Applicant declined to sign." }
+          "data": {
+            "reason": "Applicant declined to sign."
+          }
         }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "declined", "event": "signature.declined" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "declined",
+      "event": "signature.declined"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "taskFailed", "data": { "details": { "signatureStatus": "declined" } } }
+    {
+      "recordKind": "taskFailed",
+      "data": {
+        "details": {
+          "signatureStatus": "declined"
+        }
+      }
+    }
   ]
 }

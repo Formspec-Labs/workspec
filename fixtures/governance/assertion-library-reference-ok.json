@@ -12,13 +12,13 @@
     }
   ],
   "lifecycle": {
-    "initial": "start",
+    "initialState": "start",
     "states": {
       "start": {
         "type": "atomic",
         "transitions": [
           {
-            "to": "done"
+            "target": "done"
           }
         ]
       },
@@ -28,7 +28,7 @@
     }
   },
   "governance": {
-    "$schema": "https://wos-spec.org/schemas/governance/wos-assertion-gate.schema.json",
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
     "assertions": [
       {
         "id": "totalIncomeArithmetic",

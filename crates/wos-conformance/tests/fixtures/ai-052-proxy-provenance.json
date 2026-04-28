@@ -38,7 +38,7 @@
   "expected_transitions": [
     {
       "from": "pendingDetermination",
-      "to": "reviewComplete",
+      "target": "reviewComplete",
       "event": "determined"
     }
   ],

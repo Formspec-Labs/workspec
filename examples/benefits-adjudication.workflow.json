@@ -6,203 +6,445 @@
   "description": "Case-management tier. Multi-stage adjudication of a rights-impacting benefits decision with AI-assisted eligibility review, dual-blind human review, due process (notice + hearing + appeal), statutory deadlines, equity monitoring, and signed determination. Demonstrates every embedded block: governance, agents, aiOversight, signature, advanced, assurance. ~600 lines, abbreviated in places to show shape rather than exhaustively populate sub-blocks.",
   "impactLevel": "rightsImpacting",
   "status": "active",
-
   "intake": {
     "contractRef": "https://agency.gov/forms/benefits-application.formspec.json",
     "mode": "publicIntake"
   },
-
   "caseFile": {
     "fields": {
-      "applicantId":          { "type": "string",   "required": true },
-      "applicationDate":      { "type": "datetime", "required": true },
-      "programCode":          { "type": "string",   "required": true },
-      "householdSize":        { "type": "integer",  "required": true },
-      "monthlyIncome":        { "type": "number",   "required": true },
-      "documentedAssets":     { "type": "number",   "required": false },
-      "supportingEvidence":   { "type": "array",    "required": false },
-      "eligibilityScore":     { "type": "number",   "required": false },
-      "eligibilityRationale": { "type": "string",   "required": false },
-      "reviewer1Decision":    { "type": "string",   "required": false },
-      "reviewer2Decision":    { "type": "string",   "required": false },
-      "supervisorDecision":   { "type": "string",   "required": false },
-      "determination":        { "type": "string",   "required": false },
-      "determinationDate":    { "type": "datetime", "required": false },
-      "appealDeadline":       { "type": "datetime", "required": false }
+      "applicantId": {
+        "type": "string",
+        "required": true
+      },
+      "applicationDate": {
+        "type": "datetime",
+        "required": true
+      },
+      "programCode": {
+        "type": "string",
+        "required": true
+      },
+      "householdSize": {
+        "type": "integer",
+        "required": true
+      },
+      "monthlyIncome": {
+        "type": "number",
+        "required": true
+      },
+      "documentedAssets": {
+        "type": "number",
+        "required": false
+      },
+      "supportingEvidence": {
+        "type": "array",
+        "required": false
+      },
+      "eligibilityScore": {
+        "type": "number",
+        "required": false
+      },
+      "eligibilityRationale": {
+        "type": "string",
+        "required": false
+      },
+      "reviewer1Decision": {
+        "type": "string",
+        "required": false
+      },
+      "reviewer2Decision": {
+        "type": "string",
+        "required": false
+      },
+      "supervisorDecision": {
+        "type": "string",
+        "required": false
+      },
+      "determination": {
+        "type": "string",
+        "required": false
+      },
+      "determinationDate": {
+        "type": "datetime",
+        "required": false
+      },
+      "appealDeadline": {
+        "type": "datetime",
+        "required": false
+      }
     }
   },
-
   "actors": [
-    { "id": "applicant",         "type": "human",  "role": "respondent" },
-    { "id": "intakeClerk",       "type": "human",  "role": "intakeReview" },
-    { "id": "eligibilityAgent",  "type": "agent",  "role": "preliminaryAssessment" },
-    { "id": "reviewer1",         "type": "human",  "role": "primaryReview" },
-    { "id": "reviewer2",         "type": "human",  "role": "independentReview" },
-    { "id": "supervisor",        "type": "human",  "role": "determinationAuthority" },
-    { "id": "appealOfficer",     "type": "human",  "role": "appellateReview" },
-    { "id": "caseSystem",        "type": "system", "role": "automationSurface" }
+    {
+      "id": "applicant",
+      "type": "human",
+      "role": "respondent"
+    },
+    {
+      "id": "intakeClerk",
+      "type": "human",
+      "role": "intakeReview"
+    },
+    {
+      "id": "eligibilityAgent",
+      "type": "agent",
+      "role": "preliminaryAssessment"
+    },
+    {
+      "id": "reviewer1",
+      "type": "human",
+      "role": "primaryReview"
+    },
+    {
+      "id": "reviewer2",
+      "type": "human",
+      "role": "independentReview"
+    },
+    {
+      "id": "supervisor",
+      "type": "human",
+      "role": "determinationAuthority"
+    },
+    {
+      "id": "appealOfficer",
+      "type": "human",
+      "role": "appellateReview"
+    },
+    {
+      "id": "caseSystem",
+      "type": "system",
+      "role": "automationSurface"
+    }
   ],
-
   "lifecycle": {
-    "initial": "intake",
+    "initialState": "intake",
     "states": {
       "intake": {
         "type": "atomic",
-        "tags": ["intakeStart"],
+        "tags": [
+          "intakeStart"
+        ],
         "stateTimeout": "P5D",
         "transitions": [
-          { "to": "preliminaryReview", "actor": "intakeClerk", "tags": ["intakeAccepted"] },
-          { "to": "intakeRejected",    "actor": "intakeClerk", "tags": ["adverseAction"] }
+          {
+            "target": "preliminaryReview",
+            "actor": "intakeClerk",
+            "tags": [
+              "intakeAccepted"
+            ]
+          },
+          {
+            "target": "intakeRejected",
+            "actor": "intakeClerk",
+            "tags": [
+              "adverseAction"
+            ]
+          }
         ]
       },
       "preliminaryReview": {
         "type": "atomic",
         "stateTimeout": "P3D",
         "transitions": [
-          { "to": "dualReview", "on": { "kind": "completion", "actorId": "eligibilityAgent" } }
+          {
+            "target": "dualReview",
+            "on": {
+              "kind": "completion",
+              "actorId": "eligibilityAgent"
+            }
+          }
         ]
       },
       "dualReview": {
         "type": "parallel",
-        "tags": ["independentReview", "dualBlind"],
+        "tags": [
+          "independentReview",
+          "dualBlind"
+        ],
         "regions": {
           "primary": {
-            "initial": "reviewer1Pending",
+            "initialState": "reviewer1Pending",
             "states": {
               "reviewer1Pending": {
                 "type": "atomic",
                 "stateTimeout": "P10D",
                 "transitions": [
-                  { "to": "reviewer1Done", "actor": "reviewer1", "tags": ["primaryDecision"] }
+                  {
+                    "target": "reviewer1Done",
+                    "actor": "reviewer1",
+                    "tags": [
+                      "primaryDecision"
+                    ]
+                  }
                 ]
               },
-              "reviewer1Done": { "type": "final" }
+              "reviewer1Done": {
+                "type": "final"
+              }
             }
           },
           "independent": {
-            "initial": "reviewer2Pending",
+            "initialState": "reviewer2Pending",
             "states": {
               "reviewer2Pending": {
                 "type": "atomic",
                 "stateTimeout": "P10D",
                 "transitions": [
-                  { "to": "reviewer2Done", "actor": "reviewer2", "tags": ["independentDecision"] }
+                  {
+                    "target": "reviewer2Done",
+                    "actor": "reviewer2",
+                    "tags": [
+                      "independentDecision"
+                    ]
+                  }
                 ]
               },
-              "reviewer2Done": { "type": "final" }
+              "reviewer2Done": {
+                "type": "final"
+              }
             }
           }
         },
         "transitions": [
-          { "to": "reconciliation", "on": { "kind": "completion" }, "guard": "$caseFile.reviewer1Decision == $caseFile.reviewer2Decision" },
-          { "to": "supervisorReview", "on": { "kind": "completion" }, "guard": "$caseFile.reviewer1Decision != $caseFile.reviewer2Decision", "tags": ["disagreement"] }
+          {
+            "target": "reconciliation",
+            "on": {
+              "kind": "completion"
+            },
+            "guard": "$caseFile.reviewer1Decision == $caseFile.reviewer2Decision"
+          },
+          {
+            "target": "supervisorReview",
+            "on": {
+              "kind": "completion"
+            },
+            "guard": "$caseFile.reviewer1Decision != $caseFile.reviewer2Decision",
+            "tags": [
+              "disagreement"
+            ]
+          }
         ]
       },
       "reconciliation": {
         "type": "atomic",
         "transitions": [
-          { "to": "determination", "actor": "caseSystem", "tags": ["dualBlindAgreed"] }
+          {
+            "target": "determination",
+            "actor": "caseSystem",
+            "tags": [
+              "dualBlindAgreed"
+            ]
+          }
         ]
       },
       "supervisorReview": {
         "type": "atomic",
         "stateTimeout": "P5D",
         "transitions": [
-          { "to": "determination", "actor": "supervisor", "tags": ["supervisorOverride"] }
+          {
+            "target": "determination",
+            "actor": "supervisor",
+            "tags": [
+              "supervisorOverride"
+            ]
+          }
         ]
       },
       "determination": {
         "type": "atomic",
-        "tags": ["determinationDraft"],
+        "tags": [
+          "determinationDraft"
+        ],
         "transitions": [
-          { "to": "noticeIssued", "on": { "kind": "signature", "actorId": "supervisor" }, "tags": ["determination", "signedDetermination"] }
+          {
+            "target": "noticeIssued",
+            "on": {
+              "kind": "signature",
+              "actorId": "supervisor"
+            },
+            "tags": [
+              "determination",
+              "signedDetermination"
+            ]
+          }
         ]
       },
       "noticeIssued": {
         "type": "atomic",
-        "tags": ["adverseDecisionNotice", "appealEligible"],
+        "tags": [
+          "adverseDecisionNotice",
+          "appealEligible"
+        ],
         "stateTimeout": "P30D",
         "transitions": [
-          { "to": "appealUnderReview", "on": { "kind": "signal", "name": "appealFiled" }, "actor": "applicant" },
-          { "to": "finalized",         "on": { "kind": "timer" }, "tags": ["appealWindowClosed"] }
+          {
+            "target": "appealUnderReview",
+            "on": {
+              "kind": "signal",
+              "name": "appealFiled"
+            },
+            "actor": "applicant"
+          },
+          {
+            "target": "finalized",
+            "on": {
+              "kind": "timer"
+            },
+            "tags": [
+              "appealWindowClosed"
+            ]
+          }
         ]
       },
       "appealUnderReview": {
         "type": "atomic",
         "stateTimeout": "P30D",
         "transitions": [
-          { "to": "finalized", "actor": "appealOfficer", "tags": ["appealResolved"] }
+          {
+            "target": "finalized",
+            "actor": "appealOfficer",
+            "tags": [
+              "appealResolved"
+            ]
+          }
         ]
       },
-      "intakeRejected": { "type": "final", "outcomeCode": "intakeRejected" },
-      "finalized":      { "type": "final", "outcomeCode": "finalized", "tags": ["caseClosed"] }
+      "intakeRejected": {
+        "type": "final",
+        "outcomeCode": "intakeRejected"
+      },
+      "finalized": {
+        "type": "final",
+        "outcomeCode": "finalized",
+        "tags": [
+          "caseClosed"
+        ]
+      }
     }
   },
-
   "contracts": {
     "eligibilityRules": {
       "contractRef": "https://agency.gov/contracts/eligibility-policy.json",
       "version": "2026.04"
     }
   },
-
   "bindings": [
     {
       "on": "preliminaryReview/eligibilityAgent.completion",
       "contractRef": "https://agency.gov/contracts/eligibility-output.schema.json",
-      "writeScope": ["eligibilityScore", "eligibilityRationale"],
+      "writeScope": [
+        "eligibilityScore",
+        "eligibilityRationale"
+      ],
       "mutationSource": "agent-extracted",
       "verificationLevel": "corroborated"
     },
     {
       "on": "determination",
-      "writeScope": ["determination", "determinationDate", "appealDeadline"],
+      "writeScope": [
+        "determination",
+        "determinationDate",
+        "appealDeadline"
+      ],
       "mutationSource": "human-entered",
       "verificationLevel": "authoritative"
     }
   ],
-
-  "provenance": { "tier": "full" },
-
+  "provenance": {
+    "tier": "full"
+  },
   "governance": {
     "dueProcess": {
       "noticeRequired": true,
       "noticeTemplateRef": "https://agency.gov/templates/adverse-decision-notice.json",
-      "opportunityToBeHeard": { "mode": "writtenSubmission", "deadline": "P30D" },
+      "opportunityToBeHeard": {
+        "mode": "writtenSubmission",
+        "deadline": "P30D"
+      },
       "appealMechanism": {
         "deadline": "P30D",
         "appealOfficerActor": "appealOfficer",
         "stayOfDetermination": false
       },
       "adverseDecisionPolicy": {
-        "tagsRequiringNotice": ["adverseAction", "intakeRejected", "determination"]
+        "tagsRequiringNotice": [
+          "adverseAction",
+          "intakeRejected",
+          "determination"
+        ]
       }
     },
     "reviewProtocols": [
-      { "id": "dualBlind", "appliesToTags": ["dualBlind"], "blindingRules": { "reviewerSeparation": true, "preliminaryAssessmentVisibility": "hidden" } },
-      { "id": "independentFirst", "appliesToTags": ["independentReview"], "ordering": "independentBeforePrimary" }
+      {
+        "id": "dualBlind",
+        "appliesToTags": [
+          "dualBlind"
+        ],
+        "blindingRules": {
+          "reviewerSeparation": true,
+          "preliminaryAssessmentVisibility": "hidden"
+        }
+      },
+      {
+        "id": "independentFirst",
+        "appliesToTags": [
+          "independentReview"
+        ],
+        "ordering": "independentBeforePrimary"
+      }
     ],
     "pipelines": [
       {
         "id": "eligibility",
         "stages": [
-          { "id": "intakeValidation",  "kind": "contractValidation", "contractRef": "https://agency.gov/contracts/intake.formspec.json" },
-          { "id": "evidenceCheck",     "kind": "assertionGate", "expression": "size($caseFile.supportingEvidence) >= 1" },
-          { "id": "policyEvaluation",  "kind": "decisionService", "serviceRef": "https://agency.gov/services/eligibility-decision" }
+          {
+            "id": "intakeValidation",
+            "kind": "contractValidation",
+            "contractRef": "https://agency.gov/contracts/intake.formspec.json"
+          },
+          {
+            "id": "evidenceCheck",
+            "kind": "assertionGate",
+            "expression": "size($caseFile.supportingEvidence) >= 1"
+          },
+          {
+            "id": "policyEvaluation",
+            "kind": "decisionService",
+            "serviceRef": "https://agency.gov/services/eligibility-decision"
+          }
         ]
       }
     ],
     "taskCatalog": [
-      { "id": "primaryReview",     "actorRole": "primaryReview",      "slaPerInstance": "P10D" },
-      { "id": "independentReview", "actorRole": "independentReview",  "slaPerInstance": "P10D" },
-      { "id": "supervisorReview",  "actorRole": "determinationAuthority", "slaPerInstance": "P5D" }
+      {
+        "id": "primaryReview",
+        "actorRole": "primaryReview",
+        "slaPerInstance": "P10D"
+      },
+      {
+        "id": "independentReview",
+        "actorRole": "independentReview",
+        "slaPerInstance": "P10D"
+      },
+      {
+        "id": "supervisorReview",
+        "actorRole": "determinationAuthority",
+        "slaPerInstance": "P5D"
+      }
     ],
     "delegation": {
-      "allowedFor": ["primaryReview", "independentReview"],
+      "allowedFor": [
+        "primaryReview",
+        "independentReview"
+      ],
       "verificationLevel": "attested"
     },
     "holds": {
-      "kinds": ["evidenceRequest", "litigation", "systemOutage"],
+      "kinds": [
+        "evidenceRequest",
+        "litigation",
+        "systemOutage"
+      ],
       "stopsClock": true
     },
     "policyParameters": {
@@ -210,11 +452,21 @@
       "deadlinePolicy": "businessDays"
     },
     "escalationLevels": [
-      { "level": 1, "trigger": "P3D", "to": "supervisor", "additionalEditableFields": ["overrideRationale"] },
-      { "level": 2, "trigger": "P7D", "to": "regionalDirector" }
+      {
+        "level": 1,
+        "trigger": "P3D",
+        "target": "supervisor",
+        "additionalEditableFields": [
+          "overrideRationale"
+        ]
+      },
+      {
+        "level": 2,
+        "trigger": "P7D",
+        "target": "regionalDirector"
+      }
     ]
   },
-
   "agents": [
     {
       "id": "eligibilityAgent",
@@ -223,36 +475,68 @@
       "modelVersionPolicy": "minor-allowed",
       "autonomy": "assistive",
       "deonticConstraints": [
-        { "kind": "prohibition", "expression": "@transition.tags includes 'determination'", "$comment": "Agent MUST NOT directly determine; only assist." },
-        { "kind": "prohibition", "expression": "@transition.tags includes 'adverseAction'" },
-        { "kind": "obligation",  "expression": "@output.eligibilityRationale != null && size(@output.eligibilityRationale) > 0" },
-        { "kind": "permission",  "expression": "@transition.tags includes 'preliminaryAssessment'" }
+        {
+          "kind": "prohibition",
+          "expression": "@transition.tags includes 'determination'",
+          "$comment": "Agent MUST NOT directly determine; only assist."
+        },
+        {
+          "kind": "prohibition",
+          "expression": "@transition.tags includes 'adverseAction'"
+        },
+        {
+          "kind": "obligation",
+          "expression": "@output.eligibilityRationale != null && size(@output.eligibilityRationale) > 0"
+        },
+        {
+          "kind": "permission",
+          "expression": "@transition.tags includes 'preliminaryAssessment'"
+        }
       ],
       "confidenceFloor": 0.75,
-      "confidenceDecay": { "halfLifeDays": 90 },
-      "fallbackChain": ["reviewer1", "supervisor"],
+      "confidenceDecay": {
+        "halfLifeDays": 90
+      },
+      "fallbackChain": [
+        "reviewer1",
+        "supervisor"
+      ],
       "capabilities": [
         {
           "id": "scoreEligibility",
-          "writeScope": ["eligibilityScore", "eligibilityRationale"],
+          "writeScope": [
+            "eligibilityScore",
+            "eligibilityRationale"
+          ],
           "outputContractRef": "https://agency.gov/contracts/eligibility-output.schema.json"
         }
       ],
       "driftMonitoring": {
-        "dimensions": ["acceptanceRate", "denialRationaleEntropy", "demographicParity"],
-        "alertThresholds": { "demographicParity": 0.08 }
+        "dimensions": [
+          "acceptanceRate",
+          "denialRationaleEntropy",
+          "demographicParity"
+        ],
+        "alertThresholds": {
+          "demographicParity": 0.08
+        }
       }
     }
   ],
-
   "aiOversight": {
     "disclosure": {
       "applicantNotice": true,
       "noticeTemplateRef": "https://agency.gov/templates/ai-disclosure.json",
-      "complianceRefs": ["EU-AI-Act-Art-13", "OMB-M-24-10"]
+      "complianceRefs": [
+        "EU-AI-Act-Art-13",
+        "OMB-M-24-10"
+      ]
     },
     "driftDetection": {
-      "globalDimensions": ["systemDriftScore", "modelChurn"],
+      "globalDimensions": [
+        "systemDriftScore",
+        "modelChurn"
+      ],
       "demotionPolicy": "demoteToReadOnlyOnAlert"
     },
     "volumeConstraints": {
@@ -263,7 +547,6 @@
       "templateRef": "https://agency.gov/templates/narrative-explanation.json"
     }
   },
-
   "signature": {
     "order": "sequential",
     "signers": [
@@ -275,17 +558,26 @@
       }
     ],
     "auditCertificate": {
-      "writeScope": ["determinationDate"],
+      "writeScope": [
+        "determinationDate"
+      ],
       "mutationSource": "system-fetched",
       "verificationLevel": "authoritative"
     }
   },
-
   "advanced": {
     "equity": {
       "biasCaps": [
-        { "dimension": "race",   "metric": "demographicParity", "threshold": 0.05 },
-        { "dimension": "gender", "metric": "demographicParity", "threshold": 0.05 }
+        {
+          "dimension": "race",
+          "metric": "demographicParity",
+          "threshold": 0.05
+        },
+        {
+          "dimension": "gender",
+          "metric": "demographicParity",
+          "threshold": 0.05
+        }
       ],
       "monitoringWindow": "P90D",
       "actionOnBreach": "suspendAgentDecisioning"
@@ -303,14 +595,22 @@
       }
     ],
     "circuitBreaker": {
-      "triggers": ["agent.confidence.belowFloor", "drift.alert", "equity.breach"],
+      "triggers": [
+        "agent.confidence.belowFloor",
+        "drift.alert",
+        "equity.breach"
+      ],
       "action": "haltNewAgentInvocations"
     }
   },
-
   "assurance": {
     "level": "high",
-    "attestation": { "attesterRole": "agencyCIO", "cadence": "quarterly" },
-    "subjectContinuity": { "applicantIdentityProof": "kbaPlusKnownPerson" }
+    "attestation": {
+      "attesterRole": "agencyCIO",
+      "cadence": "quarterly"
+    },
+    "subjectContinuity": {
+      "applicantIdentityProof": "kbaPlusKnownPerson"
+    }
   }
 }

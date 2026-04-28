@@ -11,15 +11,43 @@
     "vendor": "Supplier X"
   },
   "event_sequence": [
-    { "event": "reject", "actor": "approver" },
-    { "event": "resubmit", "actor": "requester" },
-    { "event": "approve", "actor": "approver" },
-    { "event": "orderProcessed", "actor": "procurementSystem" }
+    {
+      "event": "reject",
+      "actor": "approver"
+    },
+    {
+      "event": "resubmit",
+      "actor": "requester"
+    },
+    {
+      "event": "approve",
+      "actor": "approver"
+    },
+    {
+      "event": "orderProcessed",
+      "actor": "procurementSystem"
+    }
   ],
   "expected_transitions": [
-    { "from": "submitted", "to": "rejected", "event": "reject" },
-    { "from": "rejected", "to": "submitted", "event": "resubmit" },
-    { "from": "submitted", "to": "approved", "event": "approve" },
-    { "from": "approved", "to": "completed", "event": "orderProcessed" }
+    {
+      "from": "submitted",
+      "target": "rejected",
+      "event": "reject"
+    },
+    {
+      "from": "rejected",
+      "target": "submitted",
+      "event": "resubmit"
+    },
+    {
+      "from": "submitted",
+      "target": "approved",
+      "event": "approve"
+    },
+    {
+      "from": "approved",
+      "target": "completed",
+      "event": "orderProcessed"
+    }
   ]
 }

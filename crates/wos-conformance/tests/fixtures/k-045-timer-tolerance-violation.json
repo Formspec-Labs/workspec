@@ -14,11 +14,32 @@
     }
   ],
   "expected_transitions": [
-    { "from": "waiting", "to": "done", "event": "$timeout.state" }
+    {
+      "from": "waiting",
+      "target": "done",
+      "event": "$timeout.state"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "timerCreated", "data": { "timerId": "shortTimer" } },
-    { "record_kind": "timerFired", "data": { "timerId": "shortTimer" } },
-    { "record_kind": "toleranceViolation", "data": { "timerId": "shortTimer", "duration": "PT5S", "maxTolerance": "PT1S" } }
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "shortTimer"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": {
+        "timerId": "shortTimer"
+      }
+    },
+    {
+      "record_kind": "toleranceViolation",
+      "data": {
+        "timerId": "shortTimer",
+        "duration": "PT5S",
+        "maxTolerance": "PT1S"
+      }
+    }
   ]
 }

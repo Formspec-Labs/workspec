@@ -8,17 +8,34 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "approved", "actor": "caseworker" },
+    {
+      "event": "approved",
+      "actor": "caseworker"
+    },
     {
       "event": "qualityReview",
       "actor": "caseworker",
-      "data": { "reviewType": "quality-sample", "decision": "confirmed", "sameActorAsOriginal": true }
+      "data": {
+        "reviewType": "quality-sample",
+        "decision": "confirmed",
+        "sameActorAsOriginal": true
+      }
     }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "benefitsActive", "event": "approved" }
+    {
+      "from": "pendingDetermination",
+      "target": "benefitsActive",
+      "event": "approved"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "separationViolation", "data": { "actor": "caseworker", "reason": "reviewer-is-original-decision-maker" } }
+    {
+      "record_kind": "separationViolation",
+      "data": {
+        "actor": "caseworker",
+        "reason": "reviewer-is-original-decision-maker"
+      }
+    }
   ]
 }

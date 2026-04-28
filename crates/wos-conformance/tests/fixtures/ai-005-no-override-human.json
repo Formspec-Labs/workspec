@@ -29,7 +29,7 @@
   "expected_transitions": [
     {
       "from": "triage",
-      "to": "review",
+      "target": "review",
       "event": "triaged"
     }
   ],

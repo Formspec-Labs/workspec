@@ -1,7 +1,7 @@
 {
   "id": "K-011-determinism",
   "rule": "K-011",
-  "description": "Same document and same event sequence must produce the same state transitions on every run. Feed 'approve' with amount=3000 (under the $50k guard) to the purchase order workflow. Expects submitted→approved deterministically.",
+  "description": "Same document and same event sequence must produce the same state transitions on every run. Feed 'approve' with amount=3000 (under the $50k guard) to the purchase order workflow. Expects submitted\u2192approved deterministically.",
   "documents": {
     "kernel": "fixtures/kernel/purchase-order-approval.json"
   },
@@ -24,7 +24,7 @@
   "expected_transitions": [
     {
       "from": "submitted",
-      "to": "approved",
+      "target": "approved",
       "event": "approve"
     }
   ],

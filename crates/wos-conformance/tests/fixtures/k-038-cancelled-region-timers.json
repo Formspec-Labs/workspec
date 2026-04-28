@@ -78,7 +78,7 @@
   "expected_transitions": [
     {
       "from": "reviewB",
-      "to": "errorB",
+      "target": "errorB",
       "event": "failB"
     }
   ],

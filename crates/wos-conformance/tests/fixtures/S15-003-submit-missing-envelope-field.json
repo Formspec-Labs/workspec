@@ -105,12 +105,12 @@
   "expected_transitions": [
     {
       "from": "open",
-      "to": "review",
+      "target": "review",
       "event": "start"
     },
     {
       "from": "review",
-      "to": "rejected",
+      "target": "rejected",
       "event": "review.failed"
     }
   ],

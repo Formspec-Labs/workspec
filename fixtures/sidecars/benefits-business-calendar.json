@@ -2,10 +2,6 @@
   "$wosDelivery": "1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
   "calendar": {
-    "$schema": "https://wos-spec.org/schemas/business-calendar/1.0",
-    "version": "2026.1.0",
-    "title": "Federal Benefits Agency Business Calendar FY2026",
-    "description": "Business calendar for a federal benefits adjudication agency. Covers US federal holidays, standard Monday-Friday work week, and 8am-5pm Eastern operating hours. SLA durations for task completion and hold timeouts are evaluated against this calendar.",
     "timezone": "America/New_York",
     "workWeek": [
       "monday",

@@ -6,30 +6,42 @@
     "kernel": "fixtures/kernel/medicaid-redetermination.json"
   },
   "initial_case_state": {
-    "application": { "isComplete": true },
-    "verification": { "status": "verified" },
-    "eligibility": { "decision": "eligible" }
+    "application": {
+      "isComplete": true
+    },
+    "verification": {
+      "status": "verified"
+    },
+    "eligibility": {
+      "decision": "eligible"
+    }
   },
   "event_sequence": [
     {
       "event": "applicationComplete",
       "actor": "caseworker",
       "data": {
-        "application": { "isComplete": true }
+        "application": {
+          "isComplete": true
+        }
       }
     },
     {
       "event": "verificationComplete",
       "actor": "verificationSystem",
       "data": {
-        "verification": { "status": "verified" }
+        "verification": {
+          "status": "verified"
+        }
       }
     },
     {
       "event": "determinationComplete",
       "actor": "caseworker",
       "data": {
-        "eligibility": { "decision": "eligible" }
+        "eligibility": {
+          "decision": "eligible"
+        }
       }
     },
     {
@@ -51,7 +63,9 @@
       "event": "verificationComplete",
       "actor": "verificationSystem",
       "data": {
-        "verification": { "status": "verified" }
+        "verification": {
+          "status": "verified"
+        }
       }
     },
     {
@@ -67,45 +81,100 @@
     {
       "event": "$timeout.state",
       "actor": "system",
-      "description": "12-month cycle expires — enters redeterminationDue",
+      "description": "12-month cycle expires \u2014 enters redeterminationDue",
       "data": {}
     },
     {
       "event": "$timeout.state",
       "actor": "system",
-      "description": "30-day redetermination notice window expires — enters pendingApplicantResponse (hold state)",
+      "description": "30-day redetermination notice window expires \u2014 enters pendingApplicantResponse (hold state)",
       "data": {}
     },
     {
       "event": "applicantResponse",
       "actor": "applicant",
       "data": {
-        "application": { "isComplete": true }
+        "application": {
+          "isComplete": true
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "intake", "to": "eligibilityReview", "event": "applicationComplete" },
-    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
-    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
-    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" },
-    { "from": "activeBenefits", "to": "redeterminationDue", "event": "$timeout.state" },
-    { "from": "redeterminationDue", "to": "eligibilityReview", "event": "redeterminationSubmitted" },
-    { "from": "incomeVerification", "to": "caseworkerReview", "event": "verificationComplete" },
-    { "from": "caseworkerReview", "to": "reviewComplete", "event": "determinationComplete" },
-    { "from": "eligibilityReview", "to": "activeBenefits", "event": "eligible" },
-    { "from": "activeBenefits", "to": "redeterminationDue", "event": "$timeout.state" },
-    { "from": "redeterminationDue", "to": "pendingApplicantResponse", "event": "$timeout.state" },
-    { "from": "pendingApplicantResponse", "to": "intake", "event": "applicantResponse" }
+    {
+      "from": "intake",
+      "target": "eligibilityReview",
+      "event": "applicationComplete"
+    },
+    {
+      "from": "incomeVerification",
+      "target": "caseworkerReview",
+      "event": "verificationComplete"
+    },
+    {
+      "from": "caseworkerReview",
+      "target": "reviewComplete",
+      "event": "determinationComplete"
+    },
+    {
+      "from": "eligibilityReview",
+      "target": "activeBenefits",
+      "event": "eligible"
+    },
+    {
+      "from": "activeBenefits",
+      "target": "redeterminationDue",
+      "event": "$timeout.state"
+    },
+    {
+      "from": "redeterminationDue",
+      "target": "eligibilityReview",
+      "event": "redeterminationSubmitted"
+    },
+    {
+      "from": "incomeVerification",
+      "target": "caseworkerReview",
+      "event": "verificationComplete"
+    },
+    {
+      "from": "caseworkerReview",
+      "target": "reviewComplete",
+      "event": "determinationComplete"
+    },
+    {
+      "from": "eligibilityReview",
+      "target": "activeBenefits",
+      "event": "eligible"
+    },
+    {
+      "from": "activeBenefits",
+      "target": "redeterminationDue",
+      "event": "$timeout.state"
+    },
+    {
+      "from": "redeterminationDue",
+      "target": "pendingApplicantResponse",
+      "event": "$timeout.state"
+    },
+    {
+      "from": "pendingApplicantResponse",
+      "target": "intake",
+      "event": "applicantResponse"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "timerCreated",
-      "data": { "timerId": "applicantResponseDeadline", "duration": "P30D" }
+      "data": {
+        "timerId": "applicantResponseDeadline",
+        "duration": "P30D"
+      }
     },
     {
       "recordKind": "timerCancelled",
-      "data": { "timerId": "applicantResponseDeadline" }
+      "data": {
+        "timerId": "applicantResponseDeadline"
+      }
     },
     {
       "recordKind": "stateTransition",

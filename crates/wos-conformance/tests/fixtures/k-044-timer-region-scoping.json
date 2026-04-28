@@ -14,11 +14,30 @@
     }
   ],
   "expected_transitions": [
-    { "from": "waitingA", "to": "doneA", "event": "$timeout.regionA" }
+    {
+      "from": "waitingA",
+      "target": "doneA",
+      "event": "$timeout.regionA"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "timerCreated", "data": { "timerId": "timerA" } },
-    { "record_kind": "timerCreated", "data": { "timerId": "timerB" } },
-    { "record_kind": "timerFired", "data": { "timerId": "timerA" } }
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "timerA"
+      }
+    },
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "timerB"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": {
+        "timerId": "timerA"
+      }
+    }
   ]
 }

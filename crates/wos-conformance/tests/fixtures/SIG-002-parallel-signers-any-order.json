@@ -8,7 +8,10 @@
     "signatureProfile": "../../../../fixtures/profiles/signature-runtime-parallel.json"
   },
   "event_sequence": [
-    { "event": "start", "actor": "agency" },
+    {
+      "event": "start",
+      "actor": "agency"
+    },
     {
       "event": "submit",
       "task_submission": {
@@ -19,7 +22,10 @@
           "definitionVersion": "1.0.0",
           "data": {
             "signerId": "agency",
-            "identityBinding": { "method": "credential", "assuranceLevel": "high" },
+            "identityBinding": {
+              "method": "credential",
+              "assuranceLevel": "high"
+            },
             "signatureProvider": "formspec",
             "ceremonyId": "ceremony-agency",
             "signature": {
@@ -41,7 +47,10 @@
           "definitionVersion": "1.0.0",
           "data": {
             "signerId": "applicant",
-            "identityBinding": { "method": "email-otp", "assuranceLevel": "standard" },
+            "identityBinding": {
+              "method": "email-otp",
+              "assuranceLevel": "standard"
+            },
             "signatureProvider": "formspec",
             "ceremonyId": "ceremony-applicant",
             "signature": {
@@ -55,11 +64,29 @@
     }
   ],
   "expected_transitions": [
-    { "from": "draft", "to": "signing", "event": "start" },
-    { "from": "signing", "to": "complete", "event": "signature.completed" }
+    {
+      "from": "draft",
+      "target": "signing",
+      "event": "start"
+    },
+    {
+      "from": "signing",
+      "target": "complete",
+      "event": "signature.completed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "agencyApprover" } },
-    { "recordKind": "signatureAffirmation", "data": { "roleId": "applicantSigner" } }
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "agencyApprover"
+      }
+    },
+    {
+      "recordKind": "signatureAffirmation",
+      "data": {
+        "roleId": "applicantSigner"
+      }
+    }
   ]
 }

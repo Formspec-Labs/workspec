@@ -9,7 +9,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "needInfo", "actor": "caseworker" },
+    {
+      "event": "needInfo",
+      "actor": "caseworker"
+    },
     {
       "event": "slaCheck",
       "actor": "system",
@@ -20,9 +23,19 @@
     }
   ],
   "expected_transitions": [
-    { "from": "processing", "to": "pendingResponse", "event": "needInfo" }
+    {
+      "from": "processing",
+      "target": "pendingResponse",
+      "event": "needInfo"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "calendarIgnored", "data": { "reason": "expired", "fallback": "wall-clock" } }
+    {
+      "record_kind": "calendarIgnored",
+      "data": {
+        "reason": "expired",
+        "fallback": "wall-clock"
+      }
+    }
   ]
 }

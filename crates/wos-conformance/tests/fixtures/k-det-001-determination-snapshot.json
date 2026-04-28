@@ -18,7 +18,7 @@
   "expected_transitions": [
     {
       "from": "pendingDetermination",
-      "to": "adverseNotice",
+      "target": "adverseNotice",
       "event": "denied"
     }
   ],
@@ -28,7 +28,10 @@
       "fromState": "pendingDetermination",
       "toState": "adverseNotice",
       "event": "denied",
-      "transitionTags": ["determination", "adverse-decision"],
+      "transitionTags": [
+        "determination",
+        "adverse-decision"
+      ],
       "caseFileSnapshot": {
         "value": {
           "determination": "pending"

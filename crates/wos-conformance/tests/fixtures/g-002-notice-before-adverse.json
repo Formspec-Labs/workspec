@@ -21,13 +21,13 @@
         }
       ],
       "lifecycle": {
-        "initial": "start",
+        "initialState": "start",
         "states": {
           "start": {
             "type": "atomic",
             "transitions": [
               {
-                "to": "done"
+                "target": "done"
               }
             ]
           },
@@ -37,7 +37,7 @@
         }
       },
       "governance": {
-        "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+        "$schema": "https://wos-spec.org/schemas/workflow/1.0",
         "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
         "dueProcess": {
           "adverseDecisionPolicy": {
@@ -65,7 +65,7 @@
       "$wosDelivery": "1.0",
       "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
       "notifications": {
-        "$schema": "https://wos-spec.org/schemas/notification-template/1.0",
+        "$schema": "https://wos-spec.org/schemas/delivery/1.0",
         "version": "1.0.0",
         "templates": {
           "adverseDecisionNotice": {
@@ -123,7 +123,7 @@
   "expected_transitions": [
     {
       "from": "pendingDetermination",
-      "to": "adverseNotice",
+      "target": "adverseNotice",
       "event": "denied"
     }
   ],

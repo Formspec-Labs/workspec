@@ -8,15 +8,40 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "needInfo", "actor": "caseworker" },
-    { "event": "noop", "actor": "system", "delay": "P31D" }
+    {
+      "event": "needInfo",
+      "actor": "caseworker"
+    },
+    {
+      "event": "noop",
+      "actor": "system",
+      "delay": "P31D"
+    }
   ],
   "expected_transitions": [
-    { "from": "processing", "to": "pendingResponse", "event": "needInfo" },
-    { "from": "pendingResponse", "to": "escalated", "event": "$timeout.state" }
+    {
+      "from": "processing",
+      "target": "pendingResponse",
+      "event": "needInfo"
+    },
+    {
+      "from": "pendingResponse",
+      "target": "escalated",
+      "event": "$timeout.state"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "timerCreated", "data": { "timerId": "holdTimer" } },
-    { "record_kind": "timerFired", "data": { "timerId": "holdTimer" } }
+    {
+      "record_kind": "timerCreated",
+      "data": {
+        "timerId": "holdTimer"
+      }
+    },
+    {
+      "record_kind": "timerFired",
+      "data": {
+        "timerId": "holdTimer"
+      }
+    }
   ]
 }
