@@ -648,19 +648,19 @@ The proxy is NOT a Formspec concept. It is a WOS construct that wraps Assist pro
 
 ---
 
-## 15. Inter-Document Referencing
+## 15. AI Governance in the Workflow Envelope
 
-An AI Integration Document targets a WOS Kernel Document via the `targetWorkflow` property, following the same pattern as Layer 1 (Governance S14).
+AI governance is declared as embedded blocks (`agents`, `aiOversight`) within a `$wosWorkflow` document. The same `url` that a Workflow Governance document targets via `targetWorkflow` is the `url` of the `$wosWorkflow` envelope.
 
 ```json
 {
-  "$wosAIIntegration": "1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "$wosWorkflow": "1.0",
+  "url": "https://agency.gov/workflows/benefits-adjudication",
   "...": "..."
 }
 ```
 
-When both a Workflow Governance Document and an AI Integration Document target the same kernel workflow, AI governance extends the governance structures. Neither document requires the other to validate -- each stands alone against the kernel schema.
+When a `$wosWorkflow` document carries both `governance` and `agents`/`aiOversight` blocks, AI governance extends the governance structures within the same envelope. Each embedded block is independently optional; adding `agents` does not require `governance` to be present, and vice versa.
 
 ---
 

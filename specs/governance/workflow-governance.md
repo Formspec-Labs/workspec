@@ -772,19 +772,19 @@ Temporal parameter resolution composes with the Business Calendar sidecar: "the 
 
 ---
 
-## 14. Inter-Document Referencing
+## 14. Governance in the Workflow Envelope
 
-A Workflow Governance Document targets a WOS Kernel Document via the `targetWorkflow` property. This follows the Formspec sidecar pattern -- a companion document that targets a parent by URL reference.
+Governance is declared as the `governance` embedded block within a `$wosWorkflow` document. The document's `url` serves as the stable workflow identifier referenced by any companion or runtime artifact.
 
 ```json
 {
-  "$wosWorkflowGovernance": "1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "$wosWorkflow": "1.0",
+  "url": "https://agency.gov/workflows/benefits-adjudication",
   "...": "..."
 }
 ```
 
-The `targetWorkflow` value MUST match the `url` property of the target Kernel Document. When the target Kernel Document does not declare a `url`, the governance document MAY use an implementation-defined reference mechanism.
+The `url` value is the canonical workflow identifier. Runtime artifacts (`$wosCaseInstance`, `$wosProvenanceLog`) and any delivery sidecar (`$wosDelivery`) join to the same `url` via their respective `targetWorkflow` or `workflowUrl` properties.
 
 ---
 

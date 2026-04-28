@@ -30,14 +30,12 @@ This document is a **draft specification**. It is a sidecar to the WOS Workflow 
 
 ## 1. Document Structure
 
+Policy parameters are expressed as the `governance.policyParameters` block within a `$wosWorkflow` document. All properties described in this section appear under `governance.policyParameters`.
+
 ### 1.1 Properties
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `$wosPolicyParameters` | string | REQUIRED | Document type marker. MUST be `"1.0"`. |
-| `targetWorkflow` | string (URI) | REQUIRED | URI of the WOS Kernel Document these parameters apply to. |
-| `version` | string | OPTIONAL | Version of this config document. |
-| `title` | string | OPTIONAL | Human-readable name. |
 | `parameters` | map of ParameterDefinition | REQUIRED | Named parameters with date-indexed values. |
 | `bindings` | map of RegulatoryBinding | OPTIONAL | Named bindings with date-indexed document references (S1.5). |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
@@ -114,48 +112,65 @@ The workflow author references bindings the same way as parameters. The distinct
 
 ### 1.6 Example
 
+The `governance.policyParameters` block embedded in a `$wosWorkflow` document:
+
 ```json
 {
-  "$wosPolicyParameters": "1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "version": "2026.1.0",
-  "title": "Benefits Program Parameters FY2025-2026",
-  "parameters": {
-    "eligibilityThreshold": {
-      "description": "Maximum household income for program eligibility",
-      "type": "number",
-      "unit": "USD",
-      "resolutionDateRef": "caseFile.applicationDate",
-      "authority": "42 USC 1396a",
-      "values": [
-        { "effectiveDate": "2025-01-01", "value": 35000 },
-        { "effectiveDate": "2025-07-01", "value": 36500 },
-        { "effectiveDate": "2026-01-01", "value": 38000 }
-      ]
-    },
-    "appealDeadlineDays": {
-      "description": "Number of days to file an appeal after adverse decision",
-      "type": "integer",
-      "unit": "days",
-      "resolutionDateRef": "caseFile.adverseDecisionDate",
-      "authority": "APA 5 USC 554",
-      "values": [
-        { "effectiveDate": "2020-01-01", "value": 30 },
-        { "effectiveDate": "2025-06-01", "value": 45 }
-      ]
+  "$wosWorkflow": "1.0",
+  "url": "https://example.gov/workflows/benefits-adjudication",
+  "version": "1.0.0",
+  "title": "Benefits Adjudication",
+  "impactLevel": "rights-impacting",
+  "actors": [
+    { "id": "system", "type": "system" }
+  ],
+  "lifecycle": {
+    "initialState": "start",
+    "states": {
+      "start": { "type": "atomic" },
+      "done": { "type": "final" }
     }
   },
-  "bindings": {
-    "eligibilityForm": {
-      "id": "eligibilityForm",
-      "description": "Formspec Definition for the eligibility determination form",
-      "resolutionDateRef": "caseFile.applicationDate",
-      "bindingType": "formspec",
-      "authority": "Agency directive 2024-03",
-      "values": [
-        { "effectiveDate": "2025-01-01", "value": "https://agency.gov/forms/eligibility/v2.1" },
-        { "effectiveDate": "2025-09-01", "value": "https://agency.gov/forms/eligibility/v3.0" }
-      ]
+  "governance": {
+    "policyParameters": {
+      "parameters": {
+        "eligibilityThreshold": {
+          "description": "Maximum household income for program eligibility",
+          "type": "number",
+          "unit": "USD",
+          "resolutionDateRef": "caseFile.applicationDate",
+          "authority": "42 USC 1396a",
+          "values": [
+            { "effectiveDate": "2025-01-01", "value": 35000 },
+            { "effectiveDate": "2025-07-01", "value": 36500 },
+            { "effectiveDate": "2026-01-01", "value": 38000 }
+          ]
+        },
+        "appealDeadlineDays": {
+          "description": "Number of days to file an appeal after adverse decision",
+          "type": "integer",
+          "unit": "days",
+          "resolutionDateRef": "caseFile.adverseDecisionDate",
+          "authority": "APA 5 USC 554",
+          "values": [
+            { "effectiveDate": "2020-01-01", "value": 30 },
+            { "effectiveDate": "2025-06-01", "value": 45 }
+          ]
+        }
+      },
+      "bindings": {
+        "eligibilityForm": {
+          "id": "eligibilityForm",
+          "description": "Formspec Definition for the eligibility determination form",
+          "resolutionDateRef": "caseFile.applicationDate",
+          "bindingType": "formspec",
+          "authority": "Agency directive 2024-03",
+          "values": [
+            { "effectiveDate": "2025-01-01", "value": "https://agency.gov/forms/eligibility/v2.1" },
+            { "effectiveDate": "2025-09-01", "value": "https://agency.gov/forms/eligibility/v3.0" }
+          ]
+        }
+      }
     }
   }
 }

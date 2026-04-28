@@ -30,17 +30,14 @@ This document is a **draft specification**. It is a sidecar to the WOS Kernel Sp
 
 ## 1. Document Structure
 
-A Correspondence Metadata Config targets a Kernel Document via `targetWorkflow`. It declares which case state fields store correspondence entries and what metadata each entry carries.
+Correspondence metadata is declared as the `correspondence` block within a `$wosDelivery` sidecar. The sidecar joins to the target workflow via `targetWorkflow` (the `url` of the `$wosWorkflow` document). It declares which case state fields store correspondence entries and what metadata each entry carries.
 
 ### 1.1 Properties
 
+The `correspondence` block carries:
+
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `$wosCorrespondenceMetadata` | string | REQUIRED | Document type marker. MUST be `"1.0"`. |
-| `targetWorkflow` | string (URI) | REQUIRED | URI of the WOS Kernel Document this config applies to. |
-| `version` | string | OPTIONAL | Version of this config document. |
-| `title` | string | OPTIONAL | Human-readable name. |
-| `description` | string | OPTIONAL | Human-readable description of this correspondence configuration. |
 | `correspondenceField` | string | REQUIRED | Case state field path where correspondence entries are stored (e.g., `caseFile.correspondence`). |
 | `entryTemplates` | array of EntryTemplate | REQUIRED | Templates defining the metadata structure for correspondence entries. |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
@@ -85,37 +82,39 @@ In both cases, the correspondence metadata sidecar defines the structure of the 
 
 ### 1.5 Example
 
+The `correspondence` block embedded in a `$wosDelivery` sidecar:
+
 ```json
 {
-  "$wosCorrespondenceMetadata": "1.0",
+  "$wosDelivery": "1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "version": "1.0.0",
-  "title": "Benefits Adjudication Correspondence Metadata",
-  "correspondenceField": "caseFile.correspondence",
-  "entryTemplates": [
-    {
-      "id": "inboundMail",
-      "description": "Physical mail received from applicant or representative",
-      "channel": "mail",
-      "direction": "inbound",
-      "actorType": "applicant",
-      "requiredFields": ["contentRef"]
-    },
-    {
-      "id": "outboundNotice",
-      "description": "Official notice sent to applicant",
-      "channel": "mail",
-      "direction": "outbound",
-      "actorType": "agency",
-      "requiredFields": ["contentRef", "relatedTaskRef"]
-    },
-    {
-      "id": "phoneContact",
-      "description": "Phone call with applicant or representative",
-      "channel": "phone",
-      "direction": "inbound",
-      "actorType": "applicant"
-    }
-  ]
+  "correspondence": {
+    "correspondenceField": "caseFile.correspondence",
+    "entryTemplates": [
+      {
+        "id": "inboundMail",
+        "description": "Physical mail received from applicant or representative",
+        "channel": "mail",
+        "direction": "inbound",
+        "actorType": "applicant",
+        "requiredFields": ["contentRef"]
+      },
+      {
+        "id": "outboundNotice",
+        "description": "Official notice sent to applicant",
+        "channel": "mail",
+        "direction": "outbound",
+        "actorType": "agency",
+        "requiredFields": ["contentRef", "relatedTaskRef"]
+      },
+      {
+        "id": "phoneContact",
+        "description": "Phone call with applicant or representative",
+        "channel": "phone",
+        "direction": "inbound",
+        "actorType": "applicant"
+      }
+    ]
+  }
 }
 ```

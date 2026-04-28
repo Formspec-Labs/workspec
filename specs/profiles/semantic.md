@@ -5,6 +5,9 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Renamed (ADR 0076 D-3).** Sidecar schema renamed `wos-semantic-profile` → `wos-ontology-alignment` at `schemas/sidecars/wos-ontology-alignment.schema.json`. Transition-tag vocabulary moves back into `specs/kernel/spec.md` (deferred — currently still in this document). This spec doc retained for historical reference; canonical surface is the ontology-alignment schema. See `specs/sidecars/README.md` for the active sidecar index.
+
+
 # WOS Semantic Profile v1.0
 
 **Version:** 1.0.0-draft.1

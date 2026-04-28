@@ -28,13 +28,12 @@ This document is a **draft specification**. It is a sidecar to the WOS AI Integr
 
 ## 1. Document Structure
 
+The drift monitoring configuration is expressed as the `driftMonitoring` property on each `agents[*]` entry of a `$wosWorkflow` document. All properties described in this section appear under `agents[*].driftMonitoring`.
+
 ### 1.1 Properties
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `$wosDriftMonitor` | string | REQUIRED | Document type marker. MUST be `"1.0"`. |
-| `targetWorkflow` | string (URI) | REQUIRED | URI of the WOS Kernel Document this monitor applies to. |
-| `version` | string | OPTIONAL | Version of this config document. |
 | `monitors` | array of AgentMonitor | REQUIRED | Per-agent monitoring configurations. |
 | `deploymentSequence` | DeploymentSequence | OPTIONAL | Shadow/canary/production deployment sequence policy. |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
@@ -90,38 +89,60 @@ For `rights-impacting` and `safety-impacting` workflows, model version changes S
 
 ### 1.6 Example
 
+The `agents[*].driftMonitoring` block embedded in a `$wosWorkflow` document:
+
 ```json
 {
-  "$wosDriftMonitor": "1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "monitors": [
-    {
-      "agentRef": "documentExtractor",
-      "evaluationWindow": "P30D",
-      "metrics": [
-        { "name": "accuracy", "method": "accuracy", "threshold": 0.92 },
-        { "name": "confidenceDistribution", "method": "psi", "threshold": 0.2 }
-      ],
-      "rubberStamp": {
-        "enabled": true,
-        "minReviewTime": "PT30S",
-        "maxAgreementRate": 0.95
-      },
-      "alertThresholds": [
-        {
-          "condition": "accuracy < 0.90",
-          "severity": "critical",
-          "action": "demoteToAssistive",
-          "policyRef": "demoteToAssistiveOnDegradedAccuracy"
-        }
-      ]
-    }
+  "$wosWorkflow": "1.0",
+  "url": "https://example.gov/workflows/document-extraction",
+  "version": "1.0.0",
+  "title": "Document Extraction Drift Monitor",
+  "impactLevel": "operational",
+  "actors": [
+    { "id": "system", "type": "system" }
   ],
-  "deploymentSequence": {
-    "enabled": true,
-    "shadowDuration": "P14D",
-    "canaryPercentage": 0.05,
-    "canaryDuration": "P7D"
-  }
+  "lifecycle": {
+    "initialState": "start",
+    "states": {
+      "start": { "type": "atomic" },
+      "done": { "type": "final" }
+    }
+  },
+  "agents": [
+    {
+      "id": "documentExtractor",
+      "driftMonitoring": {
+        "monitors": [
+          {
+            "agentRef": "documentExtractor",
+            "evaluationWindow": "P30D",
+            "metrics": [
+              { "name": "accuracy", "method": "accuracy", "threshold": 0.92 },
+              { "name": "confidenceDistribution", "method": "psi", "threshold": 0.2 }
+            ],
+            "rubberStamp": {
+              "enabled": true,
+              "minReviewTime": "PT30S",
+              "maxAgreementRate": 0.95
+            },
+            "alertThresholds": [
+              {
+                "condition": "accuracy < 0.90",
+                "severity": "critical",
+                "action": "demoteToAssistive",
+                "policyRef": "demoteToAssistiveOnDegradedAccuracy"
+              }
+            ]
+          }
+        ],
+        "deploymentSequence": {
+          "enabled": true,
+          "shadowDuration": "P14D",
+          "canaryPercentage": 0.05,
+          "canaryDuration": "P7D"
+        }
+      }
+    }
+  ]
 }
 ```
