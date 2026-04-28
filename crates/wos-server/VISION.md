@@ -1,10 +1,14 @@
 # WOS Server — Architectural Vision
 
-**Status:** Architectural commitment, 2026-04-25. Target architecture; not an inventory of crates already split from the current server.
+**Status:** Architectural commitment aligned with repo-root [`VISION.md`](../../../VISION.md) as of 2026-04-27. Target architecture; not an inventory of crates already split from the current server.
+**Stack-wide framing** (operating frame, Q1–Q4, five seams, deployment axes, platform commitments): [`VISION.md`](../../../VISION.md) — read that first for cross-layer context.
+**This document** owns the **reference-server** shape for `wos-server`: ports, adapter crates, composition root, trust-posture wiring, and implementation invariants that belong here rather than in normative WOS spec prose.
+**Maintenance rule:** When stack-wide commitments change, update root `VISION.md` first; update this file for wos-server crate DAG, adapter defaults, and server-specific invariants only.
+
 **Authoritative spec for Formspec changes:** [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md).
 **Authoritative spec for Trellis byte protocol:** [`trellis/specs/trellis-core.md`](../../../trellis/specs/trellis-core.md).
 
-This document owns the cross-spec architectural framing for the WOS Server reference implementation and its place in the Formspec / WOS / Trellis stack. It defers Formspec-side specification to ADR-0074 and Trellis-side specification to `trellis-core.md`. It captures the wos-server commitments and the engineering discipline that makes them coherent.
+This document defers Formspec-side specification to ADR-0074 and Trellis-side specification to `trellis-core.md`. It captures wos-server engineering commitments and discipline; stack composition diagrams below echo root `VISION.md` §III for convenience.
 
 ---
 
@@ -19,7 +23,7 @@ This produces specific stances:
 - **AI-authored documents are input, not authority.** "Locked," "ratified," "normative" labels in earlier exploratory documents are framing. Substance is evaluated independently.
 - **Build the end state directly.** The first thing that ships is the right thing. Interim versions become migrations; we don't ship them.
 - **Minimize concept count.** Each architectural concept earns its place by doing one thing the others don't. Naming converges on existing terms (e.g., Trellis's "case ledger") rather than inventing parallel ones.
-- **Cargo and Cargo features enforce architectural seams.** Conventions stop being load-bearing; the dep graph is the architecture diagram.
+- **Cargo / package fences enforce architectural seams.** Conventions stop being load-bearing; the dep graph is the architecture diagram.
 
 Everything else follows.
 
@@ -55,9 +59,13 @@ Three composable specs, one verifiable artifact:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Trellis is our work.** The byte protocol, the Phase-1 envelope invariants, and the Rust reference implementation are commitments we ship — not third-party dependencies we wait on. The wos-server EventStore composes Trellis crates we author.
+**Center vs. adapter at the server boundary.** WOS governance semantics live in `wos-runtime` (in-memory oracle + WASM for client-side guard evaluation). Durable orchestration is a **port**: the `DurableRuntime` trait is the stable seam; **Restate** is the initial default production adapter (`runtime-restate`); `runtime-local` is the test and conformance oracle. Temporal and other engines remain eligible behind the same seam (see root `VISION.md` §X WOS).
 
-**Restate is the production runtime adapter.** Our in-memory `wos-runtime` is the test and conformance oracle. WASM-compiled `wos-runtime` runs in browsers for client-side guard evaluation. Same Rust source, three adapter targets, shared conformance fixtures.
+**Inter-layer transport.** Service-to-service calls among `formspec-server`, `wos-server`, and Trellis-backed storage use **workload identity** (principal class `workload` in the scope hierarchy — see root `VISION.md` §V), not API-key sprawl.
+
+**Trellis is our work.** The byte protocol, the Phase-1 envelope invariants, and the Rust reference implementation are commitments we ship — not third-party dependencies we wait on. The wos-server `EventStore` composes `trellis-store-postgres` with an in-database projections schema and Trellis-shaped `canonical` rows; see §VI for adapter crate names.
+
+**Restate is the production durable-runtime adapter** for this reference server. In-memory `wos-runtime` is the semantics oracle; WASM-compiled `wos-runtime` runs in browsers. Same Rust sources, multiple adapter targets, shared conformance fixtures where the port allows.
 
 ---
 
@@ -77,9 +85,9 @@ Three deployment modes describe the **property** the deployment commits to, not 
 - **`processing-fhe`** — Fully Homomorphic Encryption. Math-rooted confidentiality; computation on ciphertext without decryption. Tractable for narrow operations (predicate evaluation, simple aggregates), maturing for broader workloads.
 - **`processing-mpc`** — Multi-Party Computation. No single party holds plaintext; computation is distributed across non-colluding services.
 
-TEE, FHE, and MPC are peer options for stronger processing confidentiality. The architecture admits all three without making any one of them load-bearing. Federal and Sovereign deployments must not claim "platform cannot reconstruct plaintext outside an attested or math-bound boundary" until the selected `ProcessingService` adapter actually delivers that property.
+TEE, FHE, and MPC are peer options for stronger processing confidentiality. The architecture admits all three without making any one of them load-bearing. Federal and Sovereign deployments must not claim "platform cannot reconstruct plaintext outside an attested or math-bound boundary" until the selected `ProcessingService` adapter actually delivers that property. **`processing-tee` (or an equivalent attested / math-bound adapter) is required before the first Federal-posture customer**; SBA-posture deployments may rely on `processing-audited` alone (root `VISION.md` §IV).
 
-This stack is **data-and-workflow zero trust** layered on conventional **identity-and-network zero trust**. NIST SP 800-207, CISA ZTMM v2.0 Data pillar, OMB M-22-09, and FedRAMP rev5 cross-reference cleanly.
+This stack is **data-and-workflow zero trust** layered on conventional **identity-and-network zero trust**. NIST SP 800-207, CISA ZTMM v2.0 Data pillar, OMB M-22-09, and FedRAMP rev5 cross-reference cleanly; procurement-facing mapping lives in [`STACK.md`](../../../STACK.md) §Proof packages, not here.
 
 ---
 
@@ -113,7 +121,7 @@ Each capability is a port (a trait in `wos-server-ports`) with multiple concrete
 
 | Capability | Port | Adapters |
 |---|---|---|
-| Canonical event log + projections | `EventStore` | `eventstore-postgres`, `eventstore-sqlite` (composed with our `trellis-store-*` crates) |
+| Canonical event log + projections | `EventStore` | `eventstore-postgres`, `eventstore-embedded`, `eventstore-sqlite` (composed with our `trellis-store-*` crates; `eventstore-embedded` lives under `wos-spec/crates/`, not in `trellis/`) |
 | Encrypted blob storage (evidence attachments, content-addressed) | `BlobStore` | `blobstore-s3`, `blobstore-azure`, `blobstore-gcs`, `blobstore-fs` |
 | Durable execution runtime | `RuntimeOps` + `SeamAccess` + `TimerCoord` (layered) | `runtime-restate` (production), `runtime-local` (test/conformance oracle) |
 | Authorization (relationship-based access control) | `AuthzService` | `authz-openfga`, `authz-spicedb`, `authz-mock` |
@@ -170,6 +178,7 @@ crates/
 │                                   #   RuntimeOps, SeamAccess, TimerCoord
 │
 ├── wos-server-eventstore-postgres  # Production EventStore (composes trellis-store-postgres)
+├── wos-server-eventstore-embedded  # In-process / embedded composition (wos-spec/crates; NOT trellis/)
 ├── wos-server-eventstore-sqlite    # Dev / tests / single-tenant on-prem
 │
 ├── wos-server-blobstore-s3         # S3-compatible (AWS / MinIO / GovCloud)
@@ -306,6 +315,7 @@ A single dependency DAG. **Dependency-ordered sequencing, not calendar phasing**
 | Per-field DEKs (one DEK per field, not per class) | Per-class DEKs are right granularity; per-field is key explosion |
 | "Subject Ledger" as a parallel name for Trellis's "case ledger" | Adopt Trellis's term; one canonical name per concept |
 | Crypto distributed across the codebase | CRYPTO_OWNER fence concentrates crypto in adapter crates that need it; the dep graph is the security boundary |
+| FEEL / DMN / SHACL / FEL-conformance-profiles / DAG processing as alternatives to FEL + WOS lifecycle | One expression language (FEL) and one lifecycle model; see root `VISION.md` §VIII |
 
 ---
 
@@ -328,7 +338,7 @@ Three additional commitments (resolved from earlier "leans"):
 
 Genuinely open:
 
-4. **Confidential-compute adapter sequencing.** Trigger-driven, not calendar-driven. Each adapter ships when a deployment surfaces it: `processing-tee` when hardware-rooted attestation is required (FedRAMP-Moderate+ workloads); `processing-fhe` when a workload's operations are FHE-tractable AND the customer values math-rooted confidentiality over hardware-rooted; `processing-mpc` when a multi-operator deployment surfaces with no single party permitted to hold plaintext. Architectural commitment: admit all three via the `ProcessingService` port; do not pre-ship.
+1. **Confidential-compute adapter sequencing.** Trigger-driven, not calendar-driven. Each adapter ships when a deployment surfaces it: `processing-tee` when hardware-rooted attestation is required (FedRAMP-Moderate+ workloads); `processing-fhe` when a workload's operations are FHE-tractable AND the customer values math-rooted confidentiality over hardware-rooted; `processing-mpc` when a multi-operator deployment surfaces with no single party permitted to hold plaintext. Architectural commitment: admit all three via the `ProcessingService` port; do not pre-ship.
 
 (`wos-server` TODO/PARITY disposition is task hygiene tracked in the project board, not an architectural decision; not listed here.)
 
@@ -358,6 +368,8 @@ The architecture's shape is constrained by a small number of frameworks whose re
 
 | Concern | Authoritative spec |
 |---|---|
+| Stack-wide vision (operating frame, seams, platform commitments, rejection list) | [`VISION.md`](../../../VISION.md) |
+| Public stack framing (partners, procurement, five seams) | [`STACK.md`](../../../STACK.md) |
 | Formspec field-level access classification, bucketed Response, per-class encryption mechanics | [ADR-0074](../../../thoughts/adr/0074-formspec-native-field-level-transparency.md) |
 | Formspec response-scoped respondent history, including optional field-level editing changelog | `specs/audit/respondent-ledger-spec.md` |
 | Case ledger composition and wire format | `trellis/specs/trellis-core.md` §22 (current) plus planned cross-stack case-ledger binding if split out |
@@ -368,7 +380,7 @@ The architecture's shape is constrained by a small number of frameworks whose re
 | Trellis operational discipline (projections, watermarks, snapshots) | `trellis/specs/trellis-operational-companion.md` |
 | Case-creation boundary (Formspec → WOS handoff) | [ADR 0073](../../../thoughts/adr/0073-stack-case-initiation-and-intake-handoff.md) |
 | Stack evidence integrity (attachment binding) | [ADR 0072](../../../thoughts/adr/0072-stack-evidence-integrity-and-attachment-binding.md) |
-| Selective disclosure (BBS+) for FOIA / cross-agency export | ADR-0081 (planned follow-on) |
+| Selective disclosure (BBS+) for FOIA / cross-agency export | Planned follow-on parent-repo ADR (number TBD; see root `VISION.md` §XIII) |
 
 ---
 
@@ -386,5 +398,6 @@ This vision is the synthesis of an architectural conversation (2026-04-25) that 
 - **"Subject Ledger" naming dropped in favor of Trellis's existing "case ledger" term** to keep the conceptual surface minimal.
 - **CRYPTO_OWNER fence pattern adopted** from ADR-0074's `formspec-bucketing` precedent. The dep graph is the security boundary.
 - **Calendar-time and "implementation realism" scaffolding dropped.** Architectural debt and conceptual debt are the real costs; build the elegant end state.
+- **Scope split (2026-04-27).** Repo-root [`VISION.md`](../../../VISION.md) is the single stack-wide vision (see its §XV). This file holds **wos-server reference architecture** only — crate DAG, ports/adapters, and server-local invariants — with upward links for duplicated narrative.
 
 The architecture that resulted is data-and-workflow zero trust on top of conventional identity-and-network zero trust — emergent from honest engagement with each architectural question, not engineered toward as a goal.

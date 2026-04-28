@@ -4,7 +4,7 @@
 
 Part of [Formspec](https://formspec.org). Licensed under [Apache-2.0](../LICENSE) (specs, schemas, runtime) and [BSL 1.1](../LICENSE-BSL) (studio). See [LICENSING.md](../LICENSING.md) for details.
 
-WOS ships as **four independent release streams** — `wos-kernel`, `wos-governance`, `wos-ai`, and `wos-advanced` — so kernel consumers can pin stability while AI-layer work iterates. Compliance claims reference a pair of stream versions (e.g. `wos-kernel@1.0 + wos-ai@0.5`). See [RELEASE-STREAMS.md](RELEASE-STREAMS.md) for the stream → path mapping and [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) for known-good pairings.
+WOS authors a workflow as **one merged document** with seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md). The single top-level marker `$wosWorkflow` pins the envelope version; compliance claims compose as `$wosWorkflow@X.Y` plus a claims map enumerating which blocks are exercised. The four release streams (`wos-kernel`, `wos-governance`, `wos-ai`, `wos-advanced`) preserve their cadence and source-path mapping for repo hygiene. See [RELEASE-STREAMS.md](RELEASE-STREAMS.md) for the claims map and [COMPATIBILITY-MATRIX.md](COMPATIBILITY-MATRIX.md) for known-good envelope versions.
 
 ---
 

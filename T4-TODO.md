@@ -2,7 +2,9 @@
 
 Active closeout plan for the remaining cross-repo work on WOS-T4. The WOS-side Signature Profile spec/schema/lint/runtime/conformance slice landed on 2026-04-22 and is archived in [COMPLETED.md](COMPLETED.md).
 
-**Status:** active — cross-repo closeout (Trellis machine-verifiable slice landed 2026-04-22)
+**Status:** active — cross-repo closeout (Trellis machine-verifiable slice landed 2026-04-22; unchanged through Trellis Wave 16 store-postgres production hardening, Wave 17 HPKE/`KeyEntry` corpus, Wave 18 HPKE crate hardening + reason-code parity lint + store-postgres review follow-ups + ADR 0005 Stage 1 spec deltas, Wave 19 AEAD nonce determinism Core §9.4 + §17 amendment per parent **PLN-0383** [signature-stack-relevant — silent retry-determinism class on signed events], Wave 20 ADR 0008 interop sidecar reservation Phase-1 lock-off, and **Wave 21 pending close** [ADR 0005 Stages 2-5 working tree complete — Rust verifier + Python parity + positive vectors `append/023..027` committed; tamper `017..019` + export bundle + CLI + §27 in working tree; closes parent **PLN-0312** entirely once committed]). Trellis cert-of-completion at [`trellis/TODO.md`](../trellis/TODO.md) item #4 remains the integrity-artifact gate for **T4-10** rendering + parent **PLN-0355** ESIGN/UETA Trigger. Open gates as of 2026-04-28: Studio authoring/validation UI (T4-11); Trellis human-facing certificate-of-completion **rendering** (T4-10) — note: spec composition shape is closed by [Trellis ADR 0007](../trellis/thoughts/adr/0007-certificate-of-completion-composition.md) (Accepted 2026-04-24); remaining work is renderer/template/UX, not new byte format; shared cross-repo fixture bundle (T4-12 + parent design at [`../thoughts/specs/2026-04-24-shared-cross-seam-fixture-bundle-design.md`](../thoughts/specs/2026-04-24-shared-cross-seam-fixture-bundle-design.md)).
+
+**Scope reframe 2026-04-27 (VISION §X DocuSign 100% parity bar).** T4 remains the workflow-tier slice (signing semantics + `SignatureAffirmation` provenance + machine-verifiable export). Parent stack closure cluster pulls administrative surface back into 1.0 scope under separate handles — T4 does not expand. Path back to original DocuSign-100% framing: **PLN-0380** (`signature.md` §1.3 scope reopen + signing-intent URI registry + signer-authority claim shape), **PLN-0398** (Trigger — administrative surface: templates, bulk-send, dashboards, signer status views, reminder cadence configuration, audit history view), **PLN-0379** (Trellis ADR 0010 user-content Attestation primitive — composes for byte-level intent URI carriage). T4 closes when the workflow slice is verified end-to-end; admin-surface parity is its own follow-on.
 **Owner:** WOS leads  
 **Stack boundary:** Formspec captures signing evidence, WOS governs the signing workflow and emits `SignatureAffirmation`, Trellis anchors and exports the evidence bundle.
 
@@ -18,7 +20,7 @@ WOS-T4 is complete only when a signature workflow runs end to end:
 4. Trellis accepts the record through `custodyHook` and anchors it.
 5. Conformance proves the behavior across the common signing patterns.
 
-The parity bar is **DocuSign common-case workflow semantics**, not DocuSign administrative UX. T4 targets ESIGN/UETA/eIDAS-aligned intent capture, identity binding, signing order, reminders, expiry, decline, reassignment, witness/counter-signature, and notary/in-person signing semantics.
+**T4 scope** is the workflow-tier slice of the parity bar: ESIGN/UETA/eIDAS-aligned intent capture, identity binding, signing order, reminders, expiry, decline, reassignment, witness/counter-signature, and notary/in-person signing semantics. The full parity bar per VISION §X (post-synthesis-merge 2026-04-27) also pulls administrative surface into 1.0 scope (templates, bulk-send, dashboards, signer status views, reminder cadence, audit history view) — that work lands as parent **PLN-0398** (Trigger) plus **PLN-0380** spec extension (signing-intent URI registry, signer-authority claim shape, §1.3 scope reopen for ESIGN/UETA/eIDAS posture mapping). T4 itself does not expand to admin-surface scope; T4 closes when the workflow-tier slice is verified end-to-end.
 
 ---
 
@@ -88,7 +90,7 @@ Work in the parent Formspec project after the WOS center is stable.
 
 Work in Trellis after WOS `SignatureAffirmation` shape is stable.
 
-**Status:** machine-verifiable export path **landed 2026-04-22** in the Trellis submodule; human-facing certificate-of-completion composition remains.
+**Status:** machine-verifiable export path **landed 2026-04-22** in the Trellis submodule; certificate-of-completion **byte composition shape** closed by [Trellis ADR 0007](../trellis/thoughts/adr/0007-certificate-of-completion-composition.md) (Accepted 2026-04-24 — `trellis.certificate-of-completion.v1`, export catalog at `065-certificates-of-completion.cbor`, verifier obligations in Trellis Core §19); remaining T4-10 work is renderer/template/UX (HTML-to-PDF reference, signing-bundle visualization), not new spec authoring.
 
 - [x] Confirm Trellis accepts WOS `SignatureAffirmation` through `custodyHook` (vector `append/019-wos-signature-affirmation`; `trellis-conformance` replays append).
 - [x] Define idempotency tuple for signing records (ADR-0061 `(caseId, recordId)` tuple pinned in `019`; domain-separated key in append vector).
@@ -100,7 +102,8 @@ Work in Trellis after WOS `SignatureAffirmation` shape is stable.
   - [x] Identity-binding reference (catalog row `identity_binding`).
   - [x] Formspec response reference (catalog row `formspec_response_ref`).
   - [x] Anchor proof (export spine: checkpoints, inclusion proofs, manifest digests; optional external anchor unchanged).
-- [ ] Define certificate-of-completion composition as Trellis-owned (renderer-facing bundle / UX; export catalog is the verifier-facing substrate).
+- [x] Define certificate-of-completion **byte composition shape** as Trellis-owned (closed by Trellis ADR 0007, Accepted 2026-04-24 — `trellis.certificate-of-completion.v1` + export catalog row + verifier obligations).
+- [ ] **Renderer / template / UX:** reference HTML-to-PDF rendering of the manifest, signing-bundle visualization (`trellis-interop-c2pa` adapter at `trellis/TODO.md` item #21 layers C2PA assertion onto the presentation PDF — co-lands with this work).
 - [x] Cross-link Trellis spec to WOS Signature Profile (`trellis/specs/trellis-core.md` §6.7 / §18 / §19 — `trellis.export.signature-affirmations.v1`, `062-signature-affirmations.cbor`, verifier obligations).
 
 ---

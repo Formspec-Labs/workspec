@@ -1,5 +1,23 @@
 # WOS Release Streams
 
+> **Updated 2026-04-28 per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md) D-7:** the schema family collapses from 27 → 6 schemas with a single top-level marker `$wosWorkflow`. Stream identity (governance, agents, signature, custody, advanced) is implicit in the workflow envelope version. Compliance claims now compose as `$wosWorkflow@X.Y` plus the **claims map** below. The four-stream cadence and source-path framing below is preserved for repository-engineering hygiene (Changesets groupings, per-tier cadence) but is no longer the authoring or compliance-claim surface.
+
+## Claims map (post-ADR-0076)
+
+A vendor implementing `$wosWorkflow@1.0` declares which embedded blocks they exercise:
+
+| Embedded block | Conformance suite | Old stream framing (reference) |
+|---|---|---|
+| (none — bare core) | Kernel-Basic conformance | `wos-kernel@1.0` |
+| `governance` | Governance fixtures + due-process pipeline tests | `wos-governance@1.0` |
+| `agents` + `aiOversight` | AI deontic + autonomy + drift fixtures | `wos-ai@1.0` |
+| `signature` | T4 SIG-* conformance suite (signature.md ⇒ embedded `signature` block) | T4 (separate per Q11) |
+| `custody` | Trellis custody-anchor cross-stack fixtures | (cross-stack, not stream-scoped) |
+| `advanced` | Advanced equity + DCR + verifiable-constraints fixtures | `wos-advanced@1.0` |
+| `assurance` | Assurance attestation fixtures | (typically paired with governance) |
+
+A vendor's claim string: `$wosWorkflow@1.0 [governance, agents, aiOversight, signature]`.
+
 WOS ships as **four independent release streams** inside one repository. Each stream
 owns a set of source paths, a publishing cadence, and a stability commitment. Vendor
 compliance claims reference a *pair* (or more) of stream versions — for example,

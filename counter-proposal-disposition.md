@@ -199,7 +199,7 @@ Row counts below match **data rows** in the disposition tables in this file (exc
 | E6 | Expression extensions | HELD | FEL extension mechanism |
 | E7 | Execution hooks | HELD | `lifecycleHook` seam |
 | E8 | End node `onComplete` triggers | REJECT | Duplicates correlation mechanism |
-| E9 | Field type extensions | HELD | `caseFieldExtension` seam |
+| E9 | Field type extensions | HELD | Kernel §10.6 `x-` extensions on case-file fields (per ADR 0077 D-3 — `caseFieldExtension` was an invented seam name; case-field extensibility uses `x-` extensions on `CaseFile` / `MutationRecord`, not a distinct named §10 seam). |
 | E10 | Validation extensions | HELD (fragmented) | Formspec shapes, bind `constraint`, §5.7 external validation, and §8 extensions — four seams serve one conceptual job (custom validator plug-in point). HELD is accurate; consolidation into a single named seam is future-ADR work. Asking “where does a custom validator plug in?” should not yield four answers. |
 | E11 | Trigger mechanisms | HELD | ADR 0073 intake handoff + workflowInitiated / publicIntake |
 
@@ -321,13 +321,4 @@ If the artifact map is not cleaned up first, the Wave 0 declarative-I/O pipeline
 
 ## Seam vocabulary drift
 
-`wos-spec/CLAUDE.md` names six kernel seams as the only extension surface: `actorExtension`, `attachmentExtension`, `caseFieldExtension`, `eventExtension`, `outcomeExtension`, `sidecarExtension`.
-
-This disposition's prose references `contractHook` (FP-02 row; architectural-posture row on `formRef`) and `lifecycleHook` (E7 row) as seams. Neither appears in `CLAUDE.md`'s six. Row E1 cites Kernel §10 as enumerating six seams (§10.1–§10.6) without naming them; §10 may or may not match `CLAUDE.md`.
-
-Two possibilities:
-
-- `CLAUDE.md` is stale against current Kernel §10, and the true seam set includes `contractHook` / `lifecycleHook`.
-- The disposition uses "seam" loosely for advisory hooks at non-kernel layers, and `CLAUDE.md`'s six are the canonical set.
-
-**Action.** Reconcile before Wave 1 schema work lands. The named-seams invariant (`CLAUDE.md` Q3 heuristic: "Inventing new seams is a Q3 violation") requires one canonical enumeration. Resolution pass: read Kernel §10 normative prose, align `CLAUDE.md`'s six-name list to match, align disposition row references (FP-02, E7, architectural-posture) to match. Wave 2+ absorptions declare new extension points (`outputBindings`, `eventContract`, `taskActions`); without a canonical seam list, those landings are ambiguous about whether they create new seams or attach to existing ones.
+**Resolved 2026-04-24 by [ADR 0077](../thoughts/adr/0077-canonical-kernel-extension-seams.md).** Kernel §10 is authoritative; the canonical six are `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, and `extensions` / `x-` keys. The previous `CLAUDE.md` list (`attachmentExtension`, `caseFieldExtension`, `eventExtension`, `outcomeExtension`, `sidecarExtension`) was a freestanding fiction with no §10 backing — those names are invented and have been removed from `CLAUDE.md`. Disposition citations of `contractHook` (FP-02, architectural-posture) and `lifecycleHook` (E7) are correct and retained; row E9's `caseFieldExtension` reference has been rewritten to point at Kernel §10.6 `x-` extensions per ADR 0077 D-3.
