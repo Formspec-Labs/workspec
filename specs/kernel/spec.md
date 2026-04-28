@@ -720,7 +720,7 @@ Higher layers add interpretive provenance tiers through the `provenanceLayer` se
 - Layer 1 adds the **Reasoning tier** (rules applied, evidence consulted) and **Counterfactual tier** (what would change the outcome).
 - Layer 2 adds the **Narrative tier** (model-generated explanation; non-authoritative).
 
-Persisted or exported provenance logs use one shared record envelope across all tiers. Facts-tier fields are normative in the kernel; higher tiers reuse the same envelope with `auditLayer` set accordingly. Runtime constructors MAY leave append-stamped fields empty in memory, but any provenance document validated against `wos-provenance-record.schema.json` is the post-append export shape.
+Persisted or exported provenance logs use one shared record envelope across all tiers. Facts-tier fields are normative in the kernel; higher tiers reuse the same envelope with `auditLayer` set accordingly. Runtime constructors MAY leave append-stamped fields empty in memory, but any provenance document validated against `wos-provenance-log.schema.json` is the post-append export shape.
 
 ### 8.2 Facts Tier Record
 
@@ -747,7 +747,7 @@ Every persisted or exported provenance record MUST include:
 | `lifecycleState` | string | OPTIONAL | Lifecycle state at the time of the action when the processor can determine it canonically. |
 | `extensions` | object | OPTIONAL | Extension data. All keys MUST be prefixed with `x-`. |
 
-`wos-provenance-record.schema.json` validates the persisted/exported shape above, not unstamped in-memory constructors. Runtime append paths MUST populate the required export fields before persistence; helper constructors in `wos-core` MAY leave those fields empty until the runtime stamps them.
+`wos-provenance-log.schema.json` validates the persisted/exported shape above, not unstamped in-memory constructors. Runtime append paths MUST populate the required export fields before persistence; helper constructors in `wos-core` MAY leave those fields empty until the runtime stamps them.
 
 #### 8.2.1 Snapshot Semantics
 
@@ -772,9 +772,9 @@ The optional `outcome` field records why the processor completed (or declined to
 | `preconditionNotSatisfied` | AI Integration §3.3.1 | A capability precondition FEL expression evaluated to `false` or a non-boolean, so the processor skipped the agent invocation and fell through to the fallback chain. |
 | `convergenceCapReached` | Runtime §10.3 | Continuous-mode re-evaluation reached the 100-cycle convergence cap for a single triggering mutation; the processor halted further re-evaluation for that mutation. |
 
-The canonical schema definition is `$defs/ProvenanceOutcome` in `wos-provenance-record.schema.json`. Processors that emit outcome values outside this reserved set MUST prefix them with `x-` (see Kernel §10.6 extensions).
+The canonical schema definition is `$defs/ProvenanceOutcome` in `wos-provenance-log.schema.json`. Processors that emit outcome values outside this reserved set MUST prefix them with `x-` (see Kernel §10.6 extensions).
 
-The `preconditionNotSatisfied` outcome pairs with the `capabilityInvocation` record-kind discriminator (AI Integration §3.3.1): when a record carries `recordKind: "capabilityInvocation"` with `data.invocationBlocked: true`, the `outcome` field MUST be `preconditionNotSatisfied`. This pairing is enforced at schema-validation time via `$defs/CapabilityInvocationRecord` in `wos-provenance-record.schema.json`, which `FactsTierRecord` composes via `allOf` so that every conformant provenance log participates in the MUST regardless of whether an AI Integration document is also attached to the workflow.
+The `preconditionNotSatisfied` outcome pairs with the `capabilityInvocation` record-kind discriminator (AI Integration §3.3.1): when a record carries `recordKind: "capabilityInvocation"` with `data.invocationBlocked: true`, the `outcome` field MUST be `preconditionNotSatisfied`. This pairing is enforced at schema-validation time via `$defs/CapabilityInvocationRecord` in `wos-provenance-log.schema.json`, which `FactsTierRecord` composes via `allOf` so that every conformant provenance log participates in the MUST regardless of whether an AI Integration document is also attached to the workflow.
 
 #### 8.2.3 Intake and Governed-Case Boundary Record Kinds
 
@@ -789,7 +789,7 @@ The following Facts-tier record kinds are reserved for the intake-acceptance bou
 
 `caseCreated` is distinct from Runtime Companion `instanceCreated`. `instanceCreated` records runtime allocation of instance state. `caseCreated` records the governance boundary at which a governed case exists. A public-intake flow MAY emit both records; they remain semantically distinct.
 
-The canonical schema definitions are `$defs/IntakeAcceptedRecord`, `$defs/IntakeRejectedRecord`, `$defs/IntakeDeferredRecord`, and `$defs/CaseCreatedRecord` in `wos-provenance-record.schema.json`. Those schema branches intentionally constrain only the binding-agnostic minimum:
+The canonical schema definitions are `$defs/IntakeAcceptedRecord`, `$defs/IntakeRejectedRecord`, `$defs/IntakeDeferredRecord`, and `$defs/CaseCreatedRecord` in `wos-provenance-log.schema.json`. Those schema branches intentionally constrain only the binding-agnostic minimum:
 
 - the `recordKind` literal,
 - the canonical event name when one is reserved,

@@ -204,6 +204,22 @@
     },
     "governance": {
       "$ref": "#/$defs/Governance",
+      "description": "Embedded Layer-1 governance (due process, review protocols, validation pipelines, policy parameters) inside the author-time workflow envelope. Required for rightsImpacting and safetyImpacting impactLevel per kernel and ADR 0076 D-2.",
+      "examples": [
+        {
+          "dueProcess": {},
+          "reviewProtocols": []
+        },
+        {
+          "amendmentTaxonomy": [
+            "correction",
+            "amendment",
+            "supersession",
+            "rescission",
+            "reinstatement"
+          ]
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Embedded due-process / review / pipeline governance \u2014 REQUIRED for rightsImpacting/safetyImpacting workflows per ADR 0076 D-2"
@@ -214,6 +230,27 @@
       "items": {
         "$ref": "#/$defs/AgentDeclaration"
       },
+      "description": "Per-agent declarations (model, autonomy, deontic constraints, drift policy) embedded in the merged workflow. Required when any actor has type agent (lint WOS-AGENT-XREF-001).",
+      "examples": [
+        [
+          {
+            "id": "docExtractor",
+            "autonomy": "assistive"
+          }
+        ],
+        [
+          {
+            "id": "intakeBot",
+            "autonomy": "readOnly",
+            "deonticConstraints": [
+              {
+                "kind": "prohibition",
+                "expression": "true"
+              }
+            ]
+          }
+        ]
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Per-agent declarations \u2014 REQUIRED when any actor has type='agent' (lint WOS-AGENT-XREF-001 enforces the cross-reference)"
@@ -221,6 +258,17 @@
     },
     "aiOversight": {
       "$ref": "#/$defs/AIOversight",
+      "description": "Cross-cutting AI oversight embedded in the workflow envelope: disclosure posture, drift detection, narrative tier handling, volume constraints. Pairs with the agents array (ADR 0076).",
+      "examples": [
+        {
+          "disclosure": {},
+          "driftDetection": {}
+        },
+        {
+          "volumeConstraints": {},
+          "narrativeTier": {}
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Cross-cutting AI policy \u2014 disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, narrative tier; pairs with agents block"
@@ -228,6 +276,15 @@
     },
     "signature": {
       "$ref": "#/$defs/Signature",
+      "description": "Embedded DocuSign-tier signature profile (roles, documents, signingFlow, evidence) inside the author-time envelope. Required when transitions gate on kind signature (lint WOS-SIG-COVER-001).",
+      "examples": [
+        {
+          "roles": [],
+          "documents": [],
+          "signingFlow": {},
+          "evidence": {}
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Embedded signature workflow \u2014 LOAD-BEARING for DocuSign-tier (signing order IS the workflow); REQUIRED when any transition gates on kind='signature' (lint WOS-SIG-COVER-001 enforces signer coverage)"
@@ -235,6 +292,22 @@
     },
     "custody": {
       "$ref": "#/$defs/Custody",
+      "description": "Embedded Trellis custody binding (trust profile, anchor requirements) for workflows that claim anchoring on transitions or signature events.",
+      "examples": [
+        {
+          "trustProfileRef": "https://example.org/trust/profiles/pilot-2026",
+          "anchorRequirements": []
+        },
+        {
+          "trustProfileRef": "urn:wos:trust:agency-default",
+          "anchorRequirements": [
+            {
+              "on": "submitDetermination",
+              "anchor": "required"
+            }
+          ]
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Trellis custody binding \u2014 load-bearing whenever a workflow claims anchoring on transitions or signature events"
@@ -993,6 +1066,11 @@
         },
         "mutationSource": {
           "description": "Provenance origin of the projected mutation under the governed output-commit pipeline (ADR 0080). Recorded in Facts-tier provenance (Kernel \u00a78); load-bearing for audit traceability and rights-impacting decision review. The closed-set values describe canonical provenance origins; vendor-namespaced `x-` values cover origins outside the canonical set.",
+          "examples": [
+            "agent-extracted",
+            "human-corrected",
+            "x-acme-batch-import"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Where the mutation came from \u2014 load-bearing audit-traceability claim per ADR 0080 governed output-commit pipeline"
@@ -1021,6 +1099,11 @@
         },
         "verificationLevel": {
           "description": "Strength of verification applied to the projected mutation under the governed output-commit pipeline (ADR 0080). Higher levels increase audit weight and enable stricter governance gates (e.g., `authoritative` defeats lower-tier challenges in ADR 0066 amendment/supersession evaluation). The closed-set values describe canonical verification regimes; vendor-namespaced `x-` values cover bespoke regimes (e.g., FHE-attested, dual-control). Lint WOS-VER-LEVEL-001 warns when `agents[].fallbackChain` is declared without any `verificationLevel` on the workflow.",
+          "examples": [
+            "independent",
+            "authoritative",
+            "x-acme-fhe-attested"
+          ],
           "x-lm": {
             "critical": true,
             "intent": "How strongly verified the mutation is \u2014 load-bearing for governance gating and fallback-chain integrity (lint WOS-VER-LEVEL-001)"
