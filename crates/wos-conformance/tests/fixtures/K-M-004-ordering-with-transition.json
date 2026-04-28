@@ -2,25 +2,36 @@
   "binding": "formspec",
   "id": "K-M-004-ordering-with-transition",
   "rule": "K-M",
-  "description": "When a setData onEntry action fires and a task with a completionEvent is created in the same state, the provenance stream must read: CaseStateMutation → MilestoneFired → TaskCreated → (later) StateTransition. This verifies the pinned ordering: durable data write, then milestone fired, then reactive transitions drained. The expected_provenance field uses any-match semantics and cannot enforce ordering between entries; the ordering assertion is implemented as an inline Rust test in kernel_conformance.rs that checks absolute indices.",
-  "documents": { "kernel": "inline" },
+  "description": "When a setData onEntry action fires and a task with a completionEvent is created in the same state, the provenance stream must read: CaseStateMutation \u2192 MilestoneFired \u2192 TaskCreated \u2192 (later) StateTransition. This verifies the pinned ordering: durable data write, then milestone fired, then reactive transitions drained. The expected_provenance field uses any-match semantics and cannot enforce ordering between entries; the ordering assertion is implemented as an inline Rust test in kernel_conformance.rs that checks absolute indices.",
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:milestone-ordering",
       "version": "1.0.0",
       "title": "Milestone Ordering With Transition",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "reviewer", "type": "human", "description": "Review actor" }
+        {
+          "id": "reviewer",
+          "type": "human",
+          "description": "Review actor"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
         "states": {
           "open": {
             "type": "atomic",
-            "transitions": [{ "event": "start", "target": "review" }]
+            "transitions": [
+              {
+                "event": "start",
+                "target": "review"
+              }
+            ]
           },
           "review": {
             "type": "atomic",
@@ -40,12 +51,22 @@
               }
             ],
             "transitions": [
-              { "event": "review.completed", "target": "approved" },
-              { "event": "review.failed", "target": "rejected" }
+              {
+                "event": "review.completed",
+                "target": "approved"
+              },
+              {
+                "event": "review.failed",
+                "target": "rejected"
+              }
             ]
           },
-          "approved": { "type": "final" },
-          "rejected": { "type": "final" }
+          "approved": {
+            "type": "final"
+          },
+          "rejected": {
+            "type": "final"
+          }
         },
         "milestones": {
           "reviewStarted": {
@@ -62,7 +83,9 @@
       },
       "caseFile": {
         "fields": {
-          "inReview": { "type": "boolean" }
+          "inReview": {
+            "type": "boolean"
+          }
         }
       },
       "execution": {
@@ -76,7 +99,10 @@
     "inReview": false
   },
   "event_sequence": [
-    { "event": "start", "actor": "reviewer" },
+    {
+      "event": "start",
+      "actor": "reviewer"
+    },
     {
       "event": "submit",
       "actor": "reviewer",
@@ -92,13 +118,32 @@
     }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "review", "event": "start" },
-    { "from": "review", "to": "approved", "event": "review.completed" }
+    {
+      "from": "open",
+      "to": "review",
+      "event": "start"
+    },
+    {
+      "from": "review",
+      "to": "approved",
+      "event": "review.completed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "caseStateMutation" },
-    { "recordKind": "milestoneFired", "data": { "milestoneId": "reviewStarted" } },
-    { "recordKind": "taskCreated" },
-    { "recordKind": "stateTransition" }
+    {
+      "recordKind": "caseStateMutation"
+    },
+    {
+      "recordKind": "milestoneFired",
+      "data": {
+        "milestoneId": "reviewStarted"
+      }
+    },
+    {
+      "recordKind": "taskCreated"
+    },
+    {
+      "recordKind": "stateTransition"
+    }
   ]
 }

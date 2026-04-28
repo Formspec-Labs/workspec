@@ -8,7 +8,6 @@ use crate::AppState;
 use crate::auth::{AuthCtx, TokenPair};
 use crate::domain::{HasRoleResponse, LoginRequest, RefreshRequest};
 use crate::error::{ApiError, ApiResult};
-use crate::storage::Storage;
 
 pub fn routes() -> Router<AppState> {
     Router::new()

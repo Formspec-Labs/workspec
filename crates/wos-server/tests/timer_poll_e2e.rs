@@ -21,7 +21,7 @@ fn timer_kernel(url: &str, version: &str) -> serde_json::Value {
     // event `timer.fire` → `done`; that's the transition the timer's
     // event payload will satisfy.
     serde_json::json!({
-        "$wosKernel": "1.0.0",
+        "$wosWorkflow": "1.0.0",
         "url": url,
         "version": version,
         "title": "Timer Poll Kernel",

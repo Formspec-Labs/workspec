@@ -21,7 +21,7 @@ fn inline_fixture(binding: Option<&str>) -> String {
             "documents": {{"kernel": "inline"}},
             "inline_documents": {{
                 "kernel": {{
-                    "$wosKernel": "1.0",
+                    "$wosWorkflow": "1.0",
                     "url": "urn:test:dispatch",
                     "version": "1.0.0",
                     "title": "Binding Dispatch Test",

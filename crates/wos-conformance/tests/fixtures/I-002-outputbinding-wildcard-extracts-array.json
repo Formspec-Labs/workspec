@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:I-002-wildcard-binding",
       "version": "1.0.0",
       "title": "I-002 Wildcard Binding Extraction",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -38,15 +42,22 @@
           "loaded": {
             "type": "atomic",
             "transitions": [
-              { "event": "done", "target": "complete" }
+              {
+                "event": "done",
+                "target": "complete"
+              }
             ]
           },
-          "complete": { "type": "final" }
+          "complete": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "items": { "type": "array" }
+          "items": {
+            "type": "array"
+          }
         }
       },
       "execution": {
@@ -56,17 +67,45 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:I-002-wildcard-binding",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "nameService": {
-          "type": "request-response",
-          "description": "Returns an array of named items; wildcarded outputBinding extracts names",
-          "outputBinding": {
-            "caseFile.items": "$.items[*].name"
+        "targetWorkflow": {
+          "url": "urn:test:I-002-wildcard-binding",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "nameService": {
+            "type": "request-response",
+            "description": "Returns an array of named items; wildcarded outputBinding extracts names",
+            "outputBinding": {
+              "caseFile.items": "$.items[*].name"
+            }
           }
         }
       }
@@ -75,21 +114,39 @@
   "initial_case_state": {},
   "service_response": {
     "items": [
-      { "name": "a" },
-      { "name": "b" },
-      { "name": "c" }
+      {
+        "name": "a"
+      },
+      {
+        "name": "b"
+      },
+      {
+        "name": "c"
+      }
     ]
   },
   "event_sequence": [
-    { "event": "fetch", "actor": "operator" }
+    {
+      "event": "fetch",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "loaded", "event": "fetch" }
+    {
+      "from": "open",
+      "to": "loaded",
+      "event": "fetch"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "dataMapping",
-      "data": { "serviceRef": "nameService", "updatedPaths": ["caseFile.items"] }
+      "data": {
+        "serviceRef": "nameService",
+        "updatedPaths": [
+          "caseFile.items"
+        ]
+      }
     }
   ]
 }

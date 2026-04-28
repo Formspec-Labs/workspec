@@ -207,7 +207,7 @@ fn workflow_handoff(case_ref: &str, handoff_id: &str) -> serde_json::Value {
 #[test]
 fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalization() {
     let kernel: KernelDocument = serde_json::from_value(json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "urn:test:formspec-intake-runtime-it",
         "version": "1.0.0",
         "lifecycle": {
@@ -287,7 +287,7 @@ fn runtime_formspec_intake_public_create_survives_legacy_governed_case_ref() {
     let def_url = "urn:test:formspec-intake-public-it";
     let def_version = "1.0.0";
     let kernel: KernelDocument = serde_json::from_value(json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": def_url,
         "version": def_version,
         "lifecycle": {

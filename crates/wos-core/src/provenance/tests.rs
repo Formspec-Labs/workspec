@@ -326,6 +326,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::InvalidDuration,
         ProvenanceKind::ToleranceViolation,
         ProvenanceKind::ConvergenceCapReached,
+        ProvenanceKind::CapabilityInvocation,
         ProvenanceKind::DeonticViolation,
         ProvenanceKind::DeonticEvaluation,
         ProvenanceKind::DeonticResolution,
@@ -399,6 +400,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ActivationBlocked,
         ProvenanceKind::CalendarIgnored,
         ProvenanceKind::NotificationSuppressed,
+        ProvenanceKind::ConfigurationWarning,
         ProvenanceKind::RelationshipChanged,
         ProvenanceKind::MilestoneFired,
         ProvenanceKind::EventEmitted,
@@ -513,4 +515,199 @@ fn signature_affirmation_constructor_serializes_required_fields() {
         "urn:agency.gov:formspec:responses:benefits:case-2026-0001"
     );
     assert_eq!(json["data"]["custodyHookEligible"], true);
+}
+
+#[test]
+fn capability_invocation_blocked_sets_precondition_outcome() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "failedPrecondition".to_string(),
+        serde_json::Value::String("caseFile.applicantConsent == true".to_string()),
+    );
+    let record = ProvenanceRecord::capability_invocation(CapabilityInvocationInput {
+        capability_id: "documentExtraction",
+        agent_id: "intake-classifier",
+        invocation_blocked: true,
+        context: Some(context),
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "capabilityInvocation");
+    assert_eq!(json["actorId"], "intake-classifier");
+    assert_eq!(json["data"]["capabilityId"], "documentExtraction");
+    assert_eq!(json["data"]["invocationBlocked"], true);
+    assert_eq!(
+        json["data"]["failedPrecondition"],
+        "caseFile.applicantConsent == true"
+    );
+    assert_eq!(json["outcome"], "preconditionNotSatisfied");
+}
+
+#[test]
+fn capability_invocation_permitted_omits_outcome() {
+    let record = ProvenanceRecord::capability_invocation(CapabilityInvocationInput {
+        capability_id: "documentExtraction",
+        agent_id: "intake-classifier",
+        invocation_blocked: false,
+        context: None,
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "capabilityInvocation");
+    assert_eq!(json["data"]["capabilityId"], "documentExtraction");
+    assert_eq!(json["data"]["invocationBlocked"], false);
+    assert!(
+        json.get("outcome").is_none(),
+        "permitted invocations MUST omit the outcome field; AI §3.3.1 reserves the literal for blocked records"
+    );
+}
+
+#[test]
+fn capability_invocation_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "capabilityId".to_string(),
+        serde_json::Value::String("attacker-overrides-this".to_string()),
+    );
+    context.insert(
+        "invocationBlocked".to_string(),
+        serde_json::Value::Bool(true),
+    );
+    context.insert(
+        "fallbackChainRef".to_string(),
+        serde_json::Value::String("urn:agency.gov:fallback:human-review".to_string()),
+    );
+    let record = ProvenanceRecord::capability_invocation(CapabilityInvocationInput {
+        capability_id: "trueCapability",
+        agent_id: "intake-classifier",
+        invocation_blocked: false,
+        context: Some(context),
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["capabilityId"], "trueCapability",
+        "constructor's capability_id MUST win over context-supplied capabilityId"
+    );
+    assert_eq!(
+        json["data"]["invocationBlocked"], false,
+        "constructor's invocation_blocked MUST win over context-supplied invocationBlocked"
+    );
+    assert_eq!(
+        json["data"]["fallbackChainRef"],
+        "urn:agency.gov:fallback:human-review"
+    );
+}
+
+#[test]
+fn capability_invocation_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::CapabilityInvocation),
+        "facts"
+    );
+}
+
+#[test]
+fn configuration_warning_unresolved_ref_subject_serializes_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "workflowUri".to_string(),
+        serde_json::Value::String("urn:agency.gov:wos:benefits:v1".to_string()),
+    );
+    let record = ProvenanceRecord::configuration_warning(ConfigurationWarningInput {
+        subject: "drift-monitor.policyRef",
+        unresolved_ref: Some("DemotionRule.id::nonexistent"),
+        context: Some(context),
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "configurationWarning");
+    assert_eq!(json["data"]["subject"], "drift-monitor.policyRef");
+    assert_eq!(json["data"]["unresolvedRef"], "DemotionRule.id::nonexistent");
+    assert_eq!(json["data"]["workflowUri"], "urn:agency.gov:wos:benefits:v1");
+}
+
+#[test]
+fn configuration_warning_render_failure_subject_omits_unresolved_ref() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "templateKey".to_string(),
+        serde_json::Value::String("benefits-denial-notice".to_string()),
+    );
+    context.insert(
+        "failureReason".to_string(),
+        serde_json::Value::String("template field {{caseId}} unresolved".to_string()),
+    );
+    let record = ProvenanceRecord::configuration_warning(ConfigurationWarningInput {
+        subject: "notification-template.render",
+        unresolved_ref: None,
+        context: Some(context),
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["subject"], "notification-template.render");
+    assert!(
+        json["data"].get("unresolvedRef").is_none(),
+        "render-failure subjects MUST omit unresolvedRef when input.unresolved_ref is None"
+    );
+    assert_eq!(json["data"]["templateKey"], "benefits-denial-notice");
+}
+
+#[test]
+fn configuration_warning_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "subject".to_string(),
+        serde_json::Value::String("attacker-overrides-this".to_string()),
+    );
+    context.insert(
+        "unresolvedRef".to_string(),
+        serde_json::Value::String("attacker-overrides-this-too".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("preserved".to_string()),
+    );
+    let record = ProvenanceRecord::configuration_warning(ConfigurationWarningInput {
+        subject: "governance.continuationPolicyRef",
+        unresolved_ref: Some("ContinuationPolicy.id::missing"),
+        context: Some(context),
+    });
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["subject"], "governance.continuationPolicyRef",
+        "constructor's subject MUST win over context-supplied subject"
+    );
+    assert_eq!(
+        json["data"]["unresolvedRef"], "ContinuationPolicy.id::missing",
+        "constructor's unresolved_ref MUST win over context-supplied unresolvedRef"
+    );
+    assert_eq!(json["data"]["auxNote"], "preserved");
+}
+
+#[test]
+fn configuration_warning_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::ConfigurationWarning),
+        "facts"
+    );
+}
+
+#[test]
+fn capability_invocation_round_trips_through_serde() {
+    let blocked = ProvenanceRecord::capability_invocation(CapabilityInvocationInput {
+        capability_id: "documentExtraction",
+        agent_id: "intake-classifier",
+        invocation_blocked: true,
+        context: None,
+    });
+    let json = serde_json::to_string(&blocked).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert!(matches!(
+        restored.record_kind,
+        ProvenanceKind::CapabilityInvocation
+    ));
+    assert_eq!(restored.outcome.as_deref(), Some("preconditionNotSatisfied"));
+    assert_eq!(restored.actor_id.as_deref(), Some("intake-classifier"));
 }

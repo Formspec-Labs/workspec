@@ -567,23 +567,167 @@ mod tests {
 
     #[test]
     fn camel_cases_all_record_kinds() {
-        // Spot-check a few variants beyond StateTransition to guard against
-        // future enum additions that might accidentally break the rename.
-        let mut log = ProvenanceLog::default();
-        for kind in [
+        // Exhaustive parity check: every `ProvenanceKind` variant exports as
+        // its serde-camelCase string verbatim. Mirrors the
+        // `audit_layer_for_kind_covers_every_variant` enumeration in
+        // `wos-core/src/provenance/tests.rs` — adding a new variant upstream
+        // forces an entry here. Catches the bug class where a new variant
+        // ships with a wrong serde rename or where the export pipeline
+        // accidentally drops `record_kind`.
+        //
+        // Background: cross-stack-scout 2026-04-28 surfaced this as a real
+        // gap — the original spot-check covered 3 of 100 variants, leaving
+        // 97 unverified. Extending mechanical because
+        // `camel_case_record_kind` is a pure serde round-trip; the test
+        // asserts the export pipeline preserves that round-trip end-to-end.
+        let all: &[ProvenanceKind] = &[
+            ProvenanceKind::StateTransition,
+            ProvenanceKind::UnmatchedEvent,
             ProvenanceKind::CaseStateMutation,
+            ProvenanceKind::CaseCreated,
+            ProvenanceKind::IntakeAccepted,
+            ProvenanceKind::IntakeRejected,
+            ProvenanceKind::IntakeDeferred,
+            ProvenanceKind::TimerCreated,
             ProvenanceKind::TimerFired,
+            ProvenanceKind::TimerCancelled,
+            ProvenanceKind::OnEntry,
+            ProvenanceKind::OnExit,
+            ProvenanceKind::ActionExecuted,
+            ProvenanceKind::InvalidDuration,
+            ProvenanceKind::ToleranceViolation,
+            ProvenanceKind::ConvergenceCapReached,
+            ProvenanceKind::CapabilityInvocation,
             ProvenanceKind::DeonticViolation,
-        ] {
+            ProvenanceKind::DeonticEvaluation,
+            ProvenanceKind::DeonticResolution,
+            ProvenanceKind::DeonticBypass,
+            ProvenanceKind::RightsViolation,
+            ProvenanceKind::ConsistencyViolation,
+            ProvenanceKind::AutonomyViolation,
+            ProvenanceKind::AutonomyCapped,
+            ProvenanceKind::AutonomyComputed,
+            ProvenanceKind::HumanTaskCreated,
+            ProvenanceKind::ToolViolation,
+            ProvenanceKind::EscalationPending,
+            ProvenanceKind::AutonomyDemotion,
+            ProvenanceKind::ConfidenceViolation,
+            ProvenanceKind::ConfidenceDecay,
+            ProvenanceKind::CumulativeConfidenceViolation,
+            ProvenanceKind::SessionPaused,
+            ProvenanceKind::GroundTruthLabel,
+            ProvenanceKind::AgentOutput,
+            ProvenanceKind::ActorTypeViolation,
+            ProvenanceKind::AgentProvenanceAnnotation,
+            ProvenanceKind::AgentVersionChange,
+            ProvenanceKind::NarrativeTierRecorded,
+            ProvenanceKind::ConstraintTamperBlocked,
+            ProvenanceKind::DriftReclassification,
+            ProvenanceKind::AgentStateTransition,
+            ProvenanceKind::ProxyInvocation,
+            ProvenanceKind::DispositiveViolation,
+            ProvenanceKind::FallbackTriggered,
+            ProvenanceKind::FallbackAttempt,
+            ProvenanceKind::FallbackTerminal,
+            ProvenanceKind::NoticeSent,
+            ProvenanceKind::SeparationViolation,
+            ProvenanceKind::AppealFiled,
+            ProvenanceKind::ProtocolViolation,
+            ProvenanceKind::IndependentFirstEnforced,
+            ProvenanceKind::SamplingDecision,
+            ProvenanceKind::OverrideViolation,
+            ProvenanceKind::OverrideRecorded,
+            ProvenanceKind::PipelineStageCompleted,
+            ProvenanceKind::PipelineRiskProfile,
+            ProvenanceKind::PipelineRejection,
+            ProvenanceKind::TaskCreated,
+            ProvenanceKind::TaskPresented,
+            ProvenanceKind::TaskDismissed,
+            ProvenanceKind::TaskDraftPersisted,
+            ProvenanceKind::TaskResponseSubmitted,
+            ProvenanceKind::TaskResponseRejected,
+            ProvenanceKind::DataMapping,
+            ProvenanceKind::TaskCompleted,
+            ProvenanceKind::TaskFailed,
+            ProvenanceKind::TaskSkipped,
+            ProvenanceKind::ParameterResolved,
+            ProvenanceKind::CompensationLogEntry,
+            ProvenanceKind::CompensationExecuted,
+            ProvenanceKind::CompensationScopeBoundary,
+            ProvenanceKind::DelegationViolation,
+            ProvenanceKind::InstanceResumed,
+            ProvenanceKind::StepResultPersisted,
+            ProvenanceKind::IdempotencyDedup,
+            ProvenanceKind::InstanceMigrated,
+            ProvenanceKind::ContractValidation,
+            ProvenanceKind::HistoryCleared,
+            ProvenanceKind::DcrActivityExecuted,
+            ProvenanceKind::DcrRelationEvaluated,
+            ProvenanceKind::DcrResolutionError,
+            ProvenanceKind::ZoneSatisfied,
+            ProvenanceKind::EquityAlert,
+            ProvenanceKind::VerificationReportProduced,
+            ProvenanceKind::ImmutabilityViolation,
+            ProvenanceKind::ActivationBlocked,
+            ProvenanceKind::CalendarIgnored,
+            ProvenanceKind::NotificationSuppressed,
+            ProvenanceKind::ConfigurationWarning,
+            ProvenanceKind::RelationshipChanged,
+            ProvenanceKind::MilestoneFired,
+            ProvenanceKind::EventEmitted,
+            ProvenanceKind::EventConsumed,
+            ProvenanceKind::CallbackReceived,
+            ProvenanceKind::CallbackPending,
+            ProvenanceKind::ArazzoStep,
+            ProvenanceKind::ToolInvoked,
+            ProvenanceKind::PolicyDecision,
+            ProvenanceKind::SignatureAffirmation,
+        ];
+        assert_eq!(
+            all.len(),
+            101,
+            "ProvenanceKind has 101 variants at HEAD; this test must enumerate all of them so a new variant forces a conscious entry"
+        );
+
+        let mut log = ProvenanceLog::default();
+        for kind in all {
             let mut record = ProvenanceRecord::state_transition("a", "b", "ev", None);
-            record.record_kind = kind;
+            record.record_kind = *kind;
             record.timestamp = "2026-01-01T00:00:00Z".into();
             log.push(record);
         }
 
         let document = export(&log, &config());
-        assert_eq!(document.graph[0]["wos:actionType"], "caseStateMutation");
-        assert_eq!(document.graph[1]["wos:actionType"], "timerFired");
-        assert_eq!(document.graph[2]["wos:actionType"], "deonticViolation");
+        let activities: Vec<&Value> = document
+            .graph
+            .iter()
+            .filter(|node| node["@type"] == "prov:Activity")
+            .collect();
+        assert_eq!(
+            activities.len(),
+            all.len(),
+            "every Facts-tier record must produce one prov:Activity"
+        );
+
+        for (kind, activity) in all.iter().zip(activities.iter()) {
+            let expected = serde_json::to_value(*kind)
+                .expect("ProvenanceKind serialization is infallible (unit variants)")
+                .as_str()
+                .expect("ProvenanceKind serializes as a string")
+                .to_string();
+            assert_eq!(
+                activity["wos:actionType"].as_str().unwrap(),
+                expected,
+                "{kind:?} export wos:actionType must match its serde camelCase rename"
+            );
+            assert!(
+                expected
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_lowercase())
+                    .unwrap_or(false),
+                "{kind:?} camelCase rename must start with a lowercase letter (got {expected:?})"
+            );
+        }
     }
 }

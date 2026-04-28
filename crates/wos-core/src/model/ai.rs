@@ -10,19 +10,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A WOS AI Integration Document.
+/// AI integration content — the embedded `aiOversight` block of a $wosWorkflow
+/// document per ADR 0076 D-1. Was a standalone document with `$wosAIIntegration`
+/// marker; the marker now lives on the envelope (`$wosWorkflow`) and this type
+/// represents only the block's interior shape. Type name retained for consumer
+/// compatibility; the standalone-document framing is gone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AIIntegrationDocument {
-    /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosAIIntegration")]
-    pub wos_ai_integration: String,
-
     /// Optional JSON Schema URI.
     #[serde(rename = "$schema", default)]
     pub schema: Option<String>,
 
     /// Kernel document this AI integration targets.
+    #[serde(default)]
     pub target_workflow: String,
 
     /// Document version.

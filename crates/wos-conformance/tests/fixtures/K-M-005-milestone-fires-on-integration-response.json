@@ -2,21 +2,25 @@
   "binding": "formspec",
   "id": "K-M-005-milestone-fires-on-integration-response",
   "rule": "K-M",
-  "description": "A milestone whose condition depends on a case-state field populated by an integration output binding fires after the output binding applies. The 'eligibilityConfirmed' milestone condition reads 'caseFile.eligible == true', which is false at instantiation. When the 'start' event fires, the transition's invokeService action calls the eligibility service; the output binding maps '$.eligible' to 'caseFile.eligible'. Because the service returns { \"eligible\": true }, the milestone condition becomes true and MilestoneFired is emitted — proving that evaluate_milestones is called after apply_output_binding.",
+  "description": "A milestone whose condition depends on a case-state field populated by an integration output binding fires after the output binding applies. The 'eligibilityConfirmed' milestone condition reads 'caseFile.eligible == true', which is false at instantiation. When the 'start' event fires, the transition's invokeService action calls the eligibility service; the output binding maps '$.eligible' to 'caseFile.eligible'. Because the service returns { \"eligible\": true }, the milestone condition becomes true and MilestoneFired is emitted \u2014 proving that evaluate_milestones is called after apply_output_binding.",
   "documents": {
     "kernel": "inline",
     "integration": "inline"
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:milestone-integration-response",
       "version": "1.0.0",
       "title": "Milestone Fires on Integration Response",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Operator actor" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Operator actor"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -39,10 +43,15 @@
           "verifying": {
             "type": "atomic",
             "transitions": [
-              { "event": "done", "target": "complete" }
+              {
+                "event": "done",
+                "target": "complete"
+              }
             ]
           },
-          "complete": { "type": "final" }
+          "complete": {
+            "type": "final"
+          }
         },
         "milestones": {
           "eligibilityConfirmed": {
@@ -53,7 +62,9 @@
       },
       "caseFile": {
         "fields": {
-          "eligible": { "type": "boolean" }
+          "eligible": {
+            "type": "boolean"
+          }
         }
       },
       "execution": {
@@ -63,17 +74,45 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:milestone-integration-response",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "eligibilityService": {
-          "type": "request-response",
-          "description": "Stub eligibility check service",
-          "outputBinding": {
-            "caseFile.eligible": "$.eligible"
+        "targetWorkflow": {
+          "url": "urn:test:milestone-integration-response",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "eligibilityService": {
+            "type": "request-response",
+            "description": "Stub eligibility check service",
+            "outputBinding": {
+              "caseFile.eligible": "$.eligible"
+            }
           }
         }
       }
@@ -82,15 +121,34 @@
   "initial_case_state": {
     "eligible": false
   },
-  "service_response": { "eligible": true },
+  "service_response": {
+    "eligible": true
+  },
   "event_sequence": [
-    { "event": "start", "actor": "operator" }
+    {
+      "event": "start",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "verifying", "event": "start" }
+    {
+      "from": "open",
+      "to": "verifying",
+      "event": "start"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "dataMapping", "data": { "serviceRef": "eligibilityService" } },
-    { "recordKind": "milestoneFired", "data": { "milestoneId": "eligibilityConfirmed" } }
+    {
+      "recordKind": "dataMapping",
+      "data": {
+        "serviceRef": "eligibilityService"
+      }
+    },
+    {
+      "recordKind": "milestoneFired",
+      "data": {
+        "milestoneId": "eligibilityConfirmed"
+      }
+    }
   ]
 }

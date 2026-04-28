@@ -1,9 +1,10 @@
 {
-  "$wosExtensionRegistry": "1.0",
+  "$wosTooling": "1.0",
+  "kind": "extensionRegistry",
   "$schema": "https://wos-spec.org/schemas/extension-registry/1.0",
   "version": "1.0.0",
-  "title": "WOS Core Extension Registry — Reference",
-  "description": "Reference example registry cataloging the six kernel seams (Kernel §10) plus a Trellis distributed-trust custody profile entry. Demonstrates lifecycle, composition, vendor prefix, and replacedBy fields. Not a normative WOS Working Group registry — illustrative only.",
+  "title": "WOS Core Extension Registry \u2014 Reference",
+  "description": "Reference example registry cataloging the six kernel seams (Kernel \u00a710) plus a Trellis distributed-trust custody profile entry. Demonstrates lifecycle, composition, vendor prefix, and replacedBy fields. Not a normative WOS Working Group registry \u2014 illustrative only.",
   "extensions": {
     "x-wos-owning-spec-version": "1.0.0-draft.1",
     "x-wos-custody-event-types": [
@@ -37,11 +38,26 @@
       }
     ],
     "x-wos-typeid-family-prefixes": [
-      { "prefix": "case", "family": "case instance" },
-      { "prefix": "prov", "family": "kernel facts-tier provenance records" },
-      { "prefix": "gov", "family": "governance runtime records" },
-      { "prefix": "ai", "family": "AI runtime records" },
-      { "prefix": "assurance", "family": "assurance runtime records" }
+      {
+        "prefix": "case",
+        "family": "case instance"
+      },
+      {
+        "prefix": "prov",
+        "family": "kernel facts-tier provenance records"
+      },
+      {
+        "prefix": "gov",
+        "family": "governance runtime records"
+      },
+      {
+        "prefix": "ai",
+        "family": "AI runtime records"
+      },
+      {
+        "prefix": "assurance",
+        "family": "assurance runtime records"
+      }
     ]
   },
   "entries": [
@@ -49,7 +65,7 @@
       "seam": "kernel.actorExtension.agent",
       "kind": "actor-extension",
       "lifecycle": "stable",
-      "description": "AI Integration registers the `agent` actor type with model-endpoint, autonomy-level, and provenance-narrative requirements (AI Integration §3). Binds to kernel actorExtension seam.",
+      "description": "AI Integration registers the `agent` actor type with model-endpoint, autonomy-level, and provenance-narrative requirements (AI Integration \u00a73). Binds to kernel actorExtension seam.",
       "specRef": "https://wos-spec.org/specs/ai-integration#3-agent-actor",
       "schemaRef": "https://wos-spec.org/schemas/ai-integration/1.0#/$defs/AgentActorDeclaration",
       "composition": "merge",
@@ -59,7 +75,7 @@
       "seam": "kernel.contractHook.formspec",
       "kind": "contract-hook",
       "lifecycle": "stable",
-      "description": "Formspec is the recommended contract binding for human task contracts and the agent-output validator pattern (Kernel §10.2, §11.2).",
+      "description": "Formspec is the recommended contract binding for human task contracts and the agent-output validator pattern (Kernel \u00a710.2, \u00a711.2).",
       "specRef": "https://wos-spec.org/specs/kernel#11-2-conformant-bindings",
       "composition": "replace",
       "since": "1.0.0"
@@ -68,7 +84,7 @@
       "seam": "kernel.contractHook.jsonSchema",
       "kind": "contract-hook",
       "lifecycle": "deprecated",
-      "description": "Baseline JSON Schema contract binding. Structural validation only — no reactive behavior or cross-field rules. Superseded by the Formspec binding for any deployment that needs cross-field validation.",
+      "description": "Baseline JSON Schema contract binding. Structural validation only \u2014 no reactive behavior or cross-field rules. Superseded by the Formspec binding for any deployment that needs cross-field validation.",
       "specRef": "https://wos-spec.org/specs/kernel#11-2-conformant-bindings",
       "since": "1.0.0",
       "deprecatedSince": "1.0.0",
@@ -78,7 +94,7 @@
       "seam": "ai.provenanceLayer.narrative",
       "kind": "provenance-layer",
       "lifecycle": "stable",
-      "description": "Layer 2 narrative tier carries model-generated explanations. MUST be marked non-authoritative; downstream tooling MUST NOT use narrative entries as evidence (AI Integration §7.4).",
+      "description": "Layer 2 narrative tier carries model-generated explanations. MUST be marked non-authoritative; downstream tooling MUST NOT use narrative entries as evidence (AI Integration \u00a77.4).",
       "specRef": "https://wos-spec.org/specs/ai-integration#7-4-narrative-tier",
       "composition": "augment",
       "since": "1.0.0"
@@ -105,7 +121,10 @@
       "examples": [
         {
           "kind": "distributed",
-          "custodians": ["urn:trellis:custodian:alpha", "urn:trellis:custodian:beta"],
+          "custodians": [
+            "urn:trellis:custodian:alpha",
+            "urn:trellis:custodian:beta"
+          ],
           "recoveryWithoutUser": false,
           "delegatedComputeExposesContent": false
         }

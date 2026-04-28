@@ -204,7 +204,7 @@ mod tests {
         states.insert("approved".to_string(), final_state());
 
         KernelDocument {
-            wos_kernel: "1.0".to_string(),
+            wos_workflow: "1.0".to_string(),
             schema: None,
             url: Some("https://example.org/test/continuous".to_string()),
             version: Some("1.0.0".to_string()),
@@ -353,7 +353,7 @@ mod tests {
         );
 
         let kernel = KernelDocument {
-            wos_kernel: "1.0".to_string(),
+            wos_workflow: "1.0".to_string(),
             schema: None,
             url: Some("https://example.org/test/loop".to_string()),
             version: Some("1.0.0".to_string()),
@@ -416,7 +416,7 @@ mod tests {
         );
 
         let kernel = KernelDocument {
-            wos_kernel: "1.0".to_string(),
+            wos_workflow: "1.0".to_string(),
             schema: None,
             url: Some("https://example.org/test/cap-shape".to_string()),
             version: Some("1.0.0".to_string()),

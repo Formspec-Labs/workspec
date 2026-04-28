@@ -65,13 +65,13 @@ A Workflow Governance Document targets a WOS Kernel Document via the `targetWork
 - **`contractHook`:** Data validation pipelines validate external data against contracts.
 - **`provenanceLayer`:** The Reasoning and Counterfactual tiers extend the kernel's Facts tier.
 
-### 1.6 Section Numbering Note
-
-Sections S2.9, S4.9, and S7.15 use identifier numbers that match the WOS Feature Matrix capability rows they specify, rather than the document's sequential hierarchy. This preserves stable cross-document citation anchors. In the document body, S2.9 appears within S2 Conformance, S4.9 appears within S11 Delegation of Authority, and S7.15 appears within S12 Typed Hold Policies.
-
 ### 1.5 Notational Conventions
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [BCP 14][RFC 2119] [RFC 8174] when, and only when, they appear in ALL CAPITALS, as shown here.
+
+### 1.6 Section Numbering Note
+
+Sections S2.9, S4.9, and S7.15 use identifier numbers that match the WOS Feature Matrix capability rows they specify, rather than the document's sequential hierarchy. This preserves stable cross-document citation anchors. In the document body, S2.9 appears within S2 Conformance, S4.9 appears within S11 Delegation of Authority, and S7.15 appears within S12 Typed Hold Policies.
 
 ---
 
@@ -157,7 +157,81 @@ The exact services maintained — and for how long — are declared by `AppealMe
 
 Due process requirements attach to transitions tagged `adverse-decision` via the `lifecycleHook` seam (Kernel S10.4). When a transition tagged `adverse-decision` fires, the processor MUST enforce the due process policy declared in the Workflow Governance Document.
 
-Due process, review protocol bindings, and hold policies MAY include a `scope` property -- a FEL expression evaluated against the evaluation context (Runtime Companion S8.2). When a scope expression evaluates to `false`, the governance rule is not enforced for that instance. When absent, the rule applies unconditionally.
+Due process, review protocol bindings, and hold policies MAY include a `scope` property -- a FEL guard expression evaluated against the evaluation context (Kernel S7). When present, the rule applies only to instances where the scope expression evaluates to `true`. When absent, the rule applies unconditionally. Governance scoping is a core engine concern because the scoping expression participates in the deterministic evaluation -- two conformant processors MUST agree on which governance rules apply to which instances.
+
+### 3.8 Explanation Assembly
+
+When a transition tagged `adverse-decision` (Kernel S4.12) fires, the processor MUST assemble a structured explanation from provenance. This explanation satisfies the due process requirement of §3.3 (individualized explanation) and §3.4 (counterfactual explanation) that affected individuals receive an individualized explanation of the decision.
+
+The assembly algorithm is deterministic -- two conformant processors MUST produce the same explanation structure from the same provenance log.
+
+#### 3.8.1 Assembly Algorithm
+
+```
+function assembleExplanation(provenanceLog, transition):
+    # Step 1: Collect Reasoning tier records for this determination
+    reasoning = provenanceLog.filter(
+        tier="reasoning",
+        relatedTransition=transition.id
+    )
+
+    # Step 2: Collect Counterfactual tier records
+    counterfactual = provenanceLog.filter(
+        tier="counterfactual",
+        relatedTransition=transition.id
+    )
+
+    # Step 3: Separate positive and negative counterfactuals
+    positive = counterfactual.filter(type="positive")
+    negative = counterfactual.filter(type="negative")
+
+    # Step 4: Order reasoning elements
+    #   Primary sort: rule authority (statute > regulation > policy)
+    #   Secondary sort: chronological order within each authority level
+    reasoning.sort(
+        key=lambda r: (authorityRank(r.authority), r.timestamp)
+    )
+
+    # Step 5: Assemble the explanation structure
+    return {
+        "transitionId": transition.id,
+        "determination": transition.tags,
+        "reasoning": reasoning,
+        "positiveCounterfactual": positive,
+        "negativeCounterfactual": negative,
+        "assembledAt": now()
+    }
+```
+
+#### 3.8.2 Authority Ranking
+
+Reasoning elements are ordered by the authority of the rule that produced them:
+
+| Rank | Authority Type | Description |
+|------|---------------|-------------|
+| 1 | `statute` | Statutory or legislative authority. |
+| 2 | `regulation` | Regulatory or administrative rule. |
+| 3 | `policy` | Organizational policy or standard operating procedure. |
+| 4 | `guideline` | Non-binding guidance or best practice. |
+
+When an authority type is not specified on a reasoning record, it defaults to `policy` (rank 3). This ranking is the same enum declared on `RuleReference.sourceAuthority` (§6.2); explanation assembly orders reasoning elements from higher-authority sources first.
+
+#### 3.8.3 Explanation Structure
+
+The assembled explanation is a JSON structure, not rendered text. Rendering the explanation into a human-readable format (PDF, HTML, plain text, accessible alternative) is the host's responsibility via the **ReportRenderer** host interface (defined in Kernel §13 Formspec Coprocessor + host-interface contract; the interface relocated from the Runtime Companion §12.7 to the kernel as part of ADR 0076 step 3a — until that absorption lands the canonical reference is Runtime Companion §12.7).
+
+The explanation structure:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `transitionId` | string | Identifier of the transition that produced the adverse decision. |
+| `determination` | array of string | Semantic tags from the transition. |
+| `reasoning` | array of ReasoningRecord | Ordered reasoning elements. |
+| `positiveCounterfactual` | array of CounterfactualRecord | What the affected individual could change to alter the outcome. |
+| `negativeCounterfactual` | array of CounterfactualRecord | What did NOT affect the outcome (e.g., protected characteristics). |
+| `assembledAt` | string (datetime) | ISO 8601 timestamp of assembly. |
+
+The deterministic notice-assembly obligation in §3.2 (byte-identical machine-readable artifact and human-readable prose under identical inputs) operates over this same explanation structure: the notice rendered for an adverse decision derives from the assembled explanation plus the appeal configuration and Notification Template.
 
 ---
 
@@ -266,7 +340,7 @@ A **RuleReference** identifies a rule that was applied in a decision, with its a
 | `sourceAuthority` | enum | OPTIONAL | Authority level of the rule's source. One of: `statute` (rank 1), `regulation` (rank 2), `policy` (rank 3), `guideline` (rank 4). Default: `policy`. |
 | `citation` | string | OPTIONAL | Formal citation to the authoritative source (e.g., "42 CFR § 435.916"). |
 
-The `sourceAuthority` enum determines ordering in explanation assembly (Runtime Companion S9.3): reasoning elements from higher-authority sources appear first. This is distinct from the `authority` property on Delegation (S11), which declares the scope of delegated power.
+The `sourceAuthority` enum determines ordering in explanation assembly (§3.8.2): reasoning elements from higher-authority sources appear first. This is distinct from the `authority` property on Delegation (S11), which declares the scope of delegated power.
 
 ### 6.3 Decision Requirements
 
@@ -326,7 +400,7 @@ When a reviewer overrides a prior decision, the override MUST include:
 2. **Authority verification** confirming the reviewer has override authority.
 3. **Supporting evidence** referenced by the rationale.
 
-The runtime record shape is the `OverrideRecord` `$def` in the [Workflow Governance schema](../../schemas/governance/wos-workflow-governance.schema.json) (`#/$defs/OverrideRecord`). Each accepted override appends one OverrideRecord to provenance; records are immutable. The three required fields (`rationale`, `authorityVerification`, `supportingEvidence`) correspond to the three switches on `OverrideAuthority`: when a switch is `true`, the corresponding field MUST be non-empty in every emitted record.
+The runtime record shape is the `OverrideRecord` `$def` in the [merged WOS Workflow schema](../../schemas/wos-workflow.schema.json) (`#/$defs/OverrideRecord`). Each accepted override appends one OverrideRecord to provenance; records are immutable. The three required fields (`rationale`, `authorityVerification`, `supportingEvidence`) correspond to the three switches on `OverrideAuthority`: when a switch is `true`, the corresponding field MUST be non-empty in every emitted record.
 
 ### 7.4 Governance Attachment
 
@@ -572,9 +646,15 @@ In government workflows, determination authority flows from statutory grants thr
 
 ### 11.4 Enforcement
 
-When a transition tagged `determination` fires (via `lifecycleHook`, Kernel S10.4), the processor MUST verify that the acting actor has a valid, non-expired, non-revoked delegation covering the determination's scope. Determinations made without a valid delegation are conformance errors.
+When a transition tagged `determination` fires (via `lifecycleHook`, Kernel S10.4 / Kernel S4.12), the processor MUST verify that the acting actor has a valid, non-expired, non-revoked delegation covering the determination's scope. Verification MUST check, in order:
 
-The delegation used for a determination MUST be referenced in the provenance record for that transition.
+1. A delegation record exists for this actor.
+2. The delegation has not expired (`expirationDate` is in the future or absent).
+3. The delegation has not been revoked (`revokedDate` is absent).
+4. The delegation's scope covers this case (impact level, case type, value threshold; `conditions` FEL expression evaluates to `true` when present).
+5. If the delegation was sub-delegated, the chain depth does not exceed `maxDelegationDepth` (§11.5).
+
+A determination without valid delegation is a conformance error. The delegation used MUST be referenced in the provenance record for that transition.
 
 ### 11.5 Sub-Delegation
 
@@ -638,7 +718,14 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 
 ### 12.4 Interaction with Timers
 
-Hold policies compose with the kernel's timer mechanism (Kernel S9.7). When a case enters a `hold`-tagged state, the processor SHOULD start a timer with the `expectedDuration`. When the timer fires, the processor executes the `timeoutAction`. When the `resumeTrigger` event arrives before the timer fires, the timer is cancelled.
+Hold policies compose with the kernel's timer mechanism (Kernel S9.7). On entering a state tagged `hold` (Kernel S4.12), the processor:
+
+1. Starts a hold timer using the `expectedDuration` from the matching Hold Policy (§12.2).
+2. Listens for the `resumeTrigger` event declared in the Hold Policy.
+3. When the resume trigger arrives, cancels the hold timer and processes the event normally.
+4. When the hold timer fires, emits a `$timeout.state` event. The lifecycle handles it like any other timeout (Kernel S4.10), and the processor executes the `timeoutAction` (`escalate`, `auto-resume`, or `cancel`).
+
+Holds with `expectedDuration: "indefinite"` (e.g., `pending-legislation`, `pending-related-case`, `legal-hold`) do NOT start a timer; they are released only when the resume trigger arrives or, for `legal-hold`, when an explicit legal-hold-release fact is recorded (§7.15).
 
 ### 12.5 Governance Attachment
 

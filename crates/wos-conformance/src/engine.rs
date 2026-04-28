@@ -116,39 +116,76 @@ impl WorkflowEngine {
             .unwrap_or_else(|| "urn:wos-conformance:kernel".to_string());
         let definition_version = kernel.version.clone().unwrap_or_default();
 
-        // Load AI integration document if present.
+        // Load AI integration content (the embedded `aiOversight` block of a
+        // $wosWorkflow document, per ADR 0076 D-1). Conformance fixtures express
+        // this as an inline `$wosWorkflow` doc whose `aiOversight` field is the
+        // AI content; extract that block before parsing into the typed shape.
         let ai_doc = if fixture.documents.contains_key("ai") {
             let ai_json = fixture_document_json(fixture, "ai")?;
-            let doc: AIIntegrationDocument = serde_json::from_value(ai_json)
+            let block = extract_embedded_block(&ai_json, "aiOversight").ok_or_else(|| {
+                ConformanceError::Parse(
+                    "AI document is missing the `aiOversight` embedded block (ADR 0076 D-1)"
+                        .to_string(),
+                )
+            })?;
+            let doc: AIIntegrationDocument = serde_json::from_value(block)
                 .map_err(|e| ConformanceError::Parse(format!("AI doc parse error: {e}")))?;
             Some(doc)
         } else {
             None
         };
 
-        // Load governance document if present.
+        // Load governance content (the `governance` block of a $wosWorkflow
+        // document per ADR 0076 D-1). Existing consumers expect a raw JSON
+        // value; extract the embedded block so they see the same shape.
         let governance_json = if fixture.documents.contains_key("governance") {
-            Some(fixture_document_json(fixture, "governance")?)
+            let raw = fixture_document_json(fixture, "governance")?;
+            let block = extract_embedded_block(&raw, "governance").ok_or_else(|| {
+                ConformanceError::Parse(
+                    "governance document is missing the `governance` embedded block (ADR 0076 D-1)"
+                        .to_string(),
+                )
+            })?;
+            Some(block)
         } else {
             None
         };
 
-        // Load integration profile if present.
+        // Load integration content (the `bindings` block of a $wosWorkflow
+        // document per ADR 0076 D-1; integration content is the OutputBinding
+        // array). Existing consumers expect IntegrationProfileDocument shape;
+        // for now load the raw block and let downstream consumers handle the
+        // shape (the integration-profile standalone type is on track to be
+        // absorbed similarly to AI/Governance/BusinessCalendar/Notification).
         let integration_profile = if fixture.documents.contains_key("integration") {
             let ip_json = fixture_document_json(fixture, "integration")?;
-            let profile: IntegrationProfileDocument =
-                serde_json::from_value(ip_json).map_err(|e| {
-                    ConformanceError::Parse(format!("integration profile parse error: {e}"))
-                })?;
-            Some(profile)
+            // Try the new envelope shape first (block under `bindings`); fall
+            // back to legacy flat shape for fixtures not yet migrated.
+            let parsed: Result<IntegrationProfileDocument, _> =
+                if let Some(block) = extract_embedded_block(&ip_json, "bindings") {
+                    serde_json::from_value(block)
+                } else {
+                    serde_json::from_value(ip_json)
+                };
+            Some(parsed.map_err(|e| {
+                ConformanceError::Parse(format!("integration profile parse error: {e}"))
+            })?)
         } else {
             None
         };
 
-        // Load business calendar if present.
+        // Load business calendar content (the `calendar` block of a $wosDelivery
+        // sidecar per ADR 0076 D-3). Conformance fixtures express this as an
+        // inline $wosDelivery doc whose `calendar` field is the calendar content.
         let business_calendar = if fixture.documents.contains_key("businessCalendar") {
             let cal_json = fixture_document_json(fixture, "businessCalendar")?;
-            let cal: BusinessCalendarDocument = serde_json::from_value(cal_json).map_err(|e| {
+            let block = extract_embedded_block(&cal_json, "calendar").ok_or_else(|| {
+                ConformanceError::Parse(
+                    "business-calendar document is missing the `calendar` embedded block (ADR 0076 D-3)"
+                        .to_string(),
+                )
+            })?;
+            let cal: BusinessCalendarDocument = serde_json::from_value(block).map_err(|e| {
                 ConformanceError::Parse(format!("business calendar parse error: {e}"))
             })?;
             Some(cal)
@@ -156,26 +193,40 @@ impl WorkflowEngine {
             None
         };
 
-        // Load Signature Profile if present. The document role doubles as the
-        // package-local profile key used by task action extensions.
+        // Load Signature Profile content (the `signature` block of a $wosWorkflow
+        // document per ADR 0076 D-1). Try envelope shape first; fall back to
+        // legacy flat shape for fixtures not yet migrated.
         let signature_profile = if fixture.documents.contains_key("signatureProfile") {
             let sig_json = fixture_document_json(fixture, "signatureProfile")?;
-            let profile: wos_runtime::SignatureProfileDocument = serde_json::from_value(sig_json)
-                .map_err(|e| {
+            let parsed: Result<wos_runtime::SignatureProfileDocument, _> =
+                if let Some(block) = extract_embedded_block(&sig_json, "signature") {
+                    serde_json::from_value(block)
+                } else {
+                    serde_json::from_value(sig_json)
+                };
+            Some(parsed.map_err(|e| {
                 ConformanceError::Parse(format!("signature profile parse error: {e}"))
-            })?;
-            Some(profile)
+            })?)
         } else {
             None
         };
 
-        // Load any remaining companion documents as raw JSON.
+        // Load any remaining companion documents as raw JSON. When a role's
+        // canonical form is now an embedded block of a $wosWorkflow / $wosDelivery
+        // / $wosOntologyAlignment / $wosTooling envelope per ADR 0076, extract
+        // the relevant block so downstream consumers see the legacy interior
+        // shape they were written against.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
             if RESERVED_DOCUMENT_ROLES.contains(&key.as_str()) {
                 continue;
             }
-            let doc_json = fixture_document_json(fixture, key)?;
+            let raw = fixture_document_json(fixture, key)?;
+            let block_key = embedded_block_for_role(key);
+            let doc_json = match block_key {
+                Some(bk) => extract_embedded_block(&raw, bk).unwrap_or(raw),
+                None => raw,
+            };
             companion_docs.insert(key.clone(), doc_json);
         }
 
@@ -590,18 +641,64 @@ fn fixture_document_json(
         ConformanceError::Parse(format!("fixture must declare a '{role}' document"))
     })?;
 
-    if document_ref == "inline" {
-        return fixture.inline_documents.get(role).cloned().ok_or_else(|| {
+    let (value, _origin) = if document_ref == "inline" {
+        let inline = fixture.inline_documents.get(role).cloned().ok_or_else(|| {
             ConformanceError::Parse(format!(
                 "fixture declares inline '{role}' document but omits inline_documents.{role}"
             ))
-        });
-    }
+        })?;
+        (inline, format!("inline:{role}"))
+    } else {
+        let document_text = std::fs::read_to_string(document_ref)
+            .map_err(|_| ConformanceError::DocumentNotFound(document_ref.clone()))?;
+        let parsed: serde_json::Value = serde_json::from_str(&document_text)
+            .map_err(|e| ConformanceError::Parse(format!("{role} parse error: {e}")))?;
+        (parsed, document_ref.clone())
+    };
 
-    let document_text = std::fs::read_to_string(document_ref)
-        .map_err(|_| ConformanceError::DocumentNotFound(document_ref.clone()))?;
-    serde_json::from_str(&document_text)
-        .map_err(|e| ConformanceError::Parse(format!("{role} parse error: {e}")))
+    Ok(value)
+}
+
+/// Extract an embedded block (e.g., `aiOversight`, `governance`, `signature`,
+/// `calendar`, `notifications`) from a parsed `$wosWorkflow` envelope per
+/// ADR 0076 D-1/D-3. Returns `None` if the field is absent.
+fn extract_embedded_block(envelope: &serde_json::Value, block_key: &str) -> Option<serde_json::Value> {
+    envelope
+        .as_object()
+        .and_then(|obj| obj.get(block_key))
+        .cloned()
+}
+
+/// Map a fixture document role to its embedded-block key per ADR 0076 D-1/D-3.
+/// Returns `None` for roles whose document remains a flat shape (kernel itself)
+/// or for roles with no canonical migration mapping.
+fn embedded_block_for_role(role: &str) -> Option<&'static str> {
+    match role {
+        // ADR 0076 D-1: $wosWorkflow embedded blocks. Accept both camelCase
+        // and kebab-case role keys (fixtures vary).
+        //
+        // TODO(post-ADR-0076): drop kebab-case aliases once the fixture corpus
+        // is camelCase-canonical. The dual-acceptance is transitional debt
+        // from the 56-fixture migration; freezing on one form prevents drift.
+        // Tracked at wos-scout review F2.
+        "advanced" => Some("advanced"),
+        "agentConfig" | "agent-config" | "agent" => Some("agents"),
+        "driftMonitor" | "drift-monitor" | "drift" => Some("agents"),
+        "assertionLibrary" | "assertion-library" => Some("governance"),
+        "policyParameters" | "policy-parameters" => Some("governance"),
+        "equityConfig" | "equity-config" | "equity" => Some("advanced"),
+        "advancedGovernance" | "advanced-governance" => Some("advanced"),
+        "verificationReport" | "verification-report" => Some("advanced"),
+        // ADR 0076 D-3: $wosDelivery embedded blocks.
+        "correspondenceMetadata" | "correspondence-metadata" | "correspondence" => {
+            Some("correspondence")
+        }
+        // ADR 0076 D-5 ($wosTooling) sub-views.
+        "extensionRegistry" | "extension-registry" => Some("extensionRegistry"),
+        // Roles with bespoke load paths handled above (kernel/ai/governance/integration/businessCalendar/signatureProfile)
+        // are not routed through this helper.
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]

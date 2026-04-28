@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-EMIT-003",
       "version": "1.0.0",
       "title": "INT-EMIT-003 Custom Subject Override",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,10 +39,14 @@
               }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -46,33 +54,70 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-EMIT-003",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "customSubjectBus": {
-          "type": "event-emit",
-          "description": "Emit with an explicit subject override",
-          "source": "urn:wos:runtime",
-          "eventType": "com.example.custom.notify",
-          "subject": "custom/subject/override"
+        "targetWorkflow": {
+          "url": "urn:test:INT-EMIT-003",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "customSubjectBus": {
+            "type": "event-emit",
+            "description": "Emit with an explicit subject override",
+            "source": "urn:wos:runtime",
+            "eventType": "com.example.custom.notify",
+            "subject": "custom/subject/override"
+          }
         }
       }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "notify", "actor": "operator" }
+    {
+      "event": "notify",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "done", "event": "notify" }
+    {
+      "from": "open",
+      "to": "done",
+      "event": "notify"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "eventEmitted",
-      "data": { "subject": "custom/subject/override" }
+      "data": {
+        "subject": "custom/subject/override"
+      }
     }
   ]
 }

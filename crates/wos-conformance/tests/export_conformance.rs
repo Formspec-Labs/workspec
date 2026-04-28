@@ -88,7 +88,7 @@ struct ExportConfigSpec {
 /// mutation) that the three serializers exercise.
 fn shared_workflow_kernel() -> Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.wos-spec.org/sp-export/shared-workflow",
         // `version` populates ProvenanceRecord.definition_version via the
         // runtime's `populate_provenance_record_fields` pass; export fixtures
@@ -181,7 +181,7 @@ fn sp_export_004_facts_tier_filter() {
     // to avoid depending on manual struct construction (KernelDocument has
     // many required fields and no Default impl).
     let kernel: KernelDocument = serde_json::from_value(json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "urn:wos-conformance:sp-export-004",
         "version": "1.0.0",
         "actors": [

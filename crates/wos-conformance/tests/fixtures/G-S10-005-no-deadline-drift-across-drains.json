@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:bc-no-drift",
       "version": "1.0.0",
       "title": "BC S10-005 No Deadline Drift Across Drains",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "system", "type": "system", "description": "System actor" }
+        {
+          "id": "system",
+          "type": "system",
+          "description": "System actor"
+        }
       ],
       "lifecycle": {
         "initialState": "pending",
@@ -31,13 +35,20 @@
               }
             ],
             "transitions": [
-              { "event": "$timeout.slaTimer", "target": "done" }
+              {
+                "event": "$timeout.slaTimer",
+                "target": "done"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -45,21 +56,29 @@
       }
     },
     "businessCalendar": {
-      "$wosBusinessCalendar": "1.0",
+      "$wosDelivery": "1.0",
       "targetWorkflow": "urn:test:bc-no-drift",
-      "version": "test-v1.0",
-      "title": "Calendar v1 — holiday on 1970-01-05 (Monday)",
-      "timezone": "UTC",
-      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      "holidays": [
-        {
-          "name": "Test Holiday Monday",
-          "date": "1970-01-05"
+      "calendar": {
+        "version": "test-v1.0",
+        "title": "Calendar v1 \u2014 holiday on 1970-01-05 (Monday)",
+        "timezone": "UTC",
+        "workWeek": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday"
+        ],
+        "holidays": [
+          {
+            "name": "Test Holiday Monday",
+            "date": "1970-01-05"
+          }
+        ],
+        "operatingHours": {
+          "start": "09:00",
+          "end": "17:00"
         }
-      ],
-      "operatingHours": {
-        "start": "09:00",
-        "end": "17:00"
       }
     }
   },
@@ -77,7 +96,11 @@
     }
   ],
   "expected_transitions": [
-    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+    {
+      "from": "pending",
+      "to": "done",
+      "event": "$timeout.slaTimer"
+    }
   ],
   "expected_provenance": [
     {
@@ -89,7 +112,9 @@
     },
     {
       "record_kind": "timerFired",
-      "data": { "timerId": "slaTimer" }
+      "data": {
+        "timerId": "slaTimer"
+      }
     }
   ]
 }

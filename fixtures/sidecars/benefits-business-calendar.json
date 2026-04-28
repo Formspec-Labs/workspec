@@ -1,72 +1,75 @@
 {
-  "$wosBusinessCalendar": "1.0",
-  "$schema": "https://wos-spec.org/schemas/business-calendar/1.0",
+  "$wosDelivery": "1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "version": "2026.1.0",
-  "title": "Federal Benefits Agency Business Calendar FY2026",
-  "description": "Business calendar for a federal benefits adjudication agency. Covers US federal holidays, standard Monday-Friday work week, and 8am-5pm Eastern operating hours. SLA durations for task completion and hold timeouts are evaluated against this calendar.",
-
-  "timezone": "America/New_York",
-
-  "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-
-  "holidays": [
-    {
-      "name": "New Year's Day",
-      "date": "2026-01-01"
+  "calendar": {
+    "$schema": "https://wos-spec.org/schemas/business-calendar/1.0",
+    "version": "2026.1.0",
+    "title": "Federal Benefits Agency Business Calendar FY2026",
+    "description": "Business calendar for a federal benefits adjudication agency. Covers US federal holidays, standard Monday-Friday work week, and 8am-5pm Eastern operating hours. SLA durations for task completion and hold timeouts are evaluated against this calendar.",
+    "timezone": "America/New_York",
+    "workWeek": [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday"
+    ],
+    "holidays": [
+      {
+        "name": "New Year's Day",
+        "date": "2026-01-01"
+      },
+      {
+        "name": "Martin Luther King Jr. Day",
+        "rule": "nthWeekday(3, monday, january)"
+      },
+      {
+        "name": "Presidents' Day",
+        "rule": "nthWeekday(3, monday, february)"
+      },
+      {
+        "name": "Memorial Day",
+        "rule": "lastWeekday(monday, may)"
+      },
+      {
+        "name": "Juneteenth National Independence Day",
+        "date": "2026-06-19"
+      },
+      {
+        "name": "Independence Day",
+        "date": "2026-07-04"
+      },
+      {
+        "name": "Independence Day (Observed)",
+        "date": "2026-07-03",
+        "observed": true
+      },
+      {
+        "name": "Labor Day",
+        "rule": "nthWeekday(1, monday, september)"
+      },
+      {
+        "name": "Columbus Day",
+        "rule": "nthWeekday(2, monday, october)"
+      },
+      {
+        "name": "Veterans Day",
+        "date": "2026-11-11"
+      },
+      {
+        "name": "Thanksgiving Day",
+        "rule": "nthWeekday(4, thursday, november)"
+      },
+      {
+        "name": "Christmas Day",
+        "date": "2026-12-25"
+      }
+    ],
+    "operatingHours": {
+      "start": "08:00",
+      "end": "17:00"
     },
-    {
-      "name": "Martin Luther King Jr. Day",
-      "rule": "nthWeekday(3, monday, january)"
-    },
-    {
-      "name": "Presidents' Day",
-      "rule": "nthWeekday(3, monday, february)"
-    },
-    {
-      "name": "Memorial Day",
-      "rule": "lastWeekday(monday, may)"
-    },
-    {
-      "name": "Juneteenth National Independence Day",
-      "date": "2026-06-19"
-    },
-    {
-      "name": "Independence Day",
-      "date": "2026-07-04"
-    },
-    {
-      "name": "Independence Day (Observed)",
-      "date": "2026-07-03",
-      "observed": true
-    },
-    {
-      "name": "Labor Day",
-      "rule": "nthWeekday(1, monday, september)"
-    },
-    {
-      "name": "Columbus Day",
-      "rule": "nthWeekday(2, monday, october)"
-    },
-    {
-      "name": "Veterans Day",
-      "date": "2026-11-11"
-    },
-    {
-      "name": "Thanksgiving Day",
-      "rule": "nthWeekday(4, thursday, november)"
-    },
-    {
-      "name": "Christmas Day",
-      "date": "2026-12-25"
-    }
-  ],
-
-  "operatingHours": {
-    "start": "08:00",
-    "end": "17:00"
-  },
-
-  "effectiveDate": "2025-10-01",
-  "expirationDate": "2026-09-30"
+    "effectiveDate": "2025-10-01",
+    "expirationDate": "2026-09-30"
+  }
 }

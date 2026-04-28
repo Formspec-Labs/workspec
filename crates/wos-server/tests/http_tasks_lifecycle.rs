@@ -104,7 +104,7 @@ const KERNEL_VERSION: &str = "1.0.0";
 
 fn kernel_document() -> serde_json::Value {
     serde_json::json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": KERNEL_URL,
         "version": KERNEL_VERSION,
         "title": "Tasks Lifecycle Test Kernel",
@@ -436,6 +436,20 @@ async fn task_submit_response_returns_completed_view() {
         json["caseMutated"],
         serde_json::Value::Bool(true),
         "body: {json}"
+    );
+    // Regression: `TaskSubmissionView` must JSON-serialize with camelCase keys
+    // for studio/TS consumers — snake_case (`case_mutated`, …) is a wire bug.
+    assert!(
+        json.get("case_mutated").is_none(),
+        "must not emit snake_case `case_mutated`; use `caseMutated`. body={json}"
+    );
+    assert!(
+        json.get("artifact_id").is_none(),
+        "must not emit snake_case `artifact_id`; use `artifactId`. body={json}"
+    );
+    assert!(
+        json.get("emitted_event").is_none(),
+        "must not emit snake_case `emitted_event`; use `emittedEvent` when present. body={json}"
     );
     assert!(
         json["artifactId"]

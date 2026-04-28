@@ -1,66 +1,258 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://wos.dev/schemas/wos-workflow.schema.json",
+  "$id": "https://wos-spec.org/schemas/wos-workflow.schema.json",
   "title": "WOS Workflow",
   "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rightsImpacting/safetyImpacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076.",
+  "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those §-numbered sections land. SCHEMA-DOC-001 violations under inner blocks are tracked, not hallucinated. The six canonical kernel extension seams (ADR 0077) — actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys — remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel §10. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
   "type": "object",
-  "required": ["$wosWorkflow", "url", "version", "title", "impactLevel", "actors", "lifecycle"],
+  "required": [
+    "$wosWorkflow",
+    "url",
+    "version",
+    "title",
+    "impactLevel",
+    "actors",
+    "lifecycle"
+  ],
   "properties": {
     "$wosWorkflow": {
       "type": "string",
       "const": "1.0",
-      "description": "Sole top-level version marker. Stream identity (governance, agents, signature, custody, advanced) is implicit in the workflow envelope version. Compliance claims compose as $wosWorkflow@X.Y. Replaces $wosKernel / $wosWorkflowGovernance / $wosAIIntegration / $wosAdvanced."
+      "description": "Sole top-level version marker that identifies this object as a WOS Workflow Document and pins it to the 1.0 line of the merged-schema product-tier model (ADR 0076). Stream identity (governance, agents, signature, custody, advanced) is implicit in the envelope version; compliance claims compose as $wosWorkflow@X.Y. Replaces the historical four-document markers $wosKernel / $wosWorkflowGovernance / $wosAIIntegration / $wosAdvanced.",
+      "examples": [
+        "1.0",
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Workflow documents per ADR 0076"
+      }
     },
-    "url": { "type": "string", "format": "uri", "description": "Stable workflow identity. Sidecars join by this url." },
-    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.+]+)?$" },
-    "title": { "type": "string" },
-    "description": { "type": "string" },
-    "status": { "enum": ["draft", "active", "deprecated"] },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical URI identifier for this Workflow Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Sidecars (`wos-delivery`, `wos-ontology-alignment`) join by this URL via `targetWorkflow`. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
+      "examples": [
+        "https://agency.gov/workflows/benefits-adjudication",
+        "https://procurement.example.gov/workflows/purchase-order-approval"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Stable identifier of the workflow across versions; sidecars join here"
+      }
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.+]+)?$",
+      "description": "Version string for this Workflow Document. Semantic Versioning (SemVer 2.0.0) is RECOMMENDED so processors and governance layers can reason about compatibility. Instance versioning (Kernel §9.6) pins each running workflow instance to the (url, version) pair of the definition that created it.",
+      "examples": [
+        "1.0.0",
+        "2025.1.0",
+        "2.3.1-rc.1"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Short human-readable name for this workflow, suitable for lists, navigation, and audit summaries. Not interpreted by the processor.",
+      "examples": [
+        "Purchase Order Approval",
+        "Benefits Adjudication Workflow",
+        "NDA Co-Signing"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "Free-text description of this workflow's purpose, scope, and intended audience. Consumed by documentation tooling and LLM authoring agents; not interpreted by the processor.",
+      "examples": [
+        "Internal workflow for approving purchase orders under $50k; routed to a manager for approval or rejection.",
+        "Medicaid eligibility redetermination with appeal branch; rightsImpacting, requires full due process."
+      ]
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "deprecated"
+      ],
+      "description": "Publication status of this workflow definition. `draft` means the definition is being authored and SHOULD NOT instantiate production cases. `active` means the definition is in effect and new instances MAY be created. `deprecated` means no new instances SHOULD be created, though existing pinned instances continue executing.",
+      "examples": [
+        "draft",
+        "active",
+        "deprecated"
+      ]
+    },
     "impactLevel": {
-      "enum": ["informational", "operational", "rightsImpacting", "safetyImpacting"],
-      "description": "Drives conditional block requirements. rightsImpacting and safetyImpacting MUST embed governance."
+      "enum": [
+        "informational",
+        "operational",
+        "rightsImpacting",
+        "safetyImpacting"
+      ],
+      "description": "Consequence level classification for decisions made within this workflow (Kernel §6). `rightsImpacting`: decisions affect individual legal rights — full due process REQUIRED (governance block MUST be present). `safetyImpacting`: decisions affect safety — full due process REQUIRED (governance block MUST be present). `operational`: organizational operations — governance RECOMMENDED. `informational`: no binding decisions — governance OPTIONAL. Drives conditional block requirements via the schema's allOf rules.",
+      "examples": [
+        "rightsImpacting",
+        "operational",
+        "informational",
+        "safetyImpacting"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Proportionality index that governs the strength of required controls across all embedded blocks"
+      }
     },
-
-    "caseFile": { "$ref": "#/$defs/CaseFile" },
-    "intake": { "$ref": "#/$defs/IntakeReference" },
-    "actors": { "type": "array", "items": { "$ref": "#/$defs/Actor" }, "minItems": 1 },
-    "lifecycle": { "$ref": "#/$defs/Lifecycle" },
-    "contracts": { "$ref": "#/$defs/Contracts" },
-    "bindings": { "type": "array", "items": { "$ref": "#/$defs/OutputBinding" } },
-    "provenance": { "$ref": "#/$defs/ProvenanceConfig" },
-
-    "governance": { "$ref": "#/$defs/Governance" },
-    "agents": { "type": "array", "items": { "$ref": "#/$defs/AgentDeclaration" } },
-    "aiOversight": { "$ref": "#/$defs/AIOversight" },
-    "signature": { "$ref": "#/$defs/Signature" },
-    "custody": { "$ref": "#/$defs/Custody" },
-    "advanced": { "$ref": "#/$defs/Advanced" },
-    "assurance": { "$ref": "#/$defs/Assurance" },
+    "caseFile": {
+      "$ref": "#/$defs/CaseFile",
+      "x-lm": {
+        "critical": true,
+        "intent": "Structured case data shape — either inline field declaration or Formspec contract reference"
+      }
+    },
+    "intake": {
+      "$ref": "#/$defs/IntakeReference"
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Actor"
+      },
+      "minItems": 1,
+      "x-lm": {
+        "critical": true,
+        "intent": "Who can act in this workflow — humans, systems, or agents (the agent type is gated by AI Integration block presence per ADR 0076 D-2; cross-ref enforced by lint WOS-AGENT-XREF-001)"
+      }
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/Lifecycle",
+      "x-lm": {
+        "critical": true,
+        "intent": "State machine spine — initial state + lifecycle topology that all other concerns attach to"
+      }
+    },
+    "contracts": {
+      "$ref": "#/$defs/Contracts"
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/OutputBinding"
+      }
+    },
+    "provenance": {
+      "$ref": "#/$defs/ProvenanceConfig"
+    },
+    "governance": {
+      "$ref": "#/$defs/Governance",
+      "x-lm": {
+        "critical": true,
+        "intent": "Embedded due-process / review / pipeline governance — REQUIRED for rightsImpacting/safetyImpacting workflows per ADR 0076 D-2"
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AgentDeclaration"
+      },
+      "x-lm": {
+        "critical": true,
+        "intent": "Per-agent declarations — REQUIRED when any actor has type='agent' (lint WOS-AGENT-XREF-001 enforces the cross-reference)"
+      }
+    },
+    "aiOversight": {
+      "$ref": "#/$defs/AIOversight",
+      "x-lm": {
+        "critical": true,
+        "intent": "Cross-cutting AI policy — disclosure (EU AI Act Art. 13, OMB M-24-10), drift detection, narrative tier; pairs with agents block"
+      }
+    },
+    "signature": {
+      "$ref": "#/$defs/Signature",
+      "x-lm": {
+        "critical": true,
+        "intent": "Embedded signature workflow — LOAD-BEARING for DocuSign-tier (signing order IS the workflow); REQUIRED when any transition gates on kind='signature' (lint WOS-SIG-COVER-001 enforces signer coverage)"
+      }
+    },
+    "custody": {
+      "$ref": "#/$defs/Custody",
+      "x-lm": {
+        "critical": true,
+        "intent": "Trellis custody binding — load-bearing whenever a workflow claims anchoring on transitions or signature events"
+      }
+    },
+    "advanced": {
+      "$ref": "#/$defs/Advanced",
+      "x-lm": {
+        "critical": true,
+        "intent": "Advanced governance — DCR constraint zones, equity guardrails, SMT verifiable constraints, circuit breakers, shadow mode"
+      }
+    },
+    "assurance": {
+      "$ref": "#/$defs/Assurance",
+      "x-lm": {
+        "critical": true,
+        "intent": "Assurance level + attestation + subject continuity declarations"
+      }
+    },
     "extensions": {
       "type": "object",
-      "propertyNames": { "pattern": "^x-" },
-      "description": "Vendor-namespaced extension container. x-wos- reserved."
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "description": "Vendor-namespaced extension container realizing Kernel §10.6 (the `extensions` seam — one of the canonical six per ADR 0077). Every key MUST start with `x-`; the prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns). Values are opaque to the processor; vendors document their own subkeys.",
+      "examples": [
+        {
+          "x-acme-billing-code": "PO-2025"
+        },
+        {
+          "x-vendor-routing": {
+            "queue": "compliance"
+          }
+        }
+      ]
     }
   },
-  "patternProperties": { "^x-": true },
+  "patternProperties": {
+    "^x-": true
+  },
   "additionalProperties": false,
-
   "allOf": [
     {
       "title": "Rights-impacting and safety-impacting workflows MUST embed governance.",
       "if": {
-        "properties": { "impactLevel": { "enum": ["rightsImpacting", "safetyImpacting"] } }
+        "properties": {
+          "impactLevel": {
+            "enum": [
+              "rightsImpacting",
+              "safetyImpacting"
+            ]
+          }
+        }
       },
-      "then": { "required": ["governance"] }
+      "then": {
+        "required": [
+          "governance"
+        ]
+      }
     },
     {
       "title": "Workflows whose actors include any agent-typed actor MUST declare agents[].",
       "if": {
         "properties": {
-          "actors": { "contains": { "properties": { "type": { "const": "agent" } } } }
+          "actors": {
+            "contains": {
+              "properties": {
+                "type": {
+                  "const": "agent"
+                }
+              }
+            }
+          }
         }
       },
-      "then": { "required": ["agents"] }
+      "then": {
+        "required": [
+          "agents"
+        ]
+      }
     },
     {
       "$comment": "Cross-reference rule beyond JSON Schema expressivity: every actor with type=='agent' MUST have a matching agents[].id. Enforced by lint rule WOS-AGENT-XREF-001."
@@ -72,120 +264,292 @@
       "title": "Workflows with both agents and advanced features SHOULD declare aiOversight.",
       "if": {
         "allOf": [
-          { "required": ["agents"] },
-          { "required": ["advanced"] }
+          {
+            "required": [
+              "agents"
+            ]
+          },
+          {
+            "required": [
+              "advanced"
+            ]
+          }
         ]
       },
-      "then": { "required": ["aiOversight"] }
+      "then": {
+        "required": [
+          "aiOversight"
+        ]
+      }
     }
   ],
-
   "$defs": {
     "CaseFile": {
       "type": "object",
       "description": "Structured case data. Either declared inline via fields, or referenced via contractRef. Formspec is the recommended contract binding (kernel contractHook seam).",
       "oneOf": [
-        { "required": ["fields"] },
-        { "required": ["contractRef"] }
+        {
+          "required": [
+            "fields"
+          ]
+        },
+        {
+          "required": [
+            "contractRef"
+          ]
+        }
       ],
       "properties": {
         "fields": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/FieldDeclaration" }
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldDeclaration"
+          }
         },
-        "contractRef": { "type": "string", "format": "uri" },
-        "contractVersion": { "type": "string" }
+        "contractRef": {
+          "type": "string",
+          "format": "uri"
+        },
+        "contractVersion": {
+          "type": "string"
+        }
       }
     },
     "FieldDeclaration": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "enum": ["string", "number", "integer", "boolean", "array", "object", "date", "datetime"] },
-        "required": { "type": "boolean" },
-        "description": { "type": "string" }
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "array",
+            "object",
+            "date",
+            "datetime"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
     "IntakeReference": {
       "type": "object",
       "description": "Public-intake form. References a Formspec definition. Validated intake is converted to caseFile via IntakeHandoff (ADR 0073).",
-      "required": ["contractRef"],
+      "required": [
+        "contractRef"
+      ],
       "properties": {
-        "contractRef": { "type": "string", "format": "uri" },
-        "contractVersion": { "type": "string" },
-        "mode": { "enum": ["workflowInitiated", "publicIntake"] }
+        "contractRef": {
+          "type": "string",
+          "format": "uri"
+        },
+        "contractVersion": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "workflowInitiated",
+            "publicIntake"
+          ]
+        }
       }
     },
     "Actor": {
       "type": "object",
-      "required": ["id", "type"],
+      "required": [
+        "id",
+        "type"
+      ],
       "properties": {
-        "id": { "type": "string" },
+        "id": {
+          "type": "string"
+        },
         "type": {
           "type": "string",
           "$comment": "Kernel: 'human' | 'system'. AI Integration adds 'agent' via actorExtension seam (ADR 0077). Open via x- prefix."
         },
-        "role": { "type": "string" }
+        "role": {
+          "type": "string"
+        }
       }
     },
     "Lifecycle": {
       "type": "object",
-      "required": ["initial", "states"],
+      "required": [
+        "initial",
+        "states"
+      ],
       "properties": {
-        "initial": { "type": "string" },
+        "initial": {
+          "type": "string"
+        },
         "states": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/State" }
+          "additionalProperties": {
+            "$ref": "#/$defs/State"
+          }
         }
       }
     },
     "State": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "enum": ["atomic", "compound", "parallel", "foreach", "final"] },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "transitions": { "type": "array", "items": { "$ref": "#/$defs/Transition" } },
-        "states": { "type": "object", "additionalProperties": { "$ref": "#/$defs/State" } },
-        "regions": { "type": "object" },
-        "onEntry": { "type": "array" },
-        "onExit": { "type": "array" },
-        "stateTimeout": { "type": "string", "format": "duration" },
-
-        "collection": { "type": "string", "$comment": "Foreach only. FEL expression yielding a bounded array. ADR 0078." },
-        "itemVariable": { "type": "string", "default": "$item" },
-        "indexVariable": { "type": "string", "default": "$index" },
-        "concurrency": { "type": ["integer", "null"] },
-        "breakCondition": { "type": "string" },
-        "outputPath": { "type": "string" },
-        "mergeStrategy": { "enum": ["shallow", "deep", "collect"] },
-        "body": { "$ref": "#/$defs/State" },
-
-        "outcomeCode": { "type": "string", "$comment": "Final states only." }
+        "type": {
+          "enum": [
+            "atomic",
+            "compound",
+            "parallel",
+            "foreach",
+            "final"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
+          }
+        },
+        "states": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/State"
+          }
+        },
+        "regions": {
+          "type": "object"
+        },
+        "onEntry": {
+          "type": "array"
+        },
+        "onExit": {
+          "type": "array"
+        },
+        "stateTimeout": {
+          "type": "string",
+          "format": "duration"
+        },
+        "collection": {
+          "type": "string",
+          "$comment": "Foreach only. FEL expression yielding a bounded array. ADR 0078."
+        },
+        "itemVariable": {
+          "type": "string",
+          "default": "$item"
+        },
+        "indexVariable": {
+          "type": "string",
+          "default": "$index"
+        },
+        "concurrency": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "breakCondition": {
+          "type": "string"
+        },
+        "outputPath": {
+          "type": "string"
+        },
+        "mergeStrategy": {
+          "enum": [
+            "shallow",
+            "deep",
+            "collect"
+          ]
+        },
+        "body": {
+          "$ref": "#/$defs/State"
+        },
+        "outcomeCode": {
+          "type": "string",
+          "$comment": "Final states only."
+        }
       }
     },
     "Transition": {
       "type": "object",
-      "required": ["to"],
+      "required": [
+        "to"
+      ],
       "properties": {
-        "to": { "type": "string" },
-        "on": { "$ref": "#/$defs/TransitionEvent" },
-        "guard": { "type": "string", "description": "FEL expression." },
-        "tags": { "type": "array", "items": { "type": "string" }, "$comment": "Governance attaches via tags." },
-        "actor": { "type": "string" },
-        "actions": { "type": "array" }
+        "to": {
+          "type": "string"
+        },
+        "on": {
+          "$ref": "#/$defs/TransitionEvent"
+        },
+        "guard": {
+          "type": "string",
+          "description": "FEL expression."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "$comment": "Governance attaches via tags."
+        },
+        "actor": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array"
+        }
       }
     },
     "TransitionEvent": {
       "type": "object",
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "enum": ["signal", "message", "timer", "signature", "action", "completion"] },
-        "name": { "type": "string" },
-        "actorId": { "type": "string" },
-        "correlationKey": { "type": "string" },
-        "signalTimeout": { "type": "string", "format": "duration" },
-        "eventContract": { "type": "string", "format": "uri" }
+        "kind": {
+          "enum": [
+            "signal",
+            "message",
+            "timer",
+            "signature",
+            "action",
+            "completion"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        },
+        "correlationKey": {
+          "type": "string"
+        },
+        "signalTimeout": {
+          "type": "string",
+          "format": "duration"
+        },
+        "eventContract": {
+          "type": "string",
+          "format": "uri"
+        }
       }
     },
     "Contracts": {
@@ -196,20 +560,55 @@
       "type": "object",
       "description": "Governed output-commit pipeline projection. Per ADR 0080: source surface + contractRef + projection map + writeScope + mutationSource + verificationLevel. Validated mutations + Facts-tier provenance emit deterministically.",
       "properties": {
-        "on": { "type": "string", "$comment": "Source surface: state id, transition id, capability id, signal name." },
-        "contractRef": { "type": "string", "format": "uri" },
-        "projection": { "type": "object" },
-        "writeScope": { "type": "array", "items": { "type": "string" } },
+        "on": {
+          "type": "string",
+          "$comment": "Source surface: state id, transition id, capability id, signal name."
+        },
+        "contractRef": {
+          "type": "string",
+          "format": "uri"
+        },
+        "projection": {
+          "type": "object"
+        },
+        "writeScope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "mutationSource": {
           "oneOf": [
-            { "enum": ["agent-extracted", "system-fetched", "human-entered", "human-corrected", "computed", "self-attested"] },
-            { "type": "string", "pattern": "^x-" }
+            {
+              "enum": [
+                "agent-extracted",
+                "system-fetched",
+                "human-entered",
+                "human-corrected",
+                "computed",
+                "self-attested"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-"
+            }
           ]
         },
         "verificationLevel": {
           "oneOf": [
-            { "enum": ["independent", "attested", "corroborated", "authoritative"] },
-            { "type": "string", "pattern": "^x-" }
+            {
+              "enum": [
+                "independent",
+                "attested",
+                "corroborated",
+                "authoritative"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-"
+            }
           ]
         }
       }
@@ -218,13 +617,18 @@
       "type": "object",
       "properties": {
         "tier": {
-          "enum": ["facts", "reasoning", "counterfactual", "narrative", "full"],
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative",
+            "full"
+          ],
           "default": "facts",
           "description": "Minimum provenance tier emitted. Facts is kernel default. Higher tiers attach via provenanceLayer seam (ADR 0077)."
         }
       }
     },
-
     "Governance": {
       "type": "object",
       "description": "Embedded due-process, review, and pipeline governance. Required for rightsImpacting and safetyImpacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
@@ -241,92 +645,175 @@
           "type": "array",
           "$comment": "Validation pipelines with assertion gates."
         },
-        "taskCatalog": { "type": "array" },
-        "delegation": { "type": "object" },
-        "holds": { "type": "object" },
+        "taskCatalog": {
+          "type": "array"
+        },
+        "delegation": {
+          "type": "object"
+        },
+        "holds": {
+          "type": "object"
+        },
         "policyParameters": {
           "type": "object",
           "$comment": "Temporal parameters, deadline config, business calendar refs."
         },
-        "escalationLevels": { "type": "array" }
+        "escalationLevels": {
+          "type": "array"
+        }
       }
     },
-
     "AgentDeclaration": {
       "type": "object",
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "description": "Was wos-ai-integration.schema.json AgentDeclaration plus wos-agent-config.schema.json plus wos-drift-monitor.schema.json. Inlined per ADR 0076.",
       "properties": {
-        "id": { "type": "string", "$comment": "MUST match an actor.id where actor.type=='agent'." },
-        "modelIdentifier": { "type": "string" },
-        "modelVersion": { "type": "string" },
-        "modelVersionPolicy": { "enum": ["pinned", "minor-allowed", "major-allowed"] },
+        "id": {
+          "type": "string",
+          "$comment": "MUST match an actor.id where actor.type=='agent'."
+        },
+        "modelIdentifier": {
+          "type": "string"
+        },
+        "modelVersion": {
+          "type": "string"
+        },
+        "modelVersionPolicy": {
+          "enum": [
+            "pinned",
+            "minor-allowed",
+            "major-allowed"
+          ]
+        },
         "autonomy": {
-          "enum": ["readOnly", "assistive", "supervised", "autonomous"],
+          "enum": [
+            "readOnly",
+            "assistive",
+            "supervised",
+            "autonomous"
+          ],
           "$comment": "Capped by impactLevel. rightsImpacting MUST NOT exceed assistive without explicit governance permission."
         },
         "deonticConstraints": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["kind", "expression"],
+            "required": [
+              "kind",
+              "expression"
+            ],
             "properties": {
               "kind": {
-                "enum": ["permission", "prohibition", "obligation", "right"],
+                "enum": [
+                  "permission",
+                  "prohibition",
+                  "obligation",
+                  "right"
+                ],
                 "$comment": "OASIS LegalRuleML."
               },
-              "expression": { "type": "string", "description": "FEL." }
+              "expression": {
+                "type": "string",
+                "description": "FEL."
+              }
             }
           }
         },
-        "confidenceFloor": { "type": "number", "minimum": 0, "maximum": 1 },
-        "confidenceDecay": { "type": "object" },
+        "confidenceFloor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidenceDecay": {
+          "type": "object"
+        },
         "fallbackChain": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rightsImpacting transitions."
         },
         "capabilities": {
           "type": "array",
           "$comment": "Capability sub-shape: declared write scope, contract refs, tool grants."
         },
-        "driftMonitoring": { "type": "object" }
+        "driftMonitoring": {
+          "type": "object"
+        }
       }
     },
     "AIOversight": {
       "type": "object",
       "description": "Cross-cutting AI policy. Disclosure, drift detection, narrative provenance, volume constraints. EU AI Act Art. 13 / OMB M-24-10 alignment.",
       "properties": {
-        "disclosure": { "type": "object" },
-        "driftDetection": { "type": "object" },
-        "volumeConstraints": { "type": "object" },
-        "narrativeTier": { "type": "object", "$comment": "Required when provenance.tier == 'narrative' or 'full'." }
+        "disclosure": {
+          "type": "object"
+        },
+        "driftDetection": {
+          "type": "object"
+        },
+        "volumeConstraints": {
+          "type": "object"
+        },
+        "narrativeTier": {
+          "type": "object",
+          "$comment": "Required when provenance.tier == 'narrative' or 'full'."
+        }
       }
     },
-
     "Signature": {
       "type": "object",
       "description": "Embedded signature workflow semantics. LOAD-BEARING for any DocuSign-tier workflow: signing order IS the workflow. Routes through Signature Profile semantics; SignatureAffirmation provenance anchors to Trellis via custodyHook (ADR 0077).",
-      "required": ["signers", "order"],
+      "required": [
+        "signers",
+        "order"
+      ],
       "properties": {
         "signers": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["actorId"],
+            "required": [
+              "actorId"
+            ],
             "properties": {
-              "actorId": { "type": "string" },
-              "identityVerification": {
-                "enum": ["none", "emailLink", "smsOtp", "idDocument", "kba", "biometric"]
+              "actorId": {
+                "type": "string"
               },
-              "consentText": { "type": "string" },
-              "signingMethod": { "enum": ["click", "typed", "drawn", "certificate"] }
+              "identityVerification": {
+                "enum": [
+                  "none",
+                  "emailLink",
+                  "smsOtp",
+                  "idDocument",
+                  "kba",
+                  "biometric"
+                ]
+              },
+              "consentText": {
+                "type": "string"
+              },
+              "signingMethod": {
+                "enum": [
+                  "click",
+                  "typed",
+                  "drawn",
+                  "certificate"
+                ]
+              }
             }
           }
         },
         "order": {
-          "enum": ["sequential", "parallel", "conditional"],
+          "enum": [
+            "sequential",
+            "parallel",
+            "conditional"
+          ],
           "$comment": "conditional uses transition guards to route between signers."
         },
         "reminders": {
@@ -334,14 +821,21 @@
           "items": {
             "type": "object",
             "properties": {
-              "after": { "type": "string", "format": "duration" },
-              "channel": { "type": "string" }
+              "after": {
+                "type": "string",
+                "format": "duration"
+              },
+              "channel": {
+                "type": "string"
+              }
             }
           }
         },
         "voidConditions": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "$comment": "FEL guards that void the workflow before completion (e.g. expiry)."
         },
         "auditCertificate": {
@@ -350,33 +844,56 @@
         }
       }
     },
-
     "Custody": {
       "type": "object",
       "description": "Embedded Trellis custody declaration. Load-bearing whenever a workflow claims anchoring on transitions or signature events. Was wos-custody-hook-encoding.schema.json (sidecar); promoted to embedded per ADR 0076 D-2 / Q4.",
       "properties": {
-        "trustProfileRef": { "type": "string", "format": "uri", "description": "Trust Profile binding (Trellis-side)." },
+        "trustProfileRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "Trust Profile binding (Trellis-side)."
+        },
         "anchorRequirements": {
           "type": "array",
           "description": "Per-transition or per-event anchoring rules.",
           "items": {
             "type": "object",
-            "required": ["on", "anchor"],
+            "required": [
+              "on",
+              "anchor"
+            ],
             "properties": {
-              "on": { "type": "string", "$comment": "Transition id, signature event id, or determination tag." },
-              "anchor": { "enum": ["required", "optional", "deferred"] },
-              "trellisLedger": { "type": "string", "$comment": "Optional ledger hint." }
+              "on": {
+                "type": "string",
+                "$comment": "Transition id, signature event id, or determination tag."
+              },
+              "anchor": {
+                "enum": [
+                  "required",
+                  "optional",
+                  "deferred"
+                ]
+              },
+              "trellisLedger": {
+                "type": "string",
+                "$comment": "Optional ledger hint."
+              }
             }
           }
         },
-        "exportBundleRef": { "type": "string", "format": "uri" }
+        "exportBundleRef": {
+          "type": "string",
+          "format": "uri"
+        }
       }
     },
     "Advanced": {
       "type": "object",
       "description": "Optional. DCR constraint zones, equity guardrails, SMT verifiable constraints, multi-step session config, circuit breakers. Was wos-advanced.schema.json plus wos-equity.schema.json plus wos-verification-report.schema.json (author-time half).",
       "properties": {
-        "dcrZones": { "type": "array" },
+        "dcrZones": {
+          "type": "array"
+        },
         "equity": {
           "type": "object",
           "$comment": "Bias caps, disparity thresholds, equity FEL expressions."
@@ -385,18 +902,530 @@
           "type": "array",
           "$comment": "SMT constraint declarations. Verification report is a runtime artifact in wos-provenance-log."
         },
-        "circuitBreaker": { "type": "object" },
-        "shadowMode": { "type": "object" }
+        "circuitBreaker": {
+          "type": "object"
+        },
+        "shadowMode": {
+          "type": "object"
+        }
       }
     },
-
     "Assurance": {
       "type": "object",
       "description": "Optional. Assurance level declaration, attestation, subject continuity. Was wos-assurance.schema.json.",
       "properties": {
-        "level": { "enum": ["baseline", "elevated", "high"] },
-        "attestation": { "type": "object" },
-        "subjectContinuity": { "type": "object" }
+        "level": {
+          "enum": [
+            "baseline",
+            "elevated",
+            "high"
+          ]
+        },
+        "attestation": {
+          "type": "object"
+        },
+        "subjectContinuity": {
+          "type": "object"
+        }
+      }
+    },
+    "FactsTierRecord": {
+      "type": "object",
+      "description": "A persisted WOS provenance record emitted by runtime execution. Facts-tier semantics are normative in the kernel; higher tiers reuse the same envelope and advertise their tier through `auditLayer`. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
+      "required": [
+        "id",
+        "recordKind",
+        "timestamp",
+        "auditLayer",
+        "definitionVersion"
+      ],
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "stateTransition",
+          "timestamp": "2026-04-19T12:00:00Z",
+          "auditLayer": "facts",
+          "actorId": "caseworker",
+          "actorType": "human",
+          "fromState": "review",
+          "toState": "decided",
+          "event": "decide",
+          "definitionVersion": "1.0.0",
+          "lifecycleState": "review",
+          "transitionTags": [
+            "determination"
+          ],
+          "caseFileSnapshot": {
+            "value": {
+              "income": 17500,
+              "eligible": true
+            },
+            "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+            "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec §10.6"
+        }
+      },
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-record-typeid",
+          "description": "TypeID-structured identifier for this facts-tier provenance record. Reserved family prefix: `prov`.",
+          "examples": [
+            "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+          ]
+        },
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. For determination snapshot enforcement, the relevant value is 'stateTransition'. Other record kinds MAY also carry caseFileSnapshot for implementation-specific diagnostics.",
+          "examples": [
+            "stateTransition",
+            "caseStateMutation"
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 / ISO 8601 timestamp stamped by the runtime append path before persistence.",
+          "examples": [
+            "2026-04-19T12:00:00Z"
+          ]
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the actor who triggered the record, when the processor can name one.",
+          "examples": [
+            "caseworker",
+            "intake-service"
+          ]
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel lifecycle state label naming the configuration leaf immediately before this transition-oriented provenance record was emitted.",
+          "examples": [
+            "review"
+          ]
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel lifecycle state label naming the configuration leaf immediately after this transition-oriented provenance record was emitted.",
+          "examples": [
+            "decided"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event or reserved event literal carried by the record kind.",
+          "examples": [
+            "decide",
+            "case.intake.accepted"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Arbitrary JSON object carrying record-kind-specific correlation keys, diagnostics, or structured details not represented by top-level scalar provenance fields.",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "path": "eligibility.result"
+            }
+          ]
+        },
+        "auditLayer": {
+          "type": "string",
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative"
+          ],
+          "description": "Audit tier for the persisted/exported record. Facts-tier records are normative in the kernel; higher layers reuse the same envelope and set a different tier literal.",
+          "examples": [
+            "facts",
+            "narrative"
+          ]
+        },
+        "actorType": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "human",
+                "system",
+                "agent"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix.",
+          "examples": [
+            "human",
+            "system",
+            "agent"
+          ]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state at the time of the action when the processor can determine it canonically.",
+          "examples": [
+            "review",
+            "open"
+          ]
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document stamped at append time.",
+          "examples": [
+            "1.0.0"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Input entity references used by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an input entity this activity consumed, aligned with PROV-O `prov:used` semantics for downstream audit graph materialization.",
+            "examples": [
+              "handoff-public-2026-0001"
+            ]
+          },
+          "examples": [
+            [
+              "handoff-public-2026-0001"
+            ]
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output entity references generated by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an output entity this activity produced so exporters can stitch forward references into case files or external systems.",
+            "examples": [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
+          },
+          "examples": [
+            [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/ProvenanceOutcome"
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory.",
+          "examples": [
+            [
+              "determination"
+            ],
+            [
+              "review"
+            ]
+          ],
+          "items": {
+            "type": "string",
+            "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
+            "examples": [
+              "determination",
+              "review"
+            ]
+          }
+        },
+        "caseFileSnapshot": {
+          "$ref": "#/$defs/CaseFileSnapshot"
+        },
+        "mutationSource": {
+          "$ref": "#/$defs/MutationSource",
+          "description": "Origin of the mutation when recordKind is 'caseStateMutation'. OPTIONAL on other record kinds. Reserved literals trace the provenance chain from human entry through AI extraction to system-fetch and computed derivation."
+        },
+        "verificationLevel": {
+          "$ref": "#/$defs/VerificationLevel",
+          "description": "OPTIONAL verification strength of this mutation. When present, signals the degree of independent confirmation behind the written value. Tying this to 'determination'-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST."
+        },
+        "canonicalEventHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase hex rendering of the 32-byte Trellis `canonical_event_hash` stamped after custody admission, when present.",
+          "examples": [
+            "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "stateTransition"
+              },
+              "transitionTags": {
+                "contains": {
+                  "const": "determination"
+                }
+              }
+            },
+            "required": [
+              "recordKind",
+              "transitionTags"
+            ]
+          },
+          "then": {
+            "required": [
+              "caseFileSnapshot"
+            ]
+          }
+        },
+        {
+          "$ref": "#/$defs/CapabilityInvocationRecord"
+        }
+      ]
+    },
+    "MutationSource": {
+      "type": "string",
+      "description": "Origin of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. `agent-extracted` supersedes the FlowSpec `ai-extracted` literal for WOS actor-vocabulary alignment.",
+      "examples": [
+        "human-entered",
+        "agent-extracted",
+        "system-fetched",
+        "computed",
+        "self-attested",
+        "human-corrected",
+        "x-vendor-batch-import"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "human-entered",
+            "human-corrected",
+            "agent-extracted",
+            "system-fetched",
+            "computed",
+            "self-attested"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "VerificationLevel": {
+      "type": "string",
+      "description": "Verification strength of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. OPTIONAL on mutation records; tying it to `determination`-tagged transitions is policy-shaped (governance profile / attachment pattern).",
+      "examples": [
+        "independent",
+        "attested",
+        "corroborated",
+        "authoritative"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "independent",
+            "attested",
+            "corroborated",
+            "authoritative"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "CaseFileSnapshot": {
+      "type": "object",
+      "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export.",
+      "examples": [
+        {
+          "value": {
+            "income": 17500,
+            "eligible": true
+          },
+          "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+          "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        }
+      ],
+      "required": [
+        "value",
+        "jcsCanonical",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires. This value may be an object, array, string, number, boolean, or null depending on the processor's case-state representation.",
+          "examples": [
+            {
+              "income": 17500,
+              "eligible": true
+            }
+          ]
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
+          "examples": [
+            "{\"eligible\":true,\"income\":17500}"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical. This digest links the human-readable snapshot to tamper-evident exports without requiring downstream systems to reserialize value.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
+        }
+      }
+    },
+    "CapabilityInvocationRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. Every provenance log validated against this kernel schema participates in the MUST via `FactsTierRecord.allOf`; records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+          "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:30:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "invocationBlocked": true,
+            "capabilityId": "documentExtraction"
+          },
+          "outcome": "preconditionNotSatisfied"
+        },
+        {
+          "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
+          "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:31:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "invocationBlocked": false,
+            "capabilityId": "documentExtraction"
+          }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
+          "examples": [
+            "capabilityInvocation",
+            "capabilityInvocation"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
+          "examples": [
+            {
+              "invocationBlocked": true,
+              "capabilityId": "documentExtraction"
+            },
+            {
+              "invocationBlocked": false,
+              "capabilityId": "eligibilityScreener"
+            }
+          ],
+          "properties": {
+            "invocationBlocked": {
+              "type": "boolean",
+              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration §3.3.1). The processor MUST then fall through to the fallback chain (AI §8). False (or absent) means the capability was invoked.",
+              "examples": [
+                true,
+                false
+              ],
+              "x-lm": {
+                "critical": true,
+                "intent": "Signal that a capability precondition blocked agent invocation; pairs with outcome=preconditionNotSatisfied to distinguish declarative gates from agent failures"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "invocationBlocked": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "invocationBlocked"
+                ]
+              }
+            },
+            "required": [
+              "recordKind",
+              "data"
+            ]
+          },
+          "then": {
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "const": "preconditionNotSatisfied"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ProvenanceOutcome": {
+      "type": "string",
+      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration §3.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime §10.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
+      "examples": [
+        "preconditionNotSatisfied",
+        "convergenceCapReached",
+        "x-vendor-quota-exceeded"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "preconditionNotSatisfied",
+            "convergenceCapReached"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
       }
     }
   }

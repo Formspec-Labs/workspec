@@ -1,138 +1,30 @@
-//! WS-014: HTTP coverage backfill for previously unexercised route modules.
+//! WS-014 slice A: HTTP coverage for lint, provenance export, and dashboard.
 //!
-//! Pins current behaviour for three routes called out in the WS-014
-//! "next slice":
-//!
-//! * `POST /api/lint/document` — happy path + malformed-body failure path.
-//! * `GET  /api/instances/:id/provenance/export?format=…` — single-format
-//!   happy path against a seeded instance + 404 on unknown id.
-//! * `GET  /api/dashboard/metrics` — top-level shape under a multi-instance
+//! * `POST /api/lint/document` — happy path + parse failure (`PARSE-001`) +
+//!   non-JSON body (extractor rejection).
+//! * `GET  /api/instances/:id/provenance/export?format=…` — `prov-o`, `xes`,
+//!   and `ocel` happy paths + 404 on unknown id + invalid `format` query.
+//! * `GET /api/dashboard/metrics` — top-level shape under a multi-instance
 //!   fixture (asserts keys only; ignores synthetic-vs-real values per WS-055
 //!   marker `synthetic_fields`).
+//!
+//! Slice B (conformance, calendar, notifications, integration, deontic,
+//! assurance, applicant, agents) lives in [`http_coverage_slice_b.rs`](http_coverage_slice_b.rs)
+//! with shared helpers under [`http_coverage_shared/`](http_coverage_shared/).
 //!
 //! Auth: `AuthKind::Mock` so no login is required. The mock provider grants a
 //! supervisor identity to anonymous requests, which is fine for these read
 //! endpoints; the assertions are about route reachability + response shape.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+#[path = "http_coverage_shared/harness.rs"]
+mod harness;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use chrono::Utc;
 use tower::ServiceExt;
-use wos_core::provenance::ProvenanceRecord;
-use wos_server::config::{AiChatKind, AuthKind, ServerConfig, SignerKind, StorageKind};
-use wos_server::services::provenance_service::chain_hash;
-use wos_server::storage::{InstanceRow, ProvenanceRow};
-use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
+use wos_server::http;
 
-const ZERO_HASH: &str =
-    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-
-fn stub_config() -> Arc<ServerConfig> {
-    Arc::new(ServerConfig {
-        port: 0,
-        fixtures_dir: std::path::PathBuf::from("."),
-        storage: StorageKind::Sqlite,
-        database_url: "sqlite::memory:?cache=shared".into(),
-        auth: AuthKind::Mock,
-        jwt_secret: String::new(),
-        jwt_access_ttl_secs: 900,
-        jwt_refresh_ttl_secs: 7 * 24 * 3600,
-        cors_origin: "http://localhost:3000".into(),
-        cors_strict: false,
-        bearer_strict: false,
-        seed: false,
-        ai_chat: AiChatKind::Disabled,
-        gemini_api_key: String::new(),
-        cursor_throttle_ms: 50,
-        timer_poll_ms: 1000,
-        session_sweep_enabled: false,
-        signer_kind: SignerKind::Noop,
-    })
-}
-
-async fn bring_up() -> AppState {
-    let cfg = stub_config();
-    let storage = storage::build(&cfg).await.unwrap();
-    let auth = auth::build(&cfg, storage.clone());
-    let services = Arc::new(
-        AppServices::new(cfg.clone(), storage.clone())
-            .await
-            .unwrap(),
-    );
-    let (_layer, io) = realtime::build_io_only();
-    let runtime = wos_server::runtime::AppRuntime::build(
-        storage.clone(),
-        services.provenance.clone(),
-        services.bundle.clone(),
-        io,
-    );
-    AppState {
-        cfg,
-        storage,
-        auth,
-        services,
-        runtime,
-        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-    }
-}
-
-fn make_instance_row(id: &str) -> InstanceRow {
-    let now = Utc::now();
-    InstanceRow {
-        instance_id: id.into(),
-        definition_url: "urn:wos:workflow:test:1.0.0".into(),
-        definition_version: "1.0.0".into(),
-        status: "active".into(),
-        impact_level: "operational".into(),
-        instance_json: serde_json::json!({
-            "instanceId": id,
-            "definitionUrl": "urn:wos:workflow:test:1.0.0",
-            "status": "active",
-            "configuration": ["draft"],
-        }),
-        runtime_aux_json: serde_json::Value::Null,
-        created_at: now,
-        updated_at: now,
-    }
-}
-
-async fn seed_instance_with_one_provenance(
-    store: &storage::StorageHandle,
-    instance_id: &str,
-) {
-    store
-        .create_instance(&make_instance_row(instance_id))
-        .await
-        .unwrap();
-
-    let mut record =
-        ProvenanceRecord::state_transition("draft", "review", "submit", Some("applicant"));
-    record.audit_layer = Some("facts".into());
-
-    let ts = Utc::now();
-    let tier = record.audit_layer.clone().unwrap_or_else(|| "facts".into());
-    let payload = serde_json::to_value(&record).unwrap();
-    let hash = chain_hash(ZERO_HASH, instance_id, 1, &ts, &tier, &payload);
-    let row = ProvenanceRow {
-        id: format!("rec-{instance_id}-1"),
-        instance_id: instance_id.into(),
-        seq: 1,
-        timestamp: ts,
-        tier,
-        payload,
-        hash,
-        previous_hash: ZERO_HASH.into(),
-    };
-
-    let rows = vec![row];
-    store
-        .update_instance_atomic(instance_id, &move |_row| Ok(rows.clone()))
-        .await
-        .unwrap();
-}
+use harness::{bring_up, make_instance_row, seed_instance_with_one_provenance};
 
 // ---------------------------------------------------------------------------
 // `POST /api/lint/document`
@@ -143,8 +35,8 @@ async fn lint_document_happy_path() {
     let state = bring_up().await;
     let app = http::router(state);
 
-    // Minimal kernel doc that wos-lint recognises via the `$wosKernel` marker.
-    let body = serde_json::json!({ "$wosKernel": "1.0" });
+    // Minimal kernel doc that wos-lint recognises via the `$wosWorkflow` marker.
+    let body = serde_json::json!({ "$wosWorkflow": "1.0" });
     let res = app
         .oneshot(
             Request::builder()
@@ -172,7 +64,7 @@ async fn lint_document_validation_failure() {
     let state = bring_up().await;
     let app = http::router(state);
 
-    // No `$wosKernel` (or any other recognised `$wos*` marker) → wos-lint
+    // No `$wosWorkflow` (or any other recognised `$wos*` marker) → wos-lint
     // returns `LintError::Parse`, which `lint_service::lint_document` maps
     // to a 200 OK with `isValid: false` and exactly one synthetic
     // `PARSE-001` diagnostic (`crates/wos-server/src/services/lint_service.rs`).
@@ -213,6 +105,29 @@ async fn lint_document_validation_failure() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn lint_document_non_json_body_is_rejected() {
+    let state = bring_up().await;
+    let app = http::router(state);
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/lint/document")
+                .header("content-type", "application/json")
+                .body(Body::from("{not json"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "invalid JSON syntax is axum `JsonSyntaxError` → 400"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // `GET /api/instances/:id/provenance/export`
 // ---------------------------------------------------------------------------
@@ -248,9 +163,13 @@ async fn provenance_export_prov_o_returns_jsonld() {
     let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes)
         .expect("PROV-O export body must be valid JSON-LD JSON");
+    let obj = v
+        .as_object()
+        .expect("PROV-O export must be a JSON object (`ProvODocument`)");
     assert!(
-        v.is_object() || v.is_array(),
-        "PROV-O document must be a JSON object/array, got: {v}"
+        obj.contains_key("@context") && obj.contains_key("@graph"),
+        "PROV-O must expose JSON-LD `@context` + `@graph` (wos-export::prov_o::ProvODocument), got keys: {:?}",
+        obj.keys().collect::<Vec<_>>(),
     );
 }
 
@@ -352,6 +271,32 @@ async fn provenance_export_404_for_missing_instance() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn provenance_export_invalid_format_query_is_rejected() {
+    let state = bring_up().await;
+    let instance_id = "urn:wos:instance:test:export-bad-format";
+    seed_instance_with_one_provenance(&state.storage, instance_id).await;
+    let app = http::router(state);
+
+    let encoded = instance_id.replace(':', "%3A");
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/instances/{encoded}/provenance/export?format=not-a-format"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "invalid `format` query fails `Query` deserialize → 400"
+    );
 }
 
 // ---------------------------------------------------------------------------

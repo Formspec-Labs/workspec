@@ -265,8 +265,8 @@ mod tests {
         // Iter 0: dirty doc + lint error → triggers repair.
         // Iter 1: clean doc + no lint findings → converged.
         let provider = ScriptedPrompter::new(vec![
-            r#"{"$wosKernel":"1.0","dirty":true}"#,
-            r#"{"$wosKernel":"1.0","clean":true}"#,
+            r#"{"$wosWorkflow":"1.0","dirty":true}"#,
+            r#"{"$wosWorkflow":"1.0","clean":true}"#,
         ]);
         let tools = ScriptedTools::new(vec![vec![err("K-001")], vec![]]);
 
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn fences_stripped_from_attempt() {
-        let provider = ScriptedPrompter::new(vec!["```json\n{\"$wosKernel\":\"1.0\"}\n```"]);
+        let provider = ScriptedPrompter::new(vec!["```json\n{\"$wosWorkflow\":\"1.0\"}\n```"]);
         let tools = ScriptedTools::new(vec![vec![]]);
 
         let outcome = pollster::block_on(synthesize(&provider, &tools, "test", Layer::Kernel, 1))
@@ -320,7 +320,7 @@ mod tests {
 
         match outcome {
             SynthOutcome::Converged { document, .. } => {
-                assert_eq!(document, r#"{"$wosKernel":"1.0"}"#);
+                assert_eq!(document, r#"{"$wosWorkflow":"1.0"}"#);
             }
             other => panic!("expected converged, got {other:?}"),
         }

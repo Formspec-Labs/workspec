@@ -248,7 +248,6 @@ mod tests {
 
     fn standard_calendar(tz: &str) -> BusinessCalendarDocument {
         BusinessCalendarDocument {
-            wos_business_calendar: "1.0".to_string(),
             schema: None,
             target_workflow: "urn:test:calendar".to_string(),
             version: Some("test-1.0".to_string()),

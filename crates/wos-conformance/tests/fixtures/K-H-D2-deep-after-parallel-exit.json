@@ -3,23 +3,36 @@
   "id": "K-H-D2-deep-after-parallel-exit",
   "rule": "K-H",
   "description": "Deep history at depth 2 with a parallel region: compound state 'review' has historyState=deep and contains a parallel state 'taskGroup'. After advancing region A from 'aWorking' to 'aAdvanced' (while region B stays in 'bWorking'), an interruption exits 'review'. Re-entry via resume should deep-restore both region leaf states: 'aAdvanced' and 'bWorking'.",
-  "documents": { "kernel": "inline" },
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:history-deep-d2-parallel",
       "version": "1.0.0",
       "title": "History Deep Depth-2 Parallel Exit Test",
       "description": "Kernel for testing deep history capture on parallel-region exit at depth 2",
       "status": "active",
       "impactLevel": "operational",
-      "actors": [{ "id": "worker", "type": "human", "description": "Test actor" }],
+      "actors": [
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Test actor"
+        }
+      ],
       "lifecycle": {
         "initialState": "open",
         "states": {
           "open": {
             "type": "atomic",
-            "transitions": [{ "event": "start", "target": "review" }]
+            "transitions": [
+              {
+                "event": "start",
+                "target": "review"
+              }
+            ]
           },
           "review": {
             "type": "compound",
@@ -32,50 +45,117 @@
                   "regionA": {
                     "initialState": "aWorking",
                     "states": {
-                      "aWorking": { "type": "atomic", "transitions": [{ "event": "advanceA", "target": "aAdvanced" }] },
-                      "aAdvanced": { "type": "atomic" }
+                      "aWorking": {
+                        "type": "atomic",
+                        "transitions": [
+                          {
+                            "event": "advanceA",
+                            "target": "aAdvanced"
+                          }
+                        ]
+                      },
+                      "aAdvanced": {
+                        "type": "atomic"
+                      }
                     }
                   },
                   "regionB": {
                     "initialState": "bWorking",
                     "states": {
-                      "bWorking": { "type": "atomic" }
+                      "bWorking": {
+                        "type": "atomic"
+                      }
                     }
                   }
                 }
               }
             },
             "transitions": [
-              { "event": "interrupt", "target": "interrupted" },
-              { "event": "resume", "target": "review" }
+              {
+                "event": "interrupt",
+                "target": "interrupted"
+              },
+              {
+                "event": "resume",
+                "target": "review"
+              }
             ]
           },
           "interrupted": {
             "type": "atomic",
-            "transitions": [{ "event": "resume", "target": "review" }]
+            "transitions": [
+              {
+                "event": "resume",
+                "target": "review"
+              }
+            ]
           }
         }
       },
-      "caseFile": { "fields": {} },
-      "execution": { "workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned" }
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "start", "actor": "worker" },
-    { "event": "advanceA", "actor": "worker" },
-    { "event": "interrupt", "actor": "worker" },
-    { "event": "resume", "actor": "worker" },
-    { "event": "advanceA", "actor": "worker" }
+    {
+      "event": "start",
+      "actor": "worker"
+    },
+    {
+      "event": "advanceA",
+      "actor": "worker"
+    },
+    {
+      "event": "interrupt",
+      "actor": "worker"
+    },
+    {
+      "event": "resume",
+      "actor": "worker"
+    },
+    {
+      "event": "advanceA",
+      "actor": "worker"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "review", "event": "start" },
-    { "from": "aWorking", "to": "aAdvanced", "event": "advanceA" },
-    { "from": "review", "to": "interrupted", "event": "interrupt" },
-    { "from": "interrupted", "to": "review", "event": "resume" }
+    {
+      "from": "open",
+      "to": "review",
+      "event": "start"
+    },
+    {
+      "from": "aWorking",
+      "to": "aAdvanced",
+      "event": "advanceA"
+    },
+    {
+      "from": "review",
+      "to": "interrupted",
+      "event": "interrupt"
+    },
+    {
+      "from": "interrupted",
+      "to": "review",
+      "event": "resume"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "historyCleared", "data": { "state": "review" } },
-    { "recordKind": "unmatchedEvent" }
+    {
+      "recordKind": "historyCleared",
+      "data": {
+        "state": "review"
+      }
+    },
+    {
+      "recordKind": "unmatchedEvent"
+    }
   ]
 }

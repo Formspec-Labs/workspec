@@ -1,21 +1,25 @@
 {
   "id": "INT-POLICY-003-indeterminate",
   "rule": "INT-POLICY",
-  "description": "A policy-engine binding returns an Indeterminate decision. The handler MUST NOT coerce it to Allow or Deny — it emits PolicyDecision provenance with decision='indeterminate'. The outputBinding maps the raw decision string to case state, which will be 'indeterminate'. This verifies the non-coercion constraint.",
+  "description": "A policy-engine binding returns an Indeterminate decision. The handler MUST NOT coerce it to Allow or Deny \u2014 it emits PolicyDecision provenance with decision='indeterminate'. The outputBinding maps the raw decision string to case state, which will be 'indeterminate'. This verifies the non-coercion constraint.",
   "documents": {
     "kernel": "inline",
     "integration": "inline"
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-POLICY-003",
       "version": "1.0.0",
       "title": "INT-POLICY-003 Policy Indeterminate Decision",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "evaluated": { "type": "final" }
+          "evaluated": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "policyOutcome": { "type": "string" }
+          "policyOutcome": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,18 +58,46 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-POLICY-003",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "policyEngine": {
-          "type": "policy-engine",
-          "description": "Policy engine that returns indeterminate",
-          "engineType": "canonical",
-          "outputBinding": {
-            "caseFile.policyOutcome": "$.decision"
+        "targetWorkflow": {
+          "url": "urn:test:INT-POLICY-003",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "policyEngine": {
+            "type": "policy-engine",
+            "description": "Policy engine that returns indeterminate",
+            "engineType": "canonical",
+            "outputBinding": {
+              "caseFile.policyOutcome": "$.decision"
+            }
           }
         }
       }
@@ -72,10 +108,17 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "evaluate", "actor": "operator" }
+    {
+      "event": "evaluate",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "evaluated", "event": "evaluate" }
+    {
+      "from": "open",
+      "to": "evaluated",
+      "event": "evaluate"
+    }
   ],
   "expected_provenance": [
     {
@@ -89,7 +132,9 @@
       "recordKind": "dataMapping",
       "data": {
         "serviceRef": "policyEngine",
-        "updatedPaths": ["caseFile.policyOutcome"]
+        "updatedPaths": [
+          "caseFile.policyOutcome"
+        ]
       }
     }
   ]

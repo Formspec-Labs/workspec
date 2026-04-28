@@ -3,62 +3,143 @@
   "id": "K-H-D1-deep-normal-reentry",
   "rule": "K-H",
   "description": "Deep history at depth 1: compound state 'review' has historyState=deep. After entering substate 'inProgress', an interruption exits to 'interrupted'. Re-entering 'review' should restore the deep leaf configuration.",
-  "documents": { "kernel": "inline" },
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:history-deep-d1",
       "version": "1.0.0",
       "title": "History Deep Depth-1 Test",
       "description": "Kernel for testing deep history state re-entry at depth 1",
       "status": "active",
       "impactLevel": "operational",
-      "actors": [{ "id": "worker", "type": "human", "description": "Test actor" }],
+      "actors": [
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Test actor"
+        }
+      ],
       "lifecycle": {
         "initialState": "open",
         "states": {
           "open": {
             "type": "atomic",
-            "transitions": [{ "event": "start", "target": "review" }]
+            "transitions": [
+              {
+                "event": "start",
+                "target": "review"
+              }
+            ]
           },
           "review": {
             "type": "compound",
             "historyState": "deep",
             "initialState": "pending",
             "states": {
-              "pending": { "type": "atomic", "transitions": [{ "event": "begin", "target": "inProgress" }] },
-              "inProgress": { "type": "atomic", "transitions": [{ "event": "complete", "target": "done" }] },
-              "done": { "type": "final" }
+              "pending": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": "begin",
+                    "target": "inProgress"
+                  }
+                ]
+              },
+              "inProgress": {
+                "type": "atomic",
+                "transitions": [
+                  {
+                    "event": "complete",
+                    "target": "done"
+                  }
+                ]
+              },
+              "done": {
+                "type": "final"
+              }
             },
             "transitions": [
-              { "event": "interrupt", "target": "interrupted" },
-              { "event": "resume", "target": "review" }
+              {
+                "event": "interrupt",
+                "target": "interrupted"
+              },
+              {
+                "event": "resume",
+                "target": "review"
+              }
             ]
           },
           "interrupted": {
             "type": "atomic",
-            "transitions": [{ "event": "resume", "target": "review" }]
+            "transitions": [
+              {
+                "event": "resume",
+                "target": "review"
+              }
+            ]
           }
         }
       },
-      "caseFile": { "fields": {} },
-      "execution": { "workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned" }
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "start", "actor": "worker" },
-    { "event": "begin", "actor": "worker" },
-    { "event": "interrupt", "actor": "worker" },
-    { "event": "resume", "actor": "worker" }
+    {
+      "event": "start",
+      "actor": "worker"
+    },
+    {
+      "event": "begin",
+      "actor": "worker"
+    },
+    {
+      "event": "interrupt",
+      "actor": "worker"
+    },
+    {
+      "event": "resume",
+      "actor": "worker"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "review", "event": "start" },
-    { "from": "pending", "to": "inProgress", "event": "begin" },
-    { "from": "review", "to": "interrupted", "event": "interrupt" },
-    { "from": "interrupted", "to": "review", "event": "resume" }
+    {
+      "from": "open",
+      "to": "review",
+      "event": "start"
+    },
+    {
+      "from": "pending",
+      "to": "inProgress",
+      "event": "begin"
+    },
+    {
+      "from": "review",
+      "to": "interrupted",
+      "event": "interrupt"
+    },
+    {
+      "from": "interrupted",
+      "to": "review",
+      "event": "resume"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "historyCleared", "data": { "state": "review" } }
+    {
+      "recordKind": "historyCleared",
+      "data": {
+        "state": "review"
+      }
+    }
   ]
 }

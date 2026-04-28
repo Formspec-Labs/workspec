@@ -15,8 +15,8 @@ use std::collections::HashMap;
 #[serde(rename_all = "camelCase")]
 pub struct KernelDocument {
     /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosKernel")]
-    pub wos_kernel: String,
+    #[serde(rename = "$wosWorkflow")]
+    pub wos_workflow: String,
 
     /// Optional JSON Schema URI for editor validation.
     #[serde(rename = "$schema", default)]

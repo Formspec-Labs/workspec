@@ -7,6 +7,63 @@ use crate::typeid;
 use super::kind::ProvenanceKind;
 use super::snapshot::CaseFileSnapshot;
 
+/// Configuration-warning provenance input (cross-cutting; covers AI
+/// `drift-monitor.policyRef`, governance `continuationPolicyRef`, and
+/// notification-template key/render failures).
+///
+/// Carrier for the four spec MUSTs at `drift-monitor.md:77`,
+/// `workflow-governance.md:154`, and `notification-template.md:199,222`.
+/// `subject` is the discriminator literal naming the failure site; the
+/// reserved set is `drift-monitor.policyRef`,
+/// `governance.continuationPolicyRef`, `notification-template.key`,
+/// `notification-template.render`. Vendor extensions use an `x-` prefix.
+pub struct ConfigurationWarningInput<'a> {
+    /// Failure-site discriminator (see type docstring for reserved set).
+    pub subject: &'a str,
+    /// The configuration reference that failed to resolve, when the
+    /// failure mode is "ref unresolvable" (drift-monitor, governance,
+    /// notification-template key). Omit for render-failure subjects
+    /// where the failing identity is the template key carried in
+    /// `context.templateKey`.
+    pub unresolved_ref: Option<&'a str>,
+    /// Additional context payload merged into `data` — failure reason
+    /// string, the workflow URI, the case-file fields consulted at
+    /// fallback time, etc. Keys in `context` that collide with the
+    /// constructor's required fields (`subject`, `unresolvedRef`) are
+    /// silently dropped: the typed input is the source of truth, and
+    /// `context` (which may originate from caller-supplied scratch) MUST
+    /// NOT overwrite the schema-shaping discriminators.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Capability-invocation provenance input (AI Integration §3.3.1).
+///
+/// Holds the precondition-evaluation outcome for an agent capability before
+/// it is serialized into a `CapabilityInvocation` provenance record. The
+/// constructor enforces the Kernel §8.2.2 invariant that a blocked
+/// invocation carries the reserved outcome literal
+/// `"preconditionNotSatisfied"`.
+pub struct CapabilityInvocationInput<'a> {
+    /// Capability identifier from the agent declaration (AI §3.3).
+    pub capability_id: &'a str,
+    /// Stable identifier for the agent actor that owns the capability.
+    pub agent_id: &'a str,
+    /// `true` when a precondition evaluated to non-`true` (false or
+    /// non-boolean) and the processor skipped invocation; `false` when all
+    /// preconditions passed and the capability proceeds.
+    pub invocation_blocked: bool,
+    /// Optional context payload merged into `data` — failed expression
+    /// source, evaluation snapshot, fallback-chain reference, resolved
+    /// precondition value, etc. Keys in `context` that collide with
+    /// `capabilityId` / `invocationBlocked` are silently dropped: the
+    /// agent declaration is the source of truth for capability identity,
+    /// and `context` (which may originate from FEL-evaluator output or
+    /// other untrusted scratch) MUST NOT be able to overwrite the
+    /// schema-required discriminators that drive the
+    /// `CapabilityInvocationRecord` if/then guard.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
 /// Signature affirmation provenance input.
 ///
 /// Holds the required WOS Signature Profile evidence fields before they are
@@ -374,6 +431,79 @@ impl ProvenanceRecord {
             }
             None => serde_json::json!({ "taskId": task_id }),
         });
+        record
+    }
+
+    /// Create a configuration-warning record for an unresolvable
+    /// configuration reference or a configured operation failure
+    /// (`drift-monitor.md:77`, `workflow-governance.md:154`,
+    /// `notification-template.md:199,222`).
+    ///
+    /// `subject` is recorded verbatim; callers supply one of the four
+    /// reserved literals or an `x-` vendor extension. `unresolvedRef` is
+    /// merged into `data` only when the input carries it; render-failure
+    /// records typically omit it and convey the failing template key /
+    /// reason via `context`.
+    #[must_use]
+    pub fn configuration_warning(input: ConfigurationWarningInput<'_>) -> Self {
+        let mut data = serde_json::Map::new();
+        if let Some(context) = input.context {
+            for (k, v) in context {
+                if k == "subject" || k == "unresolvedRef" {
+                    continue;
+                }
+                data.insert(k, v);
+            }
+        }
+        data.insert(
+            "subject".to_string(),
+            serde_json::Value::String(input.subject.to_string()),
+        );
+        if let Some(unresolved_ref) = input.unresolved_ref {
+            data.insert(
+                "unresolvedRef".to_string(),
+                serde_json::Value::String(unresolved_ref.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::ConfigurationWarning);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a capability-invocation record (AI Integration §3.3.1).
+    ///
+    /// When `invocation_blocked` is `true`, the record's `outcome` is set to
+    /// the reserved kernel literal `"preconditionNotSatisfied"` (Kernel §8.2.2)
+    /// so audit tooling can distinguish a declarative gate from an agent
+    /// failure. When `false`, the outcome is left unset — the invocation
+    /// proceeded normally and downstream records carry the agent outcome.
+    #[must_use]
+    pub fn capability_invocation(input: CapabilityInvocationInput<'_>) -> Self {
+        let mut data = serde_json::Map::new();
+        if let Some(context) = input.context {
+            for (k, v) in context {
+                if k == "capabilityId" || k == "invocationBlocked" {
+                    continue;
+                }
+                data.insert(k, v);
+            }
+        }
+        data.insert(
+            "capabilityId".to_string(),
+            serde_json::Value::String(input.capability_id.to_string()),
+        );
+        data.insert(
+            "invocationBlocked".to_string(),
+            serde_json::Value::Bool(input.invocation_blocked),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::CapabilityInvocation);
+        record.actor_id = Some(input.agent_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        if input.invocation_blocked {
+            record.outcome = Some("preconditionNotSatisfied".to_string());
+        }
         record
     }
 

@@ -38,7 +38,7 @@ fn fixture_for_kernel(kernel_path: &str) -> ConformanceFixture {
 /// with onEntry actions on processing that exercise setData.
 fn flat_kernel_with_set_data() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/flat",
         "actors": [
             { "id": "user", "type": "human" },
@@ -95,7 +95,7 @@ fn flat_kernel_with_set_data() -> serde_json::Value {
 /// A kernel with a compound state containing an initialState and substates.
 fn compound_kernel() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/compound",
         "actors": [
             { "id": "user", "type": "human" }
@@ -145,7 +145,7 @@ fn compound_kernel() -> serde_json::Value {
 /// A kernel with a timer onEntry action.
 fn timer_kernel() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/timer",
         "actors": [
             { "id": "user", "type": "human" }
@@ -183,7 +183,7 @@ fn timer_kernel() -> serde_json::Value {
 /// A kernel with an explicit cancelTimer action on exit.
 fn cancel_timer_kernel() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/cancel-timer",
         "actors": [
             { "id": "user", "type": "human" }
@@ -223,7 +223,7 @@ fn cancel_timer_kernel() -> serde_json::Value {
 /// A kernel with a parallel state and two regions.
 fn parallel_kernel() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/parallel",
         "actors": [
             { "id": "reviewerA", "type": "human" },
@@ -382,7 +382,7 @@ fn set_data_result_visible_in_guard_evaluation() {
     // Kernel where a setData on entry sets amount to 100, then a guard
     // checks caseFile.amount > 50.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/guard-after-setdata",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {
@@ -830,7 +830,7 @@ fn determinism_same_events_produce_same_transitions() {
 fn guard_evaluation_first_match_wins_document_order() {
     // Two transitions on the same event, first guard passes.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/first-match",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {
@@ -893,7 +893,7 @@ fn guard_evaluation_first_match_wins_document_order() {
 #[test]
 fn guard_evaluation_fallthrough_when_first_guard_fails() {
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://test.example.com/fallthrough",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": {

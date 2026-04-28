@@ -38,7 +38,7 @@ const KERNEL_SPEC_SUMMARY: &str = include_str!("../../../specs/kernel/spec.llm.m
 ///
 /// let problem = "An employee submits a purchase order for manager approval.";
 /// let prompt = build_generate_prompt(problem);
-/// assert!(prompt.contains("$wosKernel"));
+/// assert!(prompt.contains("$wosWorkflow"));
 /// ```
 pub fn build_generate_prompt(problem: &str) -> String {
     format!(
@@ -51,7 +51,7 @@ Given the problem statement below, produce a single valid WOS kernel document as
 ## Requirements
 
 - Output ONLY the JSON object.  No markdown fences, no prose, no explanation.
-- The document MUST include the field `"$wosKernel": "1.0"`.
+- The document MUST include the field `"$wosWorkflow": "1.0"`.
 - Every state MUST have a `"type"` field (`"atomic"`, `"compound"`, `"parallel"`, or `"final"`).
 - Every transition MUST have an `"event"` and a `"target"`.
 - The `"lifecycle"` MUST have an `"initialState"` and a `"states"` map.
@@ -91,7 +91,7 @@ Produce the JSON document now."#,
 /// ```
 /// use wos_synth_spike::prompts::build_repair_prompt;
 ///
-/// let attempt = r#"{"$wosKernel": "1.0"}"#;
+/// let attempt = r#"{"$wosWorkflow": "1.0"}"#;
 /// let diagnostics = vec!["[K-001] error at /lifecycle: required field missing".to_string()];
 /// let prompt = build_repair_prompt(attempt, &diagnostics);
 /// assert!(prompt.contains("K-001"));
@@ -139,8 +139,8 @@ mod tests {
     fn generate_prompt_contains_schema_marker() {
         let prompt = build_generate_prompt("test problem");
         assert!(
-            prompt.contains("$wosKernel"),
-            "generate prompt must reference the $wosKernel marker"
+            prompt.contains("$wosWorkflow"),
+            "generate prompt must reference the $wosWorkflow marker"
         );
     }
 
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn repair_prompt_embeds_prior_attempt() {
-        let attempt = r#"{"$wosKernel":"1.0","unique":true}"#;
+        let attempt = r#"{"$wosWorkflow":"1.0","unique":true}"#;
         let prompt = build_repair_prompt(attempt, &[]);
         assert!(
             prompt.contains(attempt),

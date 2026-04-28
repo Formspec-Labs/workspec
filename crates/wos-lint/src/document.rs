@@ -28,6 +28,10 @@ pub enum DocumentKind {
     CorrespondenceMetadata,
     BusinessCalendar,
     NotificationTemplate,
+    /// Merged author-time workflow document per ADR 0076 (`$wosWorkflow`).
+    /// Combines kernel + governance + agents + signature + custody + advanced
+    /// in one envelope; legacy four-marker shape remains accepted for compat.
+    Workflow,
 }
 
 /// A parsed WOS document with its kind and raw JSON value.
@@ -82,9 +86,16 @@ impl WosProject {
 
 // $wos* marker to DocumentKind mapping.
 // Key length is intentionally short for fast detection.
+//
+// Order matters for prefix-disambiguation: `$wosWorkflow` (ADR 0076 merged
+// envelope) must come AFTER `$wosWorkflowGovernance` so the longer marker
+// wins. The detection loop is `find` over an ordered slice; the first hit is
+// returned. Markers are detected by exact key membership (`obj.contains_key`)
+// not prefix-match, so order is only a code-readability convention here.
 const MARKERS: &[(&str, DocumentKind)] = &[
-    ("$wosKernel", DocumentKind::Kernel),
+    ("$wosWorkflow", DocumentKind::Kernel),
     ("$wosWorkflowGovernance", DocumentKind::WorkflowGovernance),
+    ("$wosWorkflow", DocumentKind::Workflow),
     ("$wosDueProcess", DocumentKind::DueProcess),
     ("$wosAssertionLibrary", DocumentKind::AssertionLibrary),
     ("$wosPolicyParameters", DocumentKind::PolicyParameters),

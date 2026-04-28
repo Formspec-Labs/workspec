@@ -1,7 +1,11 @@
-// Rust guideline compliant 2026-02-21
+// Rust guideline compliant 2026-04-28
 
-//! Round-trip deserialization tests for WOS Governance Documents.
+//! Round-trip deserialization tests for the governance content embedded in
+//! `$wosWorkflow` documents (was a standalone `$wosWorkflowGovernance`
+//! document; per ADR 0076 D-1 the marker now lives on the workflow envelope
+//! and `GovernanceDocument` represents the embedded `governance` block).
 
+use serde_json::Value;
 use std::fs;
 use wos_core::GovernanceDocument;
 
@@ -12,14 +16,24 @@ fn load_fixture(name: &str) -> GovernanceDocument {
     );
     let json =
         fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
-    serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
+    let envelope: Value = serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("failed to parse fixture {name} envelope: {e}"));
+    assert_eq!(
+        envelope.get("$wosWorkflow").and_then(Value::as_str),
+        Some("1.0"),
+        "fixture {name} must carry $wosWorkflow envelope per ADR 0076 D-1"
+    );
+    let block = envelope
+        .get("governance")
+        .cloned()
+        .unwrap_or_else(|| panic!("fixture {name} missing governance embedded block"));
+    serde_json::from_value(block)
+        .unwrap_or_else(|e| panic!("failed to deserialize governance from {name}: {e}"))
 }
 
 #[test]
 fn benefits_adjudication_governance_round_trips() {
     let doc = load_fixture("benefits-adjudication-governance.json");
-    assert_eq!(doc.wos_workflow_governance, "1.0");
     assert!(doc.target_workflow.contains("benefits-adjudication"));
 
     // Due process

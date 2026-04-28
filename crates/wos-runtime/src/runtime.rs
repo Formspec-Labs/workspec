@@ -538,7 +538,7 @@ mod tests {
     /// Keeps each test self-contained without dragging in the full DSL fixtures.
     fn kernel_with_actors(version: &str, actors: serde_json::Value) -> KernelDocument {
         serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:populator",
             "version": version,
             "actors": actors,
@@ -714,7 +714,7 @@ mod tests {
     #[test]
     fn determination_transition_emits_case_file_snapshot() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:determination-snapshot",
             "version": "1.0.0",
             "actors": [{ "id": "reviewer", "type": "human" }],
@@ -784,7 +784,7 @@ mod tests {
     #[test]
     fn recursive_join_determination_uses_current_transition_case_state() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:join-determination-snapshot",
             "version": "1.0.0",
             "actors": [{ "id": "reviewer", "type": "human" }],
@@ -880,7 +880,7 @@ mod tests {
     #[test]
     fn each_determination_transition_captures_its_own_snapshot() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:multi-determination-snapshot",
             "version": "1.0.0",
             "actors": [{ "id": "reviewer", "type": "human" }],
@@ -1935,7 +1935,7 @@ mod tests {
         }
 
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:durable-trait",
             "version": "1.0.0",
             "lifecycle": {
@@ -1975,7 +1975,7 @@ mod tests {
     fn accept_intake_handoff_attaches_provenance_to_existing_case() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-dispatch",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2032,7 +2032,7 @@ mod tests {
     fn accept_intake_handoff_intake_policy_provenance_survives_prepare() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-policy-prov",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2082,7 +2082,7 @@ mod tests {
     fn accept_intake_handoff_creates_case_for_public_intake() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-public-create",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2168,7 +2168,7 @@ mod tests {
     fn accept_intake_handoff_allows_policy_rejection() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-policy-reject",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2215,7 +2215,7 @@ mod tests {
     fn public_intake_disabled_policy_rejects_public_case_creation() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-disabled",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2257,7 +2257,7 @@ mod tests {
     fn accept_intake_handoff_replays_existing_decision_by_intake_id() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-replay",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2307,7 +2307,7 @@ mod tests {
     fn accept_intake_handoff_rejects_request_mismatch_on_replay() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-replay-conflict",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2365,7 +2365,7 @@ mod tests {
         let mut runtime = runtime_with_store(
             IntakeSaveFailingStore::new(2),
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-save-failure",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2438,7 +2438,7 @@ mod tests {
     fn accept_intake_handoff_returns_canonical_case_ref_for_legacy_public_intake_id() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-legacy-alias",
                 "version": "1.0.0",
                 "lifecycle": {
@@ -2515,7 +2515,7 @@ mod tests {
     fn rejected_intake_provenance_is_runtime_populated() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-reject-populated",
                 "version": "1.0.0",
                 "actors": [{ "id": "intake-service", "type": "system" }],
@@ -2562,7 +2562,7 @@ mod tests {
     fn deferred_intake_provenance_is_runtime_populated() {
         let mut runtime = runtime_with_kernel(
             serde_json::from_value(serde_json::json!({
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:intake-defer-populated",
                 "version": "1.0.0",
                 "actors": [{ "id": "intake-service", "type": "system" }],
@@ -2608,7 +2608,7 @@ mod tests {
     #[test]
     fn accept_intake_handoff_rejects_unsupported_binding() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:intake-unsupported",
             "version": "1.0.0",
             "lifecycle": {
@@ -2656,7 +2656,7 @@ mod tests {
     #[test]
     fn custody_receipt_stamps_canonical_event_hash_on_persisted_provenance() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:receipt",
             "version": "1.0.0",
             "lifecycle": {
@@ -2705,7 +2705,7 @@ mod tests {
     #[test]
     fn custody_receipt_reapply_is_idempotent_when_hash_matches() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:receipt-idem",
             "version": "1.0.0",
             "lifecycle": {
@@ -2748,7 +2748,7 @@ mod tests {
     #[test]
     fn custody_receipt_conflict_when_hash_differs() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:receipt-conflict",
             "version": "1.0.0",
             "lifecycle": {
@@ -2920,7 +2920,7 @@ mod tests {
     #[test]
     fn create_instance_and_drain_create_formspec_task() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3002,7 +3002,7 @@ mod tests {
     #[test]
     fn drain_once_reports_event_token_for_same_named_events() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:event-token",
             "version": "1.0.0",
             "lifecycle": {
@@ -3060,7 +3060,7 @@ mod tests {
     #[test]
     fn reference_companion_policy_scopes_idempotency_by_instance() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:companion-idempotency",
             "version": "1.0.0",
             "lifecycle": {
@@ -3119,7 +3119,7 @@ mod tests {
     #[test]
     fn create_instance_does_not_present_tasks_if_initial_commit_fails() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:presenter-order",
             "version": "1.0.0",
             "lifecycle": {
@@ -3180,7 +3180,7 @@ mod tests {
     #[test]
     fn create_instance_persists_task_state_before_presentation() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:presented-state-order",
             "version": "1.0.0",
             "lifecycle": {
@@ -3239,7 +3239,7 @@ mod tests {
     #[test]
     fn create_instance_and_restore_preserves_timer_duration_metadata() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:timer-metadata",
             "version": "1.0.0",
             "lifecycle": {
@@ -3284,7 +3284,7 @@ mod tests {
     #[test]
     fn submit_task_response_completes_and_emits_event() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:submit-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3354,7 +3354,7 @@ mod tests {
     #[test]
     fn persist_task_draft_stores_artifact_without_mutating_case_state() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:draft-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3419,7 +3419,7 @@ mod tests {
     #[test]
     fn persist_task_draft_populates_new_fields() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:draft-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3482,7 +3482,7 @@ mod tests {
     #[test]
     fn dismiss_task_records_provenance_and_leaves_task_resumable() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:dismiss-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3525,7 +3525,7 @@ mod tests {
     #[test]
     fn submit_task_response_replays_same_actor_token_after_completion() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:replay-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3599,7 +3599,7 @@ mod tests {
     #[test]
     fn submit_task_response_same_token_different_actor_does_not_replay() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:actor-replay-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3665,7 +3665,7 @@ mod tests {
     #[test]
     fn drain_once_processes_due_timer_via_queued_timeout_event() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:timer-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3722,7 +3722,7 @@ mod tests {
     #[test]
     fn drain_once_unsupported_binding_fails_deterministically() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:unsupported-binding",
             "version": "1.0.0",
             "lifecycle": {
@@ -3795,7 +3795,7 @@ mod tests {
     #[test]
     fn drain_once_save_failure_leaves_store_unchanged() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:atomic-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3875,7 +3875,7 @@ mod tests {
     #[test]
     fn submit_task_response_returns_retryable_error_when_processor_unavailable() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:unavailable-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -3941,7 +3941,7 @@ mod tests {
     #[test]
     fn drain_once_invokes_service_and_persists_step_result() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:service-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -4032,7 +4032,7 @@ mod tests {
     #[test]
     fn drain_once_consumes_integration_profile_binding_and_replays_persisted_result() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:integration-profile-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -4225,7 +4225,7 @@ mod tests {
     #[test]
     fn drain_once_rejects_integration_profile_target_mismatch() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:integration-profile-kernel",
             "version": "1.0.0",
             "lifecycle": {
@@ -4325,7 +4325,7 @@ mod tests {
     #[test]
     fn drain_once_dispatches_tool_integration_profile_binding() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:tool-integration-binding",
             "version": "1.0.0",
             "lifecycle": {
@@ -4436,7 +4436,7 @@ mod tests {
     #[test]
     fn drain_once_rejects_invalid_integration_profile_idempotency_expression() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:invalid-idempotency-expression",
             "version": "1.0.0",
             "lifecycle": {
@@ -4536,7 +4536,7 @@ mod tests {
     #[test]
     fn drain_once_exposes_guard_evaluations() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:drain-guard-evals",
             "version": "1.0.0",
             "lifecycle": {
@@ -4614,7 +4614,7 @@ mod tests {
         // during THAT event. A later drain on a second event must not leak
         // the first event's records.
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:test:guard-scope",
             "version": "1.0.0",
             "lifecycle": {

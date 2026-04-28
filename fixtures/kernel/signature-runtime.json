@@ -1,20 +1,39 @@
 {
-  "$wosKernel": "1.0",
+  "$wosWorkflow": "1.0",
   "url": "urn:test:signature-runtime",
   "version": "1.0.0",
   "title": "Signature Runtime Fixture Kernel",
   "impactLevel": "operational",
   "actors": [
-    { "id": "applicant", "type": "human" },
-    { "id": "agency", "type": "human" },
-    { "id": "witness", "type": "human" },
-    { "id": "notary", "type": "human" },
-    { "id": "caseworker", "type": "human" }
+    {
+      "id": "applicant",
+      "type": "human"
+    },
+    {
+      "id": "agency",
+      "type": "human"
+    },
+    {
+      "id": "witness",
+      "type": "human"
+    },
+    {
+      "id": "notary",
+      "type": "human"
+    },
+    {
+      "id": "caseworker",
+      "type": "human"
+    }
   ],
   "caseFile": {
     "fields": {
-      "routeApplicant": { "type": "boolean" },
-      "requiresNotary": { "type": "boolean" }
+      "routeApplicant": {
+        "type": "boolean"
+      },
+      "requiresNotary": {
+        "type": "boolean"
+      }
     }
   },
   "contracts": {
@@ -28,11 +47,21 @@
     "states": {
       "draft": {
         "type": "atomic",
-        "transitions": [{ "event": { "kind": "message", "name": "start" }, "target": "signing" }]
+        "transitions": [
+          {
+            "event": {
+              "kind": "message",
+              "name": "start"
+            },
+            "target": "signing"
+          }
+        ]
       },
       "signing": {
         "type": "atomic",
-        "tags": ["awaiting-signature"],
+        "tags": [
+          "awaiting-signature"
+        ],
         "onEntry": [
           {
             "action": "createTask",
@@ -105,16 +134,60 @@
           }
         ],
         "transitions": [
-          { "event": { "kind": "message", "name": "signature.completed" }, "target": "complete" },
-          { "event": { "kind": "message", "name": "signature.declined" }, "target": "declined" },
-          { "event": { "kind": "message", "name": "signature.expired" }, "target": "expired" },
-          { "event": { "kind": "message", "name": "signature.failed" }, "target": "failed" }
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.completed"
+            },
+            "target": "complete"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.declined"
+            },
+            "target": "declined"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.expired"
+            },
+            "target": "expired"
+          },
+          {
+            "event": {
+              "kind": "message",
+              "name": "signature.failed"
+            },
+            "target": "failed"
+          }
         ]
       },
-      "complete": { "type": "final", "tags": ["signature-complete"] },
-      "declined": { "type": "final", "tags": ["signature-declined"] },
-      "expired": { "type": "final", "tags": ["signature-expired"] },
-      "failed": { "type": "final", "tags": ["signature-voided"] }
+      "complete": {
+        "type": "final",
+        "tags": [
+          "signature-complete"
+        ]
+      },
+      "declined": {
+        "type": "final",
+        "tags": [
+          "signature-declined"
+        ]
+      },
+      "expired": {
+        "type": "final",
+        "tags": [
+          "signature-expired"
+        ]
+      },
+      "failed": {
+        "type": "final",
+        "tags": [
+          "signature-voided"
+        ]
+      }
     }
   }
 }

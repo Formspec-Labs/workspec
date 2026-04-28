@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn classify_lint_error_routes_missing_marker() {
         // Stand-in for a canned LLM response: valid JSON, valid root object,
-        // fields that look workflow-y, but no $wosKernel / $wosTheme / ...
+        // fields that look workflow-y, but no $wosWorkflow / $wosTheme / ...
         let canned_llm_response = r#"{
             "title": "Purchase order approval",
             "lifecycle": {"initialState": "draft", "states": {}}
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn conformance_smoke_test_accepts_minimal_kernel() {
         let doc = serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:formspec:test:spike-smoke:1.0.0",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn conformance_smoke_test_rejects_unreachable_initial_state() {
         let doc = serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "url": "urn:formspec:test:spike-broken:1.0.0",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",

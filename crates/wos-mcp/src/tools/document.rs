@@ -254,7 +254,7 @@ mod tests {
         // Document must deserialize back to a KernelDocument.
         let doc: KernelDocument = serde_json::from_str(doc_str)
             .expect("exported document must be valid KernelDocument JSON");
-        assert_eq!(doc.wos_kernel, "1.0");
+        assert_eq!(doc.wos_workflow, "1.0");
     }
 
     #[tokio::test]
@@ -342,7 +342,7 @@ mod tests {
 
         // Re-parse to verify the exported JSON is a valid kernel document.
         let doc: serde_json::Value = serde_json::from_str(doc_json).unwrap();
-        assert_eq!(doc["$wosKernel"], json!("1.0"));
+        assert_eq!(doc["$wosWorkflow"], json!("1.0"));
     }
 
     // ── require_project_id error classification ───────────────────────────
@@ -381,7 +381,7 @@ mod tests {
 
         // Build a minimal valid kernel document that passes lint tier-1.
         let kernel_json = serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "title": "loaded workflow",
             "impactLevel": "operational",
             "lifecycle": {
@@ -427,7 +427,7 @@ mod tests {
         // Write a valid kernel document to a temp file and load it via the
         // {"path": "..."} branch of wos_load_document.
         let kernel_json = serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "title": "path-loaded workflow",
             "impactLevel": "operational",
             "lifecycle": {

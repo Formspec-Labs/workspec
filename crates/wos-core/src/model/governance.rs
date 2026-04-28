@@ -10,19 +10,21 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A WOS Workflow Governance Document.
+/// Governance content — the embedded `governance` block of a $wosWorkflow
+/// document per ADR 0076 D-1. Was a standalone document with
+/// `$wosWorkflowGovernance` marker; the marker now lives on the envelope
+/// (`$wosWorkflow`) and this type represents only the block's interior shape.
+/// Type name retained for consumer compatibility; the standalone-document
+/// framing is gone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GovernanceDocument {
-    /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosWorkflowGovernance")]
-    pub wos_workflow_governance: String,
-
     /// Optional JSON Schema URI.
     #[serde(rename = "$schema", default)]
     pub schema: Option<String>,
 
     /// Kernel document this governance targets.
+    #[serde(default)]
     pub target_workflow: String,
 
     /// Document version.

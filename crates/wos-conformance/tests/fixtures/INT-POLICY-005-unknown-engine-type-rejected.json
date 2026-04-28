@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-POLICY-005",
       "version": "1.0.0",
       "title": "INT-POLICY-005 Unknown Engine Type Rejected",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "evaluated": { "type": "final" }
+          "evaluated": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "policyAllowed": { "type": "string" }
+          "policyAllowed": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,18 +58,46 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-POLICY-005",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "policyEngine": {
-          "type": "policy-engine",
-          "description": "Policy engine with unknown engineType — must be rejected",
-          "engineType": "xacml",
-          "outputBinding": {
-            "caseFile.policyAllowed": "$.decision"
+        "targetWorkflow": {
+          "url": "urn:test:INT-POLICY-005",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "policyEngine": {
+            "type": "policy-engine",
+            "description": "Policy engine with unknown engineType \u2014 must be rejected",
+            "engineType": "xacml",
+            "outputBinding": {
+              "caseFile.policyAllowed": "$.decision"
+            }
           }
         }
       }
@@ -74,7 +110,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "evaluate", "actor": "operator" }
+    {
+      "event": "evaluate",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [],
   "expected_provenance": []

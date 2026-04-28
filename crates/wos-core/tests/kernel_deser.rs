@@ -24,7 +24,7 @@ fn load_fixture(name: &str) -> KernelDocument {
 #[test]
 fn purchase_order_approval_round_trips() {
     let doc = load_fixture("purchase-order-approval.json");
-    assert_eq!(doc.wos_kernel, "1.0");
+    assert_eq!(doc.wos_workflow, "1.0");
     assert_eq!(doc.title.as_deref(), Some("Purchase Order Approval"));
     assert_eq!(doc.impact_level, Some(wos_core::ImpactLevel::Operational));
     assert_eq!(doc.actors.len(), 3);
@@ -42,7 +42,7 @@ fn purchase_order_approval_round_trips() {
 #[test]
 fn benefits_adjudication_round_trips() {
     let doc = load_fixture("benefits-adjudication.json");
-    assert_eq!(doc.wos_kernel, "1.0");
+    assert_eq!(doc.wos_workflow, "1.0");
     assert_eq!(
         doc.impact_level,
         Some(wos_core::ImpactLevel::RightsImpacting)
@@ -56,7 +56,7 @@ fn benefits_adjudication_round_trips() {
 #[test]
 fn medicaid_redetermination_round_trips() {
     let doc = load_fixture("medicaid-redetermination.json");
-    assert_eq!(doc.wos_kernel, "1.0");
+    assert_eq!(doc.wos_workflow, "1.0");
     assert_eq!(
         doc.impact_level,
         Some(wos_core::ImpactLevel::RightsImpacting)
@@ -68,7 +68,7 @@ fn medicaid_redetermination_round_trips() {
 #[test]
 fn case_relationship_appeal_round_trips() {
     let doc = load_fixture("case-relationship-appeal.json");
-    assert_eq!(doc.wos_kernel, "1.0");
+    assert_eq!(doc.wos_workflow, "1.0");
     let case_file = doc.case_file.as_ref().expect("case_file present");
     assert!(
         !case_file.relationships.is_empty(),
@@ -80,7 +80,7 @@ fn case_relationship_appeal_round_trips() {
 fn new_phase2_fields_round_trip() {
     // Verify evaluationMode and maxRelationshipEventDepth deserialize correctly.
     let json = r#"{
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "evaluationMode": "continuous",
         "maxRelationshipEventDepth": 5,
         "lifecycle": {
@@ -103,7 +103,7 @@ fn new_phase2_fields_round_trip() {
 fn evaluation_mode_defaults_absent() {
     // When evaluationMode is absent, it should be None (default event-driven).
     let json = r#"{
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "s",
             "states": { "s": { "type": "atomic" } }
@@ -117,7 +117,7 @@ fn evaluation_mode_defaults_absent() {
 #[test]
 fn contract_reference_typed() {
     let json = r#"{
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "s",
             "states": { "s": { "type": "atomic" } }
@@ -156,7 +156,7 @@ fn contract_reference_typed() {
 #[test]
 fn create_task_formspec_coprocessor_fields_round_trip() {
     let json = r#"{
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "s",
             "states": {

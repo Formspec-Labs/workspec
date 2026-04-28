@@ -1,7 +1,7 @@
 {
   "id": "AI-AUTO-002-drift-alert-demotion",
   "rule": "AI-AUTO-002",
-  "description": "Drift-alert-triggered demotion path: when a drift alert fires (per the DriftMonitor's alertThresholds with action=demoteToAssistive), the runtime MUST (1) emit driftReclassification provenance, (2) emit autonomyDemotion provenance with trigger='drift-alert', and (3) reroute the event through escalation so the kernel routes to the human-review state. Pairs with AI-028 (humanOverride-triggered demotion), AC-001 (calibration-expiry cap), and AI-AUTO-001 (escalation-expiry revocation) to close the autonomy-lifecycle revocation matrix (AI S5.5; DriftMonitor AlertThreshold→DemotionRule binding).",
+  "description": "Drift-alert-triggered demotion path: when a drift alert fires (per the DriftMonitor's alertThresholds with action=demoteToAssistive), the runtime MUST (1) emit driftReclassification provenance, (2) emit autonomyDemotion provenance with trigger='drift-alert', and (3) reroute the event through escalation so the kernel routes to the human-review state. Pairs with AI-028 (humanOverride-triggered demotion), AC-001 (calibration-expiry cap), and AI-AUTO-001 (escalation-expiry revocation) to close the autonomy-lifecycle revocation matrix (AI S5.5; DriftMonitor AlertThreshold\u2192DemotionRule binding).",
   "documents": {
     "kernel": "fixtures/kernel/autonomy-caps.json",
     "ai": "fixtures/ai/autonomy-caps-ai.json",
@@ -10,30 +10,57 @@
   },
   "inline_documents": {
     "drift-monitor": {
-      "$wosDriftMonitor": "1.0",
-      "targetWorkflow": "https://test.wos-spec.org/workflows/autonomy-caps",
+      "$wosWorkflow": "1.0",
       "version": "1.0.0",
-      "monitors": [
+      "url": "https://example.test/migrated-fixture",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
         {
-          "agentRef": "triageAgent",
-          "evaluationWindow": "P30D",
-          "metrics": [
-            {
-              "name": "extractionAccuracy",
-              "method": "accuracy",
-              "threshold": 0.85
-            }
-          ],
-          "alertThresholds": [
-            {
-              "condition": "extractionAccuracy < 0.85",
-              "severity": "critical",
-              "action": "demoteToAssistive",
-              "policyRef": "demoteOnLowAccuracyOrViolation"
-            }
-          ]
+          "id": "system",
+          "type": "system"
         }
-      ]
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      },
+      "agents": {
+        "targetWorkflow": "https://test.wos-spec.org/workflows/autonomy-caps",
+        "monitors": [
+          {
+            "agentRef": "triageAgent",
+            "evaluationWindow": "P30D",
+            "metrics": [
+              {
+                "name": "extractionAccuracy",
+                "method": "accuracy",
+                "threshold": 0.85
+              }
+            ],
+            "alertThresholds": [
+              {
+                "condition": "extractionAccuracy < 0.85",
+                "severity": "critical",
+                "action": "demoteToAssistive",
+                "policyRef": "demoteOnLowAccuracyOrViolation"
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "initial_case_state": {},
@@ -56,7 +83,11 @@
     }
   ],
   "expected_transitions": [
-    { "from": "triage", "to": "humanTriage", "event": "escalated" }
+    {
+      "from": "triage",
+      "to": "humanTriage",
+      "event": "escalated"
+    }
   ],
   "expected_provenance": [
     {

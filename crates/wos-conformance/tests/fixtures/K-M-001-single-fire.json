@@ -3,17 +3,23 @@
   "id": "K-M-001-single-fire",
   "rule": "K-M",
   "description": "A setData onEntry action in 'approved' sets 'approved=true'. The 'applicationApproved' milestone fires exactly once when the workflow transitions into 'approved'. A second transition to 'done' does not produce a second MilestoneFired record.",
-  "documents": { "kernel": "inline" },
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:milestone-single-fire",
       "version": "1.0.0",
       "title": "Milestone Single Fire",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "worker", "type": "human", "description": "Worker actor" }
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Worker actor"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -21,7 +27,10 @@
           "open": {
             "type": "atomic",
             "transitions": [
-              { "event": "approve", "target": "approved" }
+              {
+                "event": "approve",
+                "target": "approved"
+              }
             ]
           },
           "approved": {
@@ -34,10 +43,15 @@
               }
             ],
             "transitions": [
-              { "event": "close", "target": "done" }
+              {
+                "event": "close",
+                "target": "done"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         },
         "milestones": {
           "applicationApproved": {
@@ -48,7 +62,9 @@
       },
       "caseFile": {
         "fields": {
-          "approved": { "type": "boolean" }
+          "approved": {
+            "type": "boolean"
+          }
         }
       },
       "execution": {
@@ -62,13 +78,27 @@
     "approved": false
   },
   "event_sequence": [
-    { "event": "approve", "actor": "worker" }
+    {
+      "event": "approve",
+      "actor": "worker"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "approved", "event": "approve" }
+    {
+      "from": "open",
+      "to": "approved",
+      "event": "approve"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "caseStateMutation" },
-    { "recordKind": "milestoneFired", "data": { "milestoneId": "applicationApproved" } }
+    {
+      "recordKind": "caseStateMutation"
+    },
+    {
+      "recordKind": "milestoneFired",
+      "data": {
+        "milestoneId": "applicationApproved"
+      }
+    }
   ]
 }

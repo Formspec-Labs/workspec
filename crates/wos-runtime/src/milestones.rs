@@ -135,7 +135,7 @@ mod tests {
     /// Build a minimal kernel document with the given milestones by deserializing JSON.
     fn kernel_with_milestones(milestones: &serde_json::Value) -> KernelDocument {
         let kernel_json = serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "lifecycle": {
                 "initialState": "open",
                 "states": {

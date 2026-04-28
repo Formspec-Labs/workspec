@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-EMIT-001",
       "version": "1.0.0",
       "title": "INT-EMIT-001 Event Emit Happy Path",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -38,15 +42,22 @@
           "processing": {
             "type": "atomic",
             "transitions": [
-              { "event": "done", "target": "complete" }
+              {
+                "event": "done",
+                "target": "complete"
+              }
             ]
           },
-          "complete": { "type": "final" }
+          "complete": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "submitted": { "type": "boolean" }
+          "submitted": {
+            "type": "boolean"
+          }
         }
       },
       "execution": {
@@ -56,27 +67,62 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-EMIT-001",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "notificationBus": {
-          "type": "event-emit",
-          "description": "Emit a CloudEvent to the notification bus",
-          "source": "urn:wos:runtime",
-          "eventType": "com.example.workflow.submitted"
+        "targetWorkflow": {
+          "url": "urn:test:INT-EMIT-001",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "notificationBus": {
+            "type": "event-emit",
+            "description": "Emit a CloudEvent to the notification bus",
+            "source": "urn:wos:runtime",
+            "eventType": "com.example.workflow.submitted"
+          }
         }
       }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "submit", "actor": "operator" }
+    {
+      "event": "submit",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "processing", "event": "submit" }
+    {
+      "from": "open",
+      "to": "processing",
+      "event": "submit"
+    }
   ],
   "expected_provenance": [
     {

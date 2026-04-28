@@ -50,7 +50,7 @@ fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint:
 /// Minimal valid kernel document for cross-doc tests.
 fn base_kernel() -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
@@ -2024,7 +2024,7 @@ fn k010_no_assign_to_skips_check() {
 #[test]
 fn k037_fail_fast_without_error_final_flagged() {
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/fail-fast",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": { "fields": {} },
@@ -2065,7 +2065,7 @@ fn k037_fail_fast_without_error_final_flagged() {
 #[test]
 fn k037_fail_fast_with_error_final_clean() {
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/fail-fast-ok",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": { "fields": {} },
@@ -2108,7 +2108,7 @@ fn k037_fail_fast_with_error_final_clean() {
 fn k037_wait_all_without_error_final_skips_check() {
     // wait-all policy should not trigger K-037.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/wait-all",
         "actors": [{ "id": "user", "type": "human" }],
         "caseFile": { "fields": {} },
@@ -2155,7 +2155,7 @@ fn k037_wait_all_without_error_final_skips_check() {
 #[test]
 fn k010_compound_substate_undeclared_actor_has_correct_path() {
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/compound",
         "actors": [{ "id": "alice", "type": "human" }],
         "caseFile": { "fields": {} },
@@ -2318,7 +2318,7 @@ fn ai023_agent_free_path_exists_clean() {
     // Kernel: intake -> review (agent assigned) -> completed (final)
     // But intake has no agent, so there IS a path through non-agent states.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
@@ -2369,7 +2369,7 @@ fn ai023_no_agent_free_path_flagged() {
     // Kernel: agentOnly -> agentReview -> completed
     // Both non-final states assign tasks exclusively to agents.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [
@@ -2444,7 +2444,7 @@ fn ai023_compound_substate_agent_free_path() {
     // and transitions to "done". The initial state "processing" is the compound
     // parent — it is not agent-only, so the BFS can traverse through it.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/compound",
         "impactLevel": "operational",
         "actors": [
@@ -2515,7 +2515,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
     // reach "completed" (final). Also the humanRegion substates are human-only.
     // Global agent-free path: parallel -> completed.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/parallel",
         "impactLevel": "operational",
         "actors": [
@@ -2585,7 +2585,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
 fn ai023_severity_is_error() {
     // Same setup as ai023_no_agent_free_path_flagged — all non-final states are agent-only.
     let kernel = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/workflow/test",
         "impactLevel": "operational",
         "actors": [

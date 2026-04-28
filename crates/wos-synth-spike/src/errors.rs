@@ -18,12 +18,12 @@ pub enum SpikeError {
     ///
     /// This is the single most likely non-convergence failure mode — the model
     /// emits structurally valid JSON that the linter cannot classify because no
-    /// `$wosKernel` / `$wosTheme` / etc. field is present.  Kept distinct from
+    /// `$wosWorkflow` / `$wosTheme` / etc. field is present.  Kept distinct from
     /// [`SpikeError::LintFailure`] so callers can detect and surface it
     /// specifically (e.g., tighten the generation prompt).
     #[error(
         "LLM output is missing a $wos* document-type marker \
-         (e.g. \"$wosKernel\": \"1.0\"): {0}"
+         (e.g. \"$wosWorkflow\": \"1.0\"): {0}"
     )]
     MissingWosMarker(String),
 

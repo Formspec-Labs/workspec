@@ -37,11 +37,16 @@ fn fixtures_validate_cleanly() {
             Ok(v) => v,
             Err(_) => continue, // skip non-JSON fixtures
         };
-        // Skip fixtures that aren't `$wosKernel` — the lint loader reliably
-        // classifies them and they shouldn't be passed to the kernel linter.
-        if doc.get("$wosKernel").is_none() {
+        // Skip non-kernel JSON (sidecars, etc.). Published fixtures use
+        // `$wosWorkflow` at the root; tests and inline docs may use `$wosWorkflow`.
+        let is_kernel_doc =
+            doc.get("$wosWorkflow").is_some() || doc.get("$wosWorkflow").is_some();
+        if !is_kernel_doc {
             continue;
         }
+        // `validate_kernel` → `wos_lint::lint_document` (see `bundle_service.rs`).
+        // If the linter later splits strict kernel-only vs workflow-root gates,
+        // revisit this filter or relocate non-kernel JSON out of `fixtures/kernel/`.
         let result = validate_kernel(&doc);
         let errors: Vec<_> = result
             .issues

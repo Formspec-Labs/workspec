@@ -13,19 +13,19 @@ pub use evaluator::{BusinessCalendarError, next_business_moment};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A WOS Business Calendar Config sidecar document.
+/// Business-calendar content — the `calendar` block of a $wosDelivery sidecar
+/// per ADR 0076 D-3. Was a standalone $wosBusinessCalendar sidecar; the marker
+/// now lives on the $wosDelivery envelope and this type represents only the
+/// block's interior shape. Type name retained for consumer compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BusinessCalendarDocument {
-    /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosBusinessCalendar")]
-    pub wos_business_calendar: String,
-
     /// Optional JSON Schema URI.
     #[serde(rename = "$schema", default)]
     pub schema: Option<String>,
 
     /// Kernel document this calendar targets.
+    #[serde(default)]
     pub target_workflow: String,
 
     /// Document version.

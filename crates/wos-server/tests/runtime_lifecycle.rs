@@ -16,7 +16,7 @@ use wos_server::{AppState, auth, http, realtime, services::AppServices, storage}
 
 fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
     serde_json::json!({
-        "$wosKernel": "1.0.0",
+        "$wosWorkflow": "1.0.0",
         "url": url,
         "version": version,
         "title": "Test Kernel",

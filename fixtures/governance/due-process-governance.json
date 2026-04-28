@@ -1,50 +1,80 @@
 {
-  "$wosWorkflowGovernance": "1.0",
-  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
-  "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Due Process Governance Test",
-
-  "dueProcess": {
-    "adverseDecisionPolicy": {
-      "noticeRequired": true,
-      "noticeTiming": "beforeEffective",
-      "noticeGracePeriod": "P30D",
-      "noticeTemplateKey": "adverseDecisionNotice",
-      "explanationLevel": "individualized",
-      "counterfactualRequired": true,
-      "appealMechanism": {
-        "enabled": true,
-        "appealWindow": "P30D",
-        "reviewerConstraint": "independentFromOriginal",
-        "reviewerRoles": ["appealReviewer"],
-        "continuationOfServices": true,
-        "continuationScope": "currentLevel"
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
       }
     }
   },
-
-  "reviewProtocols": [
-    {
-      "tags": ["appeal"],
-      "protocols": ["independentFirst", "considerOpposite"],
-      "description": "Appeal uses independent-first protocol"
-    }
-  ],
-
-  "qualityControls": {
-    "reviewSampling": {
-      "rate": 0.10,
-      "method": "random",
-      "scope": "workflow"
+  "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+    "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+    "dueProcess": {
+      "adverseDecisionPolicy": {
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "noticeGracePeriod": "P30D",
+        "noticeTemplateKey": "adverseDecisionNotice",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "appealWindow": "P30D",
+          "reviewerConstraint": "independentFromOriginal",
+          "reviewerRoles": [
+            "appealReviewer"
+          ],
+          "continuationOfServices": true,
+          "continuationScope": "currentLevel"
+        }
+      }
     },
-    "separationOfDuties": {
-      "scope": "sameInstance"
-    },
-    "overrideAuthority": {
-      "requireStructuredRationale": true,
-      "requireSupportingEvidence": true,
-      "requireAuthorityVerification": true
+    "reviewProtocols": [
+      {
+        "tags": [
+          "appeal"
+        ],
+        "protocols": [
+          "independentFirst",
+          "considerOpposite"
+        ],
+        "description": "Appeal uses independent-first protocol"
+      }
+    ],
+    "qualityControls": {
+      "reviewSampling": {
+        "rate": 0.1,
+        "method": "random",
+        "scope": "workflow"
+      },
+      "separationOfDuties": {
+        "scope": "sameInstance"
+      },
+      "overrideAuthority": {
+        "requireStructuredRationale": true,
+        "requireSupportingEvidence": true,
+        "requireAuthorityVerification": true
+      }
     }
   }
 }

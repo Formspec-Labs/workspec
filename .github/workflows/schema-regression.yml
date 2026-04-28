@@ -7,6 +7,7 @@ on:
       - "fixtures/**"
       - "specs/**/*.md"
       - "tests/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/schema-regression.yml"
   push:
@@ -16,6 +17,7 @@ on:
       - "fixtures/**"
       - "specs/**/*.md"
       - "tests/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".github/workflows/schema-regression.yml"
 
@@ -37,3 +39,9 @@ jobs:
 
       - name: Run schema regression suite
         run: python -m pytest tests/schemas/ -v
+
+      - name: Enforce ADR 0077 canonical seam vocabulary
+        run: python scripts/check-canonical-seams.py
+
+      - name: Enforce ProvenanceKind schema↔enum parity (audit Gap 1 preventative)
+        run: python scripts/check-recordkind-parity.py

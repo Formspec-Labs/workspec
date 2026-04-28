@@ -147,7 +147,7 @@ fn authoring_session_round_trip_with_undo_redo() {
     let reloaded: KernelDocument = serde_json::from_str(&json).expect("parse round-tripped JSON");
 
     // ── Round-trip assertions ────────────────────────────────────────────
-    assert_eq!(reloaded.wos_kernel, "1.0");
+    assert_eq!(reloaded.wos_workflow, "1.0");
     assert_eq!(reloaded.title.as_deref(), Some("Purchase Order Approval"));
     assert_eq!(
         reloaded.impact_level,

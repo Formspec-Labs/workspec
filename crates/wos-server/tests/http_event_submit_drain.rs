@@ -26,7 +26,7 @@ const KERNEL_VERSION: &str = "1.0.0";
 /// Two-state kernel reachable by an unguarded `advance` event.
 fn stub_kernel_document() -> serde_json::Value {
     serde_json::json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": KERNEL_URL,
         "version": KERNEL_VERSION,
         "title": "WS-012 Drain Kernel",

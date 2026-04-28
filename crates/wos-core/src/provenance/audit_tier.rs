@@ -57,6 +57,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::InvalidDuration
             | K::ToleranceViolation
             | K::ConvergenceCapReached
+            | K::CapabilityInvocation
             | K::DeonticViolation
             | K::DeonticEvaluation
             | K::DeonticResolution
@@ -129,6 +130,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::ActivationBlocked
             | K::CalendarIgnored
             | K::NotificationSuppressed
+            | K::ConfigurationWarning
             | K::RelationshipChanged
             | K::MilestoneFired
             | K::EventEmitted

@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-EMIT-002",
       "version": "1.0.0",
       "title": "INT-EMIT-002 Full Envelope Captured",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,10 +39,14 @@
               }
             ]
           },
-          "published": { "type": "final" }
+          "published": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -46,27 +54,62 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-EMIT-002",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "eventBus": {
-          "type": "event-emit",
-          "description": "Emit an envelope-rich CloudEvent",
-          "source": "https://example.com/orders",
-          "eventType": "com.example.order.placed"
+        "targetWorkflow": {
+          "url": "urn:test:INT-EMIT-002",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "eventBus": {
+            "type": "event-emit",
+            "description": "Emit an envelope-rich CloudEvent",
+            "source": "https://example.com/orders",
+            "eventType": "com.example.order.placed"
+          }
         }
       }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "publish", "actor": "operator" }
+    {
+      "event": "publish",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "published", "event": "publish" }
+    {
+      "from": "open",
+      "to": "published",
+      "event": "publish"
+    }
   ],
   "expected_provenance": [
     {

@@ -69,7 +69,7 @@ fn empty_state(kind: StateKind) -> State {
 /// Build the minimal `KernelDocument` used by `RawWosProject::new`.
 fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument {
     KernelDocument {
-        wos_kernel: "1.0".into(),
+        wos_workflow: "1.0".into(),
         schema: None,
         url: None,
         version: None,
@@ -1363,7 +1363,7 @@ mod tests {
     fn new_project_has_empty_lifecycle() {
         let p = make_project();
         let snap = p.snapshot();
-        assert_eq!(snap.wos_kernel, "1.0");
+        assert_eq!(snap.wos_workflow, "1.0");
         assert!(snap.lifecycle.states.is_empty());
     }
 

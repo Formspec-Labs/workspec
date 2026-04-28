@@ -8,15 +8,23 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-CALLBACK-001",
       "version": "1.0.0",
       "title": "INT-CALLBACK-001 Callback Correlation",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" },
-        { "id": "system", "type": "system", "description": "External system" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        },
+        {
+          "id": "system",
+          "type": "system",
+          "description": "External system"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -51,12 +59,16 @@
               }
             ]
           },
-          "resolved": { "type": "final" }
+          "resolved": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "result": { "type": "string" }
+          "result": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -66,19 +78,47 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-CALLBACK-001",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "callbackService": {
-          "type": "callback",
-          "description": "Bidirectional callback binding",
-          "source": "urn:wos:runtime",
-          "eventType": "com.example.callback.request",
-          "outputBinding": {
-            "caseFile.result": "$.result"
+        "targetWorkflow": {
+          "url": "urn:test:INT-CALLBACK-001",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "callbackService": {
+            "type": "callback",
+            "description": "Bidirectional callback binding",
+            "source": "urn:wos:runtime",
+            "eventType": "com.example.callback.request",
+            "outputBinding": {
+              "caseFile.result": "$.result"
+            }
           }
         }
       }
@@ -86,7 +126,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "request", "actor": "operator" },
+    {
+      "event": "request",
+      "actor": "operator"
+    },
     {
       "event": "callbackReceived",
       "actor": "system",
@@ -96,22 +139,36 @@
         "specversion": "1.0",
         "type": "com.example.callback.response",
         "subject": "conformance-instance:callbackService:callbackService-cb-0",
-        "data": { "result": "success" }
+        "data": {
+          "result": "success"
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "waitingCallback", "event": "request" },
-    { "from": "waitingCallback", "to": "resolved", "event": "callbackReceived" }
+    {
+      "from": "open",
+      "to": "waitingCallback",
+      "event": "request"
+    },
+    {
+      "from": "waitingCallback",
+      "to": "resolved",
+      "event": "callbackReceived"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "callbackPending",
-      "data": { "subject": "conformance-instance:callbackService:callbackService-cb-0" }
+      "data": {
+        "subject": "conformance-instance:callbackService:callbackService-cb-0"
+      }
     },
     {
       "recordKind": "callbackReceived",
-      "data": { "correlationSubject": "conformance-instance:callbackService:callbackService-cb-0" }
+      "data": {
+        "correlationSubject": "conformance-instance:callbackService:callbackService-cb-0"
+      }
     }
   ]
 }

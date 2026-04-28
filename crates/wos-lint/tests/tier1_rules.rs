@@ -46,7 +46,7 @@ const TEST_WORKFLOW_URL: &str = "https://example.com/wf";
 /// Minimal valid kernel with a two-state flat lifecycle (no violations).
 fn minimal_kernel_with_relationships(relationships: serde_json::Value) -> serde_json::Value {
     json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": TEST_WORKFLOW_URL,
         "lifecycle": {
             "initialState": "open",
@@ -115,7 +115,7 @@ fn minimal_correspondence_metadata() -> serde_json::Value {
 #[test]
 fn k001_final_state_with_transitions_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -154,7 +154,7 @@ fn k001_final_state_without_transitions_clean() {
 #[test]
 fn k002_compound_without_initial_state_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -178,7 +178,7 @@ fn k002_compound_without_initial_state_flagged() {
 #[test]
 fn k002_compound_without_states_map_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -200,7 +200,7 @@ fn k002_compound_without_states_map_flagged() {
 #[test]
 fn k002_compound_with_initial_state_and_states_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -229,7 +229,7 @@ fn k002_compound_with_initial_state_and_states_clean() {
 #[test]
 fn k003_parallel_without_regions_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -247,7 +247,7 @@ fn k003_parallel_without_regions_flagged() {
 #[test]
 fn k003_parallel_with_regions_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -281,7 +281,7 @@ fn k003_parallel_with_regions_clean() {
 #[test]
 fn k004_cancellation_policy_on_atomic_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -299,7 +299,7 @@ fn k004_cancellation_policy_on_atomic_flagged() {
 #[test]
 fn k004_cancellation_policy_on_parallel_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -334,7 +334,7 @@ fn k004_cancellation_policy_on_parallel_clean() {
 #[test]
 fn k005_history_state_on_atomic_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -352,7 +352,7 @@ fn k005_history_state_on_atomic_flagged() {
 #[test]
 fn k005_history_state_on_compound_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -381,7 +381,7 @@ fn k005_history_state_on_compound_clean() {
 #[test]
 fn k006_transition_target_nonexistent_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -402,7 +402,7 @@ fn k006_transition_target_nonexistent_flagged() {
 fn k006_cross_scope_target_is_valid_clean() {
     // A substate targeting a top-level state should NOT produce K-006.
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -447,7 +447,7 @@ fn k006_same_scope_valid_target_clean() {
 #[test]
 fn k007_dollar_prefix_event_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -471,7 +471,7 @@ fn k007_dollar_prefix_event_flagged() {
 #[test]
 fn k007_legacy_string_dollar_custom_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -496,7 +496,7 @@ fn k007_legacy_string_dollar_custom_flagged() {
 fn k007_join_event_is_exempt_clean() {
     // $join is the one allowed $ event (used on parallel states).
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -526,7 +526,7 @@ fn k007_join_event_is_exempt_clean() {
 #[test]
 fn k007_typed_join_signal_parallel_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -577,7 +577,7 @@ fn k007_normal_event_name_clean() {
 #[test]
 fn k008_parallel_outgoing_non_join_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -604,7 +604,7 @@ fn k008_parallel_outgoing_non_join_flagged() {
 #[test]
 fn k008_parallel_outgoing_join_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {
@@ -664,7 +664,7 @@ fn k009_unique_actor_ids_clean() {
 #[test]
 fn k014_empty_milestone_id_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } },
@@ -683,7 +683,7 @@ fn k014_empty_milestone_id_flagged() {
 #[test]
 fn k014_non_empty_milestone_ids_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } },
@@ -704,7 +704,7 @@ fn k014_non_empty_milestone_ids_clean() {
 #[test]
 fn k015_set_data_undeclared_field_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "caseFile": {
             "fields": {
                 "amount": { "type": "number" }
@@ -732,7 +732,7 @@ fn k015_set_data_undeclared_field_flagged() {
 #[test]
 fn k015_set_data_declared_field_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "caseFile": {
             "fields": {
                 "amount": { "type": "number" }
@@ -764,7 +764,7 @@ fn k015_set_data_declared_field_clean() {
 #[test]
 fn k022_digest_without_algorithm_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } }
@@ -783,7 +783,7 @@ fn k022_digest_without_algorithm_flagged() {
 #[test]
 fn k022_digest_with_algorithm_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } }
@@ -815,7 +815,7 @@ fn k022_digest_with_algorithm_clean() {
 #[test]
 fn k029_start_timer_both_duration_and_deadline_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "caseFile": { "fields": {} },
         "lifecycle": {
             "initialState": "open",
@@ -845,7 +845,7 @@ fn k029_start_timer_both_duration_and_deadline_flagged() {
 #[test]
 fn k029_start_timer_neither_duration_nor_deadline_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "caseFile": { "fields": {} },
         "lifecycle": {
             "initialState": "open",
@@ -874,7 +874,7 @@ fn k029_start_timer_neither_duration_nor_deadline_flagged() {
 #[test]
 fn k029_start_timer_with_duration_only_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "caseFile": { "fields": {} },
         "lifecycle": {
             "initialState": "open",
@@ -904,7 +904,7 @@ fn k029_start_timer_with_duration_only_clean() {
 #[test]
 fn k030_extension_key_without_x_prefix_flagged() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } }
@@ -920,7 +920,7 @@ fn k030_extension_key_without_x_prefix_flagged() {
 #[test]
 fn k030_extension_key_with_x_prefix_clean() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": { "open": { "type": "atomic" } }
@@ -937,7 +937,7 @@ fn k030_extension_key_with_x_prefix_clean() {
 fn k030_nested_extension_key_without_prefix_flagged() {
     // Extensions can appear at any nesting level.
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "open",
             "states": {
@@ -1938,7 +1938,7 @@ fn minimal_valid_kernel_has_zero_diagnostics() {
 #[test]
 fn multiple_violations_reported_together() {
     let doc = json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "lifecycle": {
             "initialState": "review",
             "states": {

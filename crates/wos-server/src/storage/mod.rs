@@ -53,7 +53,7 @@ pub type StorageResult<T> = Result<T, StorageError>;
 /// instance set agree on page geometry regardless of which backend is wired.
 pub const LIST_INSTANCES_PAGE_SIZE_MAX: u32 = 200;
 
-/// A stored kernel document (`$wosKernel` definition + metadata).
+/// A stored kernel document (`$wosWorkflow` definition + metadata).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KernelRow {
     pub url: String,

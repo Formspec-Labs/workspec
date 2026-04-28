@@ -11,19 +11,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A WOS Notification Template Config sidecar document.
+/// Notification-template content — the `notifications` block of a $wosDelivery
+/// sidecar per ADR 0076 D-3. Was a standalone $wosNotificationTemplate
+/// sidecar; the marker now lives on the $wosDelivery envelope and this type
+/// represents only the block's interior shape. Type name retained for consumer
+/// compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationTemplateDocument {
-    /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosNotificationTemplate")]
-    pub wos_notification_template: String,
-
     /// Optional JSON Schema URI.
     #[serde(rename = "$schema", default)]
     pub schema: Option<String>,
 
     /// Kernel document this template config targets.
+    #[serde(default)]
     pub target_workflow: String,
 
     /// Document version.

@@ -1,7 +1,12 @@
-// Rust guideline compliant 2026-04-10
+// Rust guideline compliant 2026-04-28
 
-//! Round-trip deserialization tests for WOS Business Calendar Config documents.
+//! Round-trip deserialization tests for the business-calendar content embedded
+//! in `$wosDelivery` sidecar documents (was a standalone `$wosBusinessCalendar`
+//! sidecar; per ADR 0076 D-3 the marker now lives on the `$wosDelivery`
+//! envelope and `BusinessCalendarDocument` represents the embedded `calendar`
+//! block).
 
+use serde_json::Value;
 use std::fs;
 use wos_core::BusinessCalendarDocument;
 use wos_core::model::business_calendar::Weekday;
@@ -13,14 +18,32 @@ fn load_fixture(name: &str) -> BusinessCalendarDocument {
     );
     let json =
         fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
-    serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
+    let envelope: Value = serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("failed to parse fixture {name} envelope: {e}"));
+    assert_eq!(
+        envelope.get("$wosDelivery").and_then(Value::as_str),
+        Some("1.0"),
+        "fixture {name} must carry $wosDelivery envelope per ADR 0076 D-3"
+    );
+    let mut block = envelope
+        .get("calendar")
+        .cloned()
+        .unwrap_or_else(|| panic!("fixture {name} missing calendar embedded block"));
+    // Carry envelope.targetWorkflow into block.targetWorkflow when block omits it
+    // (per ADR 0076 D-3 the sidecar envelope owns targeting; the block is content).
+    if let (Some(map), Some(target)) = (
+        block.as_object_mut(),
+        envelope.get("targetWorkflow").cloned(),
+    ) {
+        map.entry("targetWorkflow".to_string()).or_insert(target);
+    }
+    serde_json::from_value(block)
+        .unwrap_or_else(|e| panic!("failed to deserialize calendar from {name}: {e}"))
 }
 
 #[test]
 fn benefits_business_calendar_round_trips() {
     let doc = load_fixture("benefits-business-calendar.json");
-    assert_eq!(doc.wos_business_calendar, "1.0");
     assert!(doc.target_workflow.contains("benefits-adjudication"));
     assert_eq!(doc.timezone, "America/New_York");
 
@@ -67,13 +90,11 @@ fn benefits_business_calendar_round_trips() {
 #[test]
 fn business_calendar_minimal_document() {
     let json = r#"{
-        "$wosBusinessCalendar": "1.0",
         "targetWorkflow": "https://example.gov/test",
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"]
     }"#;
     let doc: BusinessCalendarDocument = serde_json::from_str(json).unwrap();
-    assert_eq!(doc.wos_business_calendar, "1.0");
     assert_eq!(doc.timezone, "UTC");
     assert_eq!(doc.work_week.len(), 5);
     assert!(doc.holidays.is_empty());
@@ -87,10 +108,6 @@ fn business_calendar_serialization_round_trip() {
     let doc = load_fixture("benefits-business-calendar.json");
     let serialized = serde_json::to_string(&doc).unwrap();
     let deserialized: BusinessCalendarDocument = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(
-        doc.wos_business_calendar,
-        deserialized.wos_business_calendar
-    );
     assert_eq!(doc.timezone, deserialized.timezone);
     assert_eq!(doc.work_week.len(), deserialized.work_week.len());
     assert_eq!(doc.holidays.len(), deserialized.holidays.len());

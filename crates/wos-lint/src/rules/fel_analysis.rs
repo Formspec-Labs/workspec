@@ -1031,7 +1031,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "draft": {
@@ -1051,7 +1051,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "draft": {
@@ -1077,7 +1077,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "milestones": [{"id": "m1", "condition": "((( invalid"}]
                 }
@@ -1098,7 +1098,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "active": {
@@ -1126,7 +1126,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "active": {
@@ -1155,7 +1155,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "active": {
@@ -1183,7 +1183,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Kernel,
             json!({
-                "$wosKernel": true,
+                "$wosWorkflow": true,
                 "lifecycle": {
                     "states": {
                         "active": {

@@ -1,102 +1,138 @@
 {
-  "$wosDriftMonitor": "1.0",
-  "$schema": "https://wos-spec.org/schemas/drift-monitor/1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Benefits Adjudication Drift Monitor",
-
-  "monitors": [
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "agentRef": "documentExtractor",
-      "evaluationWindow": "P30D",
-      "metrics": [
-        {
-          "name": "extractionAccuracy",
-          "method": "accuracy",
-          "threshold": 0.92
-        },
-        {
-          "name": "confidenceDistribution",
-          "method": "psi",
-          "threshold": 0.2
-        },
-        {
-          "name": "modificationRate",
-          "method": "accuracy",
-          "threshold": 0.30
-        }
-      ],
-      "rubberStamp": {
-        "enabled": true,
-        "minReviewTime": "PT30S",
-        "maxAgreementRate": 0.95,
-        "evaluationWindow": "P14D"
-      },
-      "alertThresholds": [
-        {
-          "condition": "extractionAccuracy < 0.90",
-          "severity": "critical",
-          "action": "demoteToAssistive",
-          "policyRef": "demoteToAssistiveOnDegradedAccuracy",
-          "notifyRoles": ["systemAdministrator", "programDirector"]
-        },
-        {
-          "condition": "confidenceDistribution > 0.25",
-          "severity": "warning",
-          "action": "notify",
-          "notifyRoles": ["systemAdministrator"]
-        },
-        {
-          "condition": "modificationRate > 0.40",
-          "severity": "warning",
-          "action": "notify",
-          "notifyRoles": ["programDirector"]
-        }
-      ]
-    },
-    {
-      "agentRef": "eligibilityScreener",
-      "evaluationWindow": "P30D",
-      "metrics": [
-        {
-          "name": "agreementRate",
-          "method": "accuracy",
-          "threshold": 0.85
-        },
-        {
-          "name": "outputDistribution",
-          "method": "chi2",
-          "threshold": 0.05
-        }
-      ],
-      "rubberStamp": {
-        "enabled": true,
-        "minReviewTime": "PT60S",
-        "maxAgreementRate": 0.93,
-        "evaluationWindow": "P30D"
-      },
-      "alertThresholds": [
-        {
-          "condition": "agreementRate < 0.80",
-          "severity": "critical",
-          "action": "demoteToManual",
-          "notifyRoles": ["systemAdministrator", "programDirector"]
-        },
-        {
-          "condition": "outputDistribution > 0.1",
-          "severity": "warning",
-          "action": "notify",
-          "notifyRoles": ["systemAdministrator"]
-        }
-      ]
+      "id": "system",
+      "type": "system"
     }
   ],
-
-  "deploymentSequence": {
-    "enabled": true,
-    "shadowDuration": "P14D",
-    "canaryPercentage": 0.05,
-    "canaryDuration": "P7D",
-    "canaryReviewSamplingRate": 1.0
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "agents": {
+    "$schema": "https://wos-spec.org/schemas/drift-monitor/1.0",
+    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+    "monitors": [
+      {
+        "agentRef": "documentExtractor",
+        "evaluationWindow": "P30D",
+        "metrics": [
+          {
+            "name": "extractionAccuracy",
+            "method": "accuracy",
+            "threshold": 0.92
+          },
+          {
+            "name": "confidenceDistribution",
+            "method": "psi",
+            "threshold": 0.2
+          },
+          {
+            "name": "modificationRate",
+            "method": "accuracy",
+            "threshold": 0.3
+          }
+        ],
+        "rubberStamp": {
+          "enabled": true,
+          "minReviewTime": "PT30S",
+          "maxAgreementRate": 0.95,
+          "evaluationWindow": "P14D"
+        },
+        "alertThresholds": [
+          {
+            "condition": "extractionAccuracy < 0.90",
+            "severity": "critical",
+            "action": "demoteToAssistive",
+            "policyRef": "demoteToAssistiveOnDegradedAccuracy",
+            "notifyRoles": [
+              "systemAdministrator",
+              "programDirector"
+            ]
+          },
+          {
+            "condition": "confidenceDistribution > 0.25",
+            "severity": "warning",
+            "action": "notify",
+            "notifyRoles": [
+              "systemAdministrator"
+            ]
+          },
+          {
+            "condition": "modificationRate > 0.40",
+            "severity": "warning",
+            "action": "notify",
+            "notifyRoles": [
+              "programDirector"
+            ]
+          }
+        ]
+      },
+      {
+        "agentRef": "eligibilityScreener",
+        "evaluationWindow": "P30D",
+        "metrics": [
+          {
+            "name": "agreementRate",
+            "method": "accuracy",
+            "threshold": 0.85
+          },
+          {
+            "name": "outputDistribution",
+            "method": "chi2",
+            "threshold": 0.05
+          }
+        ],
+        "rubberStamp": {
+          "enabled": true,
+          "minReviewTime": "PT60S",
+          "maxAgreementRate": 0.93,
+          "evaluationWindow": "P30D"
+        },
+        "alertThresholds": [
+          {
+            "condition": "agreementRate < 0.80",
+            "severity": "critical",
+            "action": "demoteToManual",
+            "notifyRoles": [
+              "systemAdministrator",
+              "programDirector"
+            ]
+          },
+          {
+            "condition": "outputDistribution > 0.1",
+            "severity": "warning",
+            "action": "notify",
+            "notifyRoles": [
+              "systemAdministrator"
+            ]
+          }
+        ]
+      }
+    ],
+    "deploymentSequence": {
+      "enabled": true,
+      "shadowDuration": "P14D",
+      "canaryPercentage": 0.05,
+      "canaryDuration": "P7D",
+      "canaryReviewSamplingRate": 1.0
+    }
   }
 }

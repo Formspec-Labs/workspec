@@ -1,5 +1,5 @@
 {
-  "$wosKernel": "1.0",
+  "$wosWorkflow": "1.0",
   "$schema": "https://wos-spec.org/schemas/kernel/1.0",
   "url": "https://test.wos-spec.org/workflows/dcr-zone",
   "version": "1.0.0",

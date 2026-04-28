@@ -47,6 +47,18 @@ pub enum ProvenanceKind {
     /// `cyclesUsed` so downstream tooling can locate the cycle.
     ConvergenceCapReached,
 
+    // ── Capability preconditions (AI S3.3.1) ───────────────────────
+    /// A capability precondition was evaluated.
+    ///
+    /// Required `data` shape: `{"capabilityId": "<id>", "invocationBlocked":
+    /// <bool>, ...}`. When `invocationBlocked` is `true` the record's
+    /// `outcome` MUST be the reserved kernel literal
+    /// `"preconditionNotSatisfied"` (Kernel §8.2.2). Schema-validated by
+    /// `$defs/CapabilityInvocationRecord` in `wos-workflow.schema.json`,
+    /// composed onto `FactsTierRecord` via `allOf` so every conformant
+    /// provenance log participates in the MUST.
+    CapabilityInvocation,
+
     // ── Deontic enforcement (AI S4) ────────────────────────────────
     /// A deontic constraint was violated (AI S4.2–S4.4).
     DeonticViolation,
@@ -163,6 +175,30 @@ pub enum ProvenanceKind {
     // ── Sidecar (Business Calendar, Notification) ──────────────────
     CalendarIgnored,
     NotificationSuppressed,
+
+    // ── Configuration warnings (cross-cutting) ──────────────────────
+    /// A configuration reference failed to resolve, or a configured
+    /// operation (e.g. notification render) failed at runtime.
+    ///
+    /// Generic carrier for four spec MUSTs that require provenance for
+    /// declarative-config failures without binding a more specific
+    /// `recordKind`:
+    /// - `specs/ai/drift-monitor.md:77` — unresolvable `policyRef`.
+    /// - `specs/governance/workflow-governance.md:154` — unresolvable
+    ///   `continuationPolicyRef`.
+    /// - `specs/sidecars/notification-template.md:199` — template key not
+    ///   found.
+    /// - `specs/sidecars/notification-template.md:222` — notification
+    ///   rendering failure.
+    ///
+    /// Required `data.subject` discriminator selects the failure site;
+    /// reserved literals are `drift-monitor.policyRef`,
+    /// `governance.continuationPolicyRef`, `notification-template.key`,
+    /// `notification-template.render`. Vendor extensions use an `x-`
+    /// prefix. Distinct from `CalendarIgnored` / `NotificationSuppressed`,
+    /// which are sidecar-fallback semantics, not config-resolution
+    /// failures.
+    ConfigurationWarning,
 
     // ── Relationship provenance (Kernel S7) ────────────────────────
     RelationshipChanged,

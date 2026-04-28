@@ -58,6 +58,75 @@ fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 
     check_digest_algorithm(root, diagnostics);
     check_extension_prefixes(root, "", diagnostics);
+    check_ver_level_for_fallback_chain(root, diagnostics);
+}
+
+// ---------------------------------------------------------------------------
+// WOS-VER-LEVEL-001: agents declaring fallbackChain SHOULD also declare
+// at least one verificationLevel (ADR 0076 step 12 / Q6 owner decision).
+// ---------------------------------------------------------------------------
+
+/// Walk the merged-document root for agents[*].fallbackChain declarations.
+/// When any agent declares a fallback chain, the workflow SHOULD declare at
+/// least one `verificationLevel` somewhere — typically on `bindings[*]` for
+/// governed output paths, or on `advanced.verifiableConstraints` for SMT-
+/// verifiable shapes. Warn (not error) when fallbackChain is declared with no
+/// verificationLevel anywhere in the document.
+fn check_ver_level_for_fallback_chain(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    let Some(agents) = root.get("agents").and_then(Value::as_array) else {
+        return;
+    };
+
+    let agents_with_fallback: Vec<(usize, &str)> = agents
+        .iter()
+        .enumerate()
+        .filter_map(|(i, agent)| {
+            let has_fallback = agent
+                .get("fallbackChain")
+                .and_then(Value::as_array)
+                .map(|a| !a.is_empty())
+                .unwrap_or(false);
+            if !has_fallback {
+                return None;
+            }
+            let id = agent.get("id").and_then(Value::as_str)?;
+            Some((i, id))
+        })
+        .collect();
+
+    if agents_with_fallback.is_empty() {
+        return;
+    }
+
+    let has_verification_level = root
+        .get("bindings")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .any(|b| b.get("verificationLevel").is_some())
+        })
+        .unwrap_or(false)
+        || root
+            .get("advanced")
+            .and_then(|a| a.get("verifiableConstraints"))
+            .and_then(Value::as_array)
+            .map(|arr| !arr.is_empty())
+            .unwrap_or(false);
+
+    if has_verification_level {
+        return;
+    }
+
+    for (i, id) in agents_with_fallback {
+        diagnostics.push(LintDiagnostic::t1_warning(
+            "WOS-VER-LEVEL-001",
+            &format!("/agents/{i}/fallbackChain"),
+            format!(
+                "agent '{id}' declares fallbackChain but the workflow has no verificationLevel \
+                 anywhere; consider declaring bindings[].verificationLevel for governed output paths"
+            ),
+        ));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1153,6 +1222,75 @@ mod jsonpath_feature_tests {
         // $['a..b'] is the known false-positive pattern — must NOT be flagged.
         assert!(!contains_unsupported_jsonpath_feature("$['a..b']"));
         assert!(!contains_unsupported_jsonpath_feature("$[\"a..b\"]"));
+    }
+}
+
+#[cfg(test)]
+mod ver_level_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn run(value: Value) -> Vec<LintDiagnostic> {
+        let mut diags = Vec::new();
+        check_ver_level_for_fallback_chain(&value, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn ver_level_001_fallback_without_verification_level_warns() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "agents": [
+                {
+                    "id": "extractor",
+                    "fallbackChain": ["humanReviewer"]
+                }
+            ]
+        });
+        let diags = run(doc);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-VER-LEVEL-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert!(matches[0].message.contains("extractor"));
+    }
+
+    #[test]
+    fn ver_level_001_fallback_with_binding_verification_level_clean() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "agents": [
+                {
+                    "id": "extractor",
+                    "fallbackChain": ["humanReviewer"]
+                }
+            ],
+            "bindings": [
+                {
+                    "on": "extracted",
+                    "verificationLevel": "attested"
+                }
+            ]
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-VER-LEVEL-001"),
+            "expected no WOS-VER-LEVEL-001 diagnostic: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn ver_level_001_no_fallback_chain_silent() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "agents": [{"id": "extractor"}]
+        });
+        let diags = run(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-VER-LEVEL-001"),
+            "expected no WOS-VER-LEVEL-001 diagnostic: {diags:?}"
+        );
     }
 }
 

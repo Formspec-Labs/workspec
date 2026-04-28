@@ -17,7 +17,7 @@ use wos_core::provenance::ProvenanceKind;
 /// Build a minimal kernel document with the given states and transitions.
 fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocument {
     KernelDocument {
-        wos_kernel: "1.0".to_string(),
+        wos_workflow: "1.0".to_string(),
         schema: None,
         url: None,
         version: None,

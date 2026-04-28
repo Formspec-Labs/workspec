@@ -255,7 +255,7 @@ mod tests {
 
         let doc_json = export["document"].as_str().expect("must have document key");
         let parsed: serde_json::Value = serde_json::from_str(doc_json).unwrap();
-        assert_eq!(parsed["$wosKernel"], serde_json::json!("1.0"));
+        assert_eq!(parsed["$wosWorkflow"], serde_json::json!("1.0"));
     }
 
     /// describe through dispatch returns the expected shape.

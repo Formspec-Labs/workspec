@@ -1,63 +1,94 @@
 {
-  "$wosWorkflowGovernance": "1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-  "title": "Benefits adjudication — SLA authoring fixture",
+  "$wosWorkflow": "1.0",
+  "title": "Benefits adjudication \u2014 SLA authoring fixture",
   "description": "Minimal governance excerpt exercising ADR-0060 keys (templateKey, escalationStepId, notificationTemplateKey) against the benefits kernel URL.",
-  "taskCatalog": [
+  "url": "https://example.test/migrated-fixture",
+  "version": "1.0.0",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "pattern": "incomeVerification",
-      "verifiable": "yes",
-      "slaDefinitions": [
-        {
-          "id": "firstResponse",
-          "expectedDuration": "PT4H",
-          "calendarType": "wall-clock",
-          "startAt": "assignment"
-        },
-        {
-          "id": "fullResolution",
-          "expectedDuration": "P5BD",
-          "calendarType": "business",
-          "calendarRef": "urn:wos:sidecar:business-calendar:fy2026-federal",
-          "startAt": "custom-event",
-          "startEvent": "applicantResponseReceived"
-        }
-      ],
-      "warningThresholds": [
-        {
-          "beforeBreach": "P1D",
-          "templateKey": "slaWarning1Day",
-          "notify": ["taskOwner"]
-        }
-      ],
-      "breachPolicy": {
-        "action": "escalate",
-        "escalationStepId": "level-1",
-        "timeoutPolicy": { "onRepeatedBreach": "suspend" }
-      },
-      "escalationChain": [
-        {
-          "level": 1,
-          "assignTo": "teamLead",
-          "gracePeriod": "PT4H",
-          "onExhaustion": "escalate"
-        },
-        {
-          "level": 2,
-          "assignTo": "divisionDirector",
-          "gracePeriod": "P1D",
-          "onExhaustion": "ticketCreate"
-        }
-      ]
+      "id": "system",
+      "type": "system"
     }
   ],
-  "holdPolicies": [
-    {
-      "holdType": "pending-applicant-response",
-      "expectedDuration": "P30D",
-      "resumeTrigger": "applicantResponse",
-      "timeoutAction": "escalate",
-      "notificationTemplateKey": "holdPendingApplicant"
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
     }
-  ]
+  },
+  "governance": {
+    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+    "taskCatalog": [
+      {
+        "pattern": "incomeVerification",
+        "verifiable": "yes",
+        "slaDefinitions": [
+          {
+            "id": "firstResponse",
+            "expectedDuration": "PT4H",
+            "calendarType": "wall-clock",
+            "startAt": "assignment"
+          },
+          {
+            "id": "fullResolution",
+            "expectedDuration": "P5BD",
+            "calendarType": "business",
+            "calendarRef": "urn:wos:sidecar:business-calendar:fy2026-federal",
+            "startAt": "custom-event",
+            "startEvent": "applicantResponseReceived"
+          }
+        ],
+        "warningThresholds": [
+          {
+            "beforeBreach": "P1D",
+            "templateKey": "slaWarning1Day",
+            "notify": [
+              "taskOwner"
+            ]
+          }
+        ],
+        "breachPolicy": {
+          "action": "escalate",
+          "escalationStepId": "level-1",
+          "timeoutPolicy": {
+            "onRepeatedBreach": "suspend"
+          }
+        },
+        "escalationChain": [
+          {
+            "level": 1,
+            "assignTo": "teamLead",
+            "gracePeriod": "PT4H",
+            "onExhaustion": "escalate"
+          },
+          {
+            "level": 2,
+            "assignTo": "divisionDirector",
+            "gracePeriod": "P1D",
+            "onExhaustion": "ticketCreate"
+          }
+        ]
+      }
+    ],
+    "holdPolicies": [
+      {
+        "holdType": "pending-applicant-response",
+        "expectedDuration": "P30D",
+        "resumeTrigger": "applicantResponse",
+        "timeoutAction": "escalate",
+        "notificationTemplateKey": "holdPendingApplicant"
+      }
+    ]
+  }
 }

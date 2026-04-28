@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-ARAZZO-002",
       "version": "1.0.0",
       "title": "INT-ARAZZO-002 Mid-Sequence Failure",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "result": { "type": "string" }
+          "result": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,32 +58,60 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-ARAZZO-002",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "threeStepPipeline": {
-          "type": "arazzo-sequence",
-          "description": "3-step pipeline where step 2 fails contract validation",
-          "steps": [
-            {
-              "stepId": "step-one",
-              "serviceRef": "pipelineService"
-            },
-            {
-              "stepId": "step-two",
-              "serviceRef": "pipelineService",
-              "responseContract": {
-                "definitionRef": "urn:test:step-two-response"
+        "targetWorkflow": {
+          "url": "urn:test:INT-ARAZZO-002",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "threeStepPipeline": {
+            "type": "arazzo-sequence",
+            "description": "3-step pipeline where step 2 fails contract validation",
+            "steps": [
+              {
+                "stepId": "step-one",
+                "serviceRef": "pipelineService"
+              },
+              {
+                "stepId": "step-two",
+                "serviceRef": "pipelineService",
+                "responseContract": {
+                  "definitionRef": "urn:test:step-two-response"
+                }
+              },
+              {
+                "stepId": "step-three",
+                "serviceRef": "pipelineService"
               }
-            },
-            {
-              "stepId": "step-three",
-              "serviceRef": "pipelineService"
-            }
-          ]
+            ]
+          }
         }
       }
     }
@@ -86,22 +122,33 @@
   "contract_outcomes": {
     "urn:test:step-two-response": {
       "valid": false,
-      "errors": ["missing required field: outputHash"]
+      "errors": [
+        "missing required field: outputHash"
+      ]
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "process", "actor": "operator" }
+    {
+      "event": "process",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [],
   "expected_provenance": [
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "step-one", "outcome": "ok" }
+      "data": {
+        "stepId": "step-one",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "step-two", "outcome": "failed" }
+      "data": {
+        "stepId": "step-two",
+        "outcome": "failed"
+      }
     }
   ]
 }

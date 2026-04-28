@@ -5,6 +5,11 @@
   "description": "Catalog of all 22 tools exposed by the wos-mcp JSON-RPC-2.0 stdio server.",
   "type": "object",
   "required": ["tools"],
+  "patternProperties": {
+    "^x-": {
+      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+    }
+  },
   "properties": {
     "tools": {
       "type": "array",

@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:bc-timezone",
       "version": "1.0.0",
       "title": "BC S10-003 Timezone Boundary",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "system", "type": "system", "description": "System actor" }
+        {
+          "id": "system",
+          "type": "system",
+          "description": "System actor"
+        }
       ],
       "lifecycle": {
         "initialState": "pending",
@@ -31,13 +35,20 @@
               }
             ],
             "transitions": [
-              { "event": "$timeout.slaTimer", "target": "done" }
+              {
+                "event": "$timeout.slaTimer",
+                "target": "done"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -45,12 +56,20 @@
       }
     },
     "businessCalendar": {
-      "$wosBusinessCalendar": "1.0",
+      "$wosDelivery": "1.0",
       "targetWorkflow": "urn:test:bc-timezone",
-      "version": "test-v1.0",
-      "timezone": "Etc/GMT-12",
-      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      "holidays": []
+      "calendar": {
+        "version": "test-v1.0",
+        "timezone": "Etc/GMT-12",
+        "workWeek": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday"
+        ],
+        "holidays": []
+      }
     }
   },
   "initial_case_state": {},
@@ -62,7 +81,11 @@
     }
   ],
   "expected_transitions": [
-    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+    {
+      "from": "pending",
+      "to": "done",
+      "event": "$timeout.slaTimer"
+    }
   ],
   "expected_provenance": [
     {
@@ -74,7 +97,9 @@
     },
     {
       "record_kind": "timerFired",
-      "data": { "timerId": "slaTimer" }
+      "data": {
+        "timerId": "slaTimer"
+      }
     }
   ]
 }

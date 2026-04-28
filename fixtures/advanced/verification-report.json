@@ -1,16 +1,14 @@
 {
-  "$wosVerificationReport": "1.0",
+  "$wosProvenanceLog": "1.0",
   "$schema": "https://wos-spec.org/schemas/verification-report/1.0",
   "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
   "version": "1.0.0",
   "timestamp": "2026-04-09T14:30:00Z",
-
   "solver": {
     "name": "Z3",
     "version": "4.13.0",
     "timeout": "PT30S"
   },
-
   "results": [
     {
       "constraintRef": "noFinalDenial",
@@ -31,7 +29,6 @@
       "notes": "The prohibition references 'parameters.eligibilityThreshold' which is a temporal parameter resolved at runtime. The verifiable constraint subset (Advanced S8.2) excludes external function calls. The temporal resolution is not statically decidable -- this constraint requires runtime enforcement only."
     }
   ],
-
   "summary": {
     "totalConstraints": 3,
     "provenSafe": 2,

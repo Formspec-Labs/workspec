@@ -9,66 +9,103 @@
   },
   "inline_documents": {
     "governance": {
-      "$wosWorkflowGovernance": "1.0",
-      "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
-      "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+      "$wosWorkflow": "1.0",
       "version": "1.0.0",
       "title": "Due Process Governance Test",
-      "dueProcess": {
-        "adverseDecisionPolicy": {
-          "noticeRequired": true,
-          "noticeTiming": "beforeEffective",
-          "noticeGracePeriod": "P30D",
-          "noticeTemplateKey": "adverseDecisionNotice",
-          "explanationLevel": "individualized",
-          "counterfactualRequired": true,
-          "appealMechanism": {
-            "enabled": true,
-            "appealWindow": "P30D",
-            "reviewerConstraint": "independentFromOriginal",
-            "reviewerRoles": ["appealReviewer"],
-            "continuationOfServices": true,
-            "continuationScope": "currentLevel"
+      "url": "https://example.test/migrated-fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      },
+      "governance": {
+        "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+        "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
+        "dueProcess": {
+          "adverseDecisionPolicy": {
+            "noticeRequired": true,
+            "noticeTiming": "beforeEffective",
+            "noticeGracePeriod": "P30D",
+            "noticeTemplateKey": "adverseDecisionNotice",
+            "explanationLevel": "individualized",
+            "counterfactualRequired": true,
+            "appealMechanism": {
+              "enabled": true,
+              "appealWindow": "P30D",
+              "reviewerConstraint": "independentFromOriginal",
+              "reviewerRoles": [
+                "appealReviewer"
+              ],
+              "continuationOfServices": true,
+              "continuationScope": "currentLevel"
+            }
           }
         }
       }
     },
     "notificationTemplate": {
-      "$wosNotificationTemplate": "1.0",
-      "$schema": "https://wos-spec.org/schemas/notification-template/1.0",
+      "$wosDelivery": "1.0",
       "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
-      "version": "1.0.0",
-      "templates": {
-        "adverseDecisionNotice": {
-          "category": "adverse-decision",
-          "subject": "Notice of decision for case {{caseId}}",
-          "sections": [
-            {
-              "id": "determination",
-              "title": "Decision",
-              "contentType": "structured",
-              "content": "Your case moved to {{determination}}."
-            },
-            {
-              "id": "reasons",
-              "title": "Reasons",
-              "contentType": "structured",
-              "content": "Reason codes: {{reasonCodes}}."
-            },
-            {
-              "id": "appealRights",
-              "title": "Appeal rights",
-              "contentType": "appeal-rights",
-              "content": "You may appeal within {{appealWindow}}. File with {{appealBody}}."
-            },
-            {
-              "id": "appealInstructions",
-              "title": "How to appeal",
-              "contentType": "action-required",
-              "content": "Submit your appeal before {{appealDeadline}}."
-            }
-          ],
-          "requiredVariables": ["caseId", "determination", "reasonCodes", "appealWindow", "appealBody", "appealDeadline"]
+      "notifications": {
+        "$schema": "https://wos-spec.org/schemas/notification-template/1.0",
+        "version": "1.0.0",
+        "templates": {
+          "adverseDecisionNotice": {
+            "category": "adverse-decision",
+            "subject": "Notice of decision for case {{caseId}}",
+            "sections": [
+              {
+                "id": "determination",
+                "title": "Decision",
+                "contentType": "structured",
+                "content": "Your case moved to {{determination}}."
+              },
+              {
+                "id": "reasons",
+                "title": "Reasons",
+                "contentType": "structured",
+                "content": "Reason codes: {{reasonCodes}}."
+              },
+              {
+                "id": "appealRights",
+                "title": "Appeal rights",
+                "contentType": "appeal-rights",
+                "content": "You may appeal within {{appealWindow}}. File with {{appealBody}}."
+              },
+              {
+                "id": "appealInstructions",
+                "title": "How to appeal",
+                "contentType": "action-required",
+                "content": "Submit your appeal before {{appealDeadline}}."
+              }
+            ],
+            "requiredVariables": [
+              "caseId",
+              "determination",
+              "reasonCodes",
+              "appealWindow",
+              "appealBody",
+              "appealDeadline"
+            ]
+          }
         }
       }
     }
@@ -78,10 +115,17 @@
     "eligibilityEvidence": "below-threshold"
   },
   "event_sequence": [
-    { "event": "denied", "actor": "caseworker" }
+    {
+      "event": "denied",
+      "actor": "caseworker"
+    }
   ],
   "expected_transitions": [
-    { "from": "pendingDetermination", "to": "adverseNotice", "event": "denied" }
+    {
+      "from": "pendingDetermination",
+      "to": "adverseNotice",
+      "event": "denied"
+    }
   ],
   "expected_provenance": [
     {

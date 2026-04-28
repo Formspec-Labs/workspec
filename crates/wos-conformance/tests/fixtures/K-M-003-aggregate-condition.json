@@ -2,18 +2,24 @@
   "binding": "formspec",
   "id": "K-M-003-aggregate-condition",
   "rule": "K-M",
-  "description": "Per-repeat-instance milestone scoping is NOT supported by the WOS kernel model. Milestones are lifecycle-level conditions on the flat case state (Kernel S4.13). This fixture instead verifies that a milestone can evaluate a scalar aggregate condition — here 'reviewCount >= 2' — and fires once when the threshold is reached via two sequential setData writes. The milestone does not fire after the first write (count=1) but fires after the second (count=2).",
-  "documents": { "kernel": "inline" },
+  "description": "Per-repeat-instance milestone scoping is NOT supported by the WOS kernel model. Milestones are lifecycle-level conditions on the flat case state (Kernel S4.13). This fixture instead verifies that a milestone can evaluate a scalar aggregate condition \u2014 here 'reviewCount >= 2' \u2014 and fires once when the threshold is reached via two sequential setData writes. The milestone does not fire after the first write (count=1) but fires after the second (count=2).",
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:milestone-aggregate-condition",
       "version": "1.0.0",
       "title": "Milestone Aggregate Condition",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "worker", "type": "human", "description": "Worker actor" }
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Worker actor"
+        }
       ],
       "lifecycle": {
         "initialState": "firstReview",
@@ -28,7 +34,10 @@
               }
             ],
             "transitions": [
-              { "event": "secondReviewDone", "target": "secondReview" }
+              {
+                "event": "secondReviewDone",
+                "target": "secondReview"
+              }
             ]
           },
           "secondReview": {
@@ -41,10 +50,15 @@
               }
             ],
             "transitions": [
-              { "event": "close", "target": "done" }
+              {
+                "event": "close",
+                "target": "done"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         },
         "milestones": {
           "dualReviewComplete": {
@@ -55,7 +69,9 @@
       },
       "caseFile": {
         "fields": {
-          "reviewCount": { "type": "integer" }
+          "reviewCount": {
+            "type": "integer"
+          }
         }
       },
       "execution": {
@@ -69,14 +85,33 @@
     "reviewCount": 0
   },
   "event_sequence": [
-    { "event": "secondReviewDone", "actor": "worker" },
-    { "event": "close", "actor": "worker" }
+    {
+      "event": "secondReviewDone",
+      "actor": "worker"
+    },
+    {
+      "event": "close",
+      "actor": "worker"
+    }
   ],
   "expected_transitions": [
-    { "from": "firstReview", "to": "secondReview", "event": "secondReviewDone" },
-    { "from": "secondReview", "to": "done", "event": "close" }
+    {
+      "from": "firstReview",
+      "to": "secondReview",
+      "event": "secondReviewDone"
+    },
+    {
+      "from": "secondReview",
+      "to": "done",
+      "event": "close"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "milestoneFired", "data": { "milestoneId": "dualReviewComplete" } }
+    {
+      "recordKind": "milestoneFired",
+      "data": {
+        "milestoneId": "dualReviewComplete"
+      }
+    }
   ]
 }

@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-CONSUME-002",
       "version": "1.0.0",
       "title": "INT-CONSUME-002 Empty ID Rejected",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "system", "type": "system", "description": "External system" }
+        {
+          "id": "system",
+          "type": "system",
+          "description": "External system"
+        }
       ],
       "lifecycle": {
         "initialState": "waiting",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "updated": { "type": "final" }
+          "updated": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "status": { "type": "string" }
+          "status": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,17 +58,45 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-CONSUME-002",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "inboundChannel": {
-          "type": "event-consume",
-          "description": "Consume an inbound CloudEvent",
-          "outputBinding": {
-            "caseFile.status": "$.status"
+        "targetWorkflow": {
+          "url": "urn:test:INT-CONSUME-002",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "inboundChannel": {
+            "type": "event-consume",
+            "description": "Consume an inbound CloudEvent",
+            "outputBinding": {
+              "caseFile.status": "$.status"
+            }
           }
         }
       }
@@ -76,7 +112,9 @@
         "source": "https://external.example.com/service",
         "specversion": "1.0",
         "type": "com.external.status.updated",
-        "data": { "status": "approved" }
+        "data": {
+          "status": "approved"
+        }
       }
     }
   ],

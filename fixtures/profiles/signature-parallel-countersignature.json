@@ -1,91 +1,119 @@
 {
-  "$wosSignatureProfile": "1.0",
-  "$schema": "https://wos-spec.org/schemas/signature-profile/1.0",
-  "targetWorkflow": {
-    "url": "https://agency.gov/workflows/vendor-contract",
-    "compatibleVersions": ">=1.0.0 <2.0.0"
-  },
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Parallel Counter-Signature Profile",
-  "roles": [
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "id": "vendorSigner",
-      "role": "signer",
-      "actorId": "vendorRepresentative",
-      "authenticationPolicyKey": "credentialAuth"
-    },
-    {
-      "id": "agencyApprover",
-      "role": "approver",
-      "actorId": "contractingOfficer",
-      "authenticationPolicyKey": "credentialAuth"
-    },
-    {
-      "id": "witness",
-      "role": "witness",
-      "actorId": "witnessOfficer",
-      "authenticationPolicyKey": "credentialAuth"
+      "id": "system",
+      "type": "system"
     }
   ],
-  "documents": [
-    {
-      "id": "contractPackage",
-      "documentRef": "urn:agency.gov:documents:vendor-contract:v1",
-      "documentHash": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-      "documentHashAlgorithm": "sha-256",
-      "formspecResponseRef": "urn:agency.gov:formspec:responses:contracts:case-2026-0007"
-    }
-  ],
-  "authenticationPolicies": [
-    {
-      "key": "credentialAuth",
-      "method": "credential",
-      "assuranceLevel": "high",
-      "providerRef": "urn:agency.gov:identity:providers:piv"
-    }
-  ],
-  "signingFlow": {
-    "type": "parallel",
-    "steps": [
-      {
-        "id": "vendorSigns",
-        "roleId": "vendorSigner",
-        "documentId": "contractPackage"
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
       },
-      {
-        "id": "agencyApproves",
-        "roleId": "agencyApprover",
-        "documentId": "contractPackage"
-      },
-      {
-        "id": "witnessCountersigns",
-        "roleId": "witness",
-        "documentId": "contractPackage",
-        "dependsOn": ["vendorSigns"]
+      "done": {
+        "type": "final"
       }
-    ],
-    "completion": {
-      "type": "all-required"
     }
   },
-  "evidence": {
-    "recordKind": "signatureAffirmation",
-    "requiredFields": [
-      "caseFile.contract.signature.acceptedAt",
-      "caseFile.contract.signature.intent",
-      "caseFile.contract.signature.documentHash"
+  "signature": {
+    "$schema": "https://wos-spec.org/schemas/signature-profile/1.0",
+    "targetWorkflow": {
+      "url": "https://agency.gov/workflows/vendor-contract",
+      "compatibleVersions": ">=1.0.0 <2.0.0"
+    },
+    "roles": [
+      {
+        "id": "vendorSigner",
+        "role": "signer",
+        "actorId": "vendorRepresentative",
+        "authenticationPolicyKey": "credentialAuth"
+      },
+      {
+        "id": "agencyApprover",
+        "role": "approver",
+        "actorId": "contractingOfficer",
+        "authenticationPolicyKey": "credentialAuth"
+      },
+      {
+        "id": "witness",
+        "role": "witness",
+        "actorId": "witnessOfficer",
+        "authenticationPolicyKey": "credentialAuth"
+      }
     ],
-    "consentReference": {
-      "consentTextRef": "urn:agency.gov:consent:contract-signing:v1",
-      "consentVersion": "1.0.0",
-      "acceptedAtPath": "caseFile.contract.signature.acceptedAt",
-      "affirmationPath": "caseFile.contract.signature.intent"
+    "documents": [
+      {
+        "id": "contractPackage",
+        "documentRef": "urn:agency.gov:documents:vendor-contract:v1",
+        "documentHash": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "documentHashAlgorithm": "sha-256",
+        "formspecResponseRef": "urn:agency.gov:formspec:responses:contracts:case-2026-0007"
+      }
+    ],
+    "authenticationPolicies": [
+      {
+        "key": "credentialAuth",
+        "method": "credential",
+        "assuranceLevel": "high",
+        "providerRef": "urn:agency.gov:identity:providers:piv"
+      }
+    ],
+    "signingFlow": {
+      "type": "parallel",
+      "steps": [
+        {
+          "id": "vendorSigns",
+          "roleId": "vendorSigner",
+          "documentId": "contractPackage"
+        },
+        {
+          "id": "agencyApproves",
+          "roleId": "agencyApprover",
+          "documentId": "contractPackage"
+        },
+        {
+          "id": "witnessCountersigns",
+          "roleId": "witness",
+          "documentId": "contractPackage",
+          "dependsOn": [
+            "vendorSigns"
+          ]
+        }
+      ],
+      "completion": {
+        "type": "all-required"
+      }
     },
-    "identityBinding": {
-      "method": "credential",
-      "assuranceLevel": "high",
-      "providerRef": "urn:agency.gov:identity:providers:piv"
-    },
-    "custodyHookEligible": true
+    "evidence": {
+      "recordKind": "signatureAffirmation",
+      "requiredFields": [
+        "caseFile.contract.signature.acceptedAt",
+        "caseFile.contract.signature.intent",
+        "caseFile.contract.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:agency.gov:consent:contract-signing:v1",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "caseFile.contract.signature.acceptedAt",
+        "affirmationPath": "caseFile.contract.signature.intent"
+      },
+      "identityBinding": {
+        "method": "credential",
+        "assuranceLevel": "high",
+        "providerRef": "urn:agency.gov:identity:providers:piv"
+      },
+      "custodyHookEligible": true
+    }
   }
 }

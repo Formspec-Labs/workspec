@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-ARAZZO-001",
       "version": "1.0.0",
       "title": "INT-ARAZZO-001 Arazzo Sequence Happy Path",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "pipelineResult": { "type": "string" }
+          "pipelineResult": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,31 +58,59 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-ARAZZO-001",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "multiStepPipeline": {
-          "type": "arazzo-sequence",
-          "description": "3-step pipeline: validate → transform → persist",
-          "steps": [
-            {
-              "stepId": "validate",
-              "serviceRef": "pipelineService"
-            },
-            {
-              "stepId": "transform",
-              "serviceRef": "pipelineService"
-            },
-            {
-              "stepId": "persist",
-              "serviceRef": "pipelineService"
+        "targetWorkflow": {
+          "url": "urn:test:INT-ARAZZO-001",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "multiStepPipeline": {
+            "type": "arazzo-sequence",
+            "description": "3-step pipeline: validate \u2192 transform \u2192 persist",
+            "steps": [
+              {
+                "stepId": "validate",
+                "serviceRef": "pipelineService"
+              },
+              {
+                "stepId": "transform",
+                "serviceRef": "pipelineService"
+              },
+              {
+                "stepId": "persist",
+                "serviceRef": "pipelineService"
+              }
+            ],
+            "outputBinding": {
+              "caseFile.pipelineResult": "$.steps.persist.output.status"
             }
-          ],
-          "outputBinding": {
-            "caseFile.pipelineResult": "$.steps.persist.output.status"
           }
         }
       }
@@ -86,27 +122,46 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "process", "actor": "operator" }
+    {
+      "event": "process",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "done", "event": "process" }
+    {
+      "from": "open",
+      "to": "done",
+      "event": "process"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "validate", "outcome": "ok" }
+      "data": {
+        "stepId": "validate",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "transform", "outcome": "ok" }
+      "data": {
+        "stepId": "transform",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "persist", "outcome": "ok" }
+      "data": {
+        "stepId": "persist",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "dataMapping",
-      "data": { "serviceRef": "multiStepPipeline", "phase": "binding-level" }
+      "data": {
+        "serviceRef": "multiStepPipeline",
+        "phase": "binding-level"
+      }
     }
   ]
 }

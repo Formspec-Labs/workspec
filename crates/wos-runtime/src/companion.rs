@@ -592,33 +592,40 @@ fn resolve_drift_demotion_policy_ref(
     Some(policy_ref.to_string())
 }
 
+// Per ADR 0076 D-1, drift-monitor and agent-config content moved into the
+// `agents` embedded block of $wosWorkflow envelopes. Conformance fixtures
+// route these as separate companion-doc roles whose `agents` block is
+// extracted to the legacy interior shape (a doc carrying `monitors[]` for
+// drift-monitor and `targetAgent` + `autonomyPolicy.demotion[]` for
+// agent-config). The legacy `$wosDriftMonitor` / `$wosAgentConfig` markers
+// are no longer present; identification is by the presence of the relevant
+// shape fields.
+
 fn drift_monitor_declares_policy_ref(
     actor_id: &str,
     policy_ref: &str,
     companion_docs: &HashMap<String, serde_json::Value>,
 ) -> bool {
     companion_docs.values().any(|doc| {
-        doc.get("$wosDriftMonitor").is_some()
-            && doc
-                .get("monitors")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|monitors| {
-                    monitors.iter().any(|monitor| {
-                        monitor.get("agentRef").and_then(serde_json::Value::as_str)
-                            == Some(actor_id)
-                            && monitor
-                                .get("alertThresholds")
-                                .and_then(serde_json::Value::as_array)
-                                .is_some_and(|thresholds| {
-                                    thresholds.iter().any(|threshold| {
-                                        threshold
-                                            .get("policyRef")
-                                            .and_then(serde_json::Value::as_str)
-                                            == Some(policy_ref)
-                                    })
+        doc.get("monitors")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|monitors| {
+                monitors.iter().any(|monitor| {
+                    monitor.get("agentRef").and_then(serde_json::Value::as_str)
+                        == Some(actor_id)
+                        && monitor
+                            .get("alertThresholds")
+                            .and_then(serde_json::Value::as_array)
+                            .is_some_and(|thresholds| {
+                                thresholds.iter().any(|threshold| {
+                                    threshold
+                                        .get("policyRef")
+                                        .and_then(serde_json::Value::as_str)
+                                        == Some(policy_ref)
                                 })
-                    })
+                            })
                 })
+            })
     })
 }
 
@@ -628,8 +635,7 @@ fn agent_config_declares_demotion_rule(
     companion_docs: &HashMap<String, serde_json::Value>,
 ) -> bool {
     companion_docs.values().any(|doc| {
-        doc.get("$wosAgentConfig").is_some()
-            && doc.get("targetAgent").and_then(serde_json::Value::as_str) == Some(actor_id)
+        doc.get("targetAgent").and_then(serde_json::Value::as_str) == Some(actor_id)
             && doc
                 .pointer("/autonomyPolicy/demotion")
                 .and_then(serde_json::Value::as_array)

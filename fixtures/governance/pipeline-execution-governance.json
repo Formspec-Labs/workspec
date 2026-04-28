@@ -1,39 +1,65 @@
 {
-  "$wosWorkflowGovernance": "1.0",
-  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
-  "targetWorkflow": "https://test.wos-spec.org/workflows/pipeline-execution",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Pipeline Execution Governance",
   "description": "Governance document declaring a data validation pipeline with assertion gates, risk profiles, and rejection routing. Supports G-012, G-013, G-019, G-020, G-021, G-032, G-049 conformance tests.",
-  "pipelines": [
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "id": "dataValidation",
-      "description": "Data validation pipeline with income verification and assertion gates",
-      "stages": [
-        {
-          "id": "contractValidation",
-          "type": "contract-validation",
-          "contractRef": "dataValidationContract",
-          "rejectionPolicy": "retryWithCorrections",
-          "description": "Validate submitted data against contract"
-        },
-        {
-          "id": "incomeAssertion",
-          "type": "assertion-gate",
-          "assertions": [
-            {
-              "type": "range",
-              "expression": "caseFile.income >= 0 and caseFile.income <= 999999"
-            },
-            {
-              "type": "consistency",
-              "expression": "caseFile.employerVerified = true or caseFile.income = 0"
-            }
-          ],
-          "rejectionPolicy": "escalateToSupervisor",
-          "description": "Verify income is within bounds and consistent"
-        }
-      ]
+      "id": "system",
+      "type": "system"
     }
-  ]
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+    "targetWorkflow": "https://test.wos-spec.org/workflows/pipeline-execution",
+    "pipelines": [
+      {
+        "id": "dataValidation",
+        "description": "Data validation pipeline with income verification and assertion gates",
+        "stages": [
+          {
+            "id": "contractValidation",
+            "type": "contract-validation",
+            "contractRef": "dataValidationContract",
+            "rejectionPolicy": "retryWithCorrections",
+            "description": "Validate submitted data against contract"
+          },
+          {
+            "id": "incomeAssertion",
+            "type": "assertion-gate",
+            "assertions": [
+              {
+                "type": "range",
+                "expression": "caseFile.income >= 0 and caseFile.income <= 999999"
+              },
+              {
+                "type": "consistency",
+                "expression": "caseFile.employerVerified = true or caseFile.income = 0"
+              }
+            ],
+            "rejectionPolicy": "escalateToSupervisor",
+            "description": "Verify income is within bounds and consistent"
+          }
+        ]
+      }
+    ]
+  }
 }

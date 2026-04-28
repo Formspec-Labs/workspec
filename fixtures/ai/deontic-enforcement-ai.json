@@ -1,103 +1,129 @@
 {
-  "$wosAIIntegration": "1.0",
-  "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
-  "targetWorkflow": "https://test.wos-spec.org/workflows/deontic-enforcement",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Deontic Enforcement AI Integration",
   "description": "AI integration document for testing deontic constraints. Declares an agent with permissions, prohibitions, obligations, confidence floor, volume constraints, and bypass rules.",
-  "defaultAutonomy": "assistive",
-  "confidenceFloor": {
-    "threshold": 0.85,
-    "onViolation": "escalateToHuman"
-  },
-  "volumeConstraints": {
-    "maxAutonomousPerHour": 100,
-    "maxAutonomousPerDay": 500
-  },
-  "reviewSampling": {
-    "rate": 0.15,
-    "method": "random",
-    "scope": "agent"
-  },
-  "oversightExtensions": {
-    "suppressAgentOutput": true,
-    "presentation": {
-      "showConfidence": true,
-      "showDiffFromIndependent": true
-    }
-  },
-  "agents": [
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "id": "eligibilityAgent",
-      "type": "agent",
-      "agentType": "generative",
-      "modelIdentifier": "test-model",
-      "modelVersion": "1.0",
-      "description": "Test agent for deontic enforcement",
-      "capabilities": [
-        {
-          "id": "determineEligibility",
-          "description": "Determine applicant eligibility",
-          "outputContractRef": "urn:formspec:test:eligibility:1.0.0"
-        }
-      ],
-      "deonticConstraints": {
-        "permissions": [
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
           {
-            "id": "perm-income-range",
-            "bounds": "output.income >= 0 and output.income <= 500000",
-            "onViolation": "reject"
-          }
-        ],
-        "prohibitions": [
-          {
-            "id": "prohib-negative-without-reason",
-            "condition": "output.determination = 'denied' and output.reasonCodes = null",
-            "reason": "Agent must not deny without reason codes",
-            "onViolation": "escalateToHuman"
-          },
-          {
-            "id": "prohib-retroactive",
-            "condition": "output.effectiveDate < caseFile.applicationDate",
-            "reason": "Agent must not set retroactive effective dates",
-            "onViolation": "reject"
-          }
-        ],
-        "obligations": [
-          {
-            "id": "oblig-confidence-report",
-            "requirement": "output.confidenceReport != null",
-            "reason": "Agent must include confidence report",
-            "onViolation": "reject"
-          },
-          {
-            "id": "oblig-evidence-citation",
-            "requirement": "output.evidenceCitations != null",
-            "reason": "Agent must cite evidence for determination",
-            "onViolation": "escalateToHuman"
-          }
-        ],
-        "rights": [
-          {
-            "id": "right-explanation",
-            "entitlement": "caseFile.applicationData",
-            "description": "Applicant has the right to an individualized explanation"
+            "to": "done"
           }
         ]
       },
-      "fallbackChain": [
-        {
-          "action": "retry",
-          "maxRetries": 1,
-          "backoff": "fixed",
-          "initialInterval": "PT2S"
-        },
-        {
-          "action": "escalateToHuman",
-          "taskRef": "manualReview",
-          "assignTo": "supervisor"
-        }
-      ]
+      "done": {
+        "type": "final"
+      }
     }
-  ]
+  },
+  "aiOversight": {
+    "$schema": "https://wos-spec.org/schemas/ai-integration/1.0",
+    "targetWorkflow": "https://test.wos-spec.org/workflows/deontic-enforcement",
+    "defaultAutonomy": "assistive",
+    "confidenceFloor": {
+      "threshold": 0.85,
+      "onViolation": "escalateToHuman"
+    },
+    "volumeConstraints": {
+      "maxAutonomousPerHour": 100,
+      "maxAutonomousPerDay": 500
+    },
+    "reviewSampling": {
+      "rate": 0.15,
+      "method": "random",
+      "scope": "agent"
+    },
+    "oversightExtensions": {
+      "suppressAgentOutput": true,
+      "presentation": {
+        "showConfidence": true,
+        "showDiffFromIndependent": true
+      }
+    },
+    "agents": [
+      {
+        "id": "eligibilityAgent",
+        "type": "agent",
+        "agentType": "generative",
+        "modelIdentifier": "test-model",
+        "modelVersion": "1.0",
+        "description": "Test agent for deontic enforcement",
+        "capabilities": [
+          {
+            "id": "determineEligibility",
+            "description": "Determine applicant eligibility",
+            "outputContractRef": "urn:formspec:test:eligibility:1.0.0"
+          }
+        ],
+        "deonticConstraints": {
+          "permissions": [
+            {
+              "id": "perm-income-range",
+              "bounds": "output.income >= 0 and output.income <= 500000",
+              "onViolation": "reject"
+            }
+          ],
+          "prohibitions": [
+            {
+              "id": "prohib-negative-without-reason",
+              "condition": "output.determination = 'denied' and output.reasonCodes = null",
+              "reason": "Agent must not deny without reason codes",
+              "onViolation": "escalateToHuman"
+            },
+            {
+              "id": "prohib-retroactive",
+              "condition": "output.effectiveDate < caseFile.applicationDate",
+              "reason": "Agent must not set retroactive effective dates",
+              "onViolation": "reject"
+            }
+          ],
+          "obligations": [
+            {
+              "id": "oblig-confidence-report",
+              "requirement": "output.confidenceReport != null",
+              "reason": "Agent must include confidence report",
+              "onViolation": "reject"
+            },
+            {
+              "id": "oblig-evidence-citation",
+              "requirement": "output.evidenceCitations != null",
+              "reason": "Agent must cite evidence for determination",
+              "onViolation": "escalateToHuman"
+            }
+          ],
+          "rights": [
+            {
+              "id": "right-explanation",
+              "entitlement": "caseFile.applicationData",
+              "description": "Applicant has the right to an individualized explanation"
+            }
+          ]
+        },
+        "fallbackChain": [
+          {
+            "action": "retry",
+            "maxRetries": 1,
+            "backoff": "fixed",
+            "initialInterval": "PT2S"
+          },
+          {
+            "action": "escalateToHuman",
+            "taskRef": "manualReview",
+            "assignTo": "supervisor"
+          }
+        ]
+      }
+    ]
+  }
 }

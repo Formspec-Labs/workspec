@@ -247,16 +247,20 @@ A Right specifies what the agent is entitled to receive as input context. The WO
 
 ### 4.6 Enforcement Ordering
 
-Deontic constraints MUST be evaluated in the following order:
+Deontic constraints MUST be evaluated by the WOS Processor (the Policy Enforcement Point, S4.1) in the following order. This is the runtime enforcement contract: a conformant processor that activates the AI Integration layer MUST execute these stages in this sequence for every agent invocation.
 
-1. **Permissions** -- structural bounds on allowed outputs.
-2. **Prohibitions** -- forbidden output patterns.
-3. **Obligations** -- required output elements.
-4. **Confidence floor** -- minimum certainty threshold (S7.4).
-5. **Volume constraints** -- rate limits on autonomous actions (S11).
-6. **Human review sampling** -- quality assurance selection (S11).
+1. **Permissions** -- Is the agent permitted to perform this action? Structural bounds on allowed outputs (S4.2).
+2. **Prohibitions** -- Is the agent prohibited from this action? Forbidden output patterns (S4.3).
+3. **Obligations** -- Has the agent fulfilled its obligations? Required output elements (S4.4).
+4. **Confidence floor** -- Does the agent's confidence meet the floor? (S7.4).
+5. **Volume constraints** -- Has the agent exceeded volume constraints? Rate limits on autonomous actions (S11.1).
+6. **Human review sampling** -- Is this action selected for quality review? Quality-assurance selection (S11.2; Governance S7).
 
-When multiple constraints are violated simultaneously, the most restrictive enforcement action applies. Restriction ordering: `reject` > `escalateToHuman` > `switchToAssistive` > `flag`.
+When multiple constraints are violated simultaneously, the processor MUST apply the most restrictive enforcement action. Restriction ordering, from least to most restrictive: `flag` < `switchToAssistive` < `escalateToHuman` < `reject`. The `requireReview` and `log` actions exposed by external policy-engine bridges (see below) compose at the same precedence as `escalateToHuman` and `flag` respectively.
+
+> **Editorial note (ADR 0076 absorption, 2026-04-28):** prior to this absorption, the Runtime Companion's §8.3 specified `log < flag < requireReview < reject < escalateToHuman` (with `escalateToHuman` most restrictive). The two documents disagreed on whether `reject` or `escalateToHuman` was the strictest action. Reconciliation here adopts the AI Integration spec's local ordering (`reject` strictest), bridges `requireReview`→`escalateToHuman` and `log`→`flag` for cross-doc compatibility, and treats the resulting four-action ordering as canonical. The decision rationale: `reject` is a final answer that terminates the agent invocation; `escalateToHuman` is recoverable (the human may approve), so it cannot logically dominate `reject`.
+
+**Composition with external policy engines (deny-overrides-permit).** When a workflow integrates an external policy engine (XACML, OPA, Cedar, or equivalent) via the integration binding mechanism (Workflow §3, §8), the engine's decision composes with this deontic pipeline as a strict restrictor: a `deny` decision from a policy engine overrides any `permit` produced by S4.2-S4.4 evaluation. **External policy engines are more restrictive, never more permissive.** A policy-engine `permit` does not override a deontic `prohibition`, an unmet `obligation`, a confidence-floor failure, a volume-constraint violation, or a sampling selection. The engine's decision is recorded as a Facts-tier provenance record (Kernel §8) and made available under the binding's `outputBinding` path so guard expressions on subsequent transitions (Kernel §4.5) can reference it.
 
 ### 4.7 Constraint Composition
 

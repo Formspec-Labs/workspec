@@ -21,7 +21,7 @@ pub enum Layer {
 impl Layer {
     pub fn marker(self) -> &'static str {
         match self {
-            Layer::Kernel => "$wosKernel",
+            Layer::Kernel => "$wosWorkflow",
             Layer::Governance => "$wosGovernance",
             Layer::Ai => "$wosAiIntegration",
             Layer::Advanced => "$wosAdvancedGovernance",
@@ -152,9 +152,9 @@ mod tests {
     #[test]
     fn generate_prompt_embeds_problem_and_marker() {
         let (system, user, anchors) = build_generate_prompt("unique-sentinel-42", Layer::Kernel);
-        assert!(system.contains("$wosKernel"));
+        assert!(system.contains("$wosWorkflow"));
         assert!(user.contains("unique-sentinel-42"));
-        assert!(user.contains("$wosKernel"));
+        assert!(user.contains("$wosWorkflow"));
         assert_eq!(anchors.len(), 2);
         assert_eq!(anchors[0].name, "kernel-schema");
     }
@@ -180,11 +180,11 @@ mod tests {
             },
         ];
         let (_sys, user, _) =
-            build_repair_prompt(r#"{"$wosKernel":"1.0"}"#, &findings, Layer::Kernel);
+            build_repair_prompt(r#"{"$wosWorkflow":"1.0"}"#, &findings, Layer::Kernel);
         assert!(user.contains("1. [K-001]"));
         assert!(user.contains("2. [K-007]"));
         assert!(user.contains("missing initialState"));
-        assert!(user.contains("$wosKernel"));
+        assert!(user.contains("$wosWorkflow"));
         // Suggested fix and related docs reach the prompt (Finding 5).
         assert!(user.contains("suggested fix: add property at /lifecycle/initialState"));
         assert!(user.contains("related: Kernel §4.2"));

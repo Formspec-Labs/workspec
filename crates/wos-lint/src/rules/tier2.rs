@@ -344,8 +344,191 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         check_counterexample_on_unsafe(vr, diagnostics);
     }
 
+    // ADR 0076 D-2 cross-reference rules. The merged $wosWorkflow document
+    // carries actors[], agents[], signature, and bindings at the document
+    // root; these rules check cross-references the JSON Schema cannot
+    // express. Run against any document that exposes those fields (a
+    // $wosWorkflow root, primarily).
+    if let Some(kernel) = kernel_doc {
+        check_agent_xref(&kernel.value, diagnostics);
+        check_signature_coverage(&kernel.value, diagnostics);
+    }
+
     // FEL AST analysis (T2-ast rules).
     fel_analysis::check(project, diagnostics);
+}
+
+// ---------------------------------------------------------------------------
+// WOS-AGENT-XREF-001: every actor with type=='agent' MUST have a matching
+// agents[].id (ADR 0076 D-2 cross-reference rule).
+// ---------------------------------------------------------------------------
+
+/// Walk the merged-document root for agent-typed actors and confirm each has a
+/// matching `agents[].id`.
+fn check_agent_xref(doc: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    let Some(actors) = doc.get("actors").and_then(Value::as_array) else {
+        return;
+    };
+
+    let agent_ids: std::collections::HashSet<&str> = doc
+        .get("agents")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| a.get("id").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    for (i, actor) in actors.iter().enumerate() {
+        let is_agent = actor
+            .get("type")
+            .and_then(Value::as_str)
+            .map(|t| t == "agent")
+            .unwrap_or(false);
+        if !is_agent {
+            continue;
+        }
+        let Some(id) = actor.get("id").and_then(Value::as_str) else {
+            // Agent-typed actor without `id` is a separate conformance error
+            // (caught by schema), but still surface it here so the xref check
+            // doesn't silently pass on a malformed actor.
+            diagnostics.push(LintDiagnostic::t2_error(
+                "WOS-AGENT-XREF-001",
+                &format!("/actors/{i}"),
+                "actor has type='agent' but no `id` field; cannot xref to agents[]"
+                    .to_string(),
+            ));
+            continue;
+        };
+        if !agent_ids.contains(id) {
+            diagnostics.push(LintDiagnostic::t2_error(
+                "WOS-AGENT-XREF-001",
+                &format!("/actors/{i}/id"),
+                format!(
+                    "actor id '{id}' has type='agent' but no matching agents[] entry; \
+                     declare an agents[] entry with id='{id}' or change the actor type"
+                ),
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WOS-SIG-COVER-001: signature-gated transitions MUST be covered by signers
+// (ADR 0076 D-2 cross-reference rule).
+// ---------------------------------------------------------------------------
+
+/// Walk lifecycle transitions for any with `on.kind == "signature"` and confirm
+/// the document declares a signature block whose signers[] cover the gating
+/// actor.
+fn check_signature_coverage(doc: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    let signature_block = doc.get("signature");
+    let signer_actor_ids: std::collections::HashSet<&str> = signature_block
+        .and_then(|s| s.get("signers"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| s.get("actorId").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut findings: Vec<(String, String)> = Vec::new();
+    walk_transitions(
+        doc.get("lifecycle").and_then(|l| l.get("states")),
+        "/lifecycle/states",
+        &mut |path, transition| {
+            let is_signature_kind = transition
+                .get("on")
+                .and_then(|on| on.get("kind"))
+                .and_then(Value::as_str)
+                .map(|k| k == "signature")
+                .unwrap_or(false);
+            if !is_signature_kind {
+                return;
+            }
+
+            if signature_block.is_none() {
+                findings.push((
+                    path.to_string(),
+                    "the document has no signature block".to_string(),
+                ));
+                return;
+            }
+            if signer_actor_ids.is_empty() {
+                findings.push((
+                    path.to_string(),
+                    "signature.signers[] is empty".to_string(),
+                ));
+                return;
+            }
+
+            // A signature-gated transition may name its signing actor on a
+            // single `actor` field (single-signer case), an `actors[]` array
+            // (multi-party signing where any/all listed actors sign), or
+            // implicitly via signers[*].actorId when the transition omits both
+            // (multi-signer ordering driven entirely by the signature block).
+            // The xref check covers all three: each named actor MUST appear
+            // in signers[]. When the transition names no actor, the rule
+            // only requires signers[] to be non-empty (already checked above).
+            let mut transition_actor_ids: Vec<&str> = Vec::new();
+            if let Some(id) = transition.get("actor").and_then(Value::as_str) {
+                transition_actor_ids.push(id);
+            }
+            if let Some(arr) = transition.get("actors").and_then(Value::as_array) {
+                for v in arr {
+                    if let Some(id) = v.as_str() {
+                        transition_actor_ids.push(id);
+                    }
+                }
+            }
+            for id in transition_actor_ids {
+                if !signer_actor_ids.contains(id) {
+                    findings.push((
+                        path.to_string(),
+                        format!("signature.signers[] does not include actorId='{id}'"),
+                    ));
+                }
+            }
+        },
+    );
+
+    for (path, issue) in findings {
+        diagnostics.push(LintDiagnostic::t2_error(
+            "WOS-SIG-COVER-001",
+            &path,
+            format!("transition '{path}' is signature-gated but {issue}"),
+        ));
+    }
+}
+
+/// Recursively walk lifecycle.states, yielding (path, transition) pairs for
+/// every transition encountered.
+fn walk_transitions<F: FnMut(&str, &Value)>(
+    states: Option<&Value>,
+    path_prefix: &str,
+    visit: &mut F,
+) {
+    let Some(Value::Object(map)) = states else {
+        return;
+    };
+    for (state_name, state) in map {
+        let state_path = format!("{path_prefix}/{}", json_pointer_escape(state_name));
+        if let Some(transitions) = state.get("transitions").and_then(Value::as_array) {
+            for (i, transition) in transitions.iter().enumerate() {
+                let transition_path = format!("{state_path}/transitions/{i}");
+                visit(&transition_path, transition);
+            }
+        }
+        walk_transitions(state.get("states"), &format!("{state_path}/states"), visit);
+        if let Some(Value::Object(regions)) = state.get("regions") {
+            for (region_name, region) in regions {
+                let region_path = format!("{state_path}/regions/{}", json_pointer_escape(region_name));
+                walk_transitions(region.get("states"), &format!("{region_path}/states"), visit);
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2683,7 +2866,7 @@ mod tests {
     #[test]
     fn k_ext_002_root_level_x_wos_key_flagged() {
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "x-wos-future": true
         });
         let diags = run(doc);
@@ -2702,7 +2885,7 @@ mod tests {
     #[test]
     fn k_ext_002_nested_x_wos_key_has_correct_path() {
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "lifecycle": {
                 "states": {
                     "approved": {
@@ -2727,7 +2910,7 @@ mod tests {
     #[test]
     fn k_ext_002_other_vendor_prefix_not_flagged() {
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "x-vendor-foo": "hello",
             "x-acme-bar": { "nested": true }
         });
@@ -2743,7 +2926,7 @@ mod tests {
         // K-030 / K-EXT-001 territory: vendor keys inside `extensions` are fine
         // as long as they don't use the reserved `x-wos-` namespace.
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "extensions": {
                 "x-acme-foo": "value",
                 "x-vendor-config": { "k": 1 }
@@ -2761,7 +2944,7 @@ mod tests {
         // §10.6 reserves `x-wos-*` regardless of location. A vendor can't
         // smuggle `x-wos-*` through the `extensions` container.
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "extensions": {
                 "x-acme-foo": "allowed",
                 "x-wos-future": "RESERVED"
@@ -2782,7 +2965,7 @@ mod tests {
         // `x-wos-` (empty suffix) is malformed but not reserved-use.
         // `X-WOS-*` is uppercase; §10.6 specifies lowercase.
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "x-wos-": "empty suffix",
             "X-WOS-future": "uppercase",
             "X-Wos-Mixed": "mixed case"
@@ -2797,7 +2980,7 @@ mod tests {
     #[test]
     fn k_ext_002_inside_array_elements_flagged() {
         let doc = json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "actors": [
                 { "id": "alice", "x-wos-trait": "experimental" }
             ]
@@ -2819,5 +3002,142 @@ mod tests {
         assert_eq!(json_pointer_escape("a~b"), "a~0b");
         // Order matters: ~ must be escaped before /.
         assert_eq!(json_pointer_escape("a~/b"), "a~0~1b");
+    }
+
+    // ----- WOS-AGENT-XREF-001 ----------------------------------------------
+
+    #[test]
+    fn wos_agent_xref_001_actor_without_matching_agent_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "actors": [
+                {"id": "extractor", "type": "agent"},
+                {"id": "reviewer", "type": "human"}
+            ],
+            "agents": []
+        });
+        let mut diags = Vec::new();
+        check_agent_xref(&doc, &mut diags);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-AGENT-XREF-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(matches[0].path, "/actors/0/id");
+        assert!(matches[0].message.contains("extractor"));
+    }
+
+    #[test]
+    fn wos_agent_xref_001_matched_agent_clean() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "actors": [
+                {"id": "extractor", "type": "agent"}
+            ],
+            "agents": [
+                {"id": "extractor", "modelIdentifier": "claude-3"}
+            ]
+        });
+        let mut diags = Vec::new();
+        check_agent_xref(&doc, &mut diags);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-AGENT-XREF-001"),
+            "expected no WOS-AGENT-XREF-001 diagnostic: {diags:?}"
+        );
+    }
+
+    // ----- WOS-SIG-COVER-001 -----------------------------------------------
+
+    #[test]
+    fn wos_sig_cover_001_signature_transition_without_signature_block_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "actors": [{"id": "signer", "type": "human"}],
+            "lifecycle": {
+                "initial": "draft",
+                "states": {
+                    "draft": {
+                        "type": "atomic",
+                        "transitions": [
+                            {"to": "signed", "on": {"kind": "signature"}, "actor": "signer"}
+                        ]
+                    },
+                    "signed": {"type": "final"}
+                }
+            }
+        });
+        let mut diags = Vec::new();
+        check_signature_coverage(&doc, &mut diags);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-SIG-COVER-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert!(matches[0].message.contains("no signature block"));
+    }
+
+    #[test]
+    fn wos_sig_cover_001_covered_signer_clean() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "actors": [{"id": "signer", "type": "human"}],
+            "lifecycle": {
+                "initial": "draft",
+                "states": {
+                    "draft": {
+                        "type": "atomic",
+                        "transitions": [
+                            {"to": "signed", "on": {"kind": "signature"}, "actor": "signer"}
+                        ]
+                    },
+                    "signed": {"type": "final"}
+                }
+            },
+            "signature": {
+                "signers": [{"actorId": "signer"}],
+                "order": "sequential"
+            }
+        });
+        let mut diags = Vec::new();
+        check_signature_coverage(&doc, &mut diags);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-SIG-COVER-001"),
+            "expected no WOS-SIG-COVER-001 diagnostic: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn wos_sig_cover_001_signers_missing_actor_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "actors": [
+                {"id": "signer-a", "type": "human"},
+                {"id": "signer-b", "type": "human"}
+            ],
+            "lifecycle": {
+                "initial": "draft",
+                "states": {
+                    "draft": {
+                        "type": "atomic",
+                        "transitions": [
+                            {"to": "signed", "on": {"kind": "signature"}, "actor": "signer-b"}
+                        ]
+                    },
+                    "signed": {"type": "final"}
+                }
+            },
+            "signature": {
+                "signers": [{"actorId": "signer-a"}],
+                "order": "sequential"
+            }
+        });
+        let mut diags = Vec::new();
+        check_signature_coverage(&doc, &mut diags);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-SIG-COVER-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert!(matches[0].message.contains("signer-b"));
     }
 }

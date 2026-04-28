@@ -491,7 +491,7 @@ mod tests {
     fn k049_skips_event_driven_mode() {
         // Even with a flagrant cycle, event-driven kernels MUST NOT trigger K-049.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "event-driven",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -525,7 +525,7 @@ mod tests {
         // One transition whose guard reads `caseFile.value` and whose own setData
         // writes `caseFile.value` — a one-node cycle that pegs the convergence cap.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -559,7 +559,7 @@ mod tests {
         // `caseFile.b`; T2 reads `caseFile.b`, writes `caseFile.a`. Classic
         // two-node cycle.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -618,7 +618,7 @@ mod tests {
         // named case so regressions in the short-circuit get attributed
         // directly. Load-bearing: do not collapse into the sibling test.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -661,7 +661,7 @@ mod tests {
         // Continuous mode, setData + guard — but the write path and the guard
         // read paths are disjoint. No cycle.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -700,7 +700,7 @@ mod tests {
         // Cycle spans two atomic states inside a compound parent — ensures
         // recursion through `state.states` works.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -755,7 +755,7 @@ mod tests {
         // in its guard and writes `caseFile.a` via onExit of phaseA (which
         // T1 itself targets). Closes the loop through entry/exit actions.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -803,7 +803,7 @@ mod tests {
     #[test]
     fn k049_message_matches_runtime_and_cap_wording() {
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -844,7 +844,7 @@ mod tests {
         // equality and missed the relation when indices changed. Now the
         // reachability comparator handles equal-index segments directly.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -886,7 +886,7 @@ mod tests {
         // Guard reads `caseFile.items[*].y` — wildcard must reach the
         // indexed write to `caseFile.items[3].y` (§3.6.4 set-cover).
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",
@@ -1057,7 +1057,7 @@ mod tests {
         // Here the bad guard prevents us from inferring reads, so no cycle
         // can be detected even though a naive string match would flag it.
         let kernel = kernel_from_json(serde_json::json!({
-            "$wosKernel": "1.0",
+            "$wosWorkflow": "1.0",
             "evaluationMode": "continuous",
             "actors": [{ "id": "operator", "type": "human" }],
             "impactLevel": "operational",

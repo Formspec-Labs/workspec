@@ -13,7 +13,7 @@ fn minimal_fixture_with_binding(binding: &str) -> ConformanceFixture {
         "documents": { "kernel": "inline" },
         "inline_documents": {
             "kernel": {
-                "$wosKernel": "1.0",
+                "$wosWorkflow": "1.0",
                 "url": "urn:test:kernel",
                 "version": "1.0.0",
                 "title": "Binding Swap Test",

@@ -16,7 +16,7 @@ status: draft
 
 ## Abstract
 
-The WOS Kernel Specification defines the minimal orchestration substrate for the Workflow Orchestration Standard (WOS). A Kernel Document -- itself a JSON document -- declares a workflow's lifecycle topology (states, transitions, events, milestones), case state model (typed data with append-only mutation history), actor model (human and system), impact level classification, contract validation interface, provenance Facts tier, durable execution guarantees, and five named extension seams. The kernel is self-sufficient: a kernel-only deployment orchestrates workflows without requiring any governance layer.
+The WOS Kernel Specification defines the minimal orchestration substrate for the Workflow Orchestration Standard (WOS). A Kernel Document -- itself a JSON document -- declares a workflow's lifecycle topology (states, transitions, events, milestones), case state model (typed data with append-only mutation history), actor model (human and system), impact level classification, contract validation interface, provenance Facts tier, durable execution guarantees, and six named extension seams (per ADR 0077: `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions` / `x-` keys; enumerated normatively in §10). The kernel is self-sufficient: a kernel-only deployment orchestrates workflows without requiring any governance layer.
 
 WOS is a companion framework to Formspec v1.0. WOS MUST NOT alter core Formspec processing semantics. A Formspec processor that does not implement WOS remains fully conformant to Formspec. WOS processors MUST delegate Formspec Definition evaluation to a Formspec-conformant processor (Core S1.4).
 

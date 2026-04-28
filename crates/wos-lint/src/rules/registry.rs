@@ -793,7 +793,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // --- I (Integration Profile) --------------------------------------
+    // --- I (Integration Profile, absorbed into Kernel §9.2 per ADR 0076 D-8) ---
     RuleMetadata {
         id: "I-001",
         tier: Tier::T1,
@@ -801,7 +801,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         summary: "`outputBinding` JSONPath MUST NOT use filter expressions or recursive descent.",
         fixtures: &[],
         graduation: Graduation::Draft,
-        spec_ref: None,
+        spec_ref: Some("kernel/spec.md §9.2 (per ADR 0076 step 12 — Integration Profile §3.3.1 absorbed)"),
         suggested_fix: None,
     },
     // --- K (Kernel + Lifecycle Detail + Correspondence Metadata) -----
@@ -1214,6 +1214,49 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
+    },
+    // --- WOS-* (cross-reference rules per ADR 0076 D-2 / step 12) -----
+    // WOS-AGENT-XREF-001 / WOS-SIG-COVER-001 / WOS-VER-LEVEL-001:
+    // Tested via inline JSON in the `wos_agent_xref_001_*`,
+    // `wos_sig_cover_001_*`, and `ver_level_001_*` unit tests in
+    // `tier1.rs::ver_level_tests` and `tier2.rs::tests`. Inline fixtures are
+    // sufficient evidence per the K-EXT-002 precedent (see registry comment
+    // above). Fixture file paths are intentionally empty until promotion.
+    RuleMetadata {
+        id: "WOS-AGENT-XREF-001",
+        tier: Tier::T2,
+        severity: Severity::Error,
+        summary: "Every actor with `type=='agent'` MUST have a matching `agents[].id`.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0076 D-2 + step 12; schemas/wos-workflow.schema.json allOf $comment"),
+        suggested_fix: Some(
+            "Add an `agents[]` entry whose `id` matches the agent-typed actor, or change the actor `type` to `human`/`system`.",
+        ),
+    },
+    RuleMetadata {
+        id: "WOS-SIG-COVER-001",
+        tier: Tier::T2,
+        severity: Severity::Error,
+        summary: "Signature-gated transitions MUST be covered by a `signature.signers[]` entry.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0076 D-2 + step 12; schemas/wos-workflow.schema.json allOf $comment"),
+        suggested_fix: Some(
+            "Declare a `signature` block at the document root with `signers[]` covering the actor that signs the gating transition.",
+        ),
+    },
+    RuleMetadata {
+        id: "WOS-VER-LEVEL-001",
+        tier: Tier::T1,
+        severity: Severity::Warning,
+        summary: "Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0076 step 12 (Q6 owner decision)"),
+        suggested_fix: Some(
+            "Declare `verificationLevel` on the `bindings[]` entries that govern outputs from this agent's fallback path.",
+        ),
     },
 ];
 

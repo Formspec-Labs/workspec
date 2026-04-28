@@ -3,23 +3,36 @@
   "id": "K-H-D2-shallow-across-boundary",
   "rule": "K-H",
   "description": "Shallow history across-boundary at depth 2: compound state 'review' has historyState=shallow. After progressing into 'inProgress.advancedPhase', two interrupt-resume cycles verify that shallow history is captured and cleared on each exit (producing two historyCleared provenance records) and that shallow restore consistently re-enters 'inProgress' at its initialState 'subPhase'. A 'nextPhase' event fires from 'subPhase' on the second resume, proving the machine is back at 'subPhase' rather than 'advancedPhase'. Under deep, 'nextPhase' would be unmatched since the machine would be at 'advancedPhase'.",
-  "documents": { "kernel": "inline" },
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:history-shallow-d2-boundary",
       "version": "1.0.0",
       "title": "History Shallow Depth-2 Across-Boundary Test",
       "description": "Kernel for testing shallow history across-boundary behavior at depth 2",
       "status": "active",
       "impactLevel": "operational",
-      "actors": [{ "id": "worker", "type": "human", "description": "Test actor" }],
+      "actors": [
+        {
+          "id": "worker",
+          "type": "human",
+          "description": "Test actor"
+        }
+      ],
       "lifecycle": {
         "initialState": "open",
         "states": {
           "open": {
             "type": "atomic",
-            "transitions": [{ "event": "start", "target": "review" }]
+            "transitions": [
+              {
+                "event": "start",
+                "target": "review"
+              }
+            ]
           },
           "review": {
             "type": "compound",
@@ -32,50 +45,130 @@
                 "states": {
                   "subPhase": {
                     "type": "atomic",
-                    "transitions": [{ "event": "nextPhase", "target": "advancedPhase" }]
+                    "transitions": [
+                      {
+                        "event": "nextPhase",
+                        "target": "advancedPhase"
+                      }
+                    ]
                   },
                   "advancedPhase": {
                     "type": "atomic",
-                    "transitions": [{ "event": "complete", "target": "done" }]
+                    "transitions": [
+                      {
+                        "event": "complete",
+                        "target": "done"
+                      }
+                    ]
                   }
                 }
               },
-              "done": { "type": "final" }
+              "done": {
+                "type": "final"
+              }
             },
             "transitions": [
-              { "event": "interrupt", "target": "interrupted" }
+              {
+                "event": "interrupt",
+                "target": "interrupted"
+              }
             ]
           },
           "interrupted": {
             "type": "atomic",
-            "transitions": [{ "event": "resume", "target": "review" }]
+            "transitions": [
+              {
+                "event": "resume",
+                "target": "review"
+              }
+            ]
           }
         }
       },
-      "caseFile": { "fields": {} },
-      "execution": { "workflowTimeout": "P90D", "defaultTaskTimeout": "P7D", "instanceVersioning": "pinned" }
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P90D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
     }
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "start", "actor": "worker" },
-    { "event": "nextPhase", "actor": "worker" },
-    { "event": "interrupt", "actor": "worker" },
-    { "event": "resume", "actor": "worker" },
-    { "event": "interrupt", "actor": "worker" },
-    { "event": "resume", "actor": "worker" },
-    { "event": "nextPhase", "actor": "worker" }
+    {
+      "event": "start",
+      "actor": "worker"
+    },
+    {
+      "event": "nextPhase",
+      "actor": "worker"
+    },
+    {
+      "event": "interrupt",
+      "actor": "worker"
+    },
+    {
+      "event": "resume",
+      "actor": "worker"
+    },
+    {
+      "event": "interrupt",
+      "actor": "worker"
+    },
+    {
+      "event": "resume",
+      "actor": "worker"
+    },
+    {
+      "event": "nextPhase",
+      "actor": "worker"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "review", "event": "start" },
-    { "from": "subPhase", "to": "advancedPhase", "event": "nextPhase" },
-    { "from": "review", "to": "interrupted", "event": "interrupt" },
-    { "from": "interrupted", "to": "review", "event": "resume" },
-    { "from": "review", "to": "interrupted", "event": "interrupt" },
-    { "from": "interrupted", "to": "review", "event": "resume" },
-    { "from": "subPhase", "to": "advancedPhase", "event": "nextPhase" }
+    {
+      "from": "open",
+      "to": "review",
+      "event": "start"
+    },
+    {
+      "from": "subPhase",
+      "to": "advancedPhase",
+      "event": "nextPhase"
+    },
+    {
+      "from": "review",
+      "to": "interrupted",
+      "event": "interrupt"
+    },
+    {
+      "from": "interrupted",
+      "to": "review",
+      "event": "resume"
+    },
+    {
+      "from": "review",
+      "to": "interrupted",
+      "event": "interrupt"
+    },
+    {
+      "from": "interrupted",
+      "to": "review",
+      "event": "resume"
+    },
+    {
+      "from": "subPhase",
+      "to": "advancedPhase",
+      "event": "nextPhase"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "historyCleared", "data": { "state": "review" } }
+    {
+      "recordKind": "historyCleared",
+      "data": {
+        "state": "review"
+      }
+    }
   ]
 }

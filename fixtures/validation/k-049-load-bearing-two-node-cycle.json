@@ -1,5 +1,5 @@
 {
-  "$wosKernel": "1.0",
+  "$wosWorkflow": "1.0",
   "url": "https://wos-spec.org/fixtures/k-049-load-bearing-two-node-cycle",
   "impactLevel": "operational",
   "evaluationMode": "continuous",

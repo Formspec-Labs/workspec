@@ -38,7 +38,7 @@ fn representative_trace() -> SynthTrace {
 
     trace.push(IterationRecord {
         index: 0,
-        attempt: r#"{"$wosKernel":"1.0","broken":true}"#.to_string(),
+        attempt: r#"{"$wosWorkflow":"1.0","broken":true}"#.to_string(),
         lint_findings: vec![LintFinding {
             rule_id: "K-001".into(),
             severity: Severity::Error,
@@ -63,7 +63,7 @@ fn representative_trace() -> SynthTrace {
 
     trace.push(IterationRecord {
         index: 1,
-        attempt: r#"{"$wosKernel":"1.0","clean":true}"#.to_string(),
+        attempt: r#"{"$wosWorkflow":"1.0","clean":true}"#.to_string(),
         lint_findings: vec![],
         conformance: None,
         input_tokens: 1620,
@@ -151,7 +151,7 @@ fn synth_outcome_validator() -> jsonschema::Validator {
 #[test]
 fn converged_outcome_validates_against_outcome_schema() {
     let outcome = SynthOutcome::Converged {
-        document: r#"{"$wosKernel":"1.0","clean":true}"#.to_string(),
+        document: r#"{"$wosWorkflow":"1.0","clean":true}"#.to_string(),
         trace: representative_trace(),
     };
     let json = serde_json::to_value(&outcome).expect("outcome serializes");
@@ -169,7 +169,7 @@ fn converged_outcome_validates_against_outcome_schema() {
 #[test]
 fn unconverged_outcome_validates_against_outcome_schema() {
     let outcome = SynthOutcome::Unconverged {
-        last_attempt: r#"{"$wosKernel":"1.0","still_broken":true}"#.to_string(),
+        last_attempt: r#"{"$wosWorkflow":"1.0","still_broken":true}"#.to_string(),
         last_findings: vec![LintFinding {
             rule_id: "K-001".into(),
             severity: Severity::Error,

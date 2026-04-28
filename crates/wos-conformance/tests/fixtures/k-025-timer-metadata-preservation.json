@@ -7,21 +7,33 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "https://test.example/timer-metadata",
-      "actors": [{ "id": "user", "type": "human" }],
+      "actors": [
+        {
+          "id": "user",
+          "type": "human"
+        }
+      ],
       "lifecycle": {
         "initialState": "waiting",
         "states": {
           "waiting": {
             "type": "atomic",
             "onEntry": [
-              { "action": "startTimer", "timerId": "meta-timer", "duration": "PT1H", "event": "timeout" }
+              {
+                "action": "startTimer",
+                "timerId": "meta-timer",
+                "duration": "PT1H",
+                "event": "timeout"
+              }
             ]
           }
         }
       },
-      "caseFile": { "fields": {} }
+      "caseFile": {
+        "fields": {}
+      }
     }
   },
   "event_sequence": [],

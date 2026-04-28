@@ -1,7 +1,12 @@
-// Rust guideline compliant 2026-04-10
+// Rust guideline compliant 2026-04-28
 
-//! Round-trip deserialization tests for WOS Notification Template Config documents.
+//! Round-trip deserialization tests for the notifications content embedded in
+//! `$wosDelivery` sidecar documents (was a standalone `$wosNotificationTemplate`
+//! sidecar; per ADR 0076 D-3 the marker now lives on the `$wosDelivery`
+//! envelope and `NotificationTemplateDocument` represents the embedded
+//! `notifications` block).
 
+use serde_json::Value;
 use std::fs;
 use wos_core::NotificationTemplateDocument;
 use wos_core::model::notification_template::{
@@ -15,14 +20,30 @@ fn load_fixture(name: &str) -> NotificationTemplateDocument {
     );
     let json =
         fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
-    serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
+    let envelope: Value = serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("failed to parse fixture {name} envelope: {e}"));
+    assert_eq!(
+        envelope.get("$wosDelivery").and_then(Value::as_str),
+        Some("1.0"),
+        "fixture {name} must carry $wosDelivery envelope per ADR 0076 D-3"
+    );
+    let mut block = envelope
+        .get("notifications")
+        .cloned()
+        .unwrap_or_else(|| panic!("fixture {name} missing notifications embedded block"));
+    if let (Some(map), Some(target)) = (
+        block.as_object_mut(),
+        envelope.get("targetWorkflow").cloned(),
+    ) {
+        map.entry("targetWorkflow".to_string()).or_insert(target);
+    }
+    serde_json::from_value(block)
+        .unwrap_or_else(|e| panic!("failed to deserialize notifications from {name}: {e}"))
 }
 
 #[test]
 fn benefits_notification_templates_round_trips() {
     let doc = load_fixture("benefits-notification-templates.json");
-    assert_eq!(doc.wos_notification_template, "1.0");
     assert!(doc.target_workflow.contains("benefits-adjudication"));
 
     // Templates map
@@ -108,7 +129,6 @@ fn sla_warning_template() {
 #[test]
 fn notification_template_minimal_document() {
     let json = r#"{
-        "$wosNotificationTemplate": "1.0",
         "targetWorkflow": "https://example.gov/test",
         "templates": {
             "simple": {
@@ -124,7 +144,6 @@ fn notification_template_minimal_document() {
         }
     }"#;
     let doc: NotificationTemplateDocument = serde_json::from_str(json).unwrap();
-    assert_eq!(doc.wos_notification_template, "1.0");
     assert_eq!(doc.templates.len(), 1);
     let simple = doc.templates.get("simple").unwrap();
     assert_eq!(simple.category, TemplateCategory::CaseStatusUpdate);
@@ -139,9 +158,5 @@ fn notification_template_serialization_round_trip() {
     let doc = load_fixture("benefits-notification-templates.json");
     let serialized = serde_json::to_string(&doc).unwrap();
     let deserialized: NotificationTemplateDocument = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(
-        doc.wos_notification_template,
-        deserialized.wos_notification_template
-    );
     assert_eq!(doc.templates.len(), deserialized.templates.len());
 }

@@ -3,10 +3,12 @@
   "id": "S15-003-submit-missing-envelope-field",
   "rule": "S15",
   "description": "Task submission with missing definitionUrl in the envelope. FormspecBinding reports envelope_valid: false via ContractValidation. Task fails, failureEvent fires, provenance includes TaskFailed.",
-  "documents": { "kernel": "inline" },
+  "documents": {
+    "kernel": "inline"
+  },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:s15-task-lifecycle",
       "version": "1.0.0",
       "title": "S15 Task Lifecycle Test",
@@ -14,33 +16,54 @@
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "reviewer", "type": "human", "description": "Review actor" }
+        {
+          "id": "reviewer",
+          "type": "human",
+          "description": "Review actor"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
         "states": {
           "open": {
             "type": "atomic",
-            "transitions": [{ "event": "start", "target": "review" }]
+            "transitions": [
+              {
+                "event": "start",
+                "target": "review"
+              }
+            ]
           },
           "review": {
             "type": "atomic",
-            "onEntry": [{
-              "action": "createTask",
-              "taskRef": "reviewForm",
-              "assignTo": "reviewer",
-              "contractRef": "reviewContract",
-              "responseMappingRef": "urn:mapping:response",
-              "completionEvent": "review.completed",
-              "failureEvent": "review.failed"
-            }],
+            "onEntry": [
+              {
+                "action": "createTask",
+                "taskRef": "reviewForm",
+                "assignTo": "reviewer",
+                "contractRef": "reviewContract",
+                "responseMappingRef": "urn:mapping:response",
+                "completionEvent": "review.completed",
+                "failureEvent": "review.failed"
+              }
+            ],
             "transitions": [
-              { "event": "review.completed", "target": "approved" },
-              { "event": "review.failed", "target": "rejected" }
+              {
+                "event": "review.completed",
+                "target": "approved"
+              },
+              {
+                "event": "review.failed",
+                "target": "rejected"
+              }
             ]
           },
-          "approved": { "type": "final" },
-          "rejected": { "type": "final" }
+          "approved": {
+            "type": "final"
+          },
+          "rejected": {
+            "type": "final"
+          }
         }
       },
       "contracts": {
@@ -49,7 +72,9 @@
           "ref": "urn:formspec:review:1.0.0"
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -59,7 +84,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "start", "actor": "reviewer" },
+    {
+      "event": "start",
+      "actor": "reviewer"
+    },
     {
       "event": "submit",
       "actor": "reviewer",
@@ -67,19 +95,37 @@
         "task_ref": "reviewForm",
         "response": {
           "status": "completed",
-          "data": { "approved": false }
+          "data": {
+            "approved": false
+          }
         }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "review", "event": "start" },
-    { "from": "review", "to": "rejected", "event": "review.failed" }
+    {
+      "from": "open",
+      "to": "review",
+      "event": "start"
+    },
+    {
+      "from": "review",
+      "to": "rejected",
+      "event": "review.failed"
+    }
   ],
   "expected_provenance": [
-    { "recordKind": "taskCreated" },
-    { "recordKind": "taskPresented" },
-    { "recordKind": "taskResponseSubmitted" },
-    { "recordKind": "taskFailed" }
+    {
+      "recordKind": "taskCreated"
+    },
+    {
+      "recordKind": "taskPresented"
+    },
+    {
+      "recordKind": "taskResponseSubmitted"
+    },
+    {
+      "recordKind": "taskFailed"
+    }
   ]
 }

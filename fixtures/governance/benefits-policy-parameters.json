@@ -1,141 +1,165 @@
 {
-  "$wosPolicyParameters": "1.0",
-  "$schema": "https://wos-spec.org/schemas/policy-parameters/1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "$wosWorkflow": "1.0",
   "version": "2026.1.0",
   "title": "Benefits Program Parameters FY2025-2026",
   "description": "Date-indexed policy parameters for the benefits adjudication workflow. Eligibility thresholds, benefit rates, and filing deadlines change on known dates. Each parameter resolves against a specific case state date.",
-
-  "parameters": {
-    "eligibilityThreshold": {
-      "description": "Maximum household income for program eligibility",
-      "type": "number",
-      "unit": "USD",
-      "resolutionDateRef": "caseFile.application.submittedDate",
-      "authority": "42 USC 1396a",
-      "values": [
-        {
-          "effectiveDate": "2024-01-01",
-          "value": 33000,
-          "authority": "FY2024 appropriations"
-        },
-        {
-          "effectiveDate": "2025-01-01",
-          "value": 35000,
-          "authority": "FY2025 appropriations"
-        },
-        {
-          "effectiveDate": "2025-07-01",
-          "value": 36500,
-          "authority": "Mid-year COLA adjustment per Public Law 118-XXX"
-        },
-        {
-          "effectiveDate": "2026-01-01",
-          "value": 38000,
-          "authority": "FY2026 appropriations"
-        }
-      ]
-    },
-    "dependentAllowance": {
-      "description": "Additional income allowance per dependent",
-      "type": "number",
-      "unit": "USD",
-      "resolutionDateRef": "caseFile.application.submittedDate",
-      "authority": "42 USC 1396a",
-      "values": [
-        {
-          "effectiveDate": "2025-01-01",
-          "value": 5000
-        },
-        {
-          "effectiveDate": "2026-01-01",
-          "value": 5500
-        }
-      ]
-    },
-    "appealDeadlineDays": {
-      "description": "Number of days to file an appeal after adverse decision notice",
-      "type": "integer",
-      "unit": "days",
-      "resolutionDateRef": "caseFile.adverseDecisionDate",
-      "authority": "APA 5 USC 554",
-      "values": [
-        {
-          "effectiveDate": "2020-01-01",
-          "value": 30
-        },
-        {
-          "effectiveDate": "2025-06-01",
-          "value": 45,
-          "authority": "Administrative modernization act amendments"
-        }
-      ]
-    },
-    "minimumBenefitAmount": {
-      "description": "Minimum monthly benefit amount for eligible individuals",
-      "type": "number",
-      "unit": "USD",
-      "resolutionDateRef": "caseFile.eligibility.determinationDate",
-      "authority": "42 USC 1396a",
-      "values": [
-        {
-          "effectiveDate": "2025-01-01",
-          "value": 250
-        },
-        {
-          "effectiveDate": "2025-07-01",
-          "value": 265
-        },
-        {
-          "effectiveDate": "2026-01-01",
-          "value": 280
-        }
-      ]
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
     }
   },
-
-  "bindings": {
-    "eligibilityForm": {
-      "id": "eligibilityForm",
-      "description": "Formspec Definition for the eligibility determination intake form",
-      "resolutionDateRef": "caseFile.application.submittedDate",
-      "bindingType": "formspec",
-      "authority": "Agency directive 2024-03",
-      "values": [
-        {
-          "effectiveDate": "2024-01-01",
-          "value": "https://agency.gov/forms/eligibility/v2.0",
-          "authority": "FY2024 form revision"
-        },
-        {
-          "effectiveDate": "2025-01-01",
-          "value": "https://agency.gov/forms/eligibility/v2.1",
-          "authority": "FY2025 form revision — added dependent verification fields"
-        },
-        {
-          "effectiveDate": "2025-09-01",
-          "value": "https://agency.gov/forms/eligibility/v3.0",
-          "authority": "Major form overhaul per regulatory modernization act"
-        }
-      ]
+  "governance": {
+    "$schema": "https://wos-spec.org/schemas/policy-parameters/1.0",
+    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+    "parameters": {
+      "eligibilityThreshold": {
+        "description": "Maximum household income for program eligibility",
+        "type": "number",
+        "unit": "USD",
+        "resolutionDateRef": "caseFile.application.submittedDate",
+        "authority": "42 USC 1396a",
+        "values": [
+          {
+            "effectiveDate": "2024-01-01",
+            "value": 33000,
+            "authority": "FY2024 appropriations"
+          },
+          {
+            "effectiveDate": "2025-01-01",
+            "value": 35000,
+            "authority": "FY2025 appropriations"
+          },
+          {
+            "effectiveDate": "2025-07-01",
+            "value": 36500,
+            "authority": "Mid-year COLA adjustment per Public Law 118-XXX"
+          },
+          {
+            "effectiveDate": "2026-01-01",
+            "value": 38000,
+            "authority": "FY2026 appropriations"
+          }
+        ]
+      },
+      "dependentAllowance": {
+        "description": "Additional income allowance per dependent",
+        "type": "number",
+        "unit": "USD",
+        "resolutionDateRef": "caseFile.application.submittedDate",
+        "authority": "42 USC 1396a",
+        "values": [
+          {
+            "effectiveDate": "2025-01-01",
+            "value": 5000
+          },
+          {
+            "effectiveDate": "2026-01-01",
+            "value": 5500
+          }
+        ]
+      },
+      "appealDeadlineDays": {
+        "description": "Number of days to file an appeal after adverse decision notice",
+        "type": "integer",
+        "unit": "days",
+        "resolutionDateRef": "caseFile.adverseDecisionDate",
+        "authority": "APA 5 USC 554",
+        "values": [
+          {
+            "effectiveDate": "2020-01-01",
+            "value": 30
+          },
+          {
+            "effectiveDate": "2025-06-01",
+            "value": 45,
+            "authority": "Administrative modernization act amendments"
+          }
+        ]
+      },
+      "minimumBenefitAmount": {
+        "description": "Minimum monthly benefit amount for eligible individuals",
+        "type": "number",
+        "unit": "USD",
+        "resolutionDateRef": "caseFile.eligibility.determinationDate",
+        "authority": "42 USC 1396a",
+        "values": [
+          {
+            "effectiveDate": "2025-01-01",
+            "value": 250
+          },
+          {
+            "effectiveDate": "2025-07-01",
+            "value": 265
+          },
+          {
+            "effectiveDate": "2026-01-01",
+            "value": 280
+          }
+        ]
+      }
     },
-    "incomeVerificationService": {
-      "id": "incomeVerificationService",
-      "description": "Decision service endpoint for automated income verification",
-      "resolutionDateRef": "caseFile.eligibility.determinationDate",
-      "bindingType": "service",
-      "authority": "OMB Circular A-130",
-      "values": [
-        {
-          "effectiveDate": "2025-01-01",
-          "value": "https://agency.gov/services/income-verification/v1.0"
-        },
-        {
-          "effectiveDate": "2025-07-01",
-          "value": "https://agency.gov/services/income-verification/v1.2",
-          "authority": "Service update — added dependent income aggregation"
-        }
-      ]
+    "bindings": {
+      "eligibilityForm": {
+        "id": "eligibilityForm",
+        "description": "Formspec Definition for the eligibility determination intake form",
+        "resolutionDateRef": "caseFile.application.submittedDate",
+        "bindingType": "formspec",
+        "authority": "Agency directive 2024-03",
+        "values": [
+          {
+            "effectiveDate": "2024-01-01",
+            "value": "https://agency.gov/forms/eligibility/v2.0",
+            "authority": "FY2024 form revision"
+          },
+          {
+            "effectiveDate": "2025-01-01",
+            "value": "https://agency.gov/forms/eligibility/v2.1",
+            "authority": "FY2025 form revision \u2014 added dependent verification fields"
+          },
+          {
+            "effectiveDate": "2025-09-01",
+            "value": "https://agency.gov/forms/eligibility/v3.0",
+            "authority": "Major form overhaul per regulatory modernization act"
+          }
+        ]
+      },
+      "incomeVerificationService": {
+        "id": "incomeVerificationService",
+        "description": "Decision service endpoint for automated income verification",
+        "resolutionDateRef": "caseFile.eligibility.determinationDate",
+        "bindingType": "service",
+        "authority": "OMB Circular A-130",
+        "values": [
+          {
+            "effectiveDate": "2025-01-01",
+            "value": "https://agency.gov/services/income-verification/v1.0"
+          },
+          {
+            "effectiveDate": "2025-07-01",
+            "value": "https://agency.gov/services/income-verification/v1.2",
+            "authority": "Service update \u2014 added dependent income aggregation"
+          }
+        ]
+      }
     }
   }
 }

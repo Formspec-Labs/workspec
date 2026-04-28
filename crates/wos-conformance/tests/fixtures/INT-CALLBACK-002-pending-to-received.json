@@ -8,15 +8,23 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-CALLBACK-002",
       "version": "1.0.0",
       "title": "INT-CALLBACK-002 Pending to Received Lifecycle",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" },
-        { "id": "system", "type": "system", "description": "External system" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        },
+        {
+          "id": "system",
+          "type": "system",
+          "description": "External system"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -51,12 +59,16 @@
               }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "confirmed": { "type": "boolean" }
+          "confirmed": {
+            "type": "boolean"
+          }
         }
       },
       "execution": {
@@ -66,19 +78,47 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-CALLBACK-002",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "webhookBridge": {
-          "type": "callback",
-          "description": "Webhook callback binding for outbound request / inbound response",
-          "source": "urn:wos:runtime",
-          "eventType": "com.example.webhook.request",
-          "outputBinding": {
-            "caseFile.confirmed": "$.confirmed"
+        "targetWorkflow": {
+          "url": "urn:test:INT-CALLBACK-002",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "webhookBridge": {
+            "type": "callback",
+            "description": "Webhook callback binding for outbound request / inbound response",
+            "source": "urn:wos:runtime",
+            "eventType": "com.example.webhook.request",
+            "outputBinding": {
+              "caseFile.confirmed": "$.confirmed"
+            }
           }
         }
       }
@@ -86,7 +126,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "fire", "actor": "operator" },
+    {
+      "event": "fire",
+      "actor": "operator"
+    },
     {
       "event": "webhookInbound",
       "actor": "system",
@@ -96,26 +139,45 @@
         "specversion": "1.0",
         "type": "com.example.webhook.response",
         "subject": "conformance-instance:webhookBridge:webhookBridge-cb-0",
-        "data": { "confirmed": true }
+        "data": {
+          "confirmed": true
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "pending", "event": "fire" },
-    { "from": "pending", "to": "done", "event": "webhookInbound" }
+    {
+      "from": "open",
+      "to": "pending",
+      "event": "fire"
+    },
+    {
+      "from": "pending",
+      "to": "done",
+      "event": "webhookInbound"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "callbackPending",
-      "data": { "bindingId": "webhookBridge" }
+      "data": {
+        "bindingId": "webhookBridge"
+      }
     },
     {
       "recordKind": "dataMapping",
-      "data": { "integrationType": "callback", "updatedPaths": ["caseFile.confirmed"] }
+      "data": {
+        "integrationType": "callback",
+        "updatedPaths": [
+          "caseFile.confirmed"
+        ]
+      }
     },
     {
       "recordKind": "callbackReceived",
-      "data": { "correlationSubject": "conformance-instance:webhookBridge:webhookBridge-cb-0" }
+      "data": {
+        "correlationSubject": "conformance-instance:webhookBridge:webhookBridge-cb-0"
+      }
     }
   ]
 }

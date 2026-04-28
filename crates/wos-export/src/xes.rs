@@ -574,22 +574,135 @@ mod tests {
 
     #[test]
     fn camel_cases_all_record_kinds() {
-        // Guard against enum additions silently breaking the rename contract.
-        let mut log = ProvenanceLog::default();
-        for kind in [
+        // Exhaustive parity check (cross-stack-scout 2026-04-28): every
+        // `ProvenanceKind` variant exports its serde-camelCase string into
+        // the XES `concept:name` attribute. Mirrors the prov_o.rs sibling
+        // test; adding a new variant upstream forces an entry here.
+        let all: &[ProvenanceKind] = &[
+            ProvenanceKind::StateTransition,
+            ProvenanceKind::UnmatchedEvent,
             ProvenanceKind::CaseStateMutation,
+            ProvenanceKind::CaseCreated,
+            ProvenanceKind::IntakeAccepted,
+            ProvenanceKind::IntakeRejected,
+            ProvenanceKind::IntakeDeferred,
+            ProvenanceKind::TimerCreated,
             ProvenanceKind::TimerFired,
+            ProvenanceKind::TimerCancelled,
+            ProvenanceKind::OnEntry,
+            ProvenanceKind::OnExit,
+            ProvenanceKind::ActionExecuted,
+            ProvenanceKind::InvalidDuration,
+            ProvenanceKind::ToleranceViolation,
+            ProvenanceKind::ConvergenceCapReached,
+            ProvenanceKind::CapabilityInvocation,
             ProvenanceKind::DeonticViolation,
-        ] {
+            ProvenanceKind::DeonticEvaluation,
+            ProvenanceKind::DeonticResolution,
+            ProvenanceKind::DeonticBypass,
+            ProvenanceKind::RightsViolation,
+            ProvenanceKind::ConsistencyViolation,
+            ProvenanceKind::AutonomyViolation,
+            ProvenanceKind::AutonomyCapped,
+            ProvenanceKind::AutonomyComputed,
+            ProvenanceKind::HumanTaskCreated,
+            ProvenanceKind::ToolViolation,
+            ProvenanceKind::EscalationPending,
+            ProvenanceKind::AutonomyDemotion,
+            ProvenanceKind::ConfidenceViolation,
+            ProvenanceKind::ConfidenceDecay,
+            ProvenanceKind::CumulativeConfidenceViolation,
+            ProvenanceKind::SessionPaused,
+            ProvenanceKind::GroundTruthLabel,
+            ProvenanceKind::AgentOutput,
+            ProvenanceKind::ActorTypeViolation,
+            ProvenanceKind::AgentProvenanceAnnotation,
+            ProvenanceKind::AgentVersionChange,
+            ProvenanceKind::NarrativeTierRecorded,
+            ProvenanceKind::ConstraintTamperBlocked,
+            ProvenanceKind::DriftReclassification,
+            ProvenanceKind::AgentStateTransition,
+            ProvenanceKind::ProxyInvocation,
+            ProvenanceKind::DispositiveViolation,
+            ProvenanceKind::FallbackTriggered,
+            ProvenanceKind::FallbackAttempt,
+            ProvenanceKind::FallbackTerminal,
+            ProvenanceKind::NoticeSent,
+            ProvenanceKind::SeparationViolation,
+            ProvenanceKind::AppealFiled,
+            ProvenanceKind::ProtocolViolation,
+            ProvenanceKind::IndependentFirstEnforced,
+            ProvenanceKind::SamplingDecision,
+            ProvenanceKind::OverrideViolation,
+            ProvenanceKind::OverrideRecorded,
+            ProvenanceKind::PipelineStageCompleted,
+            ProvenanceKind::PipelineRiskProfile,
+            ProvenanceKind::PipelineRejection,
+            ProvenanceKind::TaskCreated,
+            ProvenanceKind::TaskPresented,
+            ProvenanceKind::TaskDismissed,
+            ProvenanceKind::TaskDraftPersisted,
+            ProvenanceKind::TaskResponseSubmitted,
+            ProvenanceKind::TaskResponseRejected,
+            ProvenanceKind::DataMapping,
+            ProvenanceKind::TaskCompleted,
+            ProvenanceKind::TaskFailed,
+            ProvenanceKind::TaskSkipped,
+            ProvenanceKind::ParameterResolved,
+            ProvenanceKind::CompensationLogEntry,
+            ProvenanceKind::CompensationExecuted,
+            ProvenanceKind::CompensationScopeBoundary,
+            ProvenanceKind::DelegationViolation,
+            ProvenanceKind::InstanceResumed,
+            ProvenanceKind::StepResultPersisted,
+            ProvenanceKind::IdempotencyDedup,
+            ProvenanceKind::InstanceMigrated,
+            ProvenanceKind::ContractValidation,
+            ProvenanceKind::HistoryCleared,
+            ProvenanceKind::DcrActivityExecuted,
+            ProvenanceKind::DcrRelationEvaluated,
+            ProvenanceKind::DcrResolutionError,
+            ProvenanceKind::ZoneSatisfied,
+            ProvenanceKind::EquityAlert,
+            ProvenanceKind::VerificationReportProduced,
+            ProvenanceKind::ImmutabilityViolation,
+            ProvenanceKind::ActivationBlocked,
+            ProvenanceKind::CalendarIgnored,
+            ProvenanceKind::NotificationSuppressed,
+            ProvenanceKind::ConfigurationWarning,
+            ProvenanceKind::RelationshipChanged,
+            ProvenanceKind::MilestoneFired,
+            ProvenanceKind::EventEmitted,
+            ProvenanceKind::EventConsumed,
+            ProvenanceKind::CallbackReceived,
+            ProvenanceKind::CallbackPending,
+            ProvenanceKind::ArazzoStep,
+            ProvenanceKind::ToolInvoked,
+            ProvenanceKind::PolicyDecision,
+            ProvenanceKind::SignatureAffirmation,
+        ];
+        assert_eq!(all.len(), 101);
+
+        let mut log = ProvenanceLog::default();
+        for kind in all {
             let mut record = stamped_transition(None);
-            record.record_kind = kind;
+            record.record_kind = *kind;
             log.push(record);
         }
 
         let xml = export(&log, &config());
-        assert!(xml.contains(r#"value="caseStateMutation""#));
-        assert!(xml.contains(r#"value="timerFired""#));
-        assert!(xml.contains(r#"value="deonticViolation""#));
+        for kind in all {
+            let expected = serde_json::to_value(*kind)
+                .expect("infallible serialize")
+                .as_str()
+                .expect("string serialize")
+                .to_string();
+            let needle = format!(r#"value="{expected}""#);
+            assert!(
+                xml.contains(&needle),
+                "{kind:?} expected XES concept:name={expected:?} not found in export"
+            );
+        }
     }
 
     #[test]

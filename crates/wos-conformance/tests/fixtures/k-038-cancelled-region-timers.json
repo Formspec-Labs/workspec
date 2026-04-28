@@ -7,10 +7,15 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "https://test.example/fail-fast-region-cancellation",
       "version": "1.0.0",
-      "actors": [{ "id": "reviewerB", "type": "human" }],
+      "actors": [
+        {
+          "id": "reviewerB",
+          "type": "human"
+        }
+      ],
       "lifecycle": {
         "initialState": "processing",
         "states": {
@@ -48,7 +53,9 @@
                   },
                   "errorB": {
                     "type": "final",
-                    "tags": ["error"]
+                    "tags": [
+                      "error"
+                    ]
                   }
                 }
               }
@@ -56,7 +63,9 @@
           }
         }
       },
-      "caseFile": { "fields": {} }
+      "caseFile": {
+        "fields": {}
+      }
     }
   },
   "initial_case_state": {},

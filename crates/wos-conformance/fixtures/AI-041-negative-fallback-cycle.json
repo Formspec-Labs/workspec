@@ -1,7 +1,7 @@
 {
   "id": "AI-041-negative-fallback-cycle",
   "rule": "AI-041",
-  "description": "Negative test: an AI integration document with a fallback chain that cycles must be rejected at lint time. A conformant fallback chain must terminate in 'escalateToHuman' or 'fail'. The inline AI document declares three fallback steps that form a cycle (stepA → stepB → stepC → stepA), with no terminal action.",
+  "description": "Negative test: an AI integration document with a fallback chain that cycles must be rejected at lint time. A conformant fallback chain must terminate in 'escalateToHuman' or 'fail'. The inline AI document declares three fallback steps that form a cycle (stepA \u2192 stepB \u2192 stepC \u2192 stepA), with no terminal action.",
   "documents": {
     "ai": "inline"
   },
@@ -55,6 +55,6 @@
   "expected_transitions": [],
   "expected_provenance": [],
   "expected_errors": [
-    "AI-041: fallback chain for agent 'documentClassifier' contains a cycle: stepA → stepB → stepC → stepA"
+    "AI-041: fallback chain for agent 'documentClassifier' contains a cycle: stepA \u2192 stepB \u2192 stepC \u2192 stepA"
   ]
 }

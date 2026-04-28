@@ -1,21 +1,25 @@
 {
   "id": "G-S10-004-calendar-update-shifts-future-deadline",
   "rule": "G-S10",
-  "description": "Lazy deadline evaluation: calendar v2 (with holiday added) is attached at case creation; timer scheduled earlier is recomputed at drain time against v2 rather than v1. The fixture attaches calendar v2 statically — it adds a holiday on 1970-01-05 (Monday). The timer duration P3D from epoch has a naive deadline of Sunday 1970-01-04; v2 skips the weekend and the Monday holiday, landing at Tuesday 1970-01-06 09:00 UTC (464,400,000 ms). Without the holiday (v1), the deadline would be Monday 09:00 (291,600,000 ms). The calendarVersion in timerCreated provenance confirms which calendar was in effect at drain time.",
+  "description": "Lazy deadline evaluation: calendar v2 (with holiday added) is attached at case creation; timer scheduled earlier is recomputed at drain time against v2 rather than v1. The fixture attaches calendar v2 statically \u2014 it adds a holiday on 1970-01-05 (Monday). The timer duration P3D from epoch has a naive deadline of Sunday 1970-01-04; v2 skips the weekend and the Monday holiday, landing at Tuesday 1970-01-06 09:00 UTC (464,400,000 ms). Without the holiday (v1), the deadline would be Monday 09:00 (291,600,000 ms). The calendarVersion in timerCreated provenance confirms which calendar was in effect at drain time.",
   "documents": {
     "kernel": "inline",
     "businessCalendar": "inline"
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:bc-calendar-update",
       "version": "1.0.0",
       "title": "BC S10-004 Calendar Update Shifts Deadline",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "system", "type": "system", "description": "System actor" }
+        {
+          "id": "system",
+          "type": "system",
+          "description": "System actor"
+        }
       ],
       "lifecycle": {
         "initialState": "pending",
@@ -31,13 +35,20 @@
               }
             ],
             "transitions": [
-              { "event": "$timeout.slaTimer", "target": "done" }
+              {
+                "event": "$timeout.slaTimer",
+                "target": "done"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P90D",
         "defaultTaskTimeout": "P7D",
@@ -45,21 +56,29 @@
       }
     },
     "businessCalendar": {
-      "$wosBusinessCalendar": "1.0",
+      "$wosDelivery": "1.0",
       "targetWorkflow": "urn:test:bc-calendar-update",
-      "version": "test-v2.0",
-      "title": "Calendar v2 — adds holiday on 1970-01-05 (Monday)",
-      "timezone": "UTC",
-      "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      "holidays": [
-        {
-          "name": "Test Holiday (added in v2)",
-          "date": "1970-01-05"
+      "calendar": {
+        "version": "test-v2.0",
+        "title": "Calendar v2 \u2014 adds holiday on 1970-01-05 (Monday)",
+        "timezone": "UTC",
+        "workWeek": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday"
+        ],
+        "holidays": [
+          {
+            "name": "Test Holiday (added in v2)",
+            "date": "1970-01-05"
+          }
+        ],
+        "operatingHours": {
+          "start": "09:00",
+          "end": "17:00"
         }
-      ],
-      "operatingHours": {
-        "start": "09:00",
-        "end": "17:00"
       }
     }
   },
@@ -72,7 +91,11 @@
     }
   ],
   "expected_transitions": [
-    { "from": "pending", "to": "done", "event": "$timeout.slaTimer" }
+    {
+      "from": "pending",
+      "to": "done",
+      "event": "$timeout.slaTimer"
+    }
   ],
   "expected_provenance": [
     {
@@ -84,7 +107,9 @@
     },
     {
       "record_kind": "timerFired",
-      "data": { "timerId": "slaTimer" }
+      "data": {
+        "timerId": "slaTimer"
+      }
     }
   ]
 }

@@ -7,22 +7,35 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "https://test.example/rel-isolation",
-      "actors": [{ "id": "user", "type": "human" }],
+      "actors": [
+        {
+          "id": "user",
+          "type": "human"
+        }
+      ],
       "lifecycle": {
         "initialState": "idle",
         "states": {
           "idle": {
             "type": "atomic",
             "transitions": [
-              { "event": "go", "target": "done", "guard": "count(caseFile.relationships) > 0" }
+              {
+                "event": "go",
+                "target": "done",
+                "guard": "count(caseFile.relationships) > 0"
+              }
             ]
           },
-          "done": { "type": "final" }
+          "done": {
+            "type": "final"
+          }
         }
       },
-      "caseFile": { "fields": {} }
+      "caseFile": {
+        "fields": {}
+      }
     }
   },
   "event_sequence": [
@@ -30,14 +43,26 @@
       "event": "relationshipChanged",
       "actor": "user",
       "data": {
-        "relationship": { "type": "related", "targetCase": "urn:wos:other", "action": "added" }
+        "relationship": {
+          "type": "related",
+          "targetCase": "urn:wos:other",
+          "action": "added"
+        }
       }
     },
-    { "event": "go", "actor": "user" }
+    {
+      "event": "go",
+      "actor": "user"
+    }
   ],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "relationshipChanged" },
-    { "record_kind": "unmatchedEvent", "event": "go" }
+    {
+      "record_kind": "relationshipChanged"
+    },
+    {
+      "record_kind": "unmatchedEvent",
+      "event": "go"
+    }
   ]
 }

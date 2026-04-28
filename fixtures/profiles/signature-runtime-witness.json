@@ -1,63 +1,109 @@
 {
-  "$wosSignatureProfile": "1.0",
-  "targetWorkflow": { "url": "urn:test:signature-runtime" },
-  "roles": [
+  "$wosWorkflow": "1.0",
+  "url": "https://example.test/migrated-fixture",
+  "version": "1.0.0",
+  "title": "Migrated Fixture",
+  "impactLevel": "operational",
+  "actors": [
     {
-      "id": "applicantSigner",
-      "role": "signer",
-      "actorId": "applicant",
-      "authenticationPolicyKey": "emailOtp"
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
+      }
+    }
+  },
+  "signature": {
+    "targetWorkflow": {
+      "url": "urn:test:signature-runtime"
     },
-    {
-      "id": "witnessRole",
-      "role": "witness",
-      "actorId": "witness",
-      "authenticationPolicyKey": "credentialAuth"
-    }
-  ],
-  "documents": [
-    {
-      "id": "application",
-      "documentRef": "urn:test:document:application",
-      "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "documentHashAlgorithm": "sha-256",
-      "formspecResponseRef": "urn:test:formspec-response:application"
-    }
-  ],
-  "authenticationPolicies": [
-    { "key": "emailOtp", "method": "email-otp", "assuranceLevel": "standard" },
-    { "key": "credentialAuth", "method": "credential", "assuranceLevel": "high" }
-  ],
-  "signingFlow": {
-    "type": "parallel",
-    "steps": [
-      { "id": "applicantSigns", "roleId": "applicantSigner", "documentId": "application" },
+    "roles": [
       {
-        "id": "witnessSigns",
-        "roleId": "witnessRole",
-        "documentId": "application",
-        "dependsOn": ["applicantSigns"]
+        "id": "applicantSigner",
+        "role": "signer",
+        "actorId": "applicant",
+        "authenticationPolicyKey": "emailOtp"
+      },
+      {
+        "id": "witnessRole",
+        "role": "witness",
+        "actorId": "witness",
+        "authenticationPolicyKey": "credentialAuth"
       }
     ],
-    "completion": { "type": "all-required" }
-  },
-  "evidence": {
-    "recordKind": "signatureAffirmation",
-    "requiredFields": [
-      "response.signature.acceptedAt",
-      "response.signature.affirmed",
-      "response.signature.documentHash"
+    "documents": [
+      {
+        "id": "application",
+        "documentRef": "urn:test:document:application",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256",
+        "formspecResponseRef": "urn:test:formspec-response:application"
+      }
     ],
-    "consentReference": {
-      "consentTextRef": "urn:test:consent:esign",
-      "consentVersion": "1.0.0",
-      "acceptedAtPath": "response.signature.acceptedAt",
-      "affirmationPath": "response.signature.affirmed"
+    "authenticationPolicies": [
+      {
+        "key": "emailOtp",
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      },
+      {
+        "key": "credentialAuth",
+        "method": "credential",
+        "assuranceLevel": "high"
+      }
+    ],
+    "signingFlow": {
+      "type": "parallel",
+      "steps": [
+        {
+          "id": "applicantSigns",
+          "roleId": "applicantSigner",
+          "documentId": "application"
+        },
+        {
+          "id": "witnessSigns",
+          "roleId": "witnessRole",
+          "documentId": "application",
+          "dependsOn": [
+            "applicantSigns"
+          ]
+        }
+      ],
+      "completion": {
+        "type": "all-required"
+      }
     },
-    "identityBinding": {
-      "method": "credential",
-      "assuranceLevel": "high"
-    },
-    "custodyHookEligible": true
+    "evidence": {
+      "recordKind": "signatureAffirmation",
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:test:consent:esign",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "credential",
+        "assuranceLevel": "high"
+      },
+      "custodyHookEligible": true
+    }
   }
 }

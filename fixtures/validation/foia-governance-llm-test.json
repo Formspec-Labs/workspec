@@ -1,206 +1,275 @@
 {
-  "$wosWorkflowGovernance": "1.0",
-  "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
-  "targetWorkflow": "https://agency.gov/workflows/foia-request-processing",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "FOIA Request Processing Governance",
   "description": "Governance configuration for the FOIA Request Processing Workflow. Enforces due process requirements for this rights-impacting workflow: 20-business-day response deadline, individualized withholding explanations with exemption citations, and appeal to an independent review panel.",
-  "dueProcess": {
-    "adverseDecisionPolicy": {
-      "noticeRequired": true,
-      "noticeTiming": "beforeEffective",
-      "noticeGracePeriod": "P20BD",
-      "noticeTemplateKey": "foiaAdverseDecisionNotice",
-      "explanationLevel": "individualized",
-      "counterfactualRequired": true,
-      "appealMechanism": {
-        "enabled": true,
-        "appealWindow": "P90D",
-        "reviewerConstraint": "independentFromOriginal",
-        "reviewerRoles": ["reviewPanel"],
-        "continuationOfServices": false,
-        "continuationScope": "currentLevel"
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
+      },
+      "done": {
+        "type": "final"
       }
     }
   },
-  "reviewProtocols": [
-    {
-      "tags": ["intake"],
-      "protocols": ["unassisted"],
-      "description": "Intake completeness review uses unassisted protocol — clerk independently checks completeness before assignment."
-    },
-    {
-      "tags": ["review", "determination"],
-      "protocols": ["independentFirst", "considerOpposite"],
-      "description": "Exemption review requires independent first assessment followed by explicit consideration of disclosure before applying any withholding. Applied to all determination transitions."
-    },
-    {
-      "tags": ["adverse-decision"],
-      "protocols": ["independentFirst", "calibratedConfidence"],
-      "description": "Adverse decisions require independent first assessment and calibrated confidence to reduce over-withholding bias."
-    },
-    {
-      "tags": ["appeal"],
-      "protocols": ["dualBlind", "independentFirst"],
-      "description": "Appeal review uses dual-blind protocol to ensure independence from original determination. Independent first prevents anchoring on the original decision."
-    }
-  ],
-  "pipelines": [
-    {
-      "id": "request-intake-validation",
-      "description": "Validates FOIA request completeness and required fields before assignment.",
-      "stages": [
-        {
-          "id": "completeness-check",
-          "type": "assertion-gate",
-          "description": "Verify all required FOIA request fields are present and valid.",
-          "assertions": [
-            {
-              "type": "format",
-              "description": "Request description must be present and non-empty.",
-              "fields": ["requestDescription"]
-            },
-            {
-              "type": "format",
-              "description": "Requester contact information must be present.",
-              "fields": ["requesterContact"]
-            }
+  "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow-governance/1.0",
+    "targetWorkflow": "https://agency.gov/workflows/foia-request-processing",
+    "dueProcess": {
+      "adverseDecisionPolicy": {
+        "noticeRequired": true,
+        "noticeTiming": "beforeEffective",
+        "noticeGracePeriod": "P20BD",
+        "noticeTemplateKey": "foiaAdverseDecisionNotice",
+        "explanationLevel": "individualized",
+        "counterfactualRequired": true,
+        "appealMechanism": {
+          "enabled": true,
+          "appealWindow": "P90D",
+          "reviewerConstraint": "independentFromOriginal",
+          "reviewerRoles": [
+            "reviewPanel"
           ],
-          "rejectionPolicy": "retryWithCorrections"
-        },
-        {
-          "id": "requester-identity",
-          "type": "contract-validation",
-          "description": "Validate requester identity and contact information format.",
-          "rejectionPolicy": "retryWithCorrections"
+          "continuationOfServices": false,
+          "continuationScope": "currentLevel"
         }
-      ]
+      }
     },
-    {
-      "id": "records-search-validation",
-      "description": "Validates records search results before exemption review.",
-      "stages": [
-        {
-          "id": "search-completeness",
-          "type": "assertion-gate",
-          "description": "Verify records search covered all required repositories.",
-          "assertions": [
-            {
-              "type": "source-grounded",
-              "description": "Search results must be traceable to specific records systems queried.",
-              "fields": ["responsiveRecordsCount"]
-            }
-          ],
-          "rejectionPolicy": "escalateToSupervisor"
-        }
-      ]
+    "reviewProtocols": [
+      {
+        "tags": [
+          "intake"
+        ],
+        "protocols": [
+          "unassisted"
+        ],
+        "description": "Intake completeness review uses unassisted protocol \u2014 clerk independently checks completeness before assignment."
+      },
+      {
+        "tags": [
+          "review",
+          "determination"
+        ],
+        "protocols": [
+          "independentFirst",
+          "considerOpposite"
+        ],
+        "description": "Exemption review requires independent first assessment followed by explicit consideration of disclosure before applying any withholding. Applied to all determination transitions."
+      },
+      {
+        "tags": [
+          "adverse-decision"
+        ],
+        "protocols": [
+          "independentFirst",
+          "calibratedConfidence"
+        ],
+        "description": "Adverse decisions require independent first assessment and calibrated confidence to reduce over-withholding bias."
+      },
+      {
+        "tags": [
+          "appeal"
+        ],
+        "protocols": [
+          "dualBlind",
+          "independentFirst"
+        ],
+        "description": "Appeal review uses dual-blind protocol to ensure independence from original determination. Independent first prevents anchoring on the original decision."
+      }
+    ],
+    "pipelines": [
+      {
+        "id": "request-intake-validation",
+        "description": "Validates FOIA request completeness and required fields before assignment.",
+        "stages": [
+          {
+            "id": "completeness-check",
+            "type": "assertion-gate",
+            "description": "Verify all required FOIA request fields are present and valid.",
+            "assertions": [
+              {
+                "type": "format",
+                "description": "Request description must be present and non-empty.",
+                "fields": [
+                  "requestDescription"
+                ]
+              },
+              {
+                "type": "format",
+                "description": "Requester contact information must be present.",
+                "fields": [
+                  "requesterContact"
+                ]
+              }
+            ],
+            "rejectionPolicy": "retryWithCorrections"
+          },
+          {
+            "id": "requester-identity",
+            "type": "contract-validation",
+            "description": "Validate requester identity and contact information format.",
+            "rejectionPolicy": "retryWithCorrections"
+          }
+        ]
+      },
+      {
+        "id": "records-search-validation",
+        "description": "Validates records search results before exemption review.",
+        "stages": [
+          {
+            "id": "search-completeness",
+            "type": "assertion-gate",
+            "description": "Verify records search covered all required repositories.",
+            "assertions": [
+              {
+                "type": "source-grounded",
+                "description": "Search results must be traceable to specific records systems queried.",
+                "fields": [
+                  "responsiveRecordsCount"
+                ]
+              }
+            ],
+            "rejectionPolicy": "escalateToSupervisor"
+          }
+        ]
+      },
+      {
+        "id": "adverse-decision-validation",
+        "description": "Validates adverse decision notice quality before issuance.",
+        "stages": [
+          {
+            "id": "exemption-citation-check",
+            "type": "assertion-gate",
+            "description": "Every withheld record segment must have an itemized exemption citation.",
+            "assertions": [
+              {
+                "type": "consistency",
+                "description": "All exemptions applied must have corresponding withholding justification text.",
+                "fields": [
+                  "exemptionsApplied",
+                  "withholdingJustification"
+                ]
+              },
+              {
+                "type": "source-grounded",
+                "description": "Exemption citations must reference statutory text and specific record segments.",
+                "fields": [
+                  "withholdingJustification"
+                ]
+              }
+            ],
+            "rejectionPolicy": "retryWithCorrections"
+          },
+          {
+            "id": "appeal-instructions-check",
+            "type": "assertion-gate",
+            "description": "Adverse decision notice must contain complete appeal instructions.",
+            "assertions": [
+              {
+                "type": "format",
+                "description": "Notice must include appeal deadline, review panel contact, and filing instructions.",
+                "fields": [
+                  "withholdingJustification"
+                ]
+              }
+            ],
+            "rejectionPolicy": "failWithExplanation"
+          },
+          {
+            "id": "notice-human-review",
+            "type": "human-review",
+            "description": "Supervisor reviews adverse decision notice before issuance.",
+            "rejectionPolicy": "retryWithCorrections"
+          }
+        ]
+      }
+    ],
+    "audit": {
+      "reasoningTier": {
+        "requiredForTags": [
+          "determination",
+          "adverse-decision"
+        ],
+        "requireDecisionRequirements": true
+      },
+      "counterfactualTier": {
+        "requiredForTags": [
+          "adverse-decision"
+        ],
+        "requireProtectedCharacteristics": true
+      }
     },
-    {
-      "id": "adverse-decision-validation",
-      "description": "Validates adverse decision notice quality before issuance.",
-      "stages": [
-        {
-          "id": "exemption-citation-check",
-          "type": "assertion-gate",
-          "description": "Every withheld record segment must have an itemized exemption citation.",
-          "assertions": [
-            {
-              "type": "consistency",
-              "description": "All exemptions applied must have corresponding withholding justification text.",
-              "fields": ["exemptionsApplied", "withholdingJustification"]
-            },
-            {
-              "type": "source-grounded",
-              "description": "Exemption citations must reference statutory text and specific record segments.",
-              "fields": ["withholdingJustification"]
-            }
-          ],
-          "rejectionPolicy": "retryWithCorrections"
-        },
-        {
-          "id": "appeal-instructions-check",
-          "type": "assertion-gate",
-          "description": "Adverse decision notice must contain complete appeal instructions.",
-          "assertions": [
-            {
-              "type": "format",
-              "description": "Notice must include appeal deadline, review panel contact, and filing instructions.",
-              "fields": ["withholdingJustification"]
-            }
-          ],
-          "rejectionPolicy": "failWithExplanation"
-        },
-        {
-          "id": "notice-human-review",
-          "type": "human-review",
-          "description": "Supervisor reviews adverse decision notice before issuance.",
-          "rejectionPolicy": "retryWithCorrections"
-        }
-      ]
-    }
-  ],
-  "audit": {
-    "reasoningTier": {
-      "requiredForTags": ["determination", "adverse-decision"],
-      "requireDecisionRequirements": true
+    "qualityControls": {
+      "reviewSampling": {
+        "rate": 0.25,
+        "method": "stratified",
+        "scope": "workflow"
+      },
+      "separationOfDuties": {
+        "scope": "sameInstance",
+        "excludeRoles": [
+          "foiaOfficer",
+          "intakeClerk"
+        ]
+      },
+      "overrideAuthority": {
+        "requireStructuredRationale": true,
+        "requireAuthorityVerification": true,
+        "requireSupportingEvidence": true
+      }
     },
-    "counterfactualTier": {
-      "requiredForTags": ["adverse-decision"],
-      "requireProtectedCharacteristics": true
-    }
-  },
-  "qualityControls": {
-    "reviewSampling": {
-      "rate": 0.25,
-      "method": "stratified",
-      "scope": "workflow"
-    },
-    "separationOfDuties": {
-      "scope": "sameInstance",
-      "excludeRoles": ["foiaOfficer", "intakeClerk"]
-    },
-    "overrideAuthority": {
-      "requireStructuredRationale": true,
-      "requireAuthorityVerification": true,
-      "requireSupportingEvidence": true
-    }
-  },
-  "taskCatalog": [
-    {
-      "pattern": "intake-completeness-review",
-      "verifiable": "yes",
-      "verificationMethod": "parse-check",
-      "description": "Verify FOIA request contains all required fields. Fully verifiable by re-checking field presence and format."
-    },
-    {
-      "pattern": "records-search",
-      "verifiable": "partially",
-      "verificationMethod": "source-grounding",
-      "description": "Search government records systems for responsive records. Partially verifiable by auditing search query logs and repository coverage."
-    },
-    {
-      "pattern": "exemption-review-task",
-      "verifiable": "partially",
-      "verificationMethod": "source-grounding",
-      "description": "Review responsive records against FOIA exemption categories. Partially verifiable — exemption applicability requires legal judgment but citation can be source-grounded."
-    },
-    {
-      "pattern": "prepare-adverse-decision-notice",
-      "verifiable": "yes",
-      "verificationMethod": "parse-check",
-      "description": "Prepare adverse decision notice with itemized exemption citations and appeal instructions. Verifiable by checking required sections are present."
-    },
-    {
-      "pattern": "independent-appeal-review",
-      "verifiable": "partially",
-      "verificationMethod": "source-grounding",
-      "description": "Independent panel review of appeal. Partially verifiable — panel reasoning can be source-grounded to record evidence but ultimate determination requires legal judgment."
-    },
-    {
-      "pattern": "send-no-records-notice",
-      "verifiable": "yes",
-      "verificationMethod": "parse-check",
-      "description": "Send notice that no responsive records were found. Verifiable by confirming records search was complete and notice was transmitted."
-    }
-  ]
+    "taskCatalog": [
+      {
+        "pattern": "intake-completeness-review",
+        "verifiable": "yes",
+        "verificationMethod": "parse-check",
+        "description": "Verify FOIA request contains all required fields. Fully verifiable by re-checking field presence and format."
+      },
+      {
+        "pattern": "records-search",
+        "verifiable": "partially",
+        "verificationMethod": "source-grounding",
+        "description": "Search government records systems for responsive records. Partially verifiable by auditing search query logs and repository coverage."
+      },
+      {
+        "pattern": "exemption-review-task",
+        "verifiable": "partially",
+        "verificationMethod": "source-grounding",
+        "description": "Review responsive records against FOIA exemption categories. Partially verifiable \u2014 exemption applicability requires legal judgment but citation can be source-grounded."
+      },
+      {
+        "pattern": "prepare-adverse-decision-notice",
+        "verifiable": "yes",
+        "verificationMethod": "parse-check",
+        "description": "Prepare adverse decision notice with itemized exemption citations and appeal instructions. Verifiable by checking required sections are present."
+      },
+      {
+        "pattern": "independent-appeal-review",
+        "verifiable": "partially",
+        "verificationMethod": "source-grounding",
+        "description": "Independent panel review of appeal. Partially verifiable \u2014 panel reasoning can be source-grounded to record evidence but ultimate determination requires legal judgment."
+      },
+      {
+        "pattern": "send-no-records-notice",
+        "verifiable": "yes",
+        "verificationMethod": "parse-check",
+        "description": "Send notice that no responsive records were found. Verifiable by confirming records search was complete and notice was transmitted."
+      }
+    ]
+  }
 }

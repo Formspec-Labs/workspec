@@ -23,7 +23,7 @@ fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint:
 
 fn kernel() -> serde_json::Value {
     serde_json::json!({
-        "$wosKernel": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "urn:test:signature",
         "version": "1.0.0",
         "actors": [

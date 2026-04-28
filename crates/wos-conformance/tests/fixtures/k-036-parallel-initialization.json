@@ -7,9 +7,14 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "https://test.example/parallel-init",
-      "actors": [{ "id": "user", "type": "human" }],
+      "actors": [
+        {
+          "id": "user",
+          "type": "human"
+        }
+      ],
       "lifecycle": {
         "initialState": "parallel",
         "states": {
@@ -18,11 +23,19 @@
             "regions": {
               "A": {
                 "initialState": "stateA",
-                "states": { "stateA": { "type": "atomic" } }
+                "states": {
+                  "stateA": {
+                    "type": "atomic"
+                  }
+                }
               },
               "B": {
                 "initialState": "stateB",
-                "states": { "stateB": { "type": "atomic" } }
+                "states": {
+                  "stateB": {
+                    "type": "atomic"
+                  }
+                }
               }
             }
           }
@@ -33,8 +46,23 @@
   "event_sequence": [],
   "expected_transitions": [],
   "expected_provenance": [
-    { "record_kind": "onEntry", "data": { "state": "parallel" } },
-    { "record_kind": "onEntry", "data": { "state": "stateA" } },
-    { "record_kind": "onEntry", "data": { "state": "stateB" } }
+    {
+      "record_kind": "onEntry",
+      "data": {
+        "state": "parallel"
+      }
+    },
+    {
+      "record_kind": "onEntry",
+      "data": {
+        "state": "stateA"
+      }
+    },
+    {
+      "record_kind": "onEntry",
+      "data": {
+        "state": "stateB"
+      }
+    }
   ]
 }

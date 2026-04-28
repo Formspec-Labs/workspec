@@ -119,7 +119,7 @@ async fn run(cli: Cli) -> anyhow_lite::Result<ExitCode> {
             // Canned: first call returns a minimal valid kernel doc.
             mock.expect(
                 "Problem statement",
-                r#"{"$wosKernel":"1.0","title":"dry-run","status":"draft","impactLevel":"informational","caseFile":{"fields":{}},"actors":[{"id":"a","type":"system"}],"lifecycle":{"initialState":"start","states":{"start":{"type":"final"}}}}"#,
+                r#"{"$wosWorkflow":"1.0","title":"dry-run","status":"draft","impactLevel":"informational","caseFile":{"fields":{}},"actors":[{"id":"a","type":"system"}],"lifecycle":{"initialState":"start","states":{"start":{"type":"final"}}}}"#,
             );
             run_loop(&mock, &problem, layer.into(), &output, None, 1).await
         }
@@ -326,7 +326,7 @@ mod tests {
         let mut trace = SynthTrace::new();
         trace.push(IterationRecord {
             index: 0,
-            attempt: r#"{"$wosKernel":"1.0"}"#.to_string(),
+            attempt: r#"{"$wosWorkflow":"1.0"}"#.to_string(),
             lint_findings: vec![LintFinding {
                 rule_id: "K-001".to_string(),
                 severity: Severity::Error,
@@ -345,7 +345,7 @@ mod tests {
         });
         trace.push(IterationRecord {
             index: 1,
-            attempt: r#"{"$wosKernel":"1.0"}"#.to_string(),
+            attempt: r#"{"$wosWorkflow":"1.0"}"#.to_string(),
             lint_findings: vec![],
             conformance: None,
             input_tokens: 0,

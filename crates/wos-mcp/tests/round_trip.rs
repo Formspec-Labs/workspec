@@ -344,7 +344,7 @@ async fn full_round_trip_with_10_plus_tool_calls() {
         serde_json::from_str(doc_json).expect("exported doc must be valid JSON");
 
     // Verify round-trip structural integrity.
-    assert_eq!(doc["$wosKernel"], serde_json::json!("1.0"));
+    assert_eq!(doc["$wosWorkflow"], serde_json::json!("1.0"));
     let states = doc["lifecycle"]["states"].as_object().unwrap();
     assert_eq!(states.len(), 3);
     assert_eq!(doc["lifecycle"]["initialState"], serde_json::json!("open"));

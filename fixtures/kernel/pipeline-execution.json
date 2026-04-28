@@ -1,5 +1,5 @@
 {
-  "$wosKernel": "1.0",
+  "$wosWorkflow": "1.0",
   "$schema": "https://wos-spec.org/schemas/kernel/1.0",
   "url": "https://test.wos-spec.org/workflows/pipeline-execution",
   "version": "1.0.0",

@@ -7,25 +7,40 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "https://test.example/compound-entry",
-      "actors": [{ "id": "user", "type": "human" }],
+      "actors": [
+        {
+          "id": "user",
+          "type": "human"
+        }
+      ],
       "lifecycle": {
         "initialState": "start",
         "states": {
           "start": {
             "type": "atomic",
             "transitions": [
-              { "event": "go", "target": "nested" },
-              { "event": "jump", "target": "step2" }
+              {
+                "event": "go",
+                "target": "nested"
+              },
+              {
+                "event": "jump",
+                "target": "step2"
+              }
             ]
           },
           "nested": {
             "type": "compound",
             "initialState": "step1",
             "states": {
-              "step1": { "type": "atomic" },
-              "step2": { "type": "atomic" }
+              "step1": {
+                "type": "atomic"
+              },
+              "step2": {
+                "type": "atomic"
+              }
             }
           }
         }
@@ -33,14 +48,35 @@
     }
   },
   "event_sequence": [
-    { "event": "go", "actor": "user" }
+    {
+      "event": "go",
+      "actor": "user"
+    }
   ],
   "expected_transitions": [
-    { "from": "start", "to": "nested", "event": "go" }
+    {
+      "from": "start",
+      "to": "nested",
+      "event": "go"
+    }
   ],
   "expected_provenance": [
-    { "record_kind": "stateTransition", "fromState": "start", "toState": "nested" },
-    { "record_kind": "onEntry", "data": { "state": "nested" } },
-    { "record_kind": "onEntry", "data": { "state": "step1" } }
+    {
+      "record_kind": "stateTransition",
+      "fromState": "start",
+      "toState": "nested"
+    },
+    {
+      "record_kind": "onEntry",
+      "data": {
+        "state": "nested"
+      }
+    },
+    {
+      "record_kind": "onEntry",
+      "data": {
+        "state": "step1"
+      }
+    }
   ]
 }

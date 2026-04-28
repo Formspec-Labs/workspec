@@ -26,19 +26,20 @@ pub enum IntegrationBindingKind {
     PolicyEngine,
 }
 
-/// WOS Integration Profile Document.
+/// Integration content — the embedded `bindings` block of a $wosWorkflow
+/// document per ADR 0076 D-1. Was a standalone $wosIntegrationProfile
+/// sidecar; the marker now lives on the workflow envelope and this type
+/// represents only the block's interior shape (binding declarations + types).
+/// Type name retained for consumer compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrationProfileDocument {
-    /// Document type marker. Must be `"1.0"`.
-    #[serde(rename = "$wosIntegrationProfile")]
-    pub wos_integration_profile: String,
-
     /// Optional JSON Schema URI for editor validation.
     #[serde(rename = "$schema", default)]
     pub schema: Option<String>,
 
     /// Workflow targeted by this profile.
+    #[serde(default)]
     pub target_workflow: TargetWorkflow,
 
     /// Profile document version.
@@ -62,10 +63,11 @@ pub struct IntegrationProfileDocument {
 }
 
 /// Target workflow metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetWorkflow {
     /// Canonical target workflow URL.
+    #[serde(default)]
     pub url: String,
 
     /// Compatible kernel version range.

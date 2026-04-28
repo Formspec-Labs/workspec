@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn lint_returns_findings_for_invalid_kernel() {
-        // Missing $wosKernel marker — should at least be flagged.
+        // Missing $wosWorkflow marker — should at least be flagged.
         let bad = r#"{"title": "Not a WOS document"}"#;
         let ctx = DirectToolContext::new();
         let result = pollster::block_on(ctx.lint_document(bad));
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn conformance_is_skip_today() {
         let ctx = DirectToolContext::new();
-        let verdict = pollster::block_on(ctx.run_conformance(r#"{"$wosKernel":"1.0"}"#))
+        let verdict = pollster::block_on(ctx.run_conformance(r#"{"$wosWorkflow":"1.0"}"#))
             .expect("no-op should succeed");
         assert!(verdict.is_none(), "DirectToolContext skips conformance");
     }

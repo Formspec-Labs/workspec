@@ -384,12 +384,12 @@ mod tests {
 
     #[test]
     fn known_good_kernel_excerpt_passes() {
-        // Minimal excerpt mirroring wos-kernel.schema.json's `$wosKernel`
+        // Minimal excerpt mirroring wos-kernel.schema.json's `$wosWorkflow`
         // and `url` leaves, which are both critical and documented.
         let schema = json!({
             "type": "object",
             "properties": {
-                "$wosKernel": {
+                "$wosWorkflow": {
                     "type": "string",
                     "const": "1.0",
                     "description": "WOS Kernel specification version. MUST be '1.0'. Identifies this document as a WOS Kernel Document and pins the specification version to the 1.0 line.",

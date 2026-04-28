@@ -1,0 +1,2414 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/tooling/1.0",
+  "title": "WOS Tooling",
+  "description": "Single tooling-artifact schema absorbing five formerly-separate tooling schemas per ADR 0076 D-5: wos-lint-diagnostic, conformance-trace, wos-synth-trace, wos-mcp-tools, and wos-extension-registry. These artifacts are consumed by tooling (CI pipelines, LLM authoring loops, IDE integrations, MCP hosts), never hand-authored by workflow designers. The schema acts as a discriminated union: a document carrying $wosTooling at version 1.0 declares its kind (lintDiagnostic / conformanceTrace / synthTrace / mcpToolCatalog / extensionRegistry) and conforms to that view. Sub-views are exposed via $views per Q3 owner decision (tooling-schema sub-views, not core-schema annotations).",
+  "$comment": "Step 6 of ADR 0076 implementation plan. The five source schemas (schemas/lint/, schemas/conformance/, schemas/synth/, schemas/mcp/, schemas/registry/) are preserved on disk pending cleanup phase but are non-authoritative; this schema is normative.",
+  "type": "object",
+  "required": [
+    "$wosTooling",
+    "kind"
+  ],
+  "properties": {
+    "$wosTooling": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Sole top-level version marker that identifies this object as a WOS Tooling artifact and pins it to the 1.0 line of the merged tooling schema (ADR 0076 D-5). Tooling consumers select the appropriate sub-view based on the `kind` discriminator.",
+      "examples": [
+        "1.0",
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker and version pin for WOS Tooling artifacts per ADR 0076 D-5"
+      }
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "lintDiagnostic",
+        "conformanceTrace",
+        "synthTrace",
+        "mcpToolCatalog",
+        "extensionRegistry"
+      ],
+      "description": "Discriminator selecting which sub-view this document conforms to. The five tooling artifact kinds (lintDiagnostic, conformanceTrace, synthTrace, mcpToolCatalog, extensionRegistry) were formerly separate schemas; merged here per ADR 0076 D-5.",
+      "examples": [
+        "lintDiagnostic",
+        "conformanceTrace",
+        "synthTrace"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Discriminator that selects the tooling-artifact sub-view"
+      }
+    }
+  },
+  "patternProperties": {
+    "^x-": {
+      "$comment": "Vendor extensions per Kernel spec §10.6 (the canonical `extensions` seam — one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "lintDiagnostic"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/lintDiagnostic__Root"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "conformanceTrace"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/conformanceTrace__Root"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "synthTrace"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/synthTrace__Root"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "mcpToolCatalog"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/mcpToolCatalog__Root"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "extensionRegistry"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/extensionRegistry__Root"
+      }
+    }
+  ],
+  "$views": {
+    "lintDiagnostic": {
+      "title": "WOS Lint Diagnostic",
+      "ref": "#/$defs/lintDiagnostic__Root",
+      "selector": {
+        "kind": "lintDiagnostic"
+      }
+    },
+    "conformanceTrace": {
+      "title": "WOS Conformance Trace",
+      "ref": "#/$defs/conformanceTrace__Root",
+      "selector": {
+        "kind": "conformanceTrace"
+      }
+    },
+    "synthTrace": {
+      "title": "WOS Synth Trace",
+      "ref": "#/$defs/synthTrace__Root",
+      "selector": {
+        "kind": "synthTrace"
+      }
+    },
+    "mcpToolCatalog": {
+      "title": "WOS MCP Tool Catalog",
+      "ref": "#/$defs/mcpToolCatalog__Root",
+      "selector": {
+        "kind": "mcpToolCatalog"
+      }
+    },
+    "extensionRegistry": {
+      "title": "WOS Extension Registry",
+      "ref": "#/$defs/extensionRegistry__Root",
+      "selector": {
+        "kind": "extensionRegistry"
+      }
+    }
+  },
+  "$defs": {
+    "lintDiagnostic__Root": {
+      "title": "WOS Lint Diagnostic",
+      "description": "Schema for a single structured diagnostic emitted by wos-lint. Stable JSON serialization consumed by LLM authoring loops, downstream tooling, and CI pipelines. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-lint-diagnostic.schema.json.)",
+      "type": "object",
+      "required": [
+        "ruleId",
+        "severity",
+        "tier",
+        "path",
+        "message"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN (e.g. K-001, G-037, AI-024). Callers switch on this field to suppress, escalate, or route diagnostics.",
+          "examples": [
+            "K-001",
+            "G-037",
+            "AI-024",
+            "SCHEMA-DOC-001"
+          ],
+          "x-lm": {
+            "critical": true
+          }
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "description": "Diagnostic severity level. 'error' means the document is non-conformant. 'warning' means a likely mistake requiring review. 'info' is an informational suggestion with no conformance impact.",
+          "examples": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "x-lm": {
+            "critical": true
+          }
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "T1",
+            "T2",
+            "T3"
+          ],
+          "description": "Verification tier that produced this diagnostic. T1 is single-document structural checks (wos-lint). T2 is cross-document resolution and FEL AST analysis (wos-lint --project). T3 is dynamic runtime conformance (wos-conformance).",
+          "examples": [
+            "T1",
+            "T2",
+            "T3"
+          ],
+          "x-lm": {
+            "critical": true
+          }
+        },
+        "path": {
+          "type": "string",
+          "description": "JSONPath expression pointing to the offending node in the source document. Always starts with '$.' for document-scoped diagnostics. Used by consumers to highlight the exact location in an editor or diff view.",
+          "examples": [
+            "$.states.approved",
+            "$.lifecycle.transitions[2]",
+            "$.actors.reviewer.permissions"
+          ],
+          "x-lm": {
+            "critical": true
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable prose describing what is wrong and why. Should be a complete sentence that makes sense without additional context. LLM repair loops read this field to decide how to fix the document.",
+          "examples": [
+            "state 'approved' has no outbound transition and is not terminal",
+            "actor 'reviewer' declares permission 'approve' but no transition requires that permission"
+          ],
+          "x-lm": {
+            "critical": true
+          }
+        },
+        "suggestedFix": {
+          "type": "object",
+          "description": "Machine-readable remediation proposal. Present only when the rule can deterministically propose a fix. Absent when the rule detects a problem but cannot determine the correct resolution.",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "add-property",
+                "remove-property",
+                "replace-value",
+                "rename",
+                "custom"
+              ],
+              "description": "Discriminant that identifies which fix variant this object represents. Consumers switch on this field to apply the fix without inspecting other fields.",
+              "examples": [
+                "add-property",
+                "remove-property",
+                "replace-value",
+                "rename",
+                "custom"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "JSONPath to the node that should be added, removed, or replaced. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
+              "examples": [
+                "$.states.approved.type",
+                "$.lifecycle.transitions[0].guard"
+              ]
+            },
+            "value": {
+              "description": "Replacement or new value to write at the indicated path. Required for add-property and replace-value kinds. The type matches the expected JSON type of the target field.",
+              "examples": [
+                "terminal",
+                true,
+                42
+              ]
+            },
+            "from": {
+              "type": "string",
+              "description": "Current identifier name for rename fixes. The rename kind changes a key or value from this name to the value in the 'to' field.",
+              "examples": [
+                "submited",
+                "approvall"
+              ]
+            },
+            "to": {
+              "type": "string",
+              "description": "Target identifier name for rename fixes. Replaces the current name identified in the 'from' field after the rename is applied.",
+              "examples": [
+                "submitted",
+                "approval"
+              ]
+            },
+            "hint": {
+              "type": "string",
+              "description": "Free-form remediation hint for custom fixes where none of the structured variants apply. Written as a human-readable instruction for editors and LLM repair loops.",
+              "examples": [
+                "Add at least one terminal state to the lifecycle before declaring transitions.",
+                "Declare the actor in the top-level 'actors' map before referencing it in a transition."
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "relatedDocs": {
+          "type": "array",
+          "description": "Spec sections, LINT-MATRIX entries, or ADRs related to this diagnostic. Consumers render these as links in IDE tooltips or CI annotations. Empty array when the rule has no external references.",
+          "items": {
+            "type": "string",
+            "description": "A single reference string, typically a relative file path with a fragment anchor pointing to the relevant spec section or matrix row.",
+            "examples": [
+              "specs/kernel/spec.md#S4.2",
+              "LINT-MATRIX.md#K-023",
+              "thoughts/adr/0042-terminal-state-invariant.md"
+            ]
+          },
+          "examples": [
+            [
+              "specs/kernel/spec.md#S4.2",
+              "LINT-MATRIX.md#K-023"
+            ],
+            []
+          ]
+        },
+        "source": {
+          "type": "object",
+          "description": "File location of the offending JSON node. Present when lint runs against a file on disk. Absent when linting an in-memory tree (e.g., from wos-mcp or programmatic API calls).",
+          "required": [
+            "document",
+            "line",
+            "column"
+          ],
+          "properties": {
+            "document": {
+              "type": "string",
+              "description": "Path or URL of the source document being linted. May be a relative path from the project root, an absolute path, or a remote URL depending on how the linter was invoked.",
+              "examples": [
+                "workflow.json",
+                "projects/acme/kernel.json",
+                "https://example.com/wos/v1/kernel"
+              ]
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based line number of the offending JSON node within the source document. Used by editors and CI tools to jump to the exact location in the file.",
+              "examples": [
+                42,
+                1,
+                107
+              ]
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based column number of the offending JSON node within the source document. Combined with 'line' to provide a precise character offset for editor integrations.",
+              "examples": [
+                5,
+                1,
+                22
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {
+          "description": "Extension fields reserved for downstream tooling. Prefix x- prevents collision with future spec properties.",
+          "examples": [
+            {
+              "x-editor-highlight": "red"
+            }
+          ]
+        }
+      }
+    },
+    "conformanceTrace__TraceStep": {
+      "type": "object",
+      "description": "A single event-processing step in the conformance run. Records the event dispatched, the state transition observed, optional guard evaluations and policy applications that occurred, and an optional delta explaining any mismatch.",
+      "required": [
+        "stepIndex",
+        "event",
+        "stateBefore",
+        "stateAfter"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stepIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different kernel versions.",
+          "examples": [
+            0,
+            1
+          ]
+        },
+        "event": {
+          "$ref": "#/$defs/conformanceTrace__Event"
+        },
+        "stateBefore": {
+          "type": "string",
+          "description": "Active state label(s) before the event was dispatched. For a simple linear machine this is a single state name (e.g. 'intake'). Recorded as a string serialization of the kernel's active configuration at the start of the step.",
+          "examples": [
+            "intake",
+            "submitted"
+          ]
+        },
+        "stateAfter": {
+          "type": "string",
+          "description": "Active state label(s) after the event was fully processed and all entry/exit actions have run. The runner records the actual observed state, which is compared against expectedStateAfter when present to determine pass/fail.",
+          "examples": [
+            "eligibilityReview",
+            "approved"
+          ]
+        },
+        "expectedStateAfter": {
+          "type": "string",
+          "description": "State label(s) the fixture author declared as the expected outcome for this step. Present only when the fixture explicitly asserts a post-step state. When absent the runner records the transition but does not assert correctness for this step.",
+          "examples": [
+            "eligibilityReview",
+            "approved"
+          ]
+        },
+        "guardsEvaluated": {
+          "type": "array",
+          "description": "Guard expressions evaluated by the kernel during this step, in document order. Each entry records whether the guard fired or was skipped, enabling diff tooling to identify which guard blocked an expected transition.",
+          "items": {
+            "$ref": "#/$defs/conformanceTrace__GuardEvaluation"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "policiesApplied": {
+          "type": "array",
+          "description": "Governance policies applied during this step, in application order. Present only when at least one policy changed the step's outcome. Used by diff tooling to distinguish kernel-logic failures from policy-override failures.",
+          "items": {
+            "$ref": "#/$defs/conformanceTrace__PolicyApplication"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "delta": {
+          "$ref": "#/$defs/conformanceTrace__Delta"
+        }
+      }
+    },
+    "conformanceTrace__Event": {
+      "type": "object",
+      "description": "The event dispatched to the kernel evaluator for this step. Contains the event name, the actor that sent it (if known), and an optional payload of case data that was merged into the case file before guard evaluation.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose 'on' value matches this name.",
+          "examples": [
+            "applicationComplete",
+            "$timeout.state"
+          ]
+        },
+        "sourceActor": {
+          "type": "string",
+          "description": "Identifier of the actor or system that sent this event (e.g. 'caseworker', 'verificationSystem'). Optional; absent when the event is a synthetic lifecycle signal such as '$join' that has no external origin.",
+          "examples": [
+            "caseworker",
+            "verificationSystem"
+          ]
+        },
+        "payload": {
+          "description": "Arbitrary JSON payload carried by the event, merged into the case file before guard evaluation. The payload shape is kernel-document-specific. Absent or null when the event carries no data.",
+          "examples": [
+            {
+              "application": {
+                "isComplete": true
+              }
+            },
+            {}
+          ]
+        }
+      }
+    },
+    "conformanceTrace__GuardEvaluation": {
+      "type": "object",
+      "description": "The runtime observation of a single guard expression evaluation. Recorded for every guard the kernel tests during a step, regardless of whether it fired. The inputs field is scoped to the paths the FEL expression actually read, making it a compact teaching signal for LLM-assisted repair.",
+      "required": [
+        "guardId",
+        "sourceState",
+        "targetState",
+        "event",
+        "expression",
+        "result",
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "guardId": {
+          "type": "string",
+          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple \u2014 use the expression field to disambiguate. The id is stable across runs of the same kernel version.",
+          "examples": [
+            "intake->eligibilityReview:applicationComplete",
+            "submitted->approved:approve"
+          ]
+        },
+        "sourceState": {
+          "type": "string",
+          "description": "Source state of the transition whose guard was evaluated. Matches the 'from' state in the kernel lifecycle topology.",
+          "examples": [
+            "intake",
+            "submitted"
+          ]
+        },
+        "targetState": {
+          "type": "string",
+          "description": "Target state of the transition whose guard was evaluated. Matches the 'to' state in the kernel lifecycle topology.",
+          "examples": [
+            "eligibilityReview",
+            "approved"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "description": "Event name that triggered this guard test. Matches the event.name of the enclosing TraceStep.",
+          "examples": [
+            "applicationComplete",
+            "approve"
+          ]
+        },
+        "expression": {
+          "type": "string",
+          "description": "Raw FEL expression text declared in the kernel document for this transition. The load-bearing teaching signal: when guardId is ambiguous (two transitions sharing the same source/target/event triple), expression uniquely identifies which guard blocked the expected path.",
+          "examples": [
+            "caseFile.application.isComplete = true",
+            "caseFile.amount <= 50000"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "FEL expression text \u2014 primary teaching signal for LLM repair when a guard blocks an expected transition"
+          }
+        },
+        "result": {
+          "type": "boolean",
+          "description": "True if the guard expression evaluated to a truthy value and the transition fired; false if it evaluated to falsy and the transition was skipped.",
+          "examples": [
+            true,
+            false
+          ]
+        },
+        "inputs": {
+          "description": "Subset of the evaluation context actually read by the guard expression, keyed by FEL namespace (e.g. 'caseFile', 'event'). Scoped to referenced paths only so the payload is compact and focused on the data that determined the guard result.",
+          "examples": [
+            {
+              "caseFile": {
+                "application": {
+                  "isComplete": true
+                }
+              }
+            },
+            {
+              "caseFile": {
+                "amount": 3000
+              }
+            }
+          ]
+        }
+      }
+    },
+    "conformanceTrace__PolicyApplication": {
+      "type": "object",
+      "description": "A governance policy applied during a step, recorded when the policy changed or enforced the step outcome. Contains the policy identifier and the parameter bindings resolved at evaluation time.",
+      "required": [
+        "policyId",
+        "parameterBindings"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "policyId": {
+          "type": "string",
+          "description": "Identifier of the governance policy applied (e.g. 'P-01'). Matches the 'id' of a policy entry in the kernel document's governance layer. Used by diff tooling to correlate policy effects across runs.",
+          "examples": [
+            "P-01",
+            "P-11"
+          ]
+        },
+        "parameterBindings": {
+          "description": "JSON object containing the resolved parameter bindings passed to the policy at evaluation time. Shape is policy-specific.",
+          "examples": [
+            {
+              "limit": 10
+            },
+            {
+              "threshold": 50000
+            }
+          ]
+        }
+      }
+    },
+    "conformanceTrace__Delta": {
+      "description": "Discriminated union describing why a step deviated from expectations. The 'kind' field identifies the variant. Present only when the step produced a detectable mismatch. Three variants are defined: 'stateMismatch' (actual post-step state differs from expected), 'guardFalse' (a guard evaluated false when it should have fired), 'policyOverride' (a policy changed the expected outcome).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/conformanceTrace__DeltaStateMismatch"
+        },
+        {
+          "$ref": "#/$defs/conformanceTrace__DeltaGuardFalse"
+        },
+        {
+          "$ref": "#/$defs/conformanceTrace__DeltaPolicyOverride"
+        }
+      ],
+      "examples": [
+        {
+          "kind": "stateMismatch",
+          "expected": "approved",
+          "actual": "rejected",
+          "cause": "guard false"
+        }
+      ]
+    },
+    "conformanceTrace__DeltaStateMismatch": {
+      "type": "object",
+      "description": "Delta variant: the actual state after the step differs from the state the fixture author declared as expected. The 'cause' field is an optional human-readable hint about why the mismatch occurred.",
+      "required": [
+        "kind",
+        "expected",
+        "actual"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "stateMismatch",
+          "description": "Discriminant identifying this delta as a state mismatch. Always the literal string 'stateMismatch'.",
+          "examples": [
+            "stateMismatch"
+          ]
+        },
+        "expected": {
+          "type": "string",
+          "description": "The state label the fixture declared as the expected post-step state.",
+          "examples": [
+            "approved",
+            "eligibilityReview"
+          ]
+        },
+        "actual": {
+          "type": "string",
+          "description": "The state label the kernel evaluator actually transitioned into.",
+          "examples": [
+            "rejected",
+            "intake"
+          ]
+        },
+        "cause": {
+          "type": "string",
+          "description": "Optional human-readable explanation of why the mismatch occurred. Populated by the runner when it can diagnose the root cause (e.g. 'guard false on all outgoing transitions').",
+          "examples": [
+            "guard false",
+            "no matching transition for event"
+          ]
+        }
+      }
+    },
+    "conformanceTrace__DeltaGuardFalse": {
+      "type": "object",
+      "description": "Delta variant: a guard expression evaluated false when the fixture expected it to fire. This is the primary teaching signal for LLM-assisted repair \u2014 the expression and inputs fields together give the repair agent everything it needs to identify and fix the FEL expression that blocked the expected transition.",
+      "required": [
+        "kind",
+        "guardId",
+        "expression",
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "guardFalse",
+          "description": "Discriminant identifying this delta as a guard-false event. Always the literal string 'guardFalse'.",
+          "examples": [
+            "guardFalse"
+          ]
+        },
+        "guardId": {
+          "type": "string",
+          "description": "Synthesized guard identifier in the form '{sourceState}->{targetState}:{event}' that identifies the transition whose guard evaluated false. See GuardEvaluation.guardId for disambiguation notes.",
+          "examples": [
+            "reviewed->approved:decide",
+            "submitted->approved:approve"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Identifies the blocked transition \u2014 primary key for LLM repair targeting"
+          }
+        },
+        "expression": {
+          "type": "string",
+          "description": "The raw FEL expression text that evaluated false. Together with inputs, this is the complete teaching signal: the repair agent can read the expression, see what inputs it received, and determine what change to the kernel document will make it evaluate true.",
+          "examples": [
+            "caseFile.benefit_amount <= caseFile.income_limit",
+            "caseFile.amount <= 50000"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "FEL expression that evaluated false \u2014 repair agents use this to identify the specific guard to fix"
+          }
+        },
+        "inputs": {
+          "description": "The evaluation context (scoped to referenced paths) at the moment the guard evaluated false. Keyed by FEL namespace (e.g. 'caseFile'). Together with expression, allows a repair agent to reproduce the failure without re-running the full fixture.",
+          "examples": [
+            {
+              "caseFile": {
+                "benefit_amount": 520,
+                "income_limit": 500
+              }
+            },
+            {
+              "caseFile": {
+                "amount": 75000
+              }
+            }
+          ]
+        }
+      }
+    },
+    "conformanceTrace__DeltaPolicyOverride": {
+      "type": "object",
+      "description": "Delta variant: a governance policy applied during this step changed the outcome from what the kernel logic alone would have produced. Records what the outcome would have been without the policy and what it became after the policy applied.",
+      "required": [
+        "kind",
+        "policyId",
+        "expectedWithoutPolicy",
+        "actualWithPolicy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "policyOverride",
+          "description": "Discriminant identifying this delta as a policy-override event. Always the literal string 'policyOverride'.",
+          "examples": [
+            "policyOverride"
+          ]
+        },
+        "policyId": {
+          "type": "string",
+          "description": "Identifier of the governance policy that changed the outcome. Matches PolicyApplication.policyId in the same step's policiesApplied array.",
+          "examples": [
+            "P-11",
+            "P-01"
+          ]
+        },
+        "expectedWithoutPolicy": {
+          "type": "string",
+          "description": "The state the kernel evaluator would have transitioned into if the named policy had not been applied.",
+          "examples": [
+            "approved",
+            "active"
+          ]
+        },
+        "actualWithPolicy": {
+          "type": "string",
+          "description": "The state the kernel evaluator actually transitioned into after the policy was applied.",
+          "examples": [
+            "rejected",
+            "suspended"
+          ]
+        }
+      }
+    },
+    "conformanceTrace__Root": {
+      "title": "WOS Conformance Trace",
+      "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, kernel version, the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was conformance-trace.schema.json.)",
+      "type": "object",
+      "required": [
+        "fixtureId",
+        "kernelVersion",
+        "steps",
+        "outcome"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
+          "examples": [
+            "https://wos-spec.org/schemas/conformance/conformance-trace.schema.json"
+          ]
+        },
+        "fixtureId": {
+          "type": "string",
+          "description": "Unique identifier for the conformance fixture that produced this trace. Matches the fixture filename stem (e.g. 'K-011-determinism'). Used by explain/diff tooling to correlate traces across runs and by LLM repair agents to select the fixture definition when diagnosing a failure.",
+          "examples": [
+            "K-011-determinism",
+            "G-030-hold-resume"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Fixture identity key that links the trace to its fixture definition"
+          }
+        },
+        "kernelVersion": {
+          "type": "string",
+          "description": "WOS Kernel specification version the runner evaluated the fixture against. Matches the '$wosKernel' marker in the kernel document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
+          "examples": [
+            "1.0",
+            "1.1"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Pins the trace to the kernel spec version used for evaluation"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Ordered sequence of event-processing steps executed during the fixture run. Each step corresponds to one event dispatched to the kernel evaluator. The array is empty when the fixture validates a structural property (e.g. a negative fixture that must reject at load time).",
+          "items": {
+            "$ref": "#/$defs/conformanceTrace__TraceStep"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "error"
+          ],
+          "description": "Final result of the conformance run: 'pass' means every step matched expectations; 'fail' means at least one step produced a state mismatch or unexpected guard result; 'error' means the runner itself encountered an unhandled exception (e.g. invalid fixture JSON, kernel panic). LLM repair prompts MUST treat 'fail' and 'error' differently \u2014 'fail' points to kernel logic bugs; 'error' points to fixture or tooling issues.",
+          "examples": [
+            "pass",
+            "fail"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Top-level conformance verdict used for pass/fail reporting and regression gating"
+          }
+        }
+      }
+    },
+    "synthTrace__SynthTrace": {
+      "type": "object",
+      "description": "Full record of a synthesis loop run \u2014 the iteration list plus per-run cost totals. Mirrors `wos-synth-core::trace::SynthTrace`.",
+      "required": [
+        "iterations",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_cache_read_tokens"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
+          "examples": [
+            "https://wos-spec.org/schemas/synth/wos-synth-trace.schema.json"
+          ]
+        },
+        "iterations": {
+          "type": "array",
+          "description": "Ordered sequence of loop iterations, in execution order. The first entry is iteration 0 (the initial generation call); subsequent entries are repair attempts. Empty array is permitted only when the loop never ran (constructed but unused trace); a real run always produces at least one record.",
+          "items": {
+            "$ref": "#/$defs/synthTrace__IterationRecord"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "total_input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of input_tokens across every iteration in the trace. Maintained by the Rust producer (SynthTrace::push) so consumers can read total cost without re-summing the iterations array. Used by wos-bench for cost regression alerting and by `wos-synth explain` for the run summary line.",
+          "examples": [
+            0,
+            1542
+          ]
+        },
+        "total_output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of output_tokens across every iteration in the trace. Together with total_input_tokens and total_cache_read_tokens, this gives the full per-document cost profile. Output tokens dominate cost on most providers; a high value indicates either verbose model output or many repair iterations.",
+          "examples": [
+            0,
+            487
+          ]
+        },
+        "total_cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of cache_read_tokens across every iteration in the trace. Reflects how many tokens the provider served from prompt cache rather than re-billing as input. A healthy synthesis loop with stable cache anchors converges this value toward total_input_tokens on repair iterations; large divergence indicates the prompter is invalidating its cache.",
+          "examples": [
+            0,
+            1320
+          ]
+        }
+      },
+      "patternProperties": {
+        "^x-": {
+          "description": "Vendor extension fields reserved for downstream tooling. The `x-` prefix prevents collision with future spec-defined properties.",
+          "examples": [
+            {
+              "x-run-id": "abc123"
+            }
+          ]
+        }
+      }
+    },
+    "synthTrace__IterationRecord": {
+      "type": "object",
+      "description": "One entry of the synthesis loop: the LLM produced an attempt, the tool context linted it (and optionally checked conformance), and the loop recorded the result before deciding whether to repair, converge, or give up at the iteration cap.",
+      "required": [
+        "index",
+        "attempt",
+        "lint_findings",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position of this iteration in the loop. Index 0 is the initial generation; index N>0 is a repair attempt produced after the previous iteration's lint findings were fed back into the prompt.",
+          "examples": [
+            0,
+            1,
+            2
+          ]
+        },
+        "attempt": {
+          "type": "string",
+          "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations \u2014 the trace must preserve exactly what the model produced so failures can be reproduced.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\"}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{}}}"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Verbatim model output \u2014 the load-bearing teaching signal for diagnosing why the loop did not converge"
+          }
+        },
+        "lint_findings": {
+          "type": "array",
+          "description": "Lint findings observed against this iteration's attempt. Empty array means the attempt passed all lint rules (clean). Non-empty entries are fed back into the next repair prompt so the model can correct the document.",
+          "items": {
+            "$ref": "#/$defs/synthTrace__LintFinding"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "conformance": {
+          "$ref": "#/$defs/synthTrace__ConformanceVerdict"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens billed as fresh input on the LLM call that produced this iteration's attempt. Distinct from cache_read_tokens, which accounts for cached prefix tokens the provider re-served at a discount.",
+          "examples": [
+            120,
+            1500
+          ]
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens the provider billed for the model's response on this iteration. The size of `attempt` in tokens (provider-tokenizer-dependent, so not directly comparable to character length).",
+          "examples": [
+            80,
+            450
+          ]
+        },
+        "cache_read_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens served from prompt cache on this iteration. Anthropic and other providers return this value separately from input_tokens so callers can track cache hit ratio. Zero is normal for the first iteration; subsequent repair iterations should approach the size of the cached prompt prefix.",
+          "examples": [
+            0,
+            1320
+          ]
+        }
+      }
+    },
+    "synthTrace__LintFinding": {
+      "type": "object",
+      "description": "One lint finding the synthesis loop will ask the model to repair on the next iteration. Mirrors `wos-synth-core::tool_context::LintFinding` (intentionally a distinct shape from the published wos-lint-diagnostic schema, which serves a different consumer surface).",
+      "required": [
+        "rule_id",
+        "severity",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "Stable identifier of the lint rule that produced this finding (e.g. K-001, G-027, AI-024). Matches an entry in LINT-MATRIX.md. The repair prompt cites this id so the model can map the message back to the rule's documentation.",
+          "examples": [
+            "K-001",
+            "G-027",
+            "AI-024"
+          ]
+        },
+        "severity": {
+          "$ref": "#/$defs/synthTrace__Severity"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the problem. The synthesis loop forwards this string verbatim into the repair prompt so the model gets the rule author's explanation rather than just the rule id. Should be a complete sentence that makes sense without surrounding context.",
+          "examples": [
+            "state 'approved' has no outbound transition and is not terminal",
+            "actor 'reviewer' references undefined permission 'approve'"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional JSON Pointer (RFC 6901) anchoring the finding to a specific node in the attempt document. Absent when the finding is whole-document scoped. The pointer is computed against the attempt as parsed JSON, so it may not be present on iterations where the attempt failed to parse.",
+          "examples": [
+            "/states/approved",
+            "/lifecycle/transitions/2"
+          ]
+        },
+        "suggested_fix": {
+          "type": "string",
+          "description": "Optional pre-rendered remediation hint the rule's author wrote (e.g. 'add property at /foo', 'rename X -> Y'). Surfaced in the repair prompt so the model receives the rule's machine-readable suggestion alongside the human-readable message.",
+          "examples": [
+            "add property at /states/approved/type with value 'terminal'",
+            "rename actor 'reviewr' to 'reviewer'"
+          ]
+        },
+        "related_docs": {
+          "type": "array",
+          "description": "Optional list of spec section anchors or matrix entries that explain this rule. The synthesis loop joins these into the repair prompt so the model can ground its fix in the spec rather than guessing. Empty array is omitted from the serialized form.",
+          "items": {
+            "type": "string",
+            "description": "A single reference string, typically a relative file path with a fragment anchor pointing to the relevant spec section or matrix row.",
+            "examples": [
+              "specs/kernel/spec.md#S4.2",
+              "LINT-MATRIX.md#K-023"
+            ]
+          },
+          "examples": [
+            [
+              "specs/kernel/spec.md#S4.2",
+              "LINT-MATRIX.md#K-023"
+            ],
+            []
+          ]
+        }
+      }
+    },
+    "synthTrace__Severity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "description": "Severity bucket the loop uses to decide whether the document is repair-worthy. Only `error` blocks convergence; `warning` and `info` are recorded in the trace but do not trigger another repair iteration. The loop converges when zero `error` findings remain (and conformance, if checked, passes).",
+      "examples": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Drives loop convergence \u2014 only `error` severities trigger repair iterations"
+      }
+    },
+    "synthTrace__ConformanceVerdict": {
+      "type": "object",
+      "description": "Optional conformance result attached to an iteration when the caller supplied a fixture. Absent (the iteration record's `conformance` field is omitted) when no fixture was supplied \u2014 the loop then converges on lint cleanliness alone.",
+      "required": [
+        "passed",
+        "summary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean",
+          "description": "True when the conformance harness reported the fixture passed end-to-end against this iteration's attempt; false otherwise. The synthesis loop treats `false` as a blocker just like an error-severity lint finding: another repair iteration is triggered (or the loop gives up at the cap).",
+          "examples": [
+            true,
+            false
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable summary of the conformance result, suitable for inclusion in a repair prompt. On failure, the summary should describe the divergence in enough detail for the model to diagnose and fix the document. On pass, a brief affirmative line is sufficient.",
+          "examples": [
+            "fixture passed all 7 steps",
+            "step 3: expected state 'approved', got 'rejected' (guard 'reviewed->approved:decide' evaluated false)"
+          ]
+        }
+      }
+    },
+    "synthTrace__SynthOutcome": {
+      "description": "Result of running the synthesis loop to completion. A discriminated union tagged by the `outcome` field: `converged` when the loop produced a clean document within the iteration cap, `unconverged` when the cap was hit with errors still present. Mirrors the Rust `wos-synth-core::synth_loop::SynthOutcome` enum (serde tag `outcome`, snake_case variants).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/synthTrace__SynthOutcomeConverged"
+        },
+        {
+          "$ref": "#/$defs/synthTrace__SynthOutcomeUnconverged"
+        }
+      ],
+      "examples": [
+        {
+          "outcome": "converged",
+          "document": "{\"$wosKernel\":\"1.0\"}",
+          "trace": {
+            "iterations": [],
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cache_read_tokens": 0
+          }
+        }
+      ]
+    },
+    "synthTrace__SynthOutcomeConverged": {
+      "type": "object",
+      "description": "Outcome variant: the loop produced a document that cleared all error-severity lint findings (and passed conformance, if a fixture was supplied) within the iteration cap. The `document` field is the final attempt; the `trace` records every iteration that led there.",
+      "required": [
+        "outcome",
+        "document",
+        "trace"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "const": "converged",
+          "description": "Discriminant identifying this outcome variant. Always the literal string 'converged'. Consumers switch on this field to choose between the converged and unconverged response shapes without inspecting other fields.",
+          "examples": [
+            "converged",
+            "converged"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tagged-union discriminant \u2014 consumers must read this before any other field to determine the outcome shape"
+          }
+        },
+        "document": {
+          "type": "string",
+          "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved \u2014 this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\"}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The synthesis output \u2014 the actual artifact the caller asked the loop to produce"
+          }
+        },
+        "trace": {
+          "$ref": "#/$defs/synthTrace__SynthTrace"
+        }
+      }
+    },
+    "synthTrace__SynthOutcomeUnconverged": {
+      "type": "object",
+      "description": "Outcome variant: the loop hit the iteration cap with error-severity findings still present. The `last_attempt` field is the most recent document the loop produced; `last_findings` is what was still wrong with it; `trace` records every iteration that led there.",
+      "required": [
+        "outcome",
+        "last_attempt",
+        "last_findings",
+        "trace"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "const": "unconverged",
+          "description": "Discriminant identifying this outcome variant. Always the literal string 'unconverged'. Consumers switch on this field to choose between the converged and unconverged response shapes without inspecting other fields.",
+          "examples": [
+            "unconverged",
+            "unconverged"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tagged-union discriminant \u2014 consumers must read this before any other field to determine the outcome shape"
+          }
+        },
+        "last_attempt": {
+          "type": "string",
+          "description": "The most recent document the loop produced before giving up at the iteration cap. Preserved as raw JSON text (see SynthOutcomeConverged.document for the rationale) so callers can inspect or feed it into a follow-up repair pipeline.",
+          "examples": [
+            "{\"$wosKernel\":\"1.0\",\"broken\":true}",
+            "{\"$wosKernel\":\"1.0\",\"states\":{}}"
+          ]
+        },
+        "last_findings": {
+          "type": "array",
+          "description": "Lint findings still outstanding against `last_attempt` when the loop gave up. Identical in shape to IterationRecord.lint_findings; surfaced at the outcome level for callers that only care about the final state and do not want to walk the trace.",
+          "items": {
+            "$ref": "#/$defs/synthTrace__LintFinding"
+          },
+          "examples": [
+            []
+          ]
+        },
+        "trace": {
+          "$ref": "#/$defs/synthTrace__SynthTrace"
+        }
+      }
+    },
+    "synthTrace__Root": {
+      "title": "WOS Synth Trace",
+      "description": "Structured execution trace emitted by the wos-synth synthesis loop. Records every iteration of the generate-then-repair loop the LLM authoring engine ran for a single document: the model's raw attempt, the lint findings observed against it, the conformance verdict (when a fixture was supplied), and the per-call token costs. The CLI's `wos-synth explain` command consumes this artifact, downstream tooling (wos-bench, regression dashboards) parses it for cost and convergence analysis, and external consumers may use it to replay or diff synthesis runs across model or prompt versions. The Rust authority for this shape is `wos-synth-core::trace::SynthTrace`; a drift test (`crates/wos-synth-core/tests/trace_schema_drift.rs`) keeps this schema and the Rust types aligned. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-synth-trace.schema.json.)",
+      "$ref": "#/$defs/synthTrace__SynthTrace",
+      "$comment": "The root delegates to $defs/SynthTrace so the same definition is reachable both as the top-level document type and from sibling definitions (SynthOutcomeConverged.trace, SynthOutcomeUnconverged.trace)."
+    },
+    "mcpToolCatalog__Root": {
+      "title": "WOS MCP Tool Catalog",
+      "description": "Catalog of all 22 tools exposed by the wos-mcp JSON-RPC-2.0 stdio server. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-mcp-tools.schema.json.)",
+      "type": "object",
+      "required": [
+        "tools"
+      ],
+      "properties": {
+        "tools": {
+          "type": "array",
+          "description": "Ordered list of tool descriptors. Each entry matches the shape returned by the tools/list MCP method.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "description",
+              "inputSchema"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly.",
+                "examples": [
+                  "wos_ping",
+                  "wos_add_state"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable explanation of what the tool does and what it returns, shown to LLM clients in the tools/list response.",
+                "examples": [
+                  "Health-check tool. Returns {\"pong\": true}.",
+                  "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}."
+                ]
+              },
+              "inputSchema": {
+                "type": "object",
+                "description": "JSON Schema (draft-07) describing the arguments object accepted by this tool. Used by MCP clients to validate call arguments before sending.",
+                "examples": [
+                  {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "project_id"
+                    ],
+                    "properties": {
+                      "project_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              },
+              "outputSchema": {
+                "type": "object",
+                "description": "JSON Schema describing the successful result object returned inside the MCP tools/call `result.content[0].text` field (optional).",
+                "examples": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "pong"
+                    ],
+                    "properties": {
+                      "pong": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "project_id"
+                    ],
+                    "properties": {
+                      "project_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "x-tool-catalog": {
+        "tools": [
+          {
+            "name": "wos_ping",
+            "description": "Health-check tool. Returns {\"pong\": true}.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "pong"
+              ],
+              "properties": {
+                "pong": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_create_kernel",
+            "description": "Create a new empty WOS kernel project. Returns {\"project_id\": \"<uuid>\"}.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_load_document",
+            "description": "Parse and register a WOS kernel document from inline JSON text or a file path. Returns {\"project_id\": \"<uuid>\"}.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "json": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_export_document",
+            "description": "Serialize a registered project back to a JSON string. Returns {\"document\": \"<json-string>\"}.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "document"
+              ],
+              "properties": {
+                "document": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_describe_document",
+            "description": "Return summary counts for a registered project.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "state_count",
+                "transition_count",
+                "actor_count",
+                "impact_level",
+                "ai_agent_count"
+              ],
+              "properties": {
+                "state_count": {
+                  "type": "integer"
+                },
+                "transition_count": {
+                  "type": "integer"
+                },
+                "actor_count": {
+                  "type": "integer"
+                },
+                "impact_level": {
+                  "type": "string"
+                },
+                "ai_agent_count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_state",
+            "description": "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "state_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "state_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "atomic",
+                    "compound",
+                    "parallel",
+                    "final"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "state_id"
+              ],
+              "properties": {
+                "state_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_transition",
+            "description": "Add a transition between two existing states.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "from",
+                "to"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "trigger": {
+                  "type": "string"
+                },
+                "guard": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "trigger": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_set_initial_state",
+            "description": "Set the lifecycle initial state for a registered project.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "state_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "state_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "state_id"
+              ],
+              "properties": {
+                "state_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_remove_state",
+            "description": "Remove a state and all transitions referencing it.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "state_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "state_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "state_id",
+                "transitions_removed"
+              ],
+              "properties": {
+                "state_id": {
+                  "type": "string"
+                },
+                "transitions_removed": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_actor",
+            "description": "Declare a human or system actor on a registered project.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "actor_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "actor_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "human",
+                    "system"
+                  ]
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "actor_id"
+              ],
+              "properties": {
+                "actor_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_actor_extension",
+            "description": "Attach an x-prefixed extension key to an existing actor.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "actor_id",
+                "key",
+                "value"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "actor_id": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "value": {}
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "actor_id",
+                "key"
+              ],
+              "properties": {
+                "actor_id": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_due_process_path",
+            "description": "Record a due-process path under x-wos-governance.dueProcessPaths.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "path_id",
+                "description"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "path_id": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "path_id"
+              ],
+              "properties": {
+                "path_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_assertion_gate",
+            "description": "Register an assertion gate in x-wos-governance.assertionGates.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "gate_id",
+                "assertion",
+                "transition"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "gate_id": {
+                  "type": "string"
+                },
+                "assertion": {
+                  "type": "string"
+                },
+                "transition": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "gate_id"
+              ],
+              "properties": {
+                "gate_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_set_impact_level",
+            "description": "Set the document-level impact classification (kernel \u00a7S6).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "level"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "rights-impacting",
+                    "safety-impacting",
+                    "operational",
+                    "informational"
+                  ]
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "level"
+              ],
+              "properties": {
+                "level": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_ai_agent",
+            "description": "Register an AI agent under x-wos-ai.agents. AI agents are NOT actors.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "agent_id",
+                "role",
+                "model"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "agent_id": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "capabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "agent_id"
+              ],
+              "properties": {
+                "agent_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_add_deontic_constraint",
+            "description": "Append a structured deontic constraint under x-wos-ai.deonticConstraints.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "constraint_id",
+                "target",
+                "modality",
+                "action"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "constraint_id": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "modality": {
+                  "type": "string",
+                  "enum": [
+                    "must",
+                    "must_not",
+                    "may"
+                  ]
+                },
+                "action": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "constraint_id"
+              ],
+              "properties": {
+                "constraint_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_lint",
+            "description": "Export project and lint it. Returns diagnostics summary.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "diagnostics",
+                "error_count",
+                "warning_count"
+              ],
+              "properties": {
+                "diagnostics": {
+                  "type": "array"
+                },
+                "error_count": {
+                  "type": "integer"
+                },
+                "warning_count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_run_conformance",
+            "description": "Run a conformance fixture and return the ConformanceTrace as JSON.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "fixture_json"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "fixture_json": {
+                  "type": "string"
+                },
+                "base_dir": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "passed",
+                "failures",
+                "trace"
+              ],
+              "properties": {
+                "passed": {
+                  "type": "boolean"
+                },
+                "failures": {
+                  "type": "array"
+                },
+                "trace": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_preview_state_graph",
+            "description": "Construct a state graph string from states and transitions.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "mermaid",
+                    "dot"
+                  ]
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "graph",
+                "format"
+              ],
+              "properties": {
+                "graph": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_search",
+            "description": "Linear substring search over states, transitions, actors, or deontic constraints.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "kind",
+                "query"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "transition",
+                    "actor",
+                    "constraint"
+                  ]
+                },
+                "query": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "matches",
+                "kind",
+                "query"
+              ],
+              "properties": {
+                "matches": {
+                  "type": "array"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_list_projects",
+            "description": "List all open project UUIDs in the current session.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "projects",
+                "count"
+              ],
+              "properties": {
+                "projects": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          {
+            "name": "wos_close_project",
+            "description": "Close (remove) an open project from the session registry.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "project_id"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": [
+                "project_id",
+                "closed"
+              ],
+              "properties": {
+                "project_id": {
+                  "type": "string"
+                },
+                "closed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "extensionRegistry__JsonSchemaUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the JSON Schema this document conforms to. When present, MUST resolve to a WOS Extension Registry schema document. Processors use this for resolver hints; the document type marker `$wosExtensionRegistry` remains authoritative for document classification.",
+      "examples": [
+        "https://wos-spec.org/schemas/extension-registry/1.0",
+        "https://wos-spec.org/schemas/extension-registry/1.0"
+      ]
+    },
+    "extensionRegistry__ExtensionsMap": {
+      "type": "object",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel \u00a710.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix. At the registry root, WOS-owned `x-wos-*` keys MAY publish custody-append identifier metadata such as `x-wos-custody-event-types`, `x-wos-typeid-family-prefixes`, and `x-wos-owning-spec-version`. Processors MUST ignore unknown extension keys to preserve forward compatibility.",
+      "examples": [
+        {
+          "x-acme-internal-id": "REG-001"
+        },
+        {
+          "x-vendor-source": "trellis-1.2"
+        },
+        {
+          "x-wos-owning-spec-version": "1.0.0-draft.1",
+          "x-wos-typeid-family-prefixes": [
+            {
+              "prefix": "prov",
+              "family": "kernel facts-tier provenance records"
+            }
+          ]
+        }
+      ],
+      "propertyNames": {
+        "pattern": "^x-"
+      },
+      "additionalProperties": {}
+    },
+    "extensionRegistry__RegistryEntry": {
+      "type": "object",
+      "required": [
+        "seam",
+        "kind",
+        "lifecycle",
+        "description"
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Per-entry vendor extensions per Kernel \u00a710.6"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "seam": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for the seam this entry catalogs. Conventionally dotted with a layer prefix: `kernel.<seamName>` for the six kernel seams (Kernel \u00a710.1-\u00a710.6), `governance.<hookName>` for Layer 1 attachments, `ai.<hookName>` for Layer 2 attachments, or a vendor-namespaced identifier like `x-trellis.custody.distributed`. Identifiers are case-sensitive and SHOULD be treated as opaque tokens by tooling.",
+          "examples": [
+            "kernel.actorExtension",
+            "kernel.lifecycleHook",
+            "x-trellis.custody.distributed"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Primary key used by processors to look up an entry"
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "actor-extension",
+            "contract-hook",
+            "provenance-layer",
+            "lifecycle-hook",
+            "custody-hook",
+            "vendor-extension"
+          ],
+          "description": "Classification of the extension point. The first five values correspond to the named kernel seams in Kernel \u00a710.1 through \u00a710.5: `actor-extension` (Kernel \u00a710.1), `contract-hook` (Kernel \u00a710.2), `provenance-layer` (Kernel \u00a710.3), `lifecycle-hook` (Kernel \u00a710.4), `custody-hook` (Kernel \u00a710.5). The sixth value, `vendor-extension`, catalogs `extensions` / `x-`-prefixed bindings (Kernel \u00a710.6). Tooling uses `kind` to decide which validation profile applies (e.g., a `lifecycle-hook` entry is expected to declare a transition tag schema).",
+          "examples": [
+            "lifecycle-hook",
+            "custody-hook",
+            "vendor-extension"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Discriminator selecting which kernel seam classification applies"
+          }
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "stable",
+            "deprecated",
+            "retired"
+          ],
+          "description": "Lifecycle stage of this entry. `draft` MAY change shape without notice and MUST NOT be relied upon in production; `stable` SHALL preserve its declared shape across minor registry versions and is safe to bind against; `deprecated` continues to resolve but SHOULD NOT be authored against \u2014 adopters migrate to the entry named in `replacedBy`; `retired` MUST be rejected by processors that load this registry version. Lifecycle transitions follow the rules in Registry \u00a73.2.",
+          "examples": [
+            "stable",
+            "deprecated"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Stability promise that gates whether adopters can safely depend on this entry"
+          }
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of what this seam binding does, what shape it accepts, and why it exists. Authors SHOULD include a one-sentence summary of the seam's purpose plus a pointer (in prose) to the spec section that defines its behavior.",
+          "examples": [
+            "Higher layers register additional actor types beyond `human` and `system` (Kernel \u00a710.1). The kernel treats actor `type` strings as opaque; this entry catalogs the `agent` actor type added by the AI Integration layer."
+          ]
+        },
+        "specRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to the spec section that defines this seam's behavior. RECOMMENDED to use a fragment identifier so deep-linking lands the reader on the exact normative text (e.g., the kernel spec \u00a710.1 actorExtension definition).",
+          "examples": [
+            "https://wos-spec.org/specs/kernel#10.1-actorextension",
+            "https://wos-spec.org/specs/ai-integration#3-agent-actor"
+          ]
+        },
+        "schemaRef": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI to a JSON Schema fragment that constrains the shape of values bound to this seam. When absent, the seam's shape is implementation-defined or opaque (as with the kernel `custodyHook`, which the kernel treats as opaque content).",
+          "examples": [
+            "https://wos-spec.org/schemas/ai-integration/1.0#/$defs/AgentActorDeclaration"
+          ]
+        },
+        "composition": {
+          "type": "string",
+          "enum": [
+            "merge",
+            "replace",
+            "augment"
+          ],
+          "description": "How multiple registrations at the same seam combine. `merge` performs key-wise object merge \u2014 later registrations override earlier keys field-by-field; `replace` means the latest registration wholly supersedes prior bindings \u2014 earlier values are discarded; `augment` means each registration adds to a list \u2014 order is preserved and entries do not collide. When absent, the default is `merge` for object-shaped seams and `augment` for list-shaped seams (see Registry \u00a74.2).",
+          "examples": [
+            "merge",
+            "augment"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Tells processors how to combine overlapping registrations at one seam"
+          }
+        },
+        "since": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version or date at which this entry became available. Use SemVer when the registry tracks a versioned spec; ISO 8601 date is also acceptable for time-keyed catalogs. Tooling may use this to filter entries newer than a target spec version.",
+          "examples": [
+            "1.0.0",
+            "2026-04-18"
+          ]
+        },
+        "deprecatedSince": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version or date at which this entry transitioned to `deprecated`. MUST be present when `lifecycle` is `deprecated` or `retired` so adopters can compute migration windows. Use SemVer or ISO 8601 date \u2014 the format MUST match the format used in `since` for this registry.",
+          "examples": [
+            "1.2.0",
+            "2026-09-30"
+          ]
+        },
+        "replacedBy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "When this entry is `deprecated` or `retired`, the `seam` identifier of the entry that supersedes it. Processors MAY follow `replacedBy` chains during resolution (Registry \u00a75.3); chains MUST be acyclic and MUST terminate at a non-deprecated entry.",
+          "examples": [
+            "kernel.contractHook.v2",
+            "x-trellis.custody.distributed.v2"
+          ]
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "description": "Opaque example payload illustrating a value bound at this seam. The registry imposes no shape constraint here \u2014 values are reproduced verbatim in documentation.",
+            "examples": [
+              {
+                "actorType": "agent",
+                "modelEndpoint": "anthropic://claude-opus"
+              }
+            ]
+          },
+          "minItems": 1,
+          "description": "Sample payloads for documentation. Each entry SHOULD be a complete, valid example of the value that would appear at this seam in a real document. Examples are reference material, not normative \u2014 they MUST NOT be treated as conformance fixtures.",
+          "examples": [
+            [
+              {
+                "actorType": "agent",
+                "modelEndpoint": "anthropic://claude-opus"
+              },
+              {
+                "actorType": "system",
+                "callbackUrl": "https://agency.gov/cb"
+              }
+            ]
+          ]
+        },
+        "vendorPrefix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required vendor namespace prefix for `vendor-extension` kinds. SHOULD match the regex shape `^x-[a-z0-9]+(-[a-z0-9]+)*$` per Kernel \u00a710.6 naming rules. Lint tooling enforces that any `x-` key whose prefix matches this pattern conforms to the entry's `schemaRef` (when one is declared).",
+          "examples": [
+            "x-trellis-",
+            "x-acme-tenant-"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Anchors a vendor namespace to a registry entry so lint tooling can validate keys"
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensionRegistry__ExtensionsMap"
+        }
+      }
+    },
+    "extensionRegistry__Root": {
+      "title": "WOS Extension Registry",
+      "description": "A WOS Extension Registry document. Catalogs the named extension seams that the WOS Kernel exposes (Kernel \u00a710) plus higher-layer or vendor-supplied entries that bind to those seams. Adopters scan a registry to discover which seams exist, which lifecycle stage they have reached (draft, stable, deprecated, retired), how multiple registrations compose at a single seam, and which vendor namespaces are claimed. Registries are descriptive \u2014 they catalog seams; they do not enforce behavior. Lint tooling and documentation generators consume registries to validate extension keys and to render seam catalogs. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-extension-registry.schema.json.)",
+      "type": "object",
+      "required": [
+        "$wosExtensionRegistry",
+        "version",
+        "entries"
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6 (extensions escape hatch)"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "$wosExtensionRegistry": {
+          "type": "string",
+          "const": "1.0",
+          "description": "WOS Extension Registry specification version. MUST be '1.0'. Identifies this document as a WOS Extension Registry and pins the specification version. Processors and lint tooling reject documents with unsupported registry versions and SHOULD warn (not fail) when the document parses as JSON but carries an unknown registry version, so that future versions degrade gracefully on older tooling.",
+          "examples": [
+            "1.0",
+            "1.0"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Document type marker for WOS Extension Registry"
+          }
+        },
+        "$schema": {
+          "$ref": "#/$defs/extensionRegistry__JsonSchemaUri"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of this Extension Registry document. SemVer is RECOMMENDED. Increment when entries are added, removed, or transition between lifecycle stages so that downstream tooling can detect catalog drift and re-run conformance checks against the latest snapshot.",
+          "examples": [
+            "1.0.0",
+            "2026.04.0"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable name for this registry. Surfaces in documentation and discovery UIs that list available registries (e.g., 'WOS Core Extension Registry', 'Trellis Custody Catalog').",
+          "examples": [
+            "WOS Core Extension Registry"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this registry catalogs and the audience it serves. A registry SHOULD describe whether it covers kernel seams, vendor extensions, deployment-specific overrides, or some combination, so adopters can decide which registries to load. For the WOS-Trellis `custodyHook` binding, the root `extensions` object MAY also carry reserved `x-wos-*` keys publishing WOS-owned `wos.*` event types and TypeID family prefixes.",
+          "examples": [
+            "Catalog of the six kernel seams plus reference Trellis custody profile entries published by the WOS Working Group."
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/extensionRegistry__RegistryEntry"
+          },
+          "minItems": 1,
+          "description": "Ordered list of registry entries. Each entry catalogs one seam binding: a named extension point exposed by the kernel or a higher layer, plus the lifecycle status, composition rules, and discovery metadata for that binding. Order is significant only for human reading; processors MUST resolve entries by `seam` identifier (Registry \u00a75.2).",
+          "examples": [
+            [
+              {
+                "seam": "kernel.actorExtension",
+                "kind": "actor-extension",
+                "lifecycle": "stable",
+                "description": "Higher layers register additional actor types beyond the kernel-defined `human` and `system` (Kernel \u00a710.1)."
+              }
+            ]
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "The catalog itself \u2014 the load-bearing payload of an Extension Registry document"
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensionRegistry__ExtensionsMap"
+        }
+      }
+    }
+  }
+}

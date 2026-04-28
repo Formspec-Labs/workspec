@@ -8,15 +8,23 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-CALLBACK-003",
       "version": "1.0.0",
       "title": "INT-CALLBACK-003 Uncorrelated Drop",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" },
-        { "id": "system", "type": "system", "description": "External system" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        },
+        {
+          "id": "system",
+          "type": "system",
+          "description": "External system"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -51,12 +59,16 @@
               }
             ]
           },
-          "nochange": { "type": "final" }
+          "nochange": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "result": { "type": "string" }
+          "result": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -66,19 +78,47 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-CALLBACK-003",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "callbackSvc": {
-          "type": "callback",
-          "description": "Callback binding for uncorrelated-drop test",
-          "source": "urn:wos:runtime",
-          "eventType": "com.example.callback.request",
-          "outputBinding": {
-            "caseFile.result": "$.result"
+        "targetWorkflow": {
+          "url": "urn:test:INT-CALLBACK-003",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "callbackSvc": {
+            "type": "callback",
+            "description": "Callback binding for uncorrelated-drop test",
+            "source": "urn:wos:runtime",
+            "eventType": "com.example.callback.request",
+            "outputBinding": {
+              "caseFile.result": "$.result"
+            }
           }
         }
       }
@@ -86,7 +126,10 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "fire", "actor": "operator" },
+    {
+      "event": "fire",
+      "actor": "operator"
+    },
     {
       "event": "unrelatedInbound",
       "actor": "system",
@@ -96,13 +139,23 @@
         "specversion": "1.0",
         "type": "com.example.callback.response",
         "subject": "some-other-instance:unknownBinding:unknown-cb-99",
-        "data": { "result": "should-not-apply" }
+        "data": {
+          "result": "should-not-apply"
+        }
       }
     }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "pending", "event": "fire" },
-    { "from": "pending", "to": "nochange", "event": "unrelatedInbound" }
+    {
+      "from": "open",
+      "to": "pending",
+      "event": "fire"
+    },
+    {
+      "from": "pending",
+      "to": "nochange",
+      "event": "unrelatedInbound"
+    }
   ],
   "expected_provenance": [
     {

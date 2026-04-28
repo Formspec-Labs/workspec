@@ -8,14 +8,18 @@
   },
   "inline_documents": {
     "kernel": {
-      "$wosKernel": "1.0",
+      "$wosWorkflow": "1.0",
       "url": "urn:test:INT-ARAZZO-003",
       "version": "1.0.0",
       "title": "INT-ARAZZO-003 Step Provenance Ordering",
       "status": "active",
       "impactLevel": "operational",
       "actors": [
-        { "id": "operator", "type": "human", "description": "Workflow operator" }
+        {
+          "id": "operator",
+          "type": "human",
+          "description": "Workflow operator"
+        }
       ],
       "lifecycle": {
         "initialState": "open",
@@ -35,12 +39,16 @@
               }
             ]
           },
-          "complete": { "type": "final" }
+          "complete": {
+            "type": "final"
+          }
         }
       },
       "caseFile": {
         "fields": {
-          "finalOutput": { "type": "string" }
+          "finalOutput": {
+            "type": "string"
+          }
         }
       },
       "execution": {
@@ -50,31 +58,59 @@
       }
     },
     "integration": {
-      "$wosIntegrationProfile": "1.0",
-      "targetWorkflow": {
-        "url": "urn:test:INT-ARAZZO-003",
-        "compatibleVersions": ">=1.0.0 <2.0.0"
+      "$wosWorkflow": "1.0",
+      "url": "https://example.test/migrated-fixture",
+      "version": "1.0.0",
+      "title": "Migrated Fixture",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "lifecycle": {
+        "initial": "start",
+        "states": {
+          "start": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "to": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
       },
       "bindings": {
-        "orderedSequence": {
-          "type": "arazzo-sequence",
-          "description": "Sequence with distinct step IDs to verify provenance ordering",
-          "steps": [
-            {
-              "stepId": "step-a",
-              "serviceRef": "sequenceService"
-            },
-            {
-              "stepId": "step-b",
-              "serviceRef": "sequenceService"
-            },
-            {
-              "stepId": "step-c",
-              "serviceRef": "sequenceService"
+        "targetWorkflow": {
+          "url": "urn:test:INT-ARAZZO-003",
+          "compatibleVersions": ">=1.0.0 <2.0.0"
+        },
+        "bindings": {
+          "orderedSequence": {
+            "type": "arazzo-sequence",
+            "description": "Sequence with distinct step IDs to verify provenance ordering",
+            "steps": [
+              {
+                "stepId": "step-a",
+                "serviceRef": "sequenceService"
+              },
+              {
+                "stepId": "step-b",
+                "serviceRef": "sequenceService"
+              },
+              {
+                "stepId": "step-c",
+                "serviceRef": "sequenceService"
+              }
+            ],
+            "outputBinding": {
+              "caseFile.finalOutput": "$.steps['step-c'].output.label"
             }
-          ],
-          "outputBinding": {
-            "caseFile.finalOutput": "$.steps['step-c'].output.label"
           }
         }
       }
@@ -86,27 +122,46 @@
   },
   "initial_case_state": {},
   "event_sequence": [
-    { "event": "run", "actor": "operator" }
+    {
+      "event": "run",
+      "actor": "operator"
+    }
   ],
   "expected_transitions": [
-    { "from": "open", "to": "complete", "event": "run" }
+    {
+      "from": "open",
+      "to": "complete",
+      "event": "run"
+    }
   ],
   "expected_provenance": [
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "step-a", "outcome": "ok" }
+      "data": {
+        "stepId": "step-a",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "step-b", "outcome": "ok" }
+      "data": {
+        "stepId": "step-b",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "arazzoStep",
-      "data": { "stepId": "step-c", "outcome": "ok" }
+      "data": {
+        "stepId": "step-c",
+        "outcome": "ok"
+      }
     },
     {
       "recordKind": "dataMapping",
-      "data": { "serviceRef": "orderedSequence", "phase": "binding-level" }
+      "data": {
+        "serviceRef": "orderedSequence",
+        "phase": "binding-level"
+      }
     }
   ]
 }

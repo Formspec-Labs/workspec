@@ -1,37 +1,29 @@
 {
-  "$wosLifecycleDetail": "1.0",
-  "$schema": "https://wos-spec.org/schemas/lifecycle-detail/1.0",
-  "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
+  "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Benefits Adjudication Lifecycle Detail",
-
-  "compensation": {
-    "defaultRecoveryMode": "backward",
-    "onCompensationFailure": "continue",
-    "scopeOverrides": [
-      {
-        "scopeRef": "incomeVerification",
-        "recoveryMode": "forward",
-        "description": "Income verification is idempotent and externally observable. On failure, retry the verification rather than reversing prior steps -- the external verification service can be safely re-invoked with the same idempotency key."
+  "url": "https://example.test/migrated-fixture",
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "system",
+      "type": "system"
+    }
+  ],
+  "lifecycle": {
+    "initial": "start",
+    "states": {
+      "start": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "to": "done"
+          }
+        ]
       },
-      {
-        "scopeRef": "eligibilityReview",
-        "recoveryMode": "backward",
-        "onCompensationFailure": "halt",
-        "description": "Eligibility review involves dual-blind human review. If compensation of any review step fails, halt -- partial reversal of a dual-blind review process produces inconsistent state that requires manual intervention."
+      "done": {
+        "type": "final"
       }
-    ]
-  },
-
-  "timerConfig": {
-    "firingTolerance": "PT5S",
-    "resetOnReentry": true
-  },
-
-  "scxmlMapping": {
-    "enabled": true,
-    "expressionMapping": "ecmascript",
-    "dropUnsupported": true,
-    "eventPrefixMapping": "wos."
+    }
   }
 }

@@ -1,16 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://wos.dev/schemas/conformance/conformance-trace.schema.json",
+  "$id": "https://wos-spec.org/schemas/conformance/conformance-trace.schema.json",
   "title": "WOS Conformance Trace",
   "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, kernel version, the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history.",
   "type": "object",
   "required": ["fixtureId", "kernelVersion", "steps", "outcome"],
+  "patternProperties": {
+    "^x-": {
+      "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
       "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
-      "examples": ["https://wos.dev/schemas/conformance/conformance-trace.schema.json"]
+      "examples": ["https://wos-spec.org/schemas/conformance/conformance-trace.schema.json"]
     },
     "fixtureId": {
       "type": "string",
