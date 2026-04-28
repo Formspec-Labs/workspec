@@ -46,7 +46,7 @@
   },
   "patternProperties": {
     "^x-": {
-      "$comment": "Vendor extensions per Kernel spec §10.6 (the canonical `extensions` seam — one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
+      "$comment": "Vendor extensions per Kernel spec \u00a710.6 (the canonical `extensions` seam \u2014 one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
     }
   },
   "allOf": [
@@ -374,6 +374,12 @@
             }
           },
           "additionalProperties": false
+        },
+        "$wosTooling": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -853,6 +859,12 @@
             "critical": true,
             "intent": "Top-level conformance verdict used for pass/fail reporting and regression gating"
           }
+        },
+        "$wosTooling": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
         }
       }
     },
@@ -1316,6 +1328,12 @@
             },
             "additionalProperties": false
           }
+        },
+        "$wosTooling": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -2333,7 +2351,6 @@
       "description": "A WOS Extension Registry document. Catalogs the named extension seams that the WOS Kernel exposes (Kernel \u00a710) plus higher-layer or vendor-supplied entries that bind to those seams. Adopters scan a registry to discover which seams exist, which lifecycle stage they have reached (draft, stable, deprecated, retired), how multiple registrations compose at a single seam, and which vendor namespaces are claimed. Registries are descriptive \u2014 they catalog seams; they do not enforce behavior. Lint tooling and documentation generators consume registries to validate extension keys and to render seam catalogs. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-extension-registry.schema.json.)",
       "type": "object",
       "required": [
-        "$wosExtensionRegistry",
         "version",
         "entries"
       ],
@@ -2344,19 +2361,6 @@
       },
       "additionalProperties": false,
       "properties": {
-        "$wosExtensionRegistry": {
-          "type": "string",
-          "const": "1.0",
-          "description": "WOS Extension Registry specification version. MUST be '1.0'. Identifies this document as a WOS Extension Registry and pins the specification version. Processors and lint tooling reject documents with unsupported registry versions and SHOULD warn (not fail) when the document parses as JSON but carries an unknown registry version, so that future versions degrade gracefully on older tooling.",
-          "examples": [
-            "1.0",
-            "1.0"
-          ],
-          "x-lm": {
-            "critical": true,
-            "intent": "Document type marker for WOS Extension Registry"
-          }
-        },
         "$schema": {
           "$ref": "#/$defs/extensionRegistry__JsonSchemaUri"
         },
@@ -2407,6 +2411,12 @@
         },
         "extensions": {
           "$ref": "#/$defs/extensionRegistry__ExtensionsMap"
+        },
+        "$wosTooling": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
         }
       }
     }

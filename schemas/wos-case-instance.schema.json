@@ -207,13 +207,19 @@
     },
     "status": {
       "type": "string",
-      "enum": ["active", "suspended", "migrating", "completed", "terminated"],
-      "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. Completed and terminated are irreversible terminal states.",
-      "examples": ["active", "completed"],
+      "enum": ["active", "suspended", "migrating", "completed", "terminated", "stalled"],
+      "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. 'stalled': commit retry budget exhausted -- instance has emitted commitAttemptFailure records and cannot make further progress until operator intervention (ADR 0070 D-5; reframed per maximalist Q18 as a reserved `InstanceStatus` variant, not a kernel statechart node type). Completed and terminated are irreversible terminal states; stalled is recoverable.",
+      "examples": ["active", "completed", "stalled"],
       "x-lm": {
         "critical": true,
         "intent": "Instance lifecycle position -- whether this instance accepts events"
       }
+    },
+    "stalledSince": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp recording when the instance entered `stalled` status (ADR 0070 D-5). REQUIRED when status is `stalled`; absent otherwise. Operators consume this for stuck-instance dashboards and retry-budget reset decisions. The `if/then` guard at the document level enforces the conditional requirement.",
+      "examples": ["2026-04-28T12:01:00Z"]
     },
     "createdAt": {
       "type": "string",
@@ -255,6 +261,19 @@
     },
     "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "stalled" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["stalledSince"]
+      }
+    }
+  ],
   "$defs": {
     "TimerState": {
       "type": "object",

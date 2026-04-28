@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/provenance-log/1.0",
   "title": "WOS Provenance Log",
-  "description": "Append-only audit log produced by WOS runtime execution. Per ADR 0076 D-4 this is a runtime artifact (not author-time), emitted by processors, never hand-authored. Wraps every persisted record kind: state-transition records (Kernel §8), case-file snapshots (Kernel §8 — required when transitionTags includes 'determination'), capability-invocation records (AI Integration §3.3.1), signature-affirmation records (Signature Profile §2.8), case-state mutation records carrying mutationSource / verificationLevel (Kernel §5.4, ADR 0080), iteration records (Kernel §4.10/foreach, ADR 0078), and verification certificates (formerly the runtime half of `wos-verification-report`). Facts-tier semantics are normative in the kernel and live in the merged `wos-workflow.schema.json` $defs (ADR 0076 step 5 promotion: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord). Higher tiers reuse the same envelope with `auditLayer` set accordingly. This schema validates the post-append export shape -- not unstamped in-memory constructors.",
+  "description": "Append-only audit log produced by WOS runtime execution. Per ADR 0076 D-4 this is a runtime artifact (not author-time), emitted by processors, never hand-authored. Wraps every persisted record kind: state-transition records (Kernel \u00a78), case-file snapshots (Kernel \u00a78 \u2014 required when transitionTags includes 'determination'), capability-invocation records (AI Integration \u00a73.3.1), signature-affirmation records (Signature Profile \u00a72.8), case-state mutation records carrying mutationSource / verificationLevel (Kernel \u00a75.4, ADR 0080), iteration records (Kernel \u00a74.10/foreach, ADR 0078), and verification certificates (formerly the runtime half of `wos-verification-report`). Facts-tier semantics are normative in the kernel and live in the merged `wos-workflow.schema.json` $defs (ADR 0076 step 5 promotion: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord). Higher tiers reuse the same envelope with `auditLayer` set accordingly. This schema validates the post-append export shape -- not unstamped in-memory constructors.",
   "type": "object",
   "required": [
     "provenanceLog"
@@ -405,7 +405,7 @@
     },
     "SignatureAffirmationRecord": {
       "type": "object",
-      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, hash, timestamp, identity-binding, consent, provider, ceremony, profile, Formspec response, and custody eligibility fields required by Signature Profile §2.8.",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the Signature Profile. A `recordKind == \"signatureAffirmation\"` record MUST carry the signer, role, document, hash, timestamp, identity-binding, consent, provider, ceremony, profile, Formspec response, and custody eligibility fields required by Signature Profile \u00a72.8.",
       "examples": [
         {
           "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
@@ -729,6 +729,520 @@
             "response.signature.affirmed"
           ]
         }
+      }
+    },
+    "FactsTierRecord": {
+      "type": "object",
+      "description": "A persisted WOS provenance record emitted by runtime execution. Facts-tier semantics are normative in the kernel; higher tiers reuse the same envelope and advertise their tier through `auditLayer`. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
+      "required": [
+        "id",
+        "recordKind",
+        "timestamp",
+        "auditLayer",
+        "definitionVersion"
+      ],
+      "examples": [
+        {
+          "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
+          "recordKind": "stateTransition",
+          "timestamp": "2026-04-19T12:00:00Z",
+          "auditLayer": "facts",
+          "actorId": "caseworker",
+          "actorType": "human",
+          "fromState": "review",
+          "toState": "decided",
+          "event": "decide",
+          "definitionVersion": "1.0.0",
+          "lifecycleState": "review",
+          "transitionTags": [
+            "determination"
+          ],
+          "caseFileSnapshot": {
+            "value": {
+              "income": 17500,
+              "eligible": true
+            },
+            "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+            "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {
+          "$comment": "Vendor extensions per Kernel spec \u00a710.6"
+        }
+      },
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*_prov_[0-9a-hjkmnp-tv-z]{26}$",
+          "format": "wos-record-typeid",
+          "description": "TypeID-structured identifier for this facts-tier provenance record. Reserved family prefix: `prov`.",
+          "examples": [
+            "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
+          ]
+        },
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. For determination snapshot enforcement, the relevant value is 'stateTransition'. Other record kinds MAY also carry caseFileSnapshot for implementation-specific diagnostics.",
+          "examples": [
+            "stateTransition",
+            "caseStateMutation"
+          ]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 / ISO 8601 timestamp stamped by the runtime append path before persistence.",
+          "examples": [
+            "2026-04-19T12:00:00Z"
+          ]
+        },
+        "actorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the actor who triggered the record, when the processor can name one.",
+          "examples": [
+            "caseworker",
+            "intake-service"
+          ]
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel lifecycle state label naming the configuration leaf immediately before this transition-oriented provenance record was emitted.",
+          "examples": [
+            "review"
+          ]
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Kernel lifecycle state label naming the configuration leaf immediately after this transition-oriented provenance record was emitted.",
+          "examples": [
+            "decided"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Triggering event or reserved event literal carried by the record kind.",
+          "examples": [
+            "decide",
+            "case.intake.accepted"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Arbitrary JSON object carrying record-kind-specific correlation keys, diagnostics, or structured details not represented by top-level scalar provenance fields.",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "path": "eligibility.result"
+            }
+          ]
+        },
+        "auditLayer": {
+          "type": "string",
+          "enum": [
+            "facts",
+            "reasoning",
+            "counterfactual",
+            "narrative"
+          ],
+          "description": "Audit tier for the persisted/exported record. Facts-tier records are normative in the kernel; higher layers reuse the same envelope and set a different tier literal.",
+          "examples": [
+            "facts",
+            "narrative"
+          ]
+        },
+        "actorType": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "human",
+                "system",
+                "agent"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Actor classification when the processor can resolve one canonically. Reserved literals are `human`, `system`, and `agent`; extension values MUST use an `x-` prefix.",
+          "examples": [
+            "human",
+            "system",
+            "agent"
+          ]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Lifecycle state at the time of the action when the processor can determine it canonically.",
+          "examples": [
+            "review",
+            "open"
+          ]
+        },
+        "definitionVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the governing Kernel Document stamped at append time.",
+          "examples": [
+            "1.0.0"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Input entity references used by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an input entity this activity consumed, aligned with PROV-O `prov:used` semantics for downstream audit graph materialization.",
+            "examples": [
+              "handoff-public-2026-0001"
+            ]
+          },
+          "examples": [
+            [
+              "handoff-public-2026-0001"
+            ]
+          ]
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output entity references generated by this activity.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque or resolvable token naming an output entity this activity produced so exporters can stitch forward references into case files or external systems.",
+            "examples": [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
+          },
+          "examples": [
+            [
+              "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
+            ]
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/ProvenanceOutcome"
+        },
+        "transitionTags": {
+          "type": "array",
+          "description": "Semantic tags copied from the firing transition when this record represents a state transition. The presence of 'determination' makes caseFileSnapshot mandatory.",
+          "examples": [
+            [
+              "determination"
+            ],
+            [
+              "review"
+            ]
+          ],
+          "items": {
+            "type": "string",
+            "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
+            "examples": [
+              "determination",
+              "review"
+            ]
+          }
+        },
+        "caseFileSnapshot": {
+          "$ref": "#/$defs/CaseFileSnapshot"
+        },
+        "mutationSource": {
+          "$ref": "#/$defs/MutationSource",
+          "description": "Origin of the mutation when recordKind is 'caseStateMutation'. OPTIONAL on other record kinds. Reserved literals trace the provenance chain from human entry through AI extraction to system-fetch and computed derivation."
+        },
+        "verificationLevel": {
+          "$ref": "#/$defs/VerificationLevel",
+          "description": "OPTIONAL verification strength of this mutation. When present, signals the degree of independent confirmation behind the written value. Tying this to 'determination'-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST."
+        },
+        "canonicalEventHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase hex rendering of the 32-byte Trellis `canonical_event_hash` stamped after custody admission, when present.",
+          "examples": [
+            "9ad0556334071a0d40050c61ba4601506b87dbc4847d808fb3693b364af5090c"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "stateTransition"
+              },
+              "transitionTags": {
+                "contains": {
+                  "const": "determination"
+                }
+              }
+            },
+            "required": [
+              "recordKind",
+              "transitionTags"
+            ]
+          },
+          "then": {
+            "required": [
+              "caseFileSnapshot"
+            ]
+          }
+        },
+        {
+          "$ref": "#/$defs/CapabilityInvocationRecord"
+        },
+        {
+          "$ref": "#/$defs/CaseCreatedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeAcceptedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeRejectedRecord"
+        },
+        {
+          "$ref": "#/$defs/IntakeDeferredRecord"
+        },
+        {
+          "$ref": "#/$defs/SignatureAffirmationRecord"
+        }
+      ]
+    },
+    "CapabilityInvocationRecord": {
+      "type": "object",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI \u00a73.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. Every provenance log validated against this kernel schema participates in the MUST via `FactsTierRecord.allOf`; records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "examples": [
+        {
+          "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
+          "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:30:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "invocationBlocked": true,
+            "capabilityId": "documentExtraction"
+          },
+          "outcome": "preconditionNotSatisfied"
+        },
+        {
+          "id": "sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
+          "recordKind": "capabilityInvocation",
+          "timestamp": "2026-04-22T14:31:00Z",
+          "auditLayer": "facts",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "invocationBlocked": false,
+            "capabilityId": "documentExtraction"
+          }
+        }
+      ],
+      "properties": {
+        "recordKind": {
+          "type": "string",
+          "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI \u00a73.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
+          "examples": [
+            "capabilityInvocation",
+            "capabilityInvocation"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "Record payload for a capability-invocation provenance entry. Carries the AI \u00a73.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
+          "examples": [
+            {
+              "invocationBlocked": true,
+              "capabilityId": "documentExtraction"
+            },
+            {
+              "invocationBlocked": false,
+              "capabilityId": "eligibilityScreener"
+            }
+          ],
+          "properties": {
+            "invocationBlocked": {
+              "type": "boolean",
+              "description": "True when the processor declined to invoke the agent because a capability precondition evaluated to `false` or a non-boolean (AI Integration \u00a73.3.1). The processor MUST then fall through to the fallback chain (AI \u00a78). False (or absent) means the capability was invoked.",
+              "examples": [
+                true,
+                false
+              ],
+              "x-lm": {
+                "critical": true,
+                "intent": "Signal that a capability precondition blocked agent invocation; pairs with outcome=preconditionNotSatisfied to distinguish declarative gates from agent failures"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "invocationBlocked": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "invocationBlocked"
+                ]
+              }
+            },
+            "required": [
+              "recordKind",
+              "data"
+            ]
+          },
+          "then": {
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "const": "preconditionNotSatisfied"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ProvenanceOutcome": {
+      "type": "string",
+      "description": "Outcome literal recorded on a Facts-tier provenance record when the processor completes (or declines to complete) an action. Open enum: the listed values are reserved across all tiers; vendor extensions MUST use an `x-` prefix to avoid future conflicts. Reserved literals currently defined: `preconditionNotSatisfied` (AI Integration \u00a73.3.1 -- emitted when a capability precondition FEL expression evaluates to false or non-boolean, blocking agent invocation and falling through to the fallback chain) and `convergenceCapReached` (Runtime \u00a710.3 -- emitted when continuous-mode re-evaluation hits the 100-cycle convergence cap for a single triggering mutation).",
+      "examples": [
+        "preconditionNotSatisfied",
+        "convergenceCapReached",
+        "x-vendor-quota-exceeded"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "preconditionNotSatisfied",
+            "convergenceCapReached"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "CaseFileSnapshot": {
+      "type": "object",
+      "description": "Canonical case-file snapshot captured immediately before a determination-tagged transition fires. The value is the factual input to the determination; jcsCanonical and sha256 make the snapshot stable and tamper-evident for notices, appeals, and audit export.",
+      "examples": [
+        {
+          "value": {
+            "income": 17500,
+            "eligible": true
+          },
+          "jcsCanonical": "{\"eligible\":true,\"income\":17500}",
+          "sha256": "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+        }
+      ],
+      "required": [
+        "value",
+        "jcsCanonical",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "Raw case-file JSON value observed immediately before the determination transition fires. This value may be an object, array, string, number, boolean, or null depending on the processor's case-state representation.",
+          "examples": [
+            {
+              "income": 17500,
+              "eligible": true
+            }
+          ]
+        },
+        "jcsCanonical": {
+          "type": "string",
+          "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
+          "examples": [
+            "{\"eligible\":true,\"income\":17500}"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase SHA-256 hex digest of jcsCanonical. This digest links the human-readable snapshot to tamper-evident exports without requiring downstream systems to reserialize value.",
+          "examples": [
+            "b19f000c0cd497b52c4a78e50641651e4b1e96931a1b1558984d69e722f73f5e"
+          ]
+        }
+      }
+    },
+    "MutationSource": {
+      "type": "string",
+      "description": "Origin of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. `agent-extracted` supersedes the FlowSpec `ai-extracted` literal for WOS actor-vocabulary alignment.",
+      "examples": [
+        "human-entered",
+        "agent-extracted",
+        "system-fetched",
+        "computed",
+        "self-attested",
+        "human-corrected",
+        "x-vendor-batch-import"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "human-entered",
+            "human-corrected",
+            "agent-extracted",
+            "system-fetched",
+            "computed",
+            "self-attested"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
+      }
+    },
+    "VerificationLevel": {
+      "type": "string",
+      "description": "Verification strength of a case-state mutation (Kernel S5.4). Open enum: the listed values are reserved; vendor extensions MUST use an `x-` prefix. OPTIONAL on mutation records; tying it to `determination`-tagged transitions is policy-shaped (governance profile / attachment pattern).",
+      "examples": [
+        "independent",
+        "attested",
+        "corroborated",
+        "authoritative"
+      ],
+      "oneOf": [
+        {
+          "enum": [
+            "independent",
+            "attested",
+            "corroborated",
+            "authoritative"
+          ]
+        },
+        {
+          "pattern": "^x-[a-z][a-z0-9-]*$"
+        }
+      ],
+      "x-wos": {
+        "open-enum": true
       }
     }
   }
