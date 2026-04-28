@@ -1,14 +1,17 @@
 ---
 title: WOS Signature Profile
-version: 1.0.0-draft.1
-date: 2026-04-22
+version: 1.0.0-draft.2
+date: 2026-04-28
 status: draft
 ---
 
+> **Partial absorption (ADR 0076 D-2).** Signature workflow semantics absorbed into the merged `schemas/wos-workflow.schema.json` `signature` embedded block — signature is no longer a separate sidecar but a load-bearing block on any DocuSign-tier workflow. Prose normative content remains here (signing flow patterns, role binding, authentication policies) until the absorption pass lands the within-block descriptions. SIG-001..SIG-012 lint rules continue to cite this document as canonical until the schema descriptions become full normative.
+
+
 # WOS Signature Profile v1.0
 
-**Version:** 1.0.0-draft.1
-**Date:** 2026-04-22
+**Version:** 1.0.0-draft.2
+**Date:** 2026-04-28
 **Editors:** Formspec Working Group
 **Companion to:** WOS Kernel Specification v1.0
 
@@ -25,6 +28,13 @@ The profile is a parallel seam. It does not add kernel actor types and does not 
 ## Status of This Document
 
 This document is a **draft specification**. Implementors MUST NOT treat it as stable until WOS v1.0 is ratified.
+
+### Revision history
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0.0-draft.1 | 2026-04-22 | Initial draft. |
+| 1.0.0-draft.2 | 2026-04-28 | **§1.3 scope reopen (PLN-0380).** ESIGN / UETA / eIDAS posture mapping moved from out-of-scope to in-scope. Added §2.11 signing-intent URI registry, §2.12 signer-authority claim, §2.13 jurisdictional posture mapping. §2.8 binds to Trellis ADR 0010 `UserContentAttestationPayload` as the byte-level proof. §3.3 names the layered-verifier composition contract with Trellis. Counsel-pinned legal-sufficiency claims remain gated on PLN-0355. |
 
 ---
 
@@ -44,9 +54,13 @@ Rights-impacting workflows frequently require signatures: benefit attestations, 
 
 ### 1.3 Scope
 
-**Within scope:** signer roles; signing-flow patterns; lifecycle tags; reminder, expiry, decline, void, and reassignment semantics; signer-authentication policies; intent capture; identity binding; document binding; `SignatureAffirmation` provenance; profile conformance.
+**Within scope:** signer roles; signing-flow patterns; lifecycle tags; reminder, expiry, decline, void, and reassignment semantics; signer-authentication policies; intent capture; identity binding; document binding; `SignatureAffirmation` provenance; profile conformance; **the registered set of signing-intent URIs (§2.11) and their semantic meaning**; **signer-authority claim shape (§2.12), distinct from authentication-method strength**; **jurisdictional posture mapping for ESIGN, UETA, and eIDAS (§2.13)** — that is, which combinations of registered intent URI, authentication-method floor, and signer-authority claim a deployment under each posture MUST present for the profile to admit a `SignatureAffirmation`.
 
-**Out of scope:** DocuSign administrative UX; legal advice; jurisdiction-specific legal sufficiency claims; key management; rendered-document storage; cryptographic certificate-of-completion composition; Trellis export-bundle layout.
+**Scope reopen note (1.0.0-draft.2, PLN-0380).** Earlier drafts carved out "jurisdiction-specific legal sufficiency claims" wholesale. This revision reopens the carve-out: WOS Signature Profile DOES make jurisdictional posture claims, scoped to the registered intent URIs in §2.11 and the floor matrix in §2.13. The carve-out remaining out of scope is narrower — see "Out of scope" below.
+
+**Out of scope:** DocuSign administrative UX; legal advice; **counsel-pinned legal-sufficiency assertions** (whether a specific `SignatureAffirmation` is admissible in a specific tribunal under a specific statute) — those remain gated on counsel review per PLN-0355 (parent `PLANNING.md`); key management; rendered-document storage; cryptographic certificate-of-completion composition (Trellis ADR 0007); Trellis export-bundle layout; jurisdictional postures beyond ESIGN, UETA, and eIDAS — registered as deployment-local extensions per §2.11 until a future profile revision admits them.
+
+**Authority discipline.** The Signature Profile authors the *spec text* of jurisdictional posture mapping. It does not author the *legal claim* a deployment makes to a regulator or counterparty. A deployment claiming "ESIGN-conformant" against this profile bears the legal burden; the profile bears the structural one. Counsel-pinned legal claim closure is tracked by PLN-0355.
 
 ### 1.4 Relationship to the Kernel
 
