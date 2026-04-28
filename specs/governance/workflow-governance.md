@@ -662,18 +662,13 @@ A delegate MAY further delegate authority (sub-delegation) only if the original 
 
 ### 4.9 Quorum-Based Delegation
 
+<!-- absorbed-from: prior delegation companion via ADR 0076 D-3 governance consolidation. The schema (`$wosWorkflow.governance.delegation.quorum`) enforces `quorumCount` (N) and `quorumPool` (M) presence — those are not restated here as MUSTs because schema validation already covers them. The two MUSTs below are the load-bearing claims that schemas cannot encode: collusion-resistance (distinct-principal) and audit integrity (no silent reduction). -->
+
 A delegation chain MAY require a quorum — that is, authorization by N of M distinct authorities — rather than a single delegated authority. Quorum-based delegation is a governance capability applicable to any high-stakes operation (adverse decision, irreversible lifecycle fact, exceptional access grant).
 
-A quorum-based delegation MUST declare:
+A quorum-based delegation MUST count each authority toward quorum only when it is a **distinct principal** (a single principal exercising multiple roles, or signing under multiple aliases, MUST NOT satisfy more than one slot in `quorumCount`). This is the collusion-resistance claim that distinguishes a real quorum from quorum theater.
 
-- `quorumCount`: the minimum number of distinct authorities required (N).
-- `quorumPool`: the set of eligible authorities (M).
-- The requirement that each counted authority be a distinct principal (not the same principal exercising multiple roles).
-
-A quorum-based delegation MUST NOT:
-
-- Count the same principal more than once toward quorum.
-- Silently reduce the quorum count. Reductions MUST be recorded as explicit policy transitions.
+A quorum-based delegation MUST NOT silently reduce the quorum count. Any reduction (e.g., dropping `quorumCount` from 3 to 2 because one pool member is unavailable) MUST be recorded as an explicit policy transition with provenance.
 
 The cryptographic mechanism for proving quorum participation (threshold signatures, multi-party computation, manual countersigning) is implementation-defined and binding-specific. A monolithic implementation MAY satisfy quorum purely through database-recorded approvals.
 
@@ -717,6 +712,8 @@ Typed hold policies attach to kernel states tagged `hold` via the `lifecycleHook
 | `legal-hold` | indefinite | N/A | N/A |
 
 ### 12.4 Interaction with Timers
+
+<!-- absorbed-from: prior runtime companion §8.5 + governance §12 hold prose, ADR 0076 D-3 governance consolidation. The `timeoutAction` step (4) is load-bearing — without it a held case rots silently while the operator and applicant both miss the statutory clock. -->
 
 Hold policies compose with the kernel's timer mechanism (Kernel S9.7). On entering a state tagged `hold` (Kernel S4.12), the processor:
 
