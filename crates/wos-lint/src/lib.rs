@@ -139,6 +139,22 @@ pub fn lint_schema(schema_json: &str) -> Result<Vec<Diagnostic>, LintError> {
     Ok(diagnostics)
 }
 
+/// Count the total number of SCHEMA-DOC-001 leaf properties in a schema.
+///
+/// Companion to `lint_schema` — same walk, but returns the count instead of
+/// the diagnostics. Used by the leaf-count companion ratchet in
+/// `schema_doc_zero_regression.rs` to detect "fill 1, sketch 1" gaming where
+/// violation count stays flat but total leaf count grows.
+///
+/// # Errors
+///
+/// Returns [`LintError::Parse`] if `schema_json` is not valid JSON.
+pub fn count_schema_leaves(schema_json: &str) -> Result<usize, LintError> {
+    let root: serde_json::Value = serde_json::from_str(schema_json)
+        .map_err(|e| LintError::Parse(format!("invalid JSON schema: {e}")))?;
+    Ok(rules::schema_doc::count_leaves(&root))
+}
+
 /// Lint a project directory (Tier 1 + Tier 2 checks).
 ///
 /// Loads all WOS documents from the directory, resolves cross-references,

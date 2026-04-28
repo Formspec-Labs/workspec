@@ -780,7 +780,6 @@ mod tests {
         use crate::model::kernel::ImpactLevel;
 
         let ai_json = r#"{
-            "$wosAIIntegration": "1.0",
             "targetWorkflow": "test",
             "agents": [{
                 "id": "agent1",

@@ -45,17 +45,42 @@ use crate::document::{DocumentKind, WosDocument, WosProject};
 // ---------------------------------------------------------------------------
 
 /// Run all FEL AST analysis checks across every document in the project.
+///
+/// After ADR 0076, all content lives in `$wosWorkflow` embedded blocks.
+/// FEL checks look inside the envelope's sub-fields: `lifecycle.states`,
+/// `governance`, `agents`, `advanced`, etc.
 pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
     for doc in project.documents() {
         match doc.kind {
-            DocumentKind::Kernel => check_kernel_fel(doc, diagnostics),
-            DocumentKind::WorkflowGovernance => check_governance_fel(doc, diagnostics),
-            DocumentKind::AiIntegration => check_ai_integration_fel(doc, diagnostics),
-            DocumentKind::Advanced => check_advanced_governance_fel(doc, diagnostics),
-            DocumentKind::AssertionLibrary => check_assertion_library_fel(doc, diagnostics),
-            _ => {}
+            // $wosWorkflow carries lifecycle FEL, governance FEL, agents FEL,
+            // advanced FEL, and assertion-library FEL in one envelope.
+            DocumentKind::Workflow => check_workflow_fel(doc, diagnostics),
+            // Delivery, OntologyAlignment, CaseInstance, ProvenanceLog, Tooling
+            // carry no FEL expressions.
+            DocumentKind::Delivery
+            | DocumentKind::OntologyAlignment
+            | DocumentKind::CaseInstance
+            | DocumentKind::ProvenanceLog
+            | DocumentKind::Tooling => {}
         }
     }
+}
+
+/// FEL checks for a `$wosWorkflow` document.
+///
+/// Dispatches to per-block checkers that match where FEL appears in the
+/// merged envelope.
+fn check_workflow_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+    // Kernel-surface FEL (lifecycle guards, conditions, etc.)
+    check_kernel_fel(doc, diagnostics);
+    // Governance embedded block FEL
+    check_governance_fel(doc, diagnostics);
+    // AI integration FEL (agent conditions, deontic expressions)
+    check_ai_integration_fel(doc, diagnostics);
+    // Advanced governance FEL (equity expressions, SMT constraints)
+    check_advanced_governance_fel(doc, diagnostics);
+    // Assertion library FEL (embedded in governance.assertionLibrary)
+    check_assertion_library_fel(doc, diagnostics);
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,7 +1054,7 @@ mod tests {
     #[test]
     fn k012_valid_guard_is_clean() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1049,7 +1074,7 @@ mod tests {
     #[test]
     fn k012_invalid_guard_emits_error() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1075,7 +1100,7 @@ mod tests {
     #[test]
     fn k013_invalid_milestone_condition() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1096,7 +1121,7 @@ mod tests {
     #[test]
     fn k017_guard_with_related_case_ref() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1124,7 +1149,7 @@ mod tests {
     #[test]
     fn k017_guard_without_related_case_ref_is_clean() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1153,7 +1178,7 @@ mod tests {
     #[test]
     fn k019_unknown_function_emits_warning() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1181,7 +1206,7 @@ mod tests {
     #[test]
     fn k019_known_builtin_is_clean() {
         let doc = make_doc(
-            DocumentKind::Kernel,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflow": true,
                 "lifecycle": {
@@ -1210,7 +1235,7 @@ mod tests {
     #[test]
     fn g042_invalid_assertion_expression() {
         let doc = make_doc(
-            DocumentKind::AssertionLibrary,
+            DocumentKind::Workflow,
             json!({
                 "$wosAssertionLibrary": true,
                 "assertions": [{"id": "a1", "expression": "not ( valid"}]
@@ -1229,7 +1254,7 @@ mod tests {
     #[test]
     fn g043_invalid_delegation_condition() {
         let doc = make_doc(
-            DocumentKind::WorkflowGovernance,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflowGovernance": true,
                 "delegations": [{"delegator": "alice", "conditions": ["$x >"]}]
@@ -1246,7 +1271,7 @@ mod tests {
     #[test]
     fn g043_valid_delegation_condition_is_clean() {
         let doc = make_doc(
-            DocumentKind::WorkflowGovernance,
+            DocumentKind::Workflow,
             json!({
                 "$wosWorkflowGovernance": true,
                 "delegations": [{"delegator": "alice", "conditions": ["$level > 2"]}]
@@ -1265,7 +1290,7 @@ mod tests {
     #[test]
     fn ai024_condition_without_agent_ref_warns() {
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1289,7 +1314,7 @@ mod tests {
     #[test]
     fn ai024_condition_with_agent_ref_is_clean() {
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1314,7 +1339,7 @@ mod tests {
     #[test]
     fn ai057_valid_precondition_is_clean() {
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1338,7 +1363,7 @@ mod tests {
     #[test]
     fn ai057_invalid_precondition_fails() {
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1366,7 +1391,7 @@ mod tests {
     fn ai058_binary_comparison_is_boolean_shaped() {
         // `caseFile.amount > 0` — binary comparison, boolean-shaped root.
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1391,7 +1416,7 @@ mod tests {
     fn ai058_bare_field_ref_fires() {
         // `caseFile.amount` alone is a path, not a boolean.
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1417,7 +1442,7 @@ mod tests {
     fn ai058_string_literal_fires() {
         // `"open"` parses (as a string literal) but is not boolean-shaped.
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1443,7 +1468,7 @@ mod tests {
     /// diagnostics that fired. Keeps the per-builtin allowlist tests compact.
     fn run_ai058(precondition: &str) -> Vec<LintDiagnostic> {
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1518,7 +1543,7 @@ mod tests {
     fn ai058_boolean_returning_builtin_is_clean() {
         // `present(caseFile.documentsReceived)` — builtin returning boolean.
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1571,7 +1596,7 @@ mod tests {
     fn ai057_missing_preconditions_is_noop() {
         // A capability without any preconditions MUST NOT trigger AI-057.
         let doc = make_doc(
-            DocumentKind::AiIntegration,
+            DocumentKind::Workflow,
             json!({
                 "$wosAIIntegration": true,
                 "agents": {
@@ -1850,7 +1875,7 @@ mod tests {
     #[test]
     fn ag010_advanced_doc_parses_finite_domain_declarations() {
         let doc = make_doc(
-            DocumentKind::Advanced,
+            DocumentKind::Workflow,
             json!({
                 "$wosAdvancedGovernance": true,
                 "verifiableConstraints": [{

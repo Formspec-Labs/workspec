@@ -219,13 +219,23 @@ fn collect_events_typed(
 // ---------------------------------------------------------------------------
 
 /// Run all Tier 2 cross-document checks across the project.
+///
+/// After ADR 0076, a single `$wosWorkflow` document is the author-time
+/// envelope. Governance, agents, signature, advanced, and other concerns
+/// live as embedded blocks in that document's JSON. Cross-doc checks that
+/// previously iterated over standalone `$wosWorkflowGovernance`, `$wosAIIntegration`,
+/// etc., now read the corresponding embedded block from the workflow envelope.
+///
+/// Delivery (`$wosDelivery`) remains a separate sidecar for calendar,
+/// notification templates, and correspondence.
 pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
-    // K-EXT-002: Reserved `x-wos-*` namespace check runs across every document
-    // in the project, regardless of kind.
+    // K-EXT-002: Reserved `x-wos-*` namespace check runs across every document.
     for doc in project.documents() {
         check_reserved_wos_namespace(&doc.value, "", diagnostics);
     }
 
+    // The `$wosWorkflow` document is the single author-time source. All cross-doc
+    // rules now read from its embedded blocks.
     let kernel_doc = project.kernel();
     let typed_kernel: Option<KernelDocument> =
         kernel_doc.and_then(|k| serde_json::from_value::<KernelDocument>(k.value.clone()).ok());
@@ -239,116 +249,242 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         super::continuous_mode::check(kernel, diagnostics);
     }
 
-    for gov in project.of_kind(DocumentKind::WorkflowGovernance) {
-        let typed_gov =
-            serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
-
-        // G-023 / G-060 / G-063 / G-066 only need governance + project sidecars (no typed kernel).
-        check_sla_business_calendar(gov, project, diagnostics);
-        check_notification_template_refs(gov, project, diagnostics);
-        check_sla_escalation_step_ids(gov, diagnostics);
-
-        if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
-            check_target_workflow_match_typed(gov, kernel, diagnostics);
-            if let Some(tg) = &typed_gov {
-                check_delegation_actors_exist_typed(tg, kernel, diagnostics);
-                check_hold_policies_attach_to_hold_states_typed(tg, kernel, diagnostics);
-                check_hold_resume_triggers_typed(tg, &kc.events, diagnostics);
-                check_sub_delegation_depth_typed(tg, diagnostics);
+    // Governance rules — read from $wosWorkflow.governance embedded block.
+    // The governance block value is promoted to a synthetic WosDocument so
+    // existing rule functions (which take &WosDocument) can run unchanged.
+    for wf in project.of_kind(DocumentKind::Workflow) {
+        // Promote governance block to a synthetic governance-shaped document.
+        if let Some(gov_block) = wf.value.get("governance") {
+            // Build a doc value that the governance rule functions expect:
+            // they look for top-level fields like "targetWorkflow", "dueProcess",
+            // "holdPolicies", "delegations", etc.
+            let gov_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
+            let mut gov_value = gov_block.clone();
+            // Inject targetWorkflow so cross-doc rules can resolve it.
+            if let Some(obj) = gov_value.as_object_mut() {
+                obj.entry("$wosWorkflowGovernance")
+                    .or_insert_with(|| Value::String("1.0".into()));
+                obj.entry("targetWorkflow")
+                    .or_insert_with(|| Value::String(gov_url.to_string()));
+                obj.entry("url")
+                    .or_insert_with(|| Value::String(gov_url.to_string()));
+                // Flatten hold policies from holds.policies → holdPolicies for typed model.
+                if let Some(holds_obj) = obj.get("holds").cloned() {
+                    if let Some(policies) = holds_obj.get("policies") {
+                        obj.entry("holdPolicies")
+                            .or_insert_with(|| policies.clone());
+                    }
+                }
+                // Flatten delegations from delegation.delegations → delegations.
+                if let Some(del_obj) = obj.get("delegation").cloned() {
+                    if let Some(delegations) = del_obj.get("delegations") {
+                        obj.entry("delegations")
+                            .or_insert_with(|| delegations.clone());
+                    }
+                    if let Some(max_depth) = del_obj.get("maxDelegationDepth") {
+                        obj.entry("maxDelegationDepth")
+                            .or_insert_with(|| max_depth.clone());
+                    }
+                }
             }
-            check_due_process_for_impact_typed(gov, kernel, diagnostics);
-            check_notice_individualized_for_rights_typed(gov, kernel, diagnostics);
-            check_explanation_level_for_rights_typed(gov, kernel, diagnostics);
-            check_counterfactual_for_rights_typed(gov, kernel, diagnostics);
-            check_counterfactual_tier_for_adverse_typed(gov, kernel, &kc.tags, diagnostics);
-            check_governance_tags_exist(gov, &kc.tags, diagnostics);
-            check_resolution_date_refs(gov, &kc.case_fields, diagnostics);
-            check_continuation_of_services(gov, &kc.tags, diagnostics);
-            check_adverse_decision_due_process(gov, &kc.tags, diagnostics);
-            check_reasoning_tier_for_determination(gov, &kc.tags, diagnostics);
-            check_excluded_owner_override(gov, diagnostics);
-            check_delegation_verification_on_determination(gov, &kc.tags, diagnostics);
-            check_binding_resolution_date_refs(gov, &kc.case_fields, diagnostics);
+            let gov = crate::document::WosDocument {
+                kind: DocumentKind::Workflow,
+                value: gov_value,
+                source: wf.source.clone(),
+            };
+            let typed_gov =
+                serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
+
+            // G-023 / G-060 / G-063 / G-066 need governance + project sidecars.
+            check_sla_business_calendar(&gov, project, diagnostics);
+            check_notification_template_refs(&gov, project, diagnostics);
+            check_sla_escalation_step_ids(&gov, diagnostics);
+
+            if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+                // G-034: targetWorkflow must match kernel url (embedded blocks
+                // share the same document, so this is always true — skip to avoid
+                // spurious errors when the gov block has no independent url).
+                if let Some(tg) = &typed_gov {
+                    check_delegation_actors_exist_typed(tg, kernel, diagnostics);
+                    check_hold_policies_attach_to_hold_states_typed(tg, kernel, diagnostics);
+                    check_hold_resume_triggers_typed(tg, &kc.events, diagnostics);
+                    check_sub_delegation_depth_typed(tg, diagnostics);
+                }
+                check_due_process_for_impact_typed(&gov, kernel, diagnostics);
+                check_notice_individualized_for_rights_typed(&gov, kernel, diagnostics);
+                check_explanation_level_for_rights_typed(&gov, kernel, diagnostics);
+                check_counterfactual_for_rights_typed(&gov, kernel, diagnostics);
+                check_counterfactual_tier_for_adverse_typed(&gov, kernel, &kc.tags, diagnostics);
+                check_governance_tags_exist(&gov, &kc.tags, diagnostics);
+                check_resolution_date_refs(&gov, &kc.case_fields, diagnostics);
+                check_continuation_of_services(&gov, &kc.tags, diagnostics);
+                check_adverse_decision_due_process(&gov, &kc.tags, diagnostics);
+                check_reasoning_tier_for_determination(&gov, &kc.tags, diagnostics);
+                check_excluded_owner_override(&gov, diagnostics);
+                check_delegation_verification_on_determination(&gov, &kc.tags, diagnostics);
+                check_binding_resolution_date_refs(&gov, &kc.case_fields, diagnostics);
+            }
+
+            check_parameter_coverage(&gov, diagnostics);
+            check_independence_constraint(&gov, diagnostics);
+            check_sub_delegation_permission_value(&gov, diagnostics);
+
+            // Assertion library: governance.assertionLibrary or governance.assertions
+            let al_value = gov
+                .value
+                .get("assertionLibrary")
+                .cloned()
+                .or_else(|| {
+                    gov.value.get("assertions").map(|_| gov.value.clone())
+                });
+            if let Some(al_val) = al_value {
+                let al_doc = crate::document::WosDocument {
+                    kind: DocumentKind::Workflow,
+                    value: al_val,
+                    source: wf.source.clone(),
+                };
+                check_consistency_reference_stage(&al_doc, project, diagnostics);
+            }
+            check_pipeline_assertion_ids(&gov, project, diagnostics);
         }
 
-        check_parameter_coverage(gov, diagnostics);
-        check_independence_constraint(gov, diagnostics);
-        // G-053 reads `allowsSubDelegation` which is not yet in the typed model.
-        check_sub_delegation_permission_value(gov, diagnostics);
-    }
+        // AI integration rules — read from $wosWorkflow top-level `agents` /
+        // `aiOversight` blocks. Build a synthetic AI doc shaped like the old
+        // $wosAIIntegration document.
+        let workflow_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
+        let has_agents = wf.value.get("agents").is_some()
+            || wf.value.get("aiOversight").is_some();
+        if has_agents {
+            let mut ai_value = serde_json::json!({
+                "$wosAIIntegration": "1.0",
+                "targetWorkflow": workflow_url,
+            });
+            // Copy agents, aiOversight, fallbackChain, narrativeProvenance, provenance
+            // from the workflow root into the synthetic AI doc.
+            for field in &["agents", "aiOversight", "fallbackChain", "narrativeProvenance", "provenance", "agentDisclosure"] {
+                if let Some(v) = wf.value.get(*field) {
+                    ai_value[field] = v.clone();
+                }
+            }
+            let ai_doc = crate::document::WosDocument {
+                kind: DocumentKind::Workflow,
+                value: ai_value,
+                source: wf.source.clone(),
+            };
+            if let Some(kernel) = &typed_kernel {
+                check_ai_disclosure_for_impact_typed(&ai_doc, kernel, diagnostics);
+                if let Some(kernel_raw) = kernel_doc {
+                    check_agent_output_contract(&ai_doc, kernel_raw, diagnostics);
+                    check_agent_free_completion_path(&ai_doc, kernel_raw, diagnostics);
+                }
+            }
+            check_cascading_invocations_declared(&ai_doc, diagnostics);
+            check_autonomous_actions_have_deontic(&ai_doc, diagnostics);
+            check_supervisory_actions_review_window(&ai_doc, diagnostics);
+            check_escalation_expiry_present(&ai_doc, diagnostics);
+            check_training_data_disclosure(&ai_doc, diagnostics);
+            check_optimization_objective_disclosure(&ai_doc, diagnostics);
+            check_autonomy_is_action_site_property(&ai_doc, diagnostics);
+        }
 
-    // Due-process documents.
-    for dp in project.of_kind(DocumentKind::DueProcess) {
-        check_target_governance_valid(dp, project, diagnostics);
-        check_independence_constraint_in_due_process(dp, diagnostics);
-    }
-
-    // Assertion library cross-references governance pipeline stages.
-    for al in project.of_kind(DocumentKind::AssertionLibrary) {
-        check_consistency_reference_stage(al, project, diagnostics);
-    }
-
-    // Governance documents reference assertion library ids.
-    for gov in project.of_kind(DocumentKind::WorkflowGovernance) {
-        check_pipeline_assertion_ids(gov, project, diagnostics);
-    }
-
-    for ai in project.of_kind(DocumentKind::AiIntegration) {
-        if let Some(kernel) = &typed_kernel {
-            check_target_workflow_match_typed(ai, kernel, diagnostics);
-            check_ai_disclosure_for_impact_typed(ai, kernel, diagnostics);
-            if let Some(kernel_raw) = kernel_doc {
-                check_agent_output_contract(ai, kernel_raw, diagnostics);
-                check_agent_free_completion_path(ai, kernel_raw, diagnostics);
+        // Signature rules — read from $wosWorkflow.signature embedded block.
+        if wf.value.get("signature").is_some() {
+            let mut sig_value = serde_json::json!({
+                "$wosSignatureProfile": "1.0",
+                "targetWorkflow": { "url": workflow_url },
+            });
+            // Copy signature-block fields to the synthetic profile doc.
+            if let Some(sig_block) = wf.value.get("signature") {
+                if let Some(sig_obj) = sig_block.as_object() {
+                    for (k, v) in sig_obj {
+                        sig_value[k] = v.clone();
+                    }
+                }
+            }
+            let sig_doc = crate::document::WosDocument {
+                kind: DocumentKind::Workflow,
+                value: sig_value,
+                source: wf.source.clone(),
+            };
+            if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
+                check_signature_profile(&sig_doc, kernel, kc, diagnostics);
+            } else {
+                check_signature_profile_without_kernel(&sig_doc, diagnostics);
             }
         }
-        check_cascading_invocations_declared(ai, diagnostics);
-        check_autonomous_actions_have_deontic(ai, diagnostics);
-        check_supervisory_actions_review_window(ai, diagnostics);
-        check_escalation_expiry_present(ai, diagnostics);
-        check_training_data_disclosure(ai, diagnostics);
-        check_optimization_objective_disclosure(ai, diagnostics);
-        check_autonomy_is_action_site_property(ai, diagnostics);
-    }
 
-    for profile in project.of_kind(DocumentKind::SignatureProfile) {
-        if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
-            check_signature_profile(profile, kernel, kc, diagnostics);
-        } else {
-            check_signature_profile_without_kernel(profile, diagnostics);
+        // Advanced governance rules — read from $wosWorkflow.advanced block.
+        if wf.value.get("advanced").is_some() {
+            let mut adv_value = serde_json::json!({
+                "$wosAdvancedGovernance": "1.0",
+            });
+            if let Some(adv_block) = wf.value.get("advanced") {
+                if let Some(adv_obj) = adv_block.as_object() {
+                    for (k, v) in adv_obj {
+                        adv_value[k] = v.clone();
+                    }
+                }
+            }
+            let adv_doc = crate::document::WosDocument {
+                kind: DocumentKind::Workflow,
+                value: adv_value,
+                source: wf.source.clone(),
+            };
+            if let Some(kernel) = &typed_kernel {
+                check_side_effect_tools_policy(&adv_doc, diagnostics);
+                check_shadow_mode_recommended_typed(&adv_doc, kernel, diagnostics);
+            }
         }
-    }
 
-    // Policy parameters documents.
-    for pp in project.of_kind(DocumentKind::PolicyParameters) {
-        if let Some(kc) = kernel_collections.as_ref() {
-            check_policy_param_date_refs(pp, &kc.case_fields, diagnostics);
+        // Drift monitoring — read from agents[*].driftMonitoring or a top-level
+        // driftMonitoring block. Build a synthetic drift-monitor doc.
+        {
+            let mut dm_value = serde_json::json!({ "$wosDriftMonitor": "1.0" });
+            // Top-level deploymentSequence (from workflow.advanced or workflow root).
+            if let Some(seq) = wf.value.pointer("/advanced/deploymentSequence") {
+                dm_value["deploymentSequence"] = seq.clone();
+            } else if let Some(seq) = wf.value.get("deploymentSequence") {
+                dm_value["deploymentSequence"] = seq.clone();
+            }
+            if dm_value.get("deploymentSequence").is_some() {
+                let dm_doc = crate::document::WosDocument {
+                    kind: DocumentKind::Workflow,
+                    value: dm_value,
+                    source: wf.source.clone(),
+                };
+                if let Some(kernel) = &typed_kernel {
+                    check_deployment_sequence_typed(&dm_doc, kernel, diagnostics);
+                }
+            }
         }
+
+        // Verification results — read from $wosWorkflow.advanced.verifiableConstraints
+        // or any provenance records with result: "proven-unsafe".
+        // VR-003 checks are on the $wosProvenanceLog artifact, not author-time docs.
+        // Moved to ProvenanceLog handling below.
     }
 
-    for adv in project.of_kind(DocumentKind::Advanced) {
-        if let Some(kernel) = &typed_kernel {
-            check_side_effect_tools_policy(adv, diagnostics);
-            check_shadow_mode_recommended_typed(adv, kernel, diagnostics);
-        }
+    // $wosDelivery: calendar and notification-template cross-doc rules.
+    for delivery in project.of_kind(DocumentKind::Delivery) {
+        // G-060/G-063: SLA + notification refs need governance from the workflow doc.
+        // These rules previously needed a paired governance doc. Now we look for
+        // the workflow doc that targets the same URL.
+        let _ = delivery; // Delivery cross-doc rules are future work in this migration.
     }
 
-    for dm in project.of_kind(DocumentKind::DriftMonitor) {
-        if let Some(kernel) = &typed_kernel {
-            check_deployment_sequence_typed(dm, kernel, diagnostics);
-        }
+    // $wosProvenanceLog: VR-003 counterexample check.
+    for prov_log in project.of_kind(DocumentKind::ProvenanceLog) {
+        // The VR-003 rule checks verification results. Map from provenance log
+        // records with result: "proven-unsafe" to the VR-003 diagnostic.
+        let vr_synthetic = crate::document::WosDocument {
+            kind: DocumentKind::Workflow,
+            value: prov_log.value.clone(),
+            source: prov_log.source.clone(),
+        };
+        check_counterexample_on_unsafe(&vr_synthetic, diagnostics);
     }
 
-    // Verification report documents.
-    for vr in project.of_kind(DocumentKind::VerificationReport) {
-        check_counterexample_on_unsafe(vr, diagnostics);
-    }
-
-    // ADR 0076 D-2 cross-reference rules. The merged $wosWorkflow document
-    // carries actors[], agents[], signature, and bindings at the document
-    // root; these rules check cross-references the JSON Schema cannot
-    // express. Run against any document that exposes those fields (a
-    // $wosWorkflow root, primarily).
+    // ADR 0076 D-2 cross-reference rules on the workflow envelope.
     if let Some(kernel) = kernel_doc {
         check_agent_xref(&kernel.value, diagnostics);
         check_signature_coverage(&kernel.value, diagnostics);
@@ -1368,41 +1504,83 @@ fn check_excluded_owner_override(
 // G-023 / G-060: SLA uses business days when scoped Business Calendar exists
 // ---------------------------------------------------------------------------
 
-/// True when some Business Calendar document's `targetWorkflow` equals `workflow_url`.
+/// True when a Business Calendar is present for `workflow_url`.
+///
+/// After ADR 0076, calendars live inside `$wosDelivery.calendar`. We check
+/// both Delivery sidecars (canonical) and any Workflow doc that embeds a
+/// `governance.policyParameters.calendarRef` or similar reference.
 fn business_calendar_targets_workflow(project: &WosProject, workflow_url: &str) -> bool {
-    project
-        .documents()
-        .iter()
-        .filter(|d| d.kind == DocumentKind::BusinessCalendar)
-        .any(|d| {
-            d.value
-                .get("targetWorkflow")
-                .and_then(Value::as_str)
-                .is_some_and(|t| t == workflow_url)
-        })
+    // Check Delivery sidecars first.
+    let in_delivery = project.of_kind(DocumentKind::Delivery).any(|d| {
+        let target = d
+            .value
+            .get("targetWorkflow")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        (target == workflow_url || target.is_empty())
+            && d.value.get("calendar").is_some()
+    });
+    if in_delivery {
+        return true;
+    }
+    // Legacy: accept any document in the project that carries the old
+    // $wosBusinessCalendar marker shape (targetWorkflow field at root).
+    project.documents().iter().any(|d| {
+        d.value
+            .get("targetWorkflow")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t == workflow_url)
+            && d.value.get("workWeek").is_some()
+    })
 }
 
-/// Template keys declared in Notification Template sidecars for `workflow_url`.
+/// Template keys declared in Notification Template blocks for `workflow_url`.
+///
+/// After ADR 0076, templates live inside `$wosDelivery.notificationTemplates`.
 fn notification_template_keys_for_workflow(
     project: &WosProject,
     workflow_url: &str,
 ) -> std::collections::HashSet<String> {
     let mut keys = std::collections::HashSet::new();
-    for d in project.of_kind(DocumentKind::NotificationTemplate) {
-        let matches_wf = d
+
+    // Delivery sidecars.
+    for d in project.of_kind(DocumentKind::Delivery) {
+        let target = d
             .value
             .get("targetWorkflow")
             .and_then(Value::as_str)
-            .is_some_and(|t| t == workflow_url);
-        if !matches_wf {
+            .unwrap_or("");
+        if target != workflow_url && !target.is_empty() {
             continue;
         }
-        if let Some(templates) = d.value.get("templates").and_then(Value::as_object) {
-            for k in templates.keys() {
-                keys.insert(k.clone());
+        // Templates may live at .notificationTemplates or .templates.
+        for field in &["notificationTemplates", "templates"] {
+            if let Some(templates) = d.value.get(*field).and_then(Value::as_object) {
+                for k in templates.keys() {
+                    keys.insert(k.clone());
+                }
             }
         }
     }
+
+    // Legacy: accept any document in the project that matches the old
+    // $wosNotificationTemplate shape (targetWorkflow + templates).
+    for d in project.documents() {
+        let matches = d
+            .value
+            .get("targetWorkflow")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t == workflow_url)
+            && d.value.get("templates").is_some();
+        if matches {
+            if let Some(templates) = d.value.get("templates").and_then(Value::as_object) {
+                for k in templates.keys() {
+                    keys.insert(k.clone());
+                }
+            }
+        }
+    }
+
     keys
 }
 
@@ -1825,15 +2003,18 @@ fn check_target_governance_valid(
     let Some(target) = dp.value.get("targetGovernance").and_then(Value::as_str) else {
         return;
     };
-    let governance_urls: std::collections::HashSet<&str> = project
-        .of_kind(DocumentKind::WorkflowGovernance)
+    // After ADR 0076, governance lives embedded in $wosWorkflow. The governance
+    // URL resolves to the workflow's own URL. Accept any Workflow doc whose `url`
+    // matches, or any legacy governance doc that has a matching `url`.
+    let workflow_urls: std::collections::HashSet<&str> = project
+        .of_kind(DocumentKind::Workflow)
         .filter_map(|g| g.value.get("url").and_then(Value::as_str))
         .collect();
-    if !governance_urls.contains(target) {
+    if !workflow_urls.contains(target) {
         diagnostics.push(LintDiagnostic::t2_error(
             "G-035",
             "/targetGovernance",
-            format!("targetGovernance '{target}' does not match any governance document url in the project"),
+            format!("targetGovernance '{target}' does not match any workflow url in the project"),
         ));
     }
 }
@@ -1904,12 +2085,37 @@ fn check_consistency_reference_stage(
     let Some(assertions) = al.value.get("assertions").and_then(Value::as_array) else {
         return;
     };
+    // After ADR 0076, pipeline stages live inside $wosWorkflow.governance.pipelines
+    // (or .pipeline for the flat shape). Collect from all Workflow docs.
     let pipeline_stages: std::collections::HashSet<String> = project
-        .of_kind(DocumentKind::WorkflowGovernance)
-        .filter_map(|g| g.value.get("pipeline").and_then(Value::as_array))
-        .flatten()
+        .of_kind(DocumentKind::Workflow)
+        .flat_map(|g| {
+            let from_gov_pipelines = g
+                .value
+                .pointer("/governance/pipelines")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten();
+            let from_gov_pipeline = g
+                .value
+                .pointer("/governance/pipeline")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten();
+            from_gov_pipelines.chain(from_gov_pipeline)
+        })
         .filter_map(|stage| stage.get("id").and_then(Value::as_str))
         .map(String::from)
+        // Also accept pipeline stages from the synthetic governance doc value directly.
+        .chain(
+            al.value
+                .get("pipeline")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|stage| stage.get("id").and_then(Value::as_str))
+                .map(String::from),
+        )
         .collect();
     for (i, assertion) in assertions.iter().enumerate() {
         if assertion.get("type").and_then(Value::as_str) != Some("consistency") {
@@ -1942,12 +2148,37 @@ fn check_pipeline_assertion_ids(
     let Some(pipeline) = gov.value.get("pipeline").and_then(Value::as_array) else {
         return;
     };
+    // After ADR 0076, assertion libraries live inside $wosWorkflow.governance.assertionLibrary
+    // (or .assertions directly on the governance block). Collect from all Workflow docs.
     let library_ids: std::collections::HashSet<String> = project
-        .of_kind(DocumentKind::AssertionLibrary)
-        .filter_map(|al| al.value.get("assertions").and_then(Value::as_array))
-        .flatten()
+        .of_kind(DocumentKind::Workflow)
+        .flat_map(|wf| {
+            let from_al = wf
+                .value
+                .pointer("/governance/assertionLibrary/assertions")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten();
+            let from_assertions = wf
+                .value
+                .pointer("/governance/assertions")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten();
+            from_al.chain(from_assertions)
+        })
         .filter_map(|a| a.get("id").and_then(Value::as_str))
         .map(String::from)
+        // Also accept assertion ids from the synthetic governance doc passed in.
+        .chain(
+            gov.value
+                .get("assertions")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|a| a.get("id").and_then(Value::as_str))
+                .map(String::from),
+        )
         .collect();
     for (si, stage) in pipeline.iter().enumerate() {
         let Some(refs) = stage.get("assertions").and_then(Value::as_array) else {

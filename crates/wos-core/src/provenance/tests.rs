@@ -411,7 +411,27 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ToolInvoked,
         ProvenanceKind::PolicyDecision,
         ProvenanceKind::SignatureAffirmation,
+        ProvenanceKind::CorrectionAuthorized,
+        ProvenanceKind::AmendmentAuthorized,
+        ProvenanceKind::DeterminationAmended,
+        ProvenanceKind::RescissionAuthorized,
+        ProvenanceKind::DeterminationRescinded,
+        ProvenanceKind::Reinstated,
+        ProvenanceKind::AuthorizationAttestation,
+        ProvenanceKind::ClockStarted,
+        ProvenanceKind::ClockResolved,
+        ProvenanceKind::IdentityAttestation,
+        ProvenanceKind::ClockSkewObserved,
+        ProvenanceKind::CommitAttemptFailure,
+        ProvenanceKind::AuthorizationRejected,
+        ProvenanceKind::MigrationPinChanged,
     ];
+
+    assert_eq!(
+        all.len(),
+        115,
+        "ProvenanceKind has 115 variants at HEAD (101 prior + 14 from ADRs 0066-0071); a new variant upstream MUST add an entry here"
+    );
 
     for kind in all {
         let tier = audit_layer_for_kind(*kind);
@@ -710,4 +730,1104 @@ fn capability_invocation_round_trips_through_serde() {
     ));
     assert_eq!(restored.outcome.as_deref(), Some("preconditionNotSatisfied"));
     assert_eq!(restored.actor_id.as_deref(), Some("intake-classifier"));
+}
+
+// ── Amendment & supersession (ADR 0066) ─────────────────────────────────
+
+fn correction_authorized_input() -> CorrectionAuthorizedInput<'static> {
+    CorrectionAuthorizedInput {
+        correction_target_event_hash: "sha256:event-1",
+        corrected_field_set: vec!["/applicant/email", "/applicant/phone"],
+        reason: "transcription typo",
+        authorizing_actor_id: "case-worker-7",
+        authority_basis: serde_json::json!({"kind": "actorPolicyRef", "value": "policy:line-corrections"}),
+        context: None,
+    }
+}
+
+#[test]
+fn correction_authorized_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::correction_authorized(correction_authorized_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "correctionAuthorized");
+    assert_eq!(json["actorId"], "case-worker-7");
+    assert_eq!(json["data"]["correctionTargetEventHash"], "sha256:event-1");
+    assert_eq!(
+        json["data"]["correctedFieldSet"],
+        serde_json::json!(["/applicant/email", "/applicant/phone"])
+    );
+    assert_eq!(json["data"]["reason"], "transcription typo");
+    assert_eq!(json["data"]["authorizingActorId"], "case-worker-7");
+    assert_eq!(json["data"]["authorityBasis"]["kind"], "actorPolicyRef");
+    assert_eq!(
+        json["data"]["authorityBasis"]["value"],
+        "policy:line-corrections"
+    );
+}
+
+#[test]
+fn correction_authorized_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "correctionTargetEventHash".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "reason".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("preserved".to_string()),
+    );
+    let mut input = correction_authorized_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::correction_authorized(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["correctionTargetEventHash"], "sha256:event-1");
+    assert_eq!(json["data"]["reason"], "transcription typo");
+    assert_eq!(json["data"]["auxNote"], "preserved");
+}
+
+#[test]
+fn correction_authorized_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::CorrectionAuthorized),
+        "facts"
+    );
+}
+
+#[test]
+fn correction_authorized_round_trips_through_serde() {
+    let record = ProvenanceRecord::correction_authorized(correction_authorized_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::CorrectionAuthorized);
+    assert_eq!(restored.actor_id.as_deref(), Some("case-worker-7"));
+}
+
+#[test]
+fn correction_authorized_field_set_is_array_of_pointer_strings() {
+    let record = ProvenanceRecord::correction_authorized(correction_authorized_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+    let arr = json["data"]["correctedFieldSet"]
+        .as_array()
+        .expect("array");
+    assert_eq!(arr.len(), 2);
+    assert!(arr.iter().all(|v| v.is_string()));
+}
+
+fn amendment_authorized_input() -> AmendmentAuthorizedInput<'static> {
+    AmendmentAuthorizedInput {
+        amendment_target_event_hash: "sha256:event-2",
+        prior_determination_hash: "sha256:det-1",
+        reason: "new evidence received",
+        authorizing_actor_id: "supervisor-3",
+        authority_basis: serde_json::json!({"kind": "uri", "value": "https://agency.gov/auth/amend"}),
+        context: None,
+    }
+}
+
+#[test]
+fn amendment_authorized_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::amendment_authorized(amendment_authorized_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "amendmentAuthorized");
+    assert_eq!(json["actorId"], "supervisor-3");
+    assert_eq!(json["data"]["amendmentTargetEventHash"], "sha256:event-2");
+    assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
+    assert_eq!(json["data"]["reason"], "new evidence received");
+    assert_eq!(json["data"]["authorityBasis"]["kind"], "uri");
+}
+
+#[test]
+fn amendment_authorized_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "amendmentTargetEventHash".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = amendment_authorized_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::amendment_authorized(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["amendmentTargetEventHash"], "sha256:event-2");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn amendment_authorized_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::AmendmentAuthorized),
+        "facts"
+    );
+}
+
+#[test]
+fn amendment_authorized_round_trips_through_serde() {
+    let record = ProvenanceRecord::amendment_authorized(amendment_authorized_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::AmendmentAuthorized);
+}
+
+fn determination_amended_input() -> DeterminationAmendedInput<'static> {
+    DeterminationAmendedInput {
+        prior_determination_hash: "sha256:det-1",
+        new_determination_value: serde_json::json!({"eligibility": "eligible", "amount": 1200}),
+        amendment_authorization_event_hash: "sha256:event-2",
+        context: None,
+    }
+}
+
+#[test]
+fn determination_amended_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::determination_amended(determination_amended_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "determinationAmended");
+    assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
+    assert_eq!(
+        json["data"]["newDeterminationValue"]["eligibility"],
+        "eligible"
+    );
+    assert_eq!(json["data"]["newDeterminationValue"]["amount"], 1200);
+    assert_eq!(
+        json["data"]["amendmentAuthorizationEventHash"],
+        "sha256:event-2"
+    );
+}
+
+#[test]
+fn determination_amended_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "newDeterminationValue".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = determination_amended_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::determination_amended(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert!(
+        json["data"]["newDeterminationValue"].is_object(),
+        "constructor value MUST win over context override"
+    );
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn determination_amended_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::DeterminationAmended),
+        "facts"
+    );
+}
+
+#[test]
+fn determination_amended_round_trips_through_serde() {
+    let record = ProvenanceRecord::determination_amended(determination_amended_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::DeterminationAmended);
+}
+
+fn rescission_authorized_input() -> RescissionAuthorizedInput<'static> {
+    RescissionAuthorizedInput {
+        rescission_target_event_hash: "sha256:event-3",
+        prior_determination_hash: "sha256:det-1",
+        reason: "fraud finding",
+        authorizing_actor_id: "fraud-officer-2",
+        authority_basis: serde_json::json!({"kind": "uri", "value": "https://agency.gov/auth/rescind"}),
+        migration_pin_change: None,
+        context: None,
+    }
+}
+
+#[test]
+fn rescission_authorized_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::rescission_authorized(rescission_authorized_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "rescissionAuthorized");
+    assert_eq!(json["actorId"], "fraud-officer-2");
+    assert_eq!(json["data"]["rescissionTargetEventHash"], "sha256:event-3");
+    assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
+    assert_eq!(json["data"]["reason"], "fraud finding");
+    assert!(
+        json["data"].get("migrationPinChange").is_none(),
+        "omits migrationPinChange when input has None"
+    );
+}
+
+#[test]
+fn rescission_authorized_carries_optional_migration_pin_change() {
+    let mut pin = serde_json::Map::new();
+    pin.insert(
+        "newChainPinEventHash".to_string(),
+        serde_json::Value::String("sha256:pin-2".to_string()),
+    );
+    pin.insert(
+        "priorPinSet".to_string(),
+        serde_json::json!({"formspec.definitionVersion": "1.0.0"}),
+    );
+    pin.insert(
+        "newPinSet".to_string(),
+        serde_json::json!({"formspec.definitionVersion": "1.1.0"}),
+    );
+    let mut input = rescission_authorized_input();
+    input.migration_pin_change = Some(pin);
+    let record = ProvenanceRecord::rescission_authorized(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(
+        json["data"]["migrationPinChange"]["newChainPinEventHash"],
+        "sha256:pin-2"
+    );
+    assert_eq!(
+        json["data"]["migrationPinChange"]["newPinSet"]["formspec.definitionVersion"],
+        "1.1.0"
+    );
+}
+
+#[test]
+fn rescission_authorized_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "rescissionTargetEventHash".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "migrationPinChange".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = rescission_authorized_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::rescission_authorized(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["rescissionTargetEventHash"], "sha256:event-3");
+    assert!(
+        json["data"].get("migrationPinChange").is_none(),
+        "context-supplied migrationPinChange dropped; constructor's None wins"
+    );
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn rescission_authorized_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::RescissionAuthorized),
+        "facts"
+    );
+}
+
+#[test]
+fn rescission_authorized_round_trips_through_serde() {
+    let record = ProvenanceRecord::rescission_authorized(rescission_authorized_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::RescissionAuthorized);
+}
+
+fn determination_rescinded_input() -> DeterminationRescindedInput<'static> {
+    DeterminationRescindedInput {
+        prior_determination_hash: "sha256:det-1",
+        rescission_authorization_event_hash: "sha256:event-3",
+        context: None,
+    }
+}
+
+#[test]
+fn determination_rescinded_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::determination_rescinded(determination_rescinded_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "determinationRescinded");
+    assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
+    assert_eq!(
+        json["data"]["rescissionAuthorizationEventHash"],
+        "sha256:event-3"
+    );
+}
+
+#[test]
+fn determination_rescinded_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "priorDeterminationHash".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = determination_rescinded_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::determination_rescinded(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["priorDeterminationHash"], "sha256:det-1");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn determination_rescinded_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::DeterminationRescinded),
+        "facts"
+    );
+}
+
+#[test]
+fn determination_rescinded_round_trips_through_serde() {
+    let record = ProvenanceRecord::determination_rescinded(determination_rescinded_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(
+        restored.record_kind,
+        ProvenanceKind::DeterminationRescinded
+    );
+}
+
+fn reinstated_input() -> ReinstatedInput<'static> {
+    ReinstatedInput {
+        prior_rescission_event_hash: "sha256:event-4",
+        reactivation_authorization_event_hash: "sha256:event-5",
+        reason: "rescission overturned on appeal",
+        context: None,
+    }
+}
+
+#[test]
+fn reinstated_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::reinstated(reinstated_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "reinstated");
+    assert_eq!(json["data"]["priorRescissionEventHash"], "sha256:event-4");
+    assert_eq!(
+        json["data"]["reactivationAuthorizationEventHash"],
+        "sha256:event-5"
+    );
+    assert_eq!(json["data"]["reason"], "rescission overturned on appeal");
+}
+
+#[test]
+fn reinstated_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "reason".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = reinstated_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::reinstated(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["reason"], "rescission overturned on appeal");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn reinstated_classifies_as_facts() {
+    assert_eq!(audit_layer_for_kind(ProvenanceKind::Reinstated), "facts");
+}
+
+#[test]
+fn reinstated_round_trips_through_serde() {
+    let record = ProvenanceRecord::reinstated(reinstated_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::Reinstated);
+}
+
+#[test]
+fn reinstated_is_distinct_from_amendment_kind() {
+    let r = ProvenanceRecord::reinstated(reinstated_input());
+    let a = ProvenanceRecord::amendment_authorized(amendment_authorized_input());
+    assert_ne!(r.record_kind, a.record_kind);
+    let r_json = serde_json::to_value(&r).expect("serialize");
+    assert_eq!(r_json["recordKind"], "reinstated");
+}
+
+fn authorization_attestation_input() -> AuthorizationAttestationInput<'static> {
+    AuthorizationAttestationInput {
+        authorizing_actor_id: "supervisor-3",
+        authority_basis: serde_json::json!({"kind": "actorPolicyRef", "value": "policy:amendment"}),
+        policy_predicate: "amendment-authority",
+        assurance_level: Some("high"),
+        context: None,
+    }
+}
+
+#[test]
+fn authorization_attestation_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::authorization_attestation(authorization_attestation_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "authorizationAttestation");
+    assert_eq!(json["actorId"], "supervisor-3");
+    assert_eq!(json["data"]["authorizingActorId"], "supervisor-3");
+    assert_eq!(json["data"]["policyPredicate"], "amendment-authority");
+    assert_eq!(json["data"]["assuranceLevel"], "high");
+    assert_eq!(json["data"]["authorityBasis"]["kind"], "actorPolicyRef");
+}
+
+#[test]
+fn authorization_attestation_omits_optional_assurance_level_when_none() {
+    let mut input = authorization_attestation_input();
+    input.assurance_level = None;
+    let record = ProvenanceRecord::authorization_attestation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert!(json["data"].get("assuranceLevel").is_none());
+}
+
+#[test]
+fn authorization_attestation_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "policyPredicate".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = authorization_attestation_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::authorization_attestation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["policyPredicate"], "amendment-authority");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn authorization_attestation_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::AuthorizationAttestation),
+        "facts"
+    );
+}
+
+#[test]
+fn authorization_attestation_round_trips_through_serde() {
+    let record = ProvenanceRecord::authorization_attestation(authorization_attestation_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(
+        restored.record_kind,
+        ProvenanceKind::AuthorizationAttestation
+    );
+}
+
+// ── Statutory clocks (ADR 0067) ─────────────────────────────────────────
+
+fn clock_started_input() -> ClockStartedInput<'static> {
+    ClockStartedInput {
+        clock_id: "clock-appeal-001",
+        clock_kind: "AppealClock",
+        origin_event_hash: "sha256:origin-1",
+        duration: "P30D",
+        computed_deadline: "2026-05-28T00:00:00Z",
+        calendar_ref: Some("urn:agency.gov:calendar:business"),
+        statute_reference: Some("https://agency.gov/statute/appeal-30d"),
+        context: None,
+    }
+}
+
+#[test]
+fn clock_started_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::clock_started(clock_started_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "clockStarted");
+    assert_eq!(json["data"]["clockId"], "clock-appeal-001");
+    assert_eq!(json["data"]["clockKind"], "AppealClock");
+    assert_eq!(json["data"]["originEventHash"], "sha256:origin-1");
+    assert_eq!(json["data"]["duration"], "P30D");
+    assert_eq!(json["data"]["computedDeadline"], "2026-05-28T00:00:00Z");
+    assert_eq!(
+        json["data"]["calendarRef"],
+        "urn:agency.gov:calendar:business"
+    );
+    assert_eq!(
+        json["data"]["statuteReference"],
+        "https://agency.gov/statute/appeal-30d"
+    );
+}
+
+#[test]
+fn clock_started_omits_optional_fields_when_none() {
+    let mut input = clock_started_input();
+    input.calendar_ref = None;
+    input.statute_reference = None;
+    let record = ProvenanceRecord::clock_started(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert!(json["data"].get("calendarRef").is_none());
+    assert!(json["data"].get("statuteReference").is_none());
+}
+
+#[test]
+fn clock_started_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "clockId".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = clock_started_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::clock_started(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["clockId"], "clock-appeal-001");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn clock_started_classifies_as_facts() {
+    assert_eq!(audit_layer_for_kind(ProvenanceKind::ClockStarted), "facts");
+}
+
+#[test]
+fn clock_started_round_trips_through_serde() {
+    let record = ProvenanceRecord::clock_started(clock_started_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::ClockStarted);
+}
+
+fn clock_resolved_input() -> ClockResolvedInput<'static> {
+    ClockResolvedInput {
+        clock_id: "clock-appeal-001",
+        origin_clock_hash: "sha256:clock-origin-1",
+        resolution: ClockResolution::Satisfied,
+        resolved_at: "2026-05-15T12:00:00Z",
+        resolving_event_hash: Some("sha256:resolve-1"),
+        context: None,
+    }
+}
+
+#[test]
+fn clock_resolved_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::clock_resolved(clock_resolved_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "clockResolved");
+    assert_eq!(json["data"]["clockId"], "clock-appeal-001");
+    assert_eq!(json["data"]["originClockHash"], "sha256:clock-origin-1");
+    assert_eq!(json["data"]["resolution"], "satisfied");
+    assert_eq!(json["data"]["resolvedAt"], "2026-05-15T12:00:00Z");
+    assert_eq!(json["data"]["resolvingEventHash"], "sha256:resolve-1");
+}
+
+#[test]
+fn clock_resolved_paused_resolution_serializes_camelcase() {
+    let mut input = clock_resolved_input();
+    input.resolution = ClockResolution::Paused;
+    let record = ProvenanceRecord::clock_resolved(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert_eq!(json["data"]["resolution"], "paused");
+}
+
+#[test]
+fn clock_resolved_all_typed_resolutions_serialize_camelcase() {
+    for (resolution, expected) in [
+        (ClockResolution::Satisfied, "satisfied"),
+        (ClockResolution::Elapsed, "elapsed"),
+        (ClockResolution::Paused, "paused"),
+        (ClockResolution::Cancelled, "cancelled"),
+    ] {
+        let mut input = clock_resolved_input();
+        input.resolution = resolution;
+        let record = ProvenanceRecord::clock_resolved(input);
+        let json = serde_json::to_value(&record).expect("serialize");
+        assert_eq!(json["data"]["resolution"], expected);
+    }
+}
+
+#[test]
+fn clock_resolved_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "resolution".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = clock_resolved_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::clock_resolved(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["resolution"], "satisfied");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn clock_resolved_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::ClockResolved),
+        "facts"
+    );
+}
+
+#[test]
+fn clock_resolved_round_trips_through_serde() {
+    let record = ProvenanceRecord::clock_resolved(clock_resolved_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::ClockResolved);
+}
+
+// ── Identity attestation (ADR 0068) ─────────────────────────────────────
+
+fn identity_attestation_input() -> IdentityAttestationInput<'static> {
+    IdentityAttestationInput {
+        subject_global_id: "did:example:applicant-001",
+        assurance_level: "high",
+        attestation_provider: "urn:agency.gov:identity:provider:idme",
+        provider_attestation_id: "att-2026-0001",
+        attested_at: "2026-04-01T10:00:00Z",
+        valid_until: Some("2027-04-01T10:00:00Z"),
+        attested_predicates: vec!["legal-name-verified", "age-of-majority"],
+        context: None,
+    }
+}
+
+#[test]
+fn identity_attestation_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::identity_attestation(identity_attestation_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "identityAttestation");
+    assert_eq!(json["data"]["subjectGlobalId"], "did:example:applicant-001");
+    assert_eq!(json["data"]["assuranceLevel"], "high");
+    assert_eq!(
+        json["data"]["attestationProvider"],
+        "urn:agency.gov:identity:provider:idme"
+    );
+    assert_eq!(json["data"]["providerAttestationId"], "att-2026-0001");
+    assert_eq!(json["data"]["attestedAt"], "2026-04-01T10:00:00Z");
+    assert_eq!(json["data"]["validUntil"], "2027-04-01T10:00:00Z");
+    assert_eq!(
+        json["data"]["attestedPredicates"],
+        serde_json::json!(["legal-name-verified", "age-of-majority"])
+    );
+}
+
+#[test]
+fn identity_attestation_omits_valid_until_when_none() {
+    let mut input = identity_attestation_input();
+    input.valid_until = None;
+    let record = ProvenanceRecord::identity_attestation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert!(json["data"].get("validUntil").is_none());
+}
+
+#[test]
+fn identity_attestation_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "subjectGlobalId".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = identity_attestation_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::identity_attestation(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["subjectGlobalId"], "did:example:applicant-001");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn identity_attestation_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::IdentityAttestation),
+        "facts"
+    );
+}
+
+#[test]
+fn identity_attestation_round_trips_through_serde() {
+    let record = ProvenanceRecord::identity_attestation(identity_attestation_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::IdentityAttestation);
+}
+
+// ── Clock skew (ADR 0069) ───────────────────────────────────────────────
+
+fn clock_skew_observed_input() -> ClockSkewObservedInput<'static> {
+    ClockSkewObservedInput {
+        processor_authored_at: "2026-04-22T14:30:00.500Z",
+        substrate_created_at: "2026-04-22T14:30:01.700Z",
+        skew_milliseconds: -1200,
+        threshold_milliseconds: 1000,
+        event_hash: "sha256:event-skew-1",
+        context: None,
+    }
+}
+
+#[test]
+fn clock_skew_observed_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::clock_skew_observed(clock_skew_observed_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "clockSkewObserved");
+    assert_eq!(
+        json["data"]["processorAuthoredAt"],
+        "2026-04-22T14:30:00.500Z"
+    );
+    assert_eq!(
+        json["data"]["substrateCreatedAt"],
+        "2026-04-22T14:30:01.700Z"
+    );
+    assert_eq!(json["data"]["skewMilliseconds"], -1200);
+    assert_eq!(json["data"]["thresholdMilliseconds"], 1000);
+    assert_eq!(json["data"]["eventHash"], "sha256:event-skew-1");
+}
+
+#[test]
+fn clock_skew_observed_skew_can_be_negative() {
+    let record = ProvenanceRecord::clock_skew_observed(clock_skew_observed_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+    let skew = json["data"]["skewMilliseconds"]
+        .as_i64()
+        .expect("signed integer");
+    assert!(skew < 0, "negative skew (substrate ahead) MUST round-trip");
+}
+
+#[test]
+fn clock_skew_observed_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "skewMilliseconds".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(99999)),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = clock_skew_observed_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::clock_skew_observed(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["skewMilliseconds"], -1200);
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn clock_skew_observed_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::ClockSkewObserved),
+        "facts"
+    );
+}
+
+#[test]
+fn clock_skew_observed_round_trips_through_serde() {
+    let record = ProvenanceRecord::clock_skew_observed(clock_skew_observed_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::ClockSkewObserved);
+}
+
+// ── Failure & compensation (ADR 0070) ───────────────────────────────────
+
+fn commit_attempt_failure_input() -> CommitAttemptFailureInput<'static> {
+    CommitAttemptFailureInput {
+        target_event_hash: "sha256:target-1",
+        failure_kind: CommitFailureKind::NetworkTimeout,
+        attempt_count: 3,
+        retry_budget_remaining_ms: 5000,
+        error_payload: Some(serde_json::json!({"errno": "ETIMEDOUT"})),
+        context: None,
+    }
+}
+
+#[test]
+fn commit_attempt_failure_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::commit_attempt_failure(commit_attempt_failure_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "commitAttemptFailure");
+    assert_eq!(json["data"]["targetEventHash"], "sha256:target-1");
+    assert_eq!(json["data"]["failureKind"], "networkTimeout");
+    assert_eq!(json["data"]["attemptCount"], 3);
+    assert_eq!(json["data"]["retryBudgetRemainingMs"], 5000);
+    assert_eq!(json["data"]["errorPayload"]["errno"], "ETIMEDOUT");
+}
+
+#[test]
+fn commit_attempt_failure_failure_kind_typed_enum_round_trips() {
+    for (kind, expected) in [
+        (CommitFailureKind::NetworkTimeout, "networkTimeout"),
+        (CommitFailureKind::SubstrateDown, "substrateDown"),
+        (CommitFailureKind::HashConflict, "hashConflict"),
+        (CommitFailureKind::Other, "other"),
+    ] {
+        let mut input = commit_attempt_failure_input();
+        input.failure_kind = kind;
+        let record = ProvenanceRecord::commit_attempt_failure(input);
+        let json = serde_json::to_value(&record).expect("serialize");
+        assert_eq!(json["data"]["failureKind"], expected);
+    }
+}
+
+#[test]
+fn commit_attempt_failure_omits_error_payload_when_none() {
+    let mut input = commit_attempt_failure_input();
+    input.error_payload = None;
+    let record = ProvenanceRecord::commit_attempt_failure(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert!(json["data"].get("errorPayload").is_none());
+}
+
+#[test]
+fn commit_attempt_failure_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "failureKind".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = commit_attempt_failure_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::commit_attempt_failure(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["failureKind"], "networkTimeout");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn commit_attempt_failure_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::CommitAttemptFailure),
+        "facts"
+    );
+}
+
+#[test]
+fn commit_attempt_failure_round_trips_through_serde() {
+    let record = ProvenanceRecord::commit_attempt_failure(commit_attempt_failure_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::CommitAttemptFailure);
+}
+
+fn authorization_rejected_input() -> AuthorizationRejectedInput<'static> {
+    AuthorizationRejectedInput {
+        attempted_actor_id: "applicant-1",
+        attempted_action: "transition:approve",
+        target_resource_id: "case-2026-0001",
+        rejection_reason: "actor lacks approve role",
+        policy_decision_ref: Some("urn:policy:decision:abc123"),
+        context: None,
+    }
+}
+
+#[test]
+fn authorization_rejected_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::authorization_rejected(authorization_rejected_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "authorizationRejected");
+    assert_eq!(json["actorId"], "applicant-1");
+    assert_eq!(json["data"]["attemptedActorId"], "applicant-1");
+    assert_eq!(json["data"]["attemptedAction"], "transition:approve");
+    assert_eq!(json["data"]["targetResourceId"], "case-2026-0001");
+    assert_eq!(json["data"]["rejectionReason"], "actor lacks approve role");
+    assert_eq!(
+        json["data"]["policyDecisionRef"],
+        "urn:policy:decision:abc123"
+    );
+}
+
+#[test]
+fn authorization_rejected_omits_policy_decision_ref_when_none() {
+    let mut input = authorization_rejected_input();
+    input.policy_decision_ref = None;
+    let record = ProvenanceRecord::authorization_rejected(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert!(json["data"].get("policyDecisionRef").is_none());
+}
+
+#[test]
+fn authorization_rejected_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "attemptedAction".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = authorization_rejected_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::authorization_rejected(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["data"]["attemptedAction"], "transition:approve");
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn authorization_rejected_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::AuthorizationRejected),
+        "facts"
+    );
+}
+
+#[test]
+fn authorization_rejected_round_trips_through_serde() {
+    let record = ProvenanceRecord::authorization_rejected(authorization_rejected_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::AuthorizationRejected);
+}
+
+// ── Migration & version pins (ADR 0071) ─────────────────────────────────
+
+fn migration_pin_changed_input() -> MigrationPinChangedInput<'static> {
+    MigrationPinChangedInput {
+        prior_pin_set: serde_json::json!({
+            "formspec.definitionVersion": "1.0.0",
+            "wos.$wosWorkflowVersion": "1.0",
+            "trellis.envelopeVersion": "1.0",
+            "trellis.conformanceClass": "B"
+        }),
+        new_pin_set: serde_json::json!({
+            "formspec.definitionVersion": "1.1.0",
+            "wos.$wosWorkflowVersion": "1.0",
+            "trellis.envelopeVersion": "1.0",
+            "trellis.conformanceClass": "B"
+        }),
+        authorizing_actor_id: "platform-admin-1",
+        authority_basis: serde_json::json!({"kind": "uri", "value": "https://agency.gov/auth/migrate"}),
+        migration_rationale: "definition v1.1.0 enables new field",
+        context: None,
+    }
+}
+
+#[test]
+fn migration_pin_changed_constructor_serializes_required_fields() {
+    let record = ProvenanceRecord::migration_pin_changed(migration_pin_changed_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert_eq!(json["recordKind"], "migrationPinChanged");
+    assert_eq!(json["actorId"], "platform-admin-1");
+    assert_eq!(
+        json["data"]["priorPinSet"]["formspec.definitionVersion"],
+        "1.0.0"
+    );
+    assert_eq!(
+        json["data"]["newPinSet"]["formspec.definitionVersion"],
+        "1.1.0"
+    );
+    assert_eq!(json["data"]["authorizingActorId"], "platform-admin-1");
+    assert_eq!(
+        json["data"]["migrationRationale"],
+        "definition v1.1.0 enables new field"
+    );
+    assert_eq!(json["data"]["authorityBasis"]["kind"], "uri");
+}
+
+#[test]
+fn migration_pin_changed_pin_sets_carry_four_field_tree() {
+    let record = ProvenanceRecord::migration_pin_changed(migration_pin_changed_input());
+    let json = serde_json::to_value(&record).expect("serialize");
+    for set_name in ["priorPinSet", "newPinSet"] {
+        let set = &json["data"][set_name];
+        for field in [
+            "formspec.definitionVersion",
+            "wos.$wosWorkflowVersion",
+            "trellis.envelopeVersion",
+            "trellis.conformanceClass",
+        ] {
+            assert!(
+                set.get(field).is_some(),
+                "{set_name} missing {field} (Q33 4-field pin tree)"
+            );
+        }
+    }
+}
+
+#[test]
+fn migration_pin_changed_drops_context_keys_that_collide_with_required_fields() {
+    let mut context = serde_json::Map::new();
+    context.insert(
+        "newPinSet".to_string(),
+        serde_json::Value::String("attacker".to_string()),
+    );
+    context.insert(
+        "auxNote".to_string(),
+        serde_json::Value::String("kept".to_string()),
+    );
+    let mut input = migration_pin_changed_input();
+    input.context = Some(context);
+    let record = ProvenanceRecord::migration_pin_changed(input);
+    let json = serde_json::to_value(&record).expect("serialize");
+
+    assert!(
+        json["data"]["newPinSet"].is_object(),
+        "constructor's typed pin set MUST win over context override"
+    );
+    assert_eq!(json["data"]["auxNote"], "kept");
+}
+
+#[test]
+fn migration_pin_changed_classifies_as_facts() {
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::MigrationPinChanged),
+        "facts"
+    );
+}
+
+#[test]
+fn migration_pin_changed_round_trips_through_serde() {
+    let record = ProvenanceRecord::migration_pin_changed(migration_pin_changed_input());
+    let json = serde_json::to_string(&record).expect("serialize");
+    let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(restored.record_kind, ProvenanceKind::MigrationPinChanged);
 }

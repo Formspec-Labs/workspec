@@ -7,31 +7,23 @@ use std::path::Path;
 
 use crate::LintError;
 
-/// Recognized WOS document kinds, detected from `$wos*` markers.
+/// Recognized WOS document kinds per ADR 0076 — 6 canonical markers only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DocumentKind {
-    Kernel,
-    WorkflowGovernance,
-    DueProcess,
-    AssertionLibrary,
-    PolicyParameters,
-    AiIntegration,
-    AgentConfig,
-    DriftMonitor,
-    Advanced,
-    Equity,
-    VerificationReport,
-    IntegrationProfile,
-    SemanticProfile,
-    SignatureProfile,
-    LifecycleDetail,
-    CorrespondenceMetadata,
-    BusinessCalendar,
-    NotificationTemplate,
-    /// Merged author-time workflow document per ADR 0076 (`$wosWorkflow`).
-    /// Combines kernel + governance + agents + signature + custody + advanced
-    /// in one envelope; legacy four-marker shape remains accepted for compat.
+    /// `$wosWorkflow` — author-time workflow envelope (lifecycle, governance,
+    /// agents, aiOversight, signature, custody, advanced, assurance, bindings).
     Workflow,
+    /// `$wosDelivery` — deployment sidecar (calendar, notification, correspondence).
+    Delivery,
+    /// `$wosOntologyAlignment` — semantic sidecar (JSON-LD, SHACL, PROV-O).
+    OntologyAlignment,
+    /// `$wosCaseInstance` — runtime case-instance artifact.
+    CaseInstance,
+    /// `$wosProvenanceLog` — runtime append-only audit log.
+    ProvenanceLog,
+    /// `$wosTooling` — tooling artifact (lintDiagnostic / conformanceTrace /
+    /// synthTrace / mcpToolCatalog / extensionRegistry).
+    Tooling,
 }
 
 /// A parsed WOS document with its kind and raw JSON value.
@@ -68,9 +60,12 @@ impl WosProject {
         &self.docs
     }
 
-    /// Find the kernel document, if one exists.
+    /// Find the primary `$wosWorkflow` document, if one exists.
+    ///
+    /// After ADR 0076, the single `$wosWorkflow` envelope is the author-time
+    /// source of truth; this replaces the old per-kind `kernel()` lookup.
     pub fn kernel(&self) -> Option<&WosDocument> {
-        self.docs.iter().find(|d| d.kind == DocumentKind::Kernel)
+        self.docs.iter().find(|d| d.kind == DocumentKind::Workflow)
     }
 
     /// Find all documents of a given kind.
@@ -84,40 +79,15 @@ impl WosProject {
     }
 }
 
-// $wos* marker to DocumentKind mapping.
-// Key length is intentionally short for fast detection.
-//
-// Order matters for prefix-disambiguation: `$wosWorkflow` (ADR 0076 merged
-// envelope) must come AFTER `$wosWorkflowGovernance` so the longer marker
-// wins. The detection loop is `find` over an ordered slice; the first hit is
-// returned. Markers are detected by exact key membership (`obj.contains_key`)
-// not prefix-match, so order is only a code-readability convention here.
+// Six canonical $wos* markers per ADR 0076. Exact-key detection — order is
+// irrelevant because no two markers share a prefix.
 const MARKERS: &[(&str, DocumentKind)] = &[
-    ("$wosWorkflow", DocumentKind::Kernel),
-    ("$wosWorkflowGovernance", DocumentKind::WorkflowGovernance),
     ("$wosWorkflow", DocumentKind::Workflow),
-    ("$wosDueProcess", DocumentKind::DueProcess),
-    ("$wosAssertionLibrary", DocumentKind::AssertionLibrary),
-    ("$wosPolicyParameters", DocumentKind::PolicyParameters),
-    ("$wosAIIntegration", DocumentKind::AiIntegration),
-    ("$wosAgentConfig", DocumentKind::AgentConfig),
-    ("$wosDriftMonitor", DocumentKind::DriftMonitor),
-    ("$wosAdvancedGovernance", DocumentKind::Advanced),
-    ("$wosEquityConfig", DocumentKind::Equity),
-    ("$wosVerificationReport", DocumentKind::VerificationReport),
-    ("$wosIntegrationProfile", DocumentKind::IntegrationProfile),
-    ("$wosSemanticProfile", DocumentKind::SemanticProfile),
-    ("$wosSignatureProfile", DocumentKind::SignatureProfile),
-    ("$wosLifecycleDetail", DocumentKind::LifecycleDetail),
-    (
-        "$wosCorrespondenceMetadata",
-        DocumentKind::CorrespondenceMetadata,
-    ),
-    ("$wosBusinessCalendar", DocumentKind::BusinessCalendar),
-    (
-        "$wosNotificationTemplate",
-        DocumentKind::NotificationTemplate,
-    ),
+    ("$wosDelivery", DocumentKind::Delivery),
+    ("$wosOntologyAlignment", DocumentKind::OntologyAlignment),
+    ("$wosCaseInstance", DocumentKind::CaseInstance),
+    ("$wosProvenanceLog", DocumentKind::ProvenanceLog),
+    ("$wosTooling", DocumentKind::Tooling),
 ];
 
 /// Parse a JSON string into a `WosDocument`.

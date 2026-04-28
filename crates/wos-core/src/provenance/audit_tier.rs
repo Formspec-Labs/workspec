@@ -140,7 +140,21 @@ impl From<K> for ProvenanceAuditTier {
             | K::ArazzoStep
             | K::ToolInvoked
             | K::PolicyDecision
-            | K::SignatureAffirmation => Self::Facts,
+            | K::SignatureAffirmation
+            | K::CorrectionAuthorized
+            | K::AmendmentAuthorized
+            | K::DeterminationAmended
+            | K::RescissionAuthorized
+            | K::DeterminationRescinded
+            | K::Reinstated
+            | K::AuthorizationAttestation
+            | K::ClockStarted
+            | K::ClockResolved
+            | K::IdentityAttestation
+            | K::ClockSkewObserved
+            | K::CommitAttemptFailure
+            | K::AuthorizationRejected
+            | K::MigrationPinChanged => Self::Facts,
         }
     }
 }

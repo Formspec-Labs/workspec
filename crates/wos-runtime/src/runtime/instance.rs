@@ -72,6 +72,7 @@ impl WosRuntime {
             history_store: Default::default(),
             compensation_logs: Default::default(),
             status: InstanceStatus::Active,
+            stalled_since: None,
             pending_events: Vec::new(),
             governance_state: None,
             volume_counters: None,

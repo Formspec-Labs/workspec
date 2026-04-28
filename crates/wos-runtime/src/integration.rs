@@ -26,11 +26,10 @@ pub enum IntegrationBindingKind {
     PolicyEngine,
 }
 
-/// Integration content — the embedded `bindings` block of a $wosWorkflow
-/// document per ADR 0076 D-1. Was a standalone $wosIntegrationProfile
-/// sidecar; the marker now lives on the workflow envelope and this type
-/// represents only the block's interior shape (binding declarations + types).
-/// Type name retained for consumer compatibility.
+/// Integration content — the embedded `bindings` block of a `$wosWorkflow`
+/// document (ADR 0076 D-1). Represents the interior shape of the `bindings`
+/// block: named binding declarations and their type descriptors. Type name
+/// retained for consumer compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrationProfileDocument {

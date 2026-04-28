@@ -4055,7 +4055,6 @@ mod tests {
         .unwrap();
         let profile: crate::IntegrationProfileDocument =
             serde_json::from_value(serde_json::json!({
-                "$wosIntegrationProfile": "1.0",
                 "targetWorkflow": {
                     "url": "urn:test:integration-profile-kernel",
                     "compatibleVersions": ">=1.0.0 <2.0.0"
@@ -4248,7 +4247,6 @@ mod tests {
         .unwrap();
         let profile: crate::IntegrationProfileDocument =
             serde_json::from_value(serde_json::json!({
-                "$wosIntegrationProfile": "1.0",
                 "targetWorkflow": {
                     "url": "urn:test:different-kernel",
                     "compatibleVersions": ">=1.0.0 <2.0.0"
@@ -4348,7 +4346,6 @@ mod tests {
         .unwrap();
         let profile: crate::IntegrationProfileDocument =
             serde_json::from_value(serde_json::json!({
-                "$wosIntegrationProfile": "1.0",
                 "targetWorkflow": {
                     "url": "urn:test:tool-integration-binding",
                     "compatibleVersions": ">=1.0.0 <2.0.0"
@@ -4459,7 +4456,6 @@ mod tests {
         .unwrap();
         let profile: crate::IntegrationProfileDocument =
             serde_json::from_value(serde_json::json!({
-                "$wosIntegrationProfile": "1.0",
                 "targetWorkflow": {
                     "url": "urn:test:invalid-idempotency-expression",
                     "compatibleVersions": ">=1.0.0 <2.0.0"

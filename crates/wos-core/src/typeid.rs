@@ -193,7 +193,14 @@ fn decode_uuid_v7_tail(tail: &str) -> Option<Uuid> {
     Some(uuid)
 }
 
+/// Validate a tenant identifier per ADR 0068 D-1.1 grammar
+/// `^[a-z][a-z0-9-]{0,62}$` (RFC 1035 DNS-label-compatible: ≤63 chars,
+/// lowercase-kebab; tenants map 1:1 to DNS subdomains for free).
 fn is_valid_tenant(value: &str) -> bool {
+    // RFC 1035 DNS-label-compatible upper bound (ADR 0068 D-1.1).
+    if value.len() > 63 {
+        return false;
+    }
     let mut chars = value.chars();
     let Some(first) = chars.next() else {
         return false;
@@ -288,5 +295,23 @@ mod tests {
         assert!(!is_valid_tenant("ABC"));
         assert!(!is_valid_tenant("1abc"));
         assert!(!is_valid_tenant("a_b"));
+    }
+
+    #[test]
+    fn is_valid_tenant_enforces_dns_label_length_cap() {
+        // ADR 0068 D-1.1: ≤63 chars (RFC 1035 DNS-label limit).
+        let max_len_tenant = "a".to_string() + &"b".repeat(62);
+        assert_eq!(max_len_tenant.len(), 63);
+        assert!(
+            is_valid_tenant(&max_len_tenant),
+            "63 chars MUST be accepted (the boundary)"
+        );
+
+        let too_long = "a".to_string() + &"b".repeat(63);
+        assert_eq!(too_long.len(), 64);
+        assert!(
+            !is_valid_tenant(&too_long),
+            "64 chars MUST be rejected (RFC 1035 boundary; ADR 0068 D-1.1)"
+        );
     }
 }

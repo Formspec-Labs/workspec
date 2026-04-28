@@ -31,9 +31,9 @@ impl Layer {
 
 /// Schemas baked into the binary at compile time.
 ///
-/// We embed the kernel schema so generation works offline and the binary is
+/// We embed the workflow schema so generation works offline and the binary is
 /// self-contained. Other layers will be added as their plans land.
-const KERNEL_SCHEMA: &str = include_str!("../../../schemas/kernel/wos-kernel.schema.json");
+const WORKFLOW_SCHEMA: &str = include_str!("../../../schemas/wos-workflow.schema.json");
 const KERNEL_SPEC_SUMMARY: &str = include_str!("../../../specs/kernel/spec.llm.md");
 
 /// Build the initial generation prompt.
@@ -54,7 +54,7 @@ pub fn build_generate_prompt(problem: &str, layer: Layer) -> (String, String, Ve
         Layer::Kernel => vec![
             CacheAnchor {
                 name: "kernel-schema",
-                content: KERNEL_SCHEMA.to_string(),
+                content: WORKFLOW_SCHEMA.to_string(),
             },
             CacheAnchor {
                 name: "kernel-spec-summary",
@@ -131,7 +131,7 @@ pub fn build_repair_prompt(
         Layer::Kernel => vec![
             CacheAnchor {
                 name: "kernel-schema",
-                content: KERNEL_SCHEMA.to_string(),
+                content: WORKFLOW_SCHEMA.to_string(),
             },
             CacheAnchor {
                 name: "kernel-spec-summary",

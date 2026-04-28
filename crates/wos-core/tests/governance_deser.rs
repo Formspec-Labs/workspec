@@ -69,7 +69,6 @@ fn governance_new_phase2_fields() {
     // Verify scope, RuleReference, delegations, holdPolicies
     // deserialize from inline JSON (fixtures don't include these yet).
     let json = r#"{
-        "$wosWorkflowGovernance": "1.0",
         "targetWorkflow": "https://example.gov/test",
         "dueProcess": {
             "scope": "impactLevel = 'rights-impacting'",

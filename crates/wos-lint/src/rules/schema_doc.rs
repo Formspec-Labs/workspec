@@ -45,6 +45,71 @@ pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
     walk(root, "", diagnostics);
 }
 
+/// Count the total number of leaf properties in the parsed schema.
+///
+/// Mirrors `check_schema`'s walk but only counts leaves; does not produce
+/// diagnostics. The companion ratchet for `EXCLUDED_SCHEMAS_CEILINGS` uses
+/// this to detect "fill 1, sketch 1" gaming where violation count stays
+/// flat but total leaf count grows.
+pub fn count_leaves(root: &Value) -> usize {
+    let mut count = 0usize;
+    walk_count(root, &mut count);
+    count
+}
+
+fn walk_count(node: &Value, count: &mut usize) {
+    let Some(obj) = node.as_object() else { return };
+    if obj.contains_key("$ref") {
+        return;
+    }
+    if is_leaf(obj) {
+        *count += 1;
+    }
+    if let Some(Value::Object(props)) = obj.get("properties") {
+        for (_, child) in props {
+            walk_count(child, count);
+        }
+    }
+    if let Some(Value::Object(pp)) = obj.get("patternProperties") {
+        for (_, child) in pp {
+            walk_count(child, count);
+        }
+    }
+    if let Some(defs) = obj.get("$defs").and_then(Value::as_object) {
+        for (_, child) in defs {
+            walk_count(child, count);
+        }
+    }
+    if let Some(defs) = obj.get("definitions").and_then(Value::as_object) {
+        for (_, child) in defs {
+            walk_count(child, count);
+        }
+    }
+    if let Some(items) = obj.get("items") {
+        match items {
+            Value::Object(_) => walk_count(items, count),
+            Value::Array(arr) => {
+                for child in arr {
+                    walk_count(child, count);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(additional) = obj.get("additionalProperties")
+        && additional.is_object()
+    {
+        walk_count(additional, count);
+    }
+    for combinator in ["oneOf", "anyOf", "allOf"] {
+        if let Some(Value::Array(arr)) = obj.get(combinator) {
+            for child in arr {
+                walk_count(child, count);
+            }
+        }
+    }
+}
+
 /// Recurse into a schema node. `pointer` is the JSON Pointer to `node`
 /// within the containing schema document.
 fn walk(node: &Value, pointer: &str, diagnostics: &mut Vec<LintDiagnostic>) {

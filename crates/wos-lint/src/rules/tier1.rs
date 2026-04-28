@@ -21,16 +21,16 @@ use crate::document::{DocumentKind, WosDocument};
 /// Run all Tier 1 checks applicable to the document's kind.
 pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     match doc.kind {
-        DocumentKind::Kernel => check_kernel(doc, diagnostics),
-        DocumentKind::WorkflowGovernance => check_governance(doc, diagnostics),
-        DocumentKind::AiIntegration => check_ai_integration(doc, diagnostics),
-        DocumentKind::AssertionLibrary => check_assertion_library(doc, diagnostics),
-        DocumentKind::PolicyParameters => check_policy_parameters(doc, diagnostics),
-        DocumentKind::CorrespondenceMetadata => check_correspondence_metadata(doc, diagnostics),
-        DocumentKind::BusinessCalendar => check_business_calendar(doc, diagnostics),
-        DocumentKind::NotificationTemplate => check_notification_template(doc, diagnostics),
-        DocumentKind::IntegrationProfile => check_integration_profile(doc, diagnostics),
-        _ => {} // Other document types: no Tier 1 rules yet.
+        // $wosWorkflow carries lifecycle, governance, agents, signature, bindings,
+        // custody, advanced, assurance in one envelope (ADR 0076).
+        DocumentKind::Workflow => check_workflow(doc, diagnostics),
+        // $wosDelivery carries calendar, notification templates, correspondence.
+        DocumentKind::Delivery => check_delivery(doc, diagnostics),
+        // Other canonical markers have no Tier 1 rules yet.
+        DocumentKind::OntologyAlignment
+        | DocumentKind::CaseInstance
+        | DocumentKind::ProvenanceLog
+        | DocumentKind::Tooling => {}
     }
 }
 
@@ -38,9 +38,20 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 // Kernel rules
 // ---------------------------------------------------------------------------
 
-fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+// ---------------------------------------------------------------------------
+// $wosWorkflow checks — merged envelope (ADR 0076)
+// ---------------------------------------------------------------------------
+
+/// Run all Tier 1 checks on a `$wosWorkflow` document.
+///
+/// The workflow envelope carries the former kernel lifecycle, plus optional
+/// embedded blocks: `governance`, `agents`, `aiOversight`, `signature`,
+/// `custody`, `advanced`, `assurance`, and `bindings`. Each block is checked
+/// via the appropriate sub-checker.
+fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     let root = &doc.value;
 
+    // --- Lifecycle / kernel-surface checks ---
     if let Ok(kernel) = serde_json::from_value::<KernelDocument>(root.clone()) {
         let all_state_ids = collect_all_state_ids_typed(&kernel.lifecycle.states);
         for (name, state) in &kernel.lifecycle.states {
@@ -59,6 +70,127 @@ fn check_kernel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     check_digest_algorithm(root, diagnostics);
     check_extension_prefixes(root, "", diagnostics);
     check_ver_level_for_fallback_chain(root, diagnostics);
+
+    // --- governance embedded block ---
+    if let Some(gov_block) = root.get("governance") {
+        check_governance_block(gov_block, diagnostics);
+    }
+
+    // --- agents / aiOversight embedded blocks ---
+    check_ai_integration_block(root, diagnostics);
+
+    // --- bindings embedded block (integration-profile content) ---
+    if let Some(bindings) = root.get("bindings") {
+        check_bindings_block(bindings, "/bindings", diagnostics);
+    }
+}
+
+/// Tier 1 checks on the `governance:` embedded block of a `$wosWorkflow` document.
+///
+/// Covers rules previously applied to standalone `$wosWorkflowGovernance`,
+/// `$wosPolicyParameters`, `$wosAssertionLibrary`, and `$wosDueProcess` documents.
+fn check_governance_block(gov: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    // --- Hold policies (G-055) ---
+    if let Some(holds) = gov
+        .get("holds")
+        .and_then(|h| h.get("policies"))
+        .and_then(Value::as_array)
+        .or_else(|| gov.get("holdPolicies").and_then(Value::as_array))
+    {
+        for (i, policy) in holds.iter().enumerate() {
+            let path = format!("/governance/holdPolicies/{i}");
+            check_hold_expected_duration_raw(policy, &path, diagnostics);
+        }
+    }
+
+    // --- Delegation dates (G-044, G-045) ---
+    let gov_doc_value = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "targetWorkflow": "",
+        "delegations": gov.get("delegation").and_then(|d| d.get("delegations")).cloned().unwrap_or(serde_json::Value::Null),
+        "holdPolicies": gov.get("holds").and_then(|h| h.get("policies")).cloned().unwrap_or(serde_json::Value::Null),
+    });
+    if let Ok(typed_gov) = serde_json::from_value::<GovernanceDocument>(gov_doc_value) {
+        check_delegation_dates_typed(&typed_gov, diagnostics);
+    }
+
+    // Also check directly at governance.delegations (flat shape)
+    if let Some(delegations) = gov.get("delegations").and_then(Value::as_array) {
+        let gov_flat = serde_json::json!({
+            "$wosWorkflow": "1.0",
+            "targetWorkflow": "",
+            "delegations": delegations,
+        });
+        if let Ok(typed_gov) = serde_json::from_value::<GovernanceDocument>(gov_flat) {
+            check_delegation_dates_typed(&typed_gov, diagnostics);
+        }
+    }
+
+    // --- Policy parameters block (G-047, G-048, G-050, G-057) ---
+    let policy_params_root = if let Some(pp) = gov.get("policyParameters") {
+        Some(pp.clone())
+    } else if gov.get("parameters").is_some() || gov.get("bindings").is_some() {
+        Some(gov.clone())
+    } else {
+        None
+    };
+    if let Some(pp) = policy_params_root {
+        check_policy_parameters_value(&pp, "/governance/policyParameters", diagnostics);
+    }
+
+    // --- Assertion library block (G-037, G-038, G-039) ---
+    let assertions_root = if let Some(al) = gov.get("assertionLibrary") {
+        Some(al.clone())
+    } else if gov.get("assertions").is_some() {
+        Some(gov.clone())
+    } else {
+        None
+    };
+    if let Some(al) = assertions_root {
+        check_assertion_library_value(&al, "/governance/assertionLibrary", diagnostics);
+    }
+}
+
+/// Tier 1 checks on the `agents` / `aiOversight` embedded blocks of a `$wosWorkflow`.
+///
+/// Covers rules previously applied to standalone `$wosAIIntegration` documents.
+fn check_ai_integration_block(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    // AI-049: narrativeProvenance authoritative
+    if let Some(np) = root.get("narrativeProvenance") {
+        check_narrative_tier_authoritative_in(np, "/narrativeProvenance", diagnostics);
+    }
+    if let Some(ai_oversight) = root.get("aiOversight") {
+        if let Some(np) = ai_oversight.get("narrativeProvenance") {
+            check_narrative_tier_authoritative_in(np, "/aiOversight/narrativeProvenance", diagnostics);
+        }
+    }
+
+    // AI-041: fallback chain termination
+    if let Some(agents) = root.get("agents").and_then(Value::as_array) {
+        for (i, agent) in agents.iter().enumerate() {
+            if let Some(chain) = agent.get("fallbackChain").and_then(Value::as_array) {
+                let path = format!("/agents/{i}/fallbackChain");
+                check_fallback_chain_termination_raw(chain, &path, diagnostics);
+            }
+        }
+    }
+}
+
+/// $wosDelivery checks — calendar, notification templates, correspondence.
+fn check_delivery(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+    let root = &doc.value;
+    // Business calendar rules (G-058, G-059) live inside delivery.calendar
+    if let Some(cal) = root.get("calendar") {
+        check_business_calendar_value(cal, "/calendar", diagnostics);
+    }
+    // Notification template rules (G-062, G-065)
+    if let Some(templates) = root.get("notificationTemplates") {
+        check_notification_template_value(templates, "/notificationTemplates", diagnostics);
+    }
+    // Correspondence (CM-001)
+    if let Some(corr) = root.get("correspondence") {
+        check_correspondence_metadata_value(corr, "/correspondence", diagnostics);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,36 +477,6 @@ fn check_timer_exclusivity_typed(kernel: &KernelDocument, diagnostics: &mut Vec<
 // Governance rules
 // ---------------------------------------------------------------------------
 
-fn check_governance(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
-    if let Ok(gov) = serde_json::from_value::<GovernanceDocument>(root.clone()) {
-        check_delegation_dates_typed(&gov, diagnostics);
-        check_hold_expected_duration_typed(&gov, diagnostics);
-    }
-
-    check_extension_prefixes(root, "", diagnostics);
-}
-
-/// G-055: Hold policy expectedDuration (typed).
-fn check_hold_expected_duration_typed(
-    gov: &GovernanceDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    for (i, hold) in gov.hold_policies.iter().enumerate() {
-        let duration = &hold.expected_duration;
-        if duration != "indefinite" && !duration.starts_with('P') {
-            diagnostics.push(LintDiagnostic::t1_error(
-                "G-055",
-                &format!("/holdPolicies/{i}/expectedDuration"),
-                format!(
-                    "expectedDuration '{duration}' is not a valid ISO 8601 duration or 'indefinite'"
-                ),
-            ));
-        }
-    }
-}
-
 /// G-044 / G-045: Delegation dates (typed).
 fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     for (i, delegation) in gov.delegations.iter().enumerate() {
@@ -408,43 +510,6 @@ fn check_delegation_dates_typed(gov: &GovernanceDocument, diagnostics: &mut Vec<
 // ---------------------------------------------------------------------------
 // AI Integration rules
 // ---------------------------------------------------------------------------
-
-fn check_ai_integration(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
-    if let Ok(ai) = serde_json::from_value::<AIIntegrationDocument>(root.clone()) {
-        check_fallback_chain_termination_typed(&ai.fallback_chain, "/fallbackChain", diagnostics);
-
-        for (i, agent) in ai.agents.iter().enumerate() {
-            if !agent.fallback_chain.is_empty() {
-                let path = format!("/agents/{i}/fallbackChain");
-                check_fallback_chain_termination_typed(&agent.fallback_chain, &path, diagnostics);
-            }
-        }
-    }
-
-    // AI-049: Narrative tier authoritative (always Value-based — dynamic structure).
-    check_narrative_tier_authoritative(root, diagnostics);
-
-    check_extension_prefixes(root, "", diagnostics);
-}
-
-/// AI-049: Every Narrative provenance record must have `authoritative: false`.
-fn check_narrative_tier_authoritative(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
-    if let Some(records) = root.get("narrativeProvenance").and_then(Value::as_array) {
-        for (i, record) in records.iter().enumerate() {
-            check_authoritative_false(record, &format!("/narrativeProvenance/{i}"), diagnostics);
-        }
-    }
-
-    if let Some(records) = root.get("provenance").and_then(Value::as_array) {
-        for (i, record) in records.iter().enumerate() {
-            if record.get("tier").and_then(Value::as_str) == Some("narrative") {
-                check_authoritative_false(record, &format!("/provenance/{i}"), diagnostics);
-            }
-        }
-    }
-}
 
 fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     match record.get("authoritative") {
@@ -514,30 +579,33 @@ fn check_fallback_chain_termination_typed(
 // Assertion Library rules (no typed model — Value walking)
 // ---------------------------------------------------------------------------
 
-fn check_assertion_library(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
+/// G-037 / G-038 / G-039: Assertion library checks (value-level, reusable).
+fn check_assertion_library_value(
+    root: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let assertions = root
+        .get("assertions")
+        .and_then(Value::as_array)
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
 
-    if let Some(assertions) = root.get("assertions").and_then(Value::as_array) {
-        let mut seen_ids = std::collections::HashSet::new();
-        for (i, assertion) in assertions.iter().enumerate() {
-            let path = format!("/assertions/{i}");
+    let mut seen_ids = std::collections::HashSet::new();
+    for (i, assertion) in assertions.iter().enumerate() {
+        let path = format!("{base_path}/assertions/{i}");
 
-            // G-037
-            if let Some(id) = assertion.get("id").and_then(Value::as_str) {
-                if !seen_ids.insert(id) {
-                    diagnostics.push(LintDiagnostic::t1_error(
-                        "G-037",
-                        &path,
-                        format!("duplicate assertion id '{id}'"),
-                    ));
-                }
+        if let Some(id) = assertion.get("id").and_then(Value::as_str) {
+            if !seen_ids.insert(id) {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "G-037",
+                    &path,
+                    format!("duplicate assertion id '{id}'"),
+                ));
             }
-
-            check_assertion_expression_fields(assertion, &path, diagnostics);
         }
+        check_assertion_expression_fields(assertion, &path, diagnostics);
     }
-
-    check_extension_prefixes(root, "", diagnostics);
 }
 
 /// G-038 / G-039: Assertion expression / fields recommendations.
@@ -577,12 +645,15 @@ fn check_assertion_expression_fields(
 // Policy Parameters rules (no typed model — Value walking)
 // ---------------------------------------------------------------------------
 
-fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
+/// G-047 / G-048 / G-050 / G-057: Policy parameter checks (value-level, reusable).
+fn check_policy_parameters_value(
+    root: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     if let Some(params) = root.get("parameters").and_then(Value::as_object) {
         for (name, param) in params {
-            let param_path = format!("/parameters/{name}");
+            let param_path = format!("{base_path}/parameters/{name}");
 
             if let Some(values) = param.get("values").and_then(Value::as_array) {
                 check_values_ascending_effective_date(
@@ -610,7 +681,7 @@ fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnost
 
     if let Some(bindings) = root.get("bindings").and_then(Value::as_object) {
         for (key, binding) in bindings {
-            let binding_path = format!("/bindings/{key}");
+            let binding_path = format!("{base_path}/bindings/{key}");
 
             if let Some(id) = binding.get("id").and_then(Value::as_str) {
                 if id != key {
@@ -632,8 +703,113 @@ fn check_policy_parameters(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnost
             }
         }
     }
+}
 
-    check_extension_prefixes(root, "", diagnostics);
+/// G-055: Hold policy expectedDuration raw-value check (used in embedded blocks).
+fn check_hold_expected_duration_raw(
+    policy: &Value,
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(duration) = policy.get("expectedDuration").and_then(Value::as_str) else {
+        return;
+    };
+    if duration != "indefinite" && !duration.starts_with('P') {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "G-055",
+            &format!("{path}/expectedDuration"),
+            format!(
+                "expectedDuration '{duration}' is not a valid ISO 8601 duration or 'indefinite'"
+            ),
+        ));
+    }
+}
+
+/// I-001: outputBinding JSONPath checks on the `bindings` embedded block.
+fn check_bindings_block(
+    bindings: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(bindings_obj) = bindings.as_object() else {
+        return;
+    };
+    for (binding_key, binding) in bindings_obj {
+        let Some(output_binding) = binding.get("outputBinding").and_then(Value::as_object) else {
+            continue;
+        };
+        for (case_path, json_path_value) in output_binding {
+            let Some(json_path) = json_path_value.as_str() else {
+                continue;
+            };
+            if contains_unsupported_jsonpath_feature(json_path) {
+                let path = format!("{base_path}/{binding_key}/outputBinding/{case_path}");
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "I-001",
+                    path,
+                    format!(
+                        "outputBinding JSONPath '{json_path}' uses a feature not supported in \
+                         the RFC 9535 output-binding profile: filter expressions ([?(...)]) and \
+                         recursive descent (..) are excluded for predictability and static \
+                         analysability. Extend the profile via ADR if a future binding requires \
+                         these features."
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+/// AI-049 narrative tier check on an array value (path-aware).
+fn check_narrative_tier_authoritative_in(
+    records: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(arr) = records.as_array() else {
+        return;
+    };
+    for (i, record) in arr.iter().enumerate() {
+        check_authoritative_false(record, &format!("{base_path}/{i}"), diagnostics);
+    }
+}
+
+/// AI-041: Fallback chain termination check on a raw JSON array.
+fn check_fallback_chain_termination_raw(
+    chain: &[Value],
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if chain.is_empty() {
+        return;
+    }
+    let last_action = chain
+        .last()
+        .and_then(|l| l.get("action").and_then(Value::as_str))
+        .unwrap_or("");
+    if last_action != "escalateToHuman" && last_action != "fail" {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "AI-041",
+            path,
+            format!(
+                "fallback chain must terminate in 'escalateToHuman' or 'fail', found '{last_action}'"
+            ),
+        ));
+    }
+    let mut seen_alternate_agents = std::collections::HashSet::new();
+    for (i, level) in chain.iter().enumerate() {
+        if let Some(agent_ref) = level.get("alternateAgentRef").and_then(Value::as_str) {
+            if !seen_alternate_agents.insert(agent_ref) {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "AI-041",
+                    &format!("{path}/{i}"),
+                    format!(
+                        "fallback chain cycles: alternateAgent '{agent_ref}' appears more than once"
+                    ),
+                ));
+            }
+        }
+    }
 }
 
 /// Shared helper for G-047 and G-057.
@@ -784,38 +960,43 @@ fn check_actor_id_uniqueness_typed(kernel: &KernelDocument, diagnostics: &mut Ve
     }
 }
 
-/// CM-001: Entry template ids MUST be unique within the correspondence sidecar.
-fn check_correspondence_metadata(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
+/// CM-001: Entry template ids MUST be unique within the correspondence block.
+fn check_correspondence_metadata_value(
+    corr: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let entry_templates = corr
+        .get("entryTemplates")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-    if let Some(entry_templates) = root.get("entryTemplates").and_then(Value::as_array) {
-        let mut seen = std::collections::HashSet::new();
-
-        for (index, template) in entry_templates.iter().enumerate() {
-            let Some(id) = template.get("id").and_then(Value::as_str) else {
-                continue;
-            };
-
-            if !seen.insert(id) {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "CM-001",
-                    &format!("/entryTemplates/{index}/id"),
-                    format!("duplicate correspondence entry template id '{id}'"),
-                ));
-            }
+    let mut seen = std::collections::HashSet::new();
+    for (index, template) in entry_templates.iter().enumerate() {
+        let Some(id) = template.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if !seen.insert(id) {
+            diagnostics.push(LintDiagnostic::t1_error(
+                "CM-001",
+                &format!("{base_path}/entryTemplates/{index}/id"),
+                format!("duplicate correspondence entry template id '{id}'"),
+            ));
         }
     }
-
-    check_extension_prefixes(root, "", diagnostics);
 }
 
-/// G-058 / G-059: Business calendar structural validity.
-fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
-    if let Some(holidays) = root.get("holidays").and_then(Value::as_array) {
+/// G-058 / G-059: Business calendar structural validity (value-level).
+fn check_business_calendar_value(
+    cal: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if let Some(holidays) = cal.get("holidays").and_then(Value::as_array) {
         for (i, h) in holidays.iter().enumerate() {
-            let path = format!("/holidays/{i}");
+            let path = format!("{base_path}/holidays/{i}");
             let has_date = h.get("date").is_some();
             let has_rule = h.get("rule").is_some();
             if has_date == has_rule {
@@ -832,7 +1013,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnost
         }
     }
 
-    if let Some(oh) = root.get("operatingHours") {
+    if let Some(oh) = cal.get("operatingHours") {
         let start = oh.get("start").and_then(Value::as_str);
         let end = oh.get("end").and_then(Value::as_str);
         if let (Some(s), Some(e)) = (start, end) {
@@ -842,7 +1023,7 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnost
                 (Some(sm), Some(em)) if em <= sm => {
                     diagnostics.push(LintDiagnostic::t1_error(
                         "G-059",
-                        "/operatingHours/end",
+                        &format!("{base_path}/operatingHours/end"),
                         "operating hours 'end' MUST be strictly after 'start'",
                     ));
                 }
@@ -850,33 +1031,29 @@ fn check_business_calendar(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnost
                 _ => {
                     diagnostics.push(LintDiagnostic::t1_error(
                         "G-059",
-                        "/operatingHours",
+                        &format!("{base_path}/operatingHours"),
                         "operating hours 'start' and 'end' MUST be valid 24-hour HH:MM values",
                     ));
                 }
             }
         }
     }
-
-    check_extension_prefixes(root, "", diagnostics);
 }
 
-/// G-062 / G-065: Notification template content and section id uniqueness.
-fn check_notification_template(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
-    let Some(templates) = root.get("templates").and_then(Value::as_object) else {
-        check_extension_prefixes(root, "", diagnostics);
+/// G-062 / G-065: Notification templates block (value-level).
+fn check_notification_template_value(
+    templates: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let Some(template_map) = templates.as_object() else {
         return;
     };
-
-    for (key, template) in templates {
-        let base = format!("/templates/{key}");
-        check_adverse_decision_template_sections(template, &base, diagnostics);
-        check_template_section_id_uniqueness(template, &base, diagnostics);
+    for (key, template) in template_map {
+        let path = format!("{base_path}/{key}");
+        check_adverse_decision_template_sections(template, &path, diagnostics);
+        check_template_section_id_uniqueness(template, &path, diagnostics);
     }
-
-    check_extension_prefixes(root, "", diagnostics);
 }
 
 /// G-062: Adverse-decision category requires four section classes (NT S4.4).

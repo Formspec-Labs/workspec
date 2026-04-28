@@ -111,3 +111,33 @@ Guard evaluation uses `fel-core` — the same FEL runtime used by the Formspec e
 | `wos-lint` | T1 | 32 | Single-document structural constraints |
 | `wos-lint --project` | T2 | 51 | Cross-document resolution + FEL AST analysis |
 | `wos-conformance` | T3 | 104 | Runtime behavioral guarantees via event-driven fixtures |
+
+---
+
+## Kernel Conformance Fixtures (formerly Kernel §13, relocated per ADR 0076 D-8)
+
+### 1 Kernel-Only Smoke Test
+
+A valid kernel-only deployment: a purchase order approval workflow with three states, two actors, and no governance structures. See `fixtures/kernel/purchase-order-approval.json`.
+
+### 2 Validation Requirements
+
+A Kernel Structural processor MUST accept the purchase order approval fixture without error. A Kernel Complete processor MUST additionally execute the lifecycle and produce the expected provenance records.
+
+### 3 Schema Limitations
+
+The kernel JSON Schema validates structural correctness. The state-type structural invariants (S4.3) -- which properties are required or forbidden for each `type` value -- are encoded in the schema via conditional `allOf` blocks on the `State` definition and MUST be enforced by a Kernel Structural processor. Specifically, the schema enforces:
+
+- **Compound states MUST have `initialState` and a non-empty `states` map.**
+- **Parallel states MUST have a non-empty `regions` map.**
+- **Atomic and final states MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`.**
+- **`cancellationPolicy` is permitted only on `parallel` states.**
+- **`historyState` is permitted only on `compound` states.**
+
+The following constraints remain semantic and MUST be enforced by a Kernel Complete processor (they are not expressible in JSON Schema without prohibitive complexity):
+
+- **Final states MUST NOT have outgoing transitions.** A `final` state with a `transitions` array is structurally valid against the schema but semantically invalid.
+- **Kernel-generated event names (`$` prefix) MUST NOT be used as document-authored event names** (S4.10).
+- **Referenced states MUST exist.** A transition `target`, compound `initialState`, or lifecycle-level `initialState` that names an undeclared state is semantically invalid.
+
+---

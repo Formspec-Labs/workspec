@@ -209,7 +209,7 @@ Studio defaults to `http://localhost:4000` as the API base (configurable via stu
 - Active plan: [`thoughts/plans/2026-04-18-wos-remainder-di-seam-framing.md`](../../thoughts/plans/2026-04-18-wos-remainder-di-seam-framing.md) — remaining work organised by DI seam, with placement corrections per the two DI review passes.
 - Open architectural questions: [`thoughts/reviews/2026-04-22-di-review-open-questions.md`](../../thoughts/reviews/2026-04-22-di-review-open-questions.md).
 - Reference engine-adapter target: [`thoughts/examples/temporal-reference-implementation.md`](../../thoughts/examples/temporal-reference-implementation.md).
-- Spec (what the runtime implements): [`specs/kernel/spec.md`](../../specs/kernel/spec.md) + [`specs/companions/runtime.md`](../../specs/companions/runtime.md).
+- Spec (what the runtime implements): [`specs/kernel/spec.md`](../../specs/kernel/spec.md) — §1-§16 (post-ADR-0076 merged kernel; runtime companion content absorbed into §11 Runtime Serialization, §12 Evaluation Modes, §13 Formspec Coprocessor, §16 Host Interfaces, plus §4.x / §5.5 / §9.x within-section expansions). [`specs/companions/runtime.md`](../../specs/companions/runtime.md) retained as a redirect-stub home for external citations during the citation sweep.
 
 ## Studio wire contract
 

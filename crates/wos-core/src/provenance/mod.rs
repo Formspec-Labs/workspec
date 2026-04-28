@@ -25,7 +25,11 @@ pub use audit_tier::{ProvenanceAuditTier, audit_layer_for_kind};
 pub use kind::ProvenanceKind;
 pub use log::ProvenanceLog;
 pub use record::{
-    CapabilityInvocationInput, ConfigurationWarningInput, ProvenanceRecord,
-    SignatureAffirmationInput,
+    AmendmentAuthorizedInput, AuthorizationAttestationInput, AuthorizationRejectedInput,
+    CapabilityInvocationInput, ClockResolution, ClockResolvedInput, ClockSkewObservedInput,
+    ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind, ConfigurationWarningInput,
+    CorrectionAuthorizedInput, DeterminationAmendedInput, DeterminationRescindedInput,
+    IdentityAttestationInput, MigrationPinChangedInput, ProvenanceRecord, ReinstatedInput,
+    RescissionAuthorizedInput, SignatureAffirmationInput,
 };
 pub use snapshot::CaseFileSnapshot;

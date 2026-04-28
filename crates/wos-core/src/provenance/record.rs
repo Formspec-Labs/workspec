@@ -64,6 +64,300 @@ pub struct CapabilityInvocationInput<'a> {
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Closed resolution discriminant for [`ProvenanceRecord::clock_resolved`]
+/// (ADR 0067 §3). Typed at the Rust seam so invalid resolutions cannot
+/// reach the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClockResolution {
+    Satisfied,
+    Elapsed,
+    Paused,
+    Cancelled,
+}
+
+impl ClockResolution {
+    fn as_camel_str(self) -> &'static str {
+        match self {
+            Self::Satisfied => "satisfied",
+            Self::Elapsed => "elapsed",
+            Self::Paused => "paused",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+/// Closed failure-kind discriminant for
+/// [`ProvenanceRecord::commit_attempt_failure`] (ADR 0070 §2). Typed at
+/// the Rust seam so invalid failure kinds cannot reach the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CommitFailureKind {
+    NetworkTimeout,
+    SubstrateDown,
+    HashConflict,
+    Other,
+}
+
+impl CommitFailureKind {
+    fn as_camel_str(self) -> &'static str {
+        match self {
+            Self::NetworkTimeout => "networkTimeout",
+            Self::SubstrateDown => "substrateDown",
+            Self::HashConflict => "hashConflict",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// Amendment-authorization provenance input (ADR 0066 §2).
+///
+/// Authorizes a substantive change to a prior determination. Pairs with
+/// [`DeterminationAmendedInput`] which carries the new value.
+pub struct AmendmentAuthorizedInput<'a> {
+    /// Hash of the event being amended (the amendment target).
+    pub amendment_target_event_hash: &'a str,
+    /// Hash of the prior determination value being superseded.
+    pub prior_determination_hash: &'a str,
+    /// Free-text rationale captured from the authorizing actor.
+    pub reason: &'a str,
+    /// Stable identifier for the actor authorizing the amendment.
+    pub authorizing_actor_id: &'a str,
+    /// Discriminated union: `{"kind": "uri", "value": "..."}` or
+    /// `{"kind": "actorPolicyRef", "value": "..."}`.
+    pub authority_basis: serde_json::Value,
+    /// Optional context payload merged into `data`. Constructor's
+    /// required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Authorization-attestation provenance input (ADR 0066 §5).
+pub struct AuthorizationAttestationInput<'a> {
+    /// Stable identifier for the attesting (authorizing) actor.
+    pub authorizing_actor_id: &'a str,
+    /// Discriminated-union policy basis (see
+    /// [`AmendmentAuthorizedInput::authority_basis`]).
+    pub authority_basis: serde_json::Value,
+    /// Closed-namespace policy predicate. Reserved literals include
+    /// `"amendment-authority"`, `"rescission-authority"`,
+    /// `"reinstatement-authority"`.
+    pub policy_predicate: &'a str,
+    /// Optional assurance level (e.g. `"high"`, `"standard"`).
+    pub assurance_level: Option<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Authorization-rejected provenance input (ADR 0070 §4).
+pub struct AuthorizationRejectedInput<'a> {
+    /// Identifier of the actor whose attempt was rejected.
+    pub attempted_actor_id: &'a str,
+    /// Action verb that was attempted, e.g. `"transition:approve"`,
+    /// `"submit:taskResponse"`.
+    pub attempted_action: &'a str,
+    /// Identifier of the resource the actor tried to act upon.
+    pub target_resource_id: &'a str,
+    /// Free-text rationale (typically copied from the policy decision).
+    pub rejection_reason: &'a str,
+    /// Optional reference to the upstream policy decision record.
+    pub policy_decision_ref: Option<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Clock-resolved provenance input (ADR 0067 §3).
+pub struct ClockResolvedInput<'a> {
+    /// Identifier of the clock that resolved.
+    pub clock_id: &'a str,
+    /// Hash of the originating `ClockStarted` event.
+    pub origin_clock_hash: &'a str,
+    /// Closed resolution discriminant.
+    pub resolution: ClockResolution,
+    /// RFC 3339 timestamp at which resolution occurred.
+    pub resolved_at: &'a str,
+    /// Optional hash of the event that caused the resolution.
+    pub resolving_event_hash: Option<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Clock-skew-observed provenance input (ADR 0069 §3).
+pub struct ClockSkewObservedInput<'a> {
+    /// Processor-side authoring timestamp (RFC 3339).
+    pub processor_authored_at: &'a str,
+    /// Substrate-side creation timestamp (RFC 3339).
+    pub substrate_created_at: &'a str,
+    /// Signed skew (positive = processor ahead). Stored as i64 because
+    /// negative values are valid observations.
+    pub skew_milliseconds: i64,
+    /// Configured threshold above which skew triggers a record.
+    pub threshold_milliseconds: u64,
+    /// Hash of the event whose timestamps revealed the skew.
+    pub event_hash: &'a str,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Clock-started provenance input (ADR 0067 §2).
+pub struct ClockStartedInput<'a> {
+    /// Identifier of the new clock.
+    pub clock_id: &'a str,
+    /// Open-enum kind label (`"AppealClock"`, `"ProcessingSLA"`,
+    /// `"GrantExpiry"`, `"StatuteClock"`, `x-*`).
+    pub clock_kind: &'a str,
+    /// Hash of the event that started the clock.
+    pub origin_event_hash: &'a str,
+    /// ISO 8601 duration string.
+    pub duration: &'a str,
+    /// Computed deadline (RFC 3339).
+    pub computed_deadline: &'a str,
+    /// Optional reference to a business calendar definition.
+    pub calendar_ref: Option<&'a str>,
+    /// Optional URI naming the governing statute.
+    pub statute_reference: Option<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Commit-attempt-failure provenance input (ADR 0070 §2).
+pub struct CommitAttemptFailureInput<'a> {
+    /// Hash of the event whose commit attempt failed.
+    pub target_event_hash: &'a str,
+    /// Closed failure-kind discriminant.
+    pub failure_kind: CommitFailureKind,
+    /// Number of attempts that have occurred so far (1-based).
+    pub attempt_count: u32,
+    /// Remaining retry budget in milliseconds.
+    pub retry_budget_remaining_ms: u64,
+    /// Optional adapter-specific error payload.
+    pub error_payload: Option<serde_json::Value>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Correction-authorized provenance input (ADR 0066 §1).
+///
+/// Mode 1 of the closed five-mode supersession taxonomy. Records the
+/// authorizing act for a non-determination correction (e.g. typo fix).
+pub struct CorrectionAuthorizedInput<'a> {
+    /// Hash of the event being corrected.
+    pub correction_target_event_hash: &'a str,
+    /// JSON-pointer strings naming the corrected fields.
+    pub corrected_field_set: Vec<&'a str>,
+    /// Free-text rationale.
+    pub reason: &'a str,
+    /// Identifier of the authorizing actor.
+    pub authorizing_actor_id: &'a str,
+    /// Discriminated-union policy basis.
+    pub authority_basis: serde_json::Value,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Determination-amended provenance input (ADR 0066 §2).
+pub struct DeterminationAmendedInput<'a> {
+    /// Hash of the prior determination value being amended.
+    pub prior_determination_hash: &'a str,
+    /// New determination value (any JSON shape per binding).
+    pub new_determination_value: serde_json::Value,
+    /// Hash of the authorizing `AmendmentAuthorized` record.
+    pub amendment_authorization_event_hash: &'a str,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Determination-rescinded provenance input (ADR 0066 §3).
+pub struct DeterminationRescindedInput<'a> {
+    /// Hash of the prior determination value being rescinded.
+    pub prior_determination_hash: &'a str,
+    /// Hash of the authorizing `RescissionAuthorized` record.
+    pub rescission_authorization_event_hash: &'a str,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Identity-attestation provenance input (ADR 0068 §4, Q15).
+pub struct IdentityAttestationInput<'a> {
+    /// Cross-tenant subject identifier.
+    pub subject_global_id: &'a str,
+    /// Open-enum assurance level (`"low"` | `"standard"` | `"high"` |
+    /// `"very-high"` | vendor extension).
+    pub assurance_level: &'a str,
+    /// Identifier of the attestation provider (issuer).
+    pub attestation_provider: &'a str,
+    /// Provider-issued identifier for this attestation event.
+    pub provider_attestation_id: &'a str,
+    /// RFC 3339 timestamp at which the provider attested.
+    pub attested_at: &'a str,
+    /// Optional RFC 3339 expiry of the attestation.
+    pub valid_until: Option<&'a str>,
+    /// Open-list of attested predicates (e.g.
+    /// `["legal-name-verified", "age-of-majority"]`).
+    pub attested_predicates: Vec<&'a str>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Migration-pin-changed provenance input (ADR 0071 §3).
+pub struct MigrationPinChangedInput<'a> {
+    /// Prior 4-field pin tree (per maximalist Q33: `formspec.definitionVersion`,
+    /// `wos.$wosWorkflowVersion`, `trellis.envelopeVersion`,
+    /// `trellis.conformanceClass`).
+    pub prior_pin_set: serde_json::Value,
+    /// New 4-field pin tree (same shape as `prior_pin_set`).
+    pub new_pin_set: serde_json::Value,
+    /// Identifier of the actor authorizing the pin change.
+    pub authorizing_actor_id: &'a str,
+    /// Discriminated-union policy basis.
+    pub authority_basis: serde_json::Value,
+    /// Free-text rationale.
+    pub migration_rationale: &'a str,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Reinstated provenance input (ADR 0066 §4 — Mode 5, owner directive Q26).
+///
+/// Re-activates a determination from a non-operative (post-rescission)
+/// state. Distinct from amendment: the substantive value is unchanged;
+/// only the operative status flips back.
+pub struct ReinstatedInput<'a> {
+    /// Hash of the prior `DeterminationRescinded` (or
+    /// `RescissionAuthorized`) event being undone.
+    pub prior_rescission_event_hash: &'a str,
+    /// Hash of the authorizing `AuthorizationAttestation` record
+    /// (predicate `"reinstatement-authority"`).
+    pub reactivation_authorization_event_hash: &'a str,
+    /// Free-text rationale.
+    pub reason: &'a str,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
+/// Rescission-authorized provenance input (ADR 0066 §3).
+///
+/// Mode 4 of the closed five-mode supersession taxonomy. The optional
+/// `migration_pin_change` carries the maximalist Q32 cross-chain hash
+/// linkage for supersession that also changes a version pin.
+pub struct RescissionAuthorizedInput<'a> {
+    /// Hash of the event whose authorization is being rescinded.
+    pub rescission_target_event_hash: &'a str,
+    /// Hash of the prior determination value being rescinded.
+    pub prior_determination_hash: &'a str,
+    /// Free-text rationale.
+    pub reason: &'a str,
+    /// Identifier of the authorizing actor.
+    pub authorizing_actor_id: &'a str,
+    /// Discriminated-union policy basis.
+    pub authority_basis: serde_json::Value,
+    /// Optional cross-chain hash linkage when supersession also changes
+    /// a version pin (Q32). Carries
+    /// `{newChainPinEventHash, priorPinSet, newPinSet}`.
+    pub migration_pin_change: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Optional context payload; required-field keys win on collision.
+    pub context: Option<serde_json::Map<String, serde_json::Value>>,
+}
+
 /// Signature affirmation provenance input.
 ///
 /// Holds the required WOS Signature Profile evidence fields before they are
@@ -592,6 +886,552 @@ impl ProvenanceRecord {
         record.data = Some(serde_json::Value::Object(data));
         record
     }
+
+    // ── Amendment & supersession (ADR 0066) ─────────────────────────
+
+    /// Create a correction-authorized record (ADR 0066 §1, Mode 1).
+    #[must_use]
+    pub fn correction_authorized(input: CorrectionAuthorizedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "correctionTargetEventHash",
+            "correctedFieldSet",
+            "reason",
+            "authorizingActorId",
+            "authorityBasis",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "correctionTargetEventHash".to_string(),
+            serde_json::Value::String(input.correction_target_event_hash.to_string()),
+        );
+        data.insert(
+            "correctedFieldSet".to_string(),
+            serde_json::Value::Array(
+                input
+                    .corrected_field_set
+                    .into_iter()
+                    .map(|p| serde_json::Value::String(p.to_string()))
+                    .collect(),
+            ),
+        );
+        data.insert(
+            "reason".to_string(),
+            serde_json::Value::String(input.reason.to_string()),
+        );
+        data.insert(
+            "authorizingActorId".to_string(),
+            serde_json::Value::String(input.authorizing_actor_id.to_string()),
+        );
+        data.insert("authorityBasis".to_string(), input.authority_basis);
+
+        let mut record = Self::blank(ProvenanceKind::CorrectionAuthorized);
+        record.actor_id = Some(input.authorizing_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create an amendment-authorized record (ADR 0066 §2, Mode 2).
+    #[must_use]
+    pub fn amendment_authorized(input: AmendmentAuthorizedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "amendmentTargetEventHash",
+            "priorDeterminationHash",
+            "reason",
+            "authorizingActorId",
+            "authorityBasis",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "amendmentTargetEventHash".to_string(),
+            serde_json::Value::String(input.amendment_target_event_hash.to_string()),
+        );
+        data.insert(
+            "priorDeterminationHash".to_string(),
+            serde_json::Value::String(input.prior_determination_hash.to_string()),
+        );
+        data.insert(
+            "reason".to_string(),
+            serde_json::Value::String(input.reason.to_string()),
+        );
+        data.insert(
+            "authorizingActorId".to_string(),
+            serde_json::Value::String(input.authorizing_actor_id.to_string()),
+        );
+        data.insert("authorityBasis".to_string(), input.authority_basis);
+
+        let mut record = Self::blank(ProvenanceKind::AmendmentAuthorized);
+        record.actor_id = Some(input.authorizing_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a determination-amended record (ADR 0066 §2).
+    #[must_use]
+    pub fn determination_amended(input: DeterminationAmendedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "priorDeterminationHash",
+            "newDeterminationValue",
+            "amendmentAuthorizationEventHash",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "priorDeterminationHash".to_string(),
+            serde_json::Value::String(input.prior_determination_hash.to_string()),
+        );
+        data.insert(
+            "newDeterminationValue".to_string(),
+            input.new_determination_value,
+        );
+        data.insert(
+            "amendmentAuthorizationEventHash".to_string(),
+            serde_json::Value::String(input.amendment_authorization_event_hash.to_string()),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::DeterminationAmended);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a rescission-authorized record (ADR 0066 §3, Mode 4).
+    #[must_use]
+    pub fn rescission_authorized(input: RescissionAuthorizedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "rescissionTargetEventHash",
+            "priorDeterminationHash",
+            "reason",
+            "authorizingActorId",
+            "authorityBasis",
+            "migrationPinChange",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "rescissionTargetEventHash".to_string(),
+            serde_json::Value::String(input.rescission_target_event_hash.to_string()),
+        );
+        data.insert(
+            "priorDeterminationHash".to_string(),
+            serde_json::Value::String(input.prior_determination_hash.to_string()),
+        );
+        data.insert(
+            "reason".to_string(),
+            serde_json::Value::String(input.reason.to_string()),
+        );
+        data.insert(
+            "authorizingActorId".to_string(),
+            serde_json::Value::String(input.authorizing_actor_id.to_string()),
+        );
+        data.insert("authorityBasis".to_string(), input.authority_basis);
+        if let Some(migration_pin_change) = input.migration_pin_change {
+            data.insert(
+                "migrationPinChange".to_string(),
+                serde_json::Value::Object(migration_pin_change),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::RescissionAuthorized);
+        record.actor_id = Some(input.authorizing_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a determination-rescinded record (ADR 0066 §3).
+    #[must_use]
+    pub fn determination_rescinded(input: DeterminationRescindedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "priorDeterminationHash",
+            "rescissionAuthorizationEventHash",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "priorDeterminationHash".to_string(),
+            serde_json::Value::String(input.prior_determination_hash.to_string()),
+        );
+        data.insert(
+            "rescissionAuthorizationEventHash".to_string(),
+            serde_json::Value::String(input.rescission_authorization_event_hash.to_string()),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::DeterminationRescinded);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a reinstated record (ADR 0066 §4, Mode 5 — Q26).
+    #[must_use]
+    pub fn reinstated(input: ReinstatedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "priorRescissionEventHash",
+            "reactivationAuthorizationEventHash",
+            "reason",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "priorRescissionEventHash".to_string(),
+            serde_json::Value::String(input.prior_rescission_event_hash.to_string()),
+        );
+        data.insert(
+            "reactivationAuthorizationEventHash".to_string(),
+            serde_json::Value::String(input.reactivation_authorization_event_hash.to_string()),
+        );
+        data.insert(
+            "reason".to_string(),
+            serde_json::Value::String(input.reason.to_string()),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::Reinstated);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create an authorization-attestation record (ADR 0066 §5).
+    #[must_use]
+    pub fn authorization_attestation(input: AuthorizationAttestationInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "authorizingActorId",
+            "authorityBasis",
+            "policyPredicate",
+            "assuranceLevel",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "authorizingActorId".to_string(),
+            serde_json::Value::String(input.authorizing_actor_id.to_string()),
+        );
+        data.insert("authorityBasis".to_string(), input.authority_basis);
+        data.insert(
+            "policyPredicate".to_string(),
+            serde_json::Value::String(input.policy_predicate.to_string()),
+        );
+        if let Some(assurance_level) = input.assurance_level {
+            data.insert(
+                "assuranceLevel".to_string(),
+                serde_json::Value::String(assurance_level.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::AuthorizationAttestation);
+        record.actor_id = Some(input.authorizing_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    // ── Statutory clocks (ADR 0067) ──────────────────────────────
+
+    /// Create a clock-started record (ADR 0067 §2).
+    #[must_use]
+    pub fn clock_started(input: ClockStartedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "clockId",
+            "clockKind",
+            "originEventHash",
+            "duration",
+            "computedDeadline",
+            "calendarRef",
+            "statuteReference",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "clockId".to_string(),
+            serde_json::Value::String(input.clock_id.to_string()),
+        );
+        data.insert(
+            "clockKind".to_string(),
+            serde_json::Value::String(input.clock_kind.to_string()),
+        );
+        data.insert(
+            "originEventHash".to_string(),
+            serde_json::Value::String(input.origin_event_hash.to_string()),
+        );
+        data.insert(
+            "duration".to_string(),
+            serde_json::Value::String(input.duration.to_string()),
+        );
+        data.insert(
+            "computedDeadline".to_string(),
+            serde_json::Value::String(input.computed_deadline.to_string()),
+        );
+        if let Some(calendar_ref) = input.calendar_ref {
+            data.insert(
+                "calendarRef".to_string(),
+                serde_json::Value::String(calendar_ref.to_string()),
+            );
+        }
+        if let Some(statute_reference) = input.statute_reference {
+            data.insert(
+                "statuteReference".to_string(),
+                serde_json::Value::String(statute_reference.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::ClockStarted);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create a clock-resolved record (ADR 0067 §3).
+    #[must_use]
+    pub fn clock_resolved(input: ClockResolvedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "clockId",
+            "originClockHash",
+            "resolution",
+            "resolvedAt",
+            "resolvingEventHash",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "clockId".to_string(),
+            serde_json::Value::String(input.clock_id.to_string()),
+        );
+        data.insert(
+            "originClockHash".to_string(),
+            serde_json::Value::String(input.origin_clock_hash.to_string()),
+        );
+        data.insert(
+            "resolution".to_string(),
+            serde_json::Value::String(input.resolution.as_camel_str().to_string()),
+        );
+        data.insert(
+            "resolvedAt".to_string(),
+            serde_json::Value::String(input.resolved_at.to_string()),
+        );
+        if let Some(resolving_event_hash) = input.resolving_event_hash {
+            data.insert(
+                "resolvingEventHash".to_string(),
+                serde_json::Value::String(resolving_event_hash.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::ClockResolved);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    // ── Identity attestation (ADR 0068) ──────────────────────────
+
+    /// Create an identity-attestation record (ADR 0068 §4, Q15).
+    #[must_use]
+    pub fn identity_attestation(input: IdentityAttestationInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "subjectGlobalId",
+            "assuranceLevel",
+            "attestationProvider",
+            "providerAttestationId",
+            "attestedAt",
+            "validUntil",
+            "attestedPredicates",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "subjectGlobalId".to_string(),
+            serde_json::Value::String(input.subject_global_id.to_string()),
+        );
+        data.insert(
+            "assuranceLevel".to_string(),
+            serde_json::Value::String(input.assurance_level.to_string()),
+        );
+        data.insert(
+            "attestationProvider".to_string(),
+            serde_json::Value::String(input.attestation_provider.to_string()),
+        );
+        data.insert(
+            "providerAttestationId".to_string(),
+            serde_json::Value::String(input.provider_attestation_id.to_string()),
+        );
+        data.insert(
+            "attestedAt".to_string(),
+            serde_json::Value::String(input.attested_at.to_string()),
+        );
+        if let Some(valid_until) = input.valid_until {
+            data.insert(
+                "validUntil".to_string(),
+                serde_json::Value::String(valid_until.to_string()),
+            );
+        }
+        data.insert(
+            "attestedPredicates".to_string(),
+            serde_json::Value::Array(
+                input
+                    .attested_predicates
+                    .into_iter()
+                    .map(|p| serde_json::Value::String(p.to_string()))
+                    .collect(),
+            ),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::IdentityAttestation);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    // ── Clock skew (ADR 0069) ────────────────────────────────────
+
+    /// Create a clock-skew-observed record (ADR 0069 §3).
+    #[must_use]
+    pub fn clock_skew_observed(input: ClockSkewObservedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "processorAuthoredAt",
+            "substrateCreatedAt",
+            "skewMilliseconds",
+            "thresholdMilliseconds",
+            "eventHash",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "processorAuthoredAt".to_string(),
+            serde_json::Value::String(input.processor_authored_at.to_string()),
+        );
+        data.insert(
+            "substrateCreatedAt".to_string(),
+            serde_json::Value::String(input.substrate_created_at.to_string()),
+        );
+        data.insert(
+            "skewMilliseconds".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(input.skew_milliseconds)),
+        );
+        data.insert(
+            "thresholdMilliseconds".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(input.threshold_milliseconds)),
+        );
+        data.insert(
+            "eventHash".to_string(),
+            serde_json::Value::String(input.event_hash.to_string()),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::ClockSkewObserved);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    // ── Failure & compensation (ADR 0070) ────────────────────────
+
+    /// Create a commit-attempt-failure record (ADR 0070 §2).
+    #[must_use]
+    pub fn commit_attempt_failure(input: CommitAttemptFailureInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "targetEventHash",
+            "failureKind",
+            "attemptCount",
+            "retryBudgetRemainingMs",
+            "errorPayload",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "targetEventHash".to_string(),
+            serde_json::Value::String(input.target_event_hash.to_string()),
+        );
+        data.insert(
+            "failureKind".to_string(),
+            serde_json::Value::String(input.failure_kind.as_camel_str().to_string()),
+        );
+        data.insert(
+            "attemptCount".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(input.attempt_count)),
+        );
+        data.insert(
+            "retryBudgetRemainingMs".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(input.retry_budget_remaining_ms)),
+        );
+        if let Some(error_payload) = input.error_payload {
+            data.insert("errorPayload".to_string(), error_payload);
+        }
+
+        let mut record = Self::blank(ProvenanceKind::CommitAttemptFailure);
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    /// Create an authorization-rejected record (ADR 0070 §4).
+    #[must_use]
+    pub fn authorization_rejected(input: AuthorizationRejectedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "attemptedActorId",
+            "attemptedAction",
+            "targetResourceId",
+            "rejectionReason",
+            "policyDecisionRef",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert(
+            "attemptedActorId".to_string(),
+            serde_json::Value::String(input.attempted_actor_id.to_string()),
+        );
+        data.insert(
+            "attemptedAction".to_string(),
+            serde_json::Value::String(input.attempted_action.to_string()),
+        );
+        data.insert(
+            "targetResourceId".to_string(),
+            serde_json::Value::String(input.target_resource_id.to_string()),
+        );
+        data.insert(
+            "rejectionReason".to_string(),
+            serde_json::Value::String(input.rejection_reason.to_string()),
+        );
+        if let Some(policy_decision_ref) = input.policy_decision_ref {
+            data.insert(
+                "policyDecisionRef".to_string(),
+                serde_json::Value::String(policy_decision_ref.to_string()),
+            );
+        }
+
+        let mut record = Self::blank(ProvenanceKind::AuthorizationRejected);
+        record.actor_id = Some(input.attempted_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+
+    // ── Migration & version pins (ADR 0071) ──────────────────────
+
+    /// Create a migration-pin-changed record (ADR 0071 §3).
+    #[must_use]
+    pub fn migration_pin_changed(input: MigrationPinChangedInput<'_>) -> Self {
+        const REQUIRED: &[&str] = &[
+            "priorPinSet",
+            "newPinSet",
+            "authorizingActorId",
+            "authorityBasis",
+            "migrationRationale",
+        ];
+        let mut data = merge_context(input.context, REQUIRED);
+        data.insert("priorPinSet".to_string(), input.prior_pin_set);
+        data.insert("newPinSet".to_string(), input.new_pin_set);
+        data.insert(
+            "authorizingActorId".to_string(),
+            serde_json::Value::String(input.authorizing_actor_id.to_string()),
+        );
+        data.insert("authorityBasis".to_string(), input.authority_basis);
+        data.insert(
+            "migrationRationale".to_string(),
+            serde_json::Value::String(input.migration_rationale.to_string()),
+        );
+
+        let mut record = Self::blank(ProvenanceKind::MigrationPinChanged);
+        record.actor_id = Some(input.authorizing_actor_id.to_string());
+        record.data = Some(serde_json::Value::Object(data));
+        record
+    }
+}
+
+/// Merge an optional caller-supplied `context` map into a fresh data map,
+/// dropping any keys that collide with the constructor's required fields.
+/// Constructor args remain the source of truth — `context` (which may
+/// originate from untrusted scratch) MUST NOT be able to overwrite the
+/// schema-shaping discriminators.
+fn merge_context(
+    context: Option<serde_json::Map<String, serde_json::Value>>,
+    required: &[&str],
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut data = serde_json::Map::new();
+    if let Some(context) = context {
+        for (k, v) in context {
+            if required.iter().any(|r| *r == k) {
+                continue;
+            }
+            data.insert(k, v);
+        }
+    }
+    data
 }
 
 impl std::fmt::Display for ProvenanceRecord {

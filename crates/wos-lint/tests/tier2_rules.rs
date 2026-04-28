@@ -112,7 +112,7 @@ fn base_kernel() -> serde_json::Value {
 /// Minimal governance document that targets the base kernel.
 fn base_governance() -> serde_json::Value {
     json!({
-        "$wosWorkflowGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "url": "https://example.com/governance/test",
         "targetWorkflow": "https://example.com/workflow/test"
     })
@@ -577,7 +577,7 @@ fn g035_target_governance_invalid_flagged() {
     let kernel = base_kernel();
     let gov = base_governance();
     let dp = json!({
-        "$wosDueProcess": "1.0",
+        "$wosWorkflow": "1.0",
         "targetGovernance": "https://wrong.example.com/governance"
     });
 
@@ -594,7 +594,7 @@ fn g035_target_governance_valid_clean() {
     let kernel = base_kernel();
     let gov = base_governance();
     let dp = json!({
-        "$wosDueProcess": "1.0",
+        "$wosWorkflow": "1.0",
         "targetGovernance": "https://example.com/governance/test"
     });
 
@@ -618,7 +618,7 @@ fn g040_reference_stage_not_in_pipeline_flagged() {
         { "id": "stage-1", "assertions": [] }
     ]);
     let al = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             {
                 "id": "consistency-check",
@@ -645,7 +645,7 @@ fn g040_reference_stage_exists_in_pipeline_clean() {
         { "id": "stage-1", "assertions": [] }
     ]);
     let al = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             {
                 "id": "consistency-check",
@@ -676,7 +676,7 @@ fn g041_pipeline_assertion_not_in_library_flagged() {
         { "id": "stage-1", "assertions": ["nonExistentAssertion"] }
     ]);
     let al = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "real-assertion", "type": "arithmetic", "expression": "1 + 1" }
         ]
@@ -698,7 +698,7 @@ fn g041_pipeline_assertion_exists_in_library_clean() {
         { "id": "stage-1", "assertions": ["real-assertion"] }
     ]);
     let al = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "real-assertion", "type": "arithmetic", "expression": "1 + 1" }
         ]
@@ -774,7 +774,7 @@ fn ai046_cross_doc_rights_kernel_ai_without_disclosure_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {}
     });
@@ -791,7 +791,7 @@ fn ai046_cross_doc_rights_kernel_ai_with_disclosure_clean() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agentDisclosure": {
             "discloseThatAgentAssisted": true
@@ -808,7 +808,7 @@ fn ai046_cross_doc_safety_kernel_skips_disclosure_check() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("safety-impacting");
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {}
     });
@@ -828,7 +828,7 @@ fn ai046_cross_doc_safety_kernel_skips_disclosure_check() {
 fn ai007_cascading_invocations_not_declared_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -855,7 +855,7 @@ fn ai007_cascading_invocations_not_declared_flagged() {
 fn ai018_autonomous_without_deontic_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -873,7 +873,7 @@ fn ai018_autonomous_without_deontic_flagged() {
 fn ai018_autonomous_with_deontic_clean() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -895,7 +895,7 @@ fn ai018_autonomous_with_deontic_clean() {
 fn ai020_supervisory_without_review_window_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -915,7 +915,7 @@ fn ai020_supervisory_without_review_window_flagged() {
 #[test]
 fn vr003_proven_unsafe_without_counterexample_flagged() {
     let vr = json!({
-        "$wosVerificationReport": "1.0",
+        "$wosWorkflow": "1.0",
         "results": [
             { "result": "proven-unsafe", "constraintId": "c-1" }
         ]
@@ -928,7 +928,7 @@ fn vr003_proven_unsafe_without_counterexample_flagged() {
 #[test]
 fn vr003_proven_unsafe_with_counterexample_clean() {
     let vr = json!({
-        "$wosVerificationReport": "1.0",
+        "$wosWorkflow": "1.0",
         "results": [
             {
                 "result": "proven-unsafe",
@@ -1002,7 +1002,7 @@ fn dm002_missing_shadow_phase_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let dm = json!({
-        "$wosDriftMonitor": "1.0",
+        "$wosWorkflow": "1.0",
         "deploymentSequence": ["canary", "production"]
     });
 
@@ -1015,7 +1015,7 @@ fn dm002_correct_sequence_clean() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let dm = json!({
-        "$wosDriftMonitor": "1.0",
+        "$wosWorkflow": "1.0",
         "deploymentSequence": ["shadow", "canary", "production"]
     });
 
@@ -1028,7 +1028,7 @@ fn dm002_safety_impacting_missing_shadow_phase_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("safety-impacting");
     let dm = json!({
-        "$wosDriftMonitor": "1.0",
+        "$wosWorkflow": "1.0",
         "deploymentSequence": ["canary", "production"]
     });
 
@@ -1048,7 +1048,7 @@ fn ag008_side_effect_tool_without_policy_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "tools": {
             "sendEmail": {
                 "hasSideEffects": true,
@@ -1073,7 +1073,7 @@ fn ag008_side_effect_tool_without_policy_flagged() {
 fn ai042_missing_training_data_disclosure_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -1094,7 +1094,7 @@ fn ai042_missing_training_data_disclosure_flagged() {
 fn ai043_missing_optimization_objective_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -1117,7 +1117,7 @@ fn ai043_missing_optimization_objective_flagged() {
 fn ai056_agent_level_autonomy_without_action_sites_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "agentA": {
@@ -1140,7 +1140,7 @@ fn ag017_rights_impacting_without_shadow_mode_flagged() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("rights-impacting");
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "tools": {}
     });
 
@@ -1156,7 +1156,7 @@ fn ag017_safety_impacting_skips_shadow_mode_check() {
     let mut kernel = base_kernel();
     kernel["impactLevel"] = json!("safety-impacting");
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "tools": {}
     });
 
@@ -1292,7 +1292,7 @@ fn g023_sla_without_business_calendar_type_flagged() {
     });
     // Business calendar MUST target the same workflow as governance (G-060 scoping).
     let calendar = json!({
-        "$wosBusinessCalendar": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
@@ -1323,7 +1323,7 @@ fn g023_sla_with_business_calendar_type_clean() {
         }
     });
     let calendar = json!({
-        "$wosBusinessCalendar": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
@@ -1369,7 +1369,7 @@ fn g060_calendar_different_workflow_skips_mandatory_sla_check() {
         }
     });
     let calendar = json!({
-        "$wosBusinessCalendar": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://other.example.com/other-workflow",
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
@@ -1418,7 +1418,7 @@ fn g063_notice_template_key_resolves_clean() {
         "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
-        "$wosNotificationTemplate": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "templates": {
             "adverseTpl": {
@@ -1458,7 +1458,7 @@ fn g063_notice_template_key_runs_without_kernel() {
         "noticeTemplateKey": "adverseTpl"
     });
     let notifications = json!({
-        "$wosNotificationTemplate": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "templates": {
             "adverseTpl": {
@@ -1687,7 +1687,7 @@ fn g060_sla_violation_runs_without_kernel() {
         }
     });
     let calendar = json!({
-        "$wosBusinessCalendar": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
@@ -1808,7 +1808,7 @@ fn g036_no_review_protocols_skips_check() {
 fn ai026_escalation_without_expiry_flagged() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -1833,7 +1833,7 @@ fn ai026_escalation_without_expiry_flagged() {
 fn ai026_escalation_with_expiry_clean() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -1857,7 +1857,7 @@ fn ai026_escalation_with_expiry_clean() {
 fn ai026_no_escalation_rules_skips_check() {
     let kernel = base_kernel();
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -1882,7 +1882,7 @@ fn ai031_output_contract_mismatch_flagged() {
     let mut kernel = base_kernel();
     kernel["formUrl"] = json!("https://forms.example.com/intake-form");
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -1904,7 +1904,7 @@ fn ai031_output_contract_matches_kernel_clean() {
     let mut kernel = base_kernel();
     kernel["formUrl"] = json!("https://forms.example.com/intake-form");
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -1924,7 +1924,7 @@ fn ai031_output_contract_matches_kernel_clean() {
 fn ai031_no_kernel_form_url_skips_check() {
     let kernel = base_kernel(); // No formUrl.
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": {
             "eligibilityAgent": {
@@ -2237,7 +2237,7 @@ fn k010_on_exit_undeclared_actor_flagged() {
 #[test]
 fn ag012_quantifier_in_verifiable_constraint_flagged() {
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
             { "expression": "every($items)" }
@@ -2260,7 +2260,7 @@ fn ag012_quantifier_in_verifiable_constraint_flagged() {
 #[test]
 fn ag012_every_two_args_clean() {
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
             { "expression": "every($items, $ > 0)" }
@@ -2278,7 +2278,7 @@ fn ag012_every_two_args_clean() {
 #[test]
 fn ag012_no_quantifier_clean() {
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
             { "expression": "$amount > 0 and $amount < 100000" }
@@ -2293,7 +2293,7 @@ fn ag012_no_quantifier_clean() {
 #[test]
 fn ag012_some_quantifier_flagged() {
     let adv = json!({
-        "$wosAdvancedGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "verifiableConstraints": [
             { "expression": "some($items)" }
@@ -2350,7 +2350,7 @@ fn ai023_agent_free_path_exists_clean() {
         "caseFile": { "fields": {} }
     });
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": [
             { "id": "classifier", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
@@ -2403,7 +2403,7 @@ fn ai023_no_agent_free_path_flagged() {
         "caseFile": { "fields": {} }
     });
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": [
             { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },
@@ -2486,7 +2486,7 @@ fn ai023_compound_substate_agent_free_path() {
         "caseFile": { "fields": {} }
     });
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/compound",
         "agents": [
             { "id": "bot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
@@ -2567,7 +2567,7 @@ fn ai023_parallel_region_one_agent_only_still_clean() {
         "caseFile": { "fields": {} }
     });
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/parallel",
         "agents": [
             { "id": "aiBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" }
@@ -2619,7 +2619,7 @@ fn ai023_severity_is_error() {
         "caseFile": { "fields": {} }
     });
     let ai = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "agents": [
             { "id": "triageBot", "type": "agent", "agentType": "generative", "modelIdentifier": "test", "modelVersion": "1" },

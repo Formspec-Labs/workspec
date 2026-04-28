@@ -680,8 +680,22 @@ mod tests {
             ProvenanceKind::ToolInvoked,
             ProvenanceKind::PolicyDecision,
             ProvenanceKind::SignatureAffirmation,
+            ProvenanceKind::CorrectionAuthorized,
+            ProvenanceKind::AmendmentAuthorized,
+            ProvenanceKind::DeterminationAmended,
+            ProvenanceKind::RescissionAuthorized,
+            ProvenanceKind::DeterminationRescinded,
+            ProvenanceKind::Reinstated,
+            ProvenanceKind::AuthorizationAttestation,
+            ProvenanceKind::ClockStarted,
+            ProvenanceKind::ClockResolved,
+            ProvenanceKind::IdentityAttestation,
+            ProvenanceKind::ClockSkewObserved,
+            ProvenanceKind::CommitAttemptFailure,
+            ProvenanceKind::AuthorizationRejected,
+            ProvenanceKind::MigrationPinChanged,
         ];
-        assert_eq!(all.len(), 101);
+        assert_eq!(all.len(), 115);
 
         let mut log = ProvenanceLog::default();
         for kind in all {

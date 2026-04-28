@@ -528,7 +528,6 @@ mod tests {
 
     fn test_ai_doc() -> AIIntegrationDocument {
         serde_json::from_value(serde_json::json!({
-            "$wosAIIntegration": "1.0",
             "targetWorkflow": "urn:test:workflow",
             "defaultAutonomy": "assistive",
             "agents": [{

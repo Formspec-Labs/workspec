@@ -1038,7 +1038,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "fixtures/validation/k-049-load-bearing-two-node-cycle.json",
         ],
         graduation: Graduation::LoadBearing,
-        spec_ref: Some("specs/companions/runtime.md#s10-3"),
+        spec_ref: Some("specs/kernel/spec.md#123-continuous-mode"),
         suggested_fix: Some(
             "Break the write→read cycle (split transitions, narrow guards, or move writes off the hot path); use guard-only transitions (omit `event`) for §10.3 re-scan — never author `$`-prefixed event names on transitions (K-007).",
         ),

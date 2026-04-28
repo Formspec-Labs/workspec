@@ -62,7 +62,7 @@ fn kernel() -> serde_json::Value {
 
 fn signature_profile() -> serde_json::Value {
     serde_json::json!({
-        "$wosSignatureProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": { "url": "urn:test:signature" },
         "roles": [
             {

@@ -14,11 +14,11 @@
 //! Both functions are pure and have no side effects; they can be unit-tested
 //! without network access.
 
-/// WOS kernel JSON Schema, embedded at compile time.
+/// WOS workflow JSON Schema, embedded at compile time.
 ///
 /// Path is relative to this source file (`src/prompts.rs`): three levels up
-/// reaches the workspace root, then into `schemas/kernel/`.
-const KERNEL_SCHEMA: &str = include_str!("../../../schemas/kernel/wos-kernel.schema.json");
+/// reaches the workspace root, then into `schemas/`.
+const WORKFLOW_SCHEMA: &str = include_str!("../../../schemas/wos-workflow.schema.json");
 
 /// Compact spec summary for the kernel tier.
 ///
@@ -62,7 +62,7 @@ Given the problem statement below, produce a single valid WOS kernel document as
 ## WOS Kernel JSON Schema
 
 ```json
-{KERNEL_SCHEMA}
+{WORKFLOW_SCHEMA}
 ```
 
 ## WOS Kernel Specification Summary
@@ -74,7 +74,7 @@ Given the problem statement below, produce a single valid WOS kernel document as
 {problem}
 
 Produce the JSON document now."#,
-        KERNEL_SCHEMA = KERNEL_SCHEMA,
+        WORKFLOW_SCHEMA = WORKFLOW_SCHEMA,
         KERNEL_SPEC_SUMMARY = KERNEL_SPEC_SUMMARY,
         problem = problem,
     )

@@ -682,11 +682,25 @@ mod tests {
             ProvenanceKind::ToolInvoked,
             ProvenanceKind::PolicyDecision,
             ProvenanceKind::SignatureAffirmation,
+            ProvenanceKind::CorrectionAuthorized,
+            ProvenanceKind::AmendmentAuthorized,
+            ProvenanceKind::DeterminationAmended,
+            ProvenanceKind::RescissionAuthorized,
+            ProvenanceKind::DeterminationRescinded,
+            ProvenanceKind::Reinstated,
+            ProvenanceKind::AuthorizationAttestation,
+            ProvenanceKind::ClockStarted,
+            ProvenanceKind::ClockResolved,
+            ProvenanceKind::IdentityAttestation,
+            ProvenanceKind::ClockSkewObserved,
+            ProvenanceKind::CommitAttemptFailure,
+            ProvenanceKind::AuthorizationRejected,
+            ProvenanceKind::MigrationPinChanged,
         ];
         assert_eq!(
             all.len(),
-            101,
-            "ProvenanceKind has 101 variants at HEAD; this test must enumerate all of them so a new variant forces a conscious entry"
+            115,
+            "ProvenanceKind has 115 variants at HEAD (101 prior + 14 from ADRs 0066-0071); this test must enumerate all of them so a new variant forces a conscious entry"
         );
 
         let mut log = ProvenanceLog::default();

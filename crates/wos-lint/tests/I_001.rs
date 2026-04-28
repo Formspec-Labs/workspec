@@ -34,7 +34,7 @@ fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Se
 #[test]
 fn i001_outputbinding_filter_rejected() {
     let doc = json!({
-        "$wosIntegrationProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": {
             "url": "https://example.gov/workflows/eligibility"
         },
@@ -69,7 +69,7 @@ fn i001_outputbinding_filter_rejected() {
 #[test]
 fn i001_outputbinding_recursive_descent_rejected() {
     let doc = json!({
-        "$wosIntegrationProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": {
             "url": "https://example.gov/workflows/audit"
         },
@@ -99,7 +99,7 @@ fn i001_outputbinding_recursive_descent_rejected() {
 #[test]
 fn i001_supported_features_pass_without_error() {
     let doc = json!({
-        "$wosIntegrationProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": {
             "url": "https://example.gov/workflows/benefits"
         },
@@ -129,7 +129,7 @@ fn i001_supported_features_pass_without_error() {
 #[test]
 fn i001_only_offending_binding_flagged() {
     let doc = json!({
-        "$wosIntegrationProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": {
             "url": "https://example.gov/workflows/mixed"
         },

@@ -54,6 +54,14 @@ pub struct CaseInstance {
     /// Instance status.
     pub status: InstanceStatus,
 
+    /// RFC3339 timestamp marking when the instance entered
+    /// [`InstanceStatus::Stalled`] (ADR 0070 D-4.1). MUST be populated
+    /// when `status == Stalled`; otherwise omitted from the wire.
+    /// Schema-side guard at `wos-case-instance.schema.json` enforces the
+    /// `if status == "stalled" then stalledSince required` invariant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled_since: Option<String>,
+
     /// Events enqueued but not yet processed.
     #[serde(default)]
     pub pending_events: Vec<PendingEvent>,
@@ -143,7 +151,14 @@ pub struct PendingCallback {
     pub expected_until: Option<String>,
 }
 
-/// Instance status (Runtime Companion S3.4).
+/// Instance status (Runtime Companion S3.4; ADR 0070 D-4.1).
+///
+/// `Stalled` is the reserved status for instances that have exhausted their
+/// adapter-side commit-retry budget without successful Trellis append (per
+/// ADR 0070 maximalist Q18 / Q21). It is orthogonal to the kernel statechart
+/// node taxonomy (`atomic | compound | parallel | final`) — `Stalled` is
+/// instance execution metadata, not a lifecycle node type. When `status ==
+/// Stalled`, [`CaseInstance::stalled_since`] MUST be populated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InstanceStatus {
@@ -152,6 +167,9 @@ pub enum InstanceStatus {
     Migrating,
     Completed,
     Terminated,
+    /// Adapter-side commit-retry budget exhausted; explicit operator
+    /// intervention required (ADR 0070 D-4.1, OQ-2 — no auto-recovery).
+    Stalled,
 }
 
 /// Pending timer state.

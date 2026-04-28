@@ -77,7 +77,7 @@ fn minimal_kernel() -> serde_json::Value {
 /// Schema-valid governance base so Tier 1 exercises typed deserialization.
 fn minimal_governance_document() -> serde_json::Value {
     json!({
-        "$wosWorkflowGovernance": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": TEST_WORKFLOW_URL
     })
 }
@@ -85,7 +85,7 @@ fn minimal_governance_document() -> serde_json::Value {
 /// Schema-valid AI integration base so Tier 1 exercises typed deserialization.
 fn minimal_ai_integration_document() -> serde_json::Value {
     json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": TEST_WORKFLOW_URL,
         "agents": [
             {
@@ -101,7 +101,7 @@ fn minimal_ai_integration_document() -> serde_json::Value {
 
 fn minimal_correspondence_metadata() -> serde_json::Value {
     json!({
-        "$wosCorrespondenceMetadata": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": TEST_WORKFLOW_URL,
         "correspondenceField": "caseFile.correspondence",
         "entryTemplates": []
@@ -1040,7 +1040,7 @@ fn k021_no_provenance_skips_check() {
 #[test]
 fn g037_duplicate_assertion_id_flagged() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
             { "id": "a1", "type": "range", "expression": "x > 0" }
@@ -1054,7 +1054,7 @@ fn g037_duplicate_assertion_id_flagged() {
 #[test]
 fn g037_unique_assertion_ids_clean() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
             { "id": "a2", "type": "range", "expression": "x > 0" }
@@ -1071,7 +1071,7 @@ fn g037_unique_assertion_ids_clean() {
 #[test]
 fn g038_arithmetic_without_expression_flagged() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "arithmetic" }
         ]
@@ -1084,7 +1084,7 @@ fn g038_arithmetic_without_expression_flagged() {
 #[test]
 fn g038_range_with_expression_clean() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "range", "expression": "value >= 0 && value <= 100" }
         ]
@@ -1096,7 +1096,7 @@ fn g038_range_with_expression_clean() {
 #[test]
 fn g038_temporal_without_expression_flagged() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "temporal" }
         ]
@@ -1115,7 +1115,7 @@ fn g038_temporal_without_expression_flagged() {
 #[test]
 fn g039_source_grounded_without_fields_flagged() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "source-grounded" }
         ]
@@ -1128,7 +1128,7 @@ fn g039_source_grounded_without_fields_flagged() {
 #[test]
 fn g039_consistency_with_fields_clean() {
     let doc = json!({
-        "$wosAssertionLibrary": "1.0",
+        "$wosWorkflow": "1.0",
         "assertions": [
             { "id": "a1", "type": "consistency", "fields": ["income", "deductions"] }
         ]
@@ -1266,7 +1266,7 @@ fn g045_revoked_same_as_effective_clean() {
 #[test]
 fn g047_values_out_of_order_flagged() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1284,7 +1284,7 @@ fn g047_values_out_of_order_flagged() {
 #[test]
 fn g047_values_in_order_clean() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1306,7 +1306,7 @@ fn g047_values_in_order_clean() {
 #[test]
 fn g048_binding_id_mismatch_flagged() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "bindings": {
             "myBinding": {
                 "id": "wrongId",
@@ -1321,7 +1321,7 @@ fn g048_binding_id_mismatch_flagged() {
 #[test]
 fn g048_binding_id_matches_key_clean() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "bindings": {
             "myBinding": {
                 "id": "myBinding",
@@ -1340,7 +1340,7 @@ fn g048_binding_id_matches_key_clean() {
 #[test]
 fn g050_number_parameter_with_string_value_flagged() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1357,7 +1357,7 @@ fn g050_number_parameter_with_string_value_flagged() {
 #[test]
 fn g050_boolean_parameter_with_boolean_value_clean() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "parameters": {
             "enabled": {
                 "type": "boolean",
@@ -1374,7 +1374,7 @@ fn g050_boolean_parameter_with_boolean_value_clean() {
 #[test]
 fn g050_string_parameter_with_number_value_flagged() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "parameters": {
             "label": {
                 "type": "string",
@@ -1459,7 +1459,7 @@ fn g055_indefinite_literal_clean() {
 #[test]
 fn g057_binding_values_out_of_order_flagged() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "bindings": {
             "b1": {
                 "id": "b1",
@@ -1477,7 +1477,7 @@ fn g057_binding_values_out_of_order_flagged() {
 #[test]
 fn g057_binding_values_in_order_clean() {
     let doc = json!({
-        "$wosPolicyParameters": "1.0",
+        "$wosWorkflow": "1.0",
         "bindings": {
             "b1": {
                 "id": "b1",
@@ -1498,7 +1498,7 @@ fn g057_binding_values_in_order_clean() {
 
 fn minimal_business_calendar() -> serde_json::Value {
     json!({
-        "$wosBusinessCalendar": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "timezone": "America/New_York",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"]
@@ -1601,7 +1601,7 @@ fn g059_no_operating_hours_skips_check() {
 
 fn minimal_notification_sidecar() -> serde_json::Value {
     json!({
-        "$wosNotificationTemplate": "1.0",
+        "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
         "templates": {}
     })
@@ -1838,7 +1838,7 @@ fn ai041_fallback_chain_with_cycle_flagged() {
 #[test]
 fn ai049_narrative_authoritative_true_flagged() {
     let doc = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "narrativeProvenance": [
             { "authoritative": true, "text": "This is a narrative." }
         ]
@@ -1851,7 +1851,7 @@ fn ai049_narrative_authoritative_true_flagged() {
 #[test]
 fn ai049_narrative_authoritative_missing_warns() {
     let doc = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "narrativeProvenance": [
             { "text": "Narrative with no authoritative field." }
         ]
@@ -1867,7 +1867,7 @@ fn ai049_narrative_authoritative_missing_warns() {
 #[test]
 fn ai049_narrative_authoritative_false_clean() {
     let doc = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "narrativeProvenance": [
             { "authoritative": false, "text": "This is a narrative." }
         ]
@@ -1880,7 +1880,7 @@ fn ai049_narrative_authoritative_false_clean() {
 fn ai049_provenance_tier_narrative_authoritative_true_flagged() {
     // The rule also checks generic provenance entries with tier="narrative".
     let doc = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "provenance": [
             { "tier": "narrative", "authoritative": true, "text": "Narrative." }
         ]
@@ -1905,7 +1905,7 @@ fn dm001_drift_monitor_extension_key_without_prefix() {
     // The implementation applies check_extension_prefixes to all doc types
     // that reach their check_* function. Let's verify.
     let doc = json!({
-        "$wosAIIntegration": "1.0",
+        "$wosWorkflow": "1.0",
         "extensions": {
             "noPrefix": "bad"
         }
@@ -1976,7 +1976,7 @@ fn multiple_violations_reported_together() {
 
 fn minimal_integration_profile(output_binding: serde_json::Value) -> serde_json::Value {
     json!({
-        "$wosIntegrationProfile": "1.0",
+        "$wosWorkflow": "1.0",
         "targetWorkflow": {
             "url": "https://example.com/wf"
         },

@@ -260,6 +260,7 @@ fn status_str(s: &wos_core::instance::InstanceStatus) -> &'static str {
         Migrating => "migrating",
         Completed => "completed",
         Terminated => "terminated",
+        Stalled => "stalled",
     }
 }
 

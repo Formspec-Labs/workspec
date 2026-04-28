@@ -356,7 +356,7 @@ fn resolve_notice_template<'a>(
     let mut docs = companion_docs.iter().collect::<Vec<_>>();
     docs.sort_by(|(left, _), (right, _)| left.cmp(right));
     for (_, doc) in docs {
-        if doc.get("$wosNotificationTemplate").is_none() {
+        if doc.get("notifications").is_none() || doc.get("$wosDelivery").is_none() {
             continue;
         }
         if let Some(target) = target_workflow {

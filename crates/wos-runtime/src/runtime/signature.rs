@@ -31,11 +31,10 @@ pub const SIGNATURE_STEP_ID_EXTENSION: &str = "x-wos-signature-step-id";
 const SIGNATURE_COMPLETIONS_EXTENSION: &str = "x-wos-signature-completions";
 const SIGNATURE_ASSIGNMENTS_EXTENSION: &str = "x-wos-signature-assignments";
 
-/// Signature content — the embedded `signature` block of a $wosWorkflow
-/// document per ADR 0076 D-1. Was a standalone $wosSignatureProfile sidecar;
-/// the marker now lives on the workflow envelope and this type represents
-/// only the block's interior shape. Type name retained for consumer
-/// compatibility.
+/// Signature content — the embedded `signature` block of a `$wosWorkflow`
+/// document (ADR 0076 D-1). Represents the interior shape of the `signature`
+/// block: signers, documents, signing flow, evidence, and policies. Type name
+/// retained for consumer compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignatureProfileDocument {

@@ -253,6 +253,128 @@ pub enum ProvenanceKind {
     /// `data` carries signer, role, document, identity-binding, consent,
     /// ceremony, profile, Formspec response, and custody eligibility fields.
     SignatureAffirmation,
+
+    // ── Amendment & supersession (ADR 0066) ─────────────────────────
+    /// A correction to a non-determination event was authorized (ADR 0066 §1).
+    ///
+    /// Mode 1 of the closed five-mode supersession taxonomy
+    /// (Correction / Amendment / Supersession / Rescission / Reinstatement).
+    /// `data` carries `correctionTargetEventHash`, `correctedFieldSet`
+    /// (JSON-pointer strings), `reason`, `authorizingActorId`, and
+    /// `authorityBasis` (discriminated union: `{kind, value}` where
+    /// `kind` is `"uri"` or `"actorPolicyRef"`).
+    CorrectionAuthorized,
+    /// An amendment to a prior determination was authorized (ADR 0066 §2).
+    ///
+    /// Mode 2 of the five-mode supersession taxonomy. Pairs with
+    /// `DeterminationAmended`, which carries the new value. `data` carries
+    /// `amendmentTargetEventHash`, `priorDeterminationHash`, `reason`,
+    /// `authorizingActorId`, `authorityBasis`.
+    AmendmentAuthorized,
+    /// A determination was amended; new value supersedes the prior (ADR 0066 §2).
+    ///
+    /// `data` carries `priorDeterminationHash`, `newDeterminationValue`,
+    /// `amendmentAuthorizationEventHash` (back-reference to the authorizing
+    /// `AmendmentAuthorized` record).
+    DeterminationAmended,
+    /// A rescission of a prior determination was authorized (ADR 0066 §3).
+    ///
+    /// Mode 4 of the five-mode supersession taxonomy. `data` carries
+    /// `rescissionTargetEventHash`, `priorDeterminationHash`, `reason`,
+    /// `authorizingActorId`, `authorityBasis`, and an optional
+    /// `migrationPinChange` payload (Q32 cross-chain hash linkage —
+    /// supersession that also changes a version pin carries
+    /// `{newChainPinEventHash, priorPinSet, newPinSet}`).
+    RescissionAuthorized,
+    /// A determination was rescinded (ADR 0066 §3).
+    ///
+    /// `data` carries `priorDeterminationHash` and
+    /// `rescissionAuthorizationEventHash` (back-reference to the authorizing
+    /// `RescissionAuthorized` record).
+    DeterminationRescinded,
+    /// A previously rescinded determination was reinstated (ADR 0066 §4).
+    ///
+    /// Mode 5 of the closed five-mode supersession taxonomy
+    /// (owner directive Q26). Re-activates a determination from a
+    /// non-operative (post-rescission) state and is distinct from amendment:
+    /// the substantive value is unchanged; only the operative status flips
+    /// back. `data` carries `priorRescissionEventHash`,
+    /// `reactivationAuthorizationEventHash`, and `reason`.
+    Reinstated,
+    /// A standalone authorization attestation supporting an amendment,
+    /// rescission, or reinstatement chain (ADR 0066 §5).
+    ///
+    /// Records the authorizing actor's policy basis for the supersession
+    /// act. `data` carries `authorizingActorId`, `authorityBasis`,
+    /// `policyPredicate` (e.g. `"amendment-authority"`,
+    /// `"rescission-authority"`, `"reinstatement-authority"`), and an
+    /// optional `assuranceLevel` (e.g. `"high"`, `"standard"`).
+    AuthorizationAttestation,
+
+    // ── Statutory clocks (ADR 0067) ──────────────────────────────
+    /// A statutory or SLA clock was started (ADR 0067 §2).
+    ///
+    /// `data` carries `clockId`, `clockKind` (open enum:
+    /// `"AppealClock"` | `"ProcessingSLA"` | `"GrantExpiry"` |
+    /// `"StatuteClock"` | `x-*`), `originEventHash`, `duration`
+    /// (ISO 8601 duration), `computedDeadline` (RFC 3339), and
+    /// optional `calendarRef` and `statuteReference`.
+    ClockStarted,
+    /// A statutory or SLA clock resolved (ADR 0067 §3).
+    ///
+    /// `data` carries `clockId`, `originClockHash`, `resolution`
+    /// (closed enum: `"satisfied"` | `"elapsed"` | `"paused"` |
+    /// `"cancelled"` — see [`ClockResolution`]), `resolvedAt`
+    /// (RFC 3339), and optional `resolvingEventHash`.
+    ClockResolved,
+
+    // ── Identity attestation (ADR 0068) ──────────────────────────
+    /// A cross-tenant identity attestation was recorded (ADR 0068 §4, Q15).
+    ///
+    /// Pulled inline as a first-class kind per maximalist Q15. `data`
+    /// carries `subjectGlobalId`, `assuranceLevel` (open enum, e.g.
+    /// `"low"` | `"standard"` | `"high"` | `"very-high"`),
+    /// `attestationProvider`, `providerAttestationId`, `attestedAt`
+    /// (RFC 3339), optional `validUntil` (RFC 3339), and
+    /// `attestedPredicates` (open list, e.g. `["legal-name-verified",
+    /// "age-of-majority"]`).
+    IdentityAttestation,
+
+    // ── Clock skew (ADR 0069) ────────────────────────────────────
+    /// Clock skew between processor and substrate was observed (ADR 0069 §3).
+    ///
+    /// Emitted when processor and substrate timestamps diverge beyond the
+    /// deployment-configured threshold (default: 1000ms). `data` carries
+    /// `processorAuthoredAt` (RFC 3339), `substrateCreatedAt` (RFC 3339),
+    /// `skewMilliseconds` (signed: positive = processor ahead),
+    /// `thresholdMilliseconds`, and `eventHash`.
+    ClockSkewObserved,
+
+    // ── Failure & compensation (ADR 0070) ────────────────────────
+    /// A commit attempt against the substrate failed (ADR 0070 §2).
+    ///
+    /// `data` carries `targetEventHash`, `failureKind` (closed enum
+    /// via [`CommitFailureKind`]: `networkTimeout` | `substrateDown` |
+    /// `hashConflict` | `other`), `attemptCount`,
+    /// `retryBudgetRemainingMs`, and optional `errorPayload`.
+    CommitAttemptFailure,
+    /// An authorization attempt was rejected by policy (ADR 0070 §4).
+    ///
+    /// `data` carries `attemptedActorId`, `attemptedAction` (e.g.
+    /// `"transition:approve"`, `"submit:taskResponse"`),
+    /// `targetResourceId`, `rejectionReason`, and optional
+    /// `policyDecisionRef`.
+    AuthorizationRejected,
+
+    // ── Migration & version pins (ADR 0071) ──────────────────────
+    /// A migration pin set changed (ADR 0071 §3).
+    ///
+    /// `data` carries `priorPinSet` and `newPinSet` (4-field pin trees
+    /// per maximalist Q33: `formspec.definitionVersion`,
+    /// `wos.$wosWorkflowVersion`, `trellis.envelopeVersion`,
+    /// `trellis.conformanceClass`), `authorizingActorId`,
+    /// `authorityBasis`, and `migrationRationale`.
+    MigrationPinChanged,
 }
 
 impl ProvenanceKind {
