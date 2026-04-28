@@ -23,29 +23,20 @@ from jsonschema import Draft202012Validator
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS_ROOT = WOS_SPEC_ROOT / "schemas"
 
-# Marker → schema path. Markers MUST match the `$wos*` property each schema
-# declares as required at its root. Verified against every schema in
-# `schemas/` on 2026-04-17.
+# Marker → schema path. Post-ADR-0076 (D-6) the schema family collapsed to 6
+# files — one author-time core ($wosWorkflow), two sidecars ($wosDelivery,
+# $wosOntologyAlignment), two runtime artifacts ($wosCaseInstance,
+# $wosProvenanceLog), one tooling ($wosTooling). Legacy per-block schemas have
+# been deleted; their normative content is absorbed under embedded blocks of
+# wos-workflow.schema.json. Spec example blocks and fixtures use the canonical
+# six markers — no legacy compat shims.
 MARKER_TO_SCHEMA: dict[str, str] = {
-    "$wosKernel": "kernel/wos-kernel.schema.json",
-    "$wosCorrespondenceMetadata": "kernel/wos-correspondence-metadata.schema.json",
-    "$wosLifecycleDetail": "companions/wos-lifecycle-detail.schema.json",
-    "$wosWorkflowGovernance": "governance/wos-workflow-governance.schema.json",
-    "$wosAssertionLibrary": "governance/wos-assertion-gate.schema.json",
-    "$wosDueProcess": "governance/wos-due-process.schema.json",
-    "$wosPolicyParameters": "governance/wos-policy-parameters.schema.json",
-    "$wosAIIntegration": "ai/wos-ai-integration.schema.json",
-    "$wosAgentConfig": "ai/wos-agent-config.schema.json",
-    "$wosDriftMonitor": "ai/wos-drift-monitor.schema.json",
-    "$wosAdvancedGovernance": "advanced/wos-advanced.schema.json",
-    "$wosEquityConfig": "advanced/wos-equity.schema.json",
-    "$wosVerificationReport": "advanced/wos-verification-report.schema.json",
-    "$wosIntegrationProfile": "profiles/wos-integration-profile.schema.json",
-    "$wosSemanticProfile": "profiles/wos-semantic-profile.schema.json",
-    "$wosSignatureProfile": "profiles/wos-signature-profile.schema.json",
-    "$wosBusinessCalendar": "sidecars/wos-business-calendar.schema.json",
-    "$wosNotificationTemplate": "sidecars/wos-notification-template.schema.json",
-    "$wosExtensionRegistry": "registry/wos-extension-registry.schema.json",
+    "$wosWorkflow": "wos-workflow.schema.json",
+    "$wosDelivery": "sidecars/wos-delivery.schema.json",
+    "$wosOntologyAlignment": "sidecars/wos-ontology-alignment.schema.json",
+    "$wosCaseInstance": "wos-case-instance.schema.json",
+    "$wosProvenanceLog": "wos-provenance-log.schema.json",
+    "$wosTooling": "wos-tooling.schema.json",
 }
 
 

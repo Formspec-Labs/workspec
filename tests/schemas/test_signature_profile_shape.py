@@ -1,8 +1,9 @@
-"""Signature Profile schema regression tests (WOS-T4).
+"""Signature block schema regression tests (WOS-T4).
 
-Guards the WOS Signature Profile authoring shape before lint/runtime
-semantics land. Cross-document reference integrity is intentionally left to
-the planned SIG-* Tier 2 lint rules.
+Guards the WOS Signature embedded block shape inside a $wosWorkflow document.
+The signature block lives at `workflow.signature` per ADR 0076; the standalone
+$wosSignatureProfile marker is retired. Cross-document reference integrity is
+intentionally left to the planned SIG-* Tier 2 lint rules.
 """
 from __future__ import annotations
 
@@ -14,73 +15,86 @@ import pytest
 from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-SIGNATURE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "profiles" / "wos-signature-profile.schema.json"
-)
+WORKFLOW_SCHEMA = WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 
 
 @pytest.fixture(scope="module")
 def validator() -> Draft202012Validator:
-    return Draft202012Validator(json.loads(SIGNATURE_SCHEMA.read_text()))
+    return Draft202012Validator(json.loads(WORKFLOW_SCHEMA.read_text()))
 
 
 def _minimal_profile() -> dict:
+    """Minimal $wosWorkflow document with a signature block."""
     return {
-        "$wosSignatureProfile": "1.0",
-        "targetWorkflow": {
-            "url": "https://agency.gov/workflows/benefits-adjudication"
+        "$wosWorkflow": "1.0",
+        "url": "https://example.test/sig-test",
+        "version": "1.0.0",
+        "title": "Signature Profile Shape Test",
+        "impactLevel": "operational",
+        "actors": [
+            {"id": "applicant", "type": "human"},
+            {"id": "agency", "type": "system"},
+        ],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic"},
+                "done": {"type": "final"},
+            },
         },
-        "roles": [
-            {
-                "id": "applicantSigner",
-                "role": "signer",
-                "actorId": "applicant",
-                "authenticationPolicyKey": "emailOtp",
-            }
-        ],
-        "documents": [
-            {
-                "id": "benefitsApplication",
-                "documentRef": "urn:agency.gov:documents:benefits-application:v1",
-                "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "documentHashAlgorithm": "sha-256",
-            }
-        ],
-        "authenticationPolicies": [
-            {
-                "key": "emailOtp",
-                "method": "email-otp",
-                "assuranceLevel": "standard",
-            }
-        ],
-        "signingFlow": {
-            "type": "sequential",
-            "steps": [
+        "signature": {
+            "roles": [
                 {
-                    "id": "applicantSigns",
-                    "roleId": "applicantSigner",
-                    "documentId": "benefitsApplication",
+                    "id": "applicantSigner",
+                    "role": "signer",
+                    "actorId": "applicant",
+                    "authenticationPolicyKey": "emailOtp",
                 }
             ],
-            "completion": {"type": "all-required"},
-        },
-        "evidence": {
-            "recordKind": "signatureAffirmation",
-            "requiredFields": [
-                "response.signature.acceptedAt",
-                "response.signature.affirmed",
+            "documents": [
+                {
+                    "id": "benefitsApplication",
+                    "documentRef": "urn:agency.gov:documents:benefits-application:v1",
+                    "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "documentHashAlgorithm": "sha-256",
+                }
             ],
-            "consentReference": {
-                "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
-                "consentVersion": "1.0.0",
-                "acceptedAtPath": "response.signature.acceptedAt",
-                "affirmationPath": "response.signature.affirmed",
+            "authenticationPolicies": [
+                {
+                    "key": "emailOtp",
+                    "method": "email-otp",
+                    "assuranceLevel": "standard",
+                }
+            ],
+            "signingFlow": {
+                "type": "sequential",
+                "steps": [
+                    {
+                        "id": "applicantSigns",
+                        "roleId": "applicantSigner",
+                        "documentId": "benefitsApplication",
+                    }
+                ],
+                "completion": {"type": "all-required"},
             },
-            "identityBinding": {
-                "method": "email-otp",
-                "assuranceLevel": "standard",
+            "evidence": {
+                "recordKind": "signatureAffirmation",
+                "requiredFields": [
+                    "response.signature.acceptedAt",
+                    "response.signature.affirmed",
+                ],
+                "consentReference": {
+                    "consentTextRef": "urn:agency.gov:consent:esign-benefits:v1",
+                    "consentVersion": "1.0.0",
+                    "acceptedAtPath": "response.signature.acceptedAt",
+                    "affirmationPath": "response.signature.affirmed",
+                },
+                "identityBinding": {
+                    "method": "email-otp",
+                    "assuranceLevel": "standard",
+                },
+                "custodyHookEligible": True,
             },
-            "custodyHookEligible": True,
         },
     }
 
@@ -95,19 +109,19 @@ class TestSignatureProfilePositiveShapes:
 
     def test_sequential_signing_valid(self, validator):
         doc = _minimal_profile()
-        doc["signingFlow"]["type"] = "sequential"
+        doc["signature"]["signingFlow"]["type"] = "sequential"
         assert _errors(doc, validator) == []
 
     def test_parallel_signing_valid(self, validator):
         doc = _minimal_profile()
-        doc["roles"].append(
+        doc["signature"]["roles"].append(
             {
                 "id": "caseworkerApprover",
                 "role": "approver",
-                "actorId": "caseworker",
+                "actorId": "agency",
             }
         )
-        doc["signingFlow"] = {
+        doc["signature"]["signingFlow"] = {
             "type": "parallel",
             "steps": [
                 {
@@ -126,20 +140,23 @@ class TestSignatureProfilePositiveShapes:
 
     def test_routed_signing_valid(self, validator):
         doc = _minimal_profile()
-        doc["signingFlow"]["type"] = "routed"
-        doc["signingFlow"]["steps"][0]["guard"] = "caseFile.signature.required == true"
+        doc["signature"]["signingFlow"]["type"] = "routed"
+        doc["signature"]["signingFlow"]["steps"][0]["guard"] = (
+            "caseFile.signature.required == true"
+        )
         assert _errors(doc, validator) == []
 
     def test_witness_countersignature_valid(self, validator):
         doc = _minimal_profile()
-        doc["roles"].append(
+        doc["actors"].append({"id": "witness", "type": "human"})
+        doc["signature"]["roles"].append(
             {
                 "id": "witnessRole",
                 "role": "witness",
                 "actorId": "witness",
             }
         )
-        doc["signingFlow"]["steps"].append(
+        doc["signature"]["signingFlow"]["steps"].append(
             {
                 "id": "witnessSigns",
                 "roleId": "witnessRole",
@@ -151,13 +168,14 @@ class TestSignatureProfilePositiveShapes:
 
     def test_notary_in_person_valid(self, validator):
         doc = _minimal_profile()
-        doc["roles"][0] = {
+        doc["actors"] = [{"id": "notary", "type": "human"}]
+        doc["signature"]["roles"][0] = {
             "id": "notaryRole",
             "role": "notary",
             "actorId": "notary",
             "authenticationPolicyKey": "notaryAuth",
         }
-        doc["authenticationPolicies"] = [
+        doc["signature"]["authenticationPolicies"] = [
             {
                 "key": "notaryAuth",
                 "method": "notary",
@@ -166,8 +184,8 @@ class TestSignatureProfilePositiveShapes:
                 "requiresCredentialEvidence": True,
             }
         ]
-        doc["signingFlow"]["steps"][0]["roleId"] = "notaryRole"
-        doc["evidence"]["identityBinding"] = {
+        doc["signature"]["signingFlow"]["steps"][0]["roleId"] = "notaryRole"
+        doc["signature"]["evidence"]["identityBinding"] = {
             "method": "notary",
             "assuranceLevel": "very-high",
         }
@@ -177,40 +195,45 @@ class TestSignatureProfilePositiveShapes:
 class TestSignatureProfileNegativeShapes:
     def test_missing_consent_reference_rejected(self, validator):
         doc = _minimal_profile()
-        del doc["evidence"]["consentReference"]
+        del doc["signature"]["evidence"]["consentReference"]
         assert _errors(doc, validator)
 
     def test_missing_document_hash_rejected(self, validator):
         doc = _minimal_profile()
-        del doc["documents"][0]["documentHash"]
-        assert _errors(doc, validator)
-
-    def test_invalid_signer_role_rejected(self, validator):
-        doc = _minimal_profile()
-        doc["roles"][0]["role"] = "rubber-stamp"
-        assert _errors(doc, validator)
-
-    def test_invalid_authentication_method_rejected(self, validator):
-        doc = _minimal_profile()
-        doc["authenticationPolicies"][0]["method"] = "magic-link"
+        del doc["signature"]["documents"][0]["documentHash"]
         assert _errors(doc, validator)
 
     def test_invalid_flow_type_rejected(self, validator):
         doc = _minimal_profile()
-        doc["signingFlow"]["type"] = "waterfall"
+        doc["signature"]["signingFlow"]["type"] = "waterfall"
         assert _errors(doc, validator)
 
-    def test_unknown_root_property_rejected(self, validator):
+    def test_unknown_signature_property_rejected(self, validator):
         doc = _minimal_profile()
-        doc["providerBlob"] = {"vendor": "opaque"}
+        doc["signature"]["providerBlob"] = {"vendor": "opaque"}
         assert _errors(doc, validator)
 
-    def test_non_x_vendor_extension_rejected(self, validator):
-        doc = _minimal_profile()
-        doc["extensions"] = {"vendorMode": "opaque"}
-        assert _errors(doc, validator)
-
-    def test_x_vendor_extension_accepted(self, validator):
+    def test_x_vendor_extension_on_signature_accepted(self, validator):
         doc = copy.deepcopy(_minimal_profile())
-        doc["extensions"] = {"x-acme-mode": "witnessed"}
+        doc["signature"]["x-acme-mode"] = "witnessed"
         assert _errors(doc, validator) == []
+
+    def test_missing_signature_roles_rejected(self, validator):
+        doc = _minimal_profile()
+        del doc["signature"]["roles"]
+        assert _errors(doc, validator)
+
+    def test_missing_signature_documents_rejected(self, validator):
+        doc = _minimal_profile()
+        del doc["signature"]["documents"]
+        assert _errors(doc, validator)
+
+    def test_missing_signing_flow_rejected(self, validator):
+        doc = _minimal_profile()
+        del doc["signature"]["signingFlow"]
+        assert _errors(doc, validator)
+
+    def test_missing_evidence_rejected(self, validator):
+        doc = _minimal_profile()
+        del doc["signature"]["evidence"]
+        assert _errors(doc, validator)

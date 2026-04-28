@@ -55,7 +55,7 @@ def test_invalid_kernel_document_is_rejected(case_id, case, validators):
             f"{case_id}: violation requires semantic checks beyond JSON Schema "
             f"(expected error: {case.get('expectedError', 'unspecified')})"
         )
-    errors = list(validators["$wosKernel"].iter_errors(case["document"]))
+    errors = list(validators["$wosWorkflow"].iter_errors(case["document"]))
     assert errors, (
         f"{case_id} was expected to fail validation but passed. "
         f"Expected error: {case.get('expectedError', 'unspecified')}"

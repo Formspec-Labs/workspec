@@ -20,7 +20,7 @@ from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "registry" / "wos-extension-registry.schema.json"
+    WOS_SPEC_ROOT / "schemas" / "wos-tooling.schema.json"
 )
 REGISTRY_FIXTURE = (
     WOS_SPEC_ROOT / "fixtures" / "registry" / "wos-extension-registry-example.json"
@@ -48,7 +48,8 @@ def _minimal_valid_entry() -> dict:
 
 def _minimal_valid_document() -> dict:
     return {
-        "$wosExtensionRegistry": "1.0",
+        "$wosTooling": "1.0",
+        "kind": "extensionRegistry",
         "version": "1.0.0",
         "entries": [_minimal_valid_entry()],
     }
@@ -131,15 +132,15 @@ class TestNegativeCases:
 
     def test_missing_marker_rejected(self, validator):
         doc = _minimal_valid_document()
-        del doc["$wosExtensionRegistry"]
+        del doc["$wosTooling"]
         errors = list(validator.iter_errors(doc))
-        assert errors, "registry without `$wosExtensionRegistry` marker must fail"
+        assert errors, "registry without `$wosTooling` marker must fail"
 
     def test_wrong_marker_version_rejected(self, validator):
         doc = _minimal_valid_document()
-        doc["$wosExtensionRegistry"] = "2.0"
+        doc["$wosTooling"] = "2.0"
         errors = list(validator.iter_errors(doc))
-        assert errors, "registry with non-1.0 marker must fail"
+        assert errors, "registry with non-1.0 `$wosTooling` marker must fail"
 
     def test_empty_entries_array_rejected(self, validator):
         doc = _minimal_valid_document()

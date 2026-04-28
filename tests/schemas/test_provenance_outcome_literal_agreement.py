@@ -24,7 +24,7 @@ from pathlib import Path
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "kernel" / "wos-provenance-record.schema.json"
+    WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
 )
 
 RESERVED_LITERAL = "preconditionNotSatisfied"

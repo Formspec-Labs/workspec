@@ -18,7 +18,7 @@ from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "governance" / "wos-workflow-governance.schema.json"
+    WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 )
 
 

@@ -15,7 +15,7 @@ from jsonschema import Draft202012Validator
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 CASE_INSTANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "companions" / "wos-case-instance.schema.json"
+    WOS_SPEC_ROOT / "schemas" / "wos-case-instance.schema.json"
 )
 
 
