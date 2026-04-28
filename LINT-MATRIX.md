@@ -1,14 +1,14 @@
 # WOS Verification Matrix
 
-> **Regenerated from code registries** (commit `bdf70635e1c2747252002f5a609d8574ffd474d2`). 116 rules across 35 T1 / 72 T2 / 9 T3 (1 LoadBearing, 0 Stable, 11 Tested, 104 Draft).
+> **Updated 2026-04-28** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). 119 rules across 36 T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 104 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)            35 rules                  │
+│  Tier 1: wos-lint (static)            36 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   72 rules                  │
+│  Tier 2: wos-lint --project (cross)   74 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -67,8 +67,9 @@
 | `K-030` | K | draft | Extension keys MUST be `x-` prefixed. | — |
 | `K-048` | K | draft | Non-standard case relationship `type` values MUST use `x-` prefix. | — |
 | `SCHEMA-DOC-001` | SCHEMA-DOC | draft | Schema leaf properties MUST carry sufficient `description` and `examples`. | — |
+| `WOS-VER-LEVEL-001` | WOS | tested | Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings (ADR 0076 step 12, Q6). | inline (`tier1.rs::ver_level_tests`) |
 
-**T1 total: 35** (0 LoadBearing, 0 Stable, 2 Tested, 33 Draft)
+**T1 total: 36** (0 LoadBearing, 0 Stable, 3 Tested, 33 Draft)
 
 ---
 
@@ -148,8 +149,10 @@
 | `K-049` | K | load_bearing | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | k-049-load-bearing-self-loop.json, k-049-load-bearing-two-node-cycle.json |
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
+| `WOS-AGENT-XREF-001` | WOS | tested | Every actor with `type=='agent'` MUST have a matching `agents[].id` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_agent_xref_001_*`) |
+| `WOS-SIG-COVER-001` | WOS | tested | Signature-gated transitions MUST be covered by `signature.signers[]` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_sig_cover_001_*`) |
 
-**T2 total: 72** (1 LoadBearing, 0 Stable, 2 Tested, 69 Draft)
+**T2 total: 74** (1 LoadBearing, 0 Stable, 4 Tested, 69 Draft)
 
 ---
 
@@ -175,7 +178,7 @@
 
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
-| T1 | 35 | 0 | 0 | 2 | 33 |
-| T2 | 72 | 1 | 0 | 2 | 69 |
+| T1 | 36 | 0 | 0 | 3 | 33 |
+| T2 | 74 | 1 | 0 | 4 | 69 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **116** | **1** | **0** | **11** | **104** |
+| **Total** | **119** | **1** | **0** | **14** | **104** |

@@ -2,15 +2,38 @@
 
 This repo treats specs as executable contracts: prose defines normative processor behavior, schemas encode authoring surfaces, and conformance fixtures/lint rules prevent drift.
 
-## Required Sections (for any new or materially revised spec)
+## Required Sections (for layered-sieve specs)
 
-Every spec MUST include these sections (or a clear explanation of why one is not applicable):
+The three-section rubric below applies to **layered-sieve specs only** — the docs that encode behavioral semantics schemas alone cannot express:
+
+- `kernel/spec.md` (L0 — orchestration substrate)
+- `governance/workflow-governance.md` (L1 — due process, review, validation pipelines)
+- `ai/ai-integration.md` (L2 — agent integration, deontic enforcement, oversight)
+- `advanced/advanced-governance.md` (L3 — DCR, equity, SMT verifiable constraints)
+
+These specs MUST include:
 
 1. **Normative Contract**
 2. **Composition**
 3. **Conformance**
 
-These are not "nice to have" documentation. They are how we keep the spec, schemas, runtime behavior, and fixtures aligned.
+These are not "nice to have" documentation. They are how we keep the spec, schemas, runtime behavior, and fixtures aligned for behavioral semantics that schemas cannot encode (evaluation order, MUST-fire-before, sieve precedence, hook firing).
+
+### Embedded-block specs follow the rubric when behavioral
+
+Embedded blocks of `$wosWorkflow` (`signature`, `custody`, etc.) live partly in `schemas/wos-workflow.schema.json` and partly in companion specs that encode behavioral semantics schemas cannot capture (e.g., signing flow patterns, witness/notary semantics, custody lattice precedence). When such a companion spec exists (e.g., `specs/profiles/signature.md`, `specs/kernel/custody-hook-encoding.md`), it MUST follow the three-section rubric — the embedded-block boundary does not exempt it from layered-sieve discipline. Embedded blocks whose entire surface is captured by schema descriptions (no separate behavioral-semantics doc) ARE exempt under the same rule as sidecars below.
+
+### Sidecars are exempt
+
+Sidecars (`wos-delivery`, `wos-ontology-alignment`) do NOT require the three-section rubric when:
+
+- The schema's `description` and `$comment` fields cover the Normative Contract (processor obligations are deployment-environment configuration, not behavioral semantics).
+- The schema's `targetWorkflow` URI joining + ADR 0076 D-3 prose covers Composition (sidecars compose by URI and MUST NOT alter case state).
+- Conformance reduces to schema validation (no runtime behavior beyond what the schema validates).
+
+Sidecars under this exemption are indexed in [`specs/sidecars/README.md`](specs/sidecars/README.md) — one paragraph per sidecar naming what it does, how it joins, where its conformance lives. The exemption applies because the schema description fields are dense enough to substitute for prose, and the cold-read test fails for prose that restates schema content (six weeks later it drifts and someone hand-reconciles).
+
+The exemption does NOT extend to layered-sieve specs whose semantics genuinely require prose. ADR 0076 D-3 establishes the sidecar/layered-sieve distinction; this rubric tracks that boundary.
 
 ## Normative Contract
 

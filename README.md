@@ -153,29 +153,39 @@ The spec does not give AI a separate, weaker track — agents participate under 
 
 ## Specification inventory
 
-Normative specs and JSON schemas live side by side. Each document validates against its schema. Schemas live under `schemas/` in folders that mirror the spec structure.
+Per [ADR 0076](../thoughts/adr/0076-product-tier-consolidation.md), the WOS schema family is consolidated to **6 files**. One author-time core (`wos-workflow.schema.json`) carries the workflow lifecycle plus seven optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance). Two sidecars (`wos-delivery`, `wos-ontology-alignment`) join by `targetWorkflow` URI. Two runtime artifact schemas (`wos-case-instance`, `wos-provenance-log`) and one tooling schema (`wos-tooling`) round out the family.
 
-| Layer | Spec | Schema |
-|-------|------|--------|
-| Kernel | [`spec.md`](specs/kernel/spec.md) | [`wos-kernel`](schemas/kernel/wos-kernel.schema.json) |
-| Kernel sidecar | [`correspondence-metadata.md`](specs/kernel/correspondence-metadata.md) | [`wos-correspondence-metadata`](schemas/kernel/wos-correspondence-metadata.schema.json) |
-| Governance | [`workflow-governance.md`](specs/governance/workflow-governance.md) | [`wos-workflow-governance`](schemas/governance/wos-workflow-governance.schema.json) |
-| Governance sidecar | [`due-process-config.md`](specs/governance/due-process-config.md) | [`wos-due-process`](schemas/governance/wos-due-process.schema.json) |
-| Governance sidecar | [`assertion-library.md`](specs/governance/assertion-library.md) | [`wos-assertion-gate`](schemas/governance/wos-assertion-gate.schema.json) |
-| Governance sidecar | [`policy-parameters.md`](specs/governance/policy-parameters.md) | [`wos-policy-parameters`](schemas/governance/wos-policy-parameters.schema.json) |
-| Governance sidecar | [`business-calendar.md`](specs/sidecars/business-calendar.md) | [`wos-business-calendar`](schemas/sidecars/wos-business-calendar.schema.json) |
-| Governance sidecar | [`notification-template.md`](specs/sidecars/notification-template.md) | [`wos-notification-template`](schemas/sidecars/wos-notification-template.schema.json) |
-| AI Integration | [`ai-integration.md`](specs/ai/ai-integration.md) | [`wos-ai-integration`](schemas/ai/wos-ai-integration.schema.json) |
-| AI sidecar | [`agent-config.md`](specs/ai/agent-config.md) | [`wos-agent-config`](schemas/ai/wos-agent-config.schema.json) |
-| AI sidecar | [`drift-monitor.md`](specs/ai/drift-monitor.md) | [`wos-drift-monitor`](schemas/ai/wos-drift-monitor.schema.json) |
-| Advanced | [`advanced-governance.md`](specs/advanced/advanced-governance.md) | [`wos-advanced`](schemas/advanced/wos-advanced.schema.json) |
-| Advanced sidecar | [`equity-config.md`](specs/advanced/equity-config.md) | [`wos-equity`](schemas/advanced/equity-config.schema.json) |
-| Advanced sidecar | [`verification-report.md`](specs/advanced/verification-report.md) | [`wos-verification-report`](schemas/advanced/wos-verification-report.schema.json) |
-| Profile | [`integration.md`](specs/profiles/integration.md) | [`wos-integration-profile`](schemas/profiles/wos-integration-profile.schema.json) |
-| Profile | [`semantic.md`](specs/profiles/semantic.md) | [`wos-semantic-profile`](schemas/profiles/wos-semantic-profile.schema.json) |
-| Profile | [`signature.md`](specs/profiles/signature.md) | [`wos-signature-profile`](schemas/profiles/wos-signature-profile.schema.json) |
-| Companion | [`lifecycle-detail.md`](specs/companions/lifecycle-detail.md) | [`wos-lifecycle-detail`](schemas/companions/wos-lifecycle-detail.schema.json) |
-| Runtime | [`runtime.md`](specs/companions/runtime.md) | [`wos-case-instance`](schemas/companions/wos-case-instance.schema.json) |
+| Role | Spec | Schema |
+|---|---|---|
+| Author-time core | [`kernel/spec.md`](specs/kernel/spec.md) (the merged kernel spec post-ADR-0076 absorption — §1-§16 cover lifecycle, case state, provenance, durable execution, extension seams, runtime serialization, evaluation modes, Formspec coprocessor, separation principles, contract validation, host interfaces) | [`wos-workflow`](schemas/wos-workflow.schema.json) |
+| Sidecar (delivery) | (schema descriptions are the canonical surface; see [`specs/sidecars/README.md`](specs/sidecars/README.md)) | [`wos-delivery`](schemas/sidecars/wos-delivery.schema.json) |
+| Sidecar (ontology) | (schema descriptions are the canonical surface; see [`specs/sidecars/README.md`](specs/sidecars/README.md)) | [`wos-ontology-alignment`](schemas/sidecars/wos-ontology-alignment.schema.json) |
+| Runtime artifact (instance) | n/a (produced by processors) | [`wos-case-instance`](schemas/wos-case-instance.schema.json) |
+| Runtime artifact (audit log) | n/a (produced by processors) | [`wos-provenance-log`](schemas/wos-provenance-log.schema.json) |
+| Tooling | n/a (consumed by tooling) | [`wos-tooling`](schemas/wos-tooling.schema.json) |
+
+The behavioral specs that govern processor obligations live alongside the kernel spec:
+
+| Layer | Spec |
+|---|---|
+| Kernel (L0) | [`specs/kernel/spec.md`](specs/kernel/spec.md) — §1-§16 |
+| Workflow Governance (L1) | [`specs/governance/workflow-governance.md`](specs/governance/workflow-governance.md) — due process, review protocols, validation pipelines, holds, delegation |
+| AI Integration (L2) | [`specs/ai/ai-integration.md`](specs/ai/ai-integration.md) — agent declarations, deontic constraints, autonomy, drift |
+| Advanced Governance (L3) | [`specs/advanced/advanced-governance.md`](specs/advanced/advanced-governance.md) — DCR, equity, SMT verifiable constraints |
+| Assurance | [`specs/assurance/assurance.md`](specs/assurance/assurance.md) — assurance levels, attestation |
+
+<details>
+<summary>Legacy spec inventory (pre-ADR 0076 — files retained as redirect stubs while citation sweep is in flight)</summary>
+
+The pre-consolidation 17-document framing (one document per layer + sidecar + companion + profile) is being phased out. The companion + profile docs below carry "Fully migrated" banners pointing at the post-consolidation homes; the schema files in those legacy directories are subsumed by the merged `wos-workflow.schema.json` per ADR 0076 D-6. Files retained pending citation sweep:
+
+- [`specs/companions/lifecycle-detail.md`](specs/companions/lifecycle-detail.md) — §2-§6 absorbed into kernel §4.6/§4.7/§4.8/§4.14, §9.5, §9.7
+- [`specs/companions/runtime.md`](specs/companions/runtime.md) — §3-§15 absorbed into kernel §11/§12/§13/§16, governance §3.8/§11.4/§12.4, AI §4.6
+- [`specs/profiles/integration.md`](specs/profiles/integration.md) — §3-§7/§9 absorbed into kernel §9.2; §10/§11 relocated to `docs/adapters/integration-extensions.md`
+- [`specs/profiles/signature.md`](specs/profiles/signature.md) — content lives in `wos-workflow.schema.json` `signature` block; prose normative sections still here
+- [`specs/profiles/semantic.md`](specs/profiles/semantic.md) — schema renamed to `wos-ontology-alignment` per ADR 0076 D-3
+
+</details>
 
 ---
 
