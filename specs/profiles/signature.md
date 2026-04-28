@@ -150,6 +150,8 @@ A signature affirmation MUST include identity-binding evidence with:
 
 Authentication methods are closed at the WOS center: `none`, `email-otp`, `sms-otp`, `knowledge-based`, `oidc`, `webauthn`, `credential`, `in-person`, `notary`, and `x-*` vendor methods.
 
+Identity binding answers "who authenticated, and how strongly." It does NOT answer "in what capacity did the signer act." The latter is the signer-authority claim (§2.12). A profile MAY require both an authentication-method floor (§2.13) AND a signer-authority claim for the same affirmation; the two are independent gates and a runtime MUST evaluate both.
+
 ### 2.7 Document Binding
 
 Each signed document declaration MUST include a document digest and digest algorithm. `sha-256` is REQUIRED for Core conformance. Other algorithms MAY be used only when declared by a future profile revision or an `x-*` extension policy.
@@ -176,8 +178,12 @@ The record MUST include:
 - `profileRef` or `profileKey` according to ADR-0060 semantics
 - `formspecResponseRef`
 - `custodyHookEligible`
+- `signingIntent` — a URI from the registered set in §2.11 naming the legal-effect class of this affirmation. The URI MUST also populate the corresponding Formspec `authoredSignatures[*]` entry per Formspec Core §2.1.6 ("authoredSignatures") on the bound Response; the URI does NOT replace the Formspec field, it co-occupies its semantic slot.
+- `signerAuthority` — a signer-authority claim (§2.12). REQUIRED for any registered intent URI whose §2.11 row sets a non-`self` signer-authority floor. OPTIONAL for `self` floors; when present it MUST validate against §2.12.
 
-If consent evidence is missing, identity binding is below the role's required policy, or the Formspec response is invalid, the runtime MUST NOT emit `SignatureAffirmation`.
+If consent evidence is missing, identity binding is below the role's required policy, the signing-intent URI is unregistered for the deployment, the signer-authority floor for the URI is not met, or the Formspec response is invalid, the runtime MUST NOT emit `SignatureAffirmation`.
+
+**Binding to Trellis ADR 0010.** The byte-level proof inside a `SignatureAffirmation` is one `UserContentAttestationPayload` per signer/document pair, encoded under the Trellis `trellis.user-content-attestation.v1` event extension (Trellis ADR 0010 §"Wire shape"). The `SignatureAffirmation.signingIntent` URI MUST equal the `signing_intent` field of the corresponding `UserContentAttestationPayload`. The `documentHash` MUST equal the host event's `canonical_event_hash` carried by the payload's `attested_event_hash`. The `signedAt` MUST equal the payload's `attested_at`, which per ADR 0010 MUST equal the envelope's `authored_at`. Field-level binding is normative: a `SignatureAffirmation` whose payload disagrees with these equalities MUST NOT be admitted by `custodyHook`.
 
 ### 2.9 Decline, Void, Expiry, and Reassignment
 
@@ -194,6 +200,167 @@ A reassignment MUST record original signer, new signer, authorizing actor, times
 A witness or counter-signature step MUST depend on the primary signer affirmation unless the profile explicitly declares another dependency.
 
 A notary or in-person signer role MUST require an authentication policy whose method is `in-person`, `notary`, or an `x-*` method that declares equivalent in-person evidence.
+
+### 2.11 Signing-Intent URI Registry
+
+Every `SignatureAffirmation` carries a `signingIntent` URI naming its legal-effect class. Trellis ADR 0010 owns the byte-level URI shape (`signing_intent: tstr`, RFC 3986 syntactic check at the byte verifier). WOS Signature Profile owns the URI's *meaning*: which intent URIs the profile recognizes, what each one claims, and what authentication-method floor and signer-authority floor (§2.12) each one requires under each jurisdictional posture (§2.13).
+
+#### 2.11.1 Registered URIs (initial set)
+
+The profile registers the following intent URIs. The set is **append-only**: removing a URI is a breaking profile change; adding a URI is additive (§3.5).
+
+| Intent URI | Meaning | Authentication-method floor (general) | Signer-authority floor (§2.12) |
+|---|---|---|---|
+| `urn:wos:signing-intent:applicant-signature` | The principal party signing on their own behalf — the primary applicant, party, signer of record. | `email-otp` or stronger | `self` |
+| `urn:wos:signing-intent:counter-signature` | A second party signing the same document on their own behalf to indicate concurrence (e.g., co-applicant, co-purchaser). | `email-otp` or stronger | `self` |
+| `urn:wos:signing-intent:witness-attestation` | A witness attesting to having observed another party's signing act. Signer is the witness, not the principal. | `email-otp` or stronger | `witness` |
+| `urn:wos:signing-intent:notarial-attestation` | A commissioned notary or jurisdictional equivalent attesting to identity and signing act of another party under a notarial commission. | `notary` or `in-person` | `notary-commissioned` |
+| `urn:wos:signing-intent:consent` | Affirmative consent to a defined disclosure, policy, or processing activity (e.g., ESIGN consumer consent, GDPR processing consent). Distinct from a substantive signature on a contract. | `email-otp` or stronger | `self` |
+| `urn:wos:signing-intent:attestation-of-fact` | A non-notarial attestation that named facts are true to the signer's knowledge — e.g., a benefits applicant attesting under penalty of perjury, an officer attesting to corporate records. | `email-otp` or stronger | `self` or `as-officer-of` |
+| `urn:wos:signing-intent:agent-as-attorney-in-fact` | A signer acting under a power of attorney for another principal. | `oidc` / `webauthn` / `credential` | `as-attorney-in-fact` |
+| `urn:wos:signing-intent:agent-as-officer` | A signer acting in their capacity as an officer or authorized agent of an organization. | `oidc` / `webauthn` / `credential` | `as-officer-of` |
+| `urn:wos:signing-intent:approval` | A reviewer approving a document without being its primary signer (e.g., a manager approving a subordinate's submission). Distinct from `applicant-signature`: approval does not assert authorship. | `email-otp` or stronger | `self` or `as-officer-of` |
+| `urn:wos:signing-intent:certified-receipt` | An acknowledgement of receipt and inspection, without signing the document's substantive content. | `email-otp` or stronger | `self` |
+
+The "general" floor is the baseline floor when no jurisdictional posture is declared. Jurisdiction-specific floors per §2.13 MAY raise (never lower) the floor for a given intent URI.
+
+#### 2.11.2 Deployment-local URIs
+
+Deployments MAY register additional intent URIs in their Posture Declaration (Trellis Operational Companion §"Posture Declaration"). A deployment-local URI MUST:
+
+- use a deployment-scoped URI namespace distinct from `urn:wos:signing-intent:*` (which is reserved for this profile);
+- declare its meaning, authentication-method floor, and signer-authority floor in the Posture Declaration;
+- declare its mapping under each jurisdictional posture the deployment claims (§2.13);
+- pass the same byte-level RFC 3986 check at the Trellis verifier per ADR 0010 step 6d.2.
+
+A Signature Profile Runtime MUST reject a `SignatureAffirmation` whose `signingIntent` is neither in §2.11.1 nor in the deployment's Posture Declaration registry. Trellis admits any well-formed URI at the byte layer; semantic gating happens here.
+
+#### 2.11.3 URI propagation contract
+
+The same URI string traverses three layers. Each layer's verifier MUST observe byte equality with its source:
+
+1. **Formspec Response.** `authoredSignatures[*].signingIntent` (Formspec Core §2.1.6) carries the URI authored by the signer.
+2. **WOS `SignatureAffirmation`.** `signingIntent` MUST equal the corresponding Formspec `authoredSignatures[*].signingIntent`.
+3. **Trellis `UserContentAttestationPayload`.** `signing_intent` MUST equal the WOS `signingIntent`.
+
+A divergence at any boundary fails the affirmation. WOS lint enforces (1)↔(2); WOS runtime enforces (2)↔(3) at `custodyHook` admission; Trellis verifier enforces (3) is syntactically a URI per RFC 3986.
+
+#### 2.11.4 Open question — notarial commission credential format
+
+The `notarial-attestation` URI requires a notary commission as the authority-source (§2.12). Commission credential format varies by jurisdiction (state-issued certificate, registry lookup URI, x.509 cert with notarial extension, deployment-issued bearer credential). The §2.12 `authoritySource` field admits any URI; deployment-side registration of which commission registries are accepted in which jurisdictional posture is the deployment's responsibility, not this profile's. A future profile revision MAY add a `notaryCommissionFormat` enum once jurisdiction-specific patterns settle.
+
+### 2.12 Signer-Authority Claim
+
+The signer-authority claim declares **capacity to bind** — in what role and on whose behalf the signer acted. It is distinct from §2.6 identity binding (which is identity-strength). Both are independent gates: a strong identity claim (`webauthn`) does NOT establish authority to bind a third party; a weak identity claim (`email-otp`) is not rescued by an authority claim.
+
+#### 2.12.1 Claim shape
+
+A `signerAuthority` claim has the following shape:
+
+```json
+{
+  "class": "self" | "as-officer-of" | "as-attorney-in-fact" | "notary-commissioned" | "witness" | "x-*",
+  "authoritySource": "<URI of the credential, commission, or appointment instrument>",
+  "principal": "<URI of the principal whose interest is bound, when class != self/witness/notary-commissioned>",
+  "evidenceBinding": {
+    "evidenceHash": "<digest of supporting evidence>",
+    "evidenceHashAlgorithm": "sha-256",
+    "evidenceLocation": "<optional URI to the evidence in the case ledger or external store>"
+  },
+  "validFrom": "<RFC 3339 date-time, optional>",
+  "validUntil": "<RFC 3339 date-time, optional>",
+  "extensions": { "x-*": "..." }
+}
+```
+
+#### 2.12.2 Class semantics
+
+| `class` | Meaning | `principal` | `authoritySource` content |
+|---|---|---|---|
+| `self` | Signer acts on their own behalf only. | MUST be omitted or equal `signerId`. | OPTIONAL; if present, identifies the signer's identity record. |
+| `as-officer-of` | Signer acts as an officer or authorized agent of an organization. | REQUIRED — URI of the organization. | URI of the appointment / authorization instrument (board resolution, employment record, agency registration). |
+| `as-attorney-in-fact` | Signer acts under a power of attorney for a natural or legal person. | REQUIRED — URI of the principal granting the power. | URI of the executed power-of-attorney instrument. |
+| `notary-commissioned` | Signer acts as a commissioned notary or jurisdictional equivalent. | OPTIONAL — URI of the affiant whose act the notary attests. | REQUIRED — URI of the notarial commission. |
+| `witness` | Signer acts as a witness to another party's signing act. | OPTIONAL — URI of the principal whose act is witnessed. | OPTIONAL; if present, identifies the witness's identity record. |
+| `x-*` | Vendor or deployment-defined authority class. | Per Posture Declaration. | Per Posture Declaration. |
+
+The class enum is closed at the WOS center. Deployments add `x-*` classes through the Posture Declaration; admission rules and floor mapping (§2.13) for `x-*` classes MUST be declared per deployment.
+
+#### 2.12.3 Evidence binding
+
+`evidenceBinding.evidenceHash` MUST be the digest of the canonical supporting evidence (commission certificate bytes, executed power of attorney bytes, board resolution bytes). `sha-256` is REQUIRED for Core conformance. The hash is what binds the claim to its proof; the optional `evidenceLocation` URI is for retrieval, not for trust.
+
+When a deployment carries the supporting evidence as a chained event (e.g., a notary commission registered as its own ledger event), `evidenceLocation` MAY be the `canonical_event_hash` URI of that event. The verifier resolves the URI; trust derives from the chain's integrity, not from the URI's resolvability at verification time.
+
+#### 2.12.4 Runtime obligations
+
+A Signature Profile Runtime, when admitting a `SignatureAffirmation`, MUST:
+
+1. Resolve the `signingIntent` URI against §2.11 (or the Posture Declaration registry).
+2. If the resolved URI's signer-authority floor is anything other than `self`, REQUIRE a non-omitted `signerAuthority` claim and confirm `signerAuthority.class` matches the floor (or is a stricter class as ranked in §2.12.5).
+3. Confirm `authoritySource` is present when REQUIRED for the class.
+4. Confirm `principal` is present when REQUIRED for the class and that it is not equal to `signerId` (a signer cannot be their own principal in a delegating class).
+5. Confirm `evidenceBinding.evidenceHash` is present and uses an algorithm permitted by §2.7.
+6. If `validFrom` / `validUntil` are present, confirm `signedAt` falls within the window.
+7. If any check fails, MUST NOT emit `SignatureAffirmation` and MUST record the failure reason in the runtime's diagnostic stream.
+
+#### 2.12.5 Authority class strength ordering
+
+For floor-matching purposes, the classes are ordered weakest → strongest:
+
+`self` → `witness` → `as-officer-of` ≈ `as-attorney-in-fact` → `notary-commissioned`
+
+A claim of strength ≥ floor satisfies the floor. `as-officer-of` and `as-attorney-in-fact` are unordered relative to each other; either satisfies a floor expressed as either. `x-*` classes are unordered relative to the closed set; the Posture Declaration MUST place each `x-*` class explicitly relative to a registered class for floor-matching purposes.
+
+### 2.13 Jurisdictional Posture Mapping
+
+A deployment declares zero or more jurisdictional postures in its Posture Declaration. Postures the profile recognizes:
+
+- **`general`** — no jurisdictional claim. The default. Floors are the §2.11.1 "Authentication-method floor (general)" column.
+- **`esign`** — U.S. Electronic Signatures in Global and National Commerce Act (15 U.S.C. ch. 96).
+- **`ueta`** — U.S. Uniform Electronic Transactions Act (state-enacted; floors apply where the deployment claims a UETA-adopting jurisdiction).
+- **`eidas`** — EU Regulation 910/2014 (electronic IDentification, Authentication and trust Services).
+
+A deployment MAY claim multiple postures simultaneously (e.g., a U.S. federal-agency deployment claiming both ESIGN and UETA). When multiple postures apply, the **strictest** floor for each (intent URI × authentication-method) and (intent URI × signer-authority) cell wins.
+
+#### 2.13.1 Posture floor matrix
+
+The matrix below SHOULD be read as: "to admit a `SignatureAffirmation` carrying intent URI X under posture Y, the runtime MUST require at least authentication-method floor A and signer-authority floor B." Floors may be raised per deployment; this is the profile's normative minimum.
+
+| Intent URI | `general` auth floor | `esign` auth floor | `ueta` auth floor | `eidas` auth floor | Authority floor (all postures) |
+|---|---|---|---|---|---|
+| `applicant-signature` | `email-otp` | `email-otp` + ESIGN consent (§2.13.2) | `email-otp` | `oidc` (advanced electronic signature) | `self` |
+| `counter-signature` | `email-otp` | `email-otp` + ESIGN consent | `email-otp` | `oidc` | `self` |
+| `witness-attestation` | `email-otp` | `email-otp` | `email-otp` | `oidc` | `witness` |
+| `notarial-attestation` | `notary` or `in-person` | `notary` or `in-person` | `notary` or `in-person` (RON-permitted states only; deployment declares) | `notary` or `in-person` (qualified electronic signature where required) | `notary-commissioned` |
+| `consent` | `email-otp` | `email-otp` + ESIGN consumer consent (§2.13.2) | `email-otp` | `email-otp` (where lawful basis distinct from signature) | `self` |
+| `attestation-of-fact` | `email-otp` | `email-otp` + ESIGN consent | `email-otp` | `oidc` | `self` or `as-officer-of` |
+| `agent-as-attorney-in-fact` | `oidc` / `webauthn` / `credential` | `oidc` / `webauthn` / `credential` + ESIGN consent | `oidc` / `webauthn` / `credential` | `webauthn` / `credential` (advanced electronic signature) | `as-attorney-in-fact` |
+| `agent-as-officer` | `oidc` / `webauthn` / `credential` | `oidc` / `webauthn` / `credential` + ESIGN consent | `oidc` / `webauthn` / `credential` | `webauthn` / `credential` | `as-officer-of` |
+| `approval` | `email-otp` | `email-otp` | `email-otp` | `oidc` | `self` or `as-officer-of` |
+| `certified-receipt` | `email-otp` | `email-otp` | `email-otp` | `email-otp` | `self` |
+
+The matrix is normative for the registered URIs in §2.11.1. Deployment-local URIs (§2.11.2) MUST declare their own row in the deployment's Posture Declaration.
+
+#### 2.13.2 ESIGN consumer-consent prerequisite
+
+ESIGN posture additionally requires consumer-consent disclosures (15 U.S.C. § 7001(c)) for a `SignatureAffirmation` against a consumer. The profile records this through the existing `consentReference` field (§2.5): under `esign` posture, the runtime MUST verify that `consentReference` resolves to a Formspec consent record whose disclosed-content meets the ESIGN §7001(c)(1) categories (right to receive paper records, withdrawal procedure, hardware/software requirements, scope of consent). The profile does not author the consent text; the deployment authors it and the profile checks the structural reference.
+
+UETA does not impose the §7001(c) consumer-consent prerequisite at the federal level, but state UETA enactments may. Deployments claiming UETA in jurisdictions with such state-level prerequisites MUST raise the floor accordingly in their Posture Declaration.
+
+#### 2.13.3 eIDAS signature-tier mapping
+
+eIDAS distinguishes three signature tiers: *simple*, *advanced* (AdES), *qualified* (QES). The matrix above maps `oidc` / `webauthn` / `credential` floors to advanced electronic signature; `notary` to qualified-equivalent under deployment-specific qualified trust service provider integration. A deployment claiming QES for any URI MUST register the qualified trust service provider in its Posture Declaration; the profile floor admits AdES baseline for the registered URIs and a deployment may raise to QES per use case.
+
+#### 2.13.4 Posture-declaration responsibility
+
+Per §1.3, the profile authors the structural mapping; the deployment authors the legal claim. A deployment claiming `esign` posture in its Posture Declaration commits to:
+
+- meeting the §2.13 floors for every URI it admits;
+- carrying ESIGN §7001(c) consumer-consent disclosures where the affirmation is against a consumer;
+- counsel review per parent PLN-0355 before commercial-mode procurement claims.
+
+The Trellis Operational Companion's Posture Declaration enforces the structural side; counsel-pinned legal sufficiency is gated downstream.
 
 ---
 
