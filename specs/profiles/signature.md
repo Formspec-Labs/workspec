@@ -374,9 +374,22 @@ The Signature Profile is a profile document. It attaches to a kernel workflow by
 
 Formspec captures signature controls, consent controls, identity-proofing references, and canonical response fields. WOS consumes those fields as evidence inputs. WOS MUST NOT infer a valid signing act from fields that failed Formspec validation.
 
+The signing-intent URI authored into Formspec `authoredSignatures[*].signingIntent` (Formspec Core §2.1.6) MUST equal the WOS `SignatureAffirmation.signingIntent` per §2.11.3. The URI populates the Formspec field; it does not replace it.
+
 ### 3.3 Trellis Composition
 
 WOS emits `SignatureAffirmation` records through `custodyHook`. Trellis anchors the WOS evidence record and owns certificate-of-completion and export-bundle composition. WOS MUST NOT place Trellis-owned chain fields inside the authored signature record.
+
+The byte-level proof inside a `SignatureAffirmation` is one `UserContentAttestationPayload` per signer/document pair, encoded under Trellis `trellis.user-content-attestation.v1` (ADR 0010). The two specs compose through a **layered verifier contract**:
+
+| Layer | What it verifies | Failure mode |
+|---|---|---|
+| Trellis ADR 0010 verifier | URI is syntactically valid (RFC 3986); `attested_event_hash` resolves to chain position; `identity_attestation_ref` resolves; signature valid under domain tag `trellis-user-content-attestation-v1`; signing key Active. | `integrity_verified = false` per Core §19 step 6d. |
+| WOS Signature Profile runtime | `signingIntent` is in the registered set (§2.11.1) or the deployment's Posture Declaration; meets the §2.13 floor for the deployment's declared posture; `signerAuthority` claim (§2.12) satisfies the URI's authority floor; `evidenceBinding.evidenceHash` valid; ESIGN §7001(c) consent reference resolves where `esign` posture applies. | `SignatureAffirmation` MUST NOT be admitted at `custodyHook`; runtime records the failure reason. |
+
+Both verifiers compose. **Integrity failure at either layer fails the artifact.** Trellis catches byte-level integrity attacks (wrong-position attestation, key-state evasion, cross-family signature confusion); WOS catches semantic-intent attacks (unregistered URI, floor underrun, missing authority claim, wrong posture). Neither layer is sufficient alone; verification is the conjunction.
+
+A WOS Signature Profile Runtime MUST run the Trellis verifier first. If Trellis flags integrity failure, the WOS runtime MUST NOT proceed to semantic checks (the byte format is untrusted; running semantic checks against untrusted bytes is a security anti-pattern). If Trellis verifies, the WOS runtime then runs §2.11–§2.13 checks. The Trellis result is reported separately in the runtime's diagnostic stream from any WOS-layer failure.
 
 ### 3.4 Conflict Handling
 
@@ -385,6 +398,12 @@ Profile-to-kernel reference failures are load-time errors. Missing optional poli
 ### 3.5 Versioning
 
 Changing signer-role enums, flow semantics, authentication-method semantics, or `SignatureAffirmation` required fields is a breaking profile change. Adding a new optional policy block or `x-*` extension is additive.
+
+Changes specific to §2.11–§2.13:
+
+- **Adding** a registered intent URI to §2.11.1, an authority class to §2.12, a jurisdictional posture to §2.13, or raising a floor in the §2.13 matrix is **additive** (deployments that did not declare the new URI / class / posture see no behavioral change; deployments that opt in get the new floor).
+- **Removing** a registered intent URI, removing an authority class, removing a posture, or **lowering** a floor in the §2.13 matrix is a **breaking** change. A deployment relying on the removed item or the prior floor must explicitly migrate.
+- **Renaming** a URI string (even a typo fix) is **breaking** — URIs are byte-equal across three layers (§2.11.3) and a rename forces all three to redeploy in lockstep. Deprecate-and-add is the migration pattern, not rename.
 
 ---
 
@@ -402,15 +421,27 @@ Changing signer-role enums, flow semantics, authentication-method semantics, or 
 
 | Profile | Requirements |
 |---|---|
-| Core | Single, sequential, and parallel signing; consent; identity binding; document binding; `SignatureAffirmation` provenance. |
-| Complete | Core, plus routed and free-for-all flows; reminders; expiry; decline; void; reassignment; witness; notary; in-person signer; certified recipient. |
+| Core | Single, sequential, and parallel signing; consent; identity binding; document binding; `SignatureAffirmation` provenance; signing-intent URI from the registered set in §2.11.1; `general` posture floor checks per §2.13. |
+| Complete | Core, plus routed and free-for-all flows; reminders; expiry; decline; void; reassignment; witness; notary; in-person signer; certified recipient; deployment-local intent URIs (§2.11.2); signer-authority claims for non-`self` floors (§2.12); jurisdictional postures (§2.13) the deployment declares (`esign`, `ueta`, `eidas`); layered-verifier composition with Trellis ADR 0010 (§3.3). |
 
 Complete is a strict superset of Core.
 
 ### 4.3 Verification
 
-Schema validation checks the document shape, closed enums, URI/reference field shapes, and `x-*` extension discipline.
+Schema validation checks the document shape, closed enums, URI/reference field shapes, and `x-*` extension discipline. Schema validation MUST also check that any `signingIntent` value declared in a Signature Profile Document is a syntactically valid URI per RFC 3986 (the byte-level check Trellis ADR 0010 also enforces).
 
-Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming.
+Lint checks profile-to-kernel consistency: target workflow resolution, actor resolution, human actor binding, authentication-policy key resolution, role/document/step references, dependency cycles, FEL guard parsing, timer-event mapping, and ADR-0060 naming. Lint additionally checks: every authored `signingIntent` URI is either in §2.11.1 or in the deployment's Posture Declaration registry; every `signerAuthority.class` matches §2.12.1's closed enum (or a `x-*` class declared in the Posture Declaration); the §2.13 floor row for the declared posture is satisfied by the document's authentication policies; Formspec `authoredSignatures[*].signingIntent` equals the corresponding WOS `signingIntent` (§2.11.3 boundary 1↔2).
 
-Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion.
+Runtime conformance checks signing behavior: sequential blocking, parallel completion, routed guard selection, expiry timers, decline paths, reassignment accountability, witness dependencies, notary/in-person authentication, missing-consent rejection, and custody append inclusion. Runtime additionally checks: `signingIntent` registered for the deployment at the time of admission; §2.13 floor satisfied for the declared posture; `signerAuthority` claim present and valid where the URI's floor demands it; `evidenceBinding.evidenceHash` algorithm permitted by §2.7; ESIGN §7001(c) consumer-consent reference resolves under `esign` posture; the layered-verifier contract with Trellis ADR 0010 (§3.3) — Trellis verifier runs first, WOS verifier runs only on Trellis success, both must pass for `custodyHook` admission.
+
+### 4.4 Conformance fixture coverage
+
+Conformance fixtures for §2.11–§2.13 land under `crates/wos-conformance/tests/fixtures/SIG-*` once the WOS event-type taxonomy ratification (parent PLN-0384) settles the `wos.signing.*` namespace. The fixture set MUST include at minimum:
+
+- one positive vector per registered intent URI in §2.11.1, exercising the URI's `general` floor;
+- one positive vector per declared jurisdictional posture (`esign`, `ueta`, `eidas`), exercising the strictest floor for `applicant-signature`;
+- one positive vector exercising a non-`self` signer-authority claim for `as-officer-of`, `as-attorney-in-fact`, and `notary-commissioned`;
+- one positive vector exercising the layered-verifier composition with a real Trellis ADR 0010 `UserContentAttestationPayload` byte-encoding;
+- negative vectors per failure surface: unregistered URI; URI registered but floor underrun; missing signer-authority claim where the floor demands it; `signerAuthority.principal` equal to `signerId` for a delegating class; `evidenceBinding.evidenceHash` algorithm not permitted by §2.7; ESIGN posture without ESIGN §7001(c) consent reference; URI mismatch across the three-layer propagation contract (§2.11.3).
+
+Until PLN-0384 closes, the fixtures live in the existing `SIG-*` series with placeholder ids; once `wos.signing.*` ratifies, they renumber to align with the namespace registration. The fixture authoring is non-blocking on this profile revision — fixture coverage gates land with the namespace ratification, not with the spec text.
