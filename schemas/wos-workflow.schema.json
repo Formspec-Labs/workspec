@@ -102,6 +102,21 @@
     },
     "caseFile": {
       "$ref": "#/$defs/CaseFile",
+      "description": "Structured case data for instances of this workflow: either inline `fields` (FieldDeclaration map) or a pinned `contractRef` (Formspec Definition recommended). Mutually exclusive shapes per CaseFile oneOf.",
+      "examples": [
+        {
+          "fields": {
+            "applicantName": {
+              "type": "string",
+              "required": true
+            }
+          }
+        },
+        {
+          "contractRef": "https://agency.gov/contracts/benefits-applicant.json",
+          "contractVersion": "1.0.0"
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Structured case data shape \u2014 either inline field declaration or Formspec contract reference"
@@ -116,6 +131,26 @@
         "$ref": "#/$defs/Actor"
       },
       "minItems": 1,
+      "description": "Non-empty list of actors (humans, systems, or agents) that may perform transitions. Each entry has a unique `id`; transitions reference these ids. When any actor uses type `agent`, the `agents` and `aiOversight` blocks are required (lint WOS-AGENT-XREF-001).",
+      "examples": [
+        [
+          {
+            "id": "caseworker",
+            "type": "human",
+            "role": "Eligibility reviewer"
+          }
+        ],
+        [
+          {
+            "id": "intakeClerk",
+            "type": "human"
+          },
+          {
+            "id": "docExtractor",
+            "type": "system"
+          }
+        ]
+      ],
       "x-lm": {
         "critical": true,
         "intent": "Who can act in this workflow \u2014 humans, systems, or agents (the agent type is gated by AI Integration block presence per ADR 0076 D-2; cross-ref enforced by lint WOS-AGENT-XREF-001)"
@@ -123,6 +158,33 @@
     },
     "lifecycle": {
       "$ref": "#/$defs/Lifecycle",
+      "description": "Author-time state machine: `initialState` plus a map of state identifiers to State declarations (atomic, compound, parallel, foreach, or final). Topology is immutable for a pinned (url, version); runtime instances follow this graph.",
+      "examples": [
+        {
+          "initialState": "intake",
+          "states": {
+            "intake": {
+              "type": "atomic",
+              "transitions": [
+                {
+                  "on": {
+                    "kind": "signal",
+                    "name": "applicantSubmitted"
+                  },
+                  "target": "review"
+                }
+              ]
+            },
+            "review": {
+              "type": "atomic"
+            },
+            "completed": {
+              "type": "final",
+              "outcomeCode": "approved"
+            }
+          }
+        }
+      ],
       "x-lm": {
         "critical": true,
         "intent": "State machine spine \u2014 initial state + lifecycle topology that all other concerns attach to"
@@ -4083,10 +4145,10 @@
     "JsonSchemaUri": {
       "type": "string",
       "format": "uri",
-      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only \u2014 runtime processors MUST ignore this field.",
+      "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only \u2014 runtime processors MUST ignore this field.",
       "examples": [
-        "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
-        "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
+        "https://wos-spec.org/schemas/wos-workflow.schema.json",
+        "https://wos-spec.org/schemas/sidecars/wos-delivery.schema.json"
       ]
     },
     "DueProcess": {

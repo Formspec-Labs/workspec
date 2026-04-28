@@ -28,6 +28,7 @@ WOS documents are validated against JSON Schema for structural correctness, but 
 **Tier 2 — cross-document + FEL AST checks (51 rules).** Loads a project directory containing kernel, governance, AI integration, and sidecar documents. Resolves cross-references and parses FEL expressions.
 
 Cross-document resolution:
+
 - `targetWorkflow` matches kernel `url` (G-034)
 - Governance review protocol tags exist in the kernel (G-011)
 - Delegation actors exist in kernel actor declarations (G-046)
@@ -36,6 +37,7 @@ Cross-document resolution:
 - Rights-impacting kernel requires `discloseThatAgentAssisted: true` (AI-046)
 
 FEL AST analysis (via `fel-core`):
+
 - Guard expressions parse as valid FEL (K-012, K-013)
 - Delegation and assertion conditions parse as valid FEL (G-042, G-043)
 - No cross-case variable references in guards (K-017)
@@ -78,7 +80,7 @@ Documents are identified by their `$wos*` marker property:
 
 | Marker | Document kind |
 | ------ | ------------- |
-| `$wosKernel` | Kernel |
+| `$wosWorkflow` | Workflow (merged author-time envelope, ADR 0076) |
 | `$wosWorkflowGovernance` | Workflow Governance |
 | `$wosDueProcess` | Due Process Config |
 | `$wosAssertionLibrary` | Assertion Gate Library |

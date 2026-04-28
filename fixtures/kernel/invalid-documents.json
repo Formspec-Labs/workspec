@@ -1,20 +1,39 @@
 {
-  "description": "Expected rejections for invalid WOS Kernel Documents. A conformant Kernel Structural processor MUST reject each of these documents with diagnostics.",
+  "description": "Expected rejections for invalid WOS Workflow documents (`$wosWorkflow` 1.0). Each entry is minimal except the intentional defect. Diagnostics quoted in `expectedError` match jsonschema Draft 2020-12 (`validators['$wosWorkflow'].iter_errors(document)`) for schema-expressible cases.",
   "invalidDocuments": [
     {
       "id": "missing-lifecycle",
-      "description": "Kernel Document missing required lifecycle property",
-      "expectedError": "Required property 'lifecycle' is missing",
+      "description": "Workflow document with `$wosWorkflow` and other required core leaves but no `lifecycle` object",
+      "expectedError": "'lifecycle' is a required property",
       "document": {
         "$wosWorkflow": "1.0",
-        "impactLevel": "operational"
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/missing-lifecycle",
+        "version": "1.0.0",
+        "title": "Missing lifecycle",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ]
       }
     },
     {
       "id": "missing-document-marker",
-      "description": "Document missing the $wosKernel document type marker",
-      "expectedError": "Required property '$wosKernel' is missing",
+      "description": "Object shaped like a workflow body but missing the required `$wosWorkflow` version marker",
+      "expectedError": "'$wosWorkflow' is a required property",
       "document": {
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/missing-document-marker",
+        "version": "1.0.0",
+        "title": "Missing marker",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "lifecycle": {
           "initialState": "start",
           "states": {
@@ -30,10 +49,20 @@
     },
     {
       "id": "wrong-version",
-      "description": "Document type marker with wrong version",
-      "expectedError": "$wosKernel must be '1.0'",
+      "description": "`$wosWorkflow` must be the const string \"1.0\" for this schema line",
+      "expectedError": "'1.0' was expected",
       "document": {
         "$wosWorkflow": "2.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/wrong-version",
+        "version": "1.0.0",
+        "title": "Wrong version marker",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "lifecycle": {
           "initialState": "start",
           "states": {
@@ -49,11 +78,20 @@
     },
     {
       "id": "invalid-impact-level",
-      "description": "Impact level not in the allowed enum",
-      "expectedError": "impactLevel must be one of: rights-impacting, safety-impacting, operational, informational",
+      "description": "`impactLevel` not in the closed enum enforced by `wos-workflow.schema.json`",
+      "expectedError": "'critical' is not one of ['informational', 'operational', 'rights-impacting', 'safety-impacting']",
       "document": {
         "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/invalid-impact-level",
+        "version": "1.0.0",
+        "title": "Invalid impact level",
         "impactLevel": "critical",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "lifecycle": {
           "initialState": "start",
           "states": {
@@ -69,10 +107,14 @@
     },
     {
       "id": "invalid-actor-type",
-      "description": "Actor type not in the allowed kernel enum",
-      "expectedError": "actor type must be one of: human, system",
+      "description": "Any `actors[].type` of `agent` triggers the schema `allOf` rule that requires an `agents` array; omitting `agents` fails validation",
+      "expectedError": "'agents' is a required property",
       "document": {
         "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/invalid-actor-type",
+        "version": "1.0.0",
+        "title": "Agent actor without agents block",
+        "impactLevel": "operational",
         "actors": [
           {
             "id": "bot",
@@ -93,25 +135,26 @@
       }
     },
     {
-      "id": "transition-message-dollar-prefix",
-      "description": "Transition event with message kind using reserved $ prefix",
-      "expectedError": "message event name must not start with '$'",
+      "id": "invalid-state-type",
+      "description": "`lifecycle.states[*].type` must be one of the State discriminator enum values",
+      "expectedError": "'bogus' is not one of ['atomic', 'compound', 'parallel', 'foreach', 'final']",
       "document": {
         "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/invalid-state-type",
+        "version": "1.0.0",
+        "title": "Invalid state type",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "lifecycle": {
           "initialState": "start",
           "states": {
             "start": {
-              "type": "atomic",
-              "transitions": [
-                {
-                  "event": {
-                    "kind": "message",
-                    "name": "$custom"
-                  },
-                  "target": "end"
-                }
-              ]
+              "type": "bogus"
             },
             "end": {
               "type": "final"
@@ -122,11 +165,21 @@
     },
     {
       "id": "final-state-with-transitions",
-      "description": "Final state with outgoing transitions (semantically invalid -- caught by schema via processing, not structural constraint)",
+      "description": "Final state with outgoing transitions (semantically invalid — not expressible as a single JSON Schema constraint on this schema)",
       "expectedError": "Final states MUST NOT have outgoing transitions",
-      "note": "This is a semantic constraint. Schema validation alone may not catch this -- a Kernel Complete processor MUST reject it.",
+      "note": "Semantic constraint. Schema validation alone does not reject this; a complete processor or lint pass MUST reject it.",
       "document": {
         "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/final-state-with-transitions",
+        "version": "1.0.0",
+        "title": "Final state with transitions",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "lifecycle": {
           "initialState": "start",
           "states": {
@@ -134,7 +187,6 @@
               "type": "atomic",
               "transitions": [
                 {
-                  "event": "go",
                   "target": "end"
                 }
               ]
@@ -143,7 +195,6 @@
               "type": "final",
               "transitions": [
                 {
-                  "event": "restart",
                   "target": "start"
                 }
               ]
@@ -154,10 +205,20 @@
     },
     {
       "id": "additional-properties",
-      "description": "Document with undeclared top-level properties",
-      "expectedError": "Additional property 'deonticConstraints' is not allowed",
+      "description": "Top-level property not declared on the workflow envelope (`additionalProperties` / `patternProperties` only allow declared keys and `x-*` vendor keys)",
+      "expectedError": "'deonticConstraints' does not match any of the regexes: '^x-'",
       "document": {
         "$wosWorkflow": "1.0",
+        "url": "https://wos-spec.example/fixtures/kernel/invalid/additional-properties",
+        "version": "1.0.0",
+        "title": "Undeclared top-level property",
+        "impactLevel": "operational",
+        "actors": [
+          {
+            "id": "a1",
+            "type": "human"
+          }
+        ],
         "deonticConstraints": {},
         "lifecycle": {
           "initialState": "start",

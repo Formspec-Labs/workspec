@@ -1,7 +1,7 @@
 """Negative fixtures MUST fail schema validation.
 
 `fixtures/kernel/invalid-documents.json` catalogs intentionally-broken
-WOS Kernel documents. Each entry pairs a minimal invalid document with
+WOS workflow documents (`$wosWorkflow` envelope). Each entry pairs a minimal invalid document with
 the human-readable error a conformant structural processor SHOULD
 produce. This suite guards against a schema accidentally becoming too
 permissive: if an invalid document starts validating, the test fails
@@ -30,8 +30,8 @@ NEGATIVE_CATALOG = WOS_SPEC_ROOT / "fixtures" / "kernel" / "invalid-documents.js
 # immediately if schema expressivity changes (a surprise pass flips this
 # to XPASS and fails the build).
 SEMANTIC_ONLY_CASES: set[str] = {
-    # Final states MUST NOT have outgoing transitions — requires joining
-    # `lifecycle.states[*].final` with `lifecycle.transitions[*].from`.
+    # Final states MUST NOT have outgoing transitions — cross-property rule
+    # not expressed as a single JSON Schema constraint on this schema.
     "final-state-with-transitions",
 }
 
@@ -49,7 +49,7 @@ NEGATIVE_CASES = _load_cases()
     NEGATIVE_CASES,
     ids=[cid for cid, _ in NEGATIVE_CASES],
 )
-def test_invalid_kernel_document_is_rejected(case_id, case, validators):
+def test_invalid_workflow_document_is_rejected(case_id, case, validators):
     if case_id in SEMANTIC_ONLY_CASES:
         pytest.xfail(
             f"{case_id}: violation requires semantic checks beyond JSON Schema "

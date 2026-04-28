@@ -64,7 +64,7 @@ A purchase-order approval: two people, three states, a guard on the dollar amoun
 
 ```json
 {
-  "$wosKernel": "1.0",
+  "$wosWorkflow": "1.0",
   "url": "https://agency.gov/workflows/purchase-order-approval",
   "version": "1.0.0",
   "status": "active",

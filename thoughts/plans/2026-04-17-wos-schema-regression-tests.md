@@ -15,6 +15,7 @@
 **Spec anchor:** [Code review findings](../archive/reviews/2026-04-16-architecture-review-open-questions.md), Finding #7 — schema change has no committed regression guard.
 
 **Prior art:**
+
 - `/Users/mikewolfd/Work/formspec/tests/conformance/spec/test_spec_examples.py:19-34` — pattern to port.
 - `/Users/mikewolfd/Work/formspec/tests/conformance/schemas/test_definition_schema.py` — per-schema good/bad fixture pattern.
 
@@ -24,7 +25,7 @@
 
 - Python 3.11+ on the developer machine and in CI. Parent repo already requires it.
 - `jsonschema[format]` available (already used by parent conformance suite).
-- WOS fixtures use consistent `$wos*` markers (verified — `$wosKernel`, `$wosAIIntegration`, `$wosWorkflowGovernance`, `$wosLifecycleDetail`, etc.).
+- WOS fixtures use consistent `$wos*` markers (post–ADR 0076: author-time core is `$wosWorkflow`; historical markers retired).
 
 ## Completion criteria
 
@@ -51,6 +52,7 @@
 ## Task 1: Shared discovery helpers
 
 **Files:**
+
 - Create: `wos-spec/tests/schemas/conftest.py`
 
 - [ ] **Step 1.1:** Define a marker → schema mapping from the `$wos*` discriminators to schema paths:
@@ -66,25 +68,12 @@ WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS_ROOT = WOS_SPEC_ROOT / "schemas"
 
 MARKER_TO_SCHEMA = {
-    "$wosKernel": "kernel/wos-kernel.schema.json",
-    "$wosCorrespondenceMetadata": "kernel/wos-correspondence-metadata.schema.json",
-    "$wosLifecycleDetail": "companions/wos-lifecycle-detail.schema.json",
-    "$wosCaseInstance": "companions/wos-case-instance.schema.json",
-    "$wosWorkflowGovernance": "governance/wos-workflow-governance.schema.json",
-    "$wosAssertionGate": "governance/wos-assertion-gate.schema.json",
-    "$wosDueProcess": "governance/wos-due-process.schema.json",
-    "$wosPolicyParameters": "governance/wos-policy-parameters.schema.json",
-    "$wosAIIntegration": "ai/wos-ai-integration.schema.json",
-    "$wosAgentConfig": "ai/wos-agent-config.schema.json",
-    "$wosDriftMonitor": "ai/wos-drift-monitor.schema.json",
-    "$wosAdvanced": "advanced/wos-advanced.schema.json",
-    "$wosEquityConfig": "advanced/wos-equity.schema.json",
-    "$wosVerificationReport": "advanced/wos-verification-report.schema.json",
-    "$wosAssurance": "assurance/wos-assurance.schema.json",
-    "$wosIntegrationProfile": "profiles/wos-integration-profile.schema.json",
-    "$wosSemanticProfile": "profiles/wos-semantic-profile.schema.json",
-    "$wosBusinessCalendar": "sidecars/wos-business-calendar.schema.json",
-    "$wosNotificationTemplate": "sidecars/wos-notification-template.schema.json",
+    "$wosWorkflow": "wos-workflow.schema.json",
+    "$wosDelivery": "sidecars/wos-delivery.schema.json",
+    "$wosOntologyAlignment": "sidecars/wos-ontology-alignment.schema.json",
+    "$wosCaseInstance": "wos-case-instance.schema.json",
+    "$wosProvenanceLog": "wos-provenance-log.schema.json",
+    "$wosTooling": "wos-tooling.schema.json",
 }
 
 @pytest.fixture(scope="session")
@@ -110,6 +99,7 @@ def classify(doc: dict) -> str | None:
 ## Task 2: Meta-validity test
 
 **Files:**
+
 - Create: `wos-spec/tests/schemas/test_meta_validity.py`
 
 - [ ] **Step 2.1:**
@@ -136,6 +126,7 @@ def test_schema_is_valid_json_schema_2020_12(schema_path):
 ## Task 3: Fixture-validity test
 
 **Files:**
+
 - Create: `wos-spec/tests/schemas/test_fixture_validity.py`
 
 - [ ] **Step 3.1:**
@@ -172,6 +163,7 @@ def test_fixture_validates(fixture_path, validators):
 ## Task 4: Spec-example test
 
 **Files:**
+
 - Create: `wos-spec/tests/schemas/test_spec_examples.py`
 
 - [ ] **Step 4.1:** Port parent Formspec's extractor pattern:
@@ -226,6 +218,7 @@ def test_spec_example_validates(spec_name, block_index, marker, doc, validators)
 ## Task 5: CI gate
 
 **Files:**
+
 - Modify or create: `.github/workflows/wos-tests.yml` (or add steps to existing workflow that runs on wos-spec changes).
 
 - [ ] **Step 5.1:** Add a job:
@@ -251,6 +244,7 @@ wos-schema-regression:
 ## Task 6: README
 
 **Files:**
+
 - Create: `wos-spec/tests/README.md`
 
 - [ ] **Step 6.1:** One paragraph: "Three pytest suites protect the WOS schema surface. Meta-validity asserts every schema is a valid JSON Schema 2020-12 document. Fixture validity runs every fixture through its classified schema. Spec-example validity runs every fenced `json` block in the canonical spec prose. A future schema edit must keep all three green; adding a new schema means adding its entry to `tests/schemas/conftest.py::MARKER_TO_SCHEMA`."

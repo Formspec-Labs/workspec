@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/conformance/conformance-trace.schema.json",
   "title": "WOS Conformance Trace",
-  "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, kernel version, the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history.",
+  "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, workflow envelope version (`kernelVersion` matches the `$wosWorkflow` value under test), the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history.",
   "type": "object",
   "required": ["fixtureId", "kernelVersion", "steps", "outcome"],
   "patternProperties": {
@@ -28,11 +28,11 @@
     },
     "kernelVersion": {
       "type": "string",
-      "description": "WOS Kernel specification version the runner evaluated the fixture against. Matches the '$wosKernel' marker in the kernel document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
+      "description": "WOS workflow envelope version the runner evaluated the fixture against. Matches the '$wosWorkflow' marker in the workflow document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
       "examples": ["1.0", "1.1"],
       "x-lm": {
         "critical": true,
-        "intent": "Pins the trace to the kernel spec version used for evaluation"
+        "intent": "Pins the trace to the `$wosWorkflow` envelope version used for evaluation"
       }
     },
     "steps": {
@@ -62,7 +62,7 @@
         "stepIndex": {
           "type": "integer",
           "minimum": 0,
-          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different kernel versions.",
+          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different `$wosWorkflow` envelope versions.",
           "examples": [0, 1]
         },
         "event": {
@@ -130,7 +130,7 @@
       "properties": {
         "guardId": {
           "type": "string",
-          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple — use the expression field to disambiguate. The id is stable across runs of the same kernel version.",
+          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple — use the expression field to disambiguate. The id is stable across runs of the same `$wosWorkflow` envelope version.",
           "examples": [
             "intake->eligibilityReview:applicationComplete",
             "submitted->approved:approve"

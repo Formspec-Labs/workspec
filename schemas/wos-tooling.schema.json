@@ -408,7 +408,7 @@
         "stepIndex": {
           "type": "integer",
           "minimum": 0,
-          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different kernel versions.",
+          "description": "Zero-based position of this step in the ordered sequence of events dispatched during the fixture run. Used by diff tooling to align steps across two traces when the fixture is replayed against different `$wosWorkflow` envelope versions.",
           "examples": [
             0,
             1
@@ -519,7 +519,7 @@
       "properties": {
         "guardId": {
           "type": "string",
-          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple \u2014 use the expression field to disambiguate. The id is stable across runs of the same kernel version.",
+          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple \u2014 use the expression field to disambiguate. The id is stable across runs of the same `$wosWorkflow` envelope version.",
           "examples": [
             "intake->eligibilityReview:applicationComplete",
             "submitted->approved:approve"
@@ -792,7 +792,7 @@
     },
     "conformanceTrace__Root": {
       "title": "WOS Conformance Trace",
-      "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, kernel version, the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was conformance-trace.schema.json.)",
+      "description": "Structured execution trace emitted by the WOS conformance runner for a single fixture. Each trace records the fixture identity, workflow envelope version (`kernelVersion` matches the `$wosWorkflow` value under test), the ordered sequence of event-processing steps (with guard evaluations and policy applications observed during each step), and the final pass/fail/error outcome. Downstream consumers (wos-mcp, explain/diff CLI, external validators) use this document to diagnose conformance failures, generate teaching signals for LLM-assisted repair, and track regression history. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was conformance-trace.schema.json.)",
       "type": "object",
       "required": [
         "fixtureId",
@@ -823,14 +823,14 @@
         },
         "kernelVersion": {
           "type": "string",
-          "description": "WOS Kernel specification version the runner evaluated the fixture against. Matches the '$wosKernel' marker in the kernel document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
+          "description": "WOS workflow envelope version the runner evaluated the fixture against. Matches the '$wosWorkflow' marker in the workflow document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
           "examples": [
             "1.0",
             "1.1"
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Pins the trace to the kernel spec version used for evaluation"
+            "intent": "Pins the trace to the `$wosWorkflow` envelope version used for evaluation"
           }
         },
         "steps": {
@@ -962,8 +962,8 @@
           "type": "string",
           "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations \u2014 the trace must preserve exactly what the model produced so failures can be reproduced.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\"}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{}}}"
+            "{\"$wosWorkflow\":\"1.0\"}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{}}}"
           ],
           "x-lm": {
             "critical": true,
@@ -1137,7 +1137,7 @@
       "examples": [
         {
           "outcome": "converged",
-          "document": "{\"$wosKernel\":\"1.0\"}",
+          "document": "{\"$wosWorkflow\":\"1.0\"}",
           "trace": {
             "iterations": [],
             "total_input_tokens": 0,
@@ -1174,8 +1174,8 @@
           "type": "string",
           "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved \u2014 this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\"}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
+            "{\"$wosWorkflow\":\"1.0\"}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
           ],
           "x-lm": {
             "critical": true,
@@ -1215,8 +1215,8 @@
           "type": "string",
           "description": "The most recent document the loop produced before giving up at the iteration cap. Preserved as raw JSON text (see SynthOutcomeConverged.document for the rationale) so callers can inspect or feed it into a follow-up repair pipeline.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\",\"broken\":true}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{}}"
+            "{\"$wosWorkflow\":\"1.0\",\"broken\":true}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{}}"
           ]
         },
         "last_findings": {

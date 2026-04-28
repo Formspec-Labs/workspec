@@ -63,7 +63,7 @@ but the input is a `json!` literal constructed in-test, not a tracked fixture fi
 **None found.** No file under `fixtures/` contains a malformed FEL guard
 string that K-012 would reject. `fixtures/kernel/invalid-documents.json`
 holds the only "invalid kernel document" collection, and every entry there
-targets schema-level errors (missing `lifecycle`, wrong `$wosKernel`
+targets schema-level errors (missing `lifecycle`, wrong `$wosWorkflow`
 version, bad `impactLevel` enum, etc.) — not FEL syntax errors inside
 guards.
 

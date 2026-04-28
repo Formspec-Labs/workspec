@@ -77,8 +77,8 @@
           "type": "string",
           "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations — the trace must preserve exactly what the model produced so failures can be reproduced.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\"}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{}}}"
+            "{\"$wosWorkflow\":\"1.0\"}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{}}}"
           ],
           "x-lm": {
             "critical": true,
@@ -207,7 +207,7 @@
       "examples": [
         {
           "outcome": "converged",
-          "document": "{\"$wosKernel\":\"1.0\"}",
+          "document": "{\"$wosWorkflow\":\"1.0\"}",
           "trace": {
             "iterations": [],
             "total_input_tokens": 0,
@@ -237,8 +237,8 @@
           "type": "string",
           "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved — this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\"}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
+            "{\"$wosWorkflow\":\"1.0\"}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
           ],
           "x-lm": {
             "critical": true,
@@ -270,8 +270,8 @@
           "type": "string",
           "description": "The most recent document the loop produced before giving up at the iteration cap. Preserved as raw JSON text (see SynthOutcomeConverged.document for the rationale) so callers can inspect or feed it into a follow-up repair pipeline.",
           "examples": [
-            "{\"$wosKernel\":\"1.0\",\"broken\":true}",
-            "{\"$wosKernel\":\"1.0\",\"states\":{}}"
+            "{\"$wosWorkflow\":\"1.0\",\"broken\":true}",
+            "{\"$wosWorkflow\":\"1.0\",\"states\":{}}"
           ]
         },
         "last_findings": {

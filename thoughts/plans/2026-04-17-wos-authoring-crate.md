@@ -11,6 +11,7 @@
 **Spec anchor:** Open questions Q6 (resolved in [architecture-review-open-questions.md](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6)) establishes the three-crate layering (`wos-authoring` → `wos-mcp` → `wos-synth-core`) and confirms `wos-authoring` as the seam where intent-to-primitives translation lives. The Formspec pattern this mirrors is at `packages/formspec-studio-core/` (TypeScript) — the composition model, the helper-result return type, and the no-raw-dispatch discipline all come from there.
 
 **Related:**
+
 - `2026-04-17-wos-mcp-crate.md` — `wos-mcp` consumes `wos-authoring`; each MCP tool handler calls one or more `WosProject` helper methods rather than assembling raw model mutations itself.
 - `2026-04-16-wos-synth-crate.md` — `wos-synth-core`'s `ToolContext` production implementation delegates to `wos-mcp`, which in turn calls `wos-authoring`. `wos-authoring` is the lowest-level authoring primitive in that chain.
 
@@ -90,7 +91,7 @@ pub struct WosProject { /* private */ }
 
 | Method | Description |
 |--------|-------------|
-| `WosProject::new() -> Self` | Empty kernel document with mandatory `$wosKernel: "1.0"`. |
+| `WosProject::new() -> Self` | Empty kernel document with mandatory `$wosWorkflow: "1.0"` (ADR 0076 author-time marker; serde field `wos_workflow`). |
 | `WosProject::from_document(doc: KernelDocument) -> Self` | Wrap an existing parsed document; initializes history with the document as baseline. |
 
 **Lifecycle helpers (9):**
@@ -225,6 +226,7 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
 ### Task 1: Scaffold Crate + `WosProject::new()` + Empty-Document Round-Trip
 
 **Files:**
+
 - Create: `crates/wos-authoring/Cargo.toml`
 - Create: `crates/wos-authoring/src/lib.rs`
 - Create: `crates/wos-authoring/src/project.rs`
@@ -238,7 +240,7 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
 
 - [ ] **Step 1.2:** Create `Cargo.toml` with the dependency block listed in File Structure above.
 
-- [ ] **Step 1.3:** Implement `WosProject::new()` in `project.rs`. It must produce a minimal valid `KernelDocument` with only `$wosKernel: "1.0"` and an empty `lifecycle.states`. The `WosProject` struct holds the document as its sole field (plus the pipeline/history which are stubbed as no-ops at this stage):
+- [ ] **Step 1.3:** Implement `WosProject::new()` in `project.rs`. It must produce a minimal valid `KernelDocument` with only `$wosWorkflow: "1.0"` (JSON) / `wos_workflow` (Rust) and an empty `lifecycle.states`. The `WosProject` struct holds the document as its sole field (plus the pipeline/history which are stubbed as no-ops at this stage):
 
   ```rust
   pub struct WosProject {
@@ -257,18 +259,19 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
   fn new_document_round_trips() {
       let project = WosProject::new();
       let doc = project.export();
-      assert_eq!(doc.wos_kernel, "1.0");
+      assert_eq!(doc.wos_workflow, "1.0");
       assert!(doc.lifecycle.states.is_empty());
   }
   ```
 
   Run it, confirm it fails (crate does not compile yet), implement until it passes.
 
-- [ ] **Step 1.6:** Extend `tests/round_trip.rs` with a `from_document_round_trips` test that loads `fixtures/kernel/purchase-order-approval.json` via `serde_json::from_str`, wraps it in `WosProject::from_document(doc)`, exports, and asserts the `$wosKernel` version and actor count match the source.
+- [ ] **Step 1.6:** Extend `tests/round_trip.rs` with a `from_document_round_trips` test that loads `fixtures/kernel/purchase-order-approval.json` via `serde_json::from_str`, wraps it in `WosProject::from_document(doc)`, exports, and asserts the `$wosWorkflow` / `wos_workflow` version and actor count match the source.
 
 - [ ] **Step 1.7:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 1.8:** Commit:
+
   ```
   feat(wos-authoring): scaffold crate with empty-document round-trip
   ```
@@ -278,6 +281,7 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
 ### Task 2: Command Pipeline + Undo/Redo Foundation
 
 **Files:**
+
 - Implement: `src/commands.rs`
 - Implement: `src/history.rs`
 - Implement: `src/pipeline.rs`
@@ -366,6 +370,7 @@ The pipeline is the beating heart of this crate. Every helper method (Tasks 3–
 - [ ] **Step 2.6:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 2.7:** Commit:
+
   ```
   feat(wos-authoring): command pipeline with undo/redo
   ```
@@ -375,6 +380,7 @@ The pipeline is the beating heart of this crate. Every helper method (Tasks 3–
 ### Task 3: Lifecycle + Transition Helpers
 
 **Files:**
+
 - Implement: `src/handlers/lifecycle.rs`
 - Implement: `src/handlers/transitions.rs`
 - Extend: `src/handlers/mod.rs`
@@ -426,6 +432,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
 - [ ] **Step 3.5:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 3.6:** Commit:
+
   ```
   feat(wos-authoring): lifecycle helpers — states, transitions, initial state
   ```
@@ -435,6 +442,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
 ### Task 4: Actor + Case File + Correspondence Helpers
 
 **Files:**
+
 - Implement: `src/handlers/actors.rs`
 - Implement: `src/handlers/provenance.rs`
 - Extend: `src/project.rs`
@@ -457,6 +465,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
 - [ ] **Step 4.4:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 4.5:** Commit:
+
   ```
   feat(wos-authoring): actor + case file + correspondence helpers
   ```
@@ -466,6 +475,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
 ### Task 5: Governance + AI Integration Helpers
 
 **Files:**
+
 - Implement: `src/handlers/governance.rs`
 - Implement: `src/handlers/ai.rs`
 - Extend: `src/project.rs`
@@ -505,6 +515,7 @@ These helpers write into the `extensions` map of the `KernelDocument` under `x-w
 - [ ] **Step 5.5:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 5.6:** Commit:
+
   ```
   feat(wos-authoring): governance + AI integration helpers
   ```
@@ -514,6 +525,7 @@ These helpers write into the `extensions` map of the `KernelDocument` under `x-w
 ### Task 6: Integration Test — Compose Purchase-Order-Approval from Scratch
 
 **Files:**
+
 - Create: `tests/integration.rs`
 
 This test is the acceptance criterion that all helper methods compose correctly end-to-end and that the exported document matches a known-good fixture. It mirrors `formspec-studio-core`'s integration tests that build a full form from scratch using helper methods.
@@ -578,6 +590,7 @@ This test is the acceptance criterion that all helper methods compose correctly 
 - [ ] **Step 6.5:** Run `cargo test -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 6.6:** Commit:
+
   ```
   test(wos-authoring): integration — compose purchase-order-approval end-to-end
   ```

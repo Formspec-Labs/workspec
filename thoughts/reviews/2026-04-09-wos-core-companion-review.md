@@ -119,12 +119,14 @@ VERTICAL LAYERS (each optional, each builds on the one below)
 **Layer 1 is Workflow Governance, not AI Preparation.**
 
 A pure-human benefits adjudication workflow needs:
+
 - Kernel: lifecycle (intake → review → determination → notify), case state, actors (caseworkers, reviewers, supervisors), rights-impacting impact level, Formspec contracts, Facts tier provenance, durable execution
 - Layer 1: due process (30-day notice, individualized explanation, appeal to independent adjudicator, continuation-of-service), dual-blind review for contested cases, separation of duties, data validation for external income verification, Reasoning tier audit
 
 That's a real, complex, non-AI workflow that needs Kernel + Layer 1. Zero AI involved.
 
 When AI arrives, it plugs into structures that already exist:
+
 - Layer 1's data validation pipelines → Layer 2 validates agent output through them
 - Layer 1's review protocols → Layer 2 extends them with AI-specific suppression
 - Layer 1's quality controls → Layer 2 adds agent-specific sampling
@@ -213,6 +215,7 @@ Apply to every WOS document at every layer:
 **Kernel contents:** Lifecycle topology (states, transitions, events, milestones, cancellation policy on parallel states, semantic transition tags). **Deterministic evaluation algorithm:** the lifecycle is a pure function of (current states × event × guards → next states). Guards evaluated in document order, first satisfied guard wins. Fork activates all parallel branches simultaneously; join fires when all branches reach a final state. Events that match no transition from current states are recorded in provenance but do not change lifecycle state. Case state (typed data, append-only mutation history — grows regardless of lifecycle transitions; lifecycle state and case state are independent). Actor model (human + system, extensible via actorExtension). Impact level declaration (four levels, proportional governance table — points to Layer 1 for due process, Layer 2 for AI governance). Contract validation (abstract interface, Formspec recommended, JSON Schema baseline). **Evaluation context:** kernel defines base context from case state; layers enrich it through seams (Layer 1 adds temporal parameter resolution, Layer 2 adds deontic constraint context). All FEL evaluation — guards, assertion gates, deontic constraints — uses the fully enriched context. Provenance Facts tier (immutable facts: who, what, when, version, inputs, outputs, optional `inputDigest`/`outputDigest` for tamper detection). Durable execution (G1-G5 + compensation seam + idempotency keys + instance versioning constraint). Correlation keys on signals/callbacks. Separation principles. Named seams (actorExtension, contractHook, provenanceLayer, lifecycleHook, extensions — five seams, see Section 2.2). Conformance: Kernel Structural, Kernel Complete.
 
 **Research-validated kernel additions (see Section 10):**
+
 - `idempotencyKey` on `invokeService` — closes the crash-between-invoke-and-persist window
 - `correlationKey` on signals — fundamental for any workflow awaiting external callbacks
 - `inputDigest`/`outputDigest` on provenance records — lightweight tamper detection
@@ -236,11 +239,13 @@ Apply to every WOS document at every layer:
 **Workflow Governance contents:**
 
 *Due process (for rights-impacting/safety-impacting workflows):*
+
 - Notice with grace period, individualized explanation, appeal to independent human adjudicator, continuation-of-service, disclosure requirements
 - Counterfactual explanation for adverse decisions: positive (what controllable factors would change the outcome) and negative (what irrelevant factors, including protected characteristics, did NOT affect the outcome). This is a legal/due process requirement that predates AI
 - Legal citations: State v. Loomis, Houston Federation of Teachers, APA, ECOA, OMB M-24-10, EU AI Act
 
 *Review protocols (for ANY review step, human or AI):*
+
 - independentFirst: reviewer forms independent assessment before seeing any recommendation
 - considerOpposite: reviewer articulates counter-arguments before confirming
 - calibratedConfidence: confidence scores displayed alongside recommendation
@@ -249,24 +254,28 @@ Apply to every WOS document at every layer:
 - Research citations: Vaccaro 2024, Bucinca 2021, Li 2024
 
 *Data validation pipelines (for ANY untrusted data source):*
+
 - Staged processing with assertion gates between stages
 - Gate types: source-grounded, arithmetic, range, consistency, format, cross-document, temporal
 - Pipeline provenance: each stage records inputs, outputs, gate results
 - Verifiability matrix: which tasks are verifiable, which are judgment
 
 *Structured audit (extends kernel Facts tier):*
+
 - Reasoning tier: rules applied, evidence consulted, criteria checked, decision table trace
 - Counterfactual tier: what would change the outcome (positive counterfactuals) and what did NOT affect it (negative counterfactuals, including protected characteristics). Required for adverse decisions in rights-impacting workflows. This is a due process requirement — not AI-specific
 - Decision requirements declarations: which inputs were required, which rules from which authority, which date-effective thresholds
 - Both tiers are for HUMAN decisions too — not just AI. When a caseworker applies eligibility criteria, the reasoning trace records which rules, which evidence, which thresholds. The counterfactual records what the applicant could change to qualify
 
 *Rejection and remediation (for pipeline and gate failures):*
+
 - `rejectionPolicy` on pipeline stages and assertion gates: what happens when validation fails
 - Policies: `retryWithCorrections` (return to submitter with structured explanation of what failed), `escalateToSupervisor` (route to authority with override capability), `holdPendingData` (suspend pending external data resolution), `failWithExplanation` (terminate with structured rejection record)
 - Rejection provenance: which gate failed, what the input was, what the threshold was, what would pass
 - Layer 2 extends this via fallback chains (escalateToHuman, retry, alternateAgent, fail) — but Layer 1 must define the human-workflow equivalent independently
 
 *Temporal parameter versioning (sidecar):*
+
 - Date-indexed parameter values: rates, thresholds, eligibility criteria that change on specific dates
 - Each parameter declares its resolution date reference (e.g., `eligibilityThreshold` resolves against the `applicationDate` case state field; `appealDeadlineDays` resolves against the `appealFilingDate` field). Different parameters can resolve against different dates
 - The system applies rules effective at the relevant date, not today's date (OpenFisca model)
@@ -274,11 +283,13 @@ Apply to every WOS document at every layer:
 - **Resolution mechanism:** Temporal parameters resolve through the kernel's evaluation context enrichment model (see Section 4.1). The sidecar declares date-indexed values and resolution date references. Layer 1 resolves them and injects the effective values into the evaluation context via `lifecycleHook`. By the time any FEL expression evaluates — kernel guards, Layer 1 assertion gates, Layer 2 deontic constraints — the context already contains the correct date-effective values. The workflow author writes `income < eligibilityThreshold`; the resolution is automatic. No separate `temporalResolutionHook` seam is needed because temporal resolution is a specific case of evaluation context enrichment, which the kernel already defines
 
 *Quality controls:*
+
 - Review sampling: configurable percentage of decisions reviewed for quality
 - Separation of duties: reviewer != original caseworker, with sameInstance/global scope
 - Override authority: structured rationale, authority verification, supporting evidence
 
 *Task catalog:*
+
 - Verifiability matrix for task patterns (extraction: verifiable; credibility assessment: not verifiable)
 - Screener integration: Screener Documents for intake classification and routing
 
@@ -297,12 +308,14 @@ Apply to every WOS document at every layer:
 **AI Integration contents:**
 
 *Agent registration (via kernel actorExtension seam):*
+
 - Agent as actor type: deterministic / statistical / generative
 - Agent identity: id, version, model identifier, model version
 - Capability declaration with Formspec Definition references for I/O contracts
 - Model version policy: pinned / approved / latest
 
 *Deontic constraints (AI-specific governance primitive):*
+
 - Permission, Prohibition, Obligation, Right — extends Layer 1's review framework
 - Enforcement ordering: Permissions → Prohibitions → Obligations → Confidence → Volume → Sampling
 - Conflict resolution: reject > escalateToHuman > switchToAssistive > flag
@@ -310,46 +323,55 @@ Apply to every WOS document at every layer:
 - FEL examples for each type
 
 *Autonomy levels (action-site property, not agent property):*
+
 - autonomous / supervisory / assistive / manual
 - Impact-level caps
 - Fallback-to-human requirement
 
 *Formspec-as-validator (extends Layer 1's data validation pipelines):*
+
 - Agent output validated against same Formspec contract as human input
 - Agent-touched fields annotated with `agentProvenance` metadata
 - Validation failures trigger fallback, not silent acceptance
 
 *Confidence framework:*
+
 - ConfidenceReport: overall (0-1), method enum, fieldLevel, explanation
 - Confidence decay: half-life + event triggers (multiplicative)
 - Temporal confidence thresholds
 - Cumulative confidence across sessions
 
 *Fallback chains:*
+
 - escalateToHuman, retry, alternateAgent, fail
 - 5-step execution algorithm
 - MUST terminate in escalateToHuman or fail
 
 *Decision drift detection:*
+
 - Training data contamination (trained on outcomes = determination, not preparation)
 - Optimization objective misalignment
 - Rubber-stamp detection (reviewer engagement declining)
 
 *AI-specific oversight extensions (extends Layer 1's review protocols via lifecycleHook on review-tagged transitions):*
+
 - independentFirst suppression: hide agent output until independent assessment recorded
 - showDiffFromIndependent: highlight disagreements between reviewer and agent
 - Presentation properties: showConfidence, showAlternatives, highlightLowConfidenceFields
 
 *Assist Governance Proxy (WOS construct consuming Formspec Assist protocol):*
+
 - Per-tool-category governance
 - Cites Assist S2 (conformance roles), S7 (transport bindings)
 - NOT a Formspec concept
 
 *Agent provenance (extends Layer 1's Reasoning + Counterfactual tiers via provenanceLayer seam):*
+
 - Narrative tier: model's natural language explanation. NON-AUTHORITATIVE. This is the only AI-specific provenance tier — it exists because model-generated explanations are systematically unfaithful (Turpin 2023, Lanham 2023) and must be labeled as non-authoritative
 - Layer 1 already provides Reasoning and Counterfactual tiers for human decisions. Layer 2 extends them with agent-specific metadata (model version, confidence scores, input summaries) but does not add new tier types
 
 *Volume constraints and review sampling (extends Layer 1's quality controls via lifecycleHook on quality-check-tagged transitions):*
+
 - maxAutonomousPerHour / maxAutonomousPerDay
 - Agent-specific sampling methods: random, stratified, adversarial
 
@@ -368,6 +390,7 @@ Apply to every WOS document at every layer:
 **Why "Advanced Governance" not "Advanced AI Governance":** DCR constraint zones model compliance rules for human workflows (when fraud is discovered, include additional verification steps). Equity monitoring of human decisions (are certain demographics disproportionately denied?) is a civil rights concern, not an AI concern. These capabilities serve any complex workflow, not just AI-assisted ones.
 
 **Sub-conformance levels:** Layer 3 packages conceptually distinct capabilities for pragmatic reasons (few deployments need any of them). To prevent all-or-nothing adoption, conformance is split:
+
 - *Advanced Governance: Runtime* — constraint zones (DCR), multi-step sessions, equity guardrails, agent lifecycle. These are runtime governance patterns.
 - *Advanced Governance: Verification* — SMT verifiable constraints, calibration methods, drift detection, verification reports. These are static/offline analysis tools.
 - *Advanced Governance: Complete* — both Runtime and Verification.
@@ -410,6 +433,7 @@ This section makes explicit how each Layer 2 concept extends a Layer 1 concept, 
 **Goal:** Agencies can build complex, governed, rights-impacting human workflows with zero AI.
 
 **Delivered:**
+
 1. ✅ Kernel spec + schema — `specs/kernel/spec.md`, `schemas/wos-kernel.schema.json`
 2. ✅ Workflow Governance spec + schema — `specs/governance/workflow-governance.md`, `schemas/wos-workflow-governance.schema.json`
 3. ✅ Due Process Config sidecar + schema
@@ -597,6 +621,7 @@ Five research documents were reviewed by parallel agents against the implementat
 ### 9.3 Architecture Validation
 
 All five reviews independently validated:
+
 - The four-layer hierarchy is correct over seven-layer or flat models
 - FEL over FEEL given the Formspec relationship
 - Agent in Layer 2, not kernel (human-first principle)
@@ -619,7 +644,7 @@ All five reviews independently validated:
 
 ## 10. Success Criteria
 
-### Phase 1 (Kernel + Workflow Governance):
+### Phase 1 (Kernel + Workflow Governance)
 
 - [x] A kernel-only purchase order approval workflow (three states, two actors, no governance) validates without Layer 1 concepts
 - [x] A pure-human, rights-impacting benefits adjudication workflow is fully expressible with Kernel + Layer 1. No AI layers needed
@@ -629,7 +654,7 @@ All five reviews independently validated:
 - [ ] `every`, `some`, `duration` implemented in Formspec — **OUTSTANDING: not yet implemented in Formspec codebase. Fallback to extension functions available.**
 - [x] Temporal parameter resolution requirements documented in each layer's conformance section
 
-### Phase 2 (AI Integration):
+### Phase 2 (AI Integration)
 
 - [x] The Phase 1 benefits workflow extends with AI-assisted extraction WITHOUT changing the Kernel or Layer 1 documents
 - [x] AI governance plugs into Layer 1 governance structures via the named seams
@@ -637,7 +662,7 @@ All five reviews independently validated:
 - [x] Agent disclosure appears in due process notices via Layer 1's existing notice mechanism
 - [x] Review protocol suppression (independentFirst) works for both human recommendations and AI recommendations
 
-### Phase 3 (Advanced AI):
+### Phase 3 (Advanced AI)
 
 - [x] At least one deontic constraint formally verified via SMT
 - [x] Equity guardrails evaluate asynchronously without blocking
@@ -715,7 +740,7 @@ All five reviews independently validated:
 
 ### 11.4 Missing Conventions — RESOLVED
 
-- **`$wos*` document type markers:** `$wosKernel`, `$wosWorkflowGovernance`, `$wosAIIntegration`, `$wosAdvancedGovernance`, `$wosDueProcess`, `$wosAssertionLibrary`, `$wosPolicyParameters`, `$wosAgentConfig`, `$wosDriftMonitor`, `$wosEquityConfig`, `$wosVerificationReport`, `$wosIntegrationProfile`, `$wosSemanticProfile`, `$wosLifecycleDetail`.
+- **`$wos*` document type markers (pre–ADR 0076 inventory):** `$wosKernel`, `$wosWorkflowGovernance`, `$wosAIIntegration`, `$wosAdvancedGovernance`, `$wosDueProcess`, `$wosAssertionLibrary`, `$wosPolicyParameters`, `$wosAgentConfig`, `$wosDriftMonitor`, `$wosEquityConfig`, `$wosVerificationReport`, `$wosIntegrationProfile`, `$wosSemanticProfile`, `$wosLifecycleDetail`. Author-time authoring now uses the single **`$wosWorkflow`** envelope per ADR 0076.
 - **Inter-document referencing:** `targetWorkflow` (URI matching kernel's `url`). Follows Formspec sidecar binding pattern. All layers and sidecars use the same mechanism.
 - **Actor assignment in kernel-only deployments:** Implementation-defined (Kernel S3.4). The `assignTo` property on `createTask` provides a minimal mechanism.
 

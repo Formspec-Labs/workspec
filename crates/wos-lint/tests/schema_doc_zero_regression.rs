@@ -59,8 +59,10 @@ const EXCLUDED_SCHEMAS_CEILINGS: &[(&str, usize)] = &[
 ///
 /// Both ratchets MUST stay monotonic-decreasing. The expectation is leaves
 /// fill (violations decrease) WITHOUT new leaves being added (count stays).
+/// `wos-workflow` leaf ceiling bumped 2026-04-28 to match `count_schema_leaves`
+/// on the merged envelope (post–ADR 0076); lower only when leaves are removed.
 const EXCLUDED_SCHEMAS_LEAF_CEILINGS: &[(&str, usize)] = &[
-    ("schemas/wos-workflow.schema.json", 190),
+    ("schemas/wos-workflow.schema.json", 314),
     ("schemas/sidecars/wos-delivery.schema.json", 47),
     ("schemas/wos-tooling.schema.json", 93),
 ];

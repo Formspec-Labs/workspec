@@ -77,7 +77,7 @@ All blocking decisions resolved 2026-04-25. Remaining input touchpoints are with
 ## Outstanding follow-ups (next session, priority order)
 
 1. **WS-012 test fixture seeding** — ~~bundle service vs storage kernel
-   path~~ **re-verified green** at HEAD (2026-04-28); parallel fix: `bundle_validation` counted zero kernels because fixtures use **`$wosWorkflow`** root — test now accepts `$wosKernel` **or** `$wosWorkflow`.
+   path~~ **re-verified green** at HEAD (2026-04-28); parallel fix: `bundle_validation` counted zero kernels because fixtures use **`$wosWorkflow`** at the root — `tests/bundle_validation.rs` treats documents with that key as kernel JSON to lint (see `is_kernel_doc` filter there; ADR 0076 author-time marker is **`$wosWorkflow`** only).
 2. **WS-011 wire shape** — `TaskSubmissionView` JSON is **camelCase** (`http_tasks_lifecycle` asserts no snake_case keys, 2026-04-28). Dismiss semantics remain **runtime-documented** in that test (`active_tasks` not popped until a future runtime change).
 3. **WS-034 policy resolve** — **`GovernanceService::resolve_policy`** already sorts by **`effectiveDate` descending** (array order irrelevant); covered by `http_policy_resolve_get` including out-of-order fixture.
 4. **WS-080 `WOS_SIGNER`** — **`config.rs` + `runtime/mod.rs`** already state only `noop` is wired and other values yield a **clap parse error** (no silent fallback). No further doc action unless WS-043 adds enum variants.

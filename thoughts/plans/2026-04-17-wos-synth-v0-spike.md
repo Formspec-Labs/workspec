@@ -30,7 +30,7 @@ The spike's output is NOT production code — it's an experiment whose findings 
 
 Must be achieved for the spike to count as complete:
 
-1. `cargo run -p wos-synth-spike -- --problem benchmarks/problems/purchase-order-approval.md` emits a valid `$wosKernel` JSON document to stdout that passes `wos-lint::lint_document` with zero errors.
+1. `cargo run -p wos-synth-spike -- --problem benchmarks/problems/purchase-order-approval.md` emits a valid `$wosWorkflow` JSON document to stdout that passes `wos-lint::lint_document` with zero errors.
 2. The code fits in <800 LOC across at most 4 files (including `main.rs`, `loop.rs`, `prompts.rs`, `errors.rs`).
 3. Time-to-implement: 2–3 calendar days OR less. If it takes longer, STOP and surface what made it hard — that is a finding.
 4. A written retrospective (`thoughts/research/2026-04-2X-wos-synth-v0-spike-findings.md`) answers:
@@ -137,6 +137,7 @@ Break into 5 small tasks. Each task is a single commit.
 ### Task 1: Problem statement + spike crate scaffold
 
 **Files:**
+
 - Create: `benchmarks/problems/purchase-order-approval.md`
 - Create: `crates/wos-synth-spike/Cargo.toml`
 - Create: `crates/wos-synth-spike/src/main.rs` (stub that prints "not implemented")
@@ -156,6 +157,7 @@ Break into 5 small tasks. Each task is a single commit.
 - [ ] **Step 1.6:** Verify: `cargo build -p wos-synth-spike` passes.
 
 - [ ] **Step 1.7:** Commit:
+
   ```
   feat(synth-spike): scaffold + problem statement for purchase-order-approval
   ```
@@ -165,11 +167,12 @@ Break into 5 small tasks. Each task is a single commit.
 ### Task 2: Hardcoded prompt templates + first LLM call
 
 **Files:**
+
 - Create: `crates/wos-synth-spike/src/prompts.rs`
 - Modify: `crates/wos-synth-spike/src/main.rs`
 
 - [ ] **Step 2.1:** Create `src/prompts.rs` with two functions:
-  - `pub fn build_generate_prompt(problem: &str) -> String` — embeds the problem text inline, uses `include_str!` to embed the WOS kernel schema JSON and the core spec BLUF markdown. Instructs the LLM to produce a single valid `$wosKernel` JSON object and nothing else.
+  - `pub fn build_generate_prompt(problem: &str) -> String` — embeds the problem text inline, uses `include_str!` to embed the WOS workflow schema JSON and the core spec BLUF markdown. Instructs the LLM to produce a single valid `$wosWorkflow` JSON object and nothing else.
   - `pub fn build_repair_prompt(prior_attempt: &str, diagnostics: &[String]) -> String` — includes the prior JSON attempt and a numbered list of diagnostic messages. Instructs the LLM to correct the errors and return only the corrected JSON.
 
 - [ ] **Step 2.2:** Update `main.rs`: read the problem file, call `build_generate_prompt`, POST to the Anthropic `/v1/messages` endpoint using `reqwest` with the `ANTHROPIC_API_KEY` environment variable, extract the text content from the response, print it to stdout.
@@ -177,6 +180,7 @@ Break into 5 small tasks. Each task is a single commit.
 - [ ] **Step 2.3:** Verify: `cargo run -p wos-synth-spike -- --problem benchmarks/problems/purchase-order-approval.md` hits the API once and prints LLM output. The output may not be valid JSON yet — that is expected at this task.
 
 - [ ] **Step 2.4:** Commit:
+
   ```
   feat(synth-spike): first LLM generation pass (no lint/repair yet)
   ```
@@ -186,6 +190,7 @@ Break into 5 small tasks. Each task is a single commit.
 ### Task 3: Loop with lint + repair
 
 **Files:**
+
 - Create: `crates/wos-synth-spike/src/loop.rs`
 - Modify: `crates/wos-synth-spike/src/main.rs`
 
@@ -203,6 +208,7 @@ Break into 5 small tasks. Each task is a single commit.
 - [ ] **Step 3.3:** Verify: the spike converges on the PO problem in ≤3 iterations, or surface what's going wrong — that is a finding worth documenting now. Do NOT keep iterating on prompt engineering past the time budget.
 
 - [ ] **Step 3.4:** Commit:
+
   ```
   feat(synth-spike): lint-driven repair loop with iteration cap
   ```
@@ -212,6 +218,7 @@ Break into 5 small tasks. Each task is a single commit.
 ### Task 4: Add conformance gate
 
 **Files:**
+
 - Modify: `crates/wos-synth-spike/src/loop.rs`
 
 - [ ] **Step 4.1:** After lint passes (zero errors), call `wos_conformance::run(&doc)`. Collect any conformance failures as diagnostic strings.
@@ -223,6 +230,7 @@ Break into 5 small tasks. Each task is a single commit.
 - [ ] **Step 4.4:** Verify: `cargo run -p wos-synth-spike -- --problem benchmarks/problems/purchase-order-approval.md` produces a JSON document that passes lint + conformance.
 
 - [ ] **Step 4.5:** Commit:
+
   ```
   feat(synth-spike): conformance gate after lint-pass
   ```
@@ -232,6 +240,7 @@ Break into 5 small tasks. Each task is a single commit.
 ### Task 5: Retrospective + plan propagation
 
 **Files:**
+
 - Create: `thoughts/research/2026-04-2X-wos-synth-v0-spike-findings.md` (replace `2X` with actual date)
 
 - [ ] **Step 5.1:** Run the spike end-to-end at least twice with the PO problem. Record: number of iterations to convergence, which diagnostics appeared most frequently, which prompts worked, which did not.
@@ -245,6 +254,7 @@ Break into 5 small tasks. Each task is a single commit.
   - If the repair prompt shape was different from what the plans assumed: update `thoughts/plans/2026-04-16-wos-synthesis-benchmark.md` to reflect the actual diagnostic format.
 
 - [ ] **Step 5.4:** Commit:
+
   ```
   docs(research): wos-synth v0 spike findings + plan propagation
   ```

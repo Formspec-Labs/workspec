@@ -29,7 +29,7 @@
 - The bulk of reshape candidates here are `extensions` properties nested inside `$defs/ActorDeclaration`, `$defs/ExecutionConfig`, `$defs/ProvenanceConfig`, and `$defs/State` — all four follow the same `{ "type": "object", "propertyNames": { "pattern": "^x-" } }` pattern and could share a single `$defs/ExtensionsMap`.
 - **Top 5 sampled offenders:**
   - `/properties/url` — desc 127 chars (need 140, critical); 2 examples. **Backfill** — 14 kernel fixtures reference `url`, K-023 rule checks it. Needs 13 more description chars and one more example.
-  - `/properties/$wosKernel` — desc 134 chars (need 140, critical); 1 example (need 2). **Backfill** — every kernel fixture has this marker. Minor extension to existing text.
+  - `/properties/$wosWorkflow` — desc 134 chars (need 140, critical); 1 example (need 2). **Backfill** — every workflow fixture has this marker. Minor extension to existing text.
   - `/$defs/Action/properties/prefillMappingRef` — desc 140 chars (exact boundary, passes description); 0 examples. **Backfill** — referenced in spec prose (Kernel S11) and 2 spec files. Just needs concrete examples.
   - `/$defs/Action/properties/responseMappingRef` — same as above. **Backfill**.
   - `/$defs/State/properties/initialState` — desc 185 chars; 0 examples. **Backfill** — 19 fixtures use `initialState`, lint rule K-025 checks it. Just needs examples.
@@ -222,6 +222,7 @@ These properties appear across 3 or more schemas with near-identical semantics. 
 Every WOS schema declares an `extensions` property with the same semantics: `{ "type": "object", "propertyNames": { "pattern": "^x-" }, ... }`. The descriptions vary from 0 to 158 chars. The lint rule K-EXT-001/K-EXT-002 already validates extension keys — the property definition itself should be a single `$ref` target documented once.
 
 **Proposed shape:**
+
 ```json
 "$defs": {
   "ExtensionsMap": {
@@ -242,12 +243,13 @@ Every WOS schema declares an `extensions` property with the same semantics: `{ "
 Every schema declares `/properties/$schema` as an optional JSON Schema URI for editor tooling. All descriptions are either missing or the same 47-char text ("Optional JSON Schema URI for editor validation."). A shared ref would document it once with a concrete URI example.
 
 **Proposed shape:**
+
 ```json
 "$defs": {
   "JsonSchemaUri": {
     "type": "string",
     "format": "uri",
-    "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) will validate the document against this schema. Omit in production; the schema URI is implicit from the document type marker (e.g., '$wosKernel': '1.0').",
+    "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) will validate the document against this schema. Omit in production; the schema URI is implicit from the document type marker (e.g., '$wosWorkflow': '1.0').",
     "examples": [
       "https://wos-spec.org/schemas/kernel/wos-kernel.schema.json",
       "https://wos-spec.org/schemas/governance/wos-workflow-governance.schema.json"
@@ -289,6 +291,7 @@ The audit instruction is to keep this list tight — "zero references today" is 
 **Confirmed candidate: none at this time.**
 
 The only property class that could plausibly qualify is the `schemaUpgrade` sub-properties (`priorVersion`, `newVersion`, `migrationMechanism`, `scope`) in `wos-workflow-governance.schema.json`, which have zero fixture references and no spec prose citation at the property level. However:
+
 - The parent property `schemaUpgrade` IS cited in spec prose (Governance S2.9).
 - The four children are structural decomposition of the parent concept, not orphaned extensions.
 - Removing them would make the parent object meaningless.
@@ -296,6 +299,7 @@ The only property class that could plausibly qualify is the `schemaUpgrade` sub-
 **Verdict: Backfill the `schemaUpgrade` children during the governance tier pass.** They are not delete candidates; they are undocumented-but-structural properties whose parent has spec coverage.
 
 **Properties that should be watched but not deleted yet:**
+
 - `wosdefversion` in `wos-integration-profile.schema.json` — 0 fixtures, but 1 spec prose mention (profiles/integration.md:393). Keep; add examples during profiles pass.
 - All 26 "completely dark" properties in the advanced tier (e.g., `maxPerMinute`, `maxPerHour`, `probeCount`) — each has exactly 1 fixture reference. Research-grade but exercised. Backfill, not delete.
 
@@ -321,6 +325,7 @@ The violation counts and release-train assignments in the plan map cleanly to th
 **Cross-cutting pre-work (do before Priority 1):** Before the tier-by-tier pass, add the shared `$defs/ExtensionsMap` and `$defs/JsonSchemaUri` shapes to the kernel schema and cross-reference them from all other schemas. This eliminates ~96 violations (30 `extensions` × ~2 + 18 `$schema` × ~2 = ~96) before any per-schema work begins, collapsing the backfill burden significantly.
 
 **Suggested commit structure for Task 3:**
+
 ```
 docs(schemas/shared): add $defs/ExtensionsMap and $defs/JsonSchemaUri, cross-ref across 19 schemas
 docs(kernel): backfill SCHEMA-DOC-001 violations — wos-kernel and wos-correspondence-metadata
