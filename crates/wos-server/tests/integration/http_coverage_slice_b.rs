@@ -1,17 +1,13 @@
 //! WS-014 slice B: conformance, calendar, notifications, integration, deontic,
 //! assurance, applicant, agents — see [`http_coverage_backfill.rs`](http_coverage_backfill.rs) for slice A.
 
-#[path = "http_coverage_shared/harness.rs"]
-mod harness;
-#[path = "http_coverage_shared/slice_b.rs"]
-mod slice_b;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 use wos_server::http;
 
-use harness::{
+use crate::{harness, slice_b};
+use crate::harness::{
     bring_up, bring_up_with_cfg, make_instance_row, seed_instance_with_one_provenance, stub_config,
 };
 use slice_b::{

@@ -5,6 +5,11 @@ edition = "2024"
 description = "Reference HTTP + Socket.IO server for WOS (Workflow Orchestration Standard)"
 license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
+autotests = false
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"
 
 [dependencies]
 wos-server-ports     = { path = "../wos-server-ports" }

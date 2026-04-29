@@ -12,10 +12,7 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use wos_server::http;
 
-#[path = "http_coverage_shared/harness.rs"]
-mod harness;
-
-use harness::{bring_up_with_cfg, stub_config};
+use crate::harness::{self, bring_up_with_cfg, stub_config};
 
 const SLUG: &str = "ws036adverse";
 const WORKFLOW_URL: &str = "urn:wos:workflow:ws036adverse:1.0.0";

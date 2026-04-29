@@ -2,9 +2,6 @@
 //! integration invoke + inbound, assurance record + upgrade, adverse notice
 //! (WS-036). Extends slices A + B.
 
-#[path = "http_coverage_shared/harness.rs"]
-mod harness;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -24,7 +21,7 @@ use wos_server::http;
 use wos_server::storage::{SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, realtime, services::AppServices, storage};
 
-use harness::{bring_up_with_cfg, make_instance_row, stub_config};
+use crate::harness::{self, bring_up_with_cfg, make_instance_row, stub_config};
 
 const SLUG: &str = "ws014slicec";
 const WORKFLOW_URL: &str = "urn:wos:workflow:ws014slicec:1.0.0";

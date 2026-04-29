@@ -16,13 +16,12 @@
 //! supervisor identity to anonymous requests, which is fine for these read
 //! endpoints; the assertions are about route reachability + response shape.
 
-#[path = "http_coverage_shared/harness.rs"]
-mod harness;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 use wos_server::http;
+
+use crate::harness;
 
 use harness::{bring_up, make_instance_row, seed_instance_with_one_provenance};
 

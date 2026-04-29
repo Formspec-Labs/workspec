@@ -87,6 +87,38 @@ async fn runtime_restate_startup_matrix_is_explicit() {
     );
 }
 
+/// Sqlite + jwt + mock + runtime-local + None audit must build cleanly.
+///
+/// Lock the default-feature happy path so a regression flips an explicit test,
+/// not a downstream integration suite that takes ten minutes to fail.
+#[tokio::test]
+async fn default_feature_matrix_builds_cleanly() {
+    let cfg = minimal_cfg();
+    let storage = storage::build(&cfg)
+        .await
+        .expect("sqlite storage should build under defaults");
+    let _auth = auth::build(&cfg, storage)
+        .expect("jwt auth should build under defaults");
+}
+
+/// Audit-sink=Postgres without the `audit-postgres` feature flag must surface
+/// a typed startup error during `wos_server::run`, not a panic.
+#[cfg(not(feature = "audit-postgres"))]
+#[tokio::test]
+async fn audit_postgres_rejected_when_feature_disabled() {
+    let mut cfg = minimal_cfg();
+    cfg.audit_sink = AuditSinkKind::Postgres;
+    cfg.auth = AuthKind::Mock;
+    let err = wos_server::run(cfg)
+        .await
+        .expect_err("audit=postgres without feature should fail to start");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("audit-postgres"),
+        "expected feature-off signal mentioning `audit-postgres`, got: {msg}"
+    );
+}
+
 fn minimal_cfg() -> ServerConfig {
     ServerConfig {
         port: 0,

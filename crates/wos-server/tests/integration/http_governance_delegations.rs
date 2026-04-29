@@ -4,8 +4,7 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use wos_server::http;
 
-#[path = "common/mod.rs"]
-mod common;
+use crate::common;
 
 const SLUG: &str = "govsurface";
 const WORKFLOW_URL: &str = "urn:wos:workflow:govsurface:1.0.0";

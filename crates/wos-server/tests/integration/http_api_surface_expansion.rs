@@ -4,8 +4,7 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use wos_server::http;
 
-#[path = "common/mod.rs"]
-mod common;
+use crate::common;
 
 fn setup_tempdir() -> TempDir {
     let dir = TempDir::new().expect("tempdir");
