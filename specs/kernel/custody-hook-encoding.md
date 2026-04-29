@@ -370,5 +370,5 @@ Trellis verification MUST confirm that the WOS `custodyHook` seam matches this d
 The verifier round-trip (envelope → dCBOR decode of `payload` → authored
 record → byte-equal against `input-wos-record.dcbor`) is exercised by the
 Trellis conformance replay against the bound fixture corpus. Running
-`cargo test -p trellis-conformance` validates byte-identity end-to-end for
+`cargo nextest run -p trellis-conformance` validates byte-identity end-to-end for
 every WOS record family in the corpus.

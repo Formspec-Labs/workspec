@@ -116,17 +116,17 @@ Detailed in [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md). Summar
 ```bash
 # Targeted
 cargo check --workspace
-cargo test -p wos-core --lib
-cargo test -p wos-runtime --lib
-cargo test -p wos-lint
-cargo test -p wos-conformance
-cargo test -p wos-conformance --test signature_profile   # Signature Profile suite
+cargo nextest run -p wos-core --lib
+cargo nextest run -p wos-runtime --lib
+cargo nextest run -p wos-lint
+cargo nextest run -p wos-conformance
+cargo nextest run -p wos-conformance --test signature_profile   # Signature Profile suite
 
 # Python schema-conformance
 python3 -m pytest tests/schemas -q
 
 # Full workspace
-cargo test --workspace
+cargo nextest run --workspace
 ```
 
 Workspace depends on `fel-core` at `../crates/fel-core`. Normally checked out as `formspec/wos-spec/` inside parent Formspec repo.

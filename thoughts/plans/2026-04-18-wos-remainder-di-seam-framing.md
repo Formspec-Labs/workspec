@@ -906,7 +906,7 @@ Track H. Timer extraction is the one high-blast-radius item — it touches `Case
 - **H3 Event-sourced `InstanceStore` variant** — ~half day; additive default methods; no existing consumer breaks.
 - **H4 `wos-temporal` crate skeleton** — ~half day; documentation-only workspace member mirroring reference doc §2 layout.
 
-**Gate before proceeding to Phase 8**: full `cargo test --workspace` green after H1's fixture migration. This is the single place in the plan where a D=5 structural change is worth pausing the backlog for.
+**Gate before proceeding to Phase 8**: full `cargo nextest run --workspace` green after H1's fixture migration. This is the single place in the plan where a D=5 structural change is worth pausing the backlog for.
 
 ### Phase 8 — behavioral backlog cheap batch (1 sprint, parallelizable)
 
@@ -951,13 +951,13 @@ Each phase must pass before the next starts:
 | 0 | `cargo build --workspace` clean · `DRAFTS/` resolved · disclosure block present in all three export formats (tests land in **wos-export**) · `Clock` importable from `wos_core::traits` |
 | 0.5 | `AuthProvider::login` removed from trait (handlers that need it downcast to `SessionManager`) · `ProvenanceSigner::sign` returns `LedgerAttachment` (unit test constructs one) · `ValidationResult.errors: Vec<FieldError>` (existing tests updated) |
 | 1 | New seams visible in `AppRuntime::build` · `WOS_SIGNER=noop` + `WOS_RENDERER=json` defaults boot cleanly · `GET /provenance/verify` returns `{valid: true, algorithmId: "…"}` on seeded fixture · `IdentityResolver::resolve` called at every handler entry point (grep audit) |
-| 2 | `cargo test -p wos-server` green · new integration test `tests/policy_validator.rs` rejects rights-impacting submit without `respondentLedgerRef` (enforcement runs inside wos-runtime's default policy) · new test `tests/separation_of_duties.rs` rejects self-review agent transition · `PolicyEngine` trait present in `wos-core::traits` with `EchoPolicy` default · Chain ADR committed to `thoughts/decisions/` · `LedgerVerifier` trait exported from `wos-core::provenance` |
-| 3 | `cargo test -p wos-lint` + `cargo test -p wos-conformance` green · fixtures retrofit verified (every determination transition has `inputs`) · three determinism fixtures for #2 produce identical outputs bit-for-bit |
+| 2 | `cargo nextest run -p wos-server` green · new integration test `tests/policy_validator.rs` rejects rights-impacting submit without `respondentLedgerRef` (enforcement runs inside wos-runtime's default policy) · new test `tests/separation_of_duties.rs` rejects self-review agent transition · `PolicyEngine` trait present in `wos-core::traits` with `EchoPolicy` default · Chain ADR committed to `thoughts/decisions/` · `LedgerVerifier` trait exported from `wos-core::provenance` |
+| 3 | `cargo nextest run -p wos-lint` + `cargo nextest run -p wos-conformance` green · fixtures retrofit verified (every determination transition has `inputs`) · three determinism fixtures for #2 produce identical outputs bit-for-bit |
 | 4 | `/explain` returns a payload whose shape matches Runtime §9.1 (algorithm lives in **wos-runtime**; server is thin wrapper) · dupe `idempotencyToken` on events → single drain (asserted) · as-of policy resolution unit test green |
 | 5 | All five envelope-reference fixtures parse + lint clean · envelope-decline-reroute conformance fixture runs end-to-end · `#61` SoD fixtures run and (correctly) fail against B2's enforcement |
 | 6 | `ExternalService::invoke` signature updated in wos-core with correlation token · existing integration-profile fixtures still parse · migration endpoint round-trips `WosRuntime::migrate` · `jurisdiction` field on case-state drives correct calendar selection · `DriftReport` type in `wos-core::model` |
 | 6.5 | `Coprocessor`, `TaskStore`, `NotificationService`, `DirectoryService`, `VisibilityService` traits present in `wos-core::traits` (or `wos-formspec-binding` for `Coprocessor`) with `DefaultRuntime` impls · server's task / notification / directory / visibility handlers delegate to traits (no inline persistence) · `wos-formspec-binding` crate populated with bridge types |
-| 7 | `CaseInstance.timers` is `Vec<TimerRef>` (not `Vec<Timer>`) · `TimerService` trait present in `wos-core::traits` with `InMemoryTimerService` default in wos-runtime · evaluator returns `Vec<TimerOp>` alongside existing result · `crates/wos-temporal/` builds clean · `cargo test --workspace` green · fixture migration complete (grep `created_at_ms` in `fixtures/` returns zero hits at call-site depth) |
+| 7 | `CaseInstance.timers` is `Vec<TimerRef>` (not `Vec<Timer>`) · `TimerService` trait present in `wos-core::traits` with `InMemoryTimerService` default in wos-runtime · evaluator returns `Vec<TimerOp>` alongside existing result · `crates/wos-temporal/` builds clean · `cargo nextest run --workspace` green · fixture migration complete (grep `created_at_ms` in `fixtures/` returns zero hits at call-site depth) |
 | 8–12 | Backlog items verified item-by-item per their own acceptance criteria |
 
 ### End-to-end envelope flow
@@ -986,7 +986,7 @@ curl $API/instances/$ID/explain | jq '.explanationLevel, .reasoning, .rulesAppli
 
 ### Conformance regression guard
 
-- `cargo test -p wos-conformance` runs on every commit; 146 existing fixtures stay green.
+- `cargo nextest run -p wos-conformance` runs on every commit; 146 existing fixtures stay green.
 - New fixtures from D3 + D4 + C5 determinism + #61 SoD land in the same harness; count goes to ~160.
 - CI rule: no spec PR may merge if conformance fixtures drop below the previous count.
 
@@ -1116,7 +1116,7 @@ Both documents get updated in-place as phases land. Existing sections stay; stat
 
 **End of Phase 0.5:** trait shapes are right. `AuthVerifier`, typed `LedgerAttachment` return on `ProvenanceSigner::sign`, `FieldError[]` on `ValidationResult` — these three compound-debt fixes land before any consumer wires against the old shapes. `cargo build --workspace` green; existing tests updated (not rewritten) to the new shapes.
 
-**End of Phase 2:** no stubbed seam remains. Every `cargo test -p wos-server` still green. PARITY.md DI seam status table shows all ten host-interface traits either wired-real or wired-real-with-policy-source-pluggable, plus `PolicyEngine` + `LedgerVerifier` promoted from prose to concrete traits. Chain ADR committed.
+**End of Phase 2:** no stubbed seam remains. Every `cargo nextest run -p wos-server` still green. PARITY.md DI seam status table shows all ten host-interface traits either wired-real or wired-real-with-policy-source-pluggable, plus `PolicyEngine` + `LedgerVerifier` promoted from prose to concrete traits. Chain ADR committed.
 
 **End of Phase 4:** `/instances/:id/explain` serves Runtime §9.1-shaped output (real algorithm once #2 lands in wos-runtime; scaffold before). Chain-integrity verify returns `valid: true` on seeded fixtures; `algorithmId` field discloses which chain(s) were checked. Legal-sufficiency disclosure present on every export format (enforced by wos-export tests, not wos-server).
 

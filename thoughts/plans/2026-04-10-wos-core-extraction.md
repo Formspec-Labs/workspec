@@ -187,7 +187,7 @@ pub struct Project {
 
 2. **Partial extraction temptation.** If we extract only the kernel model but leave governance/AI as raw JSON, we end up with a mixed codebase. Mitigation: extract all document types in one phase, even if governance/AI models start as thin wrappers.
 
-3. **Breaking conformance tests.** The 37 existing tests are the correctness baseline. Every extraction step must keep them passing. Mitigation: run `cargo test` after every change.
+3. **Breaking conformance tests.** The 37 existing tests are the correctness baseline. Every extraction step must keep them passing. Mitigation: run `cargo nextest run` after every change.
 
 ## Success Criteria
 
@@ -198,4 +198,4 @@ pub struct Project {
 - [ ] `collect_kernel_tags` called 0 times (replaced by `Project::kernel_tags()`)
 - [ ] No `serde_json::Value` walking in the evaluation hot path
 - [ ] `ContractValidator` trait defined with stub and real implementations
-- [ ] `cargo test` passes with >= 37 tests after extraction
+- [ ] `cargo nextest run` passes with >= 37 tests after extraction

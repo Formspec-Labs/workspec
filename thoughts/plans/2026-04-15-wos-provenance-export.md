@@ -29,7 +29,7 @@
 
 - [ ] **Step 0.3:** Grep for all call sites in `wos-runtime` and `wos-conformance`. Update each to pass a timestamp. For runtime call sites, pass `chrono::Utc::now().to_rfc3339()`. For conformance fixtures, pass a fixed deterministic string (e.g., `"2026-01-01T00:00:00Z"`) so fixture snapshots are stable.
 
-- [ ] **Step 0.4:** Run `cargo test -p wos-core -p wos-runtime -p wos-conformance`. All tests must pass.
+- [ ] **Step 0.4:** Run `cargo nextest run -p wos-core -p wos-runtime -p wos-conformance`. All tests must pass.
 
 - [ ] **Step 0.5:** Commit.
   ```
@@ -160,7 +160,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
   }
   ```
 
-- [ ] **Step 2.4:** Run `cargo test -p wos-export`. Must pass.
+- [ ] **Step 2.4:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 2.5:** Commit.
   ```
@@ -189,7 +189,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 
 - [ ] **Step 3.2:** Add unit test verifying the output parses as valid XML and contains the expected `<event>` count.
 
-- [ ] **Step 3.3:** Run `cargo test -p wos-export`. Must pass.
+- [ ] **Step 3.3:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 3.4:** Commit.
   ```
@@ -214,7 +214,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 
 - [ ] **Step 4.2:** Add unit test verifying the output is valid JSON with `objectTypes`, `eventTypes`, `objects`, `events` keys, and that event count equals record count.
 
-- [ ] **Step 4.3:** Run `cargo test -p wos-export`. Must pass.
+- [ ] **Step 4.3:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 4.4:** Commit.
   ```
@@ -241,7 +241,7 @@ Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved
 
 - [ ] **Step 5.4:** Add a `tests/export_conformance.rs` test file that loads each fixture and runs the full export pipeline. Use the existing fixture harness pattern from `tests/provenance_tests.rs`.
 
-- [ ] **Step 5.5:** Run `cargo test -p wos-conformance`. All three new tests must pass.
+- [ ] **Step 5.5:** Run `cargo nextest run -p wos-conformance`. All three new tests must pass.
 
 - [ ] **Step 5.6:** Commit.
   ```

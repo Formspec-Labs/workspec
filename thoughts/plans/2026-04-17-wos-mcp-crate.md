@@ -155,7 +155,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 1.3:** Implement `wos_ping` in `src/tools/query.rs`. The handler takes `(registry: &ProjectRegistry, project_id: &str, args: Value) -> Result<Value, ToolError>` and returns `json!({"pong": true})`.
 - [ ] **Step 1.4:** Wire `wos_ping` into `server.rs` so a JSON-RPC `tools/call` request with `name="wos_ping"` returns the pong response.
 - [ ] **Step 1.5:** Write an integration test in `tests/stdio_transport.rs` that spawns the binary as a child process, sends a JSON-RPC request, and asserts the response contains `"pong"`.
-- [ ] **Step 1.6:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): scaffold crate + JSON-RPC-2.0 stdio transport + wos_ping`.
+- [ ] **Step 1.6:** `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): scaffold crate + JSON-RPC-2.0 stdio transport + wos_ping`.
 
 ### Task 2: Expose tool handlers as public Rust functions + MCP stdio server over them
 
@@ -167,7 +167,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 2.2:** Implement `pub fn dispatch(registry: &ProjectRegistry, tool: &str, args: Value) -> Result<Value, DispatchError>` as a convenience wrapper for callers that receive the tool name as a runtime string (e.g., the stdio server). Direct callers that know the tool name statically call the handler function directly.
 - [ ] **Step 2.3:** Refactor `server.rs` to route through `TOOL_HANDLERS` rather than invoking handlers directly in an inline match. Both the stdio server and in-workspace callers now share the same handler table.
 - [ ] **Step 2.4:** Unit test: call `wos_mcp::tools::query::wos_ping(registry, "", json!({}))` directly as a library function — asserts the same output as what the stdio binary returns for the equivalent JSON-RPC call.
-- [ ] **Step 2.5:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): expose tool handlers as pub Rust functions + MCP stdio server over shared handler table`.
+- [ ] **Step 2.5:** `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): expose tool handlers as pub Rust functions + MCP stdio server over shared handler table`.
 
 ### Task 3: `ProjectRegistry` + document management tools
 
@@ -180,7 +180,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 3.3:** Implement `wos_load_document`: accepts `{"json": "<wos-kernel-json-string>"}` or `{"path": "<file-path>"}`, parses, validates against the kernel schema, registers, returns `{"project_id": "<uuid>"}`. On schema error, returns a `ToolError::ValidationFailed` with the first validation message.
 - [ ] **Step 3.4:** Implement `wos_export_document`: serializes the project to a JSON string. Returns `{"document": "<json-string>"}`.
 - [ ] **Step 3.5:** Implement `wos_describe_document`: returns `{"state_count": N, "transition_count": N, "actor_count": N, "impact_level": "...", "ai_agent_count": N}` by reading the current document.
-- [ ] **Step 3.6:** Add all four handlers to `TOOL_HANDLERS`. Write unit tests for create + export round-trip and describe. `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): project registry + document-management tools`.
+- [ ] **Step 3.6:** Add all four handlers to `TOOL_HANDLERS`. Write unit tests for create + export round-trip and describe. `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): project registry + document-management tools`.
 
 ### Task 4: Lifecycle + actor tools
 
@@ -193,7 +193,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 4.3:** Implement `wos_set_initial_state`. Args: `{"project_id": "...", "state_id": "..."}`. Delegates to `WosProject::set_initial_state`.
 - [ ] **Step 4.4:** Implement `wos_remove_state`. Args: `{"project_id": "...", "state_id": "..."}`. Delegates to `WosProject::remove_state`. Returns count of transitions also removed.
 - [ ] **Step 4.5:** Implement `wos_add_actor` and `wos_add_actor_extension`. Wire all six into `TOOL_HANDLERS`.
-- [ ] **Step 4.6:** Round-trip test: `wos_create_kernel` → `wos_add_state` × 3 → `wos_add_transition` × 2 → `wos_set_initial_state` → `wos_export_document` → parse → assert three states and two transitions present. `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): lifecycle + actor tools`.
+- [ ] **Step 4.6:** Round-trip test: `wos_create_kernel` → `wos_add_state` × 3 → `wos_add_transition` × 2 → `wos_set_initial_state` → `wos_export_document` → parse → assert three states and two transitions present. `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): lifecycle + actor tools`.
 
 ### Task 5: Governance + AI tools
 
@@ -223,7 +223,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 6.5:** Implement `wos_list_projects` (no project_id needed — list all open projects) and `wos_close_project`. Wire all remaining handlers into `TOOL_HANDLERS`.
 - [ ] **Step 6.6:** Hand-author `schemas/mcp/wos-mcp-tools.schema.json`. Top-level shape: `{"tools": [{"name": "...", "description": "...", "inputSchema": {...}, "outputSchema": {...}}]}`. One entry per tool. Keep parameter schemas minimal but accurate — required fields and their types.
 - [ ] **Step 6.7:** Write the full round-trip integration test in `tests/round_trip.rs`: load the kernel fixture from `wos-spec/fixtures/`, dispatch 10+ tool calls (create, add 3 states, add 2 transitions, set initial state, set impact level, add actor, add AI agent, lint), export, lint again via dispatch, assert zero errors. Use the in-process dispatch path — no subprocess.
-- [ ] **Step 6.8:** `cargo test -p wos-mcp` passes. Commit: `feat(wos-mcp): validation/query tools + publish tool-catalog schema`.
+- [ ] **Step 6.8:** `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): validation/query tools + publish tool-catalog schema`.
 
 ---
 

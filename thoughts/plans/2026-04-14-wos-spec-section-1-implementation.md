@@ -6,7 +6,7 @@
 
 **Architecture:** Work happens in the `wos-spec` git submodule (`/Users/mikewolfd/Work/formspec/wos-spec`) across five crates: `wos-core` (typed models, state), `wos-runtime` (execution), `wos-formspec-binding` (coprocessor adapter), `wos-conformance` (fixture harness), `wos-lint` (static analysis). Every slice follows red-green-refactor with new conformance fixtures landing before implementation where the observable behavior is subtle (history, milestones, CloudEvents). Commits land in the submodule; the parent `formspec` repo is bumped once per slice so main-branch bisect stays meaningful.
 
-**Tech Stack:** Rust 2021 workspace, `serde`/`serde_json` for document IO, JSON Schema fixtures under `crates/*/fixtures/` and `wos-spec/fixtures/`, `cargo test -p <crate>` for per-crate runs, `cargo test --workspace` for the full suite.
+**Tech Stack:** Rust 2021 workspace, `serde`/`serde_json` for document IO, JSON Schema fixtures under `crates/*/fixtures/` and `wos-spec/fixtures/`, `cargo nextest run -p <crate>` for per-crate runs, `cargo nextest run --workspace` for the full suite.
 
 ---
 
@@ -57,7 +57,7 @@
 ## Shared Workflow (applies to every slice)
 
 1. **Start inside the submodule.** All work in `/Users/mikewolfd/Work/formspec/wos-spec`. The parent repo `formspec` tracks `wos-spec` as a submodule.
-2. **Baseline.** `cd wos-spec && cargo test --workspace` must be green before any slice. If red, stop and investigate — never write new work on top of a red bar.
+2. **Baseline.** `cd wos-spec && cargo nextest run --workspace` must be green before any slice. If red, stop and investigate — never write new work on top of a red bar.
 3. **Per task:** write the failing test, run it, confirm fail-for-right-reason, implement, run green, commit.
 4. **Per slice:** once all slice tasks pass, commit a `chore(wos-spec): slice <id> complete` marker and bump the submodule pointer in the parent `formspec` repo with `build: bump wos-spec submodule (<slice id>)`.
 5. **Never** commit `ConformanceBinding` or `StubValidator` back into `pub` after Slice 3 — their deletion is a one-way door.
@@ -120,7 +120,7 @@ fn fixture_accepts_formspec_binding() {
 
 ```bash
 cd /Users/mikewolfd/Work/formspec/wos-spec
-cargo test -p wos-conformance --test fixture_shape
+cargo nextest run -p wos-conformance --test fixture_shape
 ```
 Expected: compile error — field `binding` does not exist on `ConformanceFixture`.
 
@@ -144,7 +144,7 @@ fn default_binding() -> Option<String> {
 - [ ] **Step 4: Run to verify green**
 
 ```bash
-cargo test -p wos-conformance --test fixture_shape
+cargo nextest run -p wos-conformance --test fixture_shape
 ```
 Expected: 2 passed.
 
@@ -197,7 +197,7 @@ fn processor_rejects_unpinned_envelope() {
 - [ ] **Step 2: Run to verify compile failure**
 
 ```bash
-cargo test -p wos-conformance --test formspec_processor_double
+cargo nextest run -p wos-conformance --test formspec_processor_double
 ```
 Expected: unresolved module `formspec_processor`.
 
@@ -284,7 +284,7 @@ Add `pub mod formspec_processor;` to `crates/wos-conformance/src/lib.rs`.
 - [ ] **Step 4: Run tests to verify green**
 
 ```bash
-cargo test -p wos-conformance --test formspec_processor_double
+cargo nextest run -p wos-conformance --test formspec_processor_double
 ```
 Expected: 2 passed.
 
@@ -349,7 +349,7 @@ fn engine_defaults_to_conformance_binding() {
 - [ ] **Step 2: Run to verify compile/assertion failure**
 
 ```bash
-cargo test -p wos-conformance --test formspec_binding_swap
+cargo nextest run -p wos-conformance --test formspec_binding_swap
 ```
 Expected: `ConformanceResult` has no `binding_used` field.
 
@@ -398,8 +398,8 @@ wos-formspec-binding = { path = "../wos-formspec-binding" }
 - [ ] **Step 6: Run to verify green**
 
 ```bash
-cargo test -p wos-conformance --test formspec_binding_swap
-cargo test -p wos-conformance
+cargo nextest run -p wos-conformance --test formspec_binding_swap
+cargo nextest run -p wos-conformance
 ```
 Expected: 2 new passes, no regression in existing tests.
 
@@ -432,7 +432,7 @@ Add `"binding": "formspec"` to the new file. Keep every other field identical.
 - [ ] **Step 2: Run all fixtures (both paths)**
 
 ```bash
-cargo test -p wos-conformance
+cargo nextest run -p wos-conformance
 ```
 Expected: the ported fixture is green through the real binding; the original is still green through the stub; total fixture count increments by 1 (102 → 103).
 
@@ -450,7 +450,7 @@ git commit -m "test(wos-conformance): port K-020 fixture to real FormspecBinding
 - [ ] **Step 1: Workspace green**
 
 ```bash
-cargo test --workspace
+cargo nextest run --workspace
 ```
 
 - [ ] **Step 2: Slice commit marker**
@@ -521,7 +521,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 - [ ] **3.5** Implement pin-equality on re-validation paths (exact hook depends on runtime code; survey points to `runtime.rs` `ValidationOutcome` construction). Red → green.
 - [ ] **3.6** Slice commit + parent bump.
 
-**Acceptance:** `grep -rn "ConformanceBinding\|StubValidator" crates/` returns nothing. `cargo test --workspace` green.
+**Acceptance:** `grep -rn "ConformanceBinding\|StubValidator" crates/` returns nothing. `cargo nextest run --workspace` green.
 
 ---
 
@@ -720,7 +720,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 - [ ] **11.5** Update `WOS-FEATURE-MATRIX.md` cells that now flip green.
 - [ ] **11.6** Final commit in submodule + final bump in parent.
 
-**Acceptance:** `cargo test --workspace` green. `npm run docs:check` (in parent) passes. TODO §1 is empty of open checkboxes.
+**Acceptance:** `cargo nextest run --workspace` green. `npm run docs:check` (in parent) passes. TODO §1 is empty of open checkboxes.
 
 ---
 

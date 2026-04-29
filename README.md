@@ -208,10 +208,22 @@ This tree is normally checked out as `formspec/wos-spec` inside the [Formspec](h
 From `formspec/wos-spec`:
 
 ```bash
-cargo test -p wos-core
-cargo test -p wos-runtime
-cargo test -p wos-conformance
+cargo nextest run -p wos-core
+cargo nextest run -p wos-runtime
+cargo nextest run -p wos-conformance
 ```
+
+With [cargo-nextest](https://nexte.st/) installed:
+
+```bash
+cargo nextest run -p wos-core -p wos-authoring --status-level all
+```
+
+**Why a run can look “hung” (it usually is not):**
+
+1. **Piping to `tail` (or any pipe)** — When stdout is not a TTY, Cargo often **block-buffers** output. A long compile phase may print **nothing** until a large buffer flushes or the process exits; `tail -N` also tends to show little until the writer closes. Prefer running nextest **without** a pipe, or use `stdbuf -oL -eL`, or `tee nextest.log`.
+2. **`CARGO_TERM_PROGRESS_WHEN=always` in CI / scripts** — Cargo may error with *progress requires a `width` key* when there is no terminal width. Use the default, a real TTY, or set a width if you force `always`.
+3. **First compile** — Cold builds of several workspace crates can take a minute or more; nextest’s per-test lines only appear after binaries are built.
 
 ### Intake acceptance tests (`FormspecBinding` + `WosRuntime`)
 
@@ -223,7 +235,7 @@ match the registry's trait object.
 
 Integration tests that need both crates live under
 `crates/wos-formspec-binding/tests/` (for example `runtime_intake_workflow_alias.rs`).
-Run: `cargo test -p wos-formspec-binding`.
+Run: `cargo nextest run -p wos-formspec-binding`.
 
 ---
 

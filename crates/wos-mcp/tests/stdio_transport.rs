@@ -18,7 +18,7 @@ const RUN_TIMEOUT: Duration = Duration::from_secs(5);
 /// Build the binary path from the current CARGO_MANIFEST_DIR, falling back
 /// to discovering it through `cargo build`.
 fn binary_path() -> std::path::PathBuf {
-    // When running under `cargo test`, the binary has already been built.
+    // When running under `cargo nextest run`, the binary has already been built.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let mut path = std::path::PathBuf::from(manifest_dir);
     // Walk up to workspace root, then into the target directory.

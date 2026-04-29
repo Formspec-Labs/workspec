@@ -88,7 +88,7 @@ All fields are optional strings or `Vec<String>`. All carry `#[serde(default, sk
   - `round_trips_all_eight_new_fields` — construct a record, assign all eight fields, serialize and deserialize, assert round-trip fidelity.
   - `deserializes_legacy_record_missing_new_fields` — deserialize a JSON object that has none of the new fields; assert all default correctly (no panic, no error). This guards the `#[serde(default)]` contract.
 
-- [x] **Step 1.4:** Run `cargo test -p wos-core`. All tests must pass.
+- [x] **Step 1.4:** Run `cargo nextest run -p wos-core`. All tests must pass.
 
 - [x] **Step 1.5:** Commit.
   ```
@@ -118,7 +118,7 @@ The tier for a record is deterministic from its `ProvenanceKind`. Kinds at the F
 
 - [x] **Step 2.3:** Add a unit test `audit_layer_stamped_by_runtime_pass` that builds a log with two records (one `StateTransition`, one `NarrativeTierRecorded`), runs them through the stamp pass, and asserts `"facts"` and `"narrative"` respectively.
 
-- [x] **Step 2.4:** Run `cargo test -p wos-core -p wos-runtime`. All must pass.
+- [x] **Step 2.4:** Run `cargo nextest run -p wos-core -p wos-runtime`. All must pass.
 
 - [x] **Step 2.5:** Commit.
   ```
@@ -147,7 +147,7 @@ The `ActorKind` enum in `wos-spec/crates/wos-core/src/model/kernel.rs` (line 184
   - `actor_type_system_from_registry` — actor declared as `System`; assert `"system"`.
   - `actor_type_absent_when_no_actor_id` — record with no `actor_id`; assert `actor_type` remains `None`.
 
-- [x] **Step 3.4:** Run `cargo test -p wos-runtime`. All must pass.
+- [x] **Step 3.4:** Run `cargo nextest run -p wos-runtime`. All must pass.
 
 - [x] **Step 3.5:** Commit.
   ```
@@ -200,7 +200,7 @@ These fields require access to runtime context beyond the record constructor's p
   - `digests_computed_and_non_empty_when_inputs_present` — assert digests are `Some(...)` and are valid 64-char hex strings.
   - `digests_absent_when_inputs_empty` — assert both digests are `None` for a record with no inputs/outputs.
 
-- [x] **Step 4.6:** Run `cargo test -p wos-core -p wos-runtime`. All must pass.
+- [x] **Step 4.6:** Run `cargo nextest run -p wos-core -p wos-runtime`. All must pass.
 
 - [x] **Step 4.7:** Commit.
   ```
@@ -249,7 +249,7 @@ With the struct extended and fields populated, the exporters can emit the full m
 
 - [x] **Step 5.7:** Update existing unit tests in all three modules that assert exact graph/event counts — the new entity nodes for inputs/outputs and the tier filter change node counts. Extend the tests to assert the new attributes are present on stamped records.
 
-- [x] **Step 5.8:** Run `cargo test -p wos-export`. All tests must pass.
+- [x] **Step 5.8:** Run `cargo nextest run -p wos-export`. All tests must pass.
 
 - [x] **Step 5.9:** Commit.
   ```
@@ -288,7 +288,7 @@ These fixtures were established in `2026-04-15-wos-provenance-export.md` Task 5.
 
 - [x] **Step 6.4:** Update `export_conformance.rs` to exercise the new assertion conditions listed in Steps 6.1–6.3.
 
-- [x] **Step 6.5:** Run `cargo test -p wos-conformance`. All tests must pass.
+- [x] **Step 6.5:** Run `cargo nextest run -p wos-conformance`. All tests must pass.
 
 - [x] **Step 6.6:** Commit.
   ```

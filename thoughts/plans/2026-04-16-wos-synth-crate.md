@@ -159,7 +159,7 @@ cargo tree -p wos-synth-core | grep -E 'reqwest|tokio|anthropic'
 cargo build -p wos-synth-anthropic  # also green
 ```
 
-- [ ] **Step 1.6:** Update CI — default job: `cargo build --workspace && cargo test --workspace`. No special feature matrix needed; providers compile as separate crates in a default workspace build.
+- [ ] **Step 1.6:** Update CI — default job: `cargo build --workspace && cargo nextest run --workspace`. No special feature matrix needed; providers compile as separate crates in a default workspace build.
 
 - [ ] **Step 1.7:** Author `crates/wos-synth-core/README.md` with the three restated policy sections above.
 

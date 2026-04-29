@@ -61,7 +61,7 @@ Commit pending alongside this retrospective:
   `conformance_smoke_test_rejects_unreachable_initial_state`) — no network
   required, exercise the gate helper directly.
 
-All 17 tests in `wos-synth-spike` pass (`cargo test -p wos-synth-spike`).
+All 17 tests in `wos-synth-spike` pass (`cargo nextest run -p wos-synth-spike`).
 
 ---
 

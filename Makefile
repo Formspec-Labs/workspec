@@ -55,7 +55,7 @@ studio-build: studio-install
 test: rust-test python-test studio-test
 
 rust-test:
-	$(CARGO) test --workspace
+	$(CARGO) nextest run --workspace
 
 python-test:
 	$(PYTEST) tests/schemas -q

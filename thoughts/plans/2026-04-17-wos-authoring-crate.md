@@ -268,7 +268,7 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
 
 - [ ] **Step 1.6:** Extend `tests/round_trip.rs` with a `from_document_round_trips` test that loads `fixtures/kernel/purchase-order-approval.json` via `serde_json::from_str`, wraps it in `WosProject::from_document(doc)`, exports, and asserts the `$wosWorkflow` / `wos_workflow` version and actor count match the source.
 
-- [ ] **Step 1.7:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 1.7:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 1.8:** Commit:
 
@@ -367,7 +367,7 @@ The pipeline is the beating heart of this crate. Every helper method (Tasks 3–
 
   Implement until passing.
 
-- [ ] **Step 2.6:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 2.6:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 2.7:** Commit:
 
@@ -429,7 +429,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
   - `remove_state_with_outgoing_transitions_warns` — removes state, returns warning
   - `undo_add_transition_removes_it` — undo of `add_transition` cleans up
 
-- [ ] **Step 3.5:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 3.5:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 3.6:** Commit:
 
@@ -462,7 +462,7 @@ The analogous `formspec-studio-core` pattern: `addField` dispatches `definition.
   - `set_correspondence_metadata_unknown_field_errors`
   - `undo_add_actor_removes_it`
 
-- [ ] **Step 4.4:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 4.4:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 4.5:** Commit:
 
@@ -512,7 +512,7 @@ These helpers write into the `extensions` map of the `KernelDocument` under `x-w
   - `set_autonomy_level_unknown_agent_errors`
   - `undo_add_ai_agent_removes_it`
 
-- [ ] **Step 5.5:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 5.5:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 5.6:** Commit:
 
@@ -587,7 +587,7 @@ This test is the acceptance criterion that all helper methods compose correctly 
 
 - [ ] **Step 6.4:** Add a second integration test: `undo_redo_sequence_is_stable` — call 5 helpers, undo 3 times, redo 2 times, assert state count and actor count match expectations at each step.
 
-- [ ] **Step 6.5:** Run `cargo test -p wos-authoring`. All tests must pass.
+- [ ] **Step 6.5:** Run `cargo nextest run -p wos-authoring`. All tests must pass.
 
 - [ ] **Step 6.6:** Commit:
 

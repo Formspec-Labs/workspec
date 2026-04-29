@@ -136,7 +136,7 @@ The crate is exercised through both direct unit tests and downstream integration
 For targeted work, run:
 
 ```bash
-cargo test -p wos-core
-cargo test -p wos-conformance
-cargo test -p wos-lint
+cargo nextest run -p wos-core
+cargo nextest run -p wos-conformance
+cargo nextest run -p wos-lint
 ```

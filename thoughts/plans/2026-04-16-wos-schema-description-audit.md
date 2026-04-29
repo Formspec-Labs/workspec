@@ -98,7 +98,7 @@ For each tier:
 
 - [ ] **Step 3.X.1:** Apply backfills; no copy-paste descriptions across unrelated properties.
 - [ ] **Step 3.X.2:** Run `SCHEMA-DOC-001` and confirm the tier passes.
-- [ ] **Step 3.X.3:** Run `cargo test -p wos-lint -p wos-conformance` — zero regressions.
+- [ ] **Step 3.X.3:** Run `cargo nextest run -p wos-lint -p wos-conformance` — zero regressions.
 - [ ] **Step 3.X.4:** Commit with tier name: `docs(kernel): backfill schema descriptions and examples for LLM authoring`.
 
 ## Task 4: Register the rule in LINT-MATRIX and CI

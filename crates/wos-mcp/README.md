@@ -34,7 +34,7 @@ cargo build -p wos-mcp
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | cargo run -q -p wos-mcp
 
 # Full test suite (unit + subprocess integration)
-cargo test -p wos-mcp
+cargo nextest run -p wos-mcp
 ```
 
 ## Architecture

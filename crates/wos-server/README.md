@@ -173,7 +173,7 @@ Legal-sufficiency `wosDisclosure` block on every export (Track A3 in the active 
 ## Testing
 
 ```bash
-cargo test -p wos-server
+cargo nextest run -p wos-server
 ```
 
 Test harness:

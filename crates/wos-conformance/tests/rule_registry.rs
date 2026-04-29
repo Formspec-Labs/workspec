@@ -370,7 +370,7 @@ fn discover_and_report_promotion_candidates() {
 
     let report_text = lines.join("\n") + "\n";
 
-    // Print to stdout so `cargo test -- --nocapture` surfaces it in CI logs.
+    // Print to stdout so `cargo nextest run --no-capture` surfaces it in CI logs.
     print!("{}", report_text);
 
     // Write to target/ so CI can read the file as an artifact.

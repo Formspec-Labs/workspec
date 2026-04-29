@@ -26,6 +26,9 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -37,10 +40,10 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Run rule registry tests (wos-lint)
-        run: cargo test -p wos-lint --test rule_registry -- --nocapture
+        run: cargo nextest run -p wos-lint --test rule_registry --no-capture
 
       - name: Run rule registry tests (wos-conformance)
-        run: cargo test -p wos-conformance --test rule_registry -- --nocapture
+        run: cargo nextest run -p wos-conformance --test rule_registry --no-capture
 
       - name: Upload promotion-candidate report
         if: always()

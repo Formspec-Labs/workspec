@@ -181,7 +181,7 @@ Hand-authored compatibility matrix for WOS release streams. Cells use SemVer car
 - [ ] **Step 4.4:** Pre-publish sanity:
   - Each stream's generated CHANGELOG has an entry for the version being published (Changesets handles this; verify with a `test -f`).
   - `scripts/check-compat.mjs --fail-on-stale` passes (from Task 3.2).
-  - `cargo test -p wos-conformance -- --tier <stream>` passes for the stream being published.
+  - `cargo nextest run -p wos-conformance -- --tier <stream>` passes for the stream being published.
 
 - [ ] **Step 4.5:** Commit. `build: WOS release workflow — Changesets + per-stream tags (mirror ADR 0063)`.
 

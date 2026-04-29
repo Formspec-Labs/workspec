@@ -70,7 +70,7 @@
 
 - [ ] **3.1** Extend `ProvenanceRecord` with optional `case_file_snapshot: Option<CaseFileSnapshot>` field. Use `serde(default, skip_serializing_if = "Option::is_none")` so existing fixtures roundtrip.
 - [ ] **3.2** Define `CaseFileSnapshot { value: serde_json::Value, jcs_canonical: String, sha256: String }`. Implement constructor `from_case_state(state: &serde_json::Value)` that performs JCS canonicalization + SHA-256.
-- [ ] **3.3** `cargo test -p wos-core` green. Backfill the existing `Milestone` `trigger_mode` pattern — every existing ProvenanceRecord constructor needs the new field added with `None`.
+- [ ] **3.3** `cargo nextest run -p wos-core` green. Backfill the existing `Milestone` `trigger_mode` pattern — every existing ProvenanceRecord constructor needs the new field added with `None`.
 - [ ] **3.4** Commit. `feat(wos-core): ProvenanceRecord.case_file_snapshot with JCS canonicalization`.
 
 ## Task 4: Runtime emission
@@ -91,7 +91,7 @@
 - [ ] **5.2** Register in `crates/wos-conformance/src/coverage.rs` evidence map.
 - [ ] **5.3** Conformance fixture `K-DET-001-determination-snapshot.json` under `fixtures/conformance/expected-traces/` — happy path: a kernel doc with one determination transition + an `expected_provenance` array containing the snapshot.
 - [ ] **5.4** Negative fixture (or unit test) covering: rule fails when snapshot absent.
-- [ ] **5.5** `cargo test --workspace` green; `every_promoted_rule_has_evidence` CI gate green.
+- [ ] **5.5** `cargo nextest run --workspace` green; `every_promoted_rule_has_evidence` CI gate green.
 - [ ] **5.6** Add row to `LINT-MATRIX.md`.
 - [ ] **5.7** Commit. `feat(conformance): K-DET-001 — Facts-tier snapshot REQUIRED at determinations`.
 
@@ -103,7 +103,7 @@
   - Workflow document (just declares the workflow — no provenance assertion). Migration: NONE.
   - Conformance fixture with `expected_provenance` array. Migration: add `caseFileSnapshot` to every determination-transition record.
   - Other (audit fixture, AI fixture). Investigate per-file.
-- [ ] **6.2** Migrate the conformance subset first; run `cargo test -p wos-conformance` after each batch to catch breaking changes early.
+- [ ] **6.2** Migrate the conformance subset first; run `cargo nextest run -p wos-conformance` after each batch to catch breaking changes early.
 - [ ] **6.3** When a fixture's `expected_provenance` array is missing entirely from a determination-bearing fixture, add it (or accept the fixture as a structural-only document).
 - [ ] **6.4** Single commit per logical batch (kernel fixtures, governance fixtures, AI fixtures).
 

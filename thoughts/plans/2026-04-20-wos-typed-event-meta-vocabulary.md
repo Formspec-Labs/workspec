@@ -27,7 +27,7 @@
 2. `Transition.event` and `Action.event` normatively use typed objects; the reference deserializer MAY still accept a legacy bare string and coerce it to `TransitionEvent` for migration.
 3. `crates/wos-core/src/model/kernel.rs` uses `pub event: Option<TransitionEvent>` on `Transition` (optional) and `Option<TransitionEvent>` on `Action` for `startTimer`, with `#[serde(tag = "kind", rename_all = "lowercase")]` on the enum and explicit `#[serde(rename = "timerId")]` / camelCase field aliases on variant fields so JSON matches the schema.
 4. Every in-tree fixture under `fixtures/` and `crates/wos-conformance/{fixtures,tests/fixtures}/` is migrated to the typed form. 185 files; 844 `"event":` occurrences in authored kernel bodies.
-5. `cargo test --workspace` and `python3 -m pytest tests/ -q` green.
+5. `cargo nextest run --workspace` and `python3 -m pytest tests/ -q` green.
 6. `npm run docs:check` (if applicable for this repo — replace with local equivalent `make docs` / schema-doc checker) green; SCHEMA-DOC-001 green on the new `TransitionEvent` $def.
 7. Spec prose amended: §4.5 table (event row now links to `TransitionEvent`), §4.6 (resolution now matches on `(kind, name)` or `(kind, discriminant)`), §4.10 table (kernel-generated events now described in terms of `kind` + named constants rather than `$`-prefixed strings).
 8. `LINT-MATRIX.md` updated: K-007 promoted from `draft` to `schema` (the schema now enforces the taxonomy structurally).
@@ -221,7 +221,7 @@ Ten tasks, ~1 engineer-day each (~8–10 engineer-days total).
 
 - **Files:** `schemas/kernel/wos-kernel.schema.json`.
 - **LOC:** +220 / −12.
-- **Acceptance:** SCHEMA-DOC-001 green (every leaf has description ≥140 chars + ≥2 examples). No Rust code changes yet — the Rust model still takes `String`, so this task alone will break `cargo test` (expected). Land it in a commit that is explicitly labelled "schema-only; Rust migration follows in Task 2."
+- **Acceptance:** SCHEMA-DOC-001 green (every leaf has description ≥140 chars + ≥2 examples). No Rust code changes yet — the Rust model still takes `String`, so this task alone will break `cargo nextest run` (expected). Land it in a commit that is explicitly labelled "schema-only; Rust migration follows in Task 2."
 - **Dependencies:** Open Questions 1 + 4 resolved.
 
 ### Task 2 — Rust `TransitionEvent` enum
@@ -235,21 +235,21 @@ Ten tasks, ~1 engineer-day each (~8–10 engineer-days total).
 
 - **Files:** `crates/wos-core/src/eval.rs:388-584,269,814,1011`; `crates/wos-core/src/event_handler.rs:20,274`; `crates/wos-core/src/project.rs:92`.
 - **LOC:** +120 / −60. (Dominated by matching on 5 kinds per call site.)
-- **Acceptance:** `cargo test -p wos-core` green (after fixtures are migrated in Task 6, or with migrated test fixtures inlined in the test module in this task).
+- **Acceptance:** `cargo nextest run -p wos-core` green (after fixtures are migrated in Task 6, or with migrated test fixtures inlined in the test module in this task).
 - **Dependencies:** Task 2.
 
 ### Task 4 — `wos-runtime` migration
 
 - **Files:** `crates/wos-runtime/src/runtime.rs:574,602,688,1118-1128`; `crates/wos-runtime/src/companion.rs:155-272,400,511`.
 - **LOC:** +140 / −50.
-- **Acceptance:** `cargo test -p wos-runtime` green (with fixtures migrated in Task 6).
+- **Acceptance:** `cargo nextest run -p wos-runtime` green (with fixtures migrated in Task 6).
 - **Dependencies:** Task 3.
 
 ### Task 5 — `wos-lint` migration
 
 - **Files:** `crates/wos-lint/src/rules/tier1.rs:149-168`; `crates/wos-lint/src/rules/tier2.rs:157`; `crates/wos-lint/src/rules/continuous_mode.rs` (tests); `crates/wos-lint/tests/tier1_rules.rs:443-507,1894-1906`.
 - **LOC:** +40 / −60 (K-007 deletion, K-008 rewrite).
-- **Acceptance:** `cargo test -p wos-lint` green.
+- **Acceptance:** `cargo nextest run -p wos-lint` green.
 - **Dependencies:** Task 3.
 
 ### Task 6 — Fixture migration (scripted)
@@ -261,7 +261,7 @@ Ten tasks, ~1 engineer-day each (~8–10 engineer-days total).
 
 ### Task 7 — Full test suite
 
-- `cargo test --workspace` and `python3 -m pytest tests/ -q`.
+- `cargo nextest run --workspace` and `python3 -m pytest tests/ -q`.
 - **Acceptance:** Green across both. Any Python schema regression tests that assert the old string shape are updated.
 - **Dependencies:** Tasks 1–6.
 
@@ -295,7 +295,7 @@ Ten tasks, ~1 engineer-day each (~8–10 engineer-days total).
 
 ## Section 9 — Risk register
 
-- **Fixture migration silent semantic drift.** A name could be rewritten to the wrong kind (e.g., `$compensation.complete` → `message` instead of `signal`), breaking a lifecycle expectation that no test currently asserts. **Mitigation:** the before/after manifest diff (§5). Every name is listed with its old shape and new shape; the diff is code-reviewed before the commit is merged. Additionally, Task 7 runs `cargo test --workspace` — any fixture-dependent behaviour test catches a mis-rewrite.
+- **Fixture migration silent semantic drift.** A name could be rewritten to the wrong kind (e.g., `$compensation.complete` → `message` instead of `signal`), breaking a lifecycle expectation that no test currently asserts. **Mitigation:** the before/after manifest diff (§5). Every name is listed with its old shape and new shape; the diff is code-reviewed before the commit is merged. Additionally, Task 7 runs `cargo nextest run --workspace` — any fixture-dependent behaviour test catches a mis-rewrite.
 - **BPMN-export compatibility** (`wos-bpmn-export`, TODO §4). The reshape *aligns* with BPMN's native event taxonomy; it does not misalign. If anything it makes the export simpler (no need to re-infer kinds from `$`-prefixes). Risk: low; no blocker. Flag a recheck when the BPMN-export crate is sketched.
 - **Rollback cost.** One-way door at the fixture and Rust-type level. Before Task 6 lands, rollback is a 1-hour revert. After Task 6 lands with migrated fixtures, rollback is a ~1-week hand-migration back to strings. After any downstream consumer (studio, authoring UI, synth crate) adopts the typed form, rollback is ~1-person-month. **Implication:** commit the *schema + model + eval* (Tasks 1–3) on a feature branch, run migration (Task 6) on the branch, validate (Task 7), then merge. Do not stage partial landings to main.
 - **Runtime event inbox boundary.** The plan deliberately leaves the runtime's inbound-event struct (`event: String`) untyped — matching happens via the typed `Transition.event` on one side and a name-string on the other. This is a known migration seam that a future plan closes; it must be clearly documented in §4.5 prose and in the companion runtime §S11 so consumers don't assume full end-to-end typing.
@@ -312,4 +312,4 @@ Please answer before any agent starts Task 1:
 - [ ] **OQ3 (condition context):** full §7 context minus `event` (preferred) OR narrower data-only context?
 - [ ] **OQ4 (vendor kinds):** closed `kind`, vendor extension via payload `x-*` (preferred) OR open `kind` with `x-` prefix?
 
-**GO / NO-GO:** this plan is executable once OQ1 and OQ4 are resolved. OQ2 and OQ3 can be deferred to implementation-time. The fixture migration (Task 6) is the heaviest step (185 files, ~1600-line diff) and has the sharpest one-way-door quality; land it last among the Rust-model tasks and gate it behind a green `cargo test --workspace` on a feature branch.
+**GO / NO-GO:** this plan is executable once OQ1 and OQ4 are resolved. OQ2 and OQ3 can be deferred to implementation-time. The fixture migration (Task 6) is the heaviest step (185 files, ~1600-line diff) and has the sharpest one-way-door quality; land it last among the Rust-model tasks and gate it behind a green `cargo nextest run --workspace` on a feature branch.

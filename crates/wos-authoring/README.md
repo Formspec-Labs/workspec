@@ -132,7 +132,7 @@ to make a new command undoable.
 
 ```bash
 cargo check -p wos-authoring --tests    # zero warnings required
-cargo test -p wos-authoring              # unit + integration tests
+cargo nextest run -p wos-authoring              # unit + integration tests
 ```
 
 ## Design choices
