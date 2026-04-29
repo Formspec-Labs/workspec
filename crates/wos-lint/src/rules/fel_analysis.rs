@@ -1237,7 +1237,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAssertionLibrary": true,
+                "$wosWorkflow": "1.0",
                 "assertions": [{"id": "a1", "expression": "not ( valid"}]
             }),
         );
@@ -1256,7 +1256,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosWorkflowGovernance": true,
+                "$wosWorkflow": "1.0",
                 "delegations": [{"delegator": "alice", "conditions": ["$x >"]}]
             }),
         );
@@ -1273,7 +1273,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosWorkflowGovernance": true,
+                "$wosWorkflow": "1.0",
                 "delegations": [{"delegator": "alice", "conditions": ["$level > 2"]}]
             }),
         );
@@ -1292,7 +1292,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "classifier": {
                         "escalation": {
@@ -1316,7 +1316,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "classifier": {
                         "escalation": {
@@ -1341,7 +1341,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1365,7 +1365,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1393,7 +1393,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1418,7 +1418,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1444,7 +1444,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1470,7 +1470,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1545,7 +1545,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{
@@ -1598,7 +1598,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAIIntegration": true,
+                "$wosWorkflow": "1.0",
                 "agents": {
                     "extractor": {
                         "capabilities": [{ "id": "extract" }]
@@ -1877,7 +1877,7 @@ mod tests {
         let doc = make_doc(
             DocumentKind::Workflow,
             json!({
-                "$wosAdvancedGovernance": true,
+                "$wosWorkflow": "1.0",
                 "verifiableConstraints": [{
                     "constraintRef": "c1",
                     "verifiable": true,

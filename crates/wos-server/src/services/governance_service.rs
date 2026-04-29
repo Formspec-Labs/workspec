@@ -3,17 +3,19 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    AgentCapabilityView, AgentView, CalendarEventView, DelegationEntryView, DeonticConstraintView,
-    EquityCategoryView, EquityConfigView, EquityDisparityMethodView, EquityRemediationTriggerView,
-    EquityReportingScheduleView, OverrideAuthorityView, PipelineAssertionView, PipelineStageView,
-    PipelineView, PolicyVersionView, QualityControlsView, ResolvedPolicyView, ReviewSamplingView,
+    AdverseDecisionNoticeView, AgentCapabilityView, AgentView, CalendarEventView,
+    DelegationEntryView, DeonticConstraintView, EquityCategoryView, EquityConfigView,
+    EquityDisparityMethodView, EquityRemediationTriggerView, EquityReportingScheduleView,
+    OverrideAuthorityView, PipelineAssertionView, PipelineStageView, PipelineView,
+    PolicyVersionView, QualityControlsView, ResolvedPolicyView, ReviewSamplingView,
     SeparationOfDutiesView, ServiceHealthView, SolverView, VerificationCounterexampleView,
     VerificationReportView, VerificationResultView, VerificationSummaryView,
 };
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
 use crate::storage::StorageHandle;
 
 use super::bundle_service::BundleService;
+use super::notifications_service::{find_template, interpolate};
 
 pub struct GovernanceService {
     storage: StorageHandle,
@@ -424,6 +426,81 @@ impl GovernanceService {
             }
         }
         out
+    }
+
+    pub async fn render_adverse_notice(
+        &self,
+        workflow_url: &str,
+        template_id: &str,
+        context: &serde_json::Value,
+    ) -> ApiResult<AdverseDecisionNoticeView> {
+        let bundle = self
+            .bundle
+            .full_bundle(workflow_url)
+            .await
+            .ok_or(ApiError::NotFound)?;
+
+        let templates = bundle.notification_templates.ok_or_else(|| {
+            ApiError::BadRequest("no notification-template sidecar attached".into())
+        })?;
+        let tmpl = find_template(&templates, template_id).ok_or(ApiError::NotFound)?;
+
+        let body_template = tmpl
+            .get("body")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ApiError::BadRequest("template has no `body` field".into()))?;
+
+        let due = bundle.due_process.as_ref();
+        let grace_period = due
+            .and_then(|d| d.get("gracePeriod"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let appeal_window = due
+            .and_then(|d| d.get("appealWindow"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let right_to_contest = due
+            .and_then(|d| d.get("rightToContest"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let mut merged_context = context.clone();
+        if let Some(obj) = merged_context.as_object_mut() {
+            if let Some(gp) = &grace_period {
+                obj.insert("gracePeriod".into(), serde_json::Value::String(gp.clone()));
+            }
+            if let Some(aw) = &appeal_window {
+                obj.insert("appealWindow".into(), serde_json::Value::String(aw.clone()));
+            }
+            if let Some(rtc) = &right_to_contest {
+                obj.insert("rightToContest".into(), serde_json::Value::String(rtc.clone()));
+            }
+        }
+
+        let body = interpolate(body_template, &merged_context);
+        let subject = tmpl
+            .get("subject")
+            .and_then(|v| v.as_str())
+            .map(|s| interpolate(s, &merged_context));
+        let channels = tmpl
+            .get("channels")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(AdverseDecisionNoticeView {
+            template_id: template_id.into(),
+            body,
+            subject,
+            grace_period,
+            appeal_window,
+            right_to_contest,
+            channels,
+        })
     }
 }
 

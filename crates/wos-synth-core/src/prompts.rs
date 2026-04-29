@@ -6,9 +6,15 @@
 use crate::prompter::CacheAnchor;
 use crate::tool_context::LintFinding;
 
-/// Which WOS layer the loop is generating.
+/// Which embedded block of `$wosWorkflow` the loop is generating.
 ///
-/// Today only [`Layer::Kernel`] is wired; other layers are reserved.
+/// Per ADR 0076 every WOS document is `$wosWorkflow`; layers vary the prompt
+/// scaffolding (which schema sections and spec excerpts are pinned in cache,
+/// which embedded blocks the model is asked to populate). The marker is the
+/// same across layers.
+///
+/// Today only [`Layer::Kernel`] (lifecycle / actors / case file) is fully
+/// wired with cache anchors; other layers fall back to system-prompt-only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Layer {
@@ -18,16 +24,10 @@ pub enum Layer {
     Advanced,
 }
 
-impl Layer {
-    pub fn marker(self) -> &'static str {
-        match self {
-            Layer::Kernel => "$wosWorkflow",
-            Layer::Governance => "$wosGovernance",
-            Layer::Ai => "$wosAiIntegration",
-            Layer::Advanced => "$wosAdvancedGovernance",
-        }
-    }
-}
+/// Single canonical document marker emitted by the synthesis loop.
+///
+/// All layers produce one merged `$wosWorkflow` envelope (ADR 0076).
+const WORKFLOW_MARKER: &str = "$wosWorkflow";
 
 /// Schemas baked into the binary at compile time.
 ///
@@ -47,7 +47,7 @@ pub fn build_generate_prompt(problem: &str, layer: Layer) -> (String, String, Ve
          Output ONLY a single valid JSON object — no markdown fences, no prose. \
          Every document MUST include the marker `\"{marker}\": \"1.0\"`.",
         layer = layer,
-        marker = layer.marker(),
+        marker = WORKFLOW_MARKER,
     );
 
     let cache_anchors = match layer {
@@ -74,7 +74,7 @@ pub fn build_generate_prompt(problem: &str, layer: Layer) -> (String, String, Ve
          - Use only fields permitted by the schema above.\n\n\
          Produce the document now.",
         problem = problem,
-        marker = layer.marker(),
+        marker = WORKFLOW_MARKER,
     );
 
     (system, user, cache_anchors)

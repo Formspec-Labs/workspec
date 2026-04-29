@@ -1,44 +1,23 @@
 """Kernel-schema ``CapabilityInvocationRecord`` if/then regression tests.
 
-Validates the §4.3b #F5d if/then branch in
-``schemas/kernel/wos-provenance-record.schema.json`` that enforces
-``outcome: "preconditionNotSatisfied"`` whenever a capability-invocation
-record carries ``data.invocationBlocked: true`` (AI Integration §3.3.1).
-
-The $def was relocated from the AI schema into the kernel provenance
-schema so every conformant provenance log participates in the MUST via
-``FactsTierRecord.allOf``, not only logs from workflows that separately
-attach an AI Integration document.
+Validates the §4.3b #F5d if/then branch on the ``CapabilityInvocationRecord``
+``$def`` in ``schemas/wos-workflow.schema.json`` (ADR 0076 step 5 promotion).
+It is composed into ``FactsTierRecord.allOf`` there; runtime
+``wos-provenance-log.schema.json`` items ``$ref`` that ``FactsTierRecord``, so
+the same MUST applies to exported logs.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pytest
 from jsonschema import Draft202012Validator
 
-WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-PROVENANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
-)
+from .conftest import validator_for_def
 
 
 @pytest.fixture(scope="module")
-def schema() -> dict:
-    return json.loads(PROVENANCE_SCHEMA.read_text())
-
-
-def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed)
+def cap_validator() -> Draft202012Validator:
+    return validator_for_def("CapabilityInvocationRecord")
 
 
 def _facts_record(record_kind: str, **extra) -> dict:
@@ -53,8 +32,8 @@ def _facts_record(record_kind: str, **extra) -> dict:
     return record
 
 
-def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+def test_blocked_invocation_with_correct_outcome_is_accepted(cap_validator):
+    validator = cap_validator
     record = _facts_record(
         "capabilityInvocation",
         data={
@@ -72,8 +51,8 @@ def test_blocked_invocation_with_correct_outcome_is_accepted(schema):
     )
 
 
-def test_blocked_invocation_missing_outcome_is_rejected(schema):
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+def test_blocked_invocation_missing_outcome_is_rejected(cap_validator):
+    validator = cap_validator
     record = _facts_record(
         "capabilityInvocation",
         id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
@@ -88,8 +67,8 @@ def test_blocked_invocation_missing_outcome_is_rejected(schema):
     )
 
 
-def test_blocked_invocation_with_wrong_outcome_is_rejected(schema):
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+def test_blocked_invocation_with_wrong_outcome_is_rejected(cap_validator):
+    validator = cap_validator
     record = _facts_record(
         "capabilityInvocation",
         id="sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
@@ -106,12 +85,12 @@ def test_blocked_invocation_with_wrong_outcome_is_rejected(schema):
     )
 
 
-def test_unblocked_invocation_without_outcome_is_accepted(schema):
+def test_unblocked_invocation_without_outcome_is_accepted(cap_validator):
     """When `invocationBlocked` is false (or absent), the if branch does not
     match, so the then-required outcome is NOT mandated. This keeps the
     happy-path record shape unconstrained.
     """
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    validator = cap_validator
     record = _facts_record(
         "capabilityInvocation",
         id="sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
@@ -128,14 +107,14 @@ def test_unblocked_invocation_without_outcome_is_accepted(schema):
     )
 
 
-def test_absent_invocation_blocked_not_required_outcome(schema):
+def test_absent_invocation_blocked_not_required_outcome(cap_validator):
     """Review B Finding 5: when `data.invocationBlocked` is absent, the
     if branch's `required: ["invocationBlocked"]` on the `data` subschema
     does not match, so the then branch does not apply. A capability-
     invocation record with no `invocationBlocked` flag MUST therefore
     validate without carrying an `outcome` -- otherwise the MUST would
     over-fire on records that predate the precondition gate."""
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    validator = cap_validator
     record = _facts_record(
         "capabilityInvocation",
         data={
@@ -151,7 +130,7 @@ def test_absent_invocation_blocked_not_required_outcome(schema):
     )
 
 
-def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(schema):
+def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(cap_validator):
     """Review B Finding 5: the if-guard is keyed on
     `recordKind == "capabilityInvocation"` AND `data.invocationBlocked == true`.
     A record with a DIFFERENT recordKind that happens to carry
@@ -159,7 +138,7 @@ def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(schem
     `outcome = "preconditionNotSatisfied"` -- the MUST is scoped to the
     AI §3.3.1 capability-invocation path, not every provenance record
     whose payload reuses the field name."""
-    validator = _validator_for_def(schema, "CapabilityInvocationRecord")
+    validator = cap_validator
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",

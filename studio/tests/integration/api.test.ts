@@ -54,16 +54,15 @@ describe('real server — kernel bundle endpoints', () => {
   it('returns a full bundle by URL', async () => {
     const { status, body } = await apiGet(`/api/bundles/${encodeURIComponent(benefitsUrl)}`);
     expect(status).toBe(200);
-    expect(body.kernel.$wosKernel).toBe('1.0');
-    expect(body.kernel.url).toBe(benefitsUrl);
-    // Sidecars load (governance exists at that path)
-    expect(body.governance).toBeDefined();
+    expect(body.workflow.$wosWorkflow).toBe('1.0');
+    expect(body.workflow.url).toBe(benefitsUrl);
+    expect(body.delivery).toBeDefined();
   });
 
   it('returns just the kernel via /bundles/:url/kernel', async () => {
     const { status, body } = await apiGet(`/api/bundles/${encodeURIComponent(benefitsUrl)}/kernel`);
     expect(status).toBe(200);
-    expect(body.$wosKernel).toBe('1.0');
+    expect(body.$wosWorkflow).toBe('1.0');
     expect(body.lifecycle.states.eligibilityReview.type).toBe('parallel');
   });
 
@@ -74,7 +73,7 @@ describe('real server — kernel bundle endpoints', () => {
 
   it('rejects PUT with mismatched URL body', async () => {
     const { status, body } = await apiJson('PUT', `/api/bundles/${encodeURIComponent(benefitsUrl)}/kernel`, {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'https://other/',
       version: '1.0.0',
       title: 'wrong',
@@ -87,7 +86,7 @@ describe('real server — kernel bundle endpoints', () => {
 
   it('rejects PUT with schema-invalid kernel', async () => {
     const { status, body } = await apiJson('PUT', `/api/bundles/${encodeURIComponent(benefitsUrl)}/kernel`, {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: benefitsUrl,
       // missing version, title, lifecycle — schema-invalid
     });
@@ -117,7 +116,7 @@ describe('real server — kernel bundle endpoints', () => {
 describe('real server — kernel validation endpoint', () => {
   it('passes for a valid kernel', async () => {
     const { status, body } = await apiJson('POST', '/api/kernel/validate', {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'test://wf',
       version: '1.0.0',
       title: 'Valid',
@@ -143,7 +142,7 @@ describe('real server — kernel validation endpoint', () => {
   it('reports structural issues for a kernel that violates the schema', async () => {
     // Uses an unknown state 'type' value, which the schema's enum explicitly rejects.
     const { status, body } = await apiJson('POST', '/api/kernel/validate', {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'test://wf',
       version: '1.0.0',
       title: 'Invalid',
@@ -166,7 +165,7 @@ describe('real server — kernel validation endpoint', () => {
     // Exercises the state-type structural invariant added to the kernel schema:
     // a compound state MUST declare initialState and a non-empty states map.
     const { status, body } = await apiJson('POST', '/api/kernel/validate', {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'test://wf',
       version: '1.0.0',
       title: 'Invalid compound',
@@ -188,7 +187,7 @@ describe('real server — kernel validation endpoint', () => {
 
   it('rejects a parallel state that omits regions (Kernel S4.3, S4.4)', async () => {
     const { status, body } = await apiJson('POST', '/api/kernel/validate', {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'test://wf',
       version: '1.0.0',
       title: 'Invalid parallel',
@@ -210,7 +209,7 @@ describe('real server — kernel validation endpoint', () => {
 
   it('rejects an atomic state that carries compound/parallel structural fields (Kernel S4.3)', async () => {
     const { status, body } = await apiJson('POST', '/api/kernel/validate', {
-      $wosKernel: '1.0',
+      $wosWorkflow: '1.0',
       url: 'test://wf',
       version: '1.0.0',
       title: 'Invalid atomic',

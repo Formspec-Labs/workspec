@@ -1,6 +1,6 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import addFormats from 'ajv-formats';
-import kernelSchema from '../../../schemas/kernel/wos-kernel.schema.json';
+import kernelSchema from '../../../schemas/wos-workflow.schema.json';
 
 export interface KernelValidationIssue {
   severity: 'error' | 'warning';

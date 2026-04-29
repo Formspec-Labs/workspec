@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Policy parameter content lives at [`Governance.policyParameters`](../../schemas/wos-workflow.schema.json) inside the merged `$wosWorkflow` envelope. Standalone `wos-policy-parameters` schema and `$wosPolicyParameters` marker are retired; the date-indexed parameter values, `resolutionDateRef` references, and OpenFisca-style temporal-resolution semantics survive as embedded-block content. Prose below remains as normative reference.
+
 # WOS Policy Parameter Config v1.0
 
 **Version:** 1.0.0-draft.1

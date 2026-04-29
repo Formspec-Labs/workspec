@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Equity Config content is the embedded `advanced.equity` slot of the merged `$wosWorkflow` envelope. Schema home: [`schemas/wos-workflow.schema.json#/$defs/Advanced`](../../schemas/wos-workflow.schema.json) — `equity` property under the `Advanced` `$def`. Standalone `wos-equity-config` schema and `$wosEquityConfig` marker are retired; the prose below remains as normative reference for equity-monitoring semantics.
+
 # WOS Equity Config v1.0
 
 **Version:** 1.0.0-draft.1

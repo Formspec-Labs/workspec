@@ -515,6 +515,8 @@ fn evaluate_agent_provenance(
     }
 
     // AI-053: Version change provenance.
+    // `target` matches the workflow-schema vocabulary (`Transition.target`)
+    // and the conformance fixtures emitted by ADR 0076 D-1.
     if let (Some(at_invocation), Some(expected)) = (
         data.get("modelVersionAtInvocation")
             .and_then(|v| v.as_str()),
@@ -524,18 +526,19 @@ fn evaluate_agent_provenance(
             ProvenanceKind::AgentVersionChange,
             serde_json::json!({
                 "from": expected,
-                "to": at_invocation,
+                "target": at_invocation,
             }),
         ));
     }
 
-    // AG-009: Agent state transition.
+    // AG-009: Agent state transition. Reads `target` from the input payload
+    // (matches schema `Transition.target` shape).
     if let Some(ast) = data.get("agentStateChange") {
         prov.push(mk(
             ProvenanceKind::AgentStateTransition,
             serde_json::json!({
                 "from": ast.get("from"),
-                "to": ast.get("to"),
+                "target": ast.get("target"),
             }),
         ));
     }

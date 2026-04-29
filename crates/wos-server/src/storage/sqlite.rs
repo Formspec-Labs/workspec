@@ -5,11 +5,31 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use std::str::FromStr;
 
-use super::{
+use wos_server_ports::storage::{
     AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator,
     InstanceQuery, InstanceRow, IntakeRecordRow, KernelRow, Page, ProvenanceRow, SessionRow,
     Storage, StorageError, StorageResult, UserRow, LIST_INSTANCES_PAGE_SIZE_MAX,
 };
+
+fn se(e: sqlx::Error) -> StorageError {
+    match &e {
+        sqlx::Error::RowNotFound => StorageError::NotFound,
+        sqlx::Error::Database(db) => {
+            if db.code().map(|c| c == "2067").unwrap_or(false)
+                || db.code().map(|c| c == "1555").unwrap_or(false)
+            {
+                StorageError::Conflict(db.message().to_string())
+            } else {
+                StorageError::Backend(e.to_string())
+            }
+        }
+        other => StorageError::Backend(other.to_string()),
+    }
+}
+
+fn me(e: sqlx::migrate::MigrateError) -> StorageError {
+    StorageError::Backend(e.to_string())
+}
 
 pub struct SqliteStorage {
     pool: SqlitePool,
@@ -17,19 +37,20 @@ pub struct SqliteStorage {
 
 impl SqliteStorage {
     pub async fn connect(url: &str) -> StorageResult<Self> {
-        let opts = SqliteConnectOptions::from_str(url)?
+        let opts = SqliteConnectOptions::from_str(url).map_err(se)?
             .create_if_missing(true)
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .busy_timeout(std::time::Duration::from_secs(5));
         let pool = SqlitePoolOptions::new()
             .max_connections(8)
             .connect_with(opts)
-            .await?;
+            .await
+            .map_err(se)?;
         Ok(Self { pool })
     }
 
     pub async fn migrate(&self) -> StorageResult<()> {
-        sqlx::migrate!("./migrations").run(&self.pool).await?;
+        sqlx::migrate!("./migrations").run(&self.pool).await.map_err(me)?;
         Ok(())
     }
 
@@ -39,15 +60,15 @@ impl SqliteStorage {
 }
 
 fn map_kernel(r: &SqliteRow) -> StorageResult<KernelRow> {
-    let document_s: String = r.try_get("document")?;
+    let document_s: String = r.try_get("document").map_err(se)?;
     Ok(KernelRow {
-        url: r.try_get("url")?,
-        title: r.try_get("title")?,
-        version: r.try_get("version")?,
-        status: r.try_get("status")?,
-        impact_level: r.try_get("impact_level")?,
+        url: r.try_get("url").map_err(se)?,
+        title: r.try_get("title").map_err(se)?,
+        version: r.try_get("version").map_err(se)?,
+        status: r.try_get("status").map_err(se)?,
+        impact_level: r.try_get("impact_level").map_err(se)?,
         document: serde_json::from_str(&document_s)?,
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map_err(se)?,
     })
 }
 
@@ -58,107 +79,107 @@ fn map_instance(r: &SqliteRow) -> StorageResult<InstanceRow> {
         _ => serde_json::json!({}),
     };
     Ok(InstanceRow {
-        instance_id: r.try_get("instance_id")?,
-        definition_url: r.try_get("definition_url")?,
-        definition_version: r.try_get("definition_version")?,
-        status: r.try_get("status")?,
-        impact_level: r.try_get("impact_level")?,
-        instance_json: serde_json::from_str(&r.try_get::<String, _>("instance_json")?)?,
+        instance_id: r.try_get("instance_id").map_err(se)?,
+        definition_url: r.try_get("definition_url").map_err(se)?,
+        definition_version: r.try_get("definition_version").map_err(se)?,
+        status: r.try_get("status").map_err(se)?,
+        impact_level: r.try_get("impact_level").map_err(se)?,
+        instance_json: serde_json::from_str(&r.try_get::<String, _>("instance_json").map_err(se)?)?,
         runtime_aux_json,
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map_err(se)?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map_err(se)?,
     })
 }
 
 fn map_provenance(r: &SqliteRow) -> StorageResult<ProvenanceRow> {
     Ok(ProvenanceRow {
-        id: r.try_get("id")?,
-        instance_id: r.try_get("instance_id")?,
-        seq: r.try_get("seq")?,
-        timestamp: r.try_get::<DateTime<Utc>, _>("timestamp")?,
-        tier: r.try_get("tier")?,
-        payload: serde_json::from_str(&r.try_get::<String, _>("payload")?)?,
-        hash: r.try_get("hash")?,
-        previous_hash: r.try_get("previous_hash")?,
+        id: r.try_get("id").map_err(se)?,
+        instance_id: r.try_get("instance_id").map_err(se)?,
+        seq: r.try_get("seq").map_err(se)?,
+        timestamp: r.try_get::<DateTime<Utc>, _>("timestamp").map_err(se)?,
+        tier: r.try_get("tier").map_err(se)?,
+        payload: serde_json::from_str(&r.try_get::<String, _>("payload").map_err(se)?)?,
+        hash: r.try_get("hash").map_err(se)?,
+        previous_hash: r.try_get("previous_hash").map_err(se)?,
     })
 }
 
 fn map_agent(r: &SqliteRow) -> StorageResult<AgentRow> {
     Ok(AgentRow {
-        id: r.try_get("id")?,
-        workflow_url: r.try_get("workflow_url")?,
-        name: r.try_get("name")?,
-        kind: r.try_get("kind")?,
-        version: r.try_get("version")?,
-        status: r.try_get("status")?,
-        autonomy: r.try_get("autonomy")?,
-        confidence_floor: r.try_get("confidence_floor")?,
-        config_json: serde_json::from_str(&r.try_get::<String, _>("config_json")?)?,
-        deployment_state: r.try_get("deployment_state")?,
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
+        id: r.try_get("id").map_err(se)?,
+        workflow_url: r.try_get("workflow_url").map_err(se)?,
+        name: r.try_get("name").map_err(se)?,
+        kind: r.try_get("kind").map_err(se)?,
+        version: r.try_get("version").map_err(se)?,
+        status: r.try_get("status").map_err(se)?,
+        autonomy: r.try_get("autonomy").map_err(se)?,
+        confidence_floor: r.try_get("confidence_floor").map_err(se)?,
+        config_json: serde_json::from_str(&r.try_get::<String, _>("config_json").map_err(se)?)?,
+        deployment_state: r.try_get("deployment_state").map_err(se)?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map_err(se)?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map_err(se)?,
     })
 }
 
 fn map_identity_fact(r: &SqliteRow) -> StorageResult<IdentityFactRow> {
     Ok(IdentityFactRow {
-        id: r.try_get("id")?,
-        instance_id: r.try_get("instance_id")?,
-        subject_ref: r.try_get("subject_ref")?,
-        assurance_level: r.try_get("assurance_level")?,
-        disclosure_posture: r.try_get("disclosure_posture")?,
-        fact_json: serde_json::from_str(&r.try_get::<String, _>("fact_json")?)?,
-        upgraded_from: r.try_get("upgraded_from")?,
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
+        id: r.try_get("id").map_err(se)?,
+        instance_id: r.try_get("instance_id").map_err(se)?,
+        subject_ref: r.try_get("subject_ref").map_err(se)?,
+        assurance_level: r.try_get("assurance_level").map_err(se)?,
+        disclosure_posture: r.try_get("disclosure_posture").map_err(se)?,
+        fact_json: serde_json::from_str(&r.try_get::<String, _>("fact_json").map_err(se)?)?,
+        upgraded_from: r.try_get("upgraded_from").map_err(se)?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map_err(se)?,
     })
 }
 
 fn map_inbound_event(r: &SqliteRow) -> StorageResult<InboundCloudEventRow> {
     Ok(InboundCloudEventRow {
-        cloud_event_id: r.try_get("cloud_event_id")?,
-        instance_id: r.try_get("instance_id")?,
-        binding: r.try_get("binding")?,
-        received_at: r.try_get::<DateTime<Utc>, _>("received_at")?,
-        payload_json: serde_json::from_str(&r.try_get::<String, _>("payload_json")?)?,
+        cloud_event_id: r.try_get("cloud_event_id").map_err(se)?,
+        instance_id: r.try_get("instance_id").map_err(se)?,
+        binding: r.try_get("binding").map_err(se)?,
+        received_at: r.try_get::<DateTime<Utc>, _>("received_at").map_err(se)?,
+        payload_json: serde_json::from_str(&r.try_get::<String, _>("payload_json").map_err(se)?)?,
     })
 }
 
 fn map_intake_record(r: &SqliteRow) -> StorageResult<IntakeRecordRow> {
     Ok(IntakeRecordRow {
-        binding: r.try_get("binding")?,
-        intake_id: r.try_get("intake_id")?,
-        status: r.try_get("status")?,
-        record_json: serde_json::from_str(&r.try_get::<String, _>("record_json")?)?,
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
-        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
+        binding: r.try_get("binding").map_err(se)?,
+        intake_id: r.try_get("intake_id").map_err(se)?,
+        status: r.try_get("status").map_err(se)?,
+        record_json: serde_json::from_str(&r.try_get::<String, _>("record_json").map_err(se)?)?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map_err(se)?,
+        updated_at: r.try_get::<DateTime<Utc>, _>("updated_at").map_err(se)?,
     })
 }
 
 fn map_user(r: &SqliteRow) -> StorageResult<UserRow> {
     Ok(UserRow {
-        id: r.try_get("id")?,
-        email: r.try_get("email")?,
-        name: r.try_get("name")?,
-        role: r.try_get("role")?,
-        password_hash: r.try_get("password_hash")?,
-        avatar: r.try_get("avatar")?,
-        auth_epoch: r.try_get("auth_epoch")?,
-        created_at: r.try_get::<DateTime<Utc>, _>("created_at")?,
+        id: r.try_get("id").map_err(se)?,
+        email: r.try_get("email").map_err(se)?,
+        name: r.try_get("name").map_err(se)?,
+        role: r.try_get("role").map_err(se)?,
+        password_hash: r.try_get("password_hash").map_err(se)?,
+        avatar: r.try_get("avatar").map_err(se)?,
+        auth_epoch: r.try_get("auth_epoch").map_err(se)?,
+        created_at: r.try_get::<DateTime<Utc>, _>("created_at").map_err(se)?,
     })
 }
 
 fn map_delegation(r: &SqliteRow) -> StorageResult<DelegationRow> {
     Ok(DelegationRow {
-        id: r.try_get("id")?,
-        workflow_url: r.try_get("workflow_url")?,
-        delegator: r.try_get("delegator")?,
-        delegate: r.try_get("delegate")?,
-        scope: r.try_get("scope")?,
-        authority: r.try_get("authority")?,
-        legal_instrument: r.try_get("legal_instrument")?,
-        start_date: r.try_get::<DateTime<Utc>, _>("start_date")?,
-        end_date: r.try_get::<Option<DateTime<Utc>>, _>("end_date")?,
-        status: r.try_get("status")?,
+        id: r.try_get("id").map_err(se)?,
+        workflow_url: r.try_get("workflow_url").map_err(se)?,
+        delegator: r.try_get("delegator").map_err(se)?,
+        delegate: r.try_get("delegate").map_err(se)?,
+        scope: r.try_get("scope").map_err(se)?,
+        authority: r.try_get("authority").map_err(se)?,
+        legal_instrument: r.try_get("legal_instrument").map_err(se)?,
+        start_date: r.try_get::<DateTime<Utc>, _>("start_date").map_err(se)?,
+        end_date: r.try_get::<Option<DateTime<Utc>>, _>("end_date").map_err(se)?,
+        status: r.try_get("status").map_err(se)?,
     })
 }
 
@@ -167,7 +188,8 @@ impl Storage for SqliteStorage {
     async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>> {
         let rows = sqlx::query("SELECT * FROM kernels ORDER BY url")
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         rows.iter().map(map_kernel).collect()
     }
 
@@ -175,7 +197,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM kernels WHERE url = ?")
             .bind(url)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_kernel).transpose()
     }
 
@@ -200,7 +223,8 @@ impl Storage for SqliteStorage {
         .bind(&doc)
         .bind(row.updated_at)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -222,7 +246,8 @@ impl Storage for SqliteStorage {
         .bind(row.created_at)
         .bind(row.updated_at)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -230,7 +255,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM instances WHERE instance_id = ?")
             .bind(id)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_instance).transpose()
     }
 
@@ -289,9 +315,9 @@ impl Storage for SqliteStorage {
                 }
             }
         }
-        let count_row = count_q.fetch_one(&self.pool).await?;
-        let total: i64 = count_row.try_get(0)?;
-        let rows = list_q.bind(limit).bind(offset).fetch_all(&self.pool).await?;
+        let count_row = count_q.fetch_one(&self.pool).await.map_err(se)?;
+        let total: i64 = count_row.try_get(0).map_err(se)?;
+        let rows = list_q.bind(limit).bind(offset).fetch_all(&self.pool).await.map_err(se)?;
         let items: Vec<InstanceRow> = rows.iter().map(map_instance).collect::<Result<_, _>>()?;
 
         Ok(Page {
@@ -307,12 +333,13 @@ impl Storage for SqliteStorage {
         id: &str,
         mutator: InstanceMutator<'_>,
     ) -> StorageResult<InstanceRow> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool.begin().await.map_err(se)?;
 
         let row = sqlx::query("SELECT * FROM instances WHERE instance_id = ?")
             .bind(id)
             .fetch_optional(&mut *tx)
-            .await?;
+            .await
+            .map_err(se)?;
         let row = row.ok_or(StorageError::NotFound)?;
         let mut current = map_instance(&row)?;
         let appended = mutator(&mut current)?;
@@ -335,7 +362,8 @@ impl Storage for SqliteStorage {
         .bind(current.updated_at)
         .bind(&current.instance_id)
         .execute(&mut *tx)
-        .await?;
+        .await
+        .map_err(se)?;
 
         for rec in &appended {
             let payload = serde_json::to_string(&rec.payload)?;
@@ -353,10 +381,11 @@ impl Storage for SqliteStorage {
             .bind(&rec.hash)
             .bind(&rec.previous_hash)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .map_err(se)?;
         }
 
-        tx.commit().await?;
+        tx.commit().await.map_err(se)?;
         Ok(current)
     }
 
@@ -366,7 +395,8 @@ impl Storage for SqliteStorage {
         )
         .bind(instance_id)
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         rows.iter().map(map_provenance).collect()
     }
 
@@ -376,7 +406,8 @@ impl Storage for SqliteStorage {
         )
         .bind(instance_id)
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         row.as_ref().map(map_provenance).transpose()
     }
 
@@ -386,7 +417,8 @@ impl Storage for SqliteStorage {
         )
         .bind(workflow_url)
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         rows.iter().map(map_delegation).collect()
     }
 
@@ -418,7 +450,8 @@ impl Storage for SqliteStorage {
         .bind(row.end_date)
         .bind(&row.status)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -429,7 +462,8 @@ impl Storage for SqliteStorage {
         .bind(workflow_url)
         .bind(id)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -464,7 +498,8 @@ impl Storage for SqliteStorage {
         .bind(row.created_at)
         .bind(row.updated_at)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -472,7 +507,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM agents WHERE id = ?")
             .bind(id)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_agent).transpose()
     }
 
@@ -482,7 +518,8 @@ impl Storage for SqliteStorage {
         )
         .bind(workflow_url)
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         rows.iter().map(map_agent).collect()
     }
 
@@ -502,7 +539,8 @@ impl Storage for SqliteStorage {
         .bind(&row.upgraded_from)
         .bind(row.created_at)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -510,7 +548,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM identity_facts WHERE id = ?")
             .bind(id)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_identity_fact).transpose()
     }
 
@@ -523,7 +562,8 @@ impl Storage for SqliteStorage {
         )
         .bind(instance_id)
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         rows.iter().map(map_identity_fact).collect()
     }
 
@@ -536,7 +576,8 @@ impl Storage for SqliteStorage {
         )
         .bind(subject_ref)
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         rows.iter().map(map_identity_fact).collect()
     }
 
@@ -547,7 +588,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM integration_inbound WHERE cloud_event_id = ?")
             .bind(cloud_event_id)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_inbound_event).transpose()
     }
 
@@ -566,7 +608,8 @@ impl Storage for SqliteStorage {
         .bind(row.received_at)
         .bind(&payload)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(result.rows_affected() > 0)
     }
 
@@ -581,7 +624,8 @@ impl Storage for SqliteStorage {
         .bind(binding)
         .bind(intake_id)
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         row.as_ref().map(map_intake_record).transpose()
     }
 
@@ -604,7 +648,7 @@ impl Storage for SqliteStorage {
             Err(sqlx::Error::Database(db)) if db.is_unique_violation() => Err(
                 StorageError::Conflict(format!("intake:{}:{}", row.binding, row.intake_id)),
             ),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(se(e)),
         }
     }
 
@@ -621,7 +665,8 @@ impl Storage for SqliteStorage {
         .bind(&row.binding)
         .bind(&row.intake_id)
         .execute(&self.pool)
-        .await?
+        .await
+        .map_err(se)?
         .rows_affected();
         if affected == 0 {
             Err(StorageError::NotFound)
@@ -634,7 +679,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM users WHERE lower(email) = lower(?)")
             .bind(email)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_user).transpose()
     }
 
@@ -642,7 +688,8 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT * FROM users WHERE id = ?")
             .bind(id)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_user).transpose()
     }
 
@@ -665,7 +712,8 @@ impl Storage for SqliteStorage {
         .bind(row.auth_epoch)
         .bind(row.created_at)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -673,7 +721,8 @@ impl Storage for SqliteStorage {
         sqlx::query("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id = ?")
             .bind(user_id)
             .execute(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         Ok(())
     }
 
@@ -682,12 +731,13 @@ impl Storage for SqliteStorage {
         user_id: &str,
         password_hash: &str,
     ) -> StorageResult<()> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool.begin().await.map_err(se)?;
         let n = sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
             .bind(password_hash)
             .bind(user_id)
             .execute(&mut *tx)
-            .await?
+            .await
+            .map_err(se)?
             .rows_affected();
         if n == 0 {
             return Err(StorageError::NotFound);
@@ -695,12 +745,14 @@ impl Storage for SqliteStorage {
         sqlx::query("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id = ?")
             .bind(user_id)
             .execute(&mut *tx)
-            .await?;
+            .await
+            .map_err(se)?;
         sqlx::query("UPDATE sessions SET revoked = 1 WHERE user_id = ?")
             .bind(user_id)
             .execute(&mut *tx)
-            .await?;
-        tx.commit().await?;
+            .await
+            .map_err(se)?;
+        tx.commit().await.map_err(se)?;
         Ok(())
     }
 
@@ -719,7 +771,8 @@ impl Storage for SqliteStorage {
         .bind(row.expires_at)
         .bind(revoked)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(())
     }
 
@@ -727,7 +780,8 @@ impl Storage for SqliteStorage {
         sqlx::query("UPDATE sessions SET revoked = 1 WHERE jti = ?")
             .bind(jti)
             .execute(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         Ok(())
     }
 
@@ -735,7 +789,8 @@ impl Storage for SqliteStorage {
         sqlx::query("UPDATE sessions SET revoked = 1 WHERE user_id = ?")
             .bind(user_id)
             .execute(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         Ok(())
     }
 
@@ -753,7 +808,8 @@ impl Storage for SqliteStorage {
         .bind(cutoff_unrevoked)
         .bind(cutoff_revoked)
         .execute(&self.pool)
-        .await?;
+        .await
+        .map_err(se)?;
         Ok(result.rows_affected())
     }
 
@@ -761,11 +817,12 @@ impl Storage for SqliteStorage {
         let row = sqlx::query("SELECT revoked, expires_at FROM sessions WHERE jti = ?")
             .bind(jti)
             .fetch_optional(&self.pool)
-            .await?;
+            .await
+            .map_err(se)?;
         Ok(match row {
             Some(r) => {
-                let revoked: i64 = r.try_get("revoked")?;
-                let expires: DateTime<Utc> = r.try_get("expires_at")?;
+                let revoked: i64 = r.try_get("revoked").map_err(se)?;
+                let expires: DateTime<Utc> = r.try_get("expires_at").map_err(se)?;
                 revoked == 0 && expires > Utc::now()
             }
             None => false,

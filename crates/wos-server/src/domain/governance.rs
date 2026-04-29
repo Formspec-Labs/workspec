@@ -246,6 +246,24 @@ pub struct VerificationSummaryView {
     pub total_solver_time_ms: Option<u64>,
 }
 
+/// `AdverseDecisionNoticeView` — rendered adverse-decision notice with
+/// due-process semantics stamped from the `dueProcess` sidecar (Gov §3.2).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdverseDecisionNoticeView {
+    pub template_id: String,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grace_period: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub appeal_window: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right_to_contest: Option<String>,
+    pub channels: Vec<String>,
+}
+
 /// `EquityConfigView` in `WosPorts.ts:161`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

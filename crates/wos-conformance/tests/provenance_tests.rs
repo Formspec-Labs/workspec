@@ -335,7 +335,7 @@ fn set_data_mutates_case_state_and_produces_provenance() {
             { "event": "submit", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "open", "to": "processing", "event": "submit" }
+            { "from": "open", "target": "processing", "event": "submit" }
         ]
     }))
     .unwrap();
@@ -426,7 +426,7 @@ fn set_data_result_visible_in_guard_evaluation() {
             { "event": "check", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "start", "to": "highValue", "event": "check" }
+            { "from": "start", "target": "highValue", "event": "check" }
         ]
     }))
     .unwrap();
@@ -507,7 +507,7 @@ fn timer_fires_after_simulated_delay() {
             { "event": "noop", "delay": "P31D" }
         ],
         "expected_transitions": [
-            { "from": "waiting", "to": "timedOut", "event": "timeout" }
+            { "from": "waiting", "target": "timedOut", "event": "timeout" }
         ]
     }))
     .unwrap();
@@ -549,7 +549,7 @@ fn timer_cancelled_on_explicit_cancel_action() {
             { "event": "respond", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "waiting", "to": "responded", "event": "respond" }
+            { "from": "waiting", "target": "responded", "event": "respond" }
         ]
     }))
     .unwrap();
@@ -631,8 +631,8 @@ fn compound_state_substate_transitions() {
             { "event": "finish", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "step1", "to": "step2", "event": "next" },
-            { "from": "step2", "to": "completed", "event": "finish" }
+            { "from": "step1", "target": "step2", "event": "next" },
+            { "from": "step2", "target": "completed", "event": "finish" }
         ]
     }))
     .unwrap();
@@ -666,7 +666,7 @@ fn parallel_join_fires_only_when_all_regions_final() {
             { "event": "completeA", "actor": "reviewerA" }
         ],
         "expected_transitions": [
-            { "from": "reviewA", "to": "doneA", "event": "completeA" }
+            { "from": "reviewA", "target": "doneA", "event": "completeA" }
         ]
     }))
     .unwrap();
@@ -706,9 +706,9 @@ fn parallel_join_fires_when_all_regions_final() {
             { "event": "completeB", "actor": "reviewerB" }
         ],
         "expected_transitions": [
-            { "from": "reviewA", "to": "doneA", "event": "completeA" },
-            { "from": "reviewB", "to": "doneB", "event": "completeB" },
-            { "from": "dualReview", "to": "resolved", "event": "$join" }
+            { "from": "reviewA", "target": "doneA", "event": "completeA" },
+            { "from": "reviewB", "target": "doneB", "event": "completeB" },
+            { "from": "dualReview", "target": "resolved", "event": "$join" }
         ]
     }))
     .unwrap();
@@ -737,8 +737,8 @@ fn every_state_transition_produces_provenance() {
             { "event": "complete", "actor": "system" }
         ],
         "expected_transitions": [
-            { "from": "open", "to": "processing", "event": "submit" },
-            { "from": "processing", "to": "done", "event": "complete" }
+            { "from": "open", "target": "processing", "event": "submit" },
+            { "from": "processing", "target": "done", "event": "complete" }
         ]
     }))
     .unwrap();
@@ -782,8 +782,8 @@ fn determinism_same_events_produce_same_transitions() {
             { "event": "complete", "actor": "system" }
         ],
         "expected_transitions": [
-            { "from": "open", "to": "processing", "event": "submit" },
-            { "from": "processing", "to": "done", "event": "complete" }
+            { "from": "open", "target": "processing", "event": "submit" },
+            { "from": "processing", "target": "done", "event": "complete" }
         ]
     }))
     .unwrap();
@@ -871,7 +871,7 @@ fn guard_evaluation_first_match_wins_document_order() {
             { "event": "evaluate", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "open", "to": "approved", "event": "evaluate" }
+            { "from": "open", "target": "approved", "event": "evaluate" }
         ]
     }))
     .unwrap();
@@ -934,7 +934,7 @@ fn guard_evaluation_fallthrough_when_first_guard_fails() {
             { "event": "evaluate", "actor": "user" }
         ],
         "expected_transitions": [
-            { "from": "open", "to": "rejected", "event": "evaluate" }
+            { "from": "open", "target": "rejected", "event": "evaluate" }
         ]
     }))
     .unwrap();

@@ -80,9 +80,9 @@ export function DocumentsTab({ caseId }: DocumentsTabProps) {
     );
   }
 
-  const contracts = bundle.kernel.contracts ?? {};
+  const contracts = bundle.workflow.contracts ?? {};
   const contractEntries = Object.entries(contracts);
-  const templates = bundle.notificationTemplates?.templates ?? {};
+  const templates = bundle.delivery?.notificationTemplates?.templates ?? {};
   const templateEntries = Object.entries(templates);
 
   return (
@@ -90,7 +90,7 @@ export function DocumentsTab({ caseId }: DocumentsTabProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Documents &amp; Correspondence</h2>
-          <p className="text-sm text-gray-500 mt-1">{bundle.kernel.title}</p>
+          <p className="text-sm text-gray-500 mt-1">{bundle.workflow.title}</p>
         </div>
       </div>
 

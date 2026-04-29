@@ -5,6 +5,8 @@ date: 2026-04-10
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-3).** Business calendar content lives in the merged delivery sidecar at [`schemas/sidecars/wos-delivery.schema.json#/$defs/CalendarBlock`](../../schemas/sidecars/wos-delivery.schema.json) — `calendar` block of a `$wosDelivery` envelope (timezone, workWeek, holidays, operatingHours). Standalone `wos-business-calendar` schema and `$wosBusinessCalendar` marker are retired. See [`specs/sidecars/README.md`](README.md) for the active sidecar index. Prose below remains as normative reference for SLA-evaluation semantics consumed by `Governance §10.3`.
+
 # WOS Business Calendar Sidecar v1.0
 
 **Version:** 1.0.0-draft.1

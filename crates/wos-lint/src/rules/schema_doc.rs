@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn known_good_kernel_excerpt_passes() {
-        // Minimal excerpt mirroring wos-kernel.schema.json's `$wosWorkflow`
+        // Minimal excerpt mirroring wos-workflow.schema.json's `$wosWorkflow`
         // and `url` leaves, which are both critical and documented.
         let schema = json!({
             "type": "object",

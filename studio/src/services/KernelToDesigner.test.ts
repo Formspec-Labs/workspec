@@ -31,7 +31,7 @@ function joinSignal() {
 function makeKernel(states: WOSKernelDocument['lifecycle']['states'], initialState?: string): WOSKernelDocument {
   const firstKey = initialState ?? Object.keys(states)[0] ?? 'start';
   return {
-    $wosKernel: '1.0',
+    $wosWorkflow: '1.0',
     url: 'test://workflow',
     version: '1.0.0',
     title: 'Test Workflow',
@@ -165,8 +165,7 @@ describe('KernelToDesigner round-trip', () => {
 
   it('round-trips the benefits adjudication fixture kernel and validates against the schema', () => {
     const bundle = loadBenefitsAdjudicationBundle();
-    const kernel = bundle.kernel;
-
+    const kernel = bundle.workflow;
     const roundTripped = designerToKernel(designerFromKernel(kernel), kernel);
 
     const eligibility = getState(roundTripped, ['eligibilityReview']);
@@ -188,8 +187,7 @@ describe('KernelToDesigner round-trip', () => {
     // region-scoped transitions and task references must survive without
     // being dropped or rewritten.
     const bundle = loadBenefitsAdjudicationBundle();
-    const kernel = bundle.kernel;
-
+    const kernel = bundle.workflow;
     const roundTripped = designerToKernel(designerFromKernel(kernel), kernel);
 
     // Region-local transition — the canonical failure mode.
@@ -209,8 +207,7 @@ describe('KernelToDesigner round-trip', () => {
     // Stronger guarantee: a null-edit round-trip should be an identity on
     // every state that appears in the designer view.
     const bundle = loadBenefitsAdjudicationBundle();
-    const kernel = bundle.kernel;
-
+    const kernel = bundle.workflow;
     const roundTripped = designerToKernel(designerFromKernel(kernel), kernel);
 
     // Compare each state that kernelToDesigner emits as a stage. Ignore

@@ -1,28 +1,84 @@
 """Custody-hook append input schema regression tests.
 
-Validates the runtime-artifact schema for the WOS-owned authored-record
+Validates the runtime-artifact JSON shape for the WOS-owned authored-record
 surface crossing the Kernel `custodyHook` seam. The root object is the
 four-field append input from WOS Custody Hook Encoding §1.3; `$defs`
 also pin the WOS-owned idempotency source and the minimum receipt shape.
+
+Per ADR 0076 the standalone custody-hook JSON Schema artifact under ``schemas/kernel/``
+was removed; this module inlines an equivalent Draft 2020-12 schema
+so fixture-level JSON Schema checks remain aligned with ``specs/kernel/custody-hook-encoding.md``.
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-CUSTODY_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "kernel" / "wos-custody-hook-encoding.schema.json"
-)
+# Inline mirror of Kernel custody-hook-encoding.md §1.3 (four-field append JSON).
+# Canonical author-time workflow schema is ``schemas/wos-workflow.schema.json``;
+# wire-format enforcement in production is ``wos_runtime::custody``.
+CUSTODY_APPEND_SCHEMA: dict = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:wos-spec:test:custody-append-input",
+    "$defs": {
+        "CaseTypeId": {
+            "type": "string",
+            "pattern": r"^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
+            "format": "wos-case-typeid",
+        },
+        "RecordTypeId": {
+            "type": "string",
+            "pattern": (
+                r"^[a-z][a-z0-9-]*_"
+                r"(?:prov|gov|ai|assurance|x-[a-z][a-z0-9-]+(?:-[a-z][a-z0-9-]+)+)"
+                r"_[0-9a-hjkmnp-tv-z]{26}$"
+            ),
+            "format": "wos-record-typeid",
+        },
+        "IdempotencySource": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["caseId", "recordId"],
+            "properties": {
+                "caseId": {"$ref": "#/$defs/CaseTypeId"},
+                "recordId": {"$ref": "#/$defs/RecordTypeId"},
+            },
+        },
+        "CustodyAppendReceipt": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["canonical_event_hash"],
+            "properties": {
+                "canonical_event_hash": {
+                    "type": "string",
+                    "pattern": r"^[0-9a-f]{64}$",
+                },
+            },
+        },
+    },
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["caseId", "recordId", "eventType", "record"],
+    "properties": {
+        "caseId": {"$ref": "#/$defs/CaseTypeId"},
+        "recordId": {"$ref": "#/$defs/RecordTypeId"},
+        "eventType": {
+            "type": "string",
+            "pattern": r"^wos\.[A-Za-z0-9._-]+$",
+        },
+        "record": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "pattern": r"^[A-Za-z0-9+/]+=*$",
+        },
+    },
+}
 
 
 @pytest.fixture(scope="module")
 def schema() -> dict:
-    return json.loads(CUSTODY_SCHEMA.read_text())
+    return CUSTODY_APPEND_SCHEMA
 
 
 @pytest.fixture(scope="module")

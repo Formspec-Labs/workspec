@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-3).** Correspondence metadata content lives in the merged delivery sidecar at [`schemas/sidecars/wos-delivery.schema.json#/$defs/CorrespondenceBlock`](../../schemas/sidecars/wos-delivery.schema.json) — `correspondence` block of a `$wosDelivery` envelope. Standalone `wos-correspondence-metadata` schema and `$wosCorrespondenceMetadata` marker are retired. See [`specs/sidecars/README.md`](../sidecars/README.md) for the active sidecar index. Prose below remains as normative reference for case-state correspondence-entry semantics.
+
 # WOS Correspondence Metadata Config v1.0
 
 **Version:** 1.0.0-draft.1

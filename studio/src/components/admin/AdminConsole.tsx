@@ -22,12 +22,12 @@ import {
   Layers
 } from 'lucide-react';
 import { useGovernance } from '../../context/WosContext';
-import type { AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView, PipelineView, VerificationReportView, EquityConfigView, PolicyVersionView, CalendarEventView, ServiceHealthView } from '../../services/WosPorts';
+import type { AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView, PipelineView, EquityConfigView, PolicyVersionView, CalendarEventView, ServiceHealthView } from '../../services/WosPorts';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { ConfirmationModal } from '../ui/ConfirmationModal';
 
-type AdminTab = 'agents' | 'deontic' | 'quality' | 'pipelines' | 'equity' | 'verification' | 'delegations' | 'regulatory' | 'calendar' | 'health';
+type AdminTab = 'agents' | 'deontic' | 'quality' | 'pipelines' | 'equity' | 'delegations' | 'regulatory' | 'calendar' | 'health';
 type AdminPersona = 'it-admin' | 'policy-admin' | 'ops-admin';
 
 const DEFAULT_WORKFLOW_URL = 'https://agency.gov/workflows/benefits-adjudication';
@@ -40,7 +40,6 @@ export function AdminConsole() {
   const [deonticConstraints, setDeonticConstraints] = useState<DeonticConstraintView[]>([]);
   const [qualityControls, setQualityControls] = useState<QualityControlsView | null>(null);
   const [pipelines, setPipelines] = useState<PipelineView[]>([]);
-  const [verificationReport, setVerificationReport] = useState<VerificationReportView | null>(null);
   const [equityConfig, setEquityConfig] = useState<EquityConfigView | null>(null);
   const [delegations, setDelegations] = useState<DelegationEntry[]>([]);
   const [versions, setVersions] = useState<PolicyVersionView[]>([]);
@@ -66,7 +65,6 @@ export function AdminConsole() {
       governance.listDeonticConstraints(DEFAULT_WORKFLOW_URL).then(setDeonticConstraints),
       governance.getQualityControls(DEFAULT_WORKFLOW_URL).then(setQualityControls),
       governance.listPipelines(DEFAULT_WORKFLOW_URL).then(setPipelines),
-      governance.getVerificationReport(DEFAULT_WORKFLOW_URL).then(setVerificationReport),
       governance.getEquityConfig(DEFAULT_WORKFLOW_URL).then(setEquityConfig),
       governance.listDelegations(DEFAULT_WORKFLOW_URL).then(setDelegations),
       governance.listPolicyVersions(DEFAULT_WORKFLOW_URL).then(setVersions),
@@ -160,7 +158,6 @@ export function AdminConsole() {
           {activePersona === 'it-admin' && (
             <>
               <TabButton active={activeTab === 'agents'} onClick={() => setActiveTab('agents')} icon={<Cpu className="w-4 h-4" />} label="Agents" />
-              <TabButton active={activeTab === 'verification'} onClick={() => setActiveTab('verification')} icon={<CheckCircle2 className="w-4 h-4" />} label="Verification" />
               <TabButton active={activeTab === 'health'} onClick={() => setActiveTab('health')} icon={<Activity className="w-4 h-4" />} label="Health" />
             </>
           )}
@@ -190,7 +187,6 @@ export function AdminConsole() {
             {activeTab === 'quality' && <div key="quality"><QualityControlsPanel controls={qualityControls} /></div>}
             {activeTab === 'pipelines' && <div key="pipelines"><PipelineViewerPanel pipelines={pipelines} /></div>}
             {activeTab === 'equity' && <div key="equity"><EquityGuardrailsPanel config={equityConfig} /></div>}
-            {activeTab === 'verification' && <div key="verification"><VerificationReportPanel report={verificationReport} /></div>}
             {activeTab === 'delegations' && <div key="delegations"><DelegationPanel delegations={delegations} onRevoke={async (id) => { await governance.revokeDelegation(DEFAULT_WORKFLOW_URL, id); governance.listDelegations(DEFAULT_WORKFLOW_URL).then(setDelegations); }} onCreate={() => setIsCreateDelegationOpen(true)} /></div>}
             {activeTab === 'regulatory' && <div key="regulatory"><RegulatoryPanel versions={versions} onDefine={() => setIsDefineVersionOpen(true)} onConfigureMigration={(id) => { setSelectedVersionId(id); setIsMigrationPolicyOpen(true); }} /></div>}
             {activeTab === 'calendar' && <div key="calendar"><CalendarPanel events={calendarEvents} onAdd={() => setIsAddHolidayOpen(true)} onViewAffected={() => setIsViewAffectedCasesOpen(true)} /></div>}
@@ -1181,85 +1177,6 @@ function PipelineViewerPanel({ pipelines }: { pipelines: PipelineView[] }) {
           </div>
         ))
       )}
-    </motion.div>
-  );
-}
-
-function VerificationReportPanel({ report }: { report: VerificationReportView | null }) {
-  if (!report) {
-    return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-        <h2 className="text-lg font-bold text-gray-900">SMT Verification Report</h2>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-          <CheckCircle2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-sm font-bold text-gray-900 mb-1">No Verification Report</h3>
-          <p className="text-xs text-gray-500">No SMT verification has been run for this workflow.</p>
-        </div>
-      </motion.div>
-    );
-  }
-
-  const RESULT_STYLES: Record<string, { bg: string; text: string }> = {
-    'proven-safe': { bg: 'bg-emerald-50', text: 'text-emerald-700' },
-    'proven-unsafe': { bg: 'bg-red-50', text: 'text-red-700' },
-    'inconclusive': { bg: 'bg-amber-50', text: 'text-amber-700' },
-  };
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">SMT Verification Report</h2>
-          <p className="text-xs text-gray-500 mt-1">Formal verification of deontic constraints via {report.solver.name} v{report.solver.version}</p>
-        </div>
-      </div>
-
-      {report.summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-            <div className="text-2xl font-black text-gray-900">{report.summary.provenSafe ?? 0}</div>
-            <div className="text-[10px] font-bold uppercase tracking-widest mt-1 text-emerald-700">Proven Safe</div>
-          </div>
-          <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-            <div className="text-2xl font-black text-gray-900">{report.summary.provenUnsafe ?? 0}</div>
-            <div className="text-[10px] font-bold uppercase tracking-widest mt-1 text-red-700">Proven Unsafe</div>
-          </div>
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-            <div className="text-2xl font-black text-gray-900">{report.summary.inconclusive ?? 0}</div>
-            <div className="text-[10px] font-bold uppercase tracking-widest mt-1 text-amber-700">Inconclusive</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <div className="text-2xl font-black text-gray-900">{report.summary.totalSolverTimeMs != null ? `${(report.summary.totalSolverTimeMs / 1000).toFixed(1)}s` : '—'}</div>
-            <div className="text-[10px] font-bold uppercase tracking-widest mt-1 text-gray-500">Total Time</div>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {report.results.map((r, i) => {
-          const rs = RESULT_STYLES[r.result] ?? RESULT_STYLES.inconclusive;
-          return (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <h4 className="text-sm font-bold text-gray-900">{r.constraintRef}</h4>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${rs.bg} ${rs.text}`}>
-                  {r.result}
-                </span>
-                {r.solverTimeMs != null && (
-                  <span className="text-[10px] text-gray-400">{r.solverTimeMs >= 1000 ? `${(r.solverTimeMs / 1000).toFixed(1)}s` : `${r.solverTimeMs}ms`}</span>
-                )}
-              </div>
-              {r.notes && <p className="text-xs text-gray-600 leading-relaxed">{r.notes}</p>}
-              {r.counterexample?.explanation && (
-                <div className="mt-2 p-3 bg-red-50 border border-red-100 rounded-lg">
-                  <span className="text-[9px] font-bold text-red-700 uppercase tracking-widest">Counterexample</span>
-                  <p className="text-xs text-red-600 mt-1">{r.counterexample.explanation}</p>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </motion.div>
   );
 }

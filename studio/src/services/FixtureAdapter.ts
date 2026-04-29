@@ -5,7 +5,7 @@ import type {
 import type {
   IInboxPort, TaskListItem, ICaseViewerPort, IWorkflowDesignPort, WosValidationResult,
   IGovernancePort, IGovernanceReader, IGovernanceWriter, AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView, PipelineView, PipelineStageView,
-  VerificationReportView, VerificationResultView, EquityConfigView,
+  EquityConfigView,
   PolicyVersionView, CalendarEventView, ServiceHealthView,
   IDashboardPort, DashboardMetrics, StageMetricView, AlertView, DriftDataPoint, PipelineDataPoint,
   IApplicantPort, ApplicantDeterminationView, IRealtimePort, Unsubscribe,
@@ -100,11 +100,11 @@ export class FixtureBackend implements IWosBackend {
 
   async listBundles(): Promise<KernelSummary[]> {
     return Array.from(this.bundles.values()).map(b => ({
-      url: b.kernel.url ?? '',
-      title: b.kernel.title ?? 'Untitled',
-      version: b.kernel.version ?? '0.0.0',
-      status: b.kernel.status ?? 'draft',
-      impactLevel: b.kernel.impactLevel ?? 'operational',
+      url: b.workflow.url ?? '',
+      title: b.workflow.title ?? 'Untitled',
+      version: b.workflow.version ?? '0.0.0',
+      status: b.workflow.status ?? 'draft',
+      impactLevel: b.workflow.impactLevel ?? 'operational',
     }));
   }
 
@@ -250,7 +250,7 @@ export class FixtureWorkflowDesignPort implements IWorkflowDesignPort {
   constructor(private backend: IWosBackend) {}
   async listWorkflows() { return this.backend.listBundles(); }
   async loadKernel(url: string) {
-    try { const b = await this.backend.loadBundle(url); return b.kernel; } catch { return null; }
+    try { const b = await this.backend.loadBundle(url); return b.workflow; } catch { return null; }
   }
   async saveKernel(_kernel: WOSKernelDocument) {}
   async validateKernel(kernel: WOSKernelDocument): Promise<WosValidationResult> {
@@ -264,135 +264,29 @@ export class FixtureWorkflowDesignPort implements IWorkflowDesignPort {
 export class FixtureGovernancePort implements IGovernancePort {
   constructor(private backend: IWosBackend) {}
   async listAgents(workflowUrl: string): Promise<AgentView[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    return (bundle.ai?.agents ?? []).map(a => ({
-      id: a.id, name: a.id, type: a.type ?? 'llm', version: '1.0', status: 'active',
-      capabilities: (a.capabilities ?? []).map(c => ({ name: c.name, autonomy: c.autonomy ?? 'assistive' })),
-    }));
+    return [];
   }
-  async listDeonticConstraints(workflowUrl: string): Promise<DeonticConstraintView[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const dc = bundle.ai?.deonticConstraints;
-    if (!dc) return [];
-    const result: DeonticConstraintView[] = [];
-    for (const p of dc.permissions ?? []) {
-      result.push({ kind: 'permission', id: p.id, summary: p.allowedFields ? `Allowed fields: ${p.allowedFields.join(', ')}` : p.bounds ?? 'Permission', detail: p.field ?? undefined, onViolation: p.onViolation, bypassable: p.bypassable });
-    }
-    for (const p of dc.prohibitions ?? []) {
-      result.push({ kind: 'prohibition', id: p.id, summary: p.condition, detail: p.reason, onViolation: p.onViolation, bypassable: p.bypassable });
-    }
-    for (const o of dc.obligations ?? []) {
-      result.push({ kind: 'obligation', id: o.id, summary: o.requirement, detail: o.reason, onViolation: o.onViolation, bypassable: o.bypassable });
-    }
-    for (const r of dc.rights ?? []) {
-      result.push({ kind: 'right', id: r.id, summary: r.entitlement, detail: r.description });
-    }
-    return result;
+  async listDeonticConstraints(_workflowUrl: string): Promise<DeonticConstraintView[]> {
+    return [];
   }
-  async getQualityControls(workflowUrl: string): Promise<QualityControlsView | null> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const qc = bundle.governance?.qualityControls;
-    if (!qc) return null;
-    return {
-      reviewSampling: qc.reviewSampling ? { rate: qc.reviewSampling.rate, method: qc.reviewSampling.method, scope: qc.reviewSampling.scope } : undefined,
-      separationOfDuties: qc.separationOfDuties ? { scope: qc.separationOfDuties.scope, excludeRoles: qc.separationOfDuties.excludeRoles } : undefined,
-      overrideAuthority: qc.overrideAuthority ? { requireStructuredRationale: qc.overrideAuthority.requireStructuredRationale, requireAuthorityVerification: qc.overrideAuthority.requireAuthorityVerification, requireSupportingEvidence: qc.overrideAuthority.requireSupportingEvidence } : undefined,
-    };
+  async getQualityControls(_workflowUrl: string): Promise<QualityControlsView | null> {
+    return null;
   }
-  async listPipelines(workflowUrl: string): Promise<PipelineView[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const pipelines = bundle.governance?.pipelines;
-    if (!pipelines) return [];
-    return pipelines.map(p => ({
-      id: p.id,
-      stages: (p.stages ?? []).map(s => ({
-        id: s.id,
-        type: s.type as PipelineStageView['type'],
-        contractRef: s.contractRef,
-        assertions: (s.assertions ?? []).map(a => ({
-          type: a.type,
-          expression: a.expression,
-          fields: a.fields,
-          description: a.description,
-          rejectionPolicy: a.rejectionPolicy,
-        })),
-        rejectionPolicy: s.rejectionPolicy as PipelineStageView['rejectionPolicy'],
-        description: s.description,
-      })),
-      description: p.description ?? undefined,
-    }));
+  async listPipelines(_workflowUrl: string): Promise<PipelineView[]> {
+    return [];
   }
-  async getVerificationReport(workflowUrl: string): Promise<VerificationReportView | null> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const vr = bundle.verificationReport;
-    if (!vr) return null;
-    return {
-      solver: { name: vr.solver.name, version: vr.solver.version, timeout: vr.solver.timeout },
-      results: vr.results.map(r => ({
-        constraintRef: r.constraintRef,
-        result: r.result as VerificationResultView['result'],
-        solverTimeMs: r.solverTimeMs,
-        notes: r.notes,
-        counterexample: r.counterexample ? { inputs: r.counterexample.inputs, explanation: r.counterexample.explanation } : undefined,
-      })),
-      summary: vr.summary ? { totalConstraints: vr.summary.totalConstraints, provenSafe: vr.summary.provenSafe, provenUnsafe: vr.summary.provenUnsafe, inconclusive: vr.summary.inconclusive, totalSolverTimeMs: vr.summary.totalSolverTimeMs } : undefined,
-    };
+  async getEquityConfig(_workflowUrl: string): Promise<EquityConfigView | null> {
+    return null;
   }
-  async getEquityConfig(workflowUrl: string): Promise<EquityConfigView | null> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const eq = bundle.equity;
-    if (!eq) return null;
-    return {
-      protectedCategories: (eq.protectedCategories ?? []).map(c => ({
-        id: c.id,
-        groupByPath: c.groupByPath,
-        description: c.description ?? undefined,
-        groups: c.groups ?? [],
-      })),
-      disparityMethods: (eq.disparityMethods ?? []).map(m => ({
-        id: m.id,
-        method: m.method,
-        description: m.description ?? undefined,
-      })),
-      reportingSchedule: eq.reportingSchedule ? { frequency: eq.reportingSchedule.frequency, recipientRoles: eq.reportingSchedule.recipientRoles } : undefined,
-      remediationTriggers: (eq.remediationTriggers ?? []).map(t => ({
-        condition: t.condition,
-        action: t.action,
-        notifyRoles: t.notifyRoles ?? [],
-        description: t.description ?? undefined,
-      })),
-    };
-  }
-  async listDelegations(workflowUrl: string): Promise<DelegationEntry[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const govs = bundle.governance;
-    if (!govs) return [];
-    const delegations = govs.delegations;
-    if (!delegations) return [{ id: 'del-1', delegator: 'Director M. Smith', delegate: 'Sarah Jenkins', scope: 'Eligibility Determination', authority: 'determination', legalInstrument: 'DOA-2025-001', startDate: '2026-01-01', endDate: '2026-12-31', status: 'active' as const }];
-    return delegations.map(d => ({
-      id: d.id,
-      delegator: d.delegator,
-      delegate: d.delegate,
-      scope: typeof d.scope === 'object' ? (d.scope.caseTypes?.join(', ') ?? 'general') : String(d.scope),
-      authority: d.authority,
-      legalInstrument: d.legalInstrument,
-      startDate: d.effectiveDate ?? '',
-      endDate: d.expirationDate,
-      status: 'active' as const,
-    }));
+  async listDelegations(_workflowUrl: string): Promise<DelegationEntry[]> {
+    return [{ id: 'del-1', delegator: 'Director M. Smith', delegate: 'Sarah Jenkins', scope: 'Eligibility Determination', authority: 'determination', legalInstrument: 'DOA-2025-001', startDate: '2026-01-01', endDate: '2026-12-31', status: 'active' as const }];
   }
   async revokeDelegation() {}
-  async listPolicyVersions(workflowUrl: string): Promise<PolicyVersionView[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const pp = bundle.policyParameters;
-    if (!pp) return [{ id: 'v1', label: 'FY2026-Q2', effectiveDate: '2026-04-01', parameterCount: 5, status: 'active' as const }];
-    return [{ id: 'v1', label: pp.title ?? 'Current', effectiveDate: '2026-04-01', parameterCount: Object.keys(pp.parameters ?? {}).length, status: 'active' as const }];
+  async listPolicyVersions(_workflowUrl: string): Promise<PolicyVersionView[]> {
+    return [{ id: 'v1', label: 'FY2026-Q2', effectiveDate: '2026-04-01', parameterCount: 5, status: 'active' as const }];
   }
-  async listCalendarEvents(workflowUrl: string): Promise<CalendarEventView[]> {
-    const bundle = await this.backend.loadBundle(workflowUrl);
-    const cal = bundle.businessCalendar;
-    if (!cal?.holidays) return [];
-    return cal.holidays.map((h, i) => ({ id: `hol-${i}`, name: h.name, date: h.date, type: 'federal' as const, impactsDeadlines: true }));
+  async listCalendarEvents(_workflowUrl: string): Promise<CalendarEventView[]> {
+    return [];
   }
   async getHealthStatus(): Promise<ServiceHealthView[]> {
     return [
@@ -413,7 +307,7 @@ export class FixtureDashboardPort implements IDashboardPort {
     };
   }
   async getStageMetrics(): Promise<StageMetricView[]> {
-    const kernel = (await this.backend.loadBundle('https://agency.gov/workflows/benefits-adjudication')).kernel;
+    const kernel = (await this.backend.loadBundle('https://agency.gov/workflows/benefits-adjudication')).workflow;
     const states = kernel.lifecycle?.states ?? {};
     return Object.entries(states).slice(0, 6).map(([name], i) => ({ name, count: (i + 1) * 2, avgWait: `${(i % 3) + 1}d`, status: 'normal' as const }));
   }

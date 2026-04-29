@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Advanced Governance is the embedded `advanced` block of the merged `$wosWorkflow` envelope. Schema home: [`schemas/wos-workflow.schema.json#/$defs/Advanced`](../../schemas/wos-workflow.schema.json) (`dcrZones`, `equity`, `verifiableConstraints`, `circuitBreaker`, `shadowMode` properties). The runtime half of the former `wos-verification-report` sidecar is absorbed into the provenance-log envelope (`schemas/wos-provenance-log.schema.json`); the standalone verification-report spec doc is retired (ADR 0076 D-4). This spec doc is retained for normative prose; references to "Advanced Governance Document" now mean the embedded block.
+
 # WOS Advanced Governance Specification v1.0
 
 **Version:** 1.0.0-draft.1

@@ -1,9 +1,11 @@
 """Facts-tier case-file snapshot schema regression tests.
 
-Validates the split-out provenance log schema (``wos-provenance-record.schema.json``).
-The schema is a real document type -- kernel documents do not embed the provenance
-log, so splitting it into its own file means the ``FactsTierRecord`` / ``CaseFileSnapshot``
-``$def`` shapes are no longer orphaned: they validate every provenance export.
+Validates the runtime provenance-log shape ``wos-provenance-log.schema.json``.
+Per ADR 0076 step 5, ``FactsTierRecord`` and ``CaseFileSnapshot`` were
+promoted into ``wos-workflow.schema.json``'s ``$defs``; the runtime log
+``$ref``s them across schemas. The cross-schema registry in
+``conftest`` resolves both the in-document ``$ref`` and the bare ``$def``
+lookups used here, so kernel-side promotion is invisible to the tests.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
+
+from .conftest import _REGISTRY, validator_for_def
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
@@ -26,22 +30,24 @@ def schema() -> dict:
 
 
 def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed)
+    """Registry-aware ``$def`` lookup. ``schema`` is ignored; def lookup
+    spans every classified schema via ``conftest._REGISTRY``.
+    """
+    return validator_for_def(def_name)
 
 
 def _document_validator(schema: dict) -> Draft202012Validator:
     """Validate the top-level provenance log document. This is the canonical
     shape the runtime emits, so it -- not the bare ``FactsTierRecord`` $def --
-    is what production exports flow through.
+    is what production exports flow through. Registry-aware so cross-schema
+    ``$ref``s into ``wos-workflow.schema.json`` resolve.
     """
-    return Draft202012Validator(schema)
+    from jsonschema import FormatChecker
+    return Draft202012Validator(
+        schema,
+        registry=_REGISTRY,
+        format_checker=FormatChecker(),
+    )
 
 
 def _snapshot() -> dict:

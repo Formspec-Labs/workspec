@@ -188,9 +188,19 @@ pub fn lint_project(dir: &std::path::Path) -> Result<Vec<Diagnostic>, LintError>
 /// Errors produced by the linting pipeline.
 #[derive(Debug, thiserror::Error)]
 pub enum LintError {
-    /// JSON parsing or document detection failed.
+    /// JSON parsing or document-shape detection failed (root not an object,
+    /// invalid JSON, etc.). Marker absence is a separate variant —
+    /// see [`LintError::MissingMarker`].
     #[error("parse error: {0}")]
     Parse(String),
+
+    /// JSON was well-formed but carried no `$wos*` document-type marker.
+    /// Promoted from a `LintError::Parse` substring sentinel
+    /// (`"no recognized $wos* document type marker found"`) so downstream
+    /// crates (`wos-synth-spike`, future synth providers) can match on
+    /// the variant instead of substring-matching the message.
+    #[error("no recognized $wos* document type marker found")]
+    MissingMarker,
 
     /// Filesystem access failed.
     #[error("io error: {0}")]

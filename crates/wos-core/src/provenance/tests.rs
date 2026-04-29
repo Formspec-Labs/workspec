@@ -1327,9 +1327,10 @@ fn clock_resolved_input() -> ClockResolvedInput<'static> {
     ClockResolvedInput {
         clock_id: "clock-appeal-001",
         origin_clock_hash: "sha256:clock-origin-1",
-        resolution: ClockResolution::Satisfied,
+        resolution: ClockResolvedResolution::Satisfied {
+            resolving_event_hash: Some("sha256:resolve-1"),
+        },
         resolved_at: "2026-05-15T12:00:00Z",
-        resolving_event_hash: Some("sha256:resolve-1"),
         context: None,
     }
 }
@@ -1348,21 +1349,49 @@ fn clock_resolved_constructor_serializes_required_fields() {
 }
 
 #[test]
-fn clock_resolved_paused_resolution_serializes_camelcase() {
-    let mut input = clock_resolved_input();
-    input.resolution = ClockResolution::Paused;
+fn clock_resolved_paused_requires_resolving_event_hash() {
+    let input = ClockResolvedInput {
+        clock_id: "clock-appeal-001",
+        origin_clock_hash: "sha256:clock-origin-1",
+        resolution: ClockResolvedResolution::Paused {
+            resolving_event_hash: "sha256:pause-event-1",
+        },
+        resolved_at: "2026-05-01T14:30:00Z",
+        context: None,
+    };
     let record = ProvenanceRecord::clock_resolved(input);
     let json = serde_json::to_value(&record).expect("serialize");
     assert_eq!(json["data"]["resolution"], "paused");
+    assert_eq!(json["data"]["resolvingEventHash"], "sha256:pause-event-1");
 }
 
 #[test]
 fn clock_resolved_all_typed_resolutions_serialize_camelcase() {
     for (resolution, expected) in [
-        (ClockResolution::Satisfied, "satisfied"),
-        (ClockResolution::Elapsed, "elapsed"),
-        (ClockResolution::Paused, "paused"),
-        (ClockResolution::Cancelled, "cancelled"),
+        (
+            ClockResolvedResolution::Satisfied {
+                resolving_event_hash: None,
+            },
+            "satisfied",
+        ),
+        (
+            ClockResolvedResolution::Elapsed {
+                resolving_event_hash: None,
+            },
+            "elapsed",
+        ),
+        (
+            ClockResolvedResolution::Paused {
+                resolving_event_hash: "sha256:pause-by-kind",
+            },
+            "paused",
+        ),
+        (
+            ClockResolvedResolution::Cancelled {
+                resolving_event_hash: None,
+            },
+            "cancelled",
+        ),
     ] {
         let mut input = clock_resolved_input();
         input.resolution = resolution;

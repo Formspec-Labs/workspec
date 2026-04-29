@@ -147,13 +147,19 @@ pub struct TaskSubmission {
 }
 
 /// An expected state transition.
+///
+/// Field `target` matches the canonical workflow-schema vocabulary
+/// (`#/$defs/Transition.target`), eliminating a long-standing
+/// fixture-vs-struct asymmetry where fixtures emitted `target` and the
+/// struct deserialized `to`. Renamed wholesale post-ADR-0076 (no compat
+/// alias — the legacy `to` shape no longer round-trips).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExpectedTransition {
     /// Source state.
     pub from: String,
 
-    /// Target state.
-    pub to: String,
+    /// Destination state — matches `Transition.target` in `wos-workflow.schema.json`.
+    pub target: String,
 
     /// Triggering event.
     pub event: String,

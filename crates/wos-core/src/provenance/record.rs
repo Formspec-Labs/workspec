@@ -64,27 +64,29 @@ pub struct CapabilityInvocationInput<'a> {
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
-/// Closed resolution discriminant for [`ProvenanceRecord::clock_resolved`]
-/// (ADR 0067 §3). Typed at the Rust seam so invalid resolutions cannot
-/// reach the wire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ClockResolution {
-    Satisfied,
-    Elapsed,
-    Paused,
-    Cancelled,
-}
-
-impl ClockResolution {
-    fn as_camel_str(self) -> &'static str {
-        match self {
-            Self::Satisfied => "satisfied",
-            Self::Elapsed => "elapsed",
-            Self::Paused => "paused",
-            Self::Cancelled => "cancelled",
-        }
-    }
+/// Resolution payload for [`ProvenanceRecord::clock_resolved`] (ADR 0067 §3).
+///
+/// `Paused` carries the pause-event hash at the type level so a paused
+/// resolution cannot be constructed without it (Q11 maximalist; matches JSON
+/// Schema `if/then` on `ClockResolvedRecord`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClockResolvedResolution<'a> {
+    /// Terminal satisfied outcome; optional hash when a concrete resolving event exists.
+    Satisfied {
+        resolving_event_hash: Option<&'a str>,
+    },
+    /// Deadline elapsed without a resolving event (synthetic elapsed).
+    Elapsed {
+        resolving_event_hash: Option<&'a str>,
+    },
+    /// Cancelled (e.g. on supersession); optional hash of the cancelling event.
+    Cancelled {
+        resolving_event_hash: Option<&'a str>,
+    },
+    /// Paused — the pause event itself is the resolving event (hash required).
+    Paused {
+        resolving_event_hash: &'a str,
+    },
 }
 
 /// Closed failure-kind discriminant for
@@ -171,12 +173,10 @@ pub struct ClockResolvedInput<'a> {
     pub clock_id: &'a str,
     /// Hash of the originating `ClockStarted` event.
     pub origin_clock_hash: &'a str,
-    /// Closed resolution discriminant.
-    pub resolution: ClockResolution,
+    /// Resolution outcome; see [`ClockResolvedResolution`].
+    pub resolution: ClockResolvedResolution<'a>,
     /// RFC 3339 timestamp at which resolution occurred.
     pub resolved_at: &'a str,
-    /// Optional hash of the event that caused the resolution.
-    pub resolving_event_hash: Option<&'a str>,
     /// Optional context payload; required-field keys win on collision.
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
@@ -1187,15 +1187,30 @@ impl ProvenanceRecord {
             "originClockHash".to_string(),
             serde_json::Value::String(input.origin_clock_hash.to_string()),
         );
+        let (resolution_str, resolving_event_hash): (&str, Option<&str>) =
+            match &input.resolution {
+                ClockResolvedResolution::Satisfied {
+                    resolving_event_hash,
+                } => ("satisfied", *resolving_event_hash),
+                ClockResolvedResolution::Elapsed {
+                    resolving_event_hash,
+                } => ("elapsed", *resolving_event_hash),
+                ClockResolvedResolution::Cancelled {
+                    resolving_event_hash,
+                } => ("cancelled", *resolving_event_hash),
+                ClockResolvedResolution::Paused {
+                    resolving_event_hash,
+                } => ("paused", Some(*resolving_event_hash)),
+            };
         data.insert(
             "resolution".to_string(),
-            serde_json::Value::String(input.resolution.as_camel_str().to_string()),
+            serde_json::Value::String(resolution_str.to_string()),
         );
         data.insert(
             "resolvedAt".to_string(),
             serde_json::Value::String(input.resolved_at.to_string()),
         );
-        if let Some(resolving_event_hash) = input.resolving_event_hash {
+        if let Some(resolving_event_hash) = resolving_event_hash {
             data.insert(
                 "resolvingEventHash".to_string(),
                 serde_json::Value::String(resolving_event_hash.to_string()),

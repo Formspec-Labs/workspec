@@ -33,7 +33,7 @@ pub enum ApiError {
     ServiceUnavailable(String),
 
     #[error(transparent)]
-    Storage(#[from] crate::storage::StorageError),
+    Storage(#[from] wos_server_ports::storage::StorageError),
 
     #[error(transparent)]
     Serde(#[from] serde_json::Error),

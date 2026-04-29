@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
+
+from .conftest import _REGISTRY
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
@@ -19,15 +21,14 @@ def schema() -> dict:
     return json.loads(PROVENANCE_SCHEMA.read_text())
 
 
-def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed)
+def _document_validator(schema: dict) -> Draft202012Validator:
+    """Validate export-shaped documents; composes workflow ``FactsTierRecord``
+    with provenance-local ``SignatureAffirmationRecord`` via ``items.allOf``."""
+    return Draft202012Validator(
+        schema,
+        registry=_REGISTRY,
+        format_checker=FormatChecker(),
+    )
 
 
 def _record() -> dict:
@@ -67,21 +68,23 @@ def _record() -> dict:
     }
 
 
-def test_signature_affirmation_with_required_fields_is_accepted(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
-    record = _record()
+def _log(record: dict) -> dict:
+    return {"provenanceLog": [record]}
 
-    errors = list(validator.iter_errors(record))
+
+def test_signature_affirmation_with_required_fields_is_accepted(schema):
+    validator = _document_validator(schema)
+    errors = list(validator.iter_errors(_log(_record())))
 
     assert errors == [], f"valid SignatureAffirmation rejected: {errors}"
 
 
 def test_signature_affirmation_missing_data_is_rejected(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     del record["data"]
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors, "SignatureAffirmation MUST carry data"
 
@@ -107,62 +110,62 @@ def test_signature_affirmation_missing_data_is_rejected(schema):
 def test_signature_affirmation_required_data_fields_are_rejected_when_missing(
     schema, field
 ):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     del record["data"][field]
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors, f"SignatureAffirmation missing {field} must fail"
 
 
 def test_signature_affirmation_requires_profile_ref_or_key(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     del record["data"]["profileRef"]
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors, "SignatureAffirmation MUST carry profileRef or profileKey"
 
 
 def test_signature_affirmation_rejects_profile_ref_and_key_together(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     record["data"]["profileKey"] = "benefitsSignature"
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors, "SignatureAffirmation MUST NOT carry both profileRef and profileKey"
 
 
 def test_signature_affirmation_accepts_profile_key_instead_of_ref(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     del record["data"]["profileRef"]
     record["data"]["profileKey"] = "benefitsSignature"
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors == [], f"profileKey-only SignatureAffirmation rejected: {errors}"
 
 
 def test_signature_affirmation_custody_hook_eligible_must_be_true(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = _record()
     record["data"]["custodyHookEligible"] = False
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors, "SignatureAffirmation custodyHookEligible must be true"
 
 
 def test_non_signature_record_is_not_forced_into_signature_shape(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = _document_validator(schema)
     record = copy.deepcopy(_record())
     record["recordKind"] = "stateTransition"
     record["data"] = {"some": "payload"}
 
-    errors = list(validator.iter_errors(record))
+    errors = list(validator.iter_errors(_log(record)))
 
     assert errors == [], f"non-signature records must remain unaffected: {errors}"

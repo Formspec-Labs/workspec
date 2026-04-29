@@ -74,7 +74,7 @@ export interface WOSKernelDocument {
   /**
    * WOS Kernel specification version marker. MUST be the literal string '1.0'. This marker is what identifies the surrounding JSON object as a WOS Kernel Document and pins it to the 1.0 line of the Kernel Specification; a processor selects the schema and evaluation semantics from this marker alone. Every Kernel Document MUST carry this key at the root (see Kernel §1, §2).
    */
-  $wosKernel: '1.0';
+  $wosWorkflow: '1.0';
   $schema?: JsonSchemaUri;
   /**
    * Canonical URI identifier for this Kernel Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Processors use this identifier for cross-document references (governance, correspondence metadata, integration profiles) and for instance-version pinning under Kernel §9.6. Prefer stable, resolvable URIs under a namespace the authoring organization controls.

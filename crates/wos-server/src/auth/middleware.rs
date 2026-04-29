@@ -92,7 +92,6 @@ impl From<AuthError> for ApiError {
             AuthError::InvalidCredentials | AuthError::InvalidToken | AuthError::Revoked => {
                 ApiError::Unauthorized
             }
-            AuthError::Storage(s) => ApiError::Storage(s),
             AuthError::Other(m) => ApiError::Other(anyhow::anyhow!(m)),
         }
     }

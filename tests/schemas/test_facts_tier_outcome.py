@@ -1,8 +1,10 @@
 """Facts-tier ``outcome`` field schema regression tests.
 
-Validates the open-enum ``ProvenanceOutcome`` ``$def`` and the optional
-``outcome`` property on ``FactsTierRecord`` in
-``schemas/kernel/wos-provenance-record.schema.json``.
+Validates the optional ``outcome`` property on ``FactsTierRecord``. Canonical
+``$defs`` (including ``ProvenanceOutcome``) live in
+``schemas/wos-workflow.schema.json`` per ADR 0076; ``validator_for_def`` resolves
+them registry-wide (same path as runtime ``wos-provenance-log`` → workflow
+``$ref``).
 
 The ``outcome`` field is an open enum (§4.3a #F5a): reserved literals
 (``preconditionNotSatisfied`` per AI Integration §3.3.1,
@@ -12,32 +14,10 @@ extensions are admitted via an ``x-``-prefixed fallback branch.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pytest
 from jsonschema import Draft202012Validator
 
-WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-PROVENANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
-)
-
-
-@pytest.fixture(scope="module")
-def schema() -> dict:
-    return json.loads(PROVENANCE_SCHEMA.read_text())
-
-
-def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed)
+from .conftest import validator_for_def
 
 
 def _facts_record(record_kind: str, **extra) -> dict:
@@ -52,8 +32,8 @@ def _facts_record(record_kind: str, **extra) -> dict:
     return record
 
 
-def test_outcome_accepts_precondition_not_satisfied(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def test_outcome_accepts_precondition_not_satisfied():
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "capabilityInvocation",
         outcome="preconditionNotSatisfied",
@@ -67,8 +47,8 @@ def test_outcome_accepts_precondition_not_satisfied(schema):
     )
 
 
-def test_outcome_accepts_convergence_cap_reached(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def test_outcome_accepts_convergence_cap_reached():
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "caseStateMutation",
         id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
@@ -83,8 +63,8 @@ def test_outcome_accepts_convergence_cap_reached(schema):
     )
 
 
-def test_outcome_accepts_vendor_extension_prefix(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def test_outcome_accepts_vendor_extension_prefix():
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
@@ -99,8 +79,8 @@ def test_outcome_accepts_vendor_extension_prefix(schema):
     )
 
 
-def test_outcome_rejects_unreserved_unprefixed_literal(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def test_outcome_rejects_unreserved_unprefixed_literal():
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",
@@ -115,8 +95,8 @@ def test_outcome_rejects_unreserved_unprefixed_literal(schema):
     )
 
 
-def test_outcome_is_optional(schema):
-    validator = _validator_for_def(schema, "FactsTierRecord")
+def test_outcome_is_optional():
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record("stateTransition")
 
     errors = list(validator.iter_errors(record))
@@ -126,15 +106,15 @@ def test_outcome_is_optional(schema):
     )
 
 
-def test_outcome_rejects_uppercase_vendor_extension(schema):
+def test_outcome_rejects_uppercase_vendor_extension():
     """The vendor-extension regex is aligned with the sibling convention
-    (`^x-[a-z][a-z0-9-]*$`) used at `wos-kernel.schema.json:816` and
-    `wos-workflow-governance.schema.json:1527`. Uppercase-containing
+    (`^x-[a-z][a-z0-9-]*$`) used at ``schemas/wos-workflow.schema.json``
+    ``ProvenanceOutcome`` (vendor branch, ca. line 3825). Uppercase-containing
     literals like `x-Acme-Foo` that an earlier (drifted) permissive
     regex `^x-[a-zA-Z][a-zA-Z0-9-]*$` would have accepted MUST be
     rejected so outcome vocabulary stays lowercase-kebab like the rest
     of the WOS vendor-extension surface (§4.3b #F5e)."""
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
@@ -149,10 +129,10 @@ def test_outcome_rejects_uppercase_vendor_extension(schema):
     )
 
 
-def test_outcome_accepts_lowercase_vendor_extension(schema):
+def test_outcome_accepts_lowercase_vendor_extension():
     """Lowercase-kebab vendor-extension outcomes continue to validate
     under the aligned regex."""
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01j5b6f5hms4g5c10f0d6qn4v8",
@@ -166,13 +146,13 @@ def test_outcome_accepts_lowercase_vendor_extension(schema):
     )
 
 
-def test_outcome_rejects_bare_x_prefix(schema):
+def test_outcome_rejects_bare_x_prefix():
     """Review B Finding 5: the vendor-extension pattern
     `^x-[a-z][a-z0-9-]*$` requires at least one lowercase letter after
     `x-`. A bare `x-` with no trailing identifier MUST be rejected --
     otherwise the collision-avoidance guarantee collapses into an empty
     sentinel that any future reserved literal could shadow."""
-    validator = _validator_for_def(schema, "FactsTierRecord")
+    validator = validator_for_def("FactsTierRecord")
     record = _facts_record(
         "stateTransition",
         id="sba-poc_prov_01j8dy7g3h36y8s3z5j4h3j7cw",

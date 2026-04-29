@@ -483,6 +483,23 @@ function compareConnectionSet(
   return true;
 }
 
+const EMBEDDED_BLOCK_KEYS = new Set([
+  'governance', 'agents', 'aiOversight', 'signature', 'custody',
+  'advanced', 'assurance', 'provenance', 'outputBindings', 'extensions',
+]);
+
+function passThroughEmbedded(base?: WOSKernelDocument): Record<string, unknown> {
+  if (!base) return {};
+  const extra: Record<string, unknown> = {};
+  const dyn = base as unknown as Record<string, unknown>;
+  for (const key of EMBEDDED_BLOCK_KEYS) {
+    if (dyn[key] !== undefined) {
+      extra[key] = dyn[key];
+    }
+  }
+  return extra;
+}
+
 function cloneStateMap(states: Record<string, State>): Record<string, State> {
   return JSON.parse(JSON.stringify(states));
 }
@@ -572,7 +589,7 @@ export function designerToKernel(
   }
 
   const kernel: WOSKernelDocument = {
-    ...(baseKernel ? { $wosKernel: baseKernel.$wosKernel } : { $wosKernel: '1.0' }),
+    ...(baseKernel ? { $wosWorkflow: baseKernel.$wosWorkflow } : { $wosWorkflow: '1.0' }),
     ...(baseKernel?.$schema ? { $schema: baseKernel.$schema } : {}),
     url: workflow.id,
     version: workflow.version,
@@ -586,6 +603,7 @@ export function designerToKernel(
     },
     ...(baseKernel?.caseFile ? { caseFile: baseKernel.caseFile } : {}),
     ...(baseKernel?.contracts ? { contracts: baseKernel.contracts } : {}),
+    ...passThroughEmbedded(baseKernel),
   };
 
   return kernel;

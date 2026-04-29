@@ -26,7 +26,7 @@ pub use kind::ProvenanceKind;
 pub use log::ProvenanceLog;
 pub use record::{
     AmendmentAuthorizedInput, AuthorizationAttestationInput, AuthorizationRejectedInput,
-    CapabilityInvocationInput, ClockResolution, ClockResolvedInput, ClockSkewObservedInput,
+    CapabilityInvocationInput, ClockResolvedInput, ClockResolvedResolution, ClockSkewObservedInput,
     ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind, ConfigurationWarningInput,
     CorrectionAuthorizedInput, DeterminationAmendedInput, DeterminationRescindedInput,
     IdentityAttestationInput, MigrationPinChangedInput, ProvenanceRecord, ReinstatedInput,

@@ -1,133 +1,105 @@
 {
-  "$wosWorkflow": "1.0",
+  "$wosSignatureProfile": "1.0",
+  "$schema": "https://wos-spec.org/schemas/signature-profile/1.0",
+  "targetWorkflow": {
+    "url": "https://agency.gov/workflows/in-person-benefits-signing",
+    "compatibleVersions": ">=1.0.0 <2.0.0"
+  },
   "version": "1.0.0",
   "title": "Routed Notary Signature Profile",
-  "url": "https://example.test/migrated-fixture",
-  "impactLevel": "operational",
-  "actors": [
+  "roles": [
     {
-      "id": "system",
-      "type": "system"
+      "id": "applicantSigner",
+      "role": "in-person-signer",
+      "actorId": "applicant",
+      "authenticationPolicyKey": "inPersonAuth"
+    },
+    {
+      "id": "notaryRole",
+      "role": "notary",
+      "actorId": "notary",
+      "authenticationPolicyKey": "notaryAuth"
+    },
+    {
+      "id": "certifiedRecipient",
+      "role": "certified-recipient",
+      "actorId": "applicant",
+      "required": false
     }
   ],
-  "lifecycle": {
-    "initialState": "start",
-    "states": {
-      "start": {
-        "type": "atomic",
-        "transitions": [
-          {
-            "target": "done"
-          }
-        ]
+  "documents": [
+    {
+      "id": "identityAffidavit",
+      "documentRef": "urn:agency.gov:documents:identity-affidavit:v1",
+      "documentHash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "documentHashAlgorithm": "sha-256",
+      "renderingRef": "urn:agency.gov:renderings:identity-affidavit:v1",
+      "formspecResponseRef": "urn:agency.gov:formspec:responses:identity-affidavit:case-2026-0042"
+    }
+  ],
+  "authenticationPolicies": [
+    {
+      "key": "inPersonAuth",
+      "method": "in-person",
+      "assuranceLevel": "high",
+      "providerRef": "urn:agency.gov:identity:providers:field-office",
+      "requiresInPerson": true,
+      "requiresCredentialEvidence": true
+    },
+    {
+      "key": "notaryAuth",
+      "method": "notary",
+      "assuranceLevel": "very-high",
+      "providerRef": "urn:agency.gov:identity:providers:notary-registry",
+      "requiresInPerson": true,
+      "requiresCredentialEvidence": true
+    }
+  ],
+  "signingFlow": {
+    "type": "routed",
+    "steps": [
+      {
+        "id": "applicantSigns",
+        "roleId": "applicantSigner",
+        "documentId": "identityAffidavit",
+        "guard": "caseFile.identity.requiresInPerson == true"
       },
-      "done": {
-        "type": "final"
+      {
+        "id": "notaryAttests",
+        "roleId": "notaryRole",
+        "documentId": "identityAffidavit",
+        "dependsOn": ["applicantSigns"],
+        "guard": "caseFile.identity.requiresNotary == true"
       }
+    ],
+    "completion": {
+      "type": "all-required"
     }
   },
-  "signature": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": {
-      "url": "https://agency.gov/workflows/in-person-benefits-signing",
-      "compatibleVersions": ">=1.0.0 <2.0.0"
-    },
-    "roles": [
-      {
-        "id": "applicantSigner",
-        "role": "in-person-signer",
-        "actorId": "applicant",
-        "authenticationPolicyKey": "inPersonAuth"
-      },
-      {
-        "id": "notaryRole",
-        "role": "notary",
-        "actorId": "notary",
-        "authenticationPolicyKey": "notaryAuth"
-      },
-      {
-        "id": "certifiedRecipient",
-        "role": "certified-recipient",
-        "actorId": "applicant",
-        "required": false
-      }
+  "evidence": {
+    "recordKind": "signatureAffirmation",
+    "requiredFields": [
+      "response.affidavit.signedAt",
+      "response.affidavit.affirmed",
+      "response.affidavit.identityProofRef"
     ],
-    "documents": [
-      {
-        "id": "identityAffidavit",
-        "documentRef": "urn:agency.gov:documents:identity-affidavit:v1",
-        "documentHash": "1111111111111111111111111111111111111111111111111111111111111111",
-        "documentHashAlgorithm": "sha-256",
-        "renderingRef": "urn:agency.gov:renderings:identity-affidavit:v1",
-        "formspecResponseRef": "urn:agency.gov:formspec:responses:identity-affidavit:case-2026-0042"
-      }
-    ],
-    "authenticationPolicies": [
-      {
-        "key": "inPersonAuth",
-        "method": "in-person",
-        "assuranceLevel": "high",
-        "providerRef": "urn:agency.gov:identity:providers:field-office",
-        "requiresInPerson": true,
-        "requiresCredentialEvidence": true
-      },
-      {
-        "key": "notaryAuth",
-        "method": "notary",
-        "assuranceLevel": "very-high",
-        "providerRef": "urn:agency.gov:identity:providers:notary-registry",
-        "requiresInPerson": true,
-        "requiresCredentialEvidence": true
-      }
-    ],
-    "signingFlow": {
-      "type": "routed",
-      "steps": [
-        {
-          "id": "applicantSigns",
-          "roleId": "applicantSigner",
-          "documentId": "identityAffidavit",
-          "guard": "caseFile.identity.requiresInPerson == true"
-        },
-        {
-          "id": "notaryAttests",
-          "roleId": "notaryRole",
-          "documentId": "identityAffidavit",
-          "dependsOn": [
-            "applicantSigns"
-          ],
-          "guard": "caseFile.identity.requiresNotary == true"
-        }
-      ],
-      "completion": {
-        "type": "all-required"
-      }
+    "consentReference": {
+      "consentTextRef": "urn:agency.gov:consent:in-person-affidavit:v1",
+      "consentVersion": "1.0.0",
+      "acceptedAtPath": "response.affidavit.signedAt",
+      "affirmationPath": "response.affidavit.affirmed"
     },
-    "evidence": {
-      "recordKind": "signatureAffirmation",
-      "requiredFields": [
-        "response.affidavit.signedAt",
-        "response.affidavit.affirmed",
-        "response.affidavit.identityProofRef"
-      ],
-      "consentReference": {
-        "consentTextRef": "urn:agency.gov:consent:in-person-affidavit:v1",
-        "consentVersion": "1.0.0",
-        "acceptedAtPath": "response.affidavit.signedAt",
-        "affirmationPath": "response.affidavit.affirmed"
-      },
-      "identityBinding": {
-        "method": "notary",
-        "assuranceLevel": "very-high",
-        "providerRef": "urn:agency.gov:identity:providers:notary-registry",
-        "externalAttestationRef": "urn:agency.gov:identity:attestations:notary:case-2026-0042"
-      },
-      "custodyHookEligible": true
+    "identityBinding": {
+      "method": "notary",
+      "assuranceLevel": "very-high",
+      "providerRef": "urn:agency.gov:identity:providers:notary-registry",
+      "externalAttestationRef": "urn:agency.gov:identity:attestations:notary:case-2026-0042"
     },
-    "expiryPolicy": {
-      "eventName": "signature.notaryExpired",
-      "after": "P3D",
-      "transitionId": "notarySignatureExpired"
-    }
+    "custodyHookEligible": true
+  },
+  "expiryPolicy": {
+    "eventName": "signature.notaryExpired",
+    "after": "P3D",
+    "transitionId": "notarySignatureExpired"
   }
 }

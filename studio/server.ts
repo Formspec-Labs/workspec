@@ -11,7 +11,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 interface WosDocumentBundle {
-  kernel: any;
+  workflow: any;
+  delivery?: {
+    businessCalendar?: any;
+    notificationTemplates?: any;
+    correspondenceMetadata?: any;
+  };
+  ontologyAlignment?: {
+    semanticProfile?: any;
+    integrationProfile?: any;
+  };
   [key: string]: any;
 }
 
@@ -88,8 +97,8 @@ function loadKernelRegistry(fixturesDir: string): Map<string, KernelRegistryEntr
     const sourcePath = path.join(kernelDir, file);
     try {
       const kernel = JSON.parse(readFileSync(sourcePath, 'utf-8'));
-      if (kernel.url && kernel.$wosKernel) {
-        registry.set(kernel.url, { bundle: { kernel }, sourcePath });
+      if (kernel.url && (kernel.$wosKernel || kernel.$wosWorkflow)) {
+        registry.set(kernel.url, { bundle: { workflow: kernel }, sourcePath });
       }
     } catch {
       // ignore files that aren't kernel documents
@@ -102,23 +111,45 @@ function buildFullBundle(fixturesDir: string, kernelUrl: string, registry: Map<s
   const existing = registry.get(kernelUrl);
   if (!existing) return null;
   const baseName = kernelUrl.split('/').pop();
-  const sidecars: [string, string][] = [
+  const bundle: WosDocumentBundle = { workflow: existing.bundle.workflow };
+
+  const deliverySidecars: [string, string][] = [
+    ['notificationTemplates', path.join(fixturesDir, 'sidecars', `benefits-notification-templates.json`)],
+    ['businessCalendar', path.join(fixturesDir, 'sidecars', `benefits-business-calendar.json`)],
+    ['correspondenceMetadata', path.join(fixturesDir, 'kernel', `benefits-correspondence-metadata.json`)],
+  ];
+  const delivery: Record<string, any> = {};
+  for (const [key, p] of deliverySidecars) {
+    if (existsSync(p)) {
+      const data = tryReadJson(p);
+      if (data) delivery[key] = data;
+    }
+  }
+  if (Object.keys(delivery).length > 0) bundle.delivery = delivery;
+
+  const ontologySidecars: [string, string][] = [
+    ['semanticProfile', path.join(fixturesDir, 'profiles', `semantic-benefits-adjudication.json`)],
+    ['integrationProfile', path.join(fixturesDir, 'profiles', `integration-benefits-adjudication.json`)],
+  ];
+  const ontologyAlignment: Record<string, any> = {};
+  for (const [key, p] of ontologySidecars) {
+    if (existsSync(p)) {
+      const data = tryReadJson(p);
+      if (data) ontologyAlignment[key] = data;
+    }
+  }
+  if (Object.keys(ontologyAlignment).length > 0) bundle.ontologyAlignment = ontologyAlignment;
+
+  const legacySidecars: [string, string][] = [
     ['governance', path.join(fixturesDir, 'governance', `${baseName}-governance.json`)],
     ['ai', path.join(fixturesDir, 'ai', `${baseName}-ai.json`)],
     ['policyParameters', path.join(fixturesDir, 'governance', `benefits-policy-parameters.json`)],
-    ['notificationTemplates', path.join(fixturesDir, 'sidecars', `benefits-notification-templates.json`)],
-    ['businessCalendar', path.join(fixturesDir, 'sidecars', `benefits-business-calendar.json`)],
     ['advanced', path.join(fixturesDir, 'advanced', `benefits-advanced-governance.json`)],
     ['equity', path.join(fixturesDir, 'advanced', `benefits-equity-config.json`)],
     ['driftMonitor', path.join(fixturesDir, 'ai', `benefits-drift-monitor.json`)],
-    ['verificationReport', path.join(fixturesDir, 'advanced', `verification-report.json`)],
-    ['correspondenceMetadata', path.join(fixturesDir, 'kernel', `benefits-correspondence-metadata.json`)],
-    ['semanticProfile', path.join(fixturesDir, 'profiles', `semantic-benefits-adjudication.json`)],
-    ['integrationProfile', path.join(fixturesDir, 'profiles', `integration-benefits-adjudication.json`)],
     ['lifecycleDetail', path.join(fixturesDir, 'companions', `benefits-lifecycle-detail.json`)],
   ];
-  const bundle: WosDocumentBundle = { kernel: existing.bundle.kernel };
-  for (const [key, p] of sidecars) {
+  for (const [key, p] of legacySidecars) {
     if (existsSync(p)) {
       const data = tryReadJson(p);
       if (data) bundle[key] = data;
@@ -246,10 +277,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   app.get('/api/bundles', (_req, res) => {
     const summaries = Array.from(kernelRegistry.entries()).map(([url, entry]) => ({
       url,
-      title: entry.bundle.kernel?.title ?? 'Untitled',
-      version: entry.bundle.kernel?.version ?? '0.0.0',
-      status: entry.bundle.kernel?.status ?? 'draft',
-      impactLevel: entry.bundle.kernel?.impactLevel ?? 'operational',
+      title: entry.bundle.workflow?.title ?? 'Untitled',
+      version: entry.bundle.workflow?.version ?? '0.0.0',
+      status: entry.bundle.workflow?.status ?? 'draft',
+      impactLevel: entry.bundle.workflow?.impactLevel ?? 'operational',
     }));
     res.json(summaries);
   });
@@ -265,7 +296,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     const url = decodeURIComponent(req.params.url);
     const entry = kernelRegistry.get(url);
     if (!entry) return res.status(404).json({ error: 'Kernel not found' });
-    res.json(entry.bundle.kernel);
+    res.json(entry.bundle.workflow);
   });
 
   app.put('/api/bundles/:url/kernel', (req, res) => {
@@ -291,7 +322,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
         return res.status(500).json({ error: 'Failed to persist kernel' });
       }
     }
-    entry.bundle.kernel = body;
+    entry.bundle.workflow = body;
     io.emit('kernel:changed', { url, kernel: body });
     res.json({ ok: true });
   });
@@ -307,7 +338,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     throw new Error('Internal invariant violation: kernelRegistry is empty after load');
   }
   app.get('/api/kernel', (_req, res) => {
-    res.json(primaryEntry.bundle.kernel);
+    res.json(primaryEntry.bundle.workflow);
   });
 
   // ---------- Instances / tasks ----------
@@ -464,12 +495,6 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     res.json([]);
   });
 
-  app.get('/api/governance/:url/verification-report', (req, res) => {
-    const bundle = buildFullBundle(fixturesDir, decodeURIComponent(req.params.url), kernelRegistry);
-    if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
-    res.json(bundle.verificationReport ?? null);
-  });
-
   app.get('/api/governance/:url/equity-config', (req, res) => {
     const bundle = buildFullBundle(fixturesDir, decodeURIComponent(req.params.url), kernelRegistry);
     if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
@@ -516,7 +541,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   });
 
   app.get('/api/dashboard/stage-metrics', (_req, res) => {
-    const primaryKernel = primaryEntry.bundle.kernel as { lifecycle?: { states?: Record<string, unknown> } };
+    const primaryKernel = primaryEntry.bundle.workflow as { lifecycle?: { states?: Record<string, unknown> } };
     const states = (primaryKernel.lifecycle?.states ?? {}) as Record<string, unknown>;
     res.json(Object.keys(states).slice(0, 6).map((name, i) => ({ name, count: (i + 1) * 2, avgWait: `${(i % 3) + 1}d`, status: 'normal' })));
   });
@@ -630,7 +655,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   const activeUsers = new Map<string, { id: string; name?: string; cursor: { x: number; y: number } }>();
 
   io.on('connection', (socket) => {
-    socket.emit('kernel:init', primaryEntry.bundle.kernel);
+    socket.emit('kernel:init', primaryEntry.bundle.workflow);
 
     socket.on('user:join', (userData: Record<string, unknown>) => {
       activeUsers.set(socket.id, { ...userData, id: socket.id, cursor: { x: 0, y: 0 } });
@@ -663,7 +688,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
           return socket.emit('kernel:update-rejected', { reason: 'persist_failed' });
         }
       }
-      entry.bundle.kernel = kernel;
+      entry.bundle.workflow = kernel;
       socket.broadcast.emit('kernel:changed', { url, kernel });
     });
 

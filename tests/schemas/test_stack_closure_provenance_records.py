@@ -4,15 +4,16 @@ Covers the 14 new ``ProvenanceKind`` variants landed for ADRs 0066 (five-mode
 amendment taxonomy + authorizing-act primitives), 0067 (clock primitives),
 0068 (tenant-independent identity attestation), 0069 (clock-skew observation),
 0070 (commit-attempt failures + authorization rejection), and 0071 (migration
-pin change). All 14 ship in:
+pin change). After ADR 0076 the 14 record-shape ``$def``s live in
+``schemas/wos-workflow.schema.json`` and the runtime export schema
+``schemas/wos-provenance-log.schema.json`` ``$ref``s into them through the
+shared cross-schema registry (``conftest._REGISTRY``).
 
-- ``schemas/wos-workflow.schema.json`` ($defs + FactsTierRecord.allOf refs),
-- ``schemas/kernel/wos-provenance-record.schema.json`` ($defs + allOf refs),
-
-The tests below validate the kernel-side schema, which is the post-append
-export shape consulted by offline verifiers and the Python conformance suite.
-The wos-workflow.schema.json copies share shape; the kernel copy is the one
-historically pinned by ``test_capability_invocation_record.py`` and friends.
+The tests below validate the post-append export shape consulted by offline
+verifiers and the Python conformance suite. ``$def`` lookups resolve via
+``conftest.validator_for_def``, which spans every classified schema, so the
+kernel-side copies ($wosWorkflow defs) are exercised through the
+provenance-log envelope.
 
 For each new record kind we cover:
 
@@ -36,6 +37,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
+from .conftest import validator_for_def
+
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
 PROVENANCE_SCHEMA = (
     WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
@@ -47,6 +50,12 @@ CASE_INSTANCE_SCHEMA = (
 
 @pytest.fixture(scope="module")
 def schema() -> dict:
+    """Retained for tests that round-trip the runtime envelope itself.
+
+    Most ``$def``-shape tests resolve via ``validator_for_def`` instead; this
+    fixture stays for the few cases that still need the raw provenance-log
+    document for top-level validation.
+    """
     return json.loads(PROVENANCE_SCHEMA.read_text())
 
 
@@ -56,14 +65,12 @@ def case_instance_schema() -> dict:
 
 
 def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed)
+    """Cross-schema-aware ``$def`` validator. ``schema`` is ignored; def
+    lookup spans every classified schema via ``conftest._REGISTRY`` so
+    ``$def``s promoted to ``wos-workflow.schema.json`` (ADR 0076 step 5)
+    resolve regardless of which schema a test loaded.
+    """
+    return validator_for_def(def_name)
 
 
 def _facts_record(record_kind: str, record_id: str | None = None, **extra) -> dict:

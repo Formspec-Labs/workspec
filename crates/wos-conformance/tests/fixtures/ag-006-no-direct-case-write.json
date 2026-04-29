@@ -6,7 +6,7 @@
   "documents": {
     "kernel": "../../../../fixtures/kernel/autonomy-caps.json",
     "ai": "../../../../fixtures/ai/autonomy-caps-ai.json",
-    "agent-config": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
+    "agentConfig": "../../../../fixtures/ai/autonomy-caps-agent-config.json"
   },
   "initial_case_state": {
     "priority": "low"

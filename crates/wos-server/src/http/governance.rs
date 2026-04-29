@@ -7,9 +7,9 @@ use serde::Deserialize;
 use crate::AppState;
 use crate::auth::{RequireRole, Supervisor};
 use crate::domain::{
-    AgentView, CalendarEventView, DelegationEntryView, DeonticConstraintView, EquityConfigView,
-    PipelineView, PolicyVersionView, QualityControlsView, ResolvedPolicyView, ServiceHealthView,
-    VerificationReportView,
+    AdverseDecisionNoticeView, AgentView, CalendarEventView, DelegationEntryView,
+    DeonticConstraintView, EquityConfigView, PipelineView, PolicyVersionView, QualityControlsView,
+    ResolvedPolicyView, ServiceHealthView, VerificationReportView,
 };
 use crate::error::{ApiError, ApiResult};
 
@@ -39,6 +39,10 @@ pub fn routes() -> Router<AppState> {
         .route("/governance/{url}/policy-resolve", post(policy_resolve))
         .route("/policy/{url}/resolve", get(policy_resolve_get))
         .route("/governance/{url}/calendar-events", get(calendar_events))
+        .route(
+            "/governance/{url}/notices/{template}/render",
+            post(render_adverse_notice),
+        )
         .route("/health", get(health))
 }
 
@@ -182,6 +186,26 @@ async fn calendar_events(
     Path(url): Path<String>,
 ) -> Json<Vec<CalendarEventView>> {
     Json(s.services.governance.calendar_events(&url).await)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdverseNoticeRenderRequest {
+    #[serde(default)]
+    pub context: serde_json::Value,
+}
+
+async fn render_adverse_notice(
+    State(s): State<AppState>,
+    Path((url, template)): Path<(String, String)>,
+    Json(req): Json<AdverseNoticeRenderRequest>,
+) -> ApiResult<Json<AdverseDecisionNoticeView>> {
+    Ok(Json(
+        s.services
+            .governance
+            .render_adverse_notice(&url, &template, &req.context)
+            .await?,
+    ))
 }
 
 async fn health(State(s): State<AppState>) -> Json<Vec<ServiceHealthView>> {

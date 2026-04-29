@@ -178,7 +178,7 @@ fn build_trace_from_result(
         let expected_state_after = fixture
             .expected_transitions
             .get(idx)
-            .map(|exp| exp.to.clone());
+            .map(|exp| exp.target.clone());
 
         // Compute delta when actual state differs from expected.
         //

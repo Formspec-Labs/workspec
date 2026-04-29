@@ -199,8 +199,6 @@ When a transition fires:
 3. Execute `onEntry` actions of the target state, outermost first.
 4. Emit a provenance record for the transition.
 
-
-
 <!-- absorbed-from: companions/lifecycle-detail.md §2 Transition Evaluation Algorithm per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
@@ -320,8 +318,6 @@ When a transition crosses nesting boundaries (e.g., from a substate of one compo
 
 The `$join` name is kernel-defined for join completion. Workflow authors MUST NOT use `$join` as a **message** event `name`; it is reserved for the join **signal** shape above.
 
-
-
 <!-- absorbed-from: companions/lifecycle-detail.md §4 Advanced Parallel Execution per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
@@ -386,8 +382,6 @@ A transition on the parallel state itself (not on a region substate) exits the e
 ### 4.9 Event Handling
 
 Events that match no transition from any current active state are recorded in provenance but do not change lifecycle state. This is not an error condition.
-
-
 
 <!-- absorbed-from: companions/runtime.md §4 Event Delivery Contract per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
@@ -466,8 +460,6 @@ Tags are free-form strings. The following tags are conventionally recognized by 
 | `notification` | A step that produces notices to affected individuals. |
 | `hold` | A state where the case is suspended pending an external condition. |
 
-
-
 <!-- absorbed-from: companions/runtime.md §8.2 Governance Scoping per ADR 0076 D-8 — full content migrated. -->
 
 Governance rules MAY include a `scope` property -- a FEL guard expression evaluated against the evaluation context (Kernel S7). When present, the rule applies only to instances where the scope expression evaluates to `true`. When absent, the rule applies to all instances.
@@ -506,8 +498,6 @@ Compound states MAY declare a `historyState` property (`shallow` or `deep`). Whe
 History state semantics (algorithms, clearing rules, interactions with parallel states) are defined in the Lifecycle Detail Companion (S3). A Kernel Structural processor MAY ignore `historyState`; a Kernel Complete processor MUST implement it per the companion's algorithms.
 
 ---
-
-
 
 <!-- absorbed-from: companions/lifecycle-detail.md §3 History States per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
@@ -586,8 +576,8 @@ Every mutation to case state MUST be recorded with:
 
 Each mutation record MAY carry:
 
-7. `mutationSource` — the origin of the value change. Reserved literals: `human-entered`, `human-corrected`, `agent-extracted`, `system-fetched`, `computed`, `self-attested`. Vendor extensions MUST use an `x-` prefix.
-8. `verificationLevel` — the degree of independent confirmation behind the value. Reserved literals: `independent`, `attested`, `corroborated`, `authoritative`. Vendor extensions MUST use an `x-` prefix. OPTIONAL; tying it to `determination`-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST.
+1. `mutationSource` — the origin of the value change. Reserved literals: `human-entered`, `human-corrected`, `agent-extracted`, `system-fetched`, `computed`, `self-attested`. Vendor extensions MUST use an `x-` prefix.
+2. `verificationLevel` — the degree of independent confirmation behind the value. Reserved literals: `independent`, `attested`, `corroborated`, `authoritative`. Vendor extensions MUST use an `x-` prefix. OPTIONAL; tying it to `determination`-tagged transitions is policy-shaped (governance profile), not a blanket kernel MUST.
 
 The mutation history is append-only. Previous entries MUST NOT be modified or deleted.
 
@@ -605,8 +595,6 @@ A workflow instance MAY declare typed relationships to other case instances. Rel
 Case relationship creation and removal MUST be recorded as provenance events. A conformant processor MUST NOT evaluate FEL guard expressions that reference data in a related case's case state -- cross-case guards would break the deterministic evaluation algorithm (Kernel S4.2) because the related case's state is not under this instance's control.
 
 ---
-
-
 
 <!-- absorbed-from: companions/runtime.md §14 Relationship-Triggered Events per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
@@ -823,8 +811,6 @@ A Kernel Complete processor MUST provide the following guarantees:
 | **G4: Durable Timers** | Timers MUST survive restarts, fire within tolerance, and consume no runtime resources while waiting. |
 | **G5: External Signal Delivery** | Signals addressed to inactive instances MUST be durably enqueued. |
 
-
-
 <!-- absorbed-from: companions/runtime.md §6 Durability Guarantees per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
@@ -887,8 +873,6 @@ The kernel defines the following action types:
 **Execution ordering.** Actions within a single state's `onEntry` or `onExit` execute sequentially in document order. The processor MUST NOT reorder actions within a state or transition. Actions across parallel regions MAY execute concurrently; provenance MUST record the actual execution order regardless of whether execution was concurrent or sequential.
 
 **Formspec-backed tasks.** A `createTask` action MAY include `contractRef` when the task is backed by a ContractReference. If that ContractReference has `binding: "formspec"`, Runtime Companion S15 defines the presentation, draft, submit, validation, mapping, and provenance behavior. `prefillMappingRef` and `responseMappingRef` MAY appear on either the ContractReference or the action. The action-level value overrides the ContractReference value for that task. `completionEvent` and `failureEvent` MAY name lifecycle events emitted after the task reaches `completed` or `failed`.
-
-
 
 <!-- absorbed-from: companions/runtime.md §5 Action Execution Model + profiles/integration.md §3 Integration Bindings + §4 Contract Validation + §5 CloudEvents Extensions + §6 Correlation + §7 Idempotency + §9 Processing Model per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
@@ -1365,8 +1349,6 @@ External signals and callbacks carry a `correlationKey` that the processor uses 
 
 Actions MAY declare a `compensatingAction` -- a semantically meaningful reversal. Scopes MAY be marked `compensable: true`. This defines the compensation seam only; detailed execution semantics (reverse ordering, pivot steps, forward/backward recovery) are deferred to the Lifecycle Detail companion.
 
-
-
 <!-- absorbed-from: companions/lifecycle-detail.md §5 Compensation Execution Algorithm per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
@@ -1458,8 +1440,6 @@ A workflow instance is bound to its creation-time definition version unless expl
 
 Version pinning applies equally to Formspec Definitions referenced as contracts. When a Kernel Document references a Formspec Definition via `contractRef`, the version of that Definition is pinned at instance creation time (Formspec Changelog VP-01, VP-02). Instance migration SHOULD use the Formspec Changelog (Changelog S4) to generate migration maps for contract changes between versions.
 
-
-
 <!-- absorbed-from: companions/runtime.md §11 Multi-Version Coexistence per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
@@ -1513,13 +1493,9 @@ Timeouts generate kernel `$timeout.*` events (S4.10) that the lifecycle handles 
 
 ---
 
-
-
 <!-- absorbed-from: companions/lifecycle-detail.md §6 Timer Semantics per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 
 This section is normative.
-
-
 
 <!-- absorbed-from: companions/runtime.md §7 Timer Management per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
 

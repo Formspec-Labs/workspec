@@ -33,8 +33,12 @@ pub fn slice_b_tempdir() -> TempDir {
     )
     .unwrap();
 
+    // See `crates/wos-server/tests/common/mod.rs::slice_b_tempdir` for why the
+    // legacy `$wosBusinessCalendar` marker is absent. ADR 0076 D-3 collapsed
+    // calendars into `$wosDelivery.calendar`; bundle_service still reads the
+    // per-sidecar subdirectory layout, but the marker key was always dead
+    // decoration and is dropped here.
     let cal = serde_json::json!({
-        "$wosBusinessCalendar": "1.0",
         "targetWorkflow": workflow_url,
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],

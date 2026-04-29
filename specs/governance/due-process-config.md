@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Due Process Config content lives at [`Governance.dueProcess`](../../schemas/wos-workflow.schema.json) inside the merged `$wosWorkflow` envelope (`#/$defs/Governance` → `dueProcess` → `#/$defs/DueProcess`). Standalone `wos-due-process-config` schema and `$wosDueProcessConfig` marker are retired; the `targetGovernance` reference pattern collapses to "the workflow's own URL" since governance and due process now share one document. Prose below remains as normative reference for due-process semantics.
+
 # WOS Due Process Config v1.0
 
 **Version:** 1.0.0-draft.1

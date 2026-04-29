@@ -147,15 +147,15 @@ Spec: `specs/kernel/correspondence-metadata.md`. Schema: `schemas/sidecars/wos-d
 
 ### custody-hook-encoding
 
-Spec: `specs/kernel/custody-hook-encoding.md`. Schema: `schemas/kernel/wos-custody-hook-encoding.schema.json`.
+Spec: `specs/kernel/custody-hook-encoding.md`. Schema: `schemas/wos-workflow.schema.json` (`custody` embedded block declares anchoring posture; the four-field Trellis append wire per §1.3 is normative prose + `wos-runtime` `custody` module — standalone `wos-custody-hook-encoding.schema.json` removed per ADR 0076).
 
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
-| Custody §1.2 | One-authored-record → one-append invariant | wos-custody-hook-encoding | runtime custodyHook seam | spec-side | Runtime-internal seam obligation; no HTTP endpoint obligated |
-| Custody §1.4 | TypeID format on caseId / recordId | wos-custody-hook-encoding | `POST /api/lint/document` | partial | No dedicated lint rule for TypeID format; schema regex enforces shape only. Grep `crates/wos-lint/src` for `wos-case-typeid` / `wos-record-typeid` returns zero hits |
-| Custody §1.6 | wos.* eventType namespace ownership | wos-custody-hook-encoding | `POST /api/lint/document` | spec-side | Schema-enforceable |
-| Custody §1.6 | Deterministic dCBOR conversion | wos-custody-hook-encoding | runtime custody emitter | spec-side | Runtime-internal at custodyHook seam |
-| Custody §1.7 | Rejection list (NaN / Infinity / ill-formed UTF-8) | wos-custody-hook-encoding | runtime custody emitter | spec-side | Runtime-internal |
+| Custody §1.2 | One-authored-record → one-append invariant | wos-workflow (`custody`) | runtime custodyHook seam | spec-side | Runtime-internal seam obligation; no HTTP endpoint obligated |
+| Custody §1.4 | TypeID format on caseId / recordId | wos-workflow (`custody`) | `POST /api/lint/document` | partial | No dedicated lint rule for TypeID format; schema regex enforces shape only. Grep `crates/wos-lint/src` for `wos-case-typeid` / `wos-record-typeid` returns zero hits |
+| Custody §1.6 | wos.* eventType namespace ownership | wos-workflow (`custody`) | `POST /api/lint/document` | spec-side | Schema-enforceable |
+| Custody §1.6 | Deterministic dCBOR conversion | wos-workflow (`custody`) | runtime custody emitter | spec-side | Runtime-internal at custodyHook seam |
+| Custody §1.7 | Rejection list (NaN / Infinity / ill-formed UTF-8) | wos-workflow (`custody`) | runtime custody emitter | spec-side | Runtime-internal |
 | Custody §1.10 | WOS MUST stamp returned canonical_event_hash | — | — | none | Runtime has `apply_custody_receipt` (`runtime.rs:2657-2798`, `provenance.rs:140-156`) which stamps `canonical_event_hash` with idempotent reapply and conflict detection (`CustodyReceiptConflict` error when hashes differ). Tested: stamp-when-absent, idempotent-when-matching, conflict-when-differing. No server HTTP endpoint exposes this capability |
 | Custody §1.11 | Surface reconciliation when record admits but posture-transition does not | — | — | none | Observable runtime obligation |
 | Custody §3.4 | Byte-authority fixture corpus (record.json / record.dcbor / record.sha256) | — | — | spec-side | Fixture obligation |
@@ -320,14 +320,14 @@ Spec: `specs/advanced/equity-config.md`. Schema: `schemas/wos-workflow.schema.js
 
 ## Assurance
 
-Spec: `specs/assurance/assurance.md`. Schema: `schemas/assurance/wos-assurance.schema.json`.
+Spec: `specs/assurance/assurance.md`. Schema: `schemas/wos-workflow.schema.json` (`assurance` embedded block; former `wos-assurance.schema.json` merged per ADR 0076).
 
 | section | capability | schema | endpoint | status | notes |
 |---|---|---|---|---|---|
-| Assurance §2.1 Taxonomy | L1–L4 assurance levels | wos-assurance | — | full | Enforced at type level via `AssuranceLevel` enum |
-| Assurance §2.3 Upgrade facts | Record assurance upgrade | wos-assurance | `POST /api/instances/:id/identity-facts/:id/upgrade` | full | Forward-only; `upgradedFrom` preserved |
-| Assurance §3 Subject continuity | Cross-instance timeline for a subject | wos-assurance | `GET /api/subjects/:ref/assurance-chain` | partial | Returns ordered facts; continuity-hash validation not implemented. **User value: high** — continuity is the main assurance observable |
-| Assurance §4 Invariant 6 | Assurance level ≠ disclosure posture | wos-assurance | — | full | Enforced at type level (two independent enums on request) |
+| Assurance §2.1 Taxonomy | L1–L4 assurance levels | wos-workflow (`assurance`) | — | full | Enforced at type level via `AssuranceLevel` enum |
+| Assurance §2.3 Upgrade facts | Record assurance upgrade | wos-workflow (`assurance`) | `POST /api/instances/:id/identity-facts/:id/upgrade` | full | Forward-only; `upgradedFrom` preserved |
+| Assurance §3 Subject continuity | Cross-instance timeline for a subject | wos-workflow (`assurance`) | `GET /api/subjects/:ref/assurance-chain` | partial | Returns ordered facts; continuity-hash validation not implemented. **User value: high** — continuity is the main assurance observable |
+| Assurance §4 Invariant 6 | Assurance level ≠ disclosure posture | wos-workflow (`assurance`) | — | full | Enforced at type level (two independent enums on request) |
 | Assurance §5 Attestation | Provider-neutral attestation | — | — | **none** | No `/api/instances/:id/identity-facts/:id/attest`. **User value: medium** — legal-sufficiency deployments need attestation; low-assurance deployments don't |
 | Assurance §6 Legal sufficiency disclosure | Disclosure metadata on exports when claims are made | — | — | **none** | §6.1 obligates a disclosure of which conditions an implementation relies on (process, signature semantics, records-management, applicable law) **when** the implementation makes claims about evidentiary weight. Server-side exports today make no such claims and therefore are technically compliant; if/when we add attestation (§5), exports must carry the disclosure. **User value: medium** — gating the attestation work, not currently blocking |
 | Assurance §custody | Custody posture declaration | — | — | **none** | Plan had `GET /api/instances/:id/custody-posture` as a stretch. **User value: medium** — specialised to chain-of-custody workflows |
@@ -482,11 +482,13 @@ These are document-shape specs that are (correctly) not exposed as resources; th
 - `schemas/wos-workflow.schema.json` (`agents[*].driftMonitoring`) — bundle projection
 - `schemas/wos-provenance-log.schema.json` — output envelope from `/verification/verify`
 - `schemas/wos-workflow.schema.json` (`advanced.equity`) — bundle projection
-- `schemas/assurance/wos-assurance.schema.json` — embedded in identity facts
+- `schemas/wos-workflow.schema.json` (`assurance`) — embedded in identity facts
 
 ### Schema-slug asymmetries (authoring smell, not correctness gap)
 
-Schema-only (runtime artifacts, no governing spec): `conformance-trace.schema.json`, `wos-lint-diagnostic.schema.json`, `wos-mcp-tools.schema.json`, `wos-synth-trace.schema.json`. (`wos-provenance-log.schema.json` is the top-level runtime artifact; the legacy `wos-provenance-record.schema.json` is governed inline by `kernel/spec.md` and superseded by `wos-provenance-log`.)
+Tooling artifacts (formerly standalone schemas, no governing spec) live as `$views` of the merged tooling schema at `schemas/wos-tooling.schema.json` per ADR 0076 D-5: `$views/conformanceTrace`, `$views/lintDiagnostic`, `$views/mcpToolCatalog`, `$views/synthTrace`, `$views/extensionRegistry`. Documents in any of these shapes carry the `$wosTooling` envelope marker; the legacy slugs (`conformance-trace`, `wos-lint-diagnostic`, `wos-mcp-tools`, `wos-synth-trace`, `wos-extension-registry`) and their per-shape markers are retired.
+
+Provenance: `wos-provenance-log.schema.json` is the top-level runtime artifact for audit logs; record-shape `$def`s (`FactsTierRecord`, `CapabilityInvocationRecord`, `CaseFileSnapshot`, etc.) are promoted into `wos-workflow.schema.json` and `$ref`'d across the cross-schema registry. The legacy `wos-provenance-record.schema.json` is gone — its content split between the workflow `$defs` (record shapes) and the provenance-log envelope (export wrapper).
 
 Post-ADR-0076 slug notes: legacy per-block slugs (`wos-assertion-gate`, `wos-integration-profile`, `wos-semantic-profile`, `wos-advanced`, `wos-equity`, `wos-due-process`, `wos-workflow-governance`, `wos-ai-integration`, `wos-agent-config`, `wos-drift-monitor`, `wos-signature-profile`, `wos-extension-registry`) are absorbed into `wos-workflow` or the appropriate sidecar. Remaining spec↔slug asymmetries on canonical schemas: `wos-case-instance` ↔ `runtime`, `wos-assurance` ↔ `assurance`.
 

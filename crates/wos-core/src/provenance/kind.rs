@@ -324,8 +324,9 @@ pub enum ProvenanceKind {
     ///
     /// `data` carries `clockId`, `originClockHash`, `resolution`
     /// (closed enum: `"satisfied"` | `"elapsed"` | `"paused"` |
-    /// `"cancelled"` — see [`ClockResolution`]), `resolvedAt`
-    /// (RFC 3339), and optional `resolvingEventHash`.
+    /// `"cancelled"` — see [`ClockResolvedResolution`], `resolvedAt`
+    /// (RFC 3339), and `resolvingEventHash` (required when `resolution` is
+    /// `"paused"`; otherwise optional).
     ClockResolved,
 
     // ── Identity attestation (ADR 0068) ──────────────────────────

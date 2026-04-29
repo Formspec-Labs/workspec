@@ -1,7 +1,12 @@
 """AssertionReference / AssertionInlineUse / AssertionUse shape regression tests.
 
-Covers the cross-document reference protocol landed for §4.4 #38 on
-``schemas/governance/wos-assertion-gate.schema.json``:
+Covers the cross-document reference protocol for assertion gates. Per ADR
+0076 D-5 the assertion ``$def``s (``AssertionUse``, ``AssertionInlineUse``,
+``AssertionReference``, ``AssertionDefinition``) are inlined into
+``schemas/wos-workflow.schema.json``; the standalone
+``wos-assertion-gate.schema.json`` is gone. The library prose lives in
+``specs/governance/assertion-library.md``; the schema seam is the workflow
+schema's ``$defs``.
 
 - ``AssertionReference`` — the ``{ assertionRef: URI }`` shape for cross-library
   references, closed to additional keys.
@@ -22,35 +27,23 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .conftest import validator_for_def
+
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-ASSERTION_LIBRARY_SCHEMA = (
-    WOS_SPEC_ROOT
-    / "schemas"
-    / "governance"
-    / "wos-assertion-gate.schema.json"
-)
+WORKFLOW_SCHEMA = WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 
 
 @pytest.fixture(scope="module")
 def schema() -> dict:
-    return json.loads(ASSERTION_LIBRARY_SCHEMA.read_text())
+    """Workflow schema (post-ADR-0076 home of assertion ``$def``s)."""
+    return json.loads(WORKFLOW_SCHEMA.read_text())
 
 
 def _validator_for_def(schema: dict, def_name: str) -> Draft202012Validator:
-    """Build a Draft 2020-12 validator against a single $def in the library schema.
-
-    Uses a ``FormatChecker`` so ``format: uri`` is actually enforced — the
-    default jsonschema behaviour is annotation-only and would let ``not a
-    uri`` slip past.
+    """Registry-aware ``$def`` lookup. ``schema`` is ignored; def lookup
+    spans every classified schema via ``conftest._REGISTRY``.
     """
-    target = schema["$defs"][def_name]
-    composed = {
-        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
-        "$id": f"{schema.get('$id', 'urn:test')}#${def_name}",
-        "$defs": schema["$defs"],
-        **target,
-    }
-    return Draft202012Validator(composed, format_checker=FormatChecker())
+    return validator_for_def(def_name)
 
 
 class TestAssertionUseInlineHappyPath:

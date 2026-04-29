@@ -1,20 +1,9 @@
 import type { WOSKernelDocument } from '../types/wos/kernel';
-import type { WOSWorkflowGovernanceDocument } from '../types/wos/workflow-governance';
-import type { WOSAIIntegrationDocument } from '../types/wos/ai-integration';
-import type { WOSPolicyParameterConfig } from '../types/wos/policy-parameters';
 import type { WOSBusinessCalendarConfig } from '../types/wos/business-calendar';
 import type { WOSNotificationTemplateConfig } from '../types/wos/notification-template';
-import type { WOSAdvancedGovernanceDocument } from '../types/wos/advanced';
-import type { WOSEquityConfig } from '../types/wos/equity';
-import type { WOSDriftMonitorConfig } from '../types/wos/drift-monitor';
-import type { WOSAgentConfig } from '../types/wos/agent-config';
-import type { WOSDueProcessConfig } from '../types/wos/due-process';
-import type { WOSAssertionGateLibrary } from '../types/wos/assertion-gate';
-import type { WOSVerificationReport } from '../types/wos/verification-report';
 import type { WOSCorrespondenceMetadataConfig } from '../types/wos/correspondence-metadata';
 import type { WOSSemanticProfileDocument } from '../types/wos/semantic-profile';
 import type { WOSIntegrationProfileDocument } from '../types/wos/integration-profile';
-import type { WOSLifecycleDetailConfiguration } from '../types/wos/lifecycle-detail';
 import type { WOSCaseInstance } from '../types/wos/case-instance';
 
 export interface ProvenanceRecord {
@@ -108,23 +97,16 @@ export interface AvailableTransition {
 }
 
 export interface WosDocumentBundle {
-  kernel: WOSKernelDocument;
-  governance?: WOSWorkflowGovernanceDocument;
-  dueProcess?: WOSDueProcessConfig;
-  assertionGates?: WOSAssertionGateLibrary;
-  ai?: WOSAIIntegrationDocument;
-  policyParameters?: WOSPolicyParameterConfig;
-  notificationTemplates?: WOSNotificationTemplateConfig;
-  businessCalendar?: WOSBusinessCalendarConfig;
-  advanced?: WOSAdvancedGovernanceDocument;
-  equity?: WOSEquityConfig;
-  driftMonitor?: WOSDriftMonitorConfig;
-  agentConfigs?: WOSAgentConfig[];
-  verificationReport?: WOSVerificationReport;
-  correspondenceMetadata?: WOSCorrespondenceMetadataConfig;
-  semanticProfile?: WOSSemanticProfileDocument;
-  integrationProfile?: WOSIntegrationProfileDocument;
-  lifecycleDetail?: WOSLifecycleDetailConfiguration;
+  workflow: WOSKernelDocument;
+  delivery?: {
+    businessCalendar?: WOSBusinessCalendarConfig;
+    notificationTemplates?: WOSNotificationTemplateConfig;
+    correspondenceMetadata?: WOSCorrespondenceMetadataConfig;
+  };
+  ontologyAlignment?: {
+    semanticProfile?: WOSSemanticProfileDocument;
+    integrationProfile?: WOSIntegrationProfileDocument;
+  };
   caseInstances?: WOSCaseInstance[];
 }
 

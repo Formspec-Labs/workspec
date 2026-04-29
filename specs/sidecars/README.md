@@ -24,9 +24,10 @@ Sidecars are exempt from the [`CONVENTIONS.md`](../../CONVENTIONS.md) three-sect
 
 ## Legacy sidecar prose docs (retained, not re-authored)
 
-The following legacy spec docs predate the ADR 0076 consolidation and target the now-replaced standalone sidecars. They remain in the tree as historical references:
+The following legacy spec docs predate the ADR 0076 consolidation and target the now-replaced standalone sidecars. They remain in the tree as historical references; each carries an absorption notice at its head pointing at the merged-schema `$def`:
 
 - [`business-calendar.md`](business-calendar.md) — content absorbed into `wos-delivery.schema.json`'s `calendar` block.
 - [`notification-template.md`](notification-template.md) — content absorbed into `wos-delivery.schema.json`'s `notifications` block.
+- [`../kernel/correspondence-metadata.md`](../kernel/correspondence-metadata.md) — content absorbed into `wos-delivery.schema.json`'s `correspondence` block.
 
 These legacy docs do not need rewrites; the absorbed schema descriptions are the canonical surface.

@@ -400,18 +400,20 @@ impl WorkflowEngine {
         // Check assertions.
         let mut failures = Vec::new();
 
-        // Transition assertions.
+        // Transition assertions. `expected.target` matches the canonical
+        // workflow-schema vocabulary; `actual.to` belongs to the runtime
+        // observation type.
         for (i, expected) in fixture.expected_transitions.iter().enumerate() {
             match observed_transitions.get(i) {
                 Some(actual) => {
                     if actual.from != expected.from
-                        || actual.to != expected.to
+                        || actual.to != expected.target
                         || actual.event != expected.event
                     {
                         failures.push(format!(
                             "transition {i}: expected {}->{} on '{}', got {}->{} on '{}'",
                             expected.from,
-                            expected.to,
+                            expected.target,
                             expected.event,
                             actual.from,
                             actual.to,
@@ -422,7 +424,7 @@ impl WorkflowEngine {
                 None => {
                     failures.push(format!(
                         "transition {i}: expected {}->{} on '{}', but no transition occurred",
-                        expected.from, expected.to, expected.event,
+                        expected.from, expected.target, expected.event,
                     ));
                 }
             }
@@ -672,31 +674,28 @@ fn extract_embedded_block(envelope: &serde_json::Value, block_key: &str) -> Opti
 /// Map a fixture document role to its embedded-block key per ADR 0076 D-1/D-3.
 /// Returns `None` for roles whose document remains a flat shape (kernel itself)
 /// or for roles with no canonical migration mapping.
+///
+/// Role keys are camelCase — same convention as `$wosWorkflow`, `signingFlow`,
+/// and the merged-schema property names. The fixture corpus is canonical
+/// camelCase (kebab-case keys retired post-ADR 0076 absorption sweep).
 fn embedded_block_for_role(role: &str) -> Option<&'static str> {
     match role {
-        // ADR 0076 D-1: $wosWorkflow embedded blocks. Accept both camelCase
-        // and kebab-case role keys (fixtures vary).
-        //
-        // TODO(post-ADR-0076): drop kebab-case aliases once the fixture corpus
-        // is camelCase-canonical. The dual-acceptance is transitional debt
-        // from the 56-fixture migration; freezing on one form prevents drift.
-        // Tracked at wos-scout review F2.
+        // ADR 0076 D-1: $wosWorkflow embedded blocks.
         "advanced" => Some("advanced"),
-        "agentConfig" | "agent-config" | "agent" => Some("agents"),
-        "driftMonitor" | "drift-monitor" | "drift" => Some("agents"),
-        "assertionLibrary" | "assertion-library" => Some("governance"),
-        "policyParameters" | "policy-parameters" => Some("governance"),
-        "equityConfig" | "equity-config" | "equity" => Some("advanced"),
-        "advancedGovernance" | "advanced-governance" => Some("advanced"),
-        "verificationReport" | "verification-report" => Some("advanced"),
+        "agentConfig" | "agent" => Some("agents"),
+        "driftMonitor" | "drift" => Some("agents"),
+        "assertionLibrary" => Some("governance"),
+        "policyParameters" => Some("governance"),
+        "equityConfig" | "equity" => Some("advanced"),
+        "advancedGovernance" => Some("advanced"),
+        "verificationReport" => Some("advanced"),
         // ADR 0076 D-3: $wosDelivery embedded blocks.
-        "correspondenceMetadata" | "correspondence-metadata" | "correspondence" => {
-            Some("correspondence")
-        }
+        "correspondenceMetadata" | "correspondence" => Some("correspondence"),
         // ADR 0076 D-5 ($wosTooling) sub-views.
-        "extensionRegistry" | "extension-registry" => Some("extensionRegistry"),
-        // Roles with bespoke load paths handled above (kernel/ai/governance/integration/businessCalendar/signatureProfile)
-        // are not routed through this helper.
+        "extensionRegistry" => Some("extensionRegistry"),
+        // Roles with bespoke load paths handled above (kernel / ai /
+        // governance / integration / businessCalendar / signatureProfile) are
+        // not routed through this helper.
         _ => None,
     }
 }

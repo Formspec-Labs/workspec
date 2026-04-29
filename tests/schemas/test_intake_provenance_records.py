@@ -1,9 +1,12 @@
 """Kernel-schema intake-acceptance provenance regression tests.
 
 Validates the ADR-0073 record-kind constraints layered into
-``schemas/kernel/wos-provenance-record.schema.json`` for the WOS-owned
-intake boundary: ``intakeAccepted``, ``intakeRejected``, ``intakeDeferred``,
-and ``caseCreated``.
+``schemas/wos-provenance-log.schema.json`` for the WOS-owned intake
+boundary: ``intakeAccepted``, ``intakeRejected``, ``intakeDeferred``, and
+``caseCreated``. (Per ADR 0076 D-4 the provenance log envelope replaces
+the prior split kernel-side ``wos-provenance-record.schema.json``;
+record-shape ``$def``s are promoted into ``wos-workflow.schema.json`` and
+``$ref``ed across the cross-schema registry.)
 
 These tests intentionally pin only the kernel-owned minimum:
 

@@ -69,8 +69,9 @@ impl ContractValidator for RecordingValidator {
 }
 
 fn minimal_proxy_ai_document() -> AIIntegrationDocument {
+    // `AIIntegrationDocument` represents the embedded `aiOversight` block per
+    // ADR 0076 D-1 — no longer a standalone document, no top-level marker.
     serde_json::from_value(serde_json::json!({
-        "$wosAIIntegration": "1.0",
         "targetWorkflow": "https://example.test/workflows/intake",
         "agents": [
             {

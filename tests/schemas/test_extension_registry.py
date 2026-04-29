@@ -1,7 +1,7 @@
 """Extension Registry schema regression tests.
 
-Guards the contract documented in `wos-extension-registry.schema.json`
-(Registry §1, §2, §3): every entry MUST carry the four required fields
+Guards the contract documented in ``schemas/wos-tooling.schema.json``
+(extension registry; Registry §1, §2, §3): every entry MUST carry the four required fields
 (seam, kind, lifecycle, description); `kind` and `lifecycle` are closed
 enums; the document MUST refuse unknown root properties (apart from `x-`
 vendor extensions).

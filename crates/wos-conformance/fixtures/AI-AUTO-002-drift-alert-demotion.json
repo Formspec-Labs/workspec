@@ -5,11 +5,11 @@
   "documents": {
     "kernel": "fixtures/kernel/autonomy-caps.json",
     "ai": "fixtures/ai/autonomy-caps-ai.json",
-    "agent-config": "fixtures/ai/autonomy-caps-agent-config.json",
-    "drift-monitor": "inline"
+    "agentConfig": "fixtures/ai/autonomy-caps-agent-config.json",
+    "driftMonitor": "inline"
   },
   "inline_documents": {
-    "drift-monitor": {
+    "driftMonitor": {
       "$wosWorkflow": "1.0",
       "version": "1.0.0",
       "url": "https://example.test/migrated-fixture",

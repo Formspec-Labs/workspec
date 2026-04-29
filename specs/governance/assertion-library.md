@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-5).** Assertion Gate Library `$def`s (`AssertionDefinition`, `AssertionInlineUse`, `AssertionReference`, `AssertionUse`) are inlined into the merged `$wosWorkflow` envelope at [`schemas/wos-workflow.schema.json#/$defs`](../../schemas/wos-workflow.schema.json). Pipeline stages `$ref` `AssertionUse` directly inside the workflow schema — no cross-schema URI plumbing. Standalone `wos-assertion-gate` schema and `$wosAssertionLibrary` marker are retired; this prose remains as normative reference for the cross-document reference protocol and assertion-type semantics.
+
 # WOS Assertion Gate Library v1.0
 
 **Version:** 1.0.0-draft.1

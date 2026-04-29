@@ -86,7 +86,7 @@ impl NotificationsService {
     }
 }
 
-fn find_template<'a>(sidecar: &'a serde_json::Value, id: &str) -> Option<&'a serde_json::Value> {
+pub(crate) fn find_template<'a>(sidecar: &'a serde_json::Value, id: &str) -> Option<&'a serde_json::Value> {
     sidecar
         .get("templates")
         .and_then(|t| t.as_array())
@@ -96,7 +96,7 @@ fn find_template<'a>(sidecar: &'a serde_json::Value, id: &str) -> Option<&'a ser
         })
 }
 
-fn interpolate(template: &str, context: &serde_json::Value) -> String {
+pub(crate) fn interpolate(template: &str, context: &serde_json::Value) -> String {
     // Minimal `${var}` replacement using a JSONPath-lite lookup (dots only).
     let mut out = String::with_capacity(template.len());
     let mut rest = template;

@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Agent Config content lives on each per-agent declaration inside the merged `$wosWorkflow` envelope. Schema home: [`schemas/wos-workflow.schema.json#/$defs/AgentDeclaration`](../../schemas/wos-workflow.schema.json) — `modelIdentifier`, `modelVersion`, `modelVersionPolicy`, `autonomy`, `confidenceFloor`, `confidenceDecay`, `fallbackChain`, `capabilities`, `driftMonitoring` properties. Standalone `wos-agent-config` schema and `$wosAgentConfig` marker are retired; this prose remains as normative reference for per-agent operational semantics.
+
 # WOS Agent Config v1.0
 
 **Version:** 1.0.0-draft.1

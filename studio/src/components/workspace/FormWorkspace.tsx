@@ -60,7 +60,7 @@ export function FormWorkspace({ target, onBack }: FormWorkspaceProps) {
       if (cancelled || !found) return;
       setInstance(found);
       const bundle = await backend.loadBundle(found.definitionUrl);
-      if (!cancelled) setKernel(bundle.kernel);
+      if (!cancelled) setKernel(bundle.workflow);
     }
     load();
     return () => { cancelled = true; };

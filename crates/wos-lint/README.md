@@ -76,22 +76,13 @@ Each diagnostic includes a rule ID (e.g., `K-001`), a JSON pointer path to the o
 
 ## Document detection
 
-Documents are identified by their `$wos*` marker property:
+Documents are identified by their `$wos*` marker property. Per ADR 0076 the schema family collapsed to six canonical markers — author-time core + two sidecars + two runtime artifacts + one tooling envelope. Legacy per-block markers (`$wosWorkflowGovernance`, `$wosAIIntegration`, `$wosAdvancedGovernance`, `$wosSignatureProfile`, `$wosBusinessCalendar`, `$wosNotificationTemplate`, `$wosCorrespondenceMetadata`, `$wosSemanticProfile`, `$wosAssertionLibrary`, `$wosDueProcess`, `$wosPolicyParameters`, `$wosAgentConfig`, `$wosDriftMonitor`, `$wosEquityConfig`, `$wosVerificationReport`, `$wosExtensionRegistry`, `$wosIntegrationProfile`, `$wosLifecycleDetail`, `$wosKernel`) are retired; their content lives under embedded blocks or `$views` of the merged schemas.
 
-| Marker | Document kind |
-| ------ | ------------- |
-| `$wosWorkflow` | Workflow (merged author-time envelope, ADR 0076) |
-| `$wosWorkflowGovernance` | Workflow Governance |
-| `$wosDueProcess` | Due Process Config |
-| `$wosAssertionLibrary` | Assertion Gate Library |
-| `$wosPolicyParameters` | Policy Parameter Config |
-| `$wosAIIntegration` | AI Integration |
-| `$wosAgentConfig` | Agent Config |
-| `$wosDriftMonitor` | Drift Monitor |
-| `$wosAdvancedGovernance` | Advanced Governance |
-| `$wosEquityConfig` | Equity Config |
-| `$wosVerificationReport` | Verification Report |
-| `$wosIntegrationProfile` | Integration Profile |
-| `$wosSemanticProfile` | Semantic Profile |
-| `$wosLifecycleDetail` | Lifecycle Detail |
-| `$wosCorrespondenceMetadata` | Correspondence Metadata |
+| Marker | Document kind | Schema |
+| ------ | ------------- | ------ |
+| `$wosWorkflow` | Author-time workflow (kernel + governance + ai + advanced + signature + custody + assurance) | `schemas/wos-workflow.schema.json` |
+| `$wosDelivery` | Deployment-environment delivery sidecar (calendar + notifications + correspondence) | `schemas/sidecars/wos-delivery.schema.json` |
+| `$wosOntologyAlignment` | Per-deployment ontology alignment sidecar (JSON-LD `@context`, SHACL, PROV-O, XES/OCEL) | `schemas/sidecars/wos-ontology-alignment.schema.json` |
+| `$wosCaseInstance` | Runtime case-instance state | `schemas/wos-case-instance.schema.json` |
+| `$wosProvenanceLog` | Runtime append-only audit log | `schemas/wos-provenance-log.schema.json` |
+| `$wosTooling` | Tooling envelope wrapping conformance traces, lint diagnostics, MCP catalogs, synth traces, extension registries | `schemas/wos-tooling.schema.json` |

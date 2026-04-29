@@ -1,7 +1,7 @@
 """OverrideRecord and EvidenceReference $def shape regression tests.
 
-Guards the contract documented in `wos-workflow-governance.schema.json`
-§OverrideRecord (Governance §7.3): every override emits one OverrideRecord
+Guards the contract documented in ``schemas/wos-workflow.schema.json``
+(``$defs/OverrideRecord``; Governance §7.3): every override emits one OverrideRecord
 with rationale + authorityVerification + supportingEvidence; every
 supportingEvidence entry MUST be locatable (carry a `caseFieldPath` or
 `uri`).

@@ -1,17 +1,12 @@
 """ProvenanceOutcome literal-agreement smoke test (Review B Finding 6).
 
-After §4.3b #F5d moved `CapabilityInvocationRecord` into the kernel
-provenance schema, the string ``"preconditionNotSatisfied"`` appears in
-two places inside the same file:
+The string ``"preconditionNotSatisfied"`` must agree between:
 
-1. `$defs/ProvenanceOutcome.oneOf[0].enum` -- the reserved-literal set.
-2. `$defs/CapabilityInvocationRecord.allOf[0].then.properties.outcome.const`
-   -- the guard that pins a blocked-invocation record to that literal.
+1. ``$defs/ProvenanceOutcome.oneOf[0].enum`` (reserved literals).
+2. ``$defs/CapabilityInvocationRecord.allOf[0].then.properties.outcome.const``.
 
-Both sites MUST agree. Review B Finding 6 recommended either a `$ref`
-into a narrow sub-$def OR a grep-based smoke test that the two literals
-stay in sync. We chose the grep route so the enforcing schema structure
-remains as close to the sibling open-enum convention as possible.
+Both live in ``schemas/wos-workflow.schema.json`` (ADR 0076 canonical $defs);
+``wos-provenance-log`` composes them via ``$ref`` into ``FactsTierRecord``.
 
 If these ever drift (typo, rename, half-finished migration), the test
 fires before lint or conformance ever runs.
@@ -23,15 +18,13 @@ import json
 from pathlib import Path
 
 WOS_SPEC_ROOT = Path(__file__).resolve().parents[2]
-PROVENANCE_SCHEMA = (
-    WOS_SPEC_ROOT / "schemas" / "wos-provenance-log.schema.json"
-)
+WORKFLOW_SCHEMA = WOS_SPEC_ROOT / "schemas" / "wos-workflow.schema.json"
 
 RESERVED_LITERAL = "preconditionNotSatisfied"
 
 
-def test_precondition_not_satisfied_literal_agrees_across_provenance_schema_sites():
-    schema = json.loads(PROVENANCE_SCHEMA.read_text())
+def test_precondition_not_satisfied_literal_agrees_across_workflow_schema_sites():
+    schema = json.loads(WORKFLOW_SCHEMA.read_text())
 
     outcome_enum = schema["$defs"]["ProvenanceOutcome"]["oneOf"][0]["enum"]
     assert RESERVED_LITERAL in outcome_enum, (

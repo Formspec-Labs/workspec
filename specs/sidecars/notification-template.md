@@ -5,6 +5,8 @@ date: 2026-04-10
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-3).** Notification template content lives in the merged delivery sidecar at [`schemas/sidecars/wos-delivery.schema.json#/$defs/NotificationsBlock`](../../schemas/sidecars/wos-delivery.schema.json) — `notifications` block of a `$wosDelivery` envelope (templates collection with subject/body/channels/sections). Standalone `wos-notification-template` schema and `$wosNotificationTemplate` marker are retired. See [`specs/sidecars/README.md`](README.md) for the active sidecar index. Prose below remains as normative reference for notice-rendering semantics consumed by `Governance §3.x`.
+
 # WOS Notification Template Sidecar v1.0
 
 **Version:** 1.0.0-draft.1

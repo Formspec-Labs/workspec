@@ -96,8 +96,15 @@ pub fn slice_b_tempdir() -> TempDir {
     )
     .unwrap();
 
+    // Business calendar fixture body. Per ADR 0076 D-3 the canonical surface
+    // is `$wosDelivery.calendar`, but `wos-server`'s `bundle_service` still
+    // reads the legacy per-sidecar subdirectory layout (`business-calendar/{slug}.json`)
+    // and projects the file contents into `BundleView.business_calendar` —
+    // see `crates/wos-server/src/services/bundle_service.rs` SIDECARS list.
+    // Fixture omits the legacy `$wosBusinessCalendar` marker (dead decoration);
+    // bundle_service migration to the merged delivery sidecar is tracked
+    // separately as ADR 0076 D-3 follow-on.
     let cal = serde_json::json!({
-        "$wosBusinessCalendar": "1.0",
         "targetWorkflow": workflow_url,
         "timezone": "UTC",
         "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],

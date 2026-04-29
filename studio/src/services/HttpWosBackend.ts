@@ -5,7 +5,7 @@ import type {
 import type {
   IInboxPort, TaskListItem, ICaseViewerPort, IWorkflowDesignPort, WosValidationResult,
   IGovernancePort, AgentView, DelegationEntry, DeonticConstraintView, QualityControlsView,
-  PipelineView, VerificationReportView, EquityConfigView,
+  PipelineView, EquityConfigView,
   PolicyVersionView, CalendarEventView, ServiceHealthView,
   IDashboardPort, DashboardMetrics, StageMetricView, AlertView, DriftDataPoint, PipelineDataPoint,
   IApplicantPort, ApplicantDeterminationView, IAuthPort, AuthUser,
@@ -21,8 +21,8 @@ const API_BASE = '/api';
 function assertBundle(data: unknown): WosDocumentBundle {
   if (!data || typeof data !== 'object') throw new Error('Invalid bundle response');
   const bundle = data as WosDocumentBundle;
-  if (!bundle.kernel) throw new Error('Bundle missing kernel');
-  const validation = validateKernelDocument(bundle.kernel);
+  if (!bundle.workflow) throw new Error('Bundle missing workflow');
+  const validation = validateKernelDocument(bundle.workflow);
   if (!validation.isValid) {
     throw new Error(`Bundle kernel failed schema validation: ${validation.issues.slice(0, 3).map(i => i.message).join('; ')}`);
   }
@@ -202,13 +202,6 @@ export class HttpGovernancePort implements IGovernancePort {
   async listPipelines(workflowUrl: string): Promise<PipelineView[]> {
     const res = await fetch(`${API_BASE}/governance/${encodeURIComponent(workflowUrl)}/pipelines`);
     if (!res.ok) throw new Error(`Failed to list pipelines: ${res.status}`);
-    return res.json();
-  }
-
-  async getVerificationReport(workflowUrl: string): Promise<VerificationReportView | null> {
-    const res = await fetch(`${API_BASE}/governance/${encodeURIComponent(workflowUrl)}/verification-report`);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Failed to get verification report: ${res.status}`);
     return res.json();
   }
 

@@ -74,14 +74,6 @@ fn minimal_kernel() -> serde_json::Value {
     minimal_kernel_with_relationships(json!([]))
 }
 
-/// Schema-valid governance base so Tier 1 exercises typed deserialization.
-fn minimal_governance_document() -> serde_json::Value {
-    json!({
-        "$wosWorkflow": "1.0",
-        "targetWorkflow": TEST_WORKFLOW_URL
-    })
-}
-
 /// Schema-valid AI integration base so Tier 1 exercises typed deserialization.
 fn minimal_ai_integration_document() -> serde_json::Value {
     json!({
@@ -96,15 +88,6 @@ fn minimal_ai_integration_document() -> serde_json::Value {
                 "modelVersion": "2025-03"
             }
         ]
-    })
-}
-
-fn minimal_correspondence_metadata() -> serde_json::Value {
-    json!({
-        "$wosDelivery": "1.0",
-        "targetWorkflow": TEST_WORKFLOW_URL,
-        "correspondenceField": "caseFile.correspondence",
-        "entryTemplates": []
     })
 }
 
@@ -1034,18 +1017,27 @@ fn k021_no_provenance_skips_check() {
 }
 
 // ========================================================================
-// G-037: Assertion id values MUST be unique.
+// G-037 / G-038 / G-039 — Assertion library (governance embedded block).
+// Per ADR 0076 D-1, `assertions` lives under `governance` in the merged
+// `$wosWorkflow` envelope (the linter accepts both flat `governance.assertions`
+// and the nested `governance.assertionLibrary.assertions` shape).
 // ========================================================================
+
+fn g037_doc_with_assertions(assertions: serde_json::Value) -> serde_json::Value {
+    json!({
+        "$wosWorkflow": "1.0",
+        "governance": {
+            "assertions": assertions,
+        }
+    })
+}
 
 #[test]
 fn g037_duplicate_assertion_id_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
-            { "id": "a1", "type": "range", "expression": "x > 0" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
+        { "id": "a1", "type": "range", "expression": "x > 0" }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-037"), "expected G-037: {diags:?}");
     assert_eq!(severity_of(&diags, "G-037"), Some(Severity::Error));
@@ -1053,29 +1045,19 @@ fn g037_duplicate_assertion_id_flagged() {
 
 #[test]
 fn g037_unique_assertion_ids_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
-            { "id": "a2", "type": "range", "expression": "x > 0" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "arithmetic", "expression": "1 + 1" },
+        { "id": "a2", "type": "range", "expression": "x > 0" }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-037"), "unexpected G-037: {diags:?}");
 }
 
-// ========================================================================
-// G-038: Arithmetic/range/temporal assertion without expression -> warning.
-// ========================================================================
-
 #[test]
 fn g038_arithmetic_without_expression_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "arithmetic" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "arithmetic" }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-038"), "expected G-038: {diags:?}");
     assert_eq!(severity_of(&diags, "G-038"), Some(Severity::Warning));
@@ -1083,24 +1065,18 @@ fn g038_arithmetic_without_expression_flagged() {
 
 #[test]
 fn g038_range_with_expression_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "range", "expression": "value >= 0 && value <= 100" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "range", "expression": "value >= 0 && value <= 100" }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-038"), "unexpected G-038: {diags:?}");
 }
 
 #[test]
 fn g038_temporal_without_expression_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "temporal" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "temporal" }
+    ]));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "G-038"),
@@ -1108,18 +1084,11 @@ fn g038_temporal_without_expression_flagged() {
     );
 }
 
-// ========================================================================
-// G-039: source-grounded/consistency assertion without fields -> warning.
-// ========================================================================
-
 #[test]
 fn g039_source_grounded_without_fields_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "source-grounded" }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "source-grounded" }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-039"), "expected G-039: {diags:?}");
     assert_eq!(severity_of(&diags, "G-039"), Some(Severity::Warning));
@@ -1127,37 +1096,42 @@ fn g039_source_grounded_without_fields_flagged() {
 
 #[test]
 fn g039_consistency_with_fields_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
-        "assertions": [
-            { "id": "a1", "type": "consistency", "fields": ["income", "deductions"] }
-        ]
-    });
+    let doc = g037_doc_with_assertions(json!([
+        { "id": "a1", "type": "consistency", "fields": ["income", "deductions"] }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-039"), "unexpected G-039: {diags:?}");
 }
 
 // ========================================================================
-// G-044: Delegation expirationDate MUST be strictly after effectiveDate.
+// G-044 / G-045 — Delegation date ordering (governance embedded block).
+// Per ADR 0076 D-1 delegations live under `governance.delegations` in the
+// merged `$wosWorkflow` envelope.
 // ========================================================================
+
+fn governance_doc_with_delegations(delegations: serde_json::Value) -> serde_json::Value {
+    json!({
+        "$wosWorkflow": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL,
+        "governance": {
+            "delegations": delegations,
+        }
+    })
+}
 
 #[test]
 fn g044_expiration_before_effective_flagged() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "delegations".to_string(),
-        json!([
-            {
-                "id": "delegation-1",
-                "delegator": "alice",
-                "delegate": "bob",
-                "scope": {},
-                "authority": "determination",
-                "effectiveDate": "2026-06-01",
-                "expirationDate": "2026-01-01"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_delegations(json!([
+        {
+            "id": "delegation-1",
+            "delegator": "alice",
+            "delegate": "bob",
+            "scope": {},
+            "authority": "determination",
+            "effectiveDate": "2026-06-01",
+            "expirationDate": "2026-01-01"
+        }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-044"), "expected G-044: {diags:?}");
     assert_eq!(severity_of(&diags, "G-044"), Some(Severity::Error));
@@ -1166,21 +1140,17 @@ fn g044_expiration_before_effective_flagged() {
 #[test]
 fn g044_expiration_equal_to_effective_flagged() {
     // Spec says "strictly after" so equal dates should fail.
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "delegations".to_string(),
-        json!([
-            {
-                "id": "delegation-1",
-                "delegator": "alice",
-                "delegate": "bob",
-                "scope": {},
-                "authority": "determination",
-                "effectiveDate": "2026-06-01",
-                "expirationDate": "2026-06-01"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_delegations(json!([
+        {
+            "id": "delegation-1",
+            "delegator": "alice",
+            "delegate": "bob",
+            "scope": {},
+            "authority": "determination",
+            "effectiveDate": "2026-06-01",
+            "expirationDate": "2026-06-01"
+        }
+    ]));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "G-044"),
@@ -1190,46 +1160,34 @@ fn g044_expiration_equal_to_effective_flagged() {
 
 #[test]
 fn g044_expiration_after_effective_clean() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "delegations".to_string(),
-        json!([
-            {
-                "id": "delegation-1",
-                "delegator": "alice",
-                "delegate": "bob",
-                "scope": {},
-                "authority": "determination",
-                "effectiveDate": "2026-01-01",
-                "expirationDate": "2026-12-31"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_delegations(json!([
+        {
+            "id": "delegation-1",
+            "delegator": "alice",
+            "delegate": "bob",
+            "scope": {},
+            "authority": "determination",
+            "effectiveDate": "2026-01-01",
+            "expirationDate": "2026-12-31"
+        }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-044"), "unexpected G-044: {diags:?}");
 }
 
-// ========================================================================
-// G-045: revokedDate MUST be on or after effectiveDate.
-// ========================================================================
-
 #[test]
 fn g045_revoked_before_effective_flagged() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "delegations".to_string(),
-        json!([
-            {
-                "id": "delegation-1",
-                "delegator": "alice",
-                "delegate": "bob",
-                "scope": {},
-                "authority": "determination",
-                "effectiveDate": "2026-06-01",
-                "revokedDate": "2026-01-01"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_delegations(json!([
+        {
+            "id": "delegation-1",
+            "delegator": "alice",
+            "delegate": "bob",
+            "scope": {},
+            "authority": "determination",
+            "effectiveDate": "2026-06-01",
+            "revokedDate": "2026-01-01"
+        }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-045"), "expected G-045: {diags:?}");
 }
@@ -1237,21 +1195,17 @@ fn g045_revoked_before_effective_flagged() {
 #[test]
 fn g045_revoked_same_as_effective_clean() {
     // Spec says "on or after" so same date is OK.
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "delegations".to_string(),
-        json!([
-            {
-                "id": "delegation-1",
-                "delegator": "alice",
-                "delegate": "bob",
-                "scope": {},
-                "authority": "determination",
-                "effectiveDate": "2026-06-01",
-                "revokedDate": "2026-06-01"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_delegations(json!([
+        {
+            "id": "delegation-1",
+            "delegator": "alice",
+            "delegate": "bob",
+            "scope": {},
+            "authority": "determination",
+            "effectiveDate": "2026-06-01",
+            "revokedDate": "2026-06-01"
+        }
+    ]));
     let diags = lint(doc);
     assert!(
         !has_rule(&diags, "G-045"),
@@ -1263,10 +1217,28 @@ fn g045_revoked_same_as_effective_clean() {
 // G-047: Parameter values MUST be in ascending effectiveDate order.
 // ========================================================================
 
+// ========================================================================
+// G-047 / G-048 / G-050 / G-057 — Policy parameters / bindings live under
+// `governance` in the merged `$wosWorkflow` envelope per ADR 0076 D-1.
+// ========================================================================
+
+fn governance_doc_with_block(block: serde_json::Value) -> serde_json::Value {
+    let mut gov = serde_json::Map::new();
+    if let Some(obj) = block.as_object() {
+        for (k, v) in obj {
+            gov.insert(k.clone(), v.clone());
+        }
+    }
+    json!({
+        "$wosWorkflow": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL,
+        "governance": serde_json::Value::Object(gov),
+    })
+}
+
 #[test]
 fn g047_values_out_of_order_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1276,15 +1248,14 @@ fn g047_values_out_of_order_flagged() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-047"), "expected G-047: {diags:?}");
 }
 
 #[test]
 fn g047_values_in_order_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1294,53 +1265,42 @@ fn g047_values_in_order_clean() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-047"), "unexpected G-047: {diags:?}");
 }
 
-// ========================================================================
-// G-048: Binding id MUST match the key under which it appears.
-// ========================================================================
-
 #[test]
 fn g048_binding_id_mismatch_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "bindings": {
             "myBinding": {
                 "id": "wrongId",
                 "parameterId": "threshold"
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-048"), "expected G-048: {diags:?}");
 }
 
 #[test]
 fn g048_binding_id_matches_key_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "bindings": {
             "myBinding": {
                 "id": "myBinding",
                 "parameterId": "threshold"
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-048"), "unexpected G-048: {diags:?}");
 }
 
-// ========================================================================
-// G-050: Parameter value type mismatch.
-// ========================================================================
-
 #[test]
 fn g050_number_parameter_with_string_value_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "parameters": {
             "threshold": {
                 "type": "number",
@@ -1349,15 +1309,14 @@ fn g050_number_parameter_with_string_value_flagged() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-050"), "expected G-050: {diags:?}");
 }
 
 #[test]
 fn g050_boolean_parameter_with_boolean_value_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "parameters": {
             "enabled": {
                 "type": "boolean",
@@ -1366,15 +1325,14 @@ fn g050_boolean_parameter_with_boolean_value_clean() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-050"), "unexpected G-050: {diags:?}");
 }
 
 #[test]
 fn g050_string_parameter_with_number_value_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "parameters": {
             "label": {
                 "type": "string",
@@ -1383,7 +1341,7 @@ fn g050_string_parameter_with_number_value_flagged() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "G-050"),
@@ -1395,56 +1353,53 @@ fn g050_string_parameter_with_number_value_flagged() {
 // G-055: Hold expectedDuration invalid format.
 // ========================================================================
 
+// G-055 hold policies live under `governance.holdPolicies` (or
+// `governance.holds.policies` — the linter accepts either) per ADR 0076 D-1.
+
+fn governance_doc_with_hold_policies(policies: serde_json::Value) -> serde_json::Value {
+    governance_doc_with_block(json!({
+        "holdPolicies": policies,
+    }))
+}
+
 #[test]
 fn g055_invalid_duration_format_flagged() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "holdPolicies".to_string(),
-        json!([
-            {
-                "holdType": "pending-applicant-response",
-                "expectedDuration": "30 days",
-                "resumeTrigger": "applicantResponse",
-                "timeoutAction": "escalate"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_hold_policies(json!([
+        {
+            "holdType": "pending-applicant-response",
+            "expectedDuration": "30 days",
+            "resumeTrigger": "applicantResponse",
+            "timeoutAction": "escalate"
+        }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-055"), "expected G-055: {diags:?}");
 }
 
 #[test]
 fn g055_valid_iso_duration_clean() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "holdPolicies".to_string(),
-        json!([
-            {
-                "holdType": "pending-applicant-response",
-                "expectedDuration": "P30D",
-                "resumeTrigger": "applicantResponse",
-                "timeoutAction": "escalate"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_hold_policies(json!([
+        {
+            "holdType": "pending-applicant-response",
+            "expectedDuration": "P30D",
+            "resumeTrigger": "applicantResponse",
+            "timeoutAction": "escalate"
+        }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-055"), "unexpected G-055: {diags:?}");
 }
 
 #[test]
 fn g055_indefinite_literal_clean() {
-    let mut doc = minimal_governance_document();
-    doc.as_object_mut().unwrap().insert(
-        "holdPolicies".to_string(),
-        json!([
-            {
-                "holdType": "pending-applicant-response",
-                "expectedDuration": "indefinite",
-                "resumeTrigger": "applicantResponse",
-                "timeoutAction": "escalate"
-            }
-        ]),
-    );
+    let doc = governance_doc_with_hold_policies(json!([
+        {
+            "holdType": "pending-applicant-response",
+            "expectedDuration": "indefinite",
+            "resumeTrigger": "applicantResponse",
+            "timeoutAction": "escalate"
+        }
+    ]));
     let diags = lint(doc);
     assert!(
         !has_rule(&diags, "G-055"),
@@ -1458,8 +1413,7 @@ fn g055_indefinite_literal_clean() {
 
 #[test]
 fn g057_binding_values_out_of_order_flagged() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "bindings": {
             "b1": {
                 "id": "b1",
@@ -1469,15 +1423,14 @@ fn g057_binding_values_out_of_order_flagged() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-057"), "expected G-057: {diags:?}");
 }
 
 #[test]
 fn g057_binding_values_in_order_clean() {
-    let doc = json!({
-        "$wosWorkflow": "1.0",
+    let doc = governance_doc_with_block(json!({
         "bindings": {
             "b1": {
                 "id": "b1",
@@ -1487,7 +1440,7 @@ fn g057_binding_values_in_order_clean() {
                 ]
             }
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-057"), "unexpected G-057: {diags:?}");
 }
@@ -1496,50 +1449,65 @@ fn g057_binding_values_in_order_clean() {
 // G-058: Holiday entry MUST have exactly one of date or rule.
 // ========================================================================
 
-fn minimal_business_calendar() -> serde_json::Value {
+// Per ADR 0076 D-3 the standalone `$wosBusinessCalendar` sidecar is absorbed
+// into `$wosDelivery.calendar`. G-058 / G-059 fixtures construct a delivery
+// envelope with a `calendar` block; the linter walks `delivery.calendar` for
+// holidays + operating-hours rules.
+
+fn delivery_doc_with_calendar(extra: serde_json::Value) -> serde_json::Value {
+    let mut calendar = json!({
+        "timezone": "America/New_York",
+        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+    });
+    if let Some(extra_obj) = extra.as_object() {
+        let cal_obj = calendar.as_object_mut().unwrap();
+        for (k, v) in extra_obj {
+            cal_obj.insert(k.clone(), v.clone());
+        }
+    }
     json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
-        "timezone": "America/New_York",
-        "workWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+        "calendar": calendar,
     })
+}
+
+fn delivery_doc_with_calendar_holidays(holidays: serde_json::Value) -> serde_json::Value {
+    delivery_doc_with_calendar(json!({ "holidays": holidays }))
+}
+
+fn delivery_doc_with_calendar_operating_hours(hours: serde_json::Value) -> serde_json::Value {
+    delivery_doc_with_calendar(json!({ "operatingHours": hours }))
 }
 
 #[test]
 fn g058_holiday_both_date_and_rule_flagged() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut().unwrap().insert(
-        "holidays".to_string(),
-        json!([{ "name": "Bad", "date": "2026-01-01", "rule": "nthWeekday(3, monday, january)" }]),
-    );
+    let doc = delivery_doc_with_calendar_holidays(json!([
+        { "name": "Bad", "date": "2026-01-01", "rule": "nthWeekday(3, monday, january)" }
+    ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-058"), "expected G-058: {diags:?}");
 }
 
 #[test]
 fn g058_holiday_neither_date_nor_rule_flagged() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut()
-        .unwrap()
-        .insert("holidays".to_string(), json!([{ "name": "Incomplete" }]));
+    let doc = delivery_doc_with_calendar_holidays(json!([{ "name": "Incomplete" }]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-058"), "expected G-058: {diags:?}");
 }
 
 #[test]
 fn g058_holiday_date_only_clean() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut().unwrap().insert(
-        "holidays".to_string(),
-        json!([{ "name": "New Year", "date": "2026-01-01" }]),
-    );
+    let doc = delivery_doc_with_calendar_holidays(json!([
+        { "name": "New Year", "date": "2026-01-01" }
+    ]));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-058"), "unexpected G-058: {diags:?}");
 }
 
 #[test]
 fn g058_no_holidays_skips_check() {
-    let doc = minimal_business_calendar();
+    let doc = delivery_doc_with_calendar(json!({}));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-058"), "unexpected G-058: {diags:?}");
 }
@@ -1550,47 +1518,41 @@ fn g058_no_holidays_skips_check() {
 
 #[test]
 fn g059_operating_hours_end_not_after_start_flagged() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut().unwrap().insert(
-        "operatingHours".to_string(),
-        json!({ "start": "17:00", "end": "08:00" }),
-    );
+    let doc = delivery_doc_with_calendar_operating_hours(json!({
+        "start": "17:00", "end": "08:00"
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-059"), "expected G-059: {diags:?}");
 }
 
 #[test]
 fn g059_operating_hours_invalid_hhmm_flagged() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut().unwrap().insert(
-        "operatingHours".to_string(),
-        json!({ "start": "08:00", "end": "not-a-time" }),
-    );
+    let doc = delivery_doc_with_calendar_operating_hours(json!({
+        "start": "08:00", "end": "not-a-time"
+    }));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "G-059"),
         "expected G-059 for invalid time: {diags:?}"
     );
     assert!(
-        path_of(&diags, "G-059").is_some_and(|p| p == "/operatingHours"),
-        "expected path /operatingHours, got: {diags:?}"
+        path_of(&diags, "G-059").is_some_and(|p| p == "/calendar/operatingHours"),
+        "expected path /calendar/operatingHours, got: {diags:?}"
     );
 }
 
 #[test]
 fn g059_operating_hours_end_after_start_clean() {
-    let mut doc = minimal_business_calendar();
-    doc.as_object_mut().unwrap().insert(
-        "operatingHours".to_string(),
-        json!({ "start": "08:00", "end": "17:00" }),
-    );
+    let doc = delivery_doc_with_calendar_operating_hours(json!({
+        "start": "08:00", "end": "17:00"
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-059"), "unexpected G-059: {diags:?}");
 }
 
 #[test]
 fn g059_no_operating_hours_skips_check() {
-    let doc = minimal_business_calendar();
+    let doc = delivery_doc_with_calendar(json!({}));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-059"), "unexpected G-059: {diags:?}");
 }
@@ -1599,25 +1561,27 @@ fn g059_no_operating_hours_skips_check() {
 // G-062: Adverse-decision templates MUST cover required sections.
 // ========================================================================
 
-fn minimal_notification_sidecar() -> serde_json::Value {
+// G-062 / G-065 — notification template fixtures use the merged delivery
+// sidecar shape: `delivery.notificationTemplates` per ADR 0076 D-3.
+
+fn delivery_doc_with_notification_templates(templates: serde_json::Value) -> serde_json::Value {
     json!({
         "$wosDelivery": "1.0",
         "targetWorkflow": "https://example.com/workflow/test",
-        "templates": {}
+        "notificationTemplates": templates,
     })
 }
 
 #[test]
 fn g062_adverse_template_missing_sections_flagged() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "badAdverse": {
             "category": "adverse-decision",
             "sections": [
                 { "id": "determination", "contentType": "structured", "content": "x" }
             ]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-062"), "expected G-062: {diags:?}");
     assert!(
@@ -1628,8 +1592,7 @@ fn g062_adverse_template_missing_sections_flagged() {
 
 #[test]
 fn g062_adverse_template_complete_clean() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "fullAdverse": {
             "category": "adverse-decision",
             "sections": [
@@ -1639,20 +1602,19 @@ fn g062_adverse_template_complete_clean() {
                 { "id": "appealInstructions", "contentType": "action-required", "content": "i" }
             ]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-062"), "unexpected G-062: {diags:?}");
 }
 
 #[test]
 fn g062_non_adverse_category_skips_section_rules() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "hold": {
             "category": "hold-notification",
             "sections": [{ "id": "only", "contentType": "text", "content": "x" }]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-062"), "unexpected G-062: {diags:?}");
 }
@@ -1663,8 +1625,7 @@ fn g062_non_adverse_category_skips_section_rules() {
 
 #[test]
 fn g065_duplicate_section_id_flagged() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "dup": {
             "category": "case-status-update",
             "sections": [
@@ -1672,15 +1633,14 @@ fn g065_duplicate_section_id_flagged() {
                 { "id": "same", "contentType": "text", "content": "b" }
             ]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-065"), "expected G-065: {diags:?}");
 }
 
 #[test]
 fn g065_unique_section_ids_clean() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "ok": {
             "category": "case-status-update",
             "sections": [
@@ -1688,20 +1648,19 @@ fn g065_unique_section_ids_clean() {
                 { "id": "b", "contentType": "text", "content": "2" }
             ]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-065"), "unexpected G-065: {diags:?}");
 }
 
 #[test]
 fn g065_single_section_skips_uniqueness_violation() {
-    let mut doc = minimal_notification_sidecar();
-    doc["templates"] = json!({
+    let doc = delivery_doc_with_notification_templates(json!({
         "one": {
             "category": "case-status-update",
             "sections": [{ "id": "only", "contentType": "text", "content": "x" }]
         }
-    });
+    }));
     let diags = lint(doc);
     assert!(!has_rule(&diags, "G-065"), "unexpected G-065: {diags:?}");
 }
@@ -1710,49 +1669,64 @@ fn g065_single_section_skips_uniqueness_violation() {
 // CM-001: Correspondence entry template ids MUST be unique.
 // ========================================================================
 
+// CM-001 — correspondence-metadata content lives under
+// `delivery.correspondence` per ADR 0076 D-3.
+
+fn delivery_doc_with_correspondence(correspondence: serde_json::Value) -> serde_json::Value {
+    json!({
+        "$wosDelivery": "1.0",
+        "targetWorkflow": TEST_WORKFLOW_URL,
+        "correspondence": correspondence,
+    })
+}
+
 #[test]
 fn cm001_duplicate_entry_template_ids_flagged() {
-    let mut doc = minimal_correspondence_metadata();
-    doc["entryTemplates"] = json!([
-        {
-            "id": "inboundMail",
-            "channel": "mail",
-            "direction": "inbound",
-            "actorType": "applicant"
-        },
-        {
-            "id": "inboundMail",
-            "channel": "email",
-            "direction": "inbound",
-            "actorType": "representative"
-        }
-    ]);
+    let doc = delivery_doc_with_correspondence(json!({
+        "correspondenceField": "caseFile.correspondence",
+        "entryTemplates": [
+            {
+                "id": "inboundMail",
+                "channel": "mail",
+                "direction": "inbound",
+                "actorType": "applicant"
+            },
+            {
+                "id": "inboundMail",
+                "channel": "email",
+                "direction": "inbound",
+                "actorType": "representative"
+            }
+        ]
+    }));
 
     let diags = lint(doc);
     assert!(has_rule(&diags, "CM-001"), "expected CM-001: {diags:?}");
     assert_eq!(
         path_of(&diags, "CM-001"),
-        Some("/entryTemplates/1/id".to_string())
+        Some("/correspondence/entryTemplates/1/id".to_string())
     );
 }
 
 #[test]
 fn cm001_unique_entry_template_ids_clean() {
-    let mut doc = minimal_correspondence_metadata();
-    doc["entryTemplates"] = json!([
-        {
-            "id": "inboundMail",
-            "channel": "mail",
-            "direction": "inbound",
-            "actorType": "applicant"
-        },
-        {
-            "id": "phoneContact",
-            "channel": "phone",
-            "direction": "inbound",
-            "actorType": "applicant"
-        }
-    ]);
+    let doc = delivery_doc_with_correspondence(json!({
+        "correspondenceField": "caseFile.correspondence",
+        "entryTemplates": [
+            {
+                "id": "inboundMail",
+                "channel": "mail",
+                "direction": "inbound",
+                "actorType": "applicant"
+            },
+            {
+                "id": "phoneContact",
+                "channel": "phone",
+                "direction": "inbound",
+                "actorType": "applicant"
+            }
+        ]
+    }));
 
     let diags = lint(doc);
     assert!(!has_rule(&diags, "CM-001"), "unexpected CM-001: {diags:?}");
@@ -1762,16 +1736,29 @@ fn cm001_unique_entry_template_ids_clean() {
 // AI-041: Fallback chain without terminal action -> error.
 // ========================================================================
 
+// AI-041 fixtures place `fallbackChain` inside `agents[0]` per ADR 0076 D-1
+// (merged `$wosWorkflow` envelope; per-agent fallback chains, not a top-level
+// AI-document field).
+
+fn ai041_doc_with_chain(chain: serde_json::Value) -> serde_json::Value {
+    let mut doc = minimal_ai_integration_document();
+    let agents = doc
+        .get_mut("agents")
+        .and_then(|a| a.as_array_mut())
+        .expect("minimal_ai_integration_document MUST seed agents[]");
+    agents[0]
+        .as_object_mut()
+        .expect("agent[0] is an object")
+        .insert("fallbackChain".to_string(), chain);
+    doc
+}
+
 #[test]
 fn ai041_fallback_chain_without_terminal_action_flagged() {
-    let mut doc = minimal_ai_integration_document();
-    doc.as_object_mut().unwrap().insert(
-        "fallbackChain".to_string(),
-        json!([
-            { "action": "retry" },
-            { "action": "alternateAgent", "alternateAgentRef": "agent-b" }
-        ]),
-    );
+    let doc = ai041_doc_with_chain(json!([
+        { "action": "retry" },
+        { "action": "alternateAgent", "alternateAgentRef": "agent-b" }
+    ]));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "AI-041"),
@@ -1781,14 +1768,10 @@ fn ai041_fallback_chain_without_terminal_action_flagged() {
 
 #[test]
 fn ai041_fallback_chain_terminates_with_escalate_clean() {
-    let mut doc = minimal_ai_integration_document();
-    doc.as_object_mut().unwrap().insert(
-        "fallbackChain".to_string(),
-        json!([
-            { "action": "retry" },
-            { "action": "escalateToHuman" }
-        ]),
-    );
+    let doc = ai041_doc_with_chain(json!([
+        { "action": "retry" },
+        { "action": "escalateToHuman" }
+    ]));
     let diags = lint(doc);
     assert!(
         !has_rule(&diags, "AI-041"),
@@ -1798,14 +1781,10 @@ fn ai041_fallback_chain_terminates_with_escalate_clean() {
 
 #[test]
 fn ai041_fallback_chain_terminates_with_fail_clean() {
-    let mut doc = minimal_ai_integration_document();
-    doc.as_object_mut().unwrap().insert(
-        "fallbackChain".to_string(),
-        json!([
-            { "action": "retry" },
-            { "action": "fail" }
-        ]),
-    );
+    let doc = ai041_doc_with_chain(json!([
+        { "action": "retry" },
+        { "action": "fail" }
+    ]));
     let diags = lint(doc);
     assert!(
         !has_rule(&diags, "AI-041"),
@@ -1815,15 +1794,11 @@ fn ai041_fallback_chain_terminates_with_fail_clean() {
 
 #[test]
 fn ai041_fallback_chain_with_cycle_flagged() {
-    let mut doc = minimal_ai_integration_document();
-    doc.as_object_mut().unwrap().insert(
-        "fallbackChain".to_string(),
-        json!([
-            { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
-            { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
-            { "action": "escalateToHuman" }
-        ]),
-    );
+    let doc = ai041_doc_with_chain(json!([
+        { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
+        { "action": "alternateAgent", "alternateAgentRef": "agent-b" },
+        { "action": "escalateToHuman" }
+    ]));
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "AI-041"),
@@ -1877,18 +1852,24 @@ fn ai049_narrative_authoritative_false_clean() {
 }
 
 #[test]
-fn ai049_provenance_tier_narrative_authoritative_true_flagged() {
-    // The rule also checks generic provenance entries with tier="narrative".
+fn ai049_aioversight_narrative_provenance_authoritative_true_flagged() {
+    // Per ADR 0076 D-1 the AI Integration document was absorbed into the
+    // merged `$wosWorkflow` envelope; framework-level oversight (including
+    // narrativeProvenance) lives under `aiOversight`. The rule walks both
+    // root `narrativeProvenance` and `aiOversight.narrativeProvenance` so
+    // Tier-1 enforcement reaches authors who place it either spot.
     let doc = json!({
         "$wosWorkflow": "1.0",
-        "provenance": [
-            { "tier": "narrative", "authoritative": true, "text": "Narrative." }
-        ]
+        "aiOversight": {
+            "narrativeProvenance": [
+                { "authoritative": true, "text": "Narrative." }
+            ]
+        }
     });
     let diags = lint(doc);
     assert!(
         has_rule(&diags, "AI-049"),
-        "expected AI-049 for provenance tier=narrative: {diags:?}"
+        "expected AI-049 for aiOversight.narrativeProvenance: {diags:?}"
     );
 }
 

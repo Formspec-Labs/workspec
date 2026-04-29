@@ -85,8 +85,10 @@ pub fn mint_assurance_id() -> String {
     mint_type_id(&tenant(), ASSURANCE_PREFIX)
 }
 
-/// Returns whether `value` is a valid **custody `recordId`** per
-/// `schemas/kernel/wos-custody-hook-encoding.schema.json` `RecordTypeId`:
+/// Returns whether `value` is a valid **custody `recordId`** per Kernel
+/// custody-hook-encoding (ADR-0061 wire); `RecordTypeId` rules were formerly
+/// in `wos-custody-hook-encoding.schema.json` and now live in author-time
+/// `schemas/wos-workflow.schema.json` / runtime `wos-runtime::custody` only:
 /// reserved families `prov`, `gov`, `ai`, `assurance`, or a vendor family
 /// `x-{label}(?:-{label})+` with the same tenant and UUIDv7 tail rules as
 /// [`is_valid_type_id`].

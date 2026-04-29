@@ -5,6 +5,8 @@ date: 2026-04-09
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-1).** Drift monitoring content lives in two slots of the merged `$wosWorkflow` envelope: per-agent monitoring at [`AgentDeclaration.driftMonitoring`](../../schemas/wos-workflow.schema.json) and workflow-wide oversight at [`AIOversight.driftDetection`](../../schemas/wos-workflow.schema.json). Standalone `wos-drift-monitor` schema and `$wosDriftMonitor` marker are retired; this prose remains as normative reference for drift detection semantics.
+
 # WOS Drift Monitor Config v1.0
 
 **Version:** 1.0.0-draft.1

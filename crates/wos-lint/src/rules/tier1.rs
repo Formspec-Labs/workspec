@@ -11,7 +11,6 @@
 
 use serde_json::Value;
 
-use wos_core::model::ai::{AIIntegrationDocument, FallbackAction};
 use wos_core::model::governance::GovernanceDocument;
 use wos_core::model::kernel::{ActionKind, KernelDocument, State, StateKind, TransitionEvent};
 
@@ -527,50 +526,6 @@ fn check_authoritative_false(record: &Value, path: &str, diagnostics: &mut Vec<L
                 path,
                 "narrative tier provenance record must have 'authoritative' set to false",
             ));
-        }
-    }
-}
-
-/// AI-041: Fallback chain termination (typed).
-fn check_fallback_chain_termination_typed(
-    chain: &[wos_core::model::ai::FallbackLevel],
-    path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if chain.is_empty() {
-        return;
-    }
-
-    if let Some(last) = chain.last() {
-        if last.action != FallbackAction::EscalateToHuman && last.action != FallbackAction::Fail {
-            let action_str = match last.action {
-                FallbackAction::Retry => "retry",
-                FallbackAction::AlternateAgent => "alternateAgent",
-                FallbackAction::EscalateToHuman => "escalateToHuman",
-                FallbackAction::Fail => "fail",
-            };
-            diagnostics.push(LintDiagnostic::t1_error(
-                "AI-041",
-                path,
-                format!(
-                    "fallback chain must terminate in 'escalateToHuman' or 'fail', found '{action_str}'"
-                ),
-            ));
-        }
-    }
-
-    let mut seen_alternate_agents = std::collections::HashSet::new();
-    for (i, level) in chain.iter().enumerate() {
-        if let Some(agent_ref) = &level.alternate_agent_ref {
-            if !seen_alternate_agents.insert(agent_ref.as_str()) {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "AI-041",
-                    &format!("{path}/{i}"),
-                    format!(
-                        "fallback chain cycles: alternateAgent '{agent_ref}' appears more than once"
-                    ),
-                ));
-            }
         }
     }
 }
@@ -1286,46 +1241,15 @@ fn visit_state_actions_typed(
 }
 
 // ---------------------------------------------------------------------------
-// Integration Profile rules
+// Output-binding JSONPath profile (I-001)
 // ---------------------------------------------------------------------------
-
-/// I-001: `outputBinding` JSONPath expressions MUST NOT use unsupported RFC 9535 features.
-///
-/// The outputBinding profile supports member access, index, wildcard, and slice only.
-/// Filter expressions (`[?(...)]`) and recursive descent (`..`) are rejected at
-/// definition load time so they never become a runtime surprise.
-fn check_integration_profile(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    let root = &doc.value;
-
-    let Some(bindings) = root.get("bindings").and_then(Value::as_object) else {
-        return;
-    };
-
-    for (binding_key, binding) in bindings {
-        let Some(output_binding) = binding.get("outputBinding").and_then(Value::as_object) else {
-            continue;
-        };
-        for (case_path, json_path_value) in output_binding {
-            let Some(json_path) = json_path_value.as_str() else {
-                continue;
-            };
-            if contains_unsupported_jsonpath_feature(json_path) {
-                let path = format!("/bindings/{binding_key}/outputBinding/{case_path}");
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "I-001",
-                    path,
-                    format!(
-                        "outputBinding JSONPath '{json_path}' uses a feature not supported in \
-                         the RFC 9535 output-binding profile: filter expressions ([?(...)]) and \
-                         recursive descent (..) are excluded for predictability and static \
-                         analysability. Extend the profile via ADR if a future binding requires \
-                         these features."
-                    ),
-                ));
-            }
-        }
-    }
-}
+//
+// The standalone `check_integration_profile` Tier-1 entry retired
+// 2026-04-28: per ADR 0076 D-1 the integration-profile document was absorbed
+// into the merged `$wosWorkflow` envelope and I-001 now fires from the
+// embedded-`bindings` walk earlier in this file (search for `"I-001"`). The
+// JSONPath feature-detection helper survives because the embedded walk
+// reuses it.
 
 /// Return `true` if the JSONPath string contains a filter expression or recursive descent.
 ///

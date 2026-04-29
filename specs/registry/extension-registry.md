@@ -5,6 +5,8 @@ date: 2026-04-18
 status: draft
 ---
 
+> **Absorbed (ADR 0076 D-5).** Extension Registry is a `$view` of the merged tooling schema at [`schemas/wos-tooling.schema.json#/$views/extensionRegistry`](../../schemas/wos-tooling.schema.json) (entries: `extensionRegistry__Root`, `extensionRegistry__RegistryEntry`, `extensionRegistry__ExtensionsMap`, `extensionRegistry__JsonSchemaUri`). Registry documents now use the `$wosTooling` envelope marker; the standalone `wos-extension-registry` schema and `$wosExtensionRegistry` marker are retired. Prose below remains as normative reference for vendor-namespace governance and seam catalog semantics.
+
 # WOS Extension Registry v1.0
 
 **Version:** 1.0.0-draft.1

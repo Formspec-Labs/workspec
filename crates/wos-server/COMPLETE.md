@@ -6,6 +6,12 @@ Shipped **WS-*** work, sprint narratives, and completed checklist rows migrated 
 
 ## Sprint narratives (2026-04-25 — 2026-04-28)
 
+## Completed — Phase 3 + HTTP coverage continuation (2026-04-28)
+
+- **WS-036** Adverse-decision notice rendering (Gov §3.2) — `POST /api/governance/:url/notices/:template/render`. Joins notification template with `dueProcess` sidecar to stamp `gracePeriod`, `appealWindow`, `rightToContest`. Service: [`governance_service.rs::render_adverse_notice`](src/services/governance_service.rs). Reuses `find_template` / `interpolate` from `NotificationsService` (promoted to `pub(crate)`). Domain type: `AdverseDecisionNoticeView`. Tests: [`tests/http_adverse_notice.rs`](tests/http_adverse_notice.rs) (4 fixtures).
+- **WS-014 slice C** HTTP coverage continuation — [`tests/http_coverage_slice_c.rs`](tests/http_coverage_slice_c.rs) (9 fixtures): verification/verify (inconclusive + 404), constraint-zones (list + valid-actions), equity/evaluate (Supervisor JWT + outcomePredicate→400), integration/invoke (Adjudicator echo + anonymous→401), assurance record→upgrade→chain (L1→L3 round-trip with `upgradedFrom` link + `chainValid`).
+- **TODO.md follow-up #6** struck — `"Supervisor"` string literal absent in `realtime/` at HEAD.
+
 ## Completed — cross-phase parallel sprint (2026-04-25, second wave)
 
 Seven items landed in parallel across seven background agents, plus three

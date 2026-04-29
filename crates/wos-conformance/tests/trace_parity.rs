@@ -187,7 +187,7 @@ fn guard_false_delta_surfaces_blocking_guard_id() {
             { "event": "approve", "actor": "approver", "data": {} }
         ],
         "expected_transitions": [
-            { "from": "submitted", "to": "approved", "event": "approve" }
+            { "from": "submitted", "target": "approved", "event": "approve" }
         ],
         "expected_provenance": [],
         "expected_errors": []

@@ -197,13 +197,15 @@ pub fn evaluate_autonomy(
     }
 
     // ── AI-028: Demotion takes effect next invocation ────────────────
+    // `target` matches the workflow-schema vocabulary; conformance fixtures
+    // assert it under `data.target` post-ADR-0076 D-1.
     if let Some(trigger) = data.get("triggerDemotion").and_then(|v| v.as_str()) {
         provenance.push(prov(
             ProvenanceKind::AutonomyDemotion,
             serde_json::json!({
                 "agentId": agent_id,
                 "from": "autonomous",
-                "to": "assistive",
+                "target": "assistive",
                 "trigger": trigger,
                 "effectiveAt": "next-invocation",
             }),

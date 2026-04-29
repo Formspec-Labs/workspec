@@ -260,10 +260,10 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
             // "holdPolicies", "delegations", etc.
             let gov_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
             let mut gov_value = gov_block.clone();
-            // Inject targetWorkflow so cross-doc rules can resolve it.
+            // Inject targetWorkflow + url so cross-doc rules can resolve them.
+            // The synthesized doc is dispatcher scaffolding — never emitted,
+            // never validated against a schema, so no marker key is needed.
             if let Some(obj) = gov_value.as_object_mut() {
-                obj.entry("$wosWorkflowGovernance")
-                    .or_insert_with(|| Value::String("1.0".into()));
                 obj.entry("targetWorkflow")
                     .or_insert_with(|| Value::String(gov_url.to_string()));
                 obj.entry("url")
@@ -349,14 +349,15 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         }
 
         // AI integration rules — read from $wosWorkflow top-level `agents` /
-        // `aiOversight` blocks. Build a synthetic AI doc shaped like the old
-        // $wosAIIntegration document.
+        // `aiOversight` blocks. Existing AI-* rule fns were authored against
+        // a standalone AI integration document; bridge by synthesizing one
+        // in-process. The synthetic doc is internal scaffolding — never
+        // emitted, never validated against any schema.
         let workflow_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
         let has_agents = wf.value.get("agents").is_some()
             || wf.value.get("aiOversight").is_some();
         if has_agents {
             let mut ai_value = serde_json::json!({
-                "$wosAIIntegration": "1.0",
                 "targetWorkflow": workflow_url,
             });
             // Copy agents, aiOversight, fallbackChain, narrativeProvenance, provenance
@@ -388,12 +389,15 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         }
 
         // Signature rules — read from $wosWorkflow.signature embedded block.
+        // Existing SIG-* rule fns were authored against a standalone signature
+        // profile document; bridge by synthesizing one in-process from the
+        // embedded block. The kernel's url becomes the synthetic profile's
+        // targetWorkflow.url unless the embedded block carries its own
+        // targetWorkflow override (used by SIG-001 mismatch fixtures).
         if wf.value.get("signature").is_some() {
             let mut sig_value = serde_json::json!({
-                "$wosSignatureProfile": "1.0",
                 "targetWorkflow": { "url": workflow_url },
             });
-            // Copy signature-block fields to the synthetic profile doc.
             if let Some(sig_block) = wf.value.get("signature") {
                 if let Some(sig_obj) = sig_block.as_object() {
                     for (k, v) in sig_obj {
@@ -414,10 +418,10 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         }
 
         // Advanced governance rules — read from $wosWorkflow.advanced block.
+        // Existing rule fns were authored against a standalone advanced doc;
+        // bridge by synthesizing one in-process from the embedded block.
         if wf.value.get("advanced").is_some() {
-            let mut adv_value = serde_json::json!({
-                "$wosAdvancedGovernance": "1.0",
-            });
+            let mut adv_value = serde_json::json!({});
             if let Some(adv_block) = wf.value.get("advanced") {
                 if let Some(adv_obj) = adv_block.as_object() {
                     for (k, v) in adv_obj {
@@ -437,9 +441,11 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         }
 
         // Drift monitoring — read from agents[*].driftMonitoring or a top-level
-        // driftMonitoring block. Build a synthetic drift-monitor doc.
+        // driftMonitoring block. Synthesize an internal drift-monitor doc to
+        // satisfy existing rule-fn signatures; the synthetic doc is dispatcher
+        // scaffolding, never validated against a schema.
         {
-            let mut dm_value = serde_json::json!({ "$wosDriftMonitor": "1.0" });
+            let mut dm_value = serde_json::json!({});
             // Top-level deploymentSequence (from workflow.advanced or workflow root).
             if let Some(seq) = wf.value.pointer("/advanced/deploymentSequence") {
                 dm_value["deploymentSequence"] = seq.clone();
@@ -1191,30 +1197,6 @@ fn check_fail_fast_recursive_typed(
 }
 
 // ---------------------------------------------------------------------------
-// G-034: targetWorkflow must match kernel url
-// ---------------------------------------------------------------------------
-
-/// G-034 (typed): `targetWorkflow` must match the kernel's `url`.
-fn check_target_workflow_match_typed(
-    doc: &crate::document::WosDocument,
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let target = doc.value.get("targetWorkflow").and_then(Value::as_str);
-    let kernel_url = kernel.url.as_deref();
-
-    if let (Some(target), Some(url)) = (target, kernel_url) {
-        if target != url {
-            diagnostics.push(LintDiagnostic::t2_error(
-                "G-034",
-                "/targetWorkflow",
-                format!("targetWorkflow '{target}' does not match kernel url '{url}'"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // G-001: Due process required for rights/safety-impacting
 // ---------------------------------------------------------------------------
 
@@ -1940,9 +1922,9 @@ fn check_hold_resume_triggers_typed(
 /// G-031: `resolutionDateRef` in a governance document MUST point to a kernel
 /// case file field.
 ///
-/// Governance documents that embed `resolutionDateRef` directly (outside of
-/// a PolicyParameters sidecar) are validated here. The PolicyParameters path
-/// is handled by `check_policy_param_date_refs`.
+/// Governance documents that embed `resolutionDateRef` directly (in
+/// `slaConfig` or sibling slots) are validated here. The PolicyParameters
+/// embedded-block path is currently un-wired into the dispatcher.
 fn check_resolution_date_refs(
     gov: &crate::document::WosDocument,
     kernel_case_fields: &std::collections::HashSet<String>,
@@ -1990,36 +1972,6 @@ fn check_parameter_coverage(
 }
 
 // ---------------------------------------------------------------------------
-// G-035: targetGovernance references valid governance document
-// ---------------------------------------------------------------------------
-
-/// G-035: `targetGovernance` in a DueProcess document MUST match the `url`
-/// of a WorkflowGovernance document loaded in the project.
-fn check_target_governance_valid(
-    dp: &crate::document::WosDocument,
-    project: &WosProject,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let Some(target) = dp.value.get("targetGovernance").and_then(Value::as_str) else {
-        return;
-    };
-    // After ADR 0076, governance lives embedded in $wosWorkflow. The governance
-    // URL resolves to the workflow's own URL. Accept any Workflow doc whose `url`
-    // matches, or any legacy governance doc that has a matching `url`.
-    let workflow_urls: std::collections::HashSet<&str> = project
-        .of_kind(DocumentKind::Workflow)
-        .filter_map(|g| g.value.get("url").and_then(Value::as_str))
-        .collect();
-    if !workflow_urls.contains(target) {
-        diagnostics.push(LintDiagnostic::t2_error(
-            "G-035",
-            "/targetGovernance",
-            format!("targetGovernance '{target}' does not match any workflow url in the project"),
-        ));
-    }
-}
-
-// ---------------------------------------------------------------------------
 // G-036: independenceConstraint encodes actual prevention
 // ---------------------------------------------------------------------------
 
@@ -2053,21 +2005,6 @@ fn check_independence_constraint(
                 ));
             }
         }
-    }
-}
-
-/// G-036 (DueProcess variant): same check applied to DueProcess documents.
-fn check_independence_constraint_in_due_process(
-    dp: &crate::document::WosDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    if dp.value.get("reviewProtocols").is_some() && dp.value.get("independenceConstraint").is_none()
-    {
-        diagnostics.push(LintDiagnostic::t2_warning(
-            "G-036",
-            "/independenceConstraint",
-            "due-process document has reviewProtocols but no independenceConstraint",
-        ));
     }
 }
 
@@ -2299,35 +2236,6 @@ fn check_binding_resolution_date_refs(
             diagnostics.push(LintDiagnostic::t2_warning(
                 "G-056",
                 &format!("/bindings/{binding_name}/resolutionDateRef"),
-                format!("resolutionDateRef '{date_ref}' not found in kernel caseFile.fields"),
-            ));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// G-031: Policy parameter resolutionDateRef (PolicyParameters sidecar)
-// ---------------------------------------------------------------------------
-
-/// G-031: Policy parameter `resolutionDateRef` must point to a kernel case
-/// file field.
-fn check_policy_param_date_refs(
-    pp: &crate::document::WosDocument,
-    kernel_case_fields: &std::collections::HashSet<String>,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let fields = kernel_case_fields;
-    let Some(params) = pp.value.get("parameters").and_then(Value::as_object) else {
-        return;
-    };
-    for (name, param) in params {
-        let Some(date_ref) = param.get("resolutionDateRef").and_then(Value::as_str) else {
-            continue;
-        };
-        if !fields.contains(date_ref) {
-            diagnostics.push(LintDiagnostic::t2_warning(
-                "G-031",
-                &format!("/parameters/{name}/resolutionDateRef"),
                 format!("resolutionDateRef '{date_ref}' not found in kernel caseFile.fields"),
             ));
         }

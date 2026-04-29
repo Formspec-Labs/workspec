@@ -15,12 +15,14 @@ status: accepted
 
 This document defines the WOS-owned authored-record surface that crosses the kernel `custodyHook` seam. It does not define Trellis canonical append semantics, anchor selection, checkpoint sealing, or receipt expansion beyond the first pinned WOS consumer.
 
-The canonical JSON-schema validation target for the **JSON serialization** of
-the runtime artifact defined here is
-[../../schemas/kernel/wos-custody-hook-encoding.schema.json](../../schemas/kernel/wos-custody-hook-encoding.schema.json).
-That schema is for fixtures, tests, and debug export of the four-field append
-input. The live `custodyHook` seam itself carries raw dCBOR bytes in `record`,
-not a base64 text wrapper.
+The **JSON serialization** of the four-field append input (fixtures, tests, and
+debug export) is described here and checked in-repo by
+`wos-spec/tests/schemas/test_custody_hook_encoding.py` (inline Draft 2020-12
+schema). Author-time anchoring posture for workflows lives under
+[`../../schemas/wos-workflow.schema.json`](../../schemas/wos-workflow.schema.json)
+`custody` (ADR 0076; the former standalone kernel custody JSON Schema was
+removed). The live `custodyHook` seam itself carries raw dCBOR bytes in
+`record`, not a base64 text wrapper.
 
 ---
 

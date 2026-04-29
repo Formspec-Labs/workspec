@@ -10,7 +10,6 @@ const mockGovernance: IGovernancePort = {
   listDeonticConstraints: vi.fn(),
   getQualityControls: vi.fn(),
   listPipelines: vi.fn(),
-  getVerificationReport: vi.fn(),
   getEquityConfig: vi.fn(),
   listDelegations: vi.fn(),
   revokeDelegation: vi.fn(),
@@ -24,7 +23,6 @@ const resetMocks = () => {
   mockGovernance.listDeonticConstraints = vi.fn().mockResolvedValue([]);
   mockGovernance.getQualityControls = vi.fn().mockResolvedValue(null);
   mockGovernance.listPipelines = vi.fn().mockResolvedValue([]);
-  mockGovernance.getVerificationReport = vi.fn().mockResolvedValue(null);
   mockGovernance.getEquityConfig = vi.fn().mockResolvedValue(null);
   mockGovernance.listDelegations = vi.fn().mockResolvedValue([]);
   mockGovernance.listPolicyVersions = vi.fn().mockResolvedValue([]);
@@ -188,27 +186,6 @@ describe('AdminConsole', () => {
     });
     expect(screen.getByText(/Validate income data/i)).toBeInTheDocument();
     expect(screen.getByText(/assertion-gate/i)).toBeInTheDocument();
-  });
-
-  it('renders verification report panel', async () => {
-    mockGovernance.getVerificationReport = vi.fn().mockResolvedValue({
-      solver: { name: 'Z3', version: '4.13.0' },
-      results: [{ constraintRef: 'noFinalDenial', result: 'proven-safe', solverTimeMs: 142 }],
-      summary: { totalConstraints: 1, provenSafe: 1, provenUnsafe: 0, inconclusive: 0, totalSolverTimeMs: 142 },
-    });
-
-    renderWithContext(<AdminConsole />);
-    await waitFor(() => { expect(screen.getByText(/System Administration/i)).toBeInTheDocument(); });
-    fireEvent.click(screen.getByRole('button', { name: /IT Admin/i }));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Verification/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Verification/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/noFinalDenial/i)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/proven-safe/i)).toBeInTheDocument();
   });
 
   it('renders equity guardrails panel with categories', async () => {

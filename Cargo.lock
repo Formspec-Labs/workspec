@@ -4762,6 +4762,18 @@ dependencies = [
  "wos-formspec-binding",
  "wos-lint",
  "wos-runtime",
+ "wos-server-ports",
+]
+
+[[package]]
+name = "wos-server-ports"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -7,7 +7,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{AuthContext, AuthError, AuthProvider, AuthResult, AuthUser, TokenPair};
-use crate::storage::{SessionRow, StorageHandle};
+use crate::storage::{SessionRow, StorageError, StorageHandle};
+
+fn ae(e: StorageError) -> AuthError {
+    AuthError::Other(e.to_string())
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -93,7 +97,8 @@ impl AuthProvider for JwtAuth {
         let user_row = self
             .storage
             .get_user_by_email(email)
-            .await?
+            .await
+            .map_err(ae)?
             .ok_or(AuthError::InvalidCredentials)?;
 
         let parsed = PasswordHash::new(&user_row.password_hash)
@@ -126,7 +131,8 @@ impl AuthProvider for JwtAuth {
                     expires_at: exp,
                     revoked: false,
                 })
-                .await?;
+                .await
+                .map_err(ae)?;
         }
 
         Ok(TokenPair {
@@ -146,16 +152,16 @@ impl AuthProvider for JwtAuth {
         let user_row = self
             .storage
             .get_user(&claims.sub)
-            .await?
+            .await
+            .map_err(ae)?
             .ok_or(AuthError::InvalidToken)?;
         if claims.auth_epoch != user_row.auth_epoch {
             return Err(AuthError::Revoked);
         }
-        if !self.storage.session_is_valid(&claims.jti).await? {
+        if !self.storage.session_is_valid(&claims.jti).await.map_err(ae)? {
             return Err(AuthError::Revoked);
         }
-        // Rotate: revoke old refresh jti, issue a fresh pair.
-        self.storage.revoke_session(&claims.jti).await?;
+        self.storage.revoke_session(&claims.jti).await.map_err(ae)?;
 
         let user = AuthUser {
             id: user_row.id.clone(),
@@ -181,7 +187,8 @@ impl AuthProvider for JwtAuth {
                     expires_at: exp,
                     revoked: false,
                 })
-                .await?;
+                .await
+                .map_err(ae)?;
         }
 
         Ok(TokenPair {
@@ -198,8 +205,8 @@ impl AuthProvider for JwtAuth {
         if claims.kind != "access" {
             return Err(AuthError::InvalidToken);
         }
-        self.storage.bump_user_auth_epoch(&claims.sub).await?;
-        self.storage.revoke_sessions_for_user(&claims.sub).await?;
+        self.storage.bump_user_auth_epoch(&claims.sub).await.map_err(ae)?;
+        self.storage.revoke_sessions_for_user(&claims.sub).await.map_err(ae)?;
         Ok(())
     }
 
@@ -211,12 +218,13 @@ impl AuthProvider for JwtAuth {
         let user_row = self
             .storage
             .get_user(&claims.sub)
-            .await?
+            .await
+            .map_err(ae)?
             .ok_or(AuthError::InvalidToken)?;
         if claims.auth_epoch != user_row.auth_epoch {
             return Err(AuthError::Revoked);
         }
-        if !self.storage.session_is_valid(&claims.jti).await? {
+        if !self.storage.session_is_valid(&claims.jti).await.map_err(ae)? {
             return Err(AuthError::Revoked);
         }
         Ok(AuthContext {

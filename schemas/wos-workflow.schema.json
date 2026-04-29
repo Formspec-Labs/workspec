@@ -847,10 +847,18 @@
         "body": {
           "$ref": "#/$defs/State"
         },
+        "initialState": {
+          "type": "string",
+          "description": "Identifier of the initial substate for compound states. MUST be a key in `states`. Required when `type=='compound'` (Kernel S4.3).",
+          "examples": [
+            "reviewing",
+            "pending"
+          ]
+        },
         "outcomeCode": {
           "type": "string",
           "$comment": "Final states only.",
-          "description": "Final states only (`type=='final'`). Stable code identifying the workflow's terminal outcome. Recorded in Facts-tier provenance and consumed by reporting / case-closure pipelines. Distinct from `tags` (which compose) \u2014 outcomeCode is singular.",
+          "description": "Final states only (`type=='final'`). Stable code identifying the workflow's terminal outcome. Recorded in Facts-tier provenance and consumed by reporting / case-closure pipelines. Distinct from `tags` (which compose) — outcomeCode is singular.",
           "examples": [
             "approved",
             "denied",
@@ -858,7 +866,45 @@
             "rescinded"
           ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "compound" }
+            }
+          },
+          "then": {
+            "required": ["initialState", "states"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "parallel" }
+            }
+          },
+          "then": {
+            "required": ["regions"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "atomic" }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["initialState"] },
+                { "required": ["states"] },
+                { "required": ["regions"] }
+              ]
+            }
+          }
+        }
+      ]
     },
     "Transition": {
       "type": "object",
@@ -1180,7 +1226,7 @@
         },
         "amendmentTaxonomy": {
           "type": "array",
-          "description": "Five-mode amendment taxonomy declared by this workflow's governance, per ADR-0066 D-1 + Q26 maximalist closed-five position. Closed enum -- vendor extensions are deliberately not permitted at this key so the lint that pairs each declared mode with its authorizing-act record kind (correctionAuthorized, amendmentAuthorized, rescissionAuthorized, reinstated; supersession is operationalized via caseRelationship.type=\"supersedes\") stays exhaustive. Authoring this enum makes the lint cheaper to land in follow-up work; absence here means the workflow asserts no amendments are permitted.",
+          "description": "Five-mode amendment taxonomy declared by this workflow's governance, per ADR-0066 D-1 + Q26 maximalist closed-five position. Closed enum -- vendor extensions are deliberately not permitted at this key so the lint that pairs each declared mode with its authorizing-act record kind (correctionAuthorized, amendmentAuthorized, rescissionAuthorized, reinstated; supersession is governed at the WOS/kernel layer per kernel spec caseRelationships (S5.5), not as a property on this workflow document) stays exhaustive. Authoring this enum makes the lint cheaper to land in follow-up work; absence here means the workflow asserts no amendments are permitted.",
           "items": {
             "type": "string",
             "enum": [
@@ -2251,7 +2297,7 @@
     },
     "CapabilityInvocationRecord": {
       "type": "object",
-      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI \u00a73.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. Every provenance log validated against this kernel schema participates in the MUST via `FactsTierRecord.allOf`; records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI \u00a73.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. This `$def` is composed into `FactsTierRecord.allOf` below; runtime provenance logs that `$ref` this schema's `FactsTierRecord` (for example `wos-provenance-log.schema.json`) inherit the same MUST. Records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
       "examples": [
         {
           "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
@@ -3394,7 +3440,7 @@
     },
     "IdentityAttestationRecord": {
       "type": "object",
-      "description": "Shape constraint for ADR-0068's tenant-independent identity-attestation primitive. Pins the subject's tenant-independent global identifier, assurance level, attestation provider, attested predicates (open list), and timestamp. Q31-relevant: cross-tenant case movement uses supersession (caseRelationship.type = \"supersedes\") rather than identity migration; this primitive carries identity attestation that travels with the case file but does not itself rewrite tenant boundaries. Spec MUST source: ADR-0068 D-1.",
+      "description": "Shape constraint for ADR-0068's tenant-independent identity-attestation primitive. Pins the subject's tenant-independent global identifier, assurance level, attestation provider, attested predicates (open list), and timestamp. Q31-relevant: cross-tenant case movement uses supersession (WOS/kernel caseRelationships per kernel spec S5.5; not modeled as a field here) rather than identity migration; this primitive carries identity attestation that travels with the case file but does not itself rewrite tenant boundaries. Spec MUST source: ADR-0068 D-1.",
       "examples": [
         {
           "id": "sba-poc_prov_01jqt180abc1d2e3f4g5h6i7q6",
@@ -3472,7 +3518,7 @@
                   "subjectGlobalId": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Tenant-independent global identifier for the subject (Q31). Format: opaque resolvable identifier (e.g., `globalid:<uuid>`, DID, urn). MUST be stable across tenants so cross-tenant supersession (`caseRelationship.type = \"supersedes\"`) preserves subject continuity."
+                    "description": "Tenant-independent global identifier for the subject (Q31). Format: opaque resolvable identifier (e.g., `globalid:<uuid>`, DID, urn). MUST be stable across tenants so cross-tenant supersession (kernel-level caseRelationships; ADR 0066 / 0068) preserves subject continuity."
                   },
                   "assuranceLevel": {
                     "type": "string",

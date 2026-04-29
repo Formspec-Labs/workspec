@@ -131,20 +131,6 @@ export interface PipelineView {
   description?: string;
 }
 
-export interface VerificationResultView {
-  constraintRef: string;
-  result: 'proven-safe' | 'proven-unsafe' | 'inconclusive';
-  solverTimeMs?: number;
-  notes?: string;
-  counterexample?: { inputs?: Record<string, unknown>; explanation?: string };
-}
-
-export interface VerificationReportView {
-  solver: { name: string; version: string; timeout?: string };
-  results: VerificationResultView[];
-  summary?: { totalConstraints?: number; provenSafe?: number; provenUnsafe?: number; inconclusive?: number; totalSolverTimeMs?: number };
-}
-
 export interface EquityCategoryView {
   id: string;
   groupByPath: string;
@@ -171,7 +157,6 @@ export interface IGovernanceReader {
   listDeonticConstraints(workflowUrl: string): Promise<DeonticConstraintView[]>;
   getQualityControls(workflowUrl: string): Promise<QualityControlsView | null>;
   listPipelines(workflowUrl: string): Promise<PipelineView[]>;
-  getVerificationReport(workflowUrl: string): Promise<VerificationReportView | null>;
   getEquityConfig(workflowUrl: string): Promise<EquityConfigView | null>;
   listDelegations(workflowUrl: string): Promise<DelegationEntry[]>;
   listPolicyVersions(workflowUrl: string): Promise<PolicyVersionView[]>;

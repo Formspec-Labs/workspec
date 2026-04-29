@@ -257,28 +257,19 @@ async fn call_anthropic(api_key: &str, prompt: &str) -> Result<String, SpikeErro
     Ok(collected)
 }
 
-/// Sentinel substring produced by `wos_lint` when a document is parseable JSON
-/// but lacks any `$wos*` document-type marker.
-///
-/// `wos_lint::LintError` does not expose a distinct discriminant for this case
-/// — the condition is conveyed through the message string on
-/// [`wos_lint::LintError::Parse`].  Matching the substring is fragile but is
-/// the only available signal today; the spike accepts that coupling rather
-/// than upstreaming a new variant.  See TODO in wos-lint document.rs.
-const MISSING_MARKER_SENTINEL: &str = "no recognized $wos*";
-
 /// Map a [`wos_lint::LintError`] to the appropriate [`SpikeError`] variant.
 ///
-/// Routes the missing-`$wos*`-marker case to [`SpikeError::MissingWosMarker`]
-/// and every other failure (malformed JSON reaching the linter, I/O errors)
-/// to [`SpikeError::LintFailure`].  Kept as a free function so the mapping
-/// can be unit-tested without running the full synthesis loop.
+/// Routes [`wos_lint::LintError::MissingMarker`] (well-formed JSON but no
+/// `$wos*` document-type marker) to [`SpikeError::MissingWosMarker`]; every
+/// other failure (malformed JSON reaching the linter, I/O errors) maps to
+/// [`SpikeError::LintFailure`]. Kept as a free function so the mapping can
+/// be unit-tested without running the full synthesis loop.
 fn classify_lint_error(err: wos_lint::LintError) -> SpikeError {
-    let message = err.to_string();
-    if message.contains(MISSING_MARKER_SENTINEL) {
-        SpikeError::MissingWosMarker(message)
-    } else {
-        SpikeError::LintFailure(message)
+    match err {
+        wos_lint::LintError::MissingMarker => SpikeError::MissingWosMarker(err.to_string()),
+        wos_lint::LintError::Parse(_) | wos_lint::LintError::Io(_) => {
+            SpikeError::LintFailure(err.to_string())
+        }
     }
 }
 

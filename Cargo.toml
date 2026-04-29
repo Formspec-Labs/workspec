@@ -7,6 +7,7 @@ members = [
     "crates/wos-formspec-binding",
     "crates/wos-export",
     "crates/wos-server",
+    "crates/wos-server-ports",
     "crates/wos-synth-spike",
     "crates/wos-synth-core",
     "crates/wos-synth-mock",
