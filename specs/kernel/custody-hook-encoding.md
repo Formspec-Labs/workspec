@@ -1,14 +1,15 @@
 ---
 title: WOS Custody Hook Encoding
-version: 1.0.0-draft.1
-date: 2026-04-21
-status: draft
+version: 1.0.0
+date: 2026-04-29
+status: accepted
 ---
 
 # WOS Custody Hook Encoding
 
-**Version:** 1.0.0-draft.1  
-**Date:** 2026-04-21  
+**Version:** 1.0.0  
+**Date:** 2026-04-29  
+**Status:** Accepted  
 **Companion to:** [WOS Kernel Specification](spec.md) §10.5  
 **Related ADR:** [ADR-0061](../../thoughts/adr/0061-custody-hook-trellis-wire-format.md) (rationale only; this document is normative)
 
@@ -344,6 +345,16 @@ Current runtime scope:
 - the live `custodyHook` emitter set is the Kernel provenance-record family
 - the shipped reference corpus therefore covers provenance-record fixtures today and MUST expand if additional WOS record families begin crossing `custodyHook`
 
+The bound cross-stack ingestion fixture is
+[`trellis/fixtures/vectors/append/010-wos-custody-hook-state-transition/`](../../../trellis/fixtures/vectors/append/010-wos-custody-hook-state-transition/),
+which exercises one authored WOS record (`input-wos-record.dcbor`) → ADR-0061
+`(caseId, recordId)` idempotency tuple (`input-wos-idempotency-tuple.cbor`) →
+Trellis canonical envelope (`expected-event.cbor`), byte-exact, anchored to
+TR-CORE-001/018/021/030/031/050/051/080. Sibling fixtures
+`append/019-022` (`wos-signature-affirmation`, `wos-intake-accepted-*`,
+`wos-case-created-*`) extend the cross-stack pattern across additional WOS
+record families.
+
 ### 3.5 Trellis Verification
 
 Trellis verification MUST confirm that the WOS `custodyHook` seam matches this document for the bound fixture set, including:
@@ -353,3 +364,9 @@ Trellis verification MUST confirm that the WOS `custodyHook` seam matches this d
 - TypeID `recordId`
 - `trellis-wos-idempotency-v1` domain separation
 - the two-field WOS idempotency input
+
+The verifier round-trip (envelope → dCBOR decode of `payload` → authored
+record → byte-equal against `input-wos-record.dcbor`) is exercised by the
+Trellis conformance replay against the bound fixture corpus. Running
+`cargo test -p trellis-conformance` validates byte-identity end-to-end for
+every WOS record family in the corpus.
