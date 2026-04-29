@@ -8,6 +8,13 @@ repository = "https://github.com/formspec/formspec"
 
 [dependencies]
 wos-server-ports     = { path = "../wos-server-ports" }
+wos-server-sqlite    = { path = "../wos-server-sqlite", optional = true }
+wos-server-postgres  = { path = "../wos-server-postgres", optional = true }
+wos-server-auth-jwt  = { path = "../wos-server-auth-jwt", optional = true }
+wos-server-auth-mock = { path = "../wos-server-auth-mock", optional = true }
+wos-server-runtime-local = { path = "../wos-server-runtime-local", optional = true }
+wos-server-runtime-restate = { path = "../wos-server-runtime-restate", optional = true }
+wos-server-audit-postgres = { path = "../wos-server-audit-postgres", optional = true }
 wos-core             = { path = "../wos-core" }
 wos-runtime          = { path = "../wos-runtime" }
 wos-lint             = { path = "../wos-lint" }
@@ -33,7 +40,6 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 
 async-trait   = "0.1"
-jsonwebtoken  = "9"
 argon2        = { version = "0.5", features = ["std"] }
 rand          = "0.8"
 
@@ -58,6 +64,17 @@ reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
+
+[features]
+default = ["storage-sqlite", "auth-jwt", "auth-mock", "runtime-local"]
+storage-sqlite = ["dep:wos-server-sqlite"]
+storage-postgres = ["dep:wos-server-postgres"]
+auth-jwt = ["dep:wos-server-auth-jwt"]
+auth-mock = ["dep:wos-server-auth-mock"]
+runtime-local = ["dep:wos-server-runtime-local"]
+runtime-restate = ["dep:wos-server-runtime-restate"]
+runtime-restate-stub = ["dep:wos-server-runtime-restate"]
+audit-postgres = ["dep:wos-server-audit-postgres"]
 
 [dev-dependencies]
 tokio       = { version = "1", features = ["full", "test-util"] }

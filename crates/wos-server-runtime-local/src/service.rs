@@ -1,9 +1,3 @@
-//! Echo-stub `ExternalService`. Returns the input as output so that
-//! workflows containing `invokeService` actions make progress in test
-//! mode. Real dispatch on integration-profile bindings (arazzo, tool,
-//! policy, etc.) routes through `wos-runtime::integration_handlers`
-//! once those adapters are wired in.
-
 use thiserror::Error;
 use wos_core::traits::ExternalService;
 

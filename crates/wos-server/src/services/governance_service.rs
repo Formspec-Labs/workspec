@@ -297,7 +297,6 @@ impl GovernanceService {
     }
 
     /// Resolve the `policy-parameters` version active at `as_of`. WS-034 backs
-    /// both `POST /governance/{url}/policy-resolve` (legacy body form) and
     /// `GET /policy/{url}/resolve?asOf=` (decided 2026-04-25). A version is
     /// "active" when `effectiveDate <= as_of < (expiryDate or +inf)` — a
     /// half-open interval: `effectiveDate` is inclusive, `expiryDate` is

@@ -1,10 +1,5 @@
 // Rust guideline compliant 2026-02-21
 
-//! `ReportRenderer` implementations. `JsonRenderer` is the default — it
-//! serialises explanation and audit payloads as pretty-printed JSON so every
-//! deployment has a functional renderer from day one. Richer formatters
-//! (HTML, PDF) slot in behind the same `ReportRenderer` trait when needed.
-
 use thiserror::Error;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::ReportRenderer;
@@ -15,9 +10,6 @@ pub enum RendererError {
     Other(String),
 }
 
-/// JSON report renderer. Produces pretty-printed JSON for both explanation
-/// and audit payloads — the lowest-common-denominator format that every
-/// consumer can parse.
 #[derive(Debug, Default)]
 pub struct JsonRenderer;
 

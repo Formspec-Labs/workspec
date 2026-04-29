@@ -1,16 +1,5 @@
 // Rust guideline compliant 2026-02-21
 
-//! `ContractValidator` implementations.
-//!
-//! [`PermissiveValidator`] accepts any payload — used as a test double and as
-//! the inner layer of [`PolicyLayeredValidator`].
-//!
-//! [`PolicyLayeredValidator`] composes an inner validator with Runtime §15.7
-//! ledger-gating: submits targeting `impactLevel ∈ {rights-impacting,
-//! safety-impacting}` must carry a non-empty `respondentLedgerRef` field in
-//! the data, or the validation fails with a diagnostic. The inner validator
-//! runs first; the policy check is additive.
-
 use thiserror::Error;
 use wos_core::traits::{ContractValidator, ValidationResult};
 
@@ -41,11 +30,6 @@ impl ContractValidator for PermissiveValidator {
     }
 }
 
-/// Layered validator that enforces Runtime §15.7 ledger-gating on top of an
-/// inner `ContractValidator`. When the data's `impactLevel` field is
-/// `rights-impacting` or `safety-impacting`, a non-empty
-/// `respondentLedgerRef` must be present; otherwise validation fails with a
-/// conformance-shaped diagnostic.
 pub struct PolicyLayeredValidator<V> {
     inner: V,
 }

@@ -23,9 +23,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::auth::AuthHandle;
-use crate::runtime::AppRuntime;
+use crate::config::{AuditSinkKind, RuntimeKind};
+use crate::runtime::{AppRuntime, AppRuntimeConfig};
 use crate::services::AppServices;
 use crate::storage::StorageHandle;
+use wos_server_ports::audit::{AuditSink, NoopAuditSink};
 
 use crate::domain::EvaluationResultView;
 
@@ -49,20 +51,43 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
     let cfg = Arc::new(cfg);
 
     let storage = storage::build(&cfg).await?;
-    let auth = auth::build(&cfg, storage.clone());
+    let auth = auth::build(&cfg, storage.clone())?;
     let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await?);
+    let audit_sink = build_audit_sink(&cfg)?;
 
     // Build the Socket.IO layer before AppRuntime so the TaskPresenter can
     // broadcast task events.
     let (io_layer, io) = realtime::build_io_only();
 
-    let app_runtime = AppRuntime::build_with(
-        storage.clone(),
-        services.provenance.clone(),
-        services.bundle.clone(),
-        io.clone(),
-        runtime::AppRuntimeConfig::from_server_config(&cfg),
-    );
+    let app_runtime = match cfg.runtime {
+        RuntimeKind::Local => {
+            #[cfg(feature = "runtime-local")]
+            {
+                AppRuntime::build_with(
+                    storage.clone(),
+                    services.provenance.clone(),
+                    services.bundle.clone(),
+                    io.clone(),
+                    AppRuntimeConfig {
+                        audit_sink,
+                        ..AppRuntimeConfig::default()
+                    },
+                )
+            }
+            #[cfg(not(feature = "runtime-local"))]
+            anyhow::bail!(
+                "WOS_RUNTIME=local requested but crate built without feature `runtime-local`"
+            )
+        }
+        RuntimeKind::Restate => {
+            #[cfg(any(feature = "runtime-restate", feature = "runtime-restate-stub"))]
+            anyhow::bail!("WOS_RUNTIME=restate scaffold loaded; WS-094 adapter wiring still pending");
+            #[cfg(not(any(feature = "runtime-restate", feature = "runtime-restate-stub")))]
+            anyhow::bail!(
+                "WOS_RUNTIME=restate requested but crate built without feature `runtime-restate` or `runtime-restate-stub`"
+            )
+        }
+    };
 
     let state = AppState {
         cfg: cfg.clone(),
@@ -93,4 +118,27 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
     tracing::info!("wos-server listening on http://{}", listener.local_addr()?);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+fn build_audit_sink(cfg: &ServerConfig) -> anyhow::Result<Arc<dyn AuditSink>> {
+    match cfg.audit_sink {
+        AuditSinkKind::None => Ok(Arc::new(NoopAuditSink)),
+        AuditSinkKind::Postgres => {
+            #[cfg(feature = "audit-postgres")]
+            {
+                let dsn = if cfg.audit_database_url.trim().is_empty() {
+                    &cfg.database_url
+                } else {
+                    &cfg.audit_database_url
+                };
+                let sink = wos_server_audit_postgres::PostgresAuditSink::connect(dsn)
+                    .map_err(|e| anyhow::anyhow!("failed to connect audit sink: {e}"))?;
+                Ok(Arc::new(sink))
+            }
+            #[cfg(not(feature = "audit-postgres"))]
+            anyhow::bail!(
+                "WOS_AUDIT_SINK=postgres requested but crate built without feature `audit-postgres`"
+            )
+        }
+    }
 }

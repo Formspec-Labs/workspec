@@ -5,11 +5,10 @@
 //! (WS-020), it adds a sibling `wos_server_postgres` crate that also implements
 //! `wos_server_ports::Storage` — no edits to this file needed.
 
-pub mod runtime_store;
-pub mod sqlite;
-
-pub use runtime_store::SqliteRuntimeStore;
-pub use sqlite::SqliteStorage;
+#[cfg(feature = "storage-sqlite")]
+pub use wos_server_sqlite::SqliteStorage;
+#[cfg(feature = "storage-postgres")]
+pub use wos_server_postgres::PostgresStorage;
 
 // Re-export everything from the ports crate so existing call sites (`use
 // crate::storage::{InstanceRow, Storage, …}`) resolve unchanged.
@@ -47,16 +46,35 @@ pub async fn list_instances_all_pages(
     Ok(out)
 }
 
-use std::sync::Arc;
-
 use crate::config::{ServerConfig, StorageKind};
 
 pub async fn build(cfg: &ServerConfig) -> anyhow::Result<StorageHandle> {
     match cfg.storage {
         StorageKind::Sqlite => {
-            let store = SqliteStorage::connect(&cfg.database_url).await?;
-            store.migrate().await?;
-            Ok(Arc::new(store))
+            #[cfg(feature = "storage-sqlite")]
+            {
+                let store = SqliteStorage::connect(&cfg.database_url).await?;
+                store.migrate().await?;
+                return Ok(std::sync::Arc::new(store));
+            }
+            #[cfg(not(feature = "storage-sqlite"))]
+            anyhow::bail!(
+                "WOS_STORAGE=sqlite requested but crate built without feature `storage-sqlite`"
+            )
         }
+        StorageKind::Postgres => {
+            #[cfg(feature = "storage-postgres")]
+            {
+                let store = PostgresStorage::connect(&cfg.database_url)?;
+                return Ok(std::sync::Arc::new(store));
+            }
+            #[cfg(not(feature = "storage-postgres"))]
+            anyhow::bail!(
+                "WOS_STORAGE=postgres requested but crate built without feature `storage-postgres`"
+            )
+        }
+        StorageKind::Embedded => anyhow::bail!(
+            "WOS_STORAGE=embedded is not wired yet (WS-095 scaffold only)"
+        ),
     }
 }

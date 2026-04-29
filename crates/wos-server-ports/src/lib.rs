@@ -9,9 +9,16 @@
 //! Adapter authoring guide: see `crates/wos-server-ports/AUTHORING.md` (WS-081).
 
 pub mod auth;
+pub mod audit;
+pub mod runtime;
 pub mod storage;
 
 pub use auth::{AuthContext, AuthError, AuthProvider, AuthResult, AuthUser, TokenPair};
+pub use audit::{AuditError, AuditResult, AuditSink, ExportEnvelope, NoopAuditSink};
+pub use runtime::{
+    BundleResolverPort, ProvenancePort, RuntimeAdapterError, RuntimeOps, RuntimeResult,
+    SeamAccess, TimerCoord,
+};
 pub use storage::{
     AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator, InstanceQuery,
     InstanceRow, IntakeRecordRow, KernelRow, ListInstancesPageSizeMax, Page, ProvenanceRow,

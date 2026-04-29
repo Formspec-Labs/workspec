@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use tokio::sync::RwLock;
+use wos_server_ports::runtime::{BundleResolverPort, RuntimeAdapterError};
 
 use crate::config::ServerConfig;
 use crate::domain::{BundleView, KernelSummaryView, ValidationIssueView, ValidationResultView};
@@ -182,6 +183,47 @@ impl BundleService {
     }
 }
 
+#[async_trait::async_trait]
+impl BundleResolverPort for BundleService {
+    async fn resolve_kernel_bundle(
+        &self,
+        workflow_url: &str,
+    ) -> Result<serde_json::Value, RuntimeAdapterError> {
+        self.get(workflow_url)
+            .await
+            .map(|row| row.document)
+            .ok_or_else(|| RuntimeAdapterError::Message(format!("kernel `{workflow_url}` not found")))
+    }
+
+    async fn resolve_governance_bundle(
+        &self,
+        workflow_url: &str,
+    ) -> Result<serde_json::Value, RuntimeAdapterError> {
+        self.full_bundle(workflow_url)
+            .await
+            .and_then(|bundle| bundle.governance)
+            .ok_or_else(|| {
+                RuntimeAdapterError::Message(format!(
+                    "governance sidecar for `{workflow_url}` not found"
+                ))
+            })
+    }
+
+    async fn resolve_sidecar_bundle(
+        &self,
+        workflow_url: &str,
+    ) -> Result<serde_json::Value, RuntimeAdapterError> {
+        let bundle = self.full_bundle(workflow_url).await.ok_or_else(|| {
+            RuntimeAdapterError::Message(format!("bundle for `{workflow_url}` not found"))
+        })?;
+        serde_json::to_value(bundle).map_err(|e| {
+            RuntimeAdapterError::Message(format!(
+                "failed to serialise sidecar bundle for `{workflow_url}`: {e}"
+            ))
+        })
+    }
+}
+
 fn assign_sidecar(bundle: &mut BundleView, field: &str, v: serde_json::Value) {
     match field {
         "governance" => bundle.governance = Some(v),
@@ -288,11 +330,11 @@ pub fn validate_kernel(doc: &serde_json::Value) -> ValidationResultView {
     }
 }
 
-fn severity_to_str(s: wos_lint::Severity) -> &'static str {
+fn severity_to_str(s: wos_lint::LintSeverity) -> &'static str {
     match s {
-        wos_lint::Severity::Error => "error",
-        wos_lint::Severity::Warning => "warning",
-        wos_lint::Severity::Info => "info",
+        wos_lint::LintSeverity::Error => "error",
+        wos_lint::LintSeverity::Warning => "warning",
+        wos_lint::LintSeverity::Info => "info",
     }
 }
 

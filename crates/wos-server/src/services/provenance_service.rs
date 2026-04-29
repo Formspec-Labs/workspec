@@ -1,5 +1,6 @@
 use sha2::{Digest, Sha256};
 use wos_core::provenance::ProvenanceRecord;
+use wos_server_ports::runtime::{ProvenancePort, RuntimeAdapterError};
 
 use crate::domain::provenance::ProvenanceResponse;
 use crate::error::{ApiError, ApiResult};
@@ -143,4 +144,17 @@ pub fn row_to_response(r: &ProvenanceRow) -> ApiResult<ProvenanceResponse> {
         hash: r.hash.clone(),
         previous_hash: r.previous_hash.clone(),
     })
+}
+
+#[async_trait::async_trait]
+impl ProvenancePort for ProvenanceService {
+    async fn prepare_batch(
+        &self,
+        instance_id: &str,
+        records: &[ProvenanceRecord],
+    ) -> Result<Vec<ProvenanceRow>, RuntimeAdapterError> {
+        ProvenanceService::prepare_batch(self, instance_id, records)
+            .await
+            .map_err(|e| RuntimeAdapterError::Message(e.to_string()))
+    }
 }

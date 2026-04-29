@@ -1,16 +1,15 @@
 [package]
-name = "wos-server-ports"
+name = "wos-server-auth-jwt"
 version = "0.1.0"
 edition = "2024"
-description = "Trait crate for wos-server adapter boundary — Storage, AuthProvider, and shared row/error types"
 license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
 
 [dependencies]
+argon2 = { version = "0.5", features = ["std"] }
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
+jsonwebtoken = "9"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-wos-core = { path = "../wos-core" }
-wos-runtime = { path = "../wos-runtime" }
+uuid = { version = "1", features = ["v4", "serde"] }
+wos-server-ports = { path = "../wos-server-ports" }

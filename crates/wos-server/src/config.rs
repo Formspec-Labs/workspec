@@ -156,6 +156,18 @@ pub struct ServerConfig {
     #[arg(long, env = "WOS_TIMER_POLL_MS", default_value_t = 1000)]
     pub timer_poll_ms: u64,
 
+    /// Runtime adapter selector.
+    #[arg(long, env = "WOS_RUNTIME", value_enum, default_value_t = RuntimeKind::Local)]
+    pub runtime: RuntimeKind,
+
+    /// Audit sink selector.
+    #[arg(long, env = "WOS_AUDIT_SINK", value_enum, default_value_t = AuditSinkKind::None)]
+    pub audit_sink: AuditSinkKind,
+
+    /// Audit sink database URL.
+    #[arg(long, env = "WOS_AUDIT_DATABASE_URL", default_value = "")]
+    pub audit_database_url: String,
+
     /// Run the daily session-table sweep inside `timer_task` (deletes rows
     /// where `expires_at < now - 7d`, plus revoked rows older than 30d).
     /// Set `WOS_SESSION_SWEEP=off|false|0` to opt out for ops parity with
@@ -172,8 +184,7 @@ pub struct ServerConfig {
     /// ships spec-correct empty-signature attestation blocks. `Ed25519File`
     /// (WS-043) and `External` will be added with their impls; until then,
     /// `WOS_SIGNER=ed25519-file` (or any other non-`noop` value) currently
-    /// produces a clap error — there is no fallback. Wired through
-    /// [`crate::runtime::AppRuntimeConfig::from_server_config`].
+    /// produces a clap error — there is no fallback.
     #[arg(long, env = "WOS_SIGNER", value_enum, default_value_t = SignerKind::Noop)]
     pub signer_kind: SignerKind,
 }
@@ -192,6 +203,8 @@ fn parse_session_sweep(s: &str) -> Result<bool, String> {
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageKind {
     Sqlite,
+    Postgres,
+    Embedded,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,6 +227,18 @@ pub enum AiChatKind {
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignerKind {
     Noop,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeKind {
+    Local,
+    Restate,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuditSinkKind {
+    None,
+    Postgres,
 }
 
 impl ServerConfig {
@@ -262,6 +287,9 @@ mod tests {
             gemini_api_key: String::new(),
             cursor_throttle_ms: 50,
             timer_poll_ms: 1000,
+            runtime: RuntimeKind::Local,
+            audit_sink: AuditSinkKind::None,
+            audit_database_url: String::new(),
             session_sweep_enabled: true,
             signer_kind: SignerKind::Noop,
         }

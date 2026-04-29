@@ -53,8 +53,8 @@ pub struct PolicyVersionView {
     pub status: String,
 }
 
-/// `ResolvedPolicyView` — payload for `/governance/{url}/policy-resolve` and
-/// `/policy/{url}/resolve` (WS-034). Returns the version of the
+/// `ResolvedPolicyView` — payload for `/policy/{url}/resolve` (WS-034).
+/// Returns the version of the
 /// `policy-parameters` sidecar active at the requested instant, with the full
 /// parameters object inlined so callers do not need a second fetch.
 #[derive(Debug, Clone, Serialize, Deserialize)]

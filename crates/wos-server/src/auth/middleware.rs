@@ -97,22 +97,6 @@ impl From<AuthError> for ApiError {
     }
 }
 
-/// Free-function role check. Kept for backward compatibility while call sites
-/// migrate to [`RequireRole<R>`]. Prefer the extractor for new handlers — it
-/// moves the role string from a runtime literal (typo-prone) to a compile-time
-/// type that does not exist if mistyped.
-#[deprecated(
-    since = "0.1.0",
-    note = "Use the `RequireRole<R: Role>` extractor (e.g. `RequireRole<Supervisor>`); typos in the role string become compile errors."
-)]
-pub fn require_role(ctx: &AuthContext, expected: &str) -> Result<(), ApiError> {
-    if ctx.user.role.eq_ignore_ascii_case(expected) {
-        Ok(())
-    } else {
-        Err(ApiError::Forbidden)
-    }
-}
-
 // ---------------------------------------------------------------------------
 // WS-083: Role markers + `RequireRole<R>` extractor
 // ---------------------------------------------------------------------------

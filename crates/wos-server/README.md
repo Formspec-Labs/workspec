@@ -109,7 +109,7 @@ All config via flags or env vars (flags win). Full list in `src/config.rs`.
 |---|---|---|---|
 | `PORT` | `--port` | `4000` | TCP listen port |
 | `WOS_FIXTURES_DIR` | `--fixtures-dir` | `fixtures` | Seed + conformance fixture root |
-| `WOS_STORAGE` | `--storage` | `sqlite` | Storage backend (`sqlite` only today) |
+| `WOS_STORAGE` | `--storage` | `sqlite` | Storage backend (`sqlite` \| `postgres` \| `embedded`; non-sqlite are scaffolds that fail fast today) |
 | `WOS_DATABASE_URL` | `--database-url` | `sqlite::memory:` | SQLite connection string |
 | `WOS_AUTH` | `--auth` | `jwt` | Auth provider (`jwt` \| `mock`) |
 | `WOS_JWT_SECRET` | `--jwt-secret` | *(required for jwt)* | HS256 secret (raw or hex) |
@@ -123,12 +123,26 @@ All config via flags or env vars (flags win). Full list in `src/config.rs`.
 | `GEMINI_API_KEY` | `--gemini-api-key` | *(required for gemini)* | Gemini API key |
 | `WOS_CURSOR_THROTTLE_MS` | `--cursor-throttle-ms` | `50` | Socket.IO cursor throttle |
 | `WOS_TIMER_POLL_MS` | `--timer-poll-ms` | `1000` | Timer tick interval |
+| `WOS_RUNTIME` | `--runtime` | `local` | Runtime adapter (`local` wired, `restate` scaffold fails fast) |
+| `WOS_AUDIT_SINK` | `--audit-sink` | `none` | Audit sink (`none` \| `postgres`) |
+| `WOS_AUDIT_DATABASE_URL` | `--audit-database-url` | *(empty)* | Optional DSN override for audit sink DB (falls back to `WOS_DATABASE_URL`) |
 
-Planned additions (from the active plan, not shipped yet):
+### Adapter feature gates (WS-089)
 
-- `WOS_SIGNER` — signer backend (`noop` \| `ed25519-file` \| `external`). Track A1.
-- `WOS_RENDERER` — report renderer (`json` \| `html`). Track A2.
-- `WOS_SUBMIT_POLICY` — `default` (ledger-gated per §15.7) \| `permissive`. Track B1 placement.
+`wos-server` now composes adapters via Cargo features:
+
+| Feature | Default | Purpose |
+|---|---|---|
+| `storage-sqlite` | yes | Enables `wos-server-sqlite` backend for `WOS_STORAGE=sqlite` |
+| `auth-jwt` | yes | Enables `wos-server-auth-jwt` for `WOS_AUTH=jwt` |
+| `auth-mock` | yes | Enables `wos-server-auth-mock` for `WOS_AUTH=mock` |
+| `runtime-local` | yes | Enables local runtime adapter crate wiring |
+| `runtime-restate` | no | Enables restate runtime adapter scaffold wiring |
+| `runtime-restate-stub` | no | Placeholder compatibility feature for WS-094 staging |
+| `storage-postgres` | no | Enables Postgres storage composition adapter over `trellis-store-postgres` |
+| `audit-postgres` | no | Enables Postgres audit sink adapter (`wos-server-audit-postgres`) |
+
+When config selects an adapter whose feature is disabled or not yet implemented, startup fails fast with an explicit message.
 
 ---
 

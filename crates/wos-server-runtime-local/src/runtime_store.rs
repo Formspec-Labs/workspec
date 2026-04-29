@@ -1,21 +1,3 @@
-//! `wos_runtime::RuntimeStore` over the server's durable [`Storage`](super::Storage) port.
-//!
-//! **Roles:** [`Storage`](super::Storage) owns SQL rows (instances, provenance,
-//! sessions, …). [`RuntimeStore`](wos_runtime::store::RuntimeStore) is the
-//! synchronous bridge `wos-runtime` uses for projections, replay keys, and
-//! atomic instance updates — this module implements it on top of
-//! [`StorageHandle`](super::StorageHandle) (see [`SqliteRuntimeStore::new`](SqliteRuntimeStore::new)).
-//! **Call sites:** durable reads/writes go through [`Storage`](super::Storage)
-//! in HTTP handlers; the runtime path goes through [`AppRuntime`](crate::runtime::AppRuntime)
-//! → `spawn_blocking` → these `RuntimeStore` methods.
-//!
-//! `RuntimeStore` itself is synchronous. To bridge to our async storage we
-//! call `tokio::runtime::Handle::block_on` inside each method. This is safe
-//! as long as callers are on a thread that can block — in practice, the
-//! server always invokes `WosRuntime` from inside `tokio::task::spawn_blocking`
-//! via the [`AppRuntime`](crate::runtime::AppRuntime) wrapper. Calling these
-//! methods directly from a tokio async worker will panic.
-
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -27,25 +9,28 @@ use wos_runtime::store::{
     StepResultRecord, StoreError, TaskArtifact, TaskArtifactKind,
 };
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
+use wos_server_ports::audit::AuditSink;
+use wos_server_ports::runtime::ProvenancePort;
+use wos_server_ports::storage::{InstanceRow, IntakeRecordRow, StorageError, StorageHandle};
 
-use super::{InstanceRow, IntakeRecordRow, StorageHandle};
-use crate::services::provenance_service::ProvenanceService;
-
-pub struct SqliteRuntimeStore {
+pub struct StorageBackedRuntimeStore {
     storage: StorageHandle,
-    provenance: Arc<ProvenanceService>,
+    provenance: Arc<dyn ProvenancePort>,
+    audit_sink: Arc<dyn AuditSink>,
     handle: Handle,
 }
 
-impl SqliteRuntimeStore {
+impl StorageBackedRuntimeStore {
     pub fn new(
         storage: StorageHandle,
-        provenance: Arc<ProvenanceService>,
+        provenance: Arc<dyn ProvenancePort>,
+        audit_sink: Arc<dyn AuditSink>,
         handle: Handle,
     ) -> Self {
         Self {
             storage,
             provenance,
+            audit_sink,
             handle,
         }
     }
@@ -60,7 +45,7 @@ fn intake_status_str(s: &wos_runtime::intake::IntakeRecordStatus) -> &'static st
     }
 }
 
-impl RuntimeStore for SqliteRuntimeStore {
+impl RuntimeStore for StorageBackedRuntimeStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         let instance = record.instance.clone();
         let instance_json = serde_json::to_value(&instance)
@@ -83,6 +68,7 @@ impl RuntimeStore for SqliteRuntimeStore {
 
         let storage = self.storage.clone();
         let provenance = self.provenance.clone();
+        let audit_sink = self.audit_sink.clone();
         let log_snapshot = record.provenance_log.clone();
         let instance_id = row.instance_id.clone();
 
@@ -101,15 +87,23 @@ impl RuntimeStore for SqliteRuntimeStore {
                 let rows = provenance
                     .prepare_batch(&instance_id, &log_snapshot)
                     .await
-                    .map_err(storage_err)?;
+                    .map_err(|e| StoreError::Failed(e.to_string()))?;
+                let rows_for_mutator = rows.clone();
                 let update_ctx = instance_id.clone();
                 storage
                     .update_instance_atomic(
                         &instance_id,
-                        &move |_current| Ok(rows.clone()),
+                        &move |_current| Ok(rows_for_mutator.clone()),
                     )
                     .await
                     .map_err(|e| storage_err_with(e, &update_ctx))?;
+                if let Err(e) = audit_sink.append_provenance(&rows).await {
+                    tracing::warn!(
+                        instance_id = %instance_id,
+                        error = %e,
+                        "audit sink append failed after operational commit; continuing",
+                    );
+                }
             }
             Ok(())
         })
@@ -119,11 +113,9 @@ impl RuntimeStore for SqliteRuntimeStore {
         let storage = self.storage.clone();
         let id = instance_id.to_string();
         self.handle.block_on(async move {
-            let (row_opt, prov_rows) = tokio::try_join!(
-                storage.get_instance(&id),
-                storage.list_provenance(&id),
-            )
-            .map_err(storage_err)?;
+            let (row_opt, prov_rows) =
+                tokio::try_join!(storage.get_instance(&id), storage.list_provenance(&id),)
+                    .map_err(storage_err)?;
             let row = row_opt.ok_or_else(|| StoreError::NotFound(id.clone()))?;
             let instance: CaseInstance = serde_json::from_value(row.instance_json.clone())
                 .map_err(|e| StoreError::Failed(format!("deserialise instance: {e}")))?;
@@ -155,6 +147,7 @@ impl RuntimeStore for SqliteRuntimeStore {
 
         let storage = self.storage.clone();
         let provenance = self.provenance.clone();
+        let audit_sink = self.audit_sink.clone();
         self.handle.block_on(async move {
             let stored = storage
                 .list_provenance(&instance_id)
@@ -169,11 +162,12 @@ impl RuntimeStore for SqliteRuntimeStore {
                 provenance
                     .prepare_batch(&instance_id, &new_tail)
                     .await
-                    .map_err(storage_err)?
+                    .map_err(|e| StoreError::Failed(e.to_string()))?
             };
             let instance_json_shared = std::sync::Arc::new(instance_json);
             let aux_json_shared = std::sync::Arc::new(aux_json);
             let appended_rows_shared = std::sync::Arc::new(appended_rows);
+            let appended_rows_for_mutator = appended_rows_shared.clone();
             let update_ctx = instance_id.clone();
             storage
                 .update_instance_atomic(&instance_id, &move |current| {
@@ -181,10 +175,19 @@ impl RuntimeStore for SqliteRuntimeStore {
                     current.runtime_aux_json = (*aux_json_shared).clone();
                     current.status = status.clone();
                     current.impact_level = impact_level.clone();
-                    Ok((*appended_rows_shared).clone())
+                    Ok((*appended_rows_for_mutator).clone())
                 })
                 .await
                 .map_err(|e| storage_err_with(e, &update_ctx))?;
+            if !appended_rows_shared.is_empty() {
+                if let Err(e) = audit_sink.append_provenance(appended_rows_shared.as_ref()).await {
+                    tracing::warn!(
+                        instance_id = %instance_id,
+                        error = %e,
+                        "audit sink append failed after operational commit; continuing",
+                    );
+                }
+            }
             Ok(())
         })
     }
@@ -240,14 +243,14 @@ fn build_intake_row(record: &IntakeRecord) -> Result<IntakeRecordRow, StoreError
     })
 }
 
-fn storage_err(e: crate::storage::StorageError) -> StoreError {
+fn storage_err(e: StorageError) -> StoreError {
     storage_err_with(e, "")
 }
 
-fn storage_err_with(e: crate::storage::StorageError, ctx: &str) -> StoreError {
+fn storage_err_with(e: StorageError, ctx: &str) -> StoreError {
     match e {
-        crate::storage::StorageError::NotFound => StoreError::NotFound(ctx.to_string()),
-        crate::storage::StorageError::Conflict(m) => StoreError::AlreadyExists(m),
+        StorageError::NotFound => StoreError::NotFound(ctx.to_string()),
+        StorageError::Conflict(m) => StoreError::AlreadyExists(m),
         other => StoreError::Failed(other.to_string()),
     }
 }
@@ -271,8 +274,6 @@ fn impact_level_hint(inst: &CaseInstance) -> String {
         .unwrap_or("operational")
         .to_string()
 }
-
-// ── Aux field (de)serialisation ────────────────────────────────────────
 
 pub(super) struct DecodedAux {
     pub step_results: Vec<StepResultRecord>,
@@ -325,9 +326,9 @@ pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
             };
             let value_json = match v {
                 ReplayValue::Draft(d) => serde_json::json!({
-                        "kind": "draft",
-                        "artifactId": d.artifact_id,
-                    }),
+                    "kind": "draft",
+                    "artifactId": d.artifact_id,
+                }),
                 ReplayValue::Submission(s) => match s {
                     TaskSubmissionResult::Completed {
                         artifact_id,
@@ -497,5 +498,159 @@ pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
         step_results,
         artifacts,
         replay_entries,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use wos_core::instance::{CaseInstance, InstanceStatus};
+    use wos_core::provenance::ProvenanceRecord;
+    use wos_runtime::store::{RuntimeRecord, RuntimeStore, StepResultRecord};
+    use wos_server_ports::audit::{AuditError, AuditResult, AuditSink, ExportEnvelope};
+    use wos_server_ports::runtime::RuntimeResult;
+    use wos_server_ports::storage::{ProvenanceRow, Storage};
+
+    #[derive(Debug)]
+    struct FailingAuditSink {
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AuditSink for FailingAuditSink {
+        async fn append_provenance(&self, _records: &[ProvenanceRow]) -> AuditResult<()> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(AuditError::Backend("intentional audit sink failure".into()))
+        }
+
+        async fn append_export(&self, _envelope: ExportEnvelope) -> AuditResult<()> {
+            Ok(())
+        }
+    }
+
+    struct PassthroughProvenancePort;
+
+    #[async_trait::async_trait]
+    impl wos_server_ports::runtime::ProvenancePort for PassthroughProvenancePort {
+        async fn prepare_batch(
+            &self,
+            instance_id: &str,
+            records: &[ProvenanceRecord],
+        ) -> RuntimeResult<Vec<ProvenanceRow>> {
+            Ok(records
+                .iter()
+                .enumerate()
+                .map(|(idx, record)| ProvenanceRow {
+                    id: format!("{instance_id}-{}", idx + 1),
+                    instance_id: instance_id.to_string(),
+                    seq: (idx as i64) + 1,
+                    timestamp: chrono::Utc::now(),
+                    tier: "facts".into(),
+                    payload: serde_json::to_value(record).expect("serialise provenance"),
+                    hash: format!("hash-{}", idx + 1),
+                    previous_hash: if idx == 0 {
+                        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                            .into()
+                    } else {
+                        format!("hash-{idx}")
+                    },
+                })
+                .collect())
+        }
+    }
+
+    fn minimal_case_instance() -> CaseInstance {
+        CaseInstance {
+            instance_id: "case_01".into(),
+            definition_url: "urn:wos:test:workflow".into(),
+            definition_version: "1.0.0".into(),
+            configuration: vec!["intake".into()],
+            case_state: serde_json::json!({"__impactLevel":"operational"}),
+            provenance_position: 0,
+            next_task_sequence: 1,
+            timers: Vec::new(),
+            active_tasks: Vec::new(),
+            history_store: HashMap::new(),
+            compensation_logs: HashMap::new(),
+            status: InstanceStatus::Active,
+            stalled_since: None,
+            pending_events: Vec::new(),
+            governance_state: None,
+            volume_counters: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+            fired_milestones: HashSet::new(),
+            pending_callbacks: HashMap::new(),
+            extensions: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn save_record_succeeds_when_audit_sink_fails() {
+        let temp_db = tempfile::NamedTempFile::new().expect("temp db");
+        let dsn = format!("sqlite://{}", temp_db.path().display());
+        let storage = Arc::new(
+            wos_server_sqlite::SqliteStorage::connect(&dsn)
+                .await
+                .expect("sqlite connect"),
+        );
+        storage.migrate().await.expect("sqlite migrate");
+        let provenance = Arc::new(PassthroughProvenancePort);
+        let audit = Arc::new(FailingAuditSink {
+            calls: AtomicUsize::new(0),
+        });
+        let handle = tokio::runtime::Handle::current();
+        let mut store = StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
+
+        let mut record = RuntimeRecord::new(minimal_case_instance());
+        tokio::task::spawn_blocking(move || {
+            store.create_record(record.clone()).expect("create record");
+            record.step_results.push(StepResultRecord {
+                service_ref: "service.ref".into(),
+                idempotency_key: Some("idempotency-1".into()),
+                output: serde_json::json!({"ok": true}),
+                recorded_at: "2026-01-01T00:00:01Z".into(),
+            });
+            record.provenance_log.push(ProvenanceRecord::state_transition(
+                "intake",
+                "review",
+                "submit",
+                Some("sys"),
+            ));
+            store
+                .save_record(record.clone())
+                .expect("save record should not fail");
+            record
+        })
+        .await
+        .expect("save task join");
+
+        assert_eq!(audit.calls.load(Ordering::SeqCst), 1);
+        let persisted = storage
+            .get_instance("case_01")
+            .await
+            .expect("instance read")
+            .expect("instance exists");
+        assert_eq!(persisted.status, "active");
+    }
+
+    #[test]
+    fn aux_json_roundtrip_preserves_step_results() {
+        let mut record = RuntimeRecord::new(minimal_case_instance());
+        record.step_results.push(StepResultRecord {
+            service_ref: "service.ref".into(),
+            idempotency_key: Some("idempotency-1".into()),
+            output: serde_json::json!({"value": 7}),
+            recorded_at: "2026-01-01T00:00:01Z".into(),
+        });
+
+        let aux = aux_to_json(&record);
+        let decoded = aux_from_json(&aux);
+        assert_eq!(decoded.step_results.len(), 1);
+        assert_eq!(decoded.step_results[0].service_ref, "service.ref");
+        assert_eq!(decoded.step_results[0].idempotency_key.as_deref(), Some("idempotency-1"));
+        assert_eq!(decoded.step_results[0].output["value"], 7);
     }
 }

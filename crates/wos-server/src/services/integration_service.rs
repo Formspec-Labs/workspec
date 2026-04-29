@@ -14,6 +14,7 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use wos_runtime::cloudevents::CloudEvent;
 
 use crate::AppState;
@@ -118,18 +119,54 @@ impl IntegrationService {
         inputs: &serde_json::Value,
     ) -> ApiResult<serde_json::Value> {
         let _profile = Self::integration_profile(bundle, workflow_url).await?;
-        // Stub: echo the binding name + inputs with a shape compatible with
-        // `IntegrationBinding` consumers. Real dispatch (Arazzo / Tool /
-        // PolicyEngine) requires the wos-runtime integration handlers, which
-        // live on a different call path and are the focus of a later round.
+        let correlation_token = Uuid::new_v4().to_string();
+        if binding.eq_ignore_ascii_case("http")
+            && let (Some(url), Some(method)) = (
+                inputs.get("url").and_then(|v| v.as_str()),
+                inputs.get("method").and_then(|v| v.as_str()),
+            )
+        {
+            let client = reqwest::Client::new();
+            let method = method
+                .parse::<reqwest::Method>()
+                .map_err(|e| ApiError::BadRequest(format!("invalid HTTP method: {e}")))?;
+            let mut request = client.request(method, url);
+            if let Some(body) = inputs.get("body") {
+                request = request.json(body);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|e| ApiError::ServiceUnavailable(format!("HTTP dispatch failed: {e}")))?;
+            let status = response.status().as_u16();
+            let output = response
+                .json::<serde_json::Value>()
+                .await
+                .unwrap_or_else(|_| serde_json::json!({}));
+            return Ok(serde_json::json!({
+                "binding": binding,
+                "inputs": inputs,
+                "correlationToken": correlation_token,
+                "output": {
+                    "status": "dispatched",
+                    "httpStatus": status,
+                    "payload": output,
+                }
+            }));
+        }
+
+        // Fallback: keep schema-compatible output for non-HTTP bindings until
+        // deeper runtime integration adapter wiring lands.
         Ok(serde_json::json!({
             "binding": binding,
             "inputs": inputs,
+            "correlationToken": correlation_token,
             "output": {
-                "status": "echoed",
-                "note": "integration binding invocation is stubbed pending adapter wiring",
+                "status": "accepted",
+                "note": "binding accepted; concrete adapter dispatch pending",
             }
         }))
     }
 }
+
 

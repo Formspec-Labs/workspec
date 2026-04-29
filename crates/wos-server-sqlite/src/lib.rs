@@ -50,7 +50,7 @@ impl SqliteStorage {
     }
 
     pub async fn migrate(&self) -> StorageResult<()> {
-        sqlx::migrate!("../wos-server/migrations")
+        sqlx::migrate!("./migrations")
             .run(&self.pool)
             .await
             .map_err(me)?;

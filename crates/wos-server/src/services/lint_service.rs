@@ -2,7 +2,7 @@
 //! rule-metadata catalog (`all_lint_rules`) as HTTP-friendly shapes.
 
 use serde::Serialize;
-use wos_lint::{Diagnostic, Severity};
+use wos_lint::{LintDiagnostic, LintSeverity};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,16 +13,16 @@ pub struct DiagnosticView {
     pub severity: &'static str,
 }
 
-impl From<Diagnostic> for DiagnosticView {
-    fn from(d: Diagnostic) -> Self {
+impl From<LintDiagnostic> for DiagnosticView {
+    fn from(d: LintDiagnostic) -> Self {
         Self {
             rule_id: d.rule_id,
             path: d.path,
             message: d.message,
             severity: match d.severity {
-                Severity::Error => "error",
-                Severity::Warning => "warning",
-                Severity::Info => "info",
+                LintSeverity::Error => "error",
+                LintSeverity::Warning => "warning",
+                LintSeverity::Info => "info",
             },
         }
     }
@@ -40,7 +40,7 @@ pub fn lint_document(body: &serde_json::Value) -> LintResult {
     let json = serde_json::to_string(body).unwrap_or_default();
     match wos_lint::lint_document(&json) {
         Ok(diags) => LintResult {
-            is_valid: !diags.iter().any(|d| d.severity == Severity::Error),
+            is_valid: !diags.iter().any(|d| d.severity == LintSeverity::Error),
             diagnostics: diags.into_iter().map(Into::into).collect(),
         },
         Err(e) => LintResult {
@@ -60,7 +60,7 @@ pub fn lint_schema(body: &serde_json::Value) -> LintResult {
     let json = serde_json::to_string(body).unwrap_or_default();
     match wos_lint::lint_schema(&json) {
         Ok(diags) => LintResult {
-            is_valid: !diags.iter().any(|d| d.severity == Severity::Error),
+            is_valid: !diags.iter().any(|d| d.severity == LintSeverity::Error),
             diagnostics: diags.into_iter().map(Into::into).collect(),
         },
         Err(e) => LintResult {
@@ -102,9 +102,9 @@ pub fn list_rules() -> Vec<RuleMetadataView> {
                 wos_lint::rules::Tier::T3 => "T3",
             },
             severity: match r.severity {
-                Severity::Error => "error",
-                Severity::Warning => "warning",
-                Severity::Info => "info",
+                LintSeverity::Error => "error",
+                LintSeverity::Warning => "warning",
+                LintSeverity::Info => "info",
             },
             summary: r.summary,
             graduation: match r.graduation {

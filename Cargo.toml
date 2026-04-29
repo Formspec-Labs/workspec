@@ -8,6 +8,13 @@ members = [
     "crates/wos-export",
     "crates/wos-server",
     "crates/wos-server-ports",
+    "crates/wos-server-sqlite",
+    "crates/wos-server-auth-jwt",
+    "crates/wos-server-auth-mock",
+    "crates/wos-server-runtime-local",
+    "crates/wos-server-postgres",
+    "crates/wos-server-audit-postgres",
+    "crates/wos-server-runtime-restate",
     "crates/wos-synth-spike",
     "crates/wos-synth-core",
     "crates/wos-synth-mock",
@@ -27,3 +34,15 @@ repository = "https://github.com/formspec/formspec"
 # fel-core lives in the Formspec monorepo (`../crates/fel-core` when this tree is `formspec/wos-spec`).
 [workspace.dependencies]
 fel-core = { path = "../crates/fel-core" }
+
+[profile.dev]
+# Trim debug metadata and increase codegen parallelism for faster compile-test loops.
+debug = 1
+incremental = true
+codegen-units = 256
+
+[profile.test]
+# Keep tests debuggable while reducing compile overhead.
+debug = 1
+incremental = true
+codegen-units = 256

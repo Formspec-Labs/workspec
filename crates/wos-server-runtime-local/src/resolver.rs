@@ -1,27 +1,19 @@
-//! `DocumentResolver` bridging `BundleService` into `wos-runtime`.
-//!
-//! Synchronous per the wos-core trait. Calls the async `BundleService`
-//! via `tokio::runtime::Handle::block_on`; safe as long as invocations
-//! happen from inside `tokio::task::spawn_blocking` (which is how
-//! `AppRuntime` dispatches all runtime calls).
-
 use std::sync::Arc;
 
 use thiserror::Error;
 use tokio::runtime::Handle;
 use wos_core::GovernanceDocument;
-use wos_core::traits::DocumentResolver;
 use wos_core::KernelDocument;
-
-use crate::services::bundle_service::BundleService;
+use wos_core::traits::DocumentResolver;
+use wos_server_ports::runtime::BundleResolverPort;
 
 pub struct BundleServiceResolver {
-    bundle: Arc<BundleService>,
+    bundle: Arc<dyn BundleResolverPort>,
     handle: Handle,
 }
 
 impl BundleServiceResolver {
-    pub fn new(bundle: Arc<BundleService>, handle: Handle) -> Self {
+    pub fn new(bundle: Arc<dyn BundleResolverPort>, handle: Handle) -> Self {
         Self { bundle, handle }
     }
 }
@@ -30,23 +22,18 @@ impl BundleServiceResolver {
 pub enum ResolverError {
     #[error("kernel `{url}` not loaded in registry")]
     KernelNotFound { url: String },
-
     #[error("kernel `{url}` loaded with version `{found}` but version `{wanted}` was requested")]
     KernelVersionMismatch {
         url: String,
         found: String,
         wanted: String,
     },
-
     #[error("governance sidecar for `{url}` is not loaded")]
     GovernanceNotFound { url: String },
-
     #[error("sidecar for `{url}` is not loaded")]
     SidecarNotFound { url: String },
-
     #[error("failed to parse kernel `{url}`: {message}")]
     KernelParse { url: String, message: String },
-
     #[error("failed to parse governance sidecar for `{url}`: {message}")]
     GovernanceParse { url: String, message: String },
 }
@@ -59,23 +46,25 @@ impl DocumentResolver for BundleServiceResolver {
         let url = url.to_string();
         let wanted = version.to_string();
         self.handle.block_on(async move {
-            let row = bundle
-                .get(&url)
+            let kernel_json = bundle
+                .resolve_kernel_bundle(&url)
                 .await
-                .ok_or_else(|| ResolverError::KernelNotFound { url: url.clone() })?;
-            if !wanted.is_empty() && row.version != wanted {
+                .map_err(|_| ResolverError::KernelNotFound { url: url.clone() })?;
+            let parsed = serde_json::from_value::<KernelDocument>(kernel_json).map_err(|e| {
+                ResolverError::KernelParse {
+                    url: url.clone(),
+                    message: e.to_string(),
+                }
+            })?;
+            let found_version = parsed.version.clone().unwrap_or_default();
+            if !wanted.is_empty() && found_version != wanted {
                 return Err(ResolverError::KernelVersionMismatch {
                     url,
-                    found: row.version,
+                    found: found_version,
                     wanted,
                 });
             }
-            serde_json::from_value::<KernelDocument>(row.document).map_err(|e| {
-                ResolverError::KernelParse {
-                    url,
-                    message: e.to_string(),
-                }
-            })
+            Ok(parsed)
         })
     }
 
@@ -87,14 +76,11 @@ impl DocumentResolver for BundleServiceResolver {
         let bundle = self.bundle.clone();
         let url = url.to_string();
         self.handle.block_on(async move {
-            let bundle_view = bundle
-                .full_bundle(&url)
+            let gov_json = bundle
+                .resolve_governance_bundle(&url)
                 .await
-                .ok_or_else(|| ResolverError::GovernanceNotFound { url: url.clone() })?;
-            let gov = bundle_view
-                .governance
-                .ok_or(ResolverError::GovernanceNotFound { url: url.clone() })?;
-            serde_json::from_value::<GovernanceDocument>(gov).map_err(|e| {
+                .map_err(|_| ResolverError::GovernanceNotFound { url: url.clone() })?;
+            serde_json::from_value::<GovernanceDocument>(gov_json).map_err(|e| {
                 ResolverError::GovernanceParse {
                     url,
                     message: e.to_string(),
@@ -111,11 +97,10 @@ impl DocumentResolver for BundleServiceResolver {
         let bundle = self.bundle.clone();
         let url = url.to_string();
         self.handle.block_on(async move {
-            let bundle_view = bundle
-                .full_bundle(&url)
+            bundle
+                .resolve_sidecar_bundle(&url)
                 .await
-                .ok_or_else(|| ResolverError::SidecarNotFound { url: url.clone() })?;
-            Ok(serde_json::to_value(bundle_view).unwrap_or(serde_json::json!({})))
+                .map_err(|_| ResolverError::SidecarNotFound { url: url.clone() })
         })
     }
 }

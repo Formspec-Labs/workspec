@@ -1,19 +1,10 @@
-//! Socket.IO-backed `TaskPresenter`.
-//!
-//! On `present_task`, broadcasts `task:assigned` with the full task
-//! context; on `dismiss_task`, broadcasts `task:dismissed`. Mirroring
-//! task state into the `tasks` SQL table (for queryability / recovery)
-//! requires a concrete `SqlitePool` on this presenter — that wire-up
-//! lands with the task-mirror query service.
-
 use chrono::Utc;
 use socketioxide::SocketIo;
 use thiserror::Error;
 use tokio::runtime::Handle;
 use wos_core::instance::FormspecTaskContext;
 use wos_core::traits::TaskPresenter;
-
-use crate::storage::StorageHandle;
+use wos_server_ports::storage::StorageHandle;
 
 pub struct SocketIoTaskPresenter {
     #[allow(dead_code)]
@@ -24,11 +15,7 @@ pub struct SocketIoTaskPresenter {
 
 impl SocketIoTaskPresenter {
     pub fn new(storage: StorageHandle, io: SocketIo, handle: Handle) -> Self {
-        Self {
-            storage,
-            io,
-            handle,
-        }
+        Self { storage, io, handle }
     }
 }
 
