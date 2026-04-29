@@ -1973,6 +1973,18 @@ Provenance records SHOULD include `taskId`, `responseId` when available, `defini
 
 ### 13.9 Amendments
 
+**Five-mode revisit taxonomy.** A Workflow Document that embeds Workflow Governance MAY declare `governance.amendmentTaxonomy`: an array of distinct string literals naming which governed-revisit modes the workflow permits. When present, each array item MUST be exactly one of the following **five** closed literals (no vendor extensions at this key; structural enforcement is normative in `wos-workflow.schema.json` under `Governance.properties.amendmentTaxonomy`):
+
+| Literal | Meaning (kernel-level summary) |
+|---------|--------------------------------|
+| `correction` | Factual correction alongside a preserved determination record (narrow field-set semantics per governance). |
+| `amendment` | Substantive change to a determination on the **same** governed chain. |
+| `supersession` | Replacement by a new governed case or chain. Declaring `supersession` here permits the mode in governance taxonomy; **cross-case linkage** is expressed through **`caseRelationships`** (Kernel S5.5), not through additional `amendmentTaxonomy` values. |
+| `rescission` | Withdrawal of a determination to a non-operative state on the same chain. |
+| `reinstatement` | Re-activation of a determination after rescission **without** rewriting the substantive determination value (distinct from `amendment`). |
+
+When `governance.amendmentTaxonomy` is absent, author-time validation treats the workflow as asserting no amendment-taxonomy modes at this key (see `wos-workflow.schema.json` for the default and lint posture).
+
 After a Formspec task completes, amendment flows MUST create a new task. A processor MUST NOT reopen a terminal completed task. The amended task or Response SHOULD reference the original through Respondent Ledger `amendmentRef` and WOS provenance fields such as `supersedesResponseId` or `relatedTaskId`.
 
 This preserves immutable completion history while allowing corrected or updated Responses to supersede earlier submissions.
