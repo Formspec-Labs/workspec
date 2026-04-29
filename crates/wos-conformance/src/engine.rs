@@ -159,14 +159,13 @@ impl WorkflowEngine {
         // absorbed similarly to AI/Governance/BusinessCalendar/Notification).
         let integration_profile = if fixture.documents.contains_key("integration") {
             let ip_json = fixture_document_json(fixture, "integration")?;
-            // Try the new envelope shape first (block under `bindings`); fall
-            // back to legacy flat shape for fixtures not yet migrated.
-            let parsed: Result<IntegrationProfileDocument, _> =
-                if let Some(block) = extract_embedded_block(&ip_json, "bindings") {
-                    serde_json::from_value(block)
-                } else {
-                    serde_json::from_value(ip_json)
-                };
+            let block = extract_embedded_block(&ip_json, "bindings").ok_or_else(|| {
+                ConformanceError::Parse(
+                    "integration document is missing the `bindings` embedded block (ADR 0076 D-1)"
+                        .to_string(),
+                )
+            })?;
+            let parsed: Result<IntegrationProfileDocument, _> = serde_json::from_value(block);
             Some(parsed.map_err(|e| {
                 ConformanceError::Parse(format!("integration profile parse error: {e}"))
             })?)
@@ -194,16 +193,17 @@ impl WorkflowEngine {
         };
 
         // Load Signature Profile content (the `signature` block of a $wosWorkflow
-        // document per ADR 0076 D-1). Try envelope shape first; fall back to
-        // legacy flat shape for fixtures not yet migrated.
+        // document per ADR 0076 D-1).
         let signature_profile = if fixture.documents.contains_key("signatureProfile") {
             let sig_json = fixture_document_json(fixture, "signatureProfile")?;
+            let block = extract_embedded_block(&sig_json, "signature").ok_or_else(|| {
+                ConformanceError::Parse(
+                    "signature-profile document is missing the `signature` embedded block (ADR 0076 D-1)"
+                        .to_string(),
+                )
+            })?;
             let parsed: Result<wos_runtime::SignatureProfileDocument, _> =
-                if let Some(block) = extract_embedded_block(&sig_json, "signature") {
-                    serde_json::from_value(block)
-                } else {
-                    serde_json::from_value(sig_json)
-                };
+                serde_json::from_value(block);
             Some(parsed.map_err(|e| {
                 ConformanceError::Parse(format!("signature profile parse error: {e}"))
             })?)

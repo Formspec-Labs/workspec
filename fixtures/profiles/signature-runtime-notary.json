@@ -1,57 +1,71 @@
 {
-  "$wosSignatureProfile": "1.0",
-  "targetWorkflow": { "url": "urn:test:signature-runtime" },
-  "roles": [
-    {
-      "id": "notaryRole",
-      "role": "notary",
-      "actorId": "notary",
-      "authenticationPolicyKey": "notaryAuth"
-    }
-  ],
-  "documents": [
-    {
-      "id": "application",
-      "documentRef": "urn:test:document:application",
-      "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "documentHashAlgorithm": "sha-256",
-      "formspecResponseRef": "urn:test:formspec-response:application"
-    }
-  ],
-  "authenticationPolicies": [
-    {
-      "key": "notaryAuth",
-      "method": "notary",
-      "assuranceLevel": "very-high",
-      "requiresInPerson": true,
-      "requiresCredentialEvidence": true
-    }
-  ],
-  "signingFlow": {
-    "type": "parallel",
-    "steps": [
-      { "id": "notaryAttests", "roleId": "notaryRole", "documentId": "application" }
-    ],
-    "completion": { "type": "all-required" }
-  },
-  "evidence": {
-    "recordKind": "signatureAffirmation",
-    "requiredFields": [
-      "response.signature.acceptedAt",
-      "response.signature.affirmed",
-      "response.signature.documentHash"
-    ],
-    "consentReference": {
-      "consentTextRef": "urn:test:consent:notary",
-      "consentVersion": "1.0.0",
-      "acceptedAtPath": "response.signature.acceptedAt",
-      "affirmationPath": "response.signature.affirmed"
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "signature-runtime-notary",
+  "url": "https://example.test/fixtures/signature-runtime-notary",
+  "signature": {
+    "$wosSignatureProfile": "1.0",
+    "targetWorkflow": {
+      "url": "urn:test:signature-runtime"
     },
-    "identityBinding": {
-      "method": "notary",
-      "assuranceLevel": "very-high",
-      "externalAttestationRef": "urn:test:notary:attestation"
+    "roles": [
+      {
+        "id": "notaryRole",
+        "role": "notary",
+        "actorId": "notary",
+        "authenticationPolicyKey": "notaryAuth"
+      }
+    ],
+    "documents": [
+      {
+        "id": "application",
+        "documentRef": "urn:test:document:application",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256",
+        "formspecResponseRef": "urn:test:formspec-response:application"
+      }
+    ],
+    "authenticationPolicies": [
+      {
+        "key": "notaryAuth",
+        "method": "notary",
+        "assuranceLevel": "very-high",
+        "requiresInPerson": true,
+        "requiresCredentialEvidence": true
+      }
+    ],
+    "signingFlow": {
+      "type": "parallel",
+      "steps": [
+        {
+          "id": "notaryAttests",
+          "roleId": "notaryRole",
+          "documentId": "application"
+        }
+      ],
+      "completion": {
+        "type": "all-required"
+      }
     },
-    "custodyHookEligible": true
+    "evidence": {
+      "recordKind": "signatureAffirmation",
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:test:consent:notary",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "notary",
+        "assuranceLevel": "very-high",
+        "externalAttestationRef": "urn:test:notary:attestation"
+      },
+      "custodyHookEligible": true
+    }
   }
 }

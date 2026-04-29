@@ -1,67 +1,89 @@
 {
-  "$wosSignatureProfile": "1.0",
-  "targetWorkflow": { "url": "urn:test:signature-runtime" },
-  "roles": [
-    {
-      "id": "applicantSigner",
-      "role": "signer",
-      "actorId": "applicant",
-      "authenticationPolicyKey": "emailOtp"
-    }
-  ],
-  "documents": [
-    {
-      "id": "application",
-      "documentRef": "urn:test:document:application",
-      "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "documentHashAlgorithm": "sha-256",
-      "formspecResponseRef": "urn:test:formspec-response:application"
-    }
-  ],
-  "authenticationPolicies": [
-    { "key": "emailOtp", "method": "email-otp", "assuranceLevel": "standard" }
-  ],
-  "signingFlow": {
-    "type": "sequential",
-    "steps": [
-      { "id": "applicantSigns", "roleId": "applicantSigner", "documentId": "application" }
-    ],
-    "completion": { "type": "all-required" }
-  },
-  "evidence": {
-    "recordKind": "signatureAffirmation",
-    "requiredFields": [
-      "response.signature.acceptedAt",
-      "response.signature.affirmed",
-      "response.signature.documentHash"
-    ],
-    "consentReference": {
-      "consentTextRef": "urn:test:consent:esign",
-      "consentVersion": "1.0.0",
-      "acceptedAtPath": "response.signature.acceptedAt",
-      "affirmationPath": "response.signature.affirmed"
+  "$wosWorkflow": "1.0",
+  "version": "1.0.0",
+  "title": "signature-runtime-sequential",
+  "url": "https://example.test/fixtures/signature-runtime-sequential",
+  "signature": {
+    "$wosSignatureProfile": "1.0",
+    "targetWorkflow": {
+      "url": "urn:test:signature-runtime"
     },
-    "identityBinding": {
-      "method": "email-otp",
-      "assuranceLevel": "standard"
+    "roles": [
+      {
+        "id": "applicantSigner",
+        "role": "signer",
+        "actorId": "applicant",
+        "authenticationPolicyKey": "emailOtp"
+      }
+    ],
+    "documents": [
+      {
+        "id": "application",
+        "documentRef": "urn:test:document:application",
+        "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "documentHashAlgorithm": "sha-256",
+        "formspecResponseRef": "urn:test:formspec-response:application"
+      }
+    ],
+    "authenticationPolicies": [
+      {
+        "key": "emailOtp",
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      }
+    ],
+    "signingFlow": {
+      "type": "sequential",
+      "steps": [
+        {
+          "id": "applicantSigns",
+          "roleId": "applicantSigner",
+          "documentId": "application"
+        }
+      ],
+      "completion": {
+        "type": "all-required"
+      }
     },
-    "custodyHookEligible": true
-  },
-  "declinePolicy": {
-    "transitionId": "signature.declined",
-    "reasonRequired": true
-  },
-  "voidPolicy": {
-    "authorizedActorIds": ["caseworker"],
-    "reasonRequired": true
-  },
-  "reassignmentPolicy": {
-    "authorizedActorIds": ["caseworker"],
-    "accountability": "preserve-original-assignment",
-    "reasonRequired": true
-  },
-  "expiryPolicy": {
-    "eventName": "signature.expired",
-    "after": "P7D"
+    "evidence": {
+      "recordKind": "signatureAffirmation",
+      "requiredFields": [
+        "response.signature.acceptedAt",
+        "response.signature.affirmed",
+        "response.signature.documentHash"
+      ],
+      "consentReference": {
+        "consentTextRef": "urn:test:consent:esign",
+        "consentVersion": "1.0.0",
+        "acceptedAtPath": "response.signature.acceptedAt",
+        "affirmationPath": "response.signature.affirmed"
+      },
+      "identityBinding": {
+        "method": "email-otp",
+        "assuranceLevel": "standard"
+      },
+      "custodyHookEligible": true
+    },
+    "declinePolicy": {
+      "transitionId": "signature.declined",
+      "reasonRequired": true
+    },
+    "voidPolicy": {
+      "authorizedActorIds": [
+        "caseworker"
+      ],
+      "reasonRequired": true
+    },
+    "reassignmentPolicy": {
+      "authorizedActorIds": [
+        "caseworker"
+      ],
+      "accountability": "preserve-original-assignment",
+      "reasonRequired": true
+    },
+    "expiryPolicy": {
+      "eventName": "signature.expired",
+      "after": "P7D"
+    }
   }
 }
