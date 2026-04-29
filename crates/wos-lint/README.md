@@ -66,7 +66,7 @@ for d in &diagnostics {
 }
 ```
 
-Each diagnostic includes a rule ID (e.g., `K-001`), a JSON pointer path to the offending location, a human-readable message, and a severity (error, warning, info).
+Each diagnostic includes a rule ID (e.g., `K-001`), a JSONPath to the offending location, a human-readable message, severity (`LintSeverity`), tier, and optional structured fields (`suggestedFix`, `relatedDocs`, `source`).
 
 ## Dependencies
 

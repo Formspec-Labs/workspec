@@ -785,7 +785,7 @@ mod tests {
         RuleMetadata {
             id,
             tier: Tier::T1,
-            severity: wos_lint::Severity::Error,
+            severity: wos_lint::LintSeverity::Error,
             summary: "test rule",
             fixtures: &[],
             graduation,
@@ -880,7 +880,7 @@ mod tests {
         let rule_with_fixture = RuleMetadata {
             id: "K-001",
             tier: Tier::T1,
-            severity: wos_lint::Severity::Error,
+            severity: wos_lint::LintSeverity::Error,
             summary: "test",
             fixtures: REFERENCED_FIXTURE,
             graduation: Graduation::Tested,

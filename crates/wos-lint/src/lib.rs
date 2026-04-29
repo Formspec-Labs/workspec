@@ -12,14 +12,12 @@
 //!
 //! # Structured output (§5.2)
 //!
-//! All lint rules now emit [`LintDiagnostic`] — a JSON-serializable struct
-//! with stable `camelCase` field names, severity, verification tier, JSONPath
+//! All lint rules emit [`LintDiagnostic`] — a JSON-serializable struct with
+//! stable `camelCase` field names, severity, verification tier, JSONPath
 //! location, and an optional machine-readable [`SuggestedFix`].
 //!
-//! The [`lint_document_structured`], [`lint_project_structured`], and
-//! [`lint_schema_structured`] functions return `Vec<LintDiagnostic>` directly.
-//! The legacy [`lint_document`], [`lint_project`], and [`lint_schema`] functions
-//! remain for callers that depend on the older [`Diagnostic`] type.
+//! [`lint_document`], [`lint_project`], and [`lint_schema`] return
+//! `Result<Vec<LintDiagnostic>, LintError>`.
 
 mod diagnostic;
 mod document;
@@ -27,14 +25,10 @@ pub mod output;
 pub mod rules;
 
 pub use diagnostic::{
-    Diagnostic, LintDiagnostic, LintSeverity, Severity, SourceLocation, SuggestedFix, Tier,
+    LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier,
 };
 pub use document::{DocumentKind, WosDocument, WosProject};
 pub use rules::{Graduation, RuleMetadata, all_lint_rules};
-
-// ==========================================================================
-// Structured API — primary interface returning `Vec<LintDiagnostic>`
-// ==========================================================================
 
 /// Lint a single WOS document (Tier 1 checks only), returning structured diagnostics.
 ///
@@ -45,11 +39,11 @@ pub use rules::{Graduation, RuleMetadata, all_lint_rules};
 ///
 /// Returns `LintError::Parse` if the input is not valid JSON or lacks a
 /// recognized `$wos*` document type marker.
-pub fn lint_document_structured(json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
+pub fn lint_document(json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
     let doc = document::parse(json)?;
     let mut diagnostics = Vec::new();
     rules::tier1::check(&doc, &mut diagnostics);
-    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(b.rule_id)));
+    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
     Ok(diagnostics)
 }
 
@@ -58,12 +52,12 @@ pub fn lint_document_structured(json: &str) -> Result<Vec<LintDiagnostic>, LintE
 /// # Errors
 ///
 /// Returns [`LintError::Parse`] if `schema_json` is not valid JSON.
-pub fn lint_schema_structured(schema_json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
+pub fn lint_schema(schema_json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
     let root: serde_json::Value = serde_json::from_str(schema_json)
         .map_err(|e| LintError::Parse(format!("invalid JSON schema: {e}")))?;
     let mut diagnostics = Vec::new();
     rules::schema_doc::check_schema(&root, &mut diagnostics);
-    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(b.rule_id)));
+    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
     Ok(diagnostics)
 }
 
@@ -73,7 +67,7 @@ pub fn lint_schema_structured(schema_json: &str) -> Result<Vec<LintDiagnostic>, 
 ///
 /// Returns `LintError::Io` if the directory cannot be read, or
 /// `LintError::Parse` if any document fails to parse.
-pub fn lint_project_structured(dir: &std::path::Path) -> Result<Vec<LintDiagnostic>, LintError> {
+pub fn lint_project(dir: &std::path::Path) -> Result<Vec<LintDiagnostic>, LintError> {
     let project = document::load_project(dir)?;
     let mut diagnostics = Vec::new();
 
@@ -82,60 +76,7 @@ pub fn lint_project_structured(dir: &std::path::Path) -> Result<Vec<LintDiagnost
     }
     rules::tier2::check(&project, &mut diagnostics);
 
-    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(b.rule_id)));
-    Ok(diagnostics)
-}
-
-// ==========================================================================
-// Legacy API — backward-compatible functions returning `Vec<Diagnostic>`
-// ==========================================================================
-
-/// Lint a single WOS document (Tier 1 checks only).
-///
-/// Runs all applicable single-document rules for the detected document kind.
-/// Returns diagnostics sorted by path, then severity.
-///
-/// **Prefer [`lint_document_structured`]** for new callers — it returns the
-/// richer [`LintDiagnostic`] type with tier, JSON path, and optional fixes.
-///
-/// # Examples
-///
-/// ```no_run
-/// use wos_lint::lint_document;
-///
-/// let json = std::fs::read_to_string("kernel.json").unwrap();
-/// let diagnostics = lint_document(&json).unwrap();
-/// for d in &diagnostics {
-///     eprintln!("{}", d);
-/// }
-/// ```
-///
-/// # Errors
-///
-/// Returns `LintError::Parse` if the input is not valid JSON or lacks a
-/// recognized `$wos*` document type marker.
-pub fn lint_document(json: &str) -> Result<Vec<Diagnostic>, LintError> {
-    let structured = lint_document_structured(json)?;
-    let mut diagnostics: Vec<Diagnostic> = structured.into_iter().map(Diagnostic::from).collect();
-    diagnostics.sort();
-    Ok(diagnostics)
-}
-
-/// Lint a single JSON Schema file for documentation coverage (`SCHEMA-DOC-001`).
-///
-/// Unlike [`lint_document`], which lints WOS *documents* that carry a
-/// `$wos*` marker, this function lints the JSON Schema files under
-/// `wos-spec/schemas/` themselves.
-///
-/// **Prefer [`lint_schema_structured`]** for new callers.
-///
-/// # Errors
-///
-/// Returns [`LintError::Parse`] if `schema_json` is not valid JSON.
-pub fn lint_schema(schema_json: &str) -> Result<Vec<Diagnostic>, LintError> {
-    let structured = lint_schema_structured(schema_json)?;
-    let mut diagnostics: Vec<Diagnostic> = structured.into_iter().map(Diagnostic::from).collect();
-    diagnostics.sort();
+    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
     Ok(diagnostics)
 }
 
@@ -153,36 +94,6 @@ pub fn count_schema_leaves(schema_json: &str) -> Result<usize, LintError> {
     let root: serde_json::Value = serde_json::from_str(schema_json)
         .map_err(|e| LintError::Parse(format!("invalid JSON schema: {e}")))?;
     Ok(rules::schema_doc::count_leaves(&root))
-}
-
-/// Lint a project directory (Tier 1 + Tier 2 checks).
-///
-/// Loads all WOS documents from the directory, resolves cross-references,
-/// and runs both single-document and cross-document rules.
-///
-/// **Prefer [`lint_project_structured`]** for new callers.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use wos_lint::lint_project;
-///
-/// let diagnostics = lint_project(Path::new("my-workflow/")).unwrap();
-/// for d in &diagnostics {
-///     eprintln!("{}", d);
-/// }
-/// ```
-///
-/// # Errors
-///
-/// Returns `LintError::Io` if the directory cannot be read, or
-/// `LintError::Parse` if any document fails to parse.
-pub fn lint_project(dir: &std::path::Path) -> Result<Vec<Diagnostic>, LintError> {
-    let structured = lint_project_structured(dir)?;
-    let mut diagnostics: Vec<Diagnostic> = structured.into_iter().map(Diagnostic::from).collect();
-    diagnostics.sort();
-    Ok(diagnostics)
 }
 
 /// Errors produced by the linting pipeline.

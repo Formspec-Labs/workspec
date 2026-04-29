@@ -19,7 +19,7 @@
 //! `fixtures` slice. Promotion is performed in a separate change once the
 //! rule has at least one passing fixture.
 
-use crate::diagnostic::Severity;
+use crate::diagnostic::LintSeverity;
 
 /// Verification tier a rule belongs to.
 ///
@@ -63,7 +63,7 @@ pub struct RuleMetadata {
     /// Verification tier.
     pub tier: Tier,
     /// Severity of the primary diagnostic this rule emits.
-    pub severity: Severity,
+    pub severity: LintSeverity,
     /// One-line summary of what the rule checks.
     pub summary: &'static str,
     /// Fixture paths (relative to `fixtures/`) that exercise this rule.
@@ -86,7 +86,7 @@ pub fn all_lint_rules() -> &'static [RuleMetadata] {
 
 /// Every lint rule currently implemented in `wos-lint`.
 ///
-/// Entries are derived from the concrete `Diagnostic::{error,warning,info}`
+/// Entries are derived from the concrete `LintDiagnostic::{t1_error,t2_error,...}`
 /// call sites in `tier1.rs`, `tier2.rs`, `fel_analysis.rs`, and
 /// `schema_doc.rs`. Rules listed in `LINT-MATRIX.md` but not yet emitted by
 /// code are intentionally absent — the registry describes present reality,
@@ -96,7 +96,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-008",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Side-effect tools at `autonomous` autonomy MUST declare a `sideEffectPolicy`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -106,7 +106,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-010",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Verifiable constraints MUST satisfy all SMT subset restrictions (parse failures).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -116,7 +116,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-011",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`let` bindings in verifiable expressions MUST NOT be recursive.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -126,7 +126,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-012",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Quantifiers MUST quantify over finite domains (non-standard every/some arity).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -136,7 +136,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-013",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Verifiable arithmetic MUST be linear (no variable*variable products).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -146,7 +146,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-014",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Verifiable subset MUST NOT include extension function calls.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -156,7 +156,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AG-017",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Shadow mode is RECOMMENDED for rights-impacting workflows.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -167,7 +167,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-007",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Cascading autonomous agents MUST be declared via `cascadingInvocations`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -177,7 +177,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-018",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`autonomous` actions MUST have associated deontic constraints.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -187,7 +187,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-020",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`supervisory` actions MUST define `reviewWindow`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -197,7 +197,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-023",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Every agent invocation MUST have a reachable path to completion without any agent.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -207,7 +207,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-024",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Escalation conditions MUST be valid FEL referencing `@agent` context.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -217,7 +217,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-026",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Escalation MUST have `escalationExpiry`; agent reverts when expired.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -227,7 +227,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-031",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Agent output contract MUST apply same rules as human-facing form.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -245,7 +245,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-041",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Fallback chain MUST terminate in `escalateToHuman` or `fail`; MUST NOT cycle.",
         fixtures: &["crates/wos-conformance/fixtures/AI-041-negative-fallback-cycle.json"],
         graduation: Graduation::Tested,
@@ -255,7 +255,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-042",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Agent config MUST disclose training data characteristics.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -265,7 +265,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-043",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Agent config MUST disclose optimization objective.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -275,7 +275,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-046",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`rights-impacting` workflows MUST have `discloseThatAgentAssisted: true`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -285,7 +285,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-049",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Narrative records MUST have `authoritative: false`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -295,7 +295,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-056",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Autonomy is an action-site property, not an agent property.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -305,7 +305,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-057",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Capability `preconditions` entries MUST be valid FEL.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -323,7 +323,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-058",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Capability `preconditions` AST root MUST be boolean-shaped (no truthy coercion).",
         fixtures: &[],
         graduation: Graduation::Tested,
@@ -334,7 +334,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "CM-001",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Entry template `id` values MUST be unique within the sidecar.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -345,7 +345,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "DM-002",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Rights/safety workflows SHOULD follow shadow/canary/production sequence.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -356,7 +356,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-001",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Due process MUST be enforced for `rights-impacting` or `safety-impacting` kernels.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -366,7 +366,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-003",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Notice MUST include specific determination, reason codes, and appeal instructions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -376,7 +376,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-004",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Explanation level MUST be `individualized` when kernel impact is `rights-impacting`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -386,7 +386,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-005",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Adverse decisions MUST include positive and negative counterfactuals when rights-impacting.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -396,7 +396,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-008",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`continuationOfServices: true` requires kernel topology to freeze adverse impacts.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -406,7 +406,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-009",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Transitions tagged `adverse-decision` MUST trigger due process policy enforcement.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -416,7 +416,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-011",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Review protocol tags MUST match tags declared in the target kernel.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -426,7 +426,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-014",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Reasoning tier MUST be present for `determination`-tagged transitions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -436,7 +436,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-015",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Counterfactual tier MUST be present for `adverse-decision` transitions in rights-impacting workflows.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -446,7 +446,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-022",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`excludedOwner` MUST override `potentialOwner` when actor appears in both.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -456,7 +456,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-023",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "SLA evaluation SHOULD use business calendar when BC sidecar is present.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -466,7 +466,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-024",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Determination-tagged transitions MUST verify the actor has valid delegation.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -476,7 +476,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-027",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Sub-delegation MUST respect `maxDelegationDepth`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -486,7 +486,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-028",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Hold policies MUST attach to kernel states tagged `hold`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -496,7 +496,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-029",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`resumeTrigger` event name MUST reference an event in the target kernel.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -506,7 +506,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-031",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`resolutionDateRef` MUST refer to a field path in the kernel's case state.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -516,7 +516,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-033",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Parameter `values` SHOULD cover every resolution date (no coverage gap).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -526,7 +526,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-034",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`targetWorkflow` MUST match the `url` of the target kernel document.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -536,7 +536,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-035",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`targetGovernance` MUST reference a valid governance document.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -546,7 +546,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-036",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`independenceConstraint` MUST describe a mechanism preventing self-review.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -556,7 +556,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-037",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Assertion `id` values MUST be unique within the library.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -566,7 +566,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-038",
         tier: Tier::T1,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Assertions of type `arithmetic`/`range`/`temporal` SHOULD include `expression`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -576,7 +576,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-039",
         tier: Tier::T1,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Assertions of type `source-grounded`/`consistency` SHOULD include `fields`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -586,7 +586,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-040",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`consistency` assertions `referenceStage` MUST refer to an earlier pipeline stage.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -596,7 +596,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-041",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Pipeline-stage assertion ids MUST exist in the targeted assertion library.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -606,7 +606,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-042",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "FEL expressions in assertion `expression` fields MUST be syntactically valid.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -616,7 +616,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-043",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "FEL expressions in delegation `conditions` MUST be syntactically valid.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -626,7 +626,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-044",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Delegation `expirationDate` MUST be strictly after `effectiveDate`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -636,7 +636,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-045",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Delegation `revokedDate` MUST be on or after `effectiveDate`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -646,7 +646,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-046",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Delegation `delegator`/`delegate` MUST reference declared kernel actors.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -656,7 +656,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-047",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Parameter `values` entries MUST be in ascending `effectiveDate` order.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -666,7 +666,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-048",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Binding `id` MUST match the key under which it appears in the `bindings` map.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -676,7 +676,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-050",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Resolved parameter value MUST be type-consistent with declared `type`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -686,7 +686,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-053",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Sub-delegation is only permitted if the original delegation explicitly allows it.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -696,7 +696,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-055",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`expectedDuration` MUST be an ISO 8601 duration or the literal `\"indefinite\"`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -706,7 +706,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-056",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Binding `resolutionDateRef` MUST reference a field path in kernel case state.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -716,7 +716,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-057",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Binding `values` entries MUST be in ascending `effectiveDate` order.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -726,7 +726,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-058",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Each Holiday entry MUST specify exactly one of `date` or `rule`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -736,7 +736,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-059",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Operating hours `end` MUST be strictly after `start`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -746,7 +746,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-060",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Business Calendar target requires SLA evaluation in business days.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -756,7 +756,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-062",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Adverse-decision templates MUST cover determination, reasons, rights, and instructions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -766,7 +766,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-063",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Notification template keys MUST resolve to a template in a targeting sidecar.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -776,7 +776,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-065",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Notification template section `id` values MUST be unique within a template.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -786,7 +786,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-066",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "BreachPolicy escalationStepId MUST resolve within the task pattern.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -797,7 +797,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "I-001",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`outputBinding` JSONPath MUST NOT use filter expressions or recursive descent.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -808,7 +808,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-001",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Final states MUST NOT have outgoing transitions.",
         fixtures: &["crates/wos-conformance/fixtures/K-001-negative-final-transitions.json"],
         graduation: Graduation::Tested,
@@ -818,7 +818,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-002",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Compound states MUST have `initialState` and `states`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -828,7 +828,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-003",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Parallel states MUST have `regions`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -838,7 +838,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-004",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`cancellationPolicy` MUST only appear on `parallel` states.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -848,7 +848,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-005",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`historyState` MUST only appear on `compound` states.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -858,7 +858,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-006",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Transition `target` MUST reference an existing state.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -868,7 +868,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-007",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Event names MUST NOT use the `$` prefix (kernel-reserved).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -878,7 +878,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-008",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Parallel state outgoing transitions MUST use `$join` as event.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -888,7 +888,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-009",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Actor identifiers MUST be unique.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -898,7 +898,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-010",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "createTask `assignTo` MUST reference a declared kernel actor.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -908,7 +908,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-012",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Guards MUST be valid FEL expressions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -918,7 +918,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-013",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Milestone conditions MUST be valid FEL expressions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -928,7 +928,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-014",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Milestone `id` values MUST be unique.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -938,7 +938,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-015",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`setData` path MUST reference a declared `caseFile.fields` entry.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -948,7 +948,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-017",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "FEL guards MUST NOT reference related case state.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -958,7 +958,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-019",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "FEL functions MUST be declared built-ins or registered extensions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -968,7 +968,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-021",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Provenance `actorId` MUST reference a declared actor.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -978,7 +978,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-022",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Digest present implies algorithm recorded in extensions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -988,7 +988,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-029",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`startTimer` MUST specify exactly one of `duration` or `deadline`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -998,7 +998,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-030",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Extension keys MUST be `x-` prefixed.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1008,7 +1008,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-037",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Fail-fast `$join` fires only on an error final state.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1018,7 +1018,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-048",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Non-standard case relationship `type` values MUST use `x-` prefix.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1031,7 +1031,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-049",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles.",
         fixtures: &[
             "fixtures/validation/k-049-load-bearing-self-loop.json",
@@ -1046,7 +1046,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-050",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Final state `outcomeCode` MUST NOT duplicate any entry in `tags` (Kernel S4.3).",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1060,7 +1060,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-EXT-002",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "`x-wos-*` namespace is reserved for future normative WOS use.",
         fixtures: &[
             "fixtures/validation/x-wos-reserved-warn.json",
@@ -1074,7 +1074,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SCHEMA-DOC-001",
         tier: Tier::T1,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Schema leaf properties MUST carry sufficient `description` and `examples`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1085,7 +1085,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-001",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature Profile `targetWorkflow.url` MUST match the loaded kernel URL.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1095,7 +1095,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-002",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature Profile roles MUST reference declared kernel actors.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1105,7 +1105,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-003",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature Profile roles MUST bind to human kernel actors.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1115,7 +1115,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-004",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature role authenticationPolicyKey values MUST resolve.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1125,7 +1125,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-005",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature signing-step roleId values MUST resolve.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1135,7 +1135,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-006",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature signing-step documentId values MUST resolve.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1145,7 +1145,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-007",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature signing-step dependencies MUST resolve and MUST NOT cycle.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1155,7 +1155,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-008",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Routed signing guards MUST parse as valid FEL.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1165,7 +1165,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-009",
         tier: Tier::T2,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Signature lifecycle tags SHOULD appear in the target kernel.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1175,7 +1175,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-010",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature reminder and expiry events MUST map to kernel events.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1187,7 +1187,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-011",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "SignatureAffirmation evidence inputs MUST be satisfiable.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1197,7 +1197,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "SIG-012",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature Profile fields MUST follow Ref/Key/Id naming conventions.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1208,7 +1208,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "VR-003",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "`counterexample` MUST be present when result is `proven-unsafe`.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -1225,7 +1225,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "WOS-AGENT-XREF-001",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Every actor with `type=='agent'` MUST have a matching `agents[].id`.",
         fixtures: &[],
         graduation: Graduation::Tested,
@@ -1237,7 +1237,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "WOS-SIG-COVER-001",
         tier: Tier::T2,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Signature-gated transitions MUST be covered by a `signature.signers[]` entry.",
         fixtures: &[],
         graduation: Graduation::Tested,
@@ -1249,7 +1249,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "WOS-VER-LEVEL-001",
         tier: Tier::T1,
-        severity: Severity::Warning,
+        severity: LintSeverity::Warning,
         summary: "Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings.",
         fixtures: &[],
         graduation: Graduation::Tested,

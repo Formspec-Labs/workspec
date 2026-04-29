@@ -8,14 +8,14 @@
 //! rule-coverage tooling (planned follow-up) can treat T1/T2 lint rules
 //! and T3 runtime rules uniformly.
 //!
-//! Metadata types (`RuleMetadata`, `Tier`, `Graduation`, `Severity`) are
+//! Metadata types (`RuleMetadata`, `Tier`, `Graduation`, `LintSeverity`) are
 //! re-exported from `wos-lint` to keep the ladder definition singular.
 
 // Use the registry Tier (wos_lint::rules::Tier) explicitly so this module
 // stays decoupled from the diagnostic::Tier added in §5.2, which wos_lint
 // now re-exports under the same short name.
 pub use wos_lint::rules::{Graduation, Tier};
-pub use wos_lint::{RuleMetadata, Severity};
+pub use wos_lint::{LintSeverity, RuleMetadata};
 
 /// Return the full static registry of currently-implemented T3 conformance rules.
 ///
@@ -42,7 +42,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-001",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Processor MUST implement agent registration (AI S3).",
         fixtures: &[
             "crates/wos-conformance/tests/fixtures/ai-005-no-override-human.json",
@@ -62,7 +62,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-002",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Processor MUST implement the confidence framework (AI S7).",
         fixtures: &[
             "crates/wos-conformance/tests/fixtures/ai-034-confidence-report-required.json",
@@ -78,7 +78,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-004",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Processor MUST delegate Formspec evaluation to a conformant processor.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -90,7 +90,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-050",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Assist Governance Proxy MUST NOT modify conformance requirements.",
         fixtures: &[],
         graduation: Graduation::Draft,
@@ -105,7 +105,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-AUTO-001",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Escalation expiry MUST revoke elevated autonomy and emit an autonomyDemotion record (AI S5.5).",
         fixtures: &[
             "crates/wos-conformance/fixtures/AI-AUTO-001-escalation-expiry-revocation.json",
@@ -123,7 +123,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "AI-AUTO-002",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Drift-alert thresholds with action=demoteToAssistive MUST emit autonomyDemotion + driftReclassification and reroute the event through escalation (AI S5.5).",
         fixtures: &["crates/wos-conformance/fixtures/AI-AUTO-002-drift-alert-demotion.json"],
         graduation: Graduation::Tested,
@@ -135,7 +135,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-051",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Governance Basic processor MUST enforce due process and review protocols.",
         fixtures: &[
             "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
@@ -159,7 +159,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "G-052",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Governance Complete processor MUST enforce all normative sections.",
         fixtures: &[
             "crates/wos-conformance/tests/fixtures/g-002-notice-before-adverse.json",
@@ -190,7 +190,7 @@ static ALL_CONFORMANCE_RULES: &[RuleMetadata] = &[
     RuleMetadata {
         id: "K-DET-001",
         tier: Tier::T3,
-        severity: Severity::Error,
+        severity: LintSeverity::Error,
         summary: "Determination-tagged transitions MUST emit the pre-transition case-file snapshot in Facts-tier provenance.",
         fixtures: &["crates/wos-conformance/tests/fixtures/k-det-001-determination-snapshot.json"],
         graduation: Graduation::Tested,

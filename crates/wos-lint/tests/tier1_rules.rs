@@ -10,31 +10,31 @@
 // Rule IDs match LINT-MATRIX.md exactly (K-001, G-037, AI-041, etc.).
 
 use serde_json::json;
-use wos_lint::{Severity, lint_document};
+use wos_lint::{LintSeverity, lint_document};
 
 // ── Helpers ────────────────────────────────────────────────────
 
-fn lint(doc: serde_json::Value) -> Vec<wos_lint::Diagnostic> {
+fn lint(doc: serde_json::Value) -> Vec<wos_lint::LintDiagnostic> {
     let json_str = serde_json::to_string(&doc).expect("serialization failed");
     lint_document(&json_str).expect("lint_document returned Err")
 }
 
-fn has_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> bool {
+fn has_rule(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> bool {
     diagnostics.iter().any(|d| d.rule_id == rule_id)
 }
 
-fn count_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> usize {
+fn count_rule(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> usize {
     diagnostics.iter().filter(|d| d.rule_id == rule_id).count()
 }
 
-fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Severity> {
+fn severity_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<LintSeverity> {
     diagnostics
         .iter()
         .find(|d| d.rule_id == rule_id)
         .map(|d| d.severity)
 }
 
-fn path_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<String> {
+fn path_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<String> {
     diagnostics
         .iter()
         .find(|d| d.rule_id == rule_id)
@@ -117,7 +117,7 @@ fn k001_final_state_with_transitions_flagged() {
         has_rule(&diags, "K-001"),
         "expected K-001 diagnostic, got: {diags:?}"
     );
-    assert_eq!(severity_of(&diags, "K-001"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "K-001"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -991,7 +991,7 @@ fn k021_provenance_actor_not_declared_flagged() {
     );
     let diags = lint(doc);
     assert!(has_rule(&diags, "K-021"), "expected K-021: {diags:?}");
-    assert_eq!(severity_of(&diags, "K-021"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "K-021"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1040,7 +1040,7 @@ fn g037_duplicate_assertion_id_flagged() {
     ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-037"), "expected G-037: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-037"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-037"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1060,7 +1060,7 @@ fn g038_arithmetic_without_expression_flagged() {
     ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-038"), "expected G-038: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-038"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-038"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1091,7 +1091,7 @@ fn g039_source_grounded_without_fields_flagged() {
     ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-039"), "expected G-039: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-039"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-039"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1134,7 +1134,7 @@ fn g044_expiration_before_effective_flagged() {
     ]));
     let diags = lint(doc);
     assert!(has_rule(&diags, "G-044"), "expected G-044: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-044"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-044"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1820,7 +1820,7 @@ fn ai049_narrative_authoritative_true_flagged() {
     });
     let diags = lint(doc);
     assert!(has_rule(&diags, "AI-049"), "expected AI-049: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-049"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "AI-049"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1836,7 +1836,7 @@ fn ai049_narrative_authoritative_missing_warns() {
         has_rule(&diags, "AI-049"),
         "expected AI-049 warning: {diags:?}"
     );
-    assert_eq!(severity_of(&diags, "AI-049"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "AI-049"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1979,7 +1979,7 @@ fn i001_filter_expression_in_output_binding_flagged() {
     assert!(has_rule(&diags, "I-001"), "expected I-001: {diags:?}");
     assert_eq!(
         severity_of(&diags, "I-001"),
-        Some(Severity::Error),
+        Some(LintSeverity::Error),
         "I-001 must be Error: {diags:?}"
     );
 }
@@ -1991,7 +1991,7 @@ fn i001_recursive_descent_in_output_binding_flagged() {
     }));
     let diags = lint(doc);
     assert!(has_rule(&diags, "I-001"), "expected I-001: {diags:?}");
-    assert_eq!(severity_of(&diags, "I-001"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "I-001"), Some(LintSeverity::Error));
 }
 
 #[test]

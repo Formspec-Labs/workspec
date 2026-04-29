@@ -7,18 +7,18 @@
 //! Integration Profile documents and assert the expected diagnostic outcomes.
 
 use serde_json::json;
-use wos_lint::{Severity, lint_document};
+use wos_lint::{LintSeverity, lint_document};
 
-fn lint(doc: serde_json::Value) -> Vec<wos_lint::Diagnostic> {
+fn lint(doc: serde_json::Value) -> Vec<wos_lint::LintDiagnostic> {
     let json_str = serde_json::to_string(&doc).expect("serialization failed");
     lint_document(&json_str).expect("lint_document returned Err")
 }
 
-fn has_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> bool {
+fn has_rule(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> bool {
     diagnostics.iter().any(|d| d.rule_id == rule_id)
 }
 
-fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Severity> {
+fn severity_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<LintSeverity> {
     diagnostics
         .iter()
         .find(|d| d.rule_id == rule_id)
@@ -57,7 +57,7 @@ fn i001_outputbinding_filter_rejected() {
     );
     assert_eq!(
         severity_of(&diags, "I-001"),
-        Some(Severity::Error),
+        Some(LintSeverity::Error),
         "I-001 must be Error severity so definition load fails: {diags:?}"
     );
 }
@@ -89,7 +89,7 @@ fn i001_outputbinding_recursive_descent_rejected() {
         has_rule(&diags, "I-001"),
         "expected I-001 for recursive descent, got: {diags:?}"
     );
-    assert_eq!(severity_of(&diags, "I-001"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "I-001"), Some(LintSeverity::Error));
 }
 
 /// Fixture: Integration profile using only supported outputBinding features.

@@ -48,7 +48,7 @@ pub async fn wos_lint(
     let diag_values: Vec<Value> = diagnostics
         .iter()
         .map(|d| {
-            let severity_str = if d.severity == wos_lint::Severity::Error {
+            let severity_str = if d.severity == wos_lint::LintSeverity::Error {
                 error_count += 1;
                 "error"
             } else {

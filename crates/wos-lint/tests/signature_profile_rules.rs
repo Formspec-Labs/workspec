@@ -11,13 +11,13 @@
 
 use std::io::Write;
 
-fn has_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> bool {
+fn has_rule(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> bool {
     diagnostics
         .iter()
         .any(|diagnostic| diagnostic.rule_id == rule_id)
 }
 
-fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::Diagnostic> {
+fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::LintDiagnostic> {
     let dir = tempfile::tempdir().expect("temp dir");
     for (filename, doc) in &docs {
         let path = dir.path().join(filename);
@@ -135,7 +135,7 @@ fn signature_profile_valid_project_is_clean_for_sig_errors() {
     let sig_errors: Vec<_> = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.rule_id.starts_with("SIG-"))
-        .filter(|diagnostic| diagnostic.severity == wos_lint::Severity::Error)
+        .filter(|diagnostic| diagnostic.severity == wos_lint::LintSeverity::Error)
         .collect();
     assert!(
         sig_errors.is_empty(),

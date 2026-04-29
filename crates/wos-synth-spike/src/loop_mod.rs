@@ -6,7 +6,7 @@
 //!
 //! 1. Call the Anthropic API with a generation prompt built from the problem text.
 //! 2. Parse the response as JSON.
-//! 3. Run [`wos_lint::lint_document`] on the raw JSON string.
+//! 3. Run [`wos_lint::lint_document`] on the raw JSON string (returns [`LintDiagnostic`]).
 //! 4. If error-severity diagnostics remain and the iteration cap has not been
 //!    hit, build a repair prompt and loop back to step 1.
 //! 5. Once lint passes, run [`wos_conformance::run_fixture`] on a minimal
@@ -90,7 +90,7 @@ pub async fn synthesize(problem: &str, anthropic_key: &str) -> Result<Value, Spi
         // Collect only error-severity findings — warnings and info are fine.
         let errors: Vec<String> = diagnostics
             .iter()
-            .filter(|d| d.severity == wos_lint::Severity::Error)
+            .filter(|d| d.severity == wos_lint::LintSeverity::Error)
             .map(|d| d.to_string())
             .collect();
 
@@ -167,7 +167,7 @@ async fn gate_on_conformance(
     let lint_errors: Vec<String> = wos_lint::lint_document(&canonical)
         .map_err(classify_lint_error)?
         .into_iter()
-        .filter(|d| d.severity == wos_lint::Severity::Error)
+        .filter(|d| d.severity == wos_lint::LintSeverity::Error)
         .map(|d| d.to_string())
         .collect();
     if !lint_errors.is_empty() {

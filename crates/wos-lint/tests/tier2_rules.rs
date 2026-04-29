@@ -12,22 +12,22 @@
 use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;
-use wos_lint::Severity;
+use wos_lint::LintSeverity;
 
 // ── Helpers ────────────────────────────────────────────────────
 
-fn has_rule(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> bool {
+fn has_rule(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> bool {
     diagnostics.iter().any(|d| d.rule_id == rule_id)
 }
 
-fn severity_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<Severity> {
+fn severity_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<LintSeverity> {
     diagnostics
         .iter()
         .find(|d| d.rule_id == rule_id)
         .map(|d| d.severity)
 }
 
-fn path_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<String> {
+fn path_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<String> {
     diagnostics
         .iter()
         .find(|d| d.rule_id == rule_id)
@@ -35,7 +35,7 @@ fn path_of(diagnostics: &[wos_lint::Diagnostic], rule_id: &str) -> Option<String
 }
 
 /// Write multiple WOS documents to a temporary directory and run `lint_project`.
-fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::Diagnostic> {
+fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::LintDiagnostic> {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     for (filename, doc) in &docs {
         let path = dir.path().join(filename);
@@ -151,7 +151,7 @@ fn g034_target_workflow_mismatch_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-034"), "expected G-034: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-034"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-034"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn g011_review_tag_not_in_kernel_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-011"), "expected G-011: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-011"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-011"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn g029_resume_trigger_not_a_kernel_event_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-029"), "expected G-029: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-029"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-029"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -451,7 +451,7 @@ fn g022_actor_in_both_potential_and_excluded_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-022"), "expected G-022: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-022"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-022"), Some(LintSeverity::Warning));
 }
 
 // ========================================================================
@@ -1190,7 +1190,7 @@ fn g003_rights_impacting_notice_missing_fields_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-003"), "expected G-003: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-003"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-003"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1244,7 +1244,7 @@ fn g008_continuation_of_services_without_hold_tag_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-008"), "expected G-008: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-008"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-008"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1305,9 +1305,9 @@ fn g023_sla_without_business_calendar_type_flagged() {
         ("business-calendar.json", calendar),
     ]);
     assert!(has_rule(&diags, "G-023"), "expected G-023: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-023"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-023"), Some(LintSeverity::Warning));
     assert!(has_rule(&diags, "G-060"), "expected G-060: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-060"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-060"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1406,7 +1406,7 @@ fn g063_notice_template_key_without_sidecar_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-063"), "expected G-063: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-063"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-063"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1521,7 +1521,7 @@ fn g066_unknown_escalation_step_id_flagged() {
 
     let diags = lint_project_with_docs(vec![("governance.json", gov)]);
     assert!(has_rule(&diags, "G-066"), "expected G-066: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-066"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-066"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -1699,7 +1699,7 @@ fn g060_sla_violation_runs_without_kernel() {
         ("business-calendar.json", calendar),
     ]);
     assert!(has_rule(&diags, "G-060"), "expected G-060: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-060"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "G-060"), Some(LintSeverity::Error));
     assert!(has_rule(&diags, "G-023"), "expected G-023: {diags:?}");
 }
 
@@ -1714,7 +1714,7 @@ fn g024_determination_without_delegation_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-024"), "expected G-024: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-024"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-024"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1756,7 +1756,7 @@ fn g036_review_protocols_without_independence_constraint_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
     assert!(has_rule(&diags, "G-036"), "expected G-036: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-036"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "G-036"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1826,7 +1826,7 @@ fn ai026_escalation_without_expiry_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-026"), "expected AI-026: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-026"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "AI-026"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1896,7 +1896,7 @@ fn ai031_output_contract_mismatch_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("ai-integration.json", ai)]);
     assert!(has_rule(&diags, "AI-031"), "expected AI-031: {diags:?}");
-    assert_eq!(severity_of(&diags, "AI-031"), Some(Severity::Warning));
+    assert_eq!(severity_of(&diags, "AI-031"), Some(LintSeverity::Warning));
 }
 
 #[test]
@@ -1961,7 +1961,7 @@ fn k010_action_assign_to_undeclared_actor_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(has_rule(&diags, "K-010"), "expected K-010: {diags:?}");
-    assert_eq!(severity_of(&diags, "K-010"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "K-010"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -2059,7 +2059,7 @@ fn k037_fail_fast_without_error_final_flagged() {
 
     let diags = lint_project_with_docs(vec![("kernel.json", kernel)]);
     assert!(has_rule(&diags, "K-037"), "expected K-037: {diags:?}");
-    assert_eq!(severity_of(&diags, "K-037"), Some(Severity::Error));
+    assert_eq!(severity_of(&diags, "K-037"), Some(LintSeverity::Error));
 }
 
 #[test]
@@ -2251,7 +2251,7 @@ fn ag012_quantifier_in_verifiable_constraint_flagged() {
     );
     assert_eq!(
         severity_of(&diags, "AG-012"),
-        Some(Severity::Warning),
+        Some(LintSeverity::Warning),
         "AG-012 should be a warning (manual review needed)"
     );
 }
@@ -2630,7 +2630,7 @@ fn ai023_severity_is_error() {
     assert!(has_rule(&diags, "AI-023"), "expected AI-023: {diags:?}");
     assert_eq!(
         severity_of(&diags, "AI-023"),
-        Some(Severity::Error),
+        Some(LintSeverity::Error),
         "AI-023 should be error severity (MUST violation when no agent-free path exists)"
     );
 }

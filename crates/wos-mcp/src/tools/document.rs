@@ -65,7 +65,7 @@ pub async fn wos_load_document(
     // Treat any error-severity diagnostic as a blocking validation failure.
     if let Some(first_error) = diagnostics
         .iter()
-        .find(|d| d.severity == wos_lint::Severity::Error)
+        .find(|d| d.severity == wos_lint::LintSeverity::Error)
     {
         return Err(ToolError::ValidationFailed(first_error.message.clone()));
     }

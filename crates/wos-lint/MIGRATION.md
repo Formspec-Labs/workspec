@@ -1,15 +1,14 @@
 # wos-lint: LintDiagnostic migration guide
 
-`wos-lint` now emits structured `LintDiagnostic` objects instead of the
-minimal `Diagnostic` type it used previously. This guide explains what
-changed, why it changed, and how to update code that depends on this crate.
+`wos-lint` emits structured `LintDiagnostic` values. This guide documents the
+shape, why it exists, and how to migrate older call sites that still assumed
+JSON Pointer paths or a slimmer diagnostic struct.
 
 ## What changed
 
-### Old shape (`Diagnostic`)
+### Historical shape (removed)
 
-Previously all lint functions returned `Vec<Diagnostic>`, where `Diagnostic`
-carried only four fields:
+Older releases returned a minimal `Diagnostic` with only four fields:
 
 ```rust
 pub struct Diagnostic {
@@ -92,52 +91,22 @@ process diagnostics incrementally).
 (`$.lifecycle.states.submitted`). Code that constructs JSON Pointer strings
 to match diagnostic paths must be updated.
 
-**Severity enum type changed:** old code compared against `wos_lint::Severity`;
-new code compares against `wos_lint::LintSeverity`. Both are exported for the
-transition period.
+**Severity enum:** compare against `wos_lint::LintSeverity` (`Error`, `Warning`, `Info`).
 
 ## How to update your code
 
-### Option 1 — use the new structured API (recommended)
-
-Switch from `lint_document` to `lint_document_structured`:
+`lint_document`, `lint_project`, and `lint_schema` return `Vec<LintDiagnostic>` directly.
+The legacy `Diagnostic` and `Severity` types and the `*_structured` function names were removed.
 
 ```rust
-// Before
-use wos_lint::{lint_document, Diagnostic, Severity};
-let diagnostics: Vec<Diagnostic> = lint_document(&json)?;
-for d in &diagnostics {
-    if d.severity == Severity::Error { ... }
-}
+use wos_lint::{lint_document, LintDiagnostic, LintSeverity};
 
-// After
-use wos_lint::{lint_document_structured, LintDiagnostic, LintSeverity};
-let diagnostics: Vec<LintDiagnostic> = lint_document_structured(&json)?;
+let diagnostics: Vec<LintDiagnostic> = lint_document(&json)?;
 for d in &diagnostics {
-    if d.severity == LintSeverity::Error { ... }
-    // d.tier, d.suggested_fix, d.related_docs now available
+    if d.severity == LintSeverity::Error { /* ... */ }
+    // d.tier, d.suggested_fix, d.related_docs, d.source
 }
 ```
-
-The structured equivalents for all three public lint functions:
-
-| Legacy | Structured |
-|--------|------------|
-| `lint_document(json)` | `lint_document_structured(json)` |
-| `lint_project(dir)` | `lint_project_structured(dir)` |
-| `lint_schema(schema_json)` | `lint_schema_structured(schema_json)` |
-
-### Option 2 — keep the legacy API (no immediate changes needed)
-
-The legacy `lint_document`, `lint_project`, and `lint_schema` functions still
-exist and still return `Vec<Diagnostic>`. They now delegate to the structured
-versions and convert results via `From<LintDiagnostic> for Diagnostic`. No
-callsite changes are required for code that only reads `rule_id`, `path`,
-`message`, and `severity`.
-
-Note: the legacy `Diagnostic` type loses `tier`, `suggested_fix`,
-`related_docs`, and `source` in the conversion. Migrate to the structured API
-when you need those fields.
 
 ### Output formatting
 
@@ -157,13 +126,7 @@ let json = output::format_json(&diagnostics);
 let sarif = output::format_sarif(&diagnostics);
 ```
 
-## Backward-compatible callers
+## Workspace callers
 
-The following crates in this workspace use the legacy API and have been
-verified to compile without changes:
-
-- `crates/wos-mcp` — uses `lint_document` → `Vec<Diagnostic>`
-- `crates/wos-conformance` — uses `lint_document` → `Vec<Diagnostic>`
-
-When those crates are ready to consume structured diagnostics (e.g., to
-surface `suggested_fix` in repair loops), switch to the `_structured` variants.
+Downstream crates (`wos-mcp`, `wos-server`, `wos-synth-core`, `wos-conformance`, etc.)
+use `lint_document` / `lint_project` / `lint_schema` with `LintDiagnostic` and `LintSeverity`.
