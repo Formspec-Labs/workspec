@@ -22,42 +22,45 @@ Compact dependency-ordered view of open work. **`→`** marks a hard dependency;
 
 **Today's bar (dev/PoC, working).** Single-process server runs: SQLite + in-memory `WosRuntime` + JWT or mock auth + WOS-T4 signature semantics + §15.7 ledger gating + governance evaluation + intake acceptance (Formspec coprocessor) + dashboard reads + Hold CRUD + `SignatureAffirmation` read surface + JSON-LD context + chain-integrity verify + provenance/PROV-O/XES/OCEL exports. Phase 1 sprint closed 2026-04-25..28 (auth tightening, typed `RequireRole<R>`, `AppRuntimeConfig` seam, typed `HoldService`, session-table sweep, policy-resolve `GET`, calibration enforcement, semantic mount).
 
-**Production bar (SBA-shape deployment, missing).** Persistent Trellis-backed event store; production runtime substrate; externally-verifiable signing + Trellis hand-off; real integration dispatch; per-actor read AuthZ; legal-sufficiency surfaces. Dependency-ordered critical path:
+**Production bar (SBA-shape deployment, missing).** Persistent Trellis-backed event store; production runtime substrate; externally-verifiable signing + Trellis hand-off; real integration dispatch; per-actor read AuthZ. Dependency-ordered critical path (status as of 2026-04-29 — `[✓]` closed, `[◐]` partial, `[ ]` unstarted):
 
 ```
-1. Adapter split (structural prereq for everything below — Cargo enforces what conventions cannot)
-   WS-084 (ports crate)
-     → WS-085 (sqlite) ∥ WS-086 (auth-jwt) ∥ WS-087 (auth-mock) ∥ WS-088 (runtime-local + 3 layered traits)
-     → WS-089 (feature gating + composition root)
-     → WS-081 (adapter author guide)
+1. Adapter split — [✓] CLOSED 2026-04-29
+   WS-084 ✓ ports crate │ WS-085 ✓ sqlite │ WS-086 ✓ auth-jwt │ WS-087 ✓ auth-mock
+   WS-088 ✓ runtime-local (3 layered traits) │ WS-089 ✓ feature gating + composition root │ WS-081 ✓ author guide
+   → Cargo now enforces the seams; adapter cluster is the structural floor everything below builds on.
 
-2. Persistence (interim dual-port scaffold; converges to single Trellis-backed EventStore per VISION §VIII)
-   WS-095 (eventstore-embedded — parent PLN-0387 — tests/CI/local dev path)
-     ∥ WS-020 (Postgres operational Storage — gated parent PLN-0368 cross-submodule path-dep)
-     ∥ WS-090 (AuditSink Postgres-append-only — wire shape gated parent PLN-0385 four-field append)
-     → WS-021 (StorageKind dispatch close-out marker)
+2. Persistence — [◐] PARTIAL (interim dual-port scaffold; converges to single Trellis-backed EventStore per VISION §VIII)
+   WS-020 [◐] Postgres operational Storage — full trait + SQLite/Postgres parity fixtures landed; broader matrix + CI container orchestration open
+   WS-090 [◐] AuditSink — explicit txn for provenance/export + deterministic failure injection landed; same-txn co-write with operational Storage open. Wire shape gated parent PLN-0385 four-field append.
+   WS-095 [ ] eventstore-embedded — parent PLN-0387 execution home; unstarted
+   → WS-021 [ ] StorageKind dispatch close-out marker (auto-closes on WS-089 ✓ + WS-020 close)
 
 3. Signing (unblocks WS-030 wosDisclosure auto-fire on exports)
-   WS-080-FOLLOWUP (validator/access/external/clock seam wiring — gated upstream wos-core Box<dyn>)
-     → WS-043 (Ed25519FileKeySigner reference impl)
+   WS-080-FOLLOWUP [ ] validator/access/external/clock seam wiring
+     ⇒ HARD-GATED upstream: needs `wos-core::traits` `Box<dyn>` blanket impls before the seams can route through `AppRuntimeConfig`. Don't push on this from the server side.
+   WS-043 [ ] Ed25519FileKeySigner reference impl — gate WS-024 ✓; recommended after WS-088 ✓ (now satisfied) so impl lands in `wos-server-runtime-local` first time.
 
 4. Production runtime (the named production target per parent CLAUDE.md)
-   WS-094 (Restate RuntimeAdapter — wraps Restate Rust SDK behind WS-088 layered traits)
+   WS-094 [◐] Restate RuntimeAdapter — create/load/enqueue/drain/drain-until-idle in-memory + unit fixtures; concrete Restate SDK durability wiring open. Behind WS-088 ✓ layered traits.
      [role-narrows WS-020 InstanceRow.instance_json from source-of-truth → CDC projection]
 
 5. Real integrations (correlation-token wiring is a trait-signature change — do once, before more adapters)
-   WS-028 (IntegrationDispatchService — replaces EchoExternalService; HTTP/Arazzo/CWL/Event bindings)
+   WS-028 [◐] IntegrationDispatchService — HTTP dispatch + correlation-token emission + response capture landed; non-HTTP bindings (Arazzo / CWL / Event) return accepted-fallback pending full adapter matrix.
 
-6. Externally-verifiable hand-off (cert-of-completion bytes closed by Trellis ADR 0007 — Wave 22)
-   WS-093 (WOS → Trellis exporter — gated parent PLN-0384 wos.* namespace ratification)
-     → WS-030 (wosDisclosure block on PROV-O/XES/OCEL exports — auto-relevant once signer makes claims)
+6. Externally-verifiable hand-off (cert-of-completion bytes closed by Trellis ADR 0007 — Wave 22; WS-093 emits catalog row, does NOT author COC bytes)
+   WS-093 [ ] WOS → Trellis exporter — gated WS-090 close + parent PLN-0384 wos.* namespace ratification. Co-lands with `trellis-interop-c2pa` (trellis/TODO.md #2).
+   → WS-030 [ ] wosDisclosure block on PROV-O/XES/OCEL exports — auto-relevant once a real signer (WS-043) makes claims.
 
 7. Read-side AuthZ (writes already role-gated via WS-003 + WS-083; reads leak rights-impacting data)
-   WS-091 (per-actor read scoping — actor-identity strategy decision pending in design pass)
+   WS-091 [ ] per-actor read scoping — actor-identity strategy decision pending in design pass.
 
-8. Legal-sufficiency surface (load-bearing for SBA adopter)
-   WS-036 (adverse-decision notice rendering — Gov §3.2 grace period + appeal window + right-to-contest)
+8. Legal-sufficiency surface — [✓] CLOSED 2026-04-28
+   WS-036 ✓ adverse-decision notice rendering (Gov §3.2 grace period + appeal window + right-to-contest)
+     POST /api/governance/:url/notices/:template/render — service + 4 fixtures shipped.
 ```
+
+**True remaining blockers, in order of leverage:** drive WS-020 / WS-090 to close (step 2 partial → done) → WS-095 (step 2 unstarted) → WS-094 Restate SDK durability (step 4 partial → done) → WS-043 (step 3, gate WS-024 already ✓) → WS-093 + WS-030 (step 6) → WS-028 non-HTTP bindings (step 5) → WS-091 (step 7). WS-080-FOLLOWUP is gated upstream — don't sequence around it.
 
 **Trigger-gated, not blocking core function** (defer until parent ratification or external trigger): WS-072 / WS-073 / WS-076 (ADR 0066 / 0067 reference-server prove-outs); WS-075 (#66g cross-stack §15 conformance); WS-040 (gated parent **#36** equity safe-subset spec); WS-042 (gated `wos-runtime::migrate`); WS-033 (gated parent **#38** G-064 lint); WS-096 / WS-097 / WS-098 / WS-099 (parent stack-closure cluster PLN-0388 / PLN-0391 / PLN-0398 / PLN-0382 ratification); WS-044–WS-048 (consumer-demand-gated); WS-004 / WS-006 / WS-023 (consumer-demand-gated). **WS-098** DocuSign admin surface is the largest deferred slice — pulled into 1.0 per VISION §X but Trigger-activated; complements the workflow-tier slice ([T4-TODO.md](../../T4-TODO.md)) without expanding it.
 
@@ -67,7 +70,7 @@ Compact dependency-ordered view of open work. **`→`** marks a hard dependency;
 
 **Phase 1 — foundation (four tracks in parallel):**
 
-- **Track A — adapter split (workspace refactor):** **WS-084** → (**WS-085** ∥ **WS-086** ∥ **WS-087** ∥ **WS-088**) → **WS-089** → **WS-081**
+- **Track A — adapter split (workspace refactor):** **(✓ 2026-04-29)** **WS-084** → (**WS-085** ∥ **WS-086** ∥ **WS-087** ∥ **WS-088**) → **WS-089** → **WS-081** — see [`COMPLETE.md`](COMPLETE.md).
 - **Track B — finish auth tightening (Supervisor-write scope only):** **(✓)** **WS-003** → **WS-002** → **WS-009** — see [`COMPLETE.md`](COMPLETE.md).
 - **Track C — DI hygiene cleanups:** **(✓)** **WS-082** ∥ **WS-083** — see [`COMPLETE.md`](COMPLETE.md).
 - **Track D — cheap docs:** **(✓)** **WS-057**; **WS-058** — see [`COMPLETE.md`](COMPLETE.md).
@@ -124,11 +127,13 @@ All blocking decisions resolved 2026-04-25. Remaining input touchpoints are with
 ## Outstanding follow-ups (next session, priority order)
 
 0. **2026-04-29 review-findings closure pass (address-all-review-findings).**
-   - `wos-server-sqlite` now fully owns the SQLite adapter + crate-local migrations (`./migrations`); no `#[path]` boundary bleed-through.
-   - Auth/scaffold feature matrix tightened: explicit unsupported-backend tests for auth feature-off paths + runtime-restate startup matrix signal.
-   - Integration invoke coverage now includes HTTP-dispatch success, invalid-method 400, network-failure 503, and non-JSON payload fallback branches.
-   - Runtime-local persistence coverage now includes audit-failure-on-save continuity and runtime-aux round-trip assertions.
-   - `wos-server-postgres` guardrail clarified: Trellis canonical-store handle kept as explicit invariant (operational tables here, canonical envelopes in Trellis), plus skip messaging when postgres binaries are unavailable.
+   - `wos-server-sqlite` now fully owns the SQLite adapter + crate-local migrations (`./migrations`); no `#[path]` boundary bleed-through. Stale duplicate at `crates/wos-server/src/storage/sqlite.rs` deleted along with the no-longer-referenced `crates/wos-server/migrations/` directory; richer-schema migrations (with operational indexes) preserved by relocating into `crates/wos-server-sqlite/migrations/`.
+   - Auth/scaffold feature matrix tightened: explicit unsupported-backend tests for auth feature-off paths + runtime-restate startup matrix signal + explicit `default_feature_matrix_builds_cleanly` happy-path test + `audit_postgres_rejected_when_feature_disabled` typed-error test in `tests/adapter_scaffolds.rs`.
+   - Runtime-restate-stub feature compiles the Restate scaffold branch via `cfg(any(feature = "runtime-restate", feature = "runtime-restate-stub"))` — verified by `cargo check -p wos-server --no-default-features --features runtime-restate-stub,storage-sqlite,auth-mock`.
+   - Integration invoke coverage now includes HTTP-dispatch success, invalid-method 400, network-failure 503, and non-JSON payload fallback branches (13 tests in `tests/http_coverage_slice_c.rs`, all green).
+   - Runtime-local persistence coverage now includes audit-failure-on-save continuity, replay-entry roundtrip (PersistDraft + Submission + Intake variants), aux/step-results roundtrip, and explicit `create_record_persists_instance_and_seeds_audit_sink` provenance-append-on-create assertion (4 tests in `wos-server-runtime-local/src/runtime_store.rs`).
+   - `wos-server-postgres` guardrail clarified: Trellis canonical-store handle kept as explicit invariant (operational tables here, canonical envelopes in Trellis), `trellis_pool()` accessor added so the future `EventStore` adapter can route canonical envelope appends through the Trellis-owned pool. Test DSN resolution now prefers `WOS_POSTGRES_TEST_URL` then `DATABASE_URL` before falling back to the ephemeral `initdb`/`pg_ctl` cluster — clean skip with explicit message when none available (CI-friendly).
+   - Auth builder confirmed already-typed (`anyhow::Result<AuthHandle>` with `anyhow::bail!` on disabled features); no `panic!` in production startup paths anywhere in `auth/`, `storage/`, or `lib.rs`.
 
 1. **WS-012 test fixture seeding** — ~~bundle service vs storage kernel
    path~~ **re-verified green** at HEAD (2026-04-28); parallel fix: `bundle_validation` counted zero kernels because fixtures use **`$wosWorkflow`** at the root — `tests/bundle_validation.rs` treats documents with that key as kernel JSON to lint (see `is_kernel_doc` filter there; ADR 0076 author-time marker is **`$wosWorkflow`** only).
