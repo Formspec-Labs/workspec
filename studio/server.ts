@@ -140,7 +140,7 @@ function buildFullBundle(fixturesDir: string, kernelUrl: string, registry: Map<s
   }
   if (Object.keys(ontologyAlignment).length > 0) bundle.ontologyAlignment = ontologyAlignment;
 
-  const legacySidecars: [string, string][] = [
+  const workflowSidecars: [string, string][] = [
     ['governance', path.join(fixturesDir, 'governance', `${baseName}-governance.json`)],
     ['ai', path.join(fixturesDir, 'ai', `${baseName}-ai.json`)],
     ['policyParameters', path.join(fixturesDir, 'governance', `benefits-policy-parameters.json`)],
@@ -149,7 +149,7 @@ function buildFullBundle(fixturesDir: string, kernelUrl: string, registry: Map<s
     ['driftMonitor', path.join(fixturesDir, 'ai', `benefits-drift-monitor.json`)],
     ['lifecycleDetail', path.join(fixturesDir, 'companions', `benefits-lifecycle-detail.json`)],
   ];
-  for (const [key, p] of legacySidecars) {
+  for (const [key, p] of workflowSidecars) {
     if (existsSync(p)) {
       const data = tryReadJson(p);
       if (data) bundle[key] = data;
@@ -600,7 +600,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   });
 
   app.post('/api/auth/login', (_req, res) => {
-    res.json({ id: 'user-1', name: 'Jane Doe', email: 'jane.doe@agency.gov', role: 'Supervisor' });
+    const now = Date.now();
+    res.json({
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      accessExpiresAt: new Date(now + 900_000).toISOString(),
+      refreshExpiresAt: new Date(now + 86_400_000).toISOString(),
+      user: { id: 'user-1', name: 'Jane Doe', email: 'jane.doe@agency.gov', role: 'Supervisor' },
+    });
   });
 
   app.post('/api/auth/logout', (_req, res) => {

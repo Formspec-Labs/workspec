@@ -250,6 +250,8 @@ describe('KernelToDesigner round-trip', () => {
     const designer = designerFromKernel(base);
     const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
     expect(out).toBeDefined();
+    // Simulate trigger-only designer data: typed `event` must be cleared so `trigger` is authoritative.
+    delete out!.event;
     out!.trigger = '$error';
     const rt = designerToKernel(designer, base);
     expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({
@@ -259,7 +261,7 @@ describe('KernelToDesigner round-trip', () => {
     expect(validateKernelDocument(rt).isValid).toBe(true);
   });
 
-  it('does not throw on corrupt __wos_te_v1 JSON; yields a synthetic error event', () => {
+  it('round-trips a typed error event set on the connection', () => {
     const base = makeKernel({
       a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
       b: { type: 'final' },
@@ -267,7 +269,8 @@ describe('KernelToDesigner round-trip', () => {
     const designer = designerFromKernel(base);
     const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
     expect(out).toBeDefined();
-    out!.trigger = '__wos_te_v1:{not valid json';
+    out!.event = { kind: 'error', code: 'wos.designer.invalid_trigger_json' };
+    out!.trigger = JSON.stringify(out!.event);
     const rt = designerToKernel(designer, base);
     expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({
       kind: 'error',
@@ -283,6 +286,7 @@ describe('KernelToDesigner round-trip', () => {
     const designer = designerFromKernel(base);
     const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
     expect(out).toBeDefined();
+    delete out!.event;
     out!.trigger = '$join';
     const rt = designerToKernel(designer, base);
     expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual(joinSignal());

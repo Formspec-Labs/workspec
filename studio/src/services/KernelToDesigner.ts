@@ -1,51 +1,26 @@
 import type { WOSKernelDocument, State, Transition, Action as WosAction, Region } from '../types/wos/kernel';
 
-/**
- * Prefix for transition triggers on designer connections. The suffix is JSON
- * encoding a facts-tier `Transition.event` object so round-trips preserve
- * message vs signal vs timer/condition/error shapes (Kernel §4.5–§4.10).
- */
-const DESIGNER_EVENT_TRIGGER_PREFIX = '__wos_te_v1:';
-
 /** Wire value for transitions with no `event` (guard-only / continuous rescan). */
 const DESIGNER_NO_EVENT_TRIGGER = '__wos_no_event__';
 
 /**
- * Placeholder `TransitionEventError.code` when a legacy designer connection used
+ * Placeholder `TransitionEventError.code` when a designer connection used
  * the bare kernel dispatch label `$error` with no typed payload (Kernel §4.10).
  */
 const LEGACY_BARE_ERROR_CODE = 'wos.designer.unspecified';
 
-/**
- * Synthetic error code when the `__wos_te_v1:` suffix is not valid JSON — avoids
- * throwing on corrupt or crafted `trigger` strings.
- */
-const CORRUPT_DESIGNER_TRIGGER_JSON_CODE = 'wos.designer.invalid_trigger_json';
-
-/** Serialize `Transition.event` for `WorkflowConnection.trigger` (string wire). */
-function transitionEventToTriggerString(event: Transition['event'] | undefined): string {
+/** Stable identity for comparing connection sets (typed `event` objects). */
+function transitionEventIdentityKey(event: Transition['event'] | undefined): string {
   if (event === undefined) return DESIGNER_NO_EVENT_TRIGGER;
-  // Historically the kernel allowed `event` as a plain string (message name).
-  // On the wire we always emit the prefixed JSON shape so round-trips preserve
-  // the message kind and forbid ambiguous `$`-prefixed names at the facts tier.
-  if (typeof event === 'string') {
-    const legacy = { kind: 'message' as const, name: event };
-    return `${DESIGNER_EVENT_TRIGGER_PREFIX}${JSON.stringify(legacy)}`;
-  }
-  return `${DESIGNER_EVENT_TRIGGER_PREFIX}${JSON.stringify(event)}`;
+  return JSON.stringify(event);
 }
 
-/** Inverse of {@link transitionEventToTriggerString} with legacy plain-name fallbacks. */
+/**
+ * Parse legacy plain-string `trigger` values when `connection.event` is absent.
+ * Authoritative transition shape is always `event` on new round-trips from the kernel.
+ */
 function triggerStringToTransitionEvent(trigger: string): Transition['event'] | undefined {
   if (trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
-  if (trigger.startsWith(DESIGNER_EVENT_TRIGGER_PREFIX)) {
-    const json = trigger.slice(DESIGNER_EVENT_TRIGGER_PREFIX.length);
-    try {
-      return JSON.parse(json) as Transition['event'];
-    } catch {
-      return { kind: 'error', code: CORRUPT_DESIGNER_TRIGGER_JSON_CODE };
-    }
-  }
   // Bare `$error` is the kernel error class dispatch label, not a signal name (Kernel §4.10).
   if (trigger === '$error') {
     return { kind: 'error', code: LEGACY_BARE_ERROR_CODE };
@@ -56,8 +31,18 @@ function triggerStringToTransitionEvent(trigger: string): Transition['event'] | 
   return { kind: 'message', name: trigger };
 }
 
-function defaultSyntheticTrigger(from: string, to: string): string {
-  return transitionEventToTriggerString({ kind: 'message', name: `${from}_to_${to}` });
+function defaultSyntheticEvent(from: string, to: string): Transition['event'] {
+  return { kind: 'message', name: `${from}_to_${to}` };
+}
+
+/** Resolve facts-tier event: prefer typed `event`, then parse legacy `trigger`, else synthetic message. */
+function connectionTransitionEvent(c: WorkflowConnection): Transition['event'] | undefined {
+  if (c.event !== undefined) return c.event;
+  if (c.trigger === undefined || c.trigger === '') {
+    return defaultSyntheticEvent(c.from, c.to);
+  }
+  if (c.trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
+  return triggerStringToTransitionEvent(c.trigger);
 }
 
 export interface WorkflowStage {
@@ -81,6 +66,12 @@ export interface WorkflowConnection {
   from: string;
   to: string;
   condition?: string;
+  /** Facts-tier transition event (Kernel §4.5–§4.10). Authoritative for kernel round-trip. */
+  event?: Transition['event'];
+  /**
+   * Legacy display / string-only edits: plain message name, `$join`, `$error`, or
+   * {@link DESIGNER_NO_EVENT_TRIGGER} when guard-only. Prefer `event` for new data.
+   */
   trigger?: string;
 }
 
@@ -219,7 +210,11 @@ export function kernelToDesigner(kernel: WOSKernelDocument): KernelToDesignerRes
       from,
       to: targetId,
       condition: transition.guard,
-      trigger: transitionEventToTriggerString(transition.event),
+      ...(transition.event !== undefined ? { event: transition.event } : {}),
+      trigger:
+        transition.event !== undefined
+          ? transitionEventIdentityKey(transition.event)
+          : DESIGNER_NO_EVENT_TRIGGER,
     });
   }
 
@@ -326,8 +321,7 @@ function buildStateFromStage(stage: WorkflowStage, connections: WorkflowConnecti
   const transitions: Transition[] = connections
     .filter(c => c.from === stage.id)
     .map(c => {
-      const rawTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
-      const ev = triggerStringToTransitionEvent(rawTrigger);
+      const ev = connectionTransitionEvent(c);
       const t: Transition = {
         target: scopeLocalTarget(c.from, c.to),
         ...(ev !== undefined ? { event: ev } : {}),
@@ -436,8 +430,7 @@ function overlayDesignerEdits(original: State, stage: WorkflowStage, connections
     else delete merged.transitions;
   } else {
     const rebuilt = outgoing.map(c => {
-      const rawTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
-      const ev = triggerStringToTransitionEvent(rawTrigger);
+      const ev = connectionTransitionEvent(c);
       const t: Transition = {
         target: scopeLocalTarget(c.from, c.to),
         ...(ev !== undefined ? { event: ev } : {}),
@@ -465,16 +458,16 @@ function compareConnectionSet(
 ): boolean {
   if (outgoing.length !== originalTransitions.length) return false;
   const originalKeys = new Set(
-    originalTransitions.map(t => `${transitionEventToTriggerString(t.event)}::${t.target}`),
+    originalTransitions.map(t => `${transitionEventIdentityKey(t.event)}::${t.target}`),
   );
   for (const c of outgoing) {
     const localTarget = scopeLocalTarget(c.from, c.to);
-    const wireTrigger = c.trigger ?? defaultSyntheticTrigger(c.from, c.to);
-    const key = `${wireTrigger}::${localTarget}`;
+    const ev = connectionTransitionEvent(c);
+    const key = `${transitionEventIdentityKey(ev)}::${localTarget}`;
     if (!originalKeys.has(key)) return false;
     // Also verify guard equivalence when present.
     const matching = originalTransitions.find(t =>
-      transitionEventToTriggerString(t.event) === wireTrigger && t.target === localTarget,
+      transitionEventIdentityKey(t.event) === transitionEventIdentityKey(ev) && t.target === localTarget,
     );
     if (matching && (matching.guard ?? undefined) !== (c.condition ?? undefined)) return false;
   }

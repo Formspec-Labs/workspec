@@ -62,7 +62,11 @@ export function loadSignatureProfiles(): Map<string, WOSSignatureProfileDocument
   ];
   const map = new Map<string, WOSSignatureProfileDocument>();
   for (const [id, raw] of entries) {
-    map.set(id, validateAndCast<WOSSignatureProfileDocument>(raw, 'WOSSignatureProfileDocument'));
+    const normalized =
+      raw && typeof raw === 'object' && !Array.isArray(raw) && 'signature' in raw
+        ? (raw as Record<string, unknown>).signature
+        : raw;
+    map.set(id, validateAndCast<WOSSignatureProfileDocument>(normalized, 'WOSSignatureProfileDocument'));
   }
   return map;
 }

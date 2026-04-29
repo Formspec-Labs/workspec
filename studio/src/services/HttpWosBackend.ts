@@ -309,14 +309,21 @@ export class HttpAuthPort implements IAuthPort {
       body: JSON.stringify(credentials),
     });
     if (!res.ok) throw new Error(`Login failed: ${res.status}`);
-    const body = await res.json();
-    // Rust wos-server returns a TokenPair with the user attached; legacy
-    // stubs return the AuthUser directly. Support both.
-    if (body && typeof body === 'object' && 'accessToken' in body && 'user' in body) {
-      storeLogin(body as TokenPair);
-      return (body as TokenPair).user;
+    const body = await res.json() as Partial<TokenPair> | null;
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      typeof body.accessToken !== 'string' ||
+      typeof body.refreshToken !== 'string' ||
+      typeof body.accessExpiresAt !== 'string' ||
+      typeof body.refreshExpiresAt !== 'string' ||
+      !body.user
+    ) {
+      throw new Error('Login response must be a TokenPair envelope.');
     }
-    return body as AuthUser;
+    const pair = body as TokenPair;
+    storeLogin(pair);
+    return pair.user;
   }
 
   async logout(): Promise<void> {
