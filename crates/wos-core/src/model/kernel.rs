@@ -358,60 +358,6 @@ pub enum TransitionEvent {
 }
 
 impl TransitionEvent {
-    /// Best-effort parse from legacy string event names (pre–TODO #20 documents).
-    pub fn from_legacy_string(s: &str) -> Self {
-        let s = s.trim();
-        match s {
-            "$join" => Self::Signal {
-                name: "$join".to_string(),
-                scope: SignalScope::Instance,
-            },
-            "$error" => Self::Error {
-                code: "kernel.error".to_string(),
-                action_path: None,
-            },
-            _ if s.starts_with("$timeout.") => {
-                let rest = s.strip_prefix("$timeout.").unwrap_or(s);
-                let source = match rest {
-                    "task" => TimerEventSource::Task,
-                    "service" => TimerEventSource::Service,
-                    "state" => TimerEventSource::State,
-                    "signal" => TimerEventSource::Signal,
-                    "workflow" => TimerEventSource::Workflow,
-                    _ => TimerEventSource::Custom,
-                };
-                Self::Timer {
-                    timer_id: rest.to_string(),
-                    source,
-                    duration: None,
-                    expires_at: None,
-                    fires_as: None,
-                }
-            }
-            _ if s.starts_with("$related.") => Self::Signal {
-                name: s.strip_prefix("$related.").unwrap_or(s).to_string(),
-                scope: SignalScope::Related,
-            },
-            "$compensation.complete" => Self::Signal {
-                name: "$compensation.complete".to_string(),
-                scope: SignalScope::Instance,
-            },
-            // Unknown `$…` legacy strings must stay verbatim so lint (K-007) and
-            // migration tooling can reject them instead of silently becoming a
-            // different message name.
-            _ if s.starts_with('$') => Self::Message {
-                name: s.to_string(),
-                correlation_key: None,
-                data: None,
-            },
-            _ => Self::Message {
-                name: s.to_string(),
-                correlation_key: None,
-                data: None,
-            },
-        }
-    }
-
     /// String used for `process_event` matching and the same labels the
     /// runtime compares against [`Self::matches_runtime_dispatch`].
     #[must_use]
@@ -493,6 +439,64 @@ impl TransitionEvent {
             TimerEventSource::Custom => format!("$timeout.{timer_id}"),
         }
     }
+
+    /// Map a bare trigger token (authoring `add_transition`, tests) to the typed union.
+    /// JSON documents may still supply the same strings under `transition.event`; serde
+    /// uses the same coercion via [`transition_event_coerce_from_str`].
+    #[must_use]
+    pub fn from_authoring_trigger(s: &str) -> Self {
+        transition_event_coerce_from_str(s)
+    }
+}
+
+fn transition_event_coerce_from_str(s: &str) -> TransitionEvent {
+    let s = s.trim();
+    match s {
+        "$join" => TransitionEvent::Signal {
+            name: "$join".to_string(),
+            scope: SignalScope::Instance,
+        },
+        "$error" => TransitionEvent::Error {
+            code: "kernel.error".to_string(),
+            action_path: None,
+        },
+        _ if s.starts_with("$timeout.") => {
+            let rest = s.strip_prefix("$timeout.").unwrap_or(s);
+            let source = match rest {
+                "task" => TimerEventSource::Task,
+                "service" => TimerEventSource::Service,
+                "state" => TimerEventSource::State,
+                "signal" => TimerEventSource::Signal,
+                "workflow" => TimerEventSource::Workflow,
+                _ => TimerEventSource::Custom,
+            };
+            TransitionEvent::Timer {
+                timer_id: rest.to_string(),
+                source,
+                duration: None,
+                expires_at: None,
+                fires_as: None,
+            }
+        }
+        _ if s.starts_with("$related.") => TransitionEvent::Signal {
+            name: s.strip_prefix("$related.").unwrap_or(s).to_string(),
+            scope: SignalScope::Related,
+        },
+        "$compensation.complete" => TransitionEvent::Signal {
+            name: "$compensation.complete".to_string(),
+            scope: SignalScope::Instance,
+        },
+        _ if s.starts_with('$') => TransitionEvent::Message {
+            name: s.to_string(),
+            correlation_key: None,
+            data: None,
+        },
+        _ => TransitionEvent::Message {
+            name: s.to_string(),
+            correlation_key: None,
+            data: None,
+        },
+    }
 }
 
 fn deserialize_opt_transition_event<'de, D>(
@@ -511,7 +515,7 @@ where
             if t.is_empty() {
                 Ok(None)
             } else {
-                Ok(Some(TransitionEvent::from_legacy_string(t)))
+                Ok(Some(transition_event_coerce_from_str(t)))
             }
         }
         serde_json::Value::Object(_) => serde_json::from_value::<TransitionEvent>(v)

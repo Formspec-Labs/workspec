@@ -848,7 +848,7 @@ mod tests {
         });
         let snapshot = CaseFileSnapshot::from_case_state(&case_state);
         let transition = Transition {
-            event: Some(TransitionEvent::from_legacy_string("denied")),
+            event: Some(TransitionEvent::from_authoring_trigger("denied")),
             target: "adverseNotice".to_string(),
             guard: None,
             actions: Vec::new(),

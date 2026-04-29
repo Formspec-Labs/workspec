@@ -347,7 +347,7 @@ impl RawWosProject {
                 .as_ref()
                 .map(|e| e.trim())
                 .filter(|e| !e.is_empty())
-                .map(TransitionEvent::from_legacy_string)
+                .map(|e| TransitionEvent::from_authoring_trigger(e))
         };
         let transition = Transition {
             event: ev_typed,

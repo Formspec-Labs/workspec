@@ -6,7 +6,7 @@ use wos_core::TransitionEvent;
 
 #[test]
 fn legacy_unknown_dollar_prefix_keeps_verbatim_message_name() {
-    let ev = TransitionEvent::from_legacy_string("$custom");
+    let ev = TransitionEvent::from_authoring_trigger("$custom");
     assert!(
         matches!(ev, TransitionEvent::Message { ref name, .. } if name == "$custom"),
         "expected verbatim `$custom` message name, got {ev:?}"

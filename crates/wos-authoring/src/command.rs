@@ -106,7 +106,7 @@ pub(crate) enum Command {
         to_state: String,
         /// Optional guard FEL expression.
         guard: Option<String>,
-        /// Legacy string event (trimmed, parsed via [`TransitionEvent::from_legacy_string`]).
+        /// Legacy string event (trimmed, parsed via [`TransitionEvent::from_authoring_trigger`]).
         event: Option<String>,
         /// Typed event; when set, must be the only event source (leave `event` empty).
         #[serde(default)]
