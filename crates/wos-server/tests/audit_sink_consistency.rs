@@ -1,7 +1,3 @@
-//! Phase 1 end-to-end: boot a minimal AppState with AppRuntime, create a
-//! case instance through the HTTP surface, and confirm it persists and is
-//! readable through the instance endpoints.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -10,11 +6,13 @@ use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use tower::ServiceExt;
 use wos_server::config::{
-    AiChatKind, AuditSinkKind, AuthKind, RuntimeKind, ServerConfig, StorageKind,
+    AiChatKind, AuditSinkKind, AuthKind, RuntimeKind, ServerConfig, SignerKind, StorageKind,
 };
-use wos_server::runtime::AppRuntime;
+use wos_server::runtime::{AppRuntime, AppRuntimeConfig};
 use wos_server::storage::KernelRow;
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
+use wos_server_ports::audit::{AuditError, AuditResult, AuditSink, ExportEnvelope};
+use wos_server_ports::storage::ProvenanceRow;
 
 fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
     serde_json::json!({
@@ -23,20 +21,27 @@ fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
         "version": version,
         "title": "Test Kernel",
         "status": "active",
-        "lifecycle": {
-            "initialState": "intake",
-            "states": {
-                "intake": { "type": "atomic" }
-            }
-        },
-        "actors": [
-            { "id": "applicant", "type": "human" }
-        ],
+        "lifecycle": { "initialState": "intake", "states": { "intake": { "type": "atomic" } } },
+        "actors": [{ "id": "applicant", "type": "human" }],
         "contracts": {}
     })
 }
 
-async fn bring_up() -> AppState {
+#[derive(Debug)]
+struct AlwaysFailAuditSink;
+
+#[async_trait::async_trait]
+impl AuditSink for AlwaysFailAuditSink {
+    async fn append_provenance(&self, _records: &[ProvenanceRow]) -> AuditResult<()> {
+        Err(AuditError::Backend("intentional audit failure for consistency test".into()))
+    }
+
+    async fn append_export(&self, _envelope: ExportEnvelope) -> AuditResult<()> {
+        Ok(())
+    }
+}
+
+async fn state_with_failing_audit_sink() -> AppState {
     let cfg = Arc::new(ServerConfig {
         port: 0,
         fixtures_dir: std::path::PathBuf::from("."),
@@ -58,10 +63,9 @@ async fn bring_up() -> AppState {
         audit_sink: AuditSinkKind::None,
         audit_database_url: String::new(),
         session_sweep_enabled: true,
-        signer_kind: wos_server::config::SignerKind::Noop,
+        signer_kind: SignerKind::Noop,
     });
-    let storage = storage::build(&cfg).await.unwrap();
-
+    let storage = storage::build(&cfg).await.expect("storage build");
     storage
         .upsert_kernel(&KernelRow {
             url: "urn:wos:workflow:test:1.0.0".into(),
@@ -73,20 +77,20 @@ async fn bring_up() -> AppState {
             updated_at: Utc::now(),
         })
         .await
-        .unwrap();
+        .expect("kernel upsert");
 
     let auth = auth::build(&cfg, storage.clone()).expect("auth build");
-    let services = Arc::new(
-        AppServices::new(cfg.clone(), storage.clone())
-            .await
-            .unwrap(),
-    );
+    let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await.expect("services"));
     let (_layer, io) = realtime::build_io_only();
-    let runtime = AppRuntime::build(
+    let runtime = AppRuntime::build_with(
         storage.clone(),
         services.provenance.clone(),
         services.bundle.clone(),
         io,
+        AppRuntimeConfig {
+            audit_sink: Arc::new(AlwaysFailAuditSink),
+            ..AppRuntimeConfig::default()
+        },
     );
     AppState {
         cfg,
@@ -99,15 +103,13 @@ async fn bring_up() -> AppState {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn create_instance_via_http_roundtrips_through_runtime() {
-    let state = bring_up().await;
+async fn create_instance_succeeds_even_when_audit_sink_fails() {
+    let state = state_with_failing_audit_sink().await;
     let app = http::router(state.clone());
-
-    let requested_id = "urn:wos:instance:test:smoke";
     let body = serde_json::json!({
         "definitionUrl": "urn:wos:workflow:test:1.0.0",
         "definitionVersion": "1.0.0",
-        "instanceId": requested_id
+        "instanceId": "urn:wos:instance:test:audit-fail"
     });
     let response = app
         .clone()
@@ -118,43 +120,9 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
                 .header("content-type", "application/json")
                 .header("authorization", "Bearer mock-access")
                 .body(Body::from(body.to_string()))
-                .unwrap(),
+                .expect("request"),
         )
         .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK, "POST /api/instances should succeed");
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
-    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
-
-    let actual_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
-    assert!(
-        actual_id.starts_with("default_case_"),
-        "runtime should mint a TypeID-based instance ID, got: {actual_id}"
-    );
-    let alias = post_val
-        .pointer("/extensions/x-wos-legacy-instance-alias")
-        .and_then(|x| x.as_str());
-    assert_eq!(alias, Some(requested_id), "legacy alias should match requested ID");
-
-    let encoded_id = actual_id.replace(':', "%3A");
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri(format!("/api/instances/{encoded_id}").as_str())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .expect("response");
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(
-        v.get("instanceId").and_then(|x| x.as_str()),
-        Some(actual_id),
-        "GET should return the same TypeID instance ID"
-    );
-    let config = v.get("configuration").and_then(|x| x.as_array()).unwrap();
-    assert_eq!(config.len(), 1);
-    assert_eq!(config[0].as_str(), Some("intake"));
 }

@@ -1,4 +1,4 @@
-//! SqliteRuntimeStore persistence round-trips across a simulated restart.
+//! StorageBackedRuntimeStore persistence round-trips across a simulated restart.
 //!
 //! Covers review findings F1 (aux codec round-trips AcceptIntakeHandoff +
 //! Intake replay values), F4 (IntakeRecord survives a fresh store handle),
@@ -16,7 +16,9 @@ use wos_runtime::store::{
     IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StoreError,
 };
 use wos_server::services::provenance_service::ProvenanceService;
-use wos_server::storage::{SqliteRuntimeStore, SqliteStorage, StorageHandle};
+use wos_server::runtime::runtime_store::StorageBackedRuntimeStore;
+use wos_server::storage::{SqliteStorage, StorageHandle};
+use wos_server_ports::audit::NoopAuditSink;
 
 async fn fresh() -> StorageHandle {
     let store = SqliteStorage::connect("sqlite::memory:?cache=shared")
@@ -118,18 +120,25 @@ async fn aux_replay_round_trips_intake_handoff_entries() {
 
     let storage_for_task = storage.clone();
     let provenance_for_task = provenance.clone();
+    let audit_for_task = Arc::new(NoopAuditSink);
     let handle_for_task = handle.clone();
     tokio::task::spawn_blocking(move || {
-        let mut store =
-            SqliteRuntimeStore::new(storage_for_task, provenance_for_task, handle_for_task);
+        let mut store = StorageBackedRuntimeStore::new(
+            storage_for_task,
+            provenance_for_task,
+            audit_for_task,
+            handle_for_task,
+        );
         store.create_record(record).expect("create record");
     })
     .await
     .unwrap();
 
     let storage_for_load = storage.clone();
+    let audit_for_load = Arc::new(NoopAuditSink);
     let loaded = tokio::task::spawn_blocking(move || {
-        let store = SqliteRuntimeStore::new(storage_for_load, provenance, handle);
+        let store =
+            StorageBackedRuntimeStore::new(storage_for_load, provenance, audit_for_load, handle);
         store
             .load_record("inst-intake-replay")
             .expect("load record")
@@ -167,7 +176,7 @@ async fn aux_replay_round_trips_intake_handoff_entries() {
     }
 }
 
-/// F4: an intake record created on one SqliteRuntimeStore handle must be
+/// F4: an intake record created on one StorageBackedRuntimeStore handle must be
 /// observable on a fresh handle backed by the same SQLite database.
 /// Previously the record lived in an in-memory HashMap tied to the store
 /// handle, so process restart (or any new store instance) dropped it.
@@ -181,10 +190,11 @@ async fn intake_records_persist_across_store_handles() {
 
     let storage_c = storage.clone();
     let provenance_c = provenance.clone();
+    let audit_c = Arc::new(NoopAuditSink);
     let handle_c = handle.clone();
     let original_c = original.clone();
     tokio::task::spawn_blocking(move || {
-        let mut store = SqliteRuntimeStore::new(storage_c, provenance_c, handle_c);
+        let mut store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
         store.create_intake_record(original_c).expect("create intake");
     })
     .await
@@ -192,9 +202,10 @@ async fn intake_records_persist_across_store_handles() {
 
     let storage_c = storage.clone();
     let provenance_c = provenance.clone();
+    let audit_c = Arc::new(NoopAuditSink);
     let handle_c = handle.clone();
     let loaded = tokio::task::spawn_blocking(move || {
-        let store = SqliteRuntimeStore::new(storage_c, provenance_c, handle_c);
+        let store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
         store
             .load_intake_record("formspecIntake", "intake-42")
             .expect("load intake after restart")
@@ -208,12 +219,13 @@ async fn intake_records_persist_across_store_handles() {
 
     let storage_c = storage.clone();
     let provenance_c = provenance.clone();
+    let audit_c = Arc::new(NoopAuditSink);
     let handle_c = handle.clone();
     let mut updated = loaded.clone();
     updated.status = IntakeRecordStatus::Applied;
     let updated_clone = updated.clone();
     tokio::task::spawn_blocking(move || {
-        let mut store = SqliteRuntimeStore::new(storage_c, provenance_c, handle_c);
+        let mut store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
         store.save_intake_record(updated_clone).expect("save intake");
     })
     .await
@@ -221,9 +233,10 @@ async fn intake_records_persist_across_store_handles() {
 
     let storage_c = storage.clone();
     let provenance_c = provenance.clone();
+    let audit_c = Arc::new(NoopAuditSink);
     let handle_c = handle.clone();
     let reloaded = tokio::task::spawn_blocking(move || {
-        let store = SqliteRuntimeStore::new(storage_c, provenance_c, handle_c);
+        let store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
         store
             .load_intake_record("formspecIntake", "intake-42")
             .expect("reload intake")
@@ -240,10 +253,11 @@ async fn intake_records_persist_across_store_handles() {
 async fn not_found_error_preserves_resource_id() {
     let storage = fresh().await;
     let provenance = Arc::new(ProvenanceService::new(storage.clone()));
+    let audit = Arc::new(NoopAuditSink);
     let handle = tokio::runtime::Handle::current();
 
     let err = tokio::task::spawn_blocking(move || {
-        let store = SqliteRuntimeStore::new(storage, provenance, handle);
+        let store = StorageBackedRuntimeStore::new(storage, provenance, audit, handle);
         store.load_intake_record("formspecIntake", "missing-77").unwrap_err()
     })
     .await

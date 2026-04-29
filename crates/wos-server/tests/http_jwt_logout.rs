@@ -75,12 +75,15 @@ async fn jwt_app_state_with(bearer_strict: bool) -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: wos_server::config::RuntimeKind::Local,
+        audit_sink: wos_server::config::AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: true,
         signer_kind: wos_server::config::SignerKind::Noop,
     });
 
     let storage_handle: wos_server::storage::StorageHandle = store.clone();
-    let auth = auth::build(&cfg, storage_handle.clone());
+    let auth = auth::build(&cfg, storage_handle.clone()).expect("auth build");
     let services = Arc::new(
         AppServices::new(cfg.clone(), storage_handle.clone())
             .await

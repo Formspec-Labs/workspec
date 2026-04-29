@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use wos_core::provenance::ProvenanceRecord;
-use wos_server::config::{AiChatKind, AuthKind, ServerConfig, SignerKind, StorageKind};
+use wos_server::config::{
+    AiChatKind, AuditSinkKind, AuthKind, RuntimeKind, ServerConfig, SignerKind, StorageKind,
+};
 use wos_server::services::provenance_service::chain_hash;
 use wos_server::storage::{InstanceRow, ProvenanceRow};
 use wos_server::{AppState, auth, realtime, services::AppServices, storage};
@@ -32,6 +34,9 @@ pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: RuntimeKind::Local,
+        audit_sink: AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: false,
         signer_kind: SignerKind::Noop,
     })
@@ -39,7 +44,7 @@ pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
 
 pub async fn bring_up_with_cfg(cfg: Arc<ServerConfig>) -> AppState {
     let storage = storage::build(&cfg).await.unwrap();
-    let auth = auth::build(&cfg, storage.clone());
+    let auth = auth::build(&cfg, storage.clone()).expect("auth build");
     let services = Arc::new(
         AppServices::new(cfg.clone(), storage.clone())
             .await

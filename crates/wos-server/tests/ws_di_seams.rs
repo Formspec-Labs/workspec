@@ -224,6 +224,9 @@ async fn app_runtime_build_with_swaps_in_custom_signer() {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: wos_server::config::RuntimeKind::Local,
+        audit_sink: wos_server::config::AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: true,
         signer_kind: wos_server::config::SignerKind::Noop,
     });
@@ -248,6 +251,7 @@ async fn app_runtime_build_with_swaps_in_custom_signer() {
             signer: signer_ref,
             renderer: Arc::new(JsonRenderer),
             bindings: wos_runtime::BindingRegistry::new(),
+            audit_sink: Arc::new(wos_server_ports::audit::NoopAuditSink),
         },
     );
 

@@ -39,12 +39,15 @@ async fn test_app_state() -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: wos_server::config::RuntimeKind::Local,
+        audit_sink: wos_server::config::AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: true,
         signer_kind: wos_server::config::SignerKind::Noop,
     });
 
     let storage_handle: storage::StorageHandle = store.clone();
-    let auth = auth::build(&cfg, storage_handle.clone());
+    let auth = auth::build(&cfg, storage_handle.clone()).expect("auth build");
 
     use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
     use rand::rngs::OsRng;

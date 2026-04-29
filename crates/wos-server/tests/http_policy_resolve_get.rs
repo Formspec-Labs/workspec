@@ -95,6 +95,9 @@ fn stub_config(fixtures_dir: std::path::PathBuf) -> Arc<ServerConfig> {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: wos_server::config::RuntimeKind::Local,
+        audit_sink: wos_server::config::AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: true,
         signer_kind: SignerKind::Noop,
     })
@@ -103,7 +106,7 @@ fn stub_config(fixtures_dir: std::path::PathBuf) -> Arc<ServerConfig> {
 async fn bring_up(fixtures_dir: std::path::PathBuf) -> AppState {
     let cfg = stub_config(fixtures_dir);
     let storage = storage::build(&cfg).await.unwrap();
-    let auth = auth::build(&cfg, storage.clone());
+    let auth = auth::build(&cfg, storage.clone()).expect("auth build");
     let services = Arc::new(
         AppServices::new(cfg.clone(), storage.clone())
             .await

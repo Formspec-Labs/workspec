@@ -4,23 +4,36 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
+use axum::body::Body;
+use axum::http::Request;
 use chrono::Utc;
+use rand::rngs::OsRng;
 use tempfile::TempDir;
+use tower::ServiceExt;
+use uuid::Uuid;
 use wos_core::provenance::ProvenanceRecord;
-use wos_server::config::{AiChatKind, AuthKind, ServerConfig, SignerKind, StorageKind};
+use wos_server::config::{
+    AiChatKind, AuditSinkKind, AuthKind, RuntimeKind, ServerConfig, SignerKind, StorageKind,
+};
 use wos_server::services::provenance_service::chain_hash;
-use wos_server::storage::{InstanceRow, ProvenanceRow};
+use wos_server::storage::{InstanceRow, ProvenanceRow, SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, realtime, services::AppServices, storage};
 
 pub const ZERO_HASH: &str =
     "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
 pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
+    let _ = fixtures_dir;
+    let database_url = format!(
+        "sqlite://file:test-{}?mode=memory&cache=shared",
+        Uuid::new_v4()
+    );
     Arc::new(ServerConfig {
         port: 0,
         fixtures_dir,
         storage: StorageKind::Sqlite,
-        database_url: "sqlite::memory:?cache=shared".into(),
+        database_url,
         auth: AuthKind::Mock,
         jwt_secret: String::new(),
         jwt_access_ttl_secs: 900,
@@ -33,6 +46,9 @@ pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: RuntimeKind::Local,
+        audit_sink: AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: false,
         signer_kind: SignerKind::Noop,
     })
@@ -40,7 +56,7 @@ pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
 
 pub async fn bring_up_with_cfg(cfg: Arc<ServerConfig>) -> AppState {
     let storage = storage::build(&cfg).await.unwrap();
-    let auth = auth::build(&cfg, storage.clone());
+    let auth = auth::build(&cfg, storage.clone()).expect("auth build");
     let services = Arc::new(
         AppServices::new(cfg.clone(), storage.clone())
             .await
@@ -202,10 +218,125 @@ pub async fn seed_instance_with_one_provenance(
 pub const SLICE_B_WORKFLOW: &str = "urn:wos:workflow:ws014sliceb:1.0.0";
 
 pub fn slice_b_workflow_path_encoded() -> String {
-    SLICE_B_WORKFLOW.replace(':', "%3A")
+    path_encode(SLICE_B_WORKFLOW)
 }
 
 pub fn int_consume_001_fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../wos-conformance/tests/fixtures/INT-CONSUME-001-happy.json")
+}
+
+pub fn path_encode(raw: &str) -> String {
+    url::form_urlencoded::byte_serialize(raw.as_bytes()).collect()
+}
+
+pub fn fixed_time() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .expect("valid fixed timestamp")
+        .with_timezone(&chrono::Utc)
+}
+
+pub async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
+    let _ = fixtures_dir;
+    let database_url = format!(
+        "sqlite://file:jwt-test-{}?mode=memory&cache=shared",
+        Uuid::new_v4()
+    );
+    let store = Arc::new(
+        SqliteStorage::connect(&database_url)
+            .await
+            .expect("sqlite connect"),
+    );
+    store.migrate().await.expect("sqlite migrate");
+
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(b"wos-dev", &salt)
+        .expect("hash fixture password")
+        .to_string();
+    for (id, role) in [
+        ("sup", "Supervisor"),
+        ("adj", "Adjudicator"),
+        ("app", "Applicant"),
+    ] {
+        store
+            .upsert_user(&UserRow {
+                id: id.into(),
+                email: format!("{id}@example.com"),
+                name: id.into(),
+                role: role.into(),
+                password_hash: hash.clone(),
+                avatar: None,
+                auth_epoch: 0,
+                created_at: fixed_time(),
+            })
+            .await
+            .expect("seed user");
+    }
+
+    let cfg = Arc::new(ServerConfig {
+        port: 0,
+        fixtures_dir,
+        storage: StorageKind::Sqlite,
+        database_url,
+        auth: AuthKind::Jwt,
+        jwt_secret: "test-secret-common".into(),
+        jwt_access_ttl_secs: 900,
+        jwt_refresh_ttl_secs: 7 * 24 * 3600,
+        cors_origin: "http://localhost:3000".into(),
+        cors_strict: false,
+        bearer_strict: false,
+        seed: false,
+        ai_chat: AiChatKind::Disabled,
+        gemini_api_key: String::new(),
+        cursor_throttle_ms: 50,
+        timer_poll_ms: 1000,
+        runtime: RuntimeKind::Local,
+        audit_sink: AuditSinkKind::None,
+        audit_database_url: String::new(),
+        session_sweep_enabled: false,
+        signer_kind: SignerKind::Noop,
+    });
+
+    let st: storage::StorageHandle = store.clone();
+    let au = auth::build(&cfg, st.clone()).expect("auth build");
+    let svc = Arc::new(AppServices::new(cfg.clone(), st.clone()).await.expect("services"));
+    let (_layer, io) = realtime::build_io_only();
+    let rt = wos_server::runtime::AppRuntime::build(
+        st.clone(),
+        svc.provenance.clone(),
+        svc.bundle.clone(),
+        io,
+    );
+    AppState {
+        cfg,
+        storage: st,
+        auth: au,
+        services: svc,
+        runtime: rt,
+        event_idempotency: Arc::new(Mutex::new(HashMap::new())),
+    }
+}
+
+pub async fn login_access_token(app: axum::Router, email: &str) -> String {
+    let body = serde_json::json!({ "email": email, "password": "wos-dev" });
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .expect("login request"),
+        )
+        .await
+        .expect("login response");
+    let bytes = axum::body::to_bytes(res.into_body(), 8192)
+        .await
+        .expect("login bytes");
+    let pair: serde_json::Value = serde_json::from_slice(&bytes).expect("login json");
+    pair["accessToken"]
+        .as_str()
+        .expect("access token")
+        .to_string()
 }

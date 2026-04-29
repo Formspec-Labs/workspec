@@ -14,10 +14,14 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use rand::rngs::OsRng;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tower::ServiceExt;
-use wos_server::config::{AiChatKind, AuthKind, ServerConfig, SignerKind, StorageKind};
+use wos_server::config::{
+    AiChatKind, AuditSinkKind, AuthKind, RuntimeKind, ServerConfig, SignerKind, StorageKind,
+};
 use wos_server::http;
-use wos_server::storage::{InstanceRow, SqliteStorage, Storage, UserRow};
+use wos_server::storage::{SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, realtime, services::AppServices, storage};
 
 use harness::{bring_up_with_cfg, make_instance_row, stub_config};
@@ -145,12 +149,15 @@ async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
         gemini_api_key: String::new(),
         cursor_throttle_ms: 50,
         timer_poll_ms: 1000,
+        runtime: RuntimeKind::Local,
+        audit_sink: AuditSinkKind::None,
+        audit_database_url: String::new(),
         session_sweep_enabled: false,
         signer_kind: SignerKind::Noop,
     });
 
     let st: storage::StorageHandle = store.clone();
-    let au = auth::build(&cfg, st.clone());
+    let au = auth::build(&cfg, st.clone()).expect("auth build");
     let svc = Arc::new(AppServices::new(cfg.clone(), st.clone()).await.unwrap());
     let (_layer, io) = realtime::build_io_only();
     let rt = wos_server::runtime::AppRuntime::build(
@@ -191,6 +198,34 @@ async fn bring_up_with_fixtures() -> (tempfile::TempDir, AppState) {
     let tmp = setup_tempdir();
     let state = bring_up_with_cfg(stub_config(tmp.path().to_path_buf())).await;
     (tmp, state)
+}
+
+
+async fn start_one_shot_http_server(
+    status_line: &str,
+    content_type: &str,
+    body: &str,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("local addr");
+    let status_line = status_line.to_string();
+    let content_type = content_type.to_string();
+    let body = body.to_string();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept");
+        let mut request_buf = vec![0_u8; 4096];
+        let _ = stream.read(&mut request_buf).await;
+        let response = format!(
+            "HTTP/1.1 {status_line}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream
+            .write_all(response.as_bytes())
+            .await
+            .expect("write response");
+    });
+    format!("http://{addr}/dispatch")
 }
 
 // ── Advanced: verification ──────────────────────────────────────────
@@ -394,7 +429,13 @@ async fn integration_invoke_echoes_binding() {
     let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["binding"], "adjudicate");
-    assert_eq!(v["output"]["status"], "echoed");
+    assert_eq!(v["output"]["status"], "accepted");
+    let token = v["correlationToken"].as_str().unwrap_or_default();
+    assert!(!token.is_empty(), "correlation token should be present");
+    assert_eq!(
+        v["output"]["note"],
+        "binding accepted; concrete adapter dispatch pending"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -415,6 +456,118 @@ async fn integration_invoke_rejects_anonymous() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn integration_invoke_http_dispatch_success() {
+    let tmp = setup_tempdir();
+    let state = jwt_state(tmp.path().to_path_buf()).await;
+    let app = http::router(state.clone());
+    let enc = workflow_path_encoded();
+    let adj_token = login_for(app.clone(), "adj@example.com").await;
+    let url = start_one_shot_http_server("200 OK", "application/json", r#"{"ok":true}"#).await;
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/integration/{enc}/invoke/http"))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {adj_token}"))
+                .body(Body::from(
+                    serde_json::json!({ "url": url, "method": "POST", "body": {"x": 1} }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v["output"]["status"], "dispatched");
+    assert_eq!(v["output"]["httpStatus"], 200);
+    assert_eq!(v["output"]["payload"]["ok"], true);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn integration_invoke_http_invalid_method_returns_400() {
+    let tmp = setup_tempdir();
+    let state = jwt_state(tmp.path().to_path_buf()).await;
+    let app = http::router(state.clone());
+    let enc = workflow_path_encoded();
+    let adj_token = login_for(app.clone(), "adj@example.com").await;
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/integration/{enc}/invoke/http"))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {adj_token}"))
+                .body(Body::from(
+                    serde_json::json!({ "url": "http://127.0.0.1:9", "method": "NOT A METHOD" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn integration_invoke_http_network_failure_returns_503() {
+    let tmp = setup_tempdir();
+    let state = jwt_state(tmp.path().to_path_buf()).await;
+    let app = http::router(state.clone());
+    let enc = workflow_path_encoded();
+    let adj_token = login_for(app.clone(), "adj@example.com").await;
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/integration/{enc}/invoke/http"))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {adj_token}"))
+                .body(Body::from(
+                    serde_json::json!({ "url": "http://127.0.0.1:1/fail", "method": "GET" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn integration_invoke_http_non_json_body_falls_back_to_empty_payload() {
+    let tmp = setup_tempdir();
+    let state = jwt_state(tmp.path().to_path_buf()).await;
+    let app = http::router(state.clone());
+    let enc = workflow_path_encoded();
+    let adj_token = login_for(app.clone(), "adj@example.com").await;
+    let url = start_one_shot_http_server("200 OK", "text/plain", "hello").await;
+
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/integration/{enc}/invoke/http"))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {adj_token}"))
+                .body(Body::from(
+                    serde_json::json!({ "url": url, "method": "GET" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v["output"]["status"], "dispatched");
+    assert_eq!(v["output"]["payload"], serde_json::json!({}));
 }
 
 // ── Assurance: record + upgrade + chain ─────────────────────────────
