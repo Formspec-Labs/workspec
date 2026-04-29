@@ -83,7 +83,7 @@ impl HoldService {
         hold: ActiveHold,
     ) -> Result<usize, HoldServiceError> {
         // safe: `update_instance_atomic` invokes the mutator exactly
-        // once (see `crates/wos-server/src/storage/sqlite.rs`). The
+        // once (see `crates/wos-server-sqlite/src/lib.rs`). The
         // `Arc<Mutex<…>>` is not for concurrency — it is the smallest
         // shape that lets a `Fn` closure thread a value back out under
         // the current trait signature. If the trait ever grows a retry
@@ -120,7 +120,7 @@ impl HoldService {
         hold_idx: usize,
     ) -> Result<ActiveHold, HoldServiceError> {
         // safe: `update_instance_atomic` invokes the mutator exactly
-        // once (see `crates/wos-server/src/storage/sqlite.rs`). The
+        // once (see `crates/wos-server-sqlite/src/lib.rs`). The
         // `Arc<Mutex<…>>` is not for concurrency — it is the smallest
         // shape that lets a `Fn` closure thread a value back out under
         // the current trait signature. If the trait ever grows a retry

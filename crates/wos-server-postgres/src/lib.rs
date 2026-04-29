@@ -381,6 +381,21 @@ impl Storage for PostgresStorage {
     }
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()> {
         let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        // AUTH-CONTRACT INVARIANT: the ON CONFLICT DO UPDATE clause intentionally
+        // omits `password_hash` and `auth_epoch`. These two fields belong to the
+        // auth contract and are set ONLY at initial user creation (the INSERT
+        // arm). Subsequent upserts MUST NOT overwrite them — password rotation
+        // flows exclusively through `set_user_password_hash` (which atomically
+        // updates the hash, bumps the epoch, and revokes sessions in a single
+        // tx), and global logout flows through `bump_user_auth_epoch`. Allowing
+        // upsert to clobber either field would silently nullify session
+        // invalidation guarantees and weaken the password rotation atomicity
+        // contract.
+        //
+        // Both adapters (this Postgres impl and `wos-server-sqlite`) implement
+        // the same invariant — keep them in lockstep. See
+        // `crates/wos-server/PARITY.md` § Auth contract for the full rule
+        // (`upsert_user` never touches `password_hash` / `auth_epoch`).
         c.execute("INSERT INTO users (id,email,name,role,password_hash,avatar,auth_epoch,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                    ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,role=excluded.role,avatar=excluded.avatar",
             &[&row.id,&row.email,&row.name,&row.role,&row.password_hash,&row.avatar,&row.auth_epoch,&row.created_at]).map_err(se)?;
@@ -455,6 +470,31 @@ impl PostgresStorage {
         let _ = &self.trellis_store;
         true
     }
+
+    /// Borrow the Trellis canonical-store pool.
+    ///
+    /// Exposed so downstream composition (the `EventStore` adapter that will
+    /// supersede this operational `Storage` per [VISION.md §VIII]) can route
+    /// canonical envelope appends through the Trellis-owned pool rather than
+    /// the operational `client` held here. Direct callers MUST NOT use this
+    /// pool to write to the operational projection tables; that path runs
+    /// through the trait methods on this type.
+    ///
+    /// **Lifecycle.** This accessor exists exclusively for the forthcoming
+    /// `EventStore` adapter composition (WS-090 Trellis EventStore, WS-095
+    /// adapter cluster split). It currently has zero in-tree callers — the
+    /// only consumer is the unit test that asserts the pool is initialized
+    /// (`trellis_store_ready`).
+    ///
+    /// Once WS-090 / WS-095 land, this method will either be removed
+    /// outright (if the EventStore adapter constructs its own pool from the
+    /// DSN) or scoped down to `pub(crate)` and the borrow moved into the
+    /// EventStore adapter crate. Do **not** add new call sites without
+    /// reading the WS-090 / WS-095 plan first; doing so will entangle this
+    /// crate with paths that are scheduled for removal.
+    pub fn trellis_pool(&self) -> &trellis_store_postgres::PostgresStorePool {
+        &self.trellis_store
+    }
 }
 
 #[cfg(test)]
@@ -527,15 +567,40 @@ mod tests {
         }
     }
 
+    /// Resolve a Postgres DSN for tests.
+    ///
+    /// Resolution order:
+    /// 1. `WOS_POSTGRES_TEST_URL` — explicit override (preferred in CI).
+    /// 2. `DATABASE_URL` — common CI convention.
+    /// 3. Spin up an ephemeral cluster via `initdb` + `pg_ctl` if the binaries
+    ///    are available locally.
+    /// Returns `None` (callers must skip cleanly) when none of the above
+    /// produces a usable DSN.
+    fn resolve_test_dsn() -> Option<(String, Option<TestCluster>)> {
+        if let Ok(dsn) = std::env::var("WOS_POSTGRES_TEST_URL") {
+            if !dsn.trim().is_empty() {
+                return Some((dsn, None));
+            }
+        }
+        if let Ok(dsn) = std::env::var("DATABASE_URL") {
+            if !dsn.trim().is_empty() {
+                return Some((dsn, None));
+            }
+        }
+        TestCluster::start().map(|c| (c.dsn(), Some(c)))
+    }
+
     #[tokio::test]
     async fn sqlite_and_postgres_kernel_roundtrip_match() {
-        let Some(cluster) = TestCluster::start() else {
+        let Some((dsn, _cluster_guard)) = resolve_test_dsn() else {
             eprintln!(
-                "SKIP sqlite_and_postgres_kernel_roundtrip_match: postgres binaries (initdb/pg_ctl) unavailable"
+                "SKIP sqlite_and_postgres_kernel_roundtrip_match: \
+                 set WOS_POSTGRES_TEST_URL or DATABASE_URL, \
+                 or install postgres binaries (initdb/pg_ctl) for an ephemeral cluster"
             );
             return;
         };
-        let pg = PostgresStorage::connect(&cluster.dsn()).expect("pg connect");
+        let pg = PostgresStorage::connect(&dsn).expect("pg connect");
         assert!(
             pg.trellis_store_ready(),
             "trellis canonical store guardrail should be initialized"

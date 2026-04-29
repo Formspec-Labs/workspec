@@ -46,6 +46,31 @@ fn intake_status_str(s: &wos_runtime::intake::IntakeRecordStatus) -> &'static st
 }
 
 impl RuntimeStore for StorageBackedRuntimeStore {
+    // INVARIANT: `create_record` is a two-phase write across two separate
+    // SQLite transactions:
+    //   1. `storage.create_instance(&row)` — inserts the instance row.
+    //   2. `storage.update_instance_atomic(...)` — appends the seed
+    //      provenance batch (skipped when `log_snapshot.is_empty()`).
+    //
+    // Failure mode: a process crash *between* step 1 and step 2 leaves an
+    // instance row with zero provenance rows on disk. There is no recovery
+    // path today — `load_record` will deserialize the instance and return an
+    // empty `provenance_log`, silently presenting a non-bootstrapped instance
+    // as valid.
+    //
+    // Recovery posture: this is a single-process dev/SBA target. Crash
+    // recovery is intentionally unimplemented until durable execution lands
+    // (Restate adapter, tracked as WS-094). Until then, two-phase exposure
+    // is acceptable because process restart = workflow restart.
+    //
+    // What "done" looks like for WS-094: either (a) fold both writes into a
+    // single atomic transaction (preferred — `update_instance_atomic` already
+    // handles the row update + provenance append in one tx, so the create
+    // path could insert an empty row first and let the same atomic update
+    // attach provenance), or (b) make `create_record` idempotent on load by
+    // checking provenance count and re-running step 2 from `record` if zero.
+    // Either path closes the window; the choice depends on whether Restate
+    // owns crash recovery by the time WS-094 is scheduled.
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         let instance = record.instance.clone();
         let instance_json = serde_json::to_value(&instance)
@@ -652,5 +677,346 @@ mod tests {
         assert_eq!(decoded.step_results[0].service_ref, "service.ref");
         assert_eq!(decoded.step_results[0].idempotency_key.as_deref(), Some("idempotency-1"));
         assert_eq!(decoded.step_results[0].output["value"], 7);
+    }
+
+    /// Replay-entry roundtrip: every `ReplayValue` variant the runtime emits.
+    ///
+    /// Covers PersistDraft (Draft), SubmitTaskResponse (Completed/Failed/Rejected),
+    /// and AcceptIntakeHandoff (Intake). Drift here silently corrupts replay
+    /// reconciliation after a process restart — the `_ => None` arm in
+    /// `aux_from_json` would drop unknown kinds without trace.
+    ///
+    /// Each variant exercised here proves a specific arm in `aux_from_json` is
+    /// reachable and field-preserving; together they prove the `_ => None`
+    /// arm is unreachable for any variant the runtime can construct today.
+    /// Adding a new `ReplayValue` variant without extending this test will
+    /// pass compile but silently fall through `_ => None` at runtime — extend
+    /// this fixture as part of any such addition.
+    #[test]
+    fn aux_json_roundtrip_preserves_replay_entries() {
+        use wos_runtime::intake::{
+            IntakeAcceptanceDecision, IntakeAcceptanceOutcome, IntakeCaseDisposition,
+        };
+        use wos_runtime::store::{ReplayKey, ReplayOperation, ReplayValue};
+
+        let mut record = RuntimeRecord::new(minimal_case_instance());
+
+        // Variant 1: Draft (persistDraft)
+        record.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::PersistDraft,
+                task_id: "task-1".into(),
+                actor_id: "actor-a".into(),
+                token: "tok-1".into(),
+            },
+            ReplayValue::Draft(PersistDraftResult {
+                artifact_id: "artifact-draft-1".into(),
+            }),
+        );
+
+        // Variant 2: Submission(Completed)
+        record.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::SubmitTaskResponse,
+                task_id: "task-2".into(),
+                actor_id: "actor-b".into(),
+                token: "tok-2".into(),
+            },
+            ReplayValue::Submission(TaskSubmissionResult::Completed {
+                artifact_id: "artifact-2".into(),
+                case_mutated: true,
+                emitted_event: Some("event.completed".into()),
+            }),
+        );
+
+        // Variant 3: Submission(Failed) — code + emittedEvent must round-trip
+        record.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::SubmitTaskResponse,
+                task_id: "task-3".into(),
+                actor_id: "actor-c".into(),
+                token: "tok-3".into(),
+            },
+            ReplayValue::Submission(TaskSubmissionResult::Failed {
+                code: "validation.failed".into(),
+                emitted_event: Some("event.failed".into()),
+            }),
+        );
+
+        // Variant 4: Submission(Rejected) — code-only
+        record.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::SubmitTaskResponse,
+                task_id: "task-4".into(),
+                actor_id: "actor-d".into(),
+                token: "tok-4".into(),
+            },
+            ReplayValue::Submission(TaskSubmissionResult::Rejected {
+                code: "policy.denied".into(),
+            }),
+        );
+
+        // Variant 5: Intake — full IntakeAcceptanceDecision through serde
+        let intake_decision = IntakeAcceptanceDecision {
+            outcome: IntakeAcceptanceOutcome::Accepted {
+                case_disposition: IntakeCaseDisposition::AttachToExistingCase {
+                    case_ref: "case_existing_1".into(),
+                },
+            },
+            provenance: vec![ProvenanceRecord::state_transition(
+                "intake",
+                "review",
+                "accept",
+                Some("intake-binding"),
+            )],
+        };
+        record.replay_entries.insert(
+            ReplayKey {
+                operation: ReplayOperation::AcceptIntakeHandoff,
+                task_id: "intake-task-1".into(),
+                actor_id: "intake-actor".into(),
+                token: "intake-tok-1".into(),
+            },
+            ReplayValue::Intake(intake_decision.clone()),
+        );
+
+        let aux = aux_to_json(&record);
+        let decoded = aux_from_json(&aux);
+        assert_eq!(decoded.replay_entries.len(), 5);
+
+        let draft_key = ReplayKey {
+            operation: ReplayOperation::PersistDraft,
+            task_id: "task-1".into(),
+            actor_id: "actor-a".into(),
+            token: "tok-1".into(),
+        };
+        match decoded.replay_entries.get(&draft_key) {
+            Some(ReplayValue::Draft(d)) => assert_eq!(d.artifact_id, "artifact-draft-1"),
+            other => panic!("expected Draft replay value, got {other:?}"),
+        }
+
+        let submit_key = ReplayKey {
+            operation: ReplayOperation::SubmitTaskResponse,
+            task_id: "task-2".into(),
+            actor_id: "actor-b".into(),
+            token: "tok-2".into(),
+        };
+        match decoded.replay_entries.get(&submit_key) {
+            Some(ReplayValue::Submission(TaskSubmissionResult::Completed {
+                artifact_id,
+                case_mutated,
+                emitted_event,
+            })) => {
+                assert_eq!(artifact_id, "artifact-2");
+                assert!(*case_mutated);
+                assert_eq!(emitted_event.as_deref(), Some("event.completed"));
+            }
+            other => panic!("expected Completed submission, got {other:?}"),
+        }
+
+        let failed_key = ReplayKey {
+            operation: ReplayOperation::SubmitTaskResponse,
+            task_id: "task-3".into(),
+            actor_id: "actor-c".into(),
+            token: "tok-3".into(),
+        };
+        match decoded.replay_entries.get(&failed_key) {
+            Some(ReplayValue::Submission(TaskSubmissionResult::Failed {
+                code,
+                emitted_event,
+            })) => {
+                assert_eq!(code, "validation.failed");
+                assert_eq!(emitted_event.as_deref(), Some("event.failed"));
+            }
+            other => panic!("expected Failed submission, got {other:?}"),
+        }
+
+        let rejected_key = ReplayKey {
+            operation: ReplayOperation::SubmitTaskResponse,
+            task_id: "task-4".into(),
+            actor_id: "actor-d".into(),
+            token: "tok-4".into(),
+        };
+        match decoded.replay_entries.get(&rejected_key) {
+            Some(ReplayValue::Submission(TaskSubmissionResult::Rejected { code })) => {
+                assert_eq!(code, "policy.denied");
+            }
+            other => panic!("expected Rejected submission, got {other:?}"),
+        }
+
+        let intake_key = ReplayKey {
+            operation: ReplayOperation::AcceptIntakeHandoff,
+            task_id: "intake-task-1".into(),
+            actor_id: "intake-actor".into(),
+            token: "intake-tok-1".into(),
+        };
+        match decoded.replay_entries.get(&intake_key) {
+            Some(ReplayValue::Intake(decoded_decision)) => {
+                // Roundtrip via serde JSON canonical form — equality on the
+                // serialized shape is the contract that survives field
+                // additions / reorderings on `IntakeAcceptanceDecision`.
+                let original_json = serde_json::to_value(&intake_decision)
+                    .expect("serialise original intake decision");
+                let decoded_json = serde_json::to_value(decoded_decision)
+                    .expect("serialise decoded intake decision");
+                assert_eq!(original_json, decoded_json);
+            }
+            other => panic!("expected Intake replay value, got {other:?}"),
+        }
+    }
+
+    /// `create_record` must persist the instance plus seed-batch provenance and
+    /// emit them through the audit sink in the same call.
+    ///
+    /// This locks the "append on create" semantics — without it a freshly-created
+    /// instance with bootstrap provenance would be silently dropped, and the audit
+    /// fan-out would only fire on the next `save_record`.
+    #[tokio::test]
+    async fn create_record_persists_instance_and_seeds_audit_sink() {
+        #[derive(Debug, Default)]
+        struct CountingAuditSink {
+            calls: AtomicUsize,
+            rows: Mutex<Vec<ProvenanceRow>>,
+        }
+
+        #[async_trait::async_trait]
+        impl AuditSink for CountingAuditSink {
+            async fn append_provenance(&self, records: &[ProvenanceRow]) -> AuditResult<()> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                self.rows.lock().unwrap().extend_from_slice(records);
+                Ok(())
+            }
+
+            async fn append_export(&self, _envelope: ExportEnvelope) -> AuditResult<()> {
+                Ok(())
+            }
+        }
+
+        use std::sync::Mutex;
+
+        let temp_db = tempfile::NamedTempFile::new().expect("temp db");
+        let dsn = format!("sqlite://{}", temp_db.path().display());
+        let storage = Arc::new(
+            wos_server_sqlite::SqliteStorage::connect(&dsn)
+                .await
+                .expect("sqlite connect"),
+        );
+        storage.migrate().await.expect("sqlite migrate");
+        let provenance = Arc::new(PassthroughProvenancePort);
+        let audit = Arc::new(CountingAuditSink::default());
+        let handle = tokio::runtime::Handle::current();
+        let mut store =
+            StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
+
+        let mut record = RuntimeRecord::new(minimal_case_instance());
+        record.provenance_log.push(ProvenanceRecord::state_transition(
+            "intake",
+            "review",
+            "submit",
+            Some("sys"),
+        ));
+
+        let storage_for_check = storage.clone();
+        let audit_for_check = audit.clone();
+        tokio::task::spawn_blocking(move || {
+            store.create_record(record).expect("create record");
+        })
+        .await
+        .expect("create task join");
+
+        // Audit sink saw exactly one append call carrying the seed record.
+        assert_eq!(audit_for_check.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(audit_for_check.rows.lock().unwrap().len(), 1);
+
+        // Operational projection has the instance.
+        let row = storage_for_check
+            .get_instance("case_01")
+            .await
+            .expect("instance read")
+            .expect("instance exists");
+        assert_eq!(row.status, "active");
+
+        // Provenance was appended in the same operational transaction.
+        let provenance_rows = storage_for_check
+            .list_provenance("case_01")
+            .await
+            .expect("provenance read");
+        assert_eq!(provenance_rows.len(), 1);
+        assert_eq!(provenance_rows[0].seq, 1);
+    }
+
+    /// `create_record` fast path: when `provenance_log` is empty, the
+    /// `update_instance_atomic` + `audit_sink.append_provenance` pair is
+    /// skipped entirely, but the instance row itself still lands.
+    ///
+    /// This locks the empty-log branch — without it, an instance created with
+    /// no bootstrap provenance could either spuriously call the audit sink
+    /// (waste + spurious export entries) or fail to persist the instance row
+    /// (broken create semantics).
+    #[tokio::test]
+    async fn create_record_with_empty_provenance_skips_audit_sink() {
+        #[derive(Debug, Default)]
+        struct CountingAuditSink {
+            calls: AtomicUsize,
+        }
+
+        #[async_trait::async_trait]
+        impl AuditSink for CountingAuditSink {
+            async fn append_provenance(&self, _records: &[ProvenanceRow]) -> AuditResult<()> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+
+            async fn append_export(&self, _envelope: ExportEnvelope) -> AuditResult<()> {
+                Ok(())
+            }
+        }
+
+        let temp_db = tempfile::NamedTempFile::new().expect("temp db");
+        let dsn = format!("sqlite://{}", temp_db.path().display());
+        let storage = Arc::new(
+            wos_server_sqlite::SqliteStorage::connect(&dsn)
+                .await
+                .expect("sqlite connect"),
+        );
+        storage.migrate().await.expect("sqlite migrate");
+        let provenance = Arc::new(PassthroughProvenancePort);
+        let audit = Arc::new(CountingAuditSink::default());
+        let handle = tokio::runtime::Handle::current();
+        let mut store =
+            StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
+
+        // Empty provenance log — the fast path under test.
+        let record = RuntimeRecord::new(minimal_case_instance());
+        assert!(record.provenance_log.is_empty());
+
+        let storage_for_check = storage.clone();
+        let audit_for_check = audit.clone();
+        tokio::task::spawn_blocking(move || {
+            store.create_record(record).expect("create record");
+        })
+        .await
+        .expect("create task join");
+
+        // Audit sink was never called — the empty-log fast path skipped it.
+        assert_eq!(audit_for_check.calls.load(Ordering::SeqCst), 0);
+
+        // Provenance store has zero rows for this instance — `update_instance_atomic`
+        // was also skipped, so no provenance records were appended.
+        let provenance_rows = storage_for_check
+            .list_provenance("case_01")
+            .await
+            .expect("provenance read");
+        assert_eq!(provenance_rows.len(), 0);
+
+        // The instance row itself still landed via `create_instance` — the
+        // fast path skips the second-phase write but not the first.
+        let row = storage_for_check
+            .get_instance("case_01")
+            .await
+            .expect("instance read")
+            .expect("instance exists");
+        assert_eq!(row.status, "active");
+        assert_eq!(row.instance_id, "case_01");
     }
 }

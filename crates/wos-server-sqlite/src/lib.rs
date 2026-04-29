@@ -697,6 +697,20 @@ impl Storage for SqliteStorage {
     }
 
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()> {
+        // AUTH-CONTRACT INVARIANT: the ON CONFLICT DO UPDATE clause intentionally
+        // omits `password_hash` and `auth_epoch`. These two fields belong to the
+        // auth contract and are set ONLY at initial user creation (the INSERT
+        // arm). Subsequent upserts MUST NOT overwrite them — password rotation
+        // flows exclusively through `set_user_password_hash` (atomically updates
+        // hash, bumps epoch, revokes sessions in one tx), and global logout
+        // flows through `bump_user_auth_epoch`. Allowing upsert to clobber
+        // either field would silently nullify session invalidation guarantees
+        // and weaken password rotation atomicity.
+        //
+        // Both adapters (this SQLite impl and `wos-server-postgres`) implement
+        // the same invariant — keep them in lockstep. See
+        // `crates/wos-server/PARITY.md` § Auth contract for the full rule
+        // (`upsert_user` never touches `password_hash` / `auth_epoch`).
         sqlx::query(
             "INSERT INTO users (id, email, name, role, password_hash, avatar, auth_epoch, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
