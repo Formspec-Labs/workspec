@@ -4194,7 +4194,6 @@ dependencies = [
 name = "trellis-types"
 version = "0.1.0"
 dependencies = [
- "hkdf",
  "sha2 0.10.9",
 ]
 
