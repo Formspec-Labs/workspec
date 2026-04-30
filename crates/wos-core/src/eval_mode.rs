@@ -241,6 +241,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         }
     }
@@ -376,6 +385,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         };
 
@@ -439,6 +457,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         };
 

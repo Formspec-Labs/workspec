@@ -1,6 +1,19 @@
 // Rust guideline compliant 2026-02-21
 
-//! Typed model for WOS Kernel Documents (Layer 0).
+//! Typed model for WOS workflows.
+//!
+//! After ADR 0076 the author-time envelope is one merged document
+//! (`$wosWorkflow`) carrying lifecycle, actors, case file, contracts, plus
+//! optional embedded blocks for governance, agents, AI oversight, signature,
+//! custody, advanced, and assurance concerns. The canonical Rust name for
+//! this shape is [`WorkflowDocument`]; [`KernelDocument`] is retained as the
+//! historical alias used by ~200 call sites and refers to the same type.
+//!
+//! Consumers that only care about the kernel-relevant slice can borrow a
+//! [`KernelView`] from a [`WorkflowDocument`] via [`WorkflowDocument::kernel_view`]
+//! (or the alias `KernelDocument::kernel_view`). The view is a zero-cost
+//! projection that exposes lifecycle, actors, case_file, contracts, and the
+//! kernel execution config without copying.
 //!
 //! Deserialized from JSON via serde. The evaluation algorithm in [`crate::eval`]
 //! operates on these types, not on raw `serde_json::Value`.
@@ -10,7 +23,27 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
-/// A WOS Kernel Document.
+// `GovernanceDocument` (in `crate::model::governance`) provides the typed view
+// over the `governance` embedded block; consumers deserialize on demand. The
+// embedded field on this document is carried as raw `serde_json::Value` to
+// keep deserialization tolerant of fixtures whose deeper nested shapes may
+// not yet round-trip through the strict typed model.
+
+/// The merged-envelope WOS workflow document (canonical name; see also the
+/// [`KernelDocument`] alias). Carries the kernel surface (lifecycle, actors,
+/// case file, contracts, execution) plus optional embedded blocks
+/// (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`,
+/// `assurance`).
+///
+/// Embedded blocks are typed where a stable Rust shape exists (`governance`),
+/// and carried as raw `serde_json::Value` otherwise. Consumers that need a
+/// typed view of a raw block deserialize on demand into the corresponding
+/// `model::ai`, advanced, or signature type.
+///
+/// Per ADR 0063, embedded blocks govern this enclosing envelope and never
+/// declare `targetWorkflow` of their own. Sidecars (`$wosDelivery`,
+/// `$wosOntologyAlignment`) are separate document types and DO target a
+/// workflow URI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KernelDocument {
@@ -77,9 +110,185 @@ pub struct KernelDocument {
     #[serde(default)]
     pub max_relationship_event_depth: Option<u32>,
 
+    // ── Embedded blocks (ADR 0076) ─────────────────────────────────────────
+    //
+    // Each block governs the enclosing envelope. Per ADR 0063, embedded blocks
+    // MUST NOT declare targetWorkflow — that is a sidecar concept. Lint rule
+    // WOS-EMBED-TARGET-001 catches violations at the JSON layer; this Rust
+    // surface assumes well-formed envelopes.
+
+    /// Embedded due-process / review-protocol / pipeline / task-catalog
+    /// governance (Governance spec). Required for `rights-impacting` and
+    /// `safety-impacting` workflows; the schema's `allOf` enforces this
+    /// at parse time.
+    ///
+    /// Carried as raw JSON because fixtures exercise deep governance shapes
+    /// (pipelines, review protocols, hold policies) that the strict typed
+    /// model in `crate::model::governance::GovernanceDocument` does not yet
+    /// round-trip cleanly. Consumers that need a typed view deserialize the
+    /// `Value` into `GovernanceDocument` on demand:
+    ///
+    /// ```ignore
+    /// if let Some(gov_value) = doc.governance.as_ref() {
+    ///     let typed: GovernanceDocument = serde_json::from_value(gov_value.clone())?;
+    /// }
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governance: Option<serde_json::Value>,
+
+    /// Per-agent runtime declarations (model identity, autonomy, deontic
+    /// constraints, fallback chain, drift monitoring, invoker spec). Carried
+    /// as raw JSON because the canonical typed shape
+    /// (`crate::model::ai::AgentDeclaration`) is intentionally stricter than
+    /// the schema and would refuse otherwise-valid envelopes; consumers that
+    /// need typed access deserialize per-entry on demand.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agents: Vec<serde_json::Value>,
+
+    /// Cross-cutting AI oversight (disclosure, drift detection, narrative
+    /// tier, volume constraints). Pairs with `agents`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_oversight: Option<serde_json::Value>,
+
+    /// DocuSign-tier signature workflow (roles, documents, signing flow,
+    /// evidence). Required when any transition gates on `event.kind ==
+    /// "signature"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<serde_json::Value>,
+
+    /// Trellis custody binding (trust profile, anchor requirements). Loaded
+    /// whenever a workflow claims anchoring on transitions or signature
+    /// events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custody: Option<serde_json::Value>,
+
+    /// Advanced governance (constraint zones, equity guardrails, verifiable
+    /// constraints, circuit breaker, shadow mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advanced: Option<serde_json::Value>,
+
+    /// Assurance level / attestation / subject continuity declarations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assurance: Option<serde_json::Value>,
+
+    /// Public intake handoff configuration (per ADR 0073, formspec→WOS
+    /// boundary).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intake: Option<serde_json::Value>,
+
+    /// Output bindings (governed-output pipeline projections per ADR 0080).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bindings: Vec<serde_json::Value>,
+
     /// Extension data. Keys MUST start with `x-`.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
+}
+
+/// `WorkflowDocument` is the canonical name for the merged-envelope
+/// author-time document; `KernelDocument` is retained as the legacy alias for
+/// the same type. New code SHOULD prefer `WorkflowDocument`; the alias exists
+/// because ~200 call sites still spell it `KernelDocument`.
+pub type WorkflowDocument = KernelDocument;
+
+/// Borrow-only projection over a [`WorkflowDocument`] that exposes the
+/// kernel-relevant slice (lifecycle, actors, case file, contracts, execution
+/// config, evaluation mode, relationship-event depth). Constructed via
+/// [`WorkflowDocument::kernel_view`]; zero-cost (just borrows the underlying
+/// document).
+///
+/// Use a [`KernelView`] when you want to make it explicit that a function
+/// only reads the kernel surface and ignores embedded blocks. The view does
+/// not deep-copy; the lifetime ties the view to the source document.
+#[derive(Debug, Clone, Copy)]
+pub struct KernelView<'a> {
+    doc: &'a WorkflowDocument,
+}
+
+impl<'a> KernelView<'a> {
+    /// Construct a view over `doc`. Prefer [`WorkflowDocument::kernel_view`]
+    /// at call sites for readability; this constructor exists for tests and
+    /// adapter crates that don't import the inherent method.
+    #[must_use]
+    pub fn new(doc: &'a WorkflowDocument) -> Self {
+        Self { doc }
+    }
+
+    /// The canonical workflow URL, if declared.
+    #[must_use]
+    pub fn url(&self) -> Option<&'a str> {
+        self.doc.url.as_deref()
+    }
+
+    /// The workflow version, if declared.
+    #[must_use]
+    pub fn version(&self) -> Option<&'a str> {
+        self.doc.version.as_deref()
+    }
+
+    /// The impact-level classification, if declared.
+    #[must_use]
+    pub fn impact_level(&self) -> Option<ImpactLevel> {
+        self.doc.impact_level
+    }
+
+    /// Lifecycle topology (initial state + state map).
+    #[must_use]
+    pub fn lifecycle(&self) -> &'a Lifecycle {
+        &self.doc.lifecycle
+    }
+
+    /// Actor declarations (humans, services, agents).
+    #[must_use]
+    pub fn actors(&self) -> &'a [Actor] {
+        &self.doc.actors
+    }
+
+    /// Inline case-file shape, if declared.
+    #[must_use]
+    pub fn case_file(&self) -> Option<&'a CaseFile> {
+        self.doc.case_file.as_ref()
+    }
+
+    /// Named contract references.
+    #[must_use]
+    pub fn contracts(&self) -> &'a HashMap<String, ContractReference> {
+        &self.doc.contracts
+    }
+
+    /// Execution configuration (timeouts, compensability, instance
+    /// versioning).
+    #[must_use]
+    pub fn execution(&self) -> Option<&'a ExecutionConfig> {
+        self.doc.execution.as_ref()
+    }
+
+    /// Evaluation mode (`event-driven` or `continuous`).
+    #[must_use]
+    pub fn evaluation_mode(&self) -> Option<EvaluationMode> {
+        self.doc.evaluation_mode
+    }
+
+    /// Cascade depth cap for `$related.*` events.
+    #[must_use]
+    pub fn max_relationship_event_depth(&self) -> Option<u32> {
+        self.doc.max_relationship_event_depth
+    }
+
+    /// Underlying merged document, when a consumer needs to drop back to the
+    /// full envelope (e.g., for a sibling embedded-block view).
+    #[must_use]
+    pub fn document(&self) -> &'a WorkflowDocument {
+        self.doc
+    }
+}
+
+impl KernelDocument {
+    /// Borrow this document as a kernel-only projection. Zero-cost.
+    #[must_use]
+    pub fn kernel_view(&self) -> KernelView<'_> {
+        KernelView { doc: self }
+    }
 }
 
 /// A contract reference (Kernel S11).

@@ -192,6 +192,170 @@ fn create_task_formspec_coprocessor_fields_round_trip() {
     assert_eq!(action.failure_event.as_deref(), Some("intake.failed"));
 }
 
+// ── ADR 0076 / B-2: WorkflowDocument alias + embedded blocks + KernelView ───
+
+#[test]
+fn workflow_document_alias_resolves_to_kernel_document() {
+    // WorkflowDocument is the canonical name; KernelDocument is the alias.
+    // Both names must resolve to the same type so existing consumers keep
+    // working unchanged while new code uses the canonical name.
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/alias",
+        "version": "1.0.0",
+        "title": "Alias Test",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        }
+    });
+    let workflow: wos_core::WorkflowDocument =
+        serde_json::from_value(json.clone()).expect("WorkflowDocument deserializes");
+    let kernel: KernelDocument =
+        serde_json::from_value(json).expect("KernelDocument alias deserializes the same JSON");
+    assert_eq!(workflow.url, kernel.url);
+    assert_eq!(workflow.version, kernel.version);
+    assert_eq!(workflow.lifecycle.initial_state, kernel.lifecycle.initial_state);
+}
+
+#[test]
+fn embedded_governance_block_round_trips_as_raw_value() {
+    // The embedded `governance` block is carried as raw serde_json::Value to
+    // keep KernelDocument deserialization tolerant of deep governance shapes
+    // (pipelines, review protocols, etc.) that the strict typed
+    // GovernanceDocument doesn't round-trip cleanly. Consumers that want
+    // typed access deserialize on demand.
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/embed-governance",
+        "version": "1.0.0",
+        "title": "Embedded Governance",
+        "impactLevel": "rights-impacting",
+        "actors": [{"id": "caseworker", "type": "human"}],
+        "lifecycle": {
+            "initialState": "review",
+            "states": {
+                "review": {"type": "atomic", "transitions": [{"target": "decided"}]},
+                "decided": {"type": "final"}
+            }
+        },
+        "governance": {
+            "dueProcess": {"scope": "true"},
+            "maxDelegationDepth": 3
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("deserializes");
+    let gov = doc.governance.as_ref().expect("governance present");
+    assert_eq!(gov["maxDelegationDepth"], 3);
+    assert!(gov["dueProcess"].is_object());
+
+    // On-demand typed deserialization MUST succeed for this minimal shape.
+    let typed: wos_core::GovernanceDocument =
+        serde_json::from_value(gov.clone()).expect("on-demand typed deserialization succeeds");
+    assert_eq!(typed.max_delegation_depth, 3);
+    assert!(typed.due_process.is_some());
+}
+
+#[test]
+fn embedded_block_absent_when_not_in_envelope() {
+    // A workflow without governance/agents/aiOversight MUST deserialize
+    // cleanly with each embedded block at its serde default.
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/no-blocks",
+        "version": "1.0.0",
+        "title": "No Embedded Blocks",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("deserializes");
+    assert!(doc.governance.is_none());
+    assert!(doc.agents.is_empty());
+    assert!(doc.ai_oversight.is_none());
+    assert!(doc.signature.is_none());
+    assert!(doc.custody.is_none());
+    assert!(doc.advanced.is_none());
+    assert!(doc.assurance.is_none());
+    assert!(doc.intake.is_none());
+    assert!(doc.bindings.is_empty());
+}
+
+#[test]
+fn kernel_view_borrows_kernel_relevant_slice() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/kernel-view",
+        "version": "2.0.0",
+        "title": "KernelView Borrow",
+        "impactLevel": "operational",
+        "actors": [
+            {"id": "extractor", "type": "agent"},
+            {"id": "caseworker", "type": "human"}
+        ],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        },
+        "evaluationMode": "event-driven",
+        "maxRelationshipEventDepth": 5,
+        "governance": {
+            "dueProcess": {"scope": "true"}
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("deserializes");
+    let view = doc.kernel_view();
+
+    // The kernel view exposes the kernel-relevant slice directly.
+    assert_eq!(view.url(), Some("https://test.wos-spec.org/workflows/kernel-view"));
+    assert_eq!(view.version(), Some("2.0.0"));
+    assert_eq!(view.impact_level(), Some(wos_core::ImpactLevel::Operational));
+    assert_eq!(view.actors().len(), 2);
+    assert_eq!(view.lifecycle().initial_state, "start");
+    assert_eq!(
+        view.evaluation_mode(),
+        Some(wos_core::model::kernel::EvaluationMode::EventDriven)
+    );
+    assert_eq!(view.max_relationship_event_depth(), Some(5));
+
+    // The view does NOT expose embedded blocks (that's by design — use the
+    // document directly when you need both kernel + governance).
+    // But document() lets you escape back to the full envelope.
+    assert!(view.document().governance.is_some());
+}
+
+#[test]
+fn kernel_view_is_zero_cost_borrow() {
+    // Borrow-check sanity: building a view does not move the document, and
+    // the view's lifetime ties to the source.
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {"initialState": "x", "states": {"x": {"type": "final"}}}
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("deserializes");
+    let view_a = doc.kernel_view();
+    let view_b = doc.kernel_view();
+    // Both views borrow the same document.
+    assert_eq!(
+        view_a.lifecycle().initial_state,
+        view_b.lifecycle().initial_state
+    );
+}
+
 // ── ADR 0064: Agent ActorKind variant ───────────────────────────────────────
 
 #[test]

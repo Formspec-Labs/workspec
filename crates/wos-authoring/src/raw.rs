@@ -92,6 +92,15 @@ fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument 
         execution: None,
         evaluation_mode: None,
         max_relationship_event_depth: None,
+        governance: None,
+        agents: Vec::new(),
+        ai_oversight: None,
+        signature: None,
+        custody: None,
+        advanced: None,
+        assurance: None,
+        intake: None,
+        bindings: Vec::new(),
         extensions: HashMap::new(),
     }
 }

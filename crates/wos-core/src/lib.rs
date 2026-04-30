@@ -51,8 +51,8 @@ pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
 pub use model::governance::GovernanceDocument;
 pub use model::kernel::{
-    Action, ActionKind, KernelDocument, SignalScope, State, StateKind, TimerEventSource,
-    Transition, TransitionEvent,
+    Action, ActionKind, KernelDocument, KernelView, SignalScope, State, StateKind,
+    TimerEventSource, Transition, TransitionEvent, WorkflowDocument,
 };
 pub use model::kernel::{Actor, ActorKind, CaseFile, CaseRelationship, FieldDefinition};
 pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};
