@@ -55,7 +55,9 @@ studio-build: studio-install
 test: rust-test python-test studio-test
 
 rust-test:
-	$(CARGO) nextest run --workspace
+	@echo "Running Rust workspace tests (nextest)."
+	@echo "Note: discovery for large integration binaries (e.g. wos-server) can take a while before PASS lines appear."
+	$(CARGO) nextest run --workspace --status-level pass
 
 python-test:
 	$(PYTEST) tests/schemas -q
