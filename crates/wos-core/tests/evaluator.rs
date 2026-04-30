@@ -1458,3 +1458,392 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
     );
     assert_eq!(count_records(&eval, ProvenanceKind::OnEntry), 3);
 }
+
+// ── ForEach outputPath + mergeStrategy (Sub-PR D-4) ───────────────────────
+
+#[test]
+fn foreach_output_path_collect_appends_each_item_to_array() {
+    // mergeStrategy=collect: per-iteration `$item` (post-body) is appended
+    // to an array at outputPath. Initial absent → empty array → grows by
+    // one per iteration. After three iterations, `caseFile.results` is the
+    // input collection element-for-element (atomic body, identity capture).
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.results".into()),
+            merge_strategy: Some(MergeStrategy::Collect),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([{"id": "a"}, {"id": "b"}, {"id": "c"}]),
+    );
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert!(eval.configuration().contains("done"));
+    assert_eq!(
+        eval.case_state()["results"],
+        serde_json::json!([{"id": "a"}, {"id": "b"}, {"id": "c"}]),
+        "collect MUST accumulate post-body items in iteration order"
+    );
+
+    // Each merge emits a caseStateMutation record attributed to `loop:output`.
+    let output_mutations: Vec<_> = eval
+        .provenance()
+        .records()
+        .iter()
+        .filter(|r| {
+            r.record_kind == ProvenanceKind::CaseStateMutation
+                && r.to_state.as_deref() == Some("loop:output")
+        })
+        .collect();
+    assert_eq!(
+        output_mutations.len(),
+        3,
+        "one foreach-output mutation per iteration; got {}",
+        output_mutations.len()
+    );
+}
+
+#[test]
+fn foreach_output_path_collect_appends_to_existing_array() {
+    // When outputPath is pre-populated with an array (e.g., a prior foreach
+    // wrote to it), collect MUST extend rather than overwrite. This matches
+    // workflow patterns where multiple foreach states funnel into a single
+    // accumulator.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.results".into()),
+            merge_strategy: Some(MergeStrategy::Collect),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!(["new1", "new2"]));
+    eval.case_state_mut().insert(
+        "results".into(),
+        serde_json::json!(["existing1"]),
+    );
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert_eq!(
+        eval.case_state()["results"],
+        serde_json::json!(["existing1", "new1", "new2"]),
+        "collect MUST append to an existing array, not replace it"
+    );
+}
+
+#[test]
+fn foreach_output_path_shallow_replaces_top_level_keys() {
+    // mergeStrategy=shallow: each iteration's item (which MUST be an object)
+    // has its top-level keys merged into the existing object at outputPath.
+    // Later iterations overwrite earlier keys when names collide.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.merged".into()),
+            merge_strategy: Some(MergeStrategy::Shallow),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([
+            {"a": 1, "shared": "first"},
+            {"b": 2, "shared": "second"}
+        ]),
+    );
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert_eq!(
+        eval.case_state()["merged"],
+        serde_json::json!({"a": 1, "b": 2, "shared": "second"}),
+        "shallow MUST overwrite colliding top-level keys with the latest iteration's value"
+    );
+}
+
+#[test]
+fn foreach_output_path_deep_recursively_merges_objects() {
+    // mergeStrategy=deep: nested objects merge key-by-key. Non-object
+    // collisions are replaced wholesale; arrays are NOT element-merged.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.merged".into()),
+            merge_strategy: Some(MergeStrategy::Deep),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([
+            {"profile": {"name": "Alice", "age": 30}, "tags": ["a"]},
+            {"profile": {"age": 31, "city": "Boston"}, "tags": ["b"]}
+        ]),
+    );
+
+    eval.process_event("submit", None, None).unwrap();
+
+    let merged = &eval.case_state()["merged"];
+    assert_eq!(
+        merged["profile"]["name"], "Alice",
+        "deep merge MUST preserve keys present in earlier iterations when later iterations don't override"
+    );
+    assert_eq!(
+        merged["profile"]["age"], 31,
+        "deep merge MUST overwrite primitive collisions with the later iteration"
+    );
+    assert_eq!(
+        merged["profile"]["city"], "Boston",
+        "deep merge MUST add new keys from later iterations"
+    );
+    // Arrays replace, do not concat.
+    assert_eq!(
+        merged["tags"],
+        serde_json::json!(["b"]),
+        "deep merge MUST replace arrays wholesale (no element-merge)"
+    );
+}
+
+#[test]
+fn foreach_output_path_collect_rejects_non_array_existing() {
+    // When outputPath is pre-populated with a non-array, non-null value,
+    // collect MUST reject — author intent (collect) and runtime state are
+    // inconsistent.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.results".into()),
+            merge_strategy: Some(MergeStrategy::Collect),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert("items".into(), serde_json::json!([{}]));
+    eval.case_state_mut().insert(
+        "results".into(),
+        serde_json::Value::String("not-an-array".into()),
+    );
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("collect MUST reject non-array existing value");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("mergeStrategy=collect requires an array"),
+        "error message MUST identify the merge-strategy contract: {msg}"
+    );
+}
+
+#[test]
+fn foreach_output_path_shallow_rejects_non_object_item() {
+    // mergeStrategy=shallow requires per-iteration items to be objects;
+    // a primitive item (string / number / null) MUST be rejected.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.merged".into()),
+            merge_strategy: Some(MergeStrategy::Shallow),
+            ..foreach_with_body(
+                "caseFile.items",
+                None,
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!(["primitive-string"]));
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("shallow MUST reject non-object item");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("mergeStrategy=shallow requires per-iteration item to be an object"),
+        "error message MUST name shallow's object requirement: {msg}"
+    );
+}
+
+#[test]
+fn foreach_output_path_persists_after_foreach_completes() {
+    // Per spec: per-iteration bindings ($item / $index) do NOT persist, but
+    // outputPath writes DO persist into case state — that is precisely why
+    // outputPath exists. Sanity-check: after the foreach completes, the
+    // accumulated outputPath value is still readable from case_state.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        State {
+            output_path: Some("caseFile.captured".into()),
+            merge_strategy: Some(MergeStrategy::Collect),
+            ..foreach_with_body(
+                "caseFile.items",
+                Some("currentItem"),
+                atomic_body_with_entry(vec![]),
+                vec![transition_anonymous("done")],
+            )
+        },
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([1, 2, 3]));
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert!(
+        eval.case_state().get("currentItem").is_none(),
+        "iteration binding MUST NOT persist"
+    );
+    assert_eq!(
+        eval.case_state()["captured"],
+        serde_json::json!([1, 2, 3]),
+        "outputPath value MUST persist after foreach completes"
+    );
+}

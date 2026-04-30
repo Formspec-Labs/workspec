@@ -19,8 +19,8 @@ use time::format_description::well_known::Rfc3339;
 use crate::context::EvalContext;
 use crate::instance::CaseInstance;
 use crate::model::kernel::{
-    Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, Region, State, StateKind,
-    Transition, TransitionEvent,
+    Action, ActionKind, CancellationPolicy, HistoryMode, KernelDocument, MergeStrategy, Region,
+    State, StateKind, Transition, TransitionEvent,
 };
 use crate::provenance::{CaseFileSnapshot, ProvenanceLog, ProvenanceRecord};
 use crate::timer::Timers;
@@ -912,6 +912,33 @@ impl Evaluator {
                         }
                     }
 
+                    // Per-iteration output write per Sub-PR D-4. The
+                    // post-body value of `case_state[item_var]` is the
+                    // per-iteration "output" — for atomic bodies that
+                    // body cannot mutate today, this collapses to the input
+                    // item, which is still useful for filter / pass-through
+                    // patterns. When a future PR adds FEL-evaluated setData
+                    // values or nested-path traversal the same hook captures
+                    // the transformed value without further surgery.
+                    if let Some(output_path) = indexed.state.output_path.as_deref() {
+                        let strategy = indexed
+                            .state
+                            .merge_strategy
+                            .unwrap_or(MergeStrategy::Collect);
+                        let item_value = self
+                            .case_state
+                            .get(&item_var)
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
+                        self.merge_foreach_output(
+                            state_id,
+                            output_path,
+                            strategy,
+                            item_value,
+                            actor,
+                        )?;
+                    }
+
                     let mut break_triggered = false;
                     if let Some(ref expr) = break_expr {
                         if self.evaluate_foreach_predicate(state_id, expr, event_data)? {
@@ -1281,6 +1308,135 @@ impl Evaluator {
         })?;
         let result = evaluate(&parsed, &env);
         Ok(matches!(result.value, FelValue::Boolean(true)))
+    }
+
+    /// Merge a per-iteration value into a `ForEach` state's `outputPath`
+    /// according to `mergeStrategy` (Sub-PR D-4 semantics).
+    ///
+    /// - [`MergeStrategy::Collect`]: append `item_value` to the array at
+    ///   `output_path`. Initializes an empty array when the path is absent.
+    ///   Errors with [`EvalError::ForEach`] if the existing value is non-null
+    ///   and non-array (mismatch between author intent and runtime state).
+    /// - [`MergeStrategy::Shallow`]: top-level keys of `item_value` (which
+    ///   MUST be a JSON object) are copied into the existing object at
+    ///   `output_path`, replacing any colliding keys. Initializes an empty
+    ///   object when absent.
+    /// - [`MergeStrategy::Deep`]: recursive merge. Nested objects merge
+    ///   key-by-key; non-object values at any level are replaced wholesale.
+    ///
+    /// On every successful merge the runtime emits a `caseStateMutation`
+    /// provenance record attributed to the synthetic lifecycle-state label
+    /// `<foreach-state>:output` so audit tooling can distinguish foreach
+    /// output writes from state-level onEntry / onExit mutations and from
+    /// per-iteration body mutations (`<foreach-state>:body`).
+    fn merge_foreach_output(
+        &mut self,
+        state_id: &str,
+        output_path: &str,
+        strategy: MergeStrategy,
+        item_value: serde_json::Value,
+        actor: Option<&str>,
+    ) -> Result<(), EvalError> {
+        let key = output_path
+            .strip_prefix("caseFile.")
+            .unwrap_or(output_path)
+            .to_string();
+        let existing = self.case_state.get(&key).cloned();
+
+        let merged = match strategy {
+            MergeStrategy::Collect => {
+                let mut arr = match existing {
+                    Some(serde_json::Value::Array(a)) => a,
+                    None | Some(serde_json::Value::Null) => Vec::new(),
+                    Some(other) => {
+                        return Err(EvalError::ForEach {
+                            state: state_id.to_string(),
+                            message: format!(
+                                "outputPath '{output_path}' has non-array value of kind {}; \
+                                 mergeStrategy=collect requires an array (or absent)",
+                                json_kind(&other)
+                            ),
+                        });
+                    }
+                };
+                arr.push(item_value);
+                serde_json::Value::Array(arr)
+            }
+            MergeStrategy::Shallow => {
+                let item_obj = match item_value {
+                    serde_json::Value::Object(m) => m,
+                    other => {
+                        return Err(EvalError::ForEach {
+                            state: state_id.to_string(),
+                            message: format!(
+                                "mergeStrategy=shallow requires per-iteration item to be an \
+                                 object; got {} for outputPath '{output_path}'",
+                                json_kind(&other)
+                            ),
+                        });
+                    }
+                };
+                let mut existing_obj = match existing {
+                    Some(serde_json::Value::Object(m)) => m,
+                    None | Some(serde_json::Value::Null) => serde_json::Map::new(),
+                    Some(other) => {
+                        return Err(EvalError::ForEach {
+                            state: state_id.to_string(),
+                            message: format!(
+                                "outputPath '{output_path}' has non-object value of kind {}; \
+                                 mergeStrategy=shallow requires an object (or absent)",
+                                json_kind(&other)
+                            ),
+                        });
+                    }
+                };
+                for (k, v) in item_obj {
+                    existing_obj.insert(k, v);
+                }
+                serde_json::Value::Object(existing_obj)
+            }
+            MergeStrategy::Deep => {
+                if !matches!(item_value, serde_json::Value::Object(_)) {
+                    return Err(EvalError::ForEach {
+                        state: state_id.to_string(),
+                        message: format!(
+                            "mergeStrategy=deep requires per-iteration item to be an object; \
+                             got {} for outputPath '{output_path}'",
+                            json_kind(&item_value)
+                        ),
+                    });
+                }
+                let base = match existing {
+                    Some(serde_json::Value::Object(m)) => serde_json::Value::Object(m),
+                    None | Some(serde_json::Value::Null) => {
+                        serde_json::Value::Object(serde_json::Map::new())
+                    }
+                    Some(other) => {
+                        return Err(EvalError::ForEach {
+                            state: state_id.to_string(),
+                            message: format!(
+                                "outputPath '{output_path}' has non-object value of kind {}; \
+                                 mergeStrategy=deep requires an object (or absent)",
+                                json_kind(&other)
+                            ),
+                        });
+                    }
+                };
+                deep_merge_json(base, item_value)
+            }
+        };
+
+        self.case_state.insert(key, merged.clone());
+
+        let output_label = format!("{state_id}:output");
+        self.provenance.push(ProvenanceRecord::case_state_mutation(
+            output_path,
+            &merged,
+            actor,
+            &output_label,
+        ));
+
+        Ok(())
     }
 
     /// Fire the first eligible outgoing transition of a `ForEach` state after
@@ -1844,6 +2000,31 @@ fn action_kind_camel(kind: ActionKind) -> &'static str {
         ActionKind::StartTimer => "startTimer",
         ActionKind::CancelTimer => "cancelTimer",
         ActionKind::Log => "log",
+    }
+}
+
+/// Recursively merge `incoming` into `base`. Both arguments SHOULD be JSON
+/// objects when called from [`Evaluator::merge_foreach_output`] under
+/// [`MergeStrategy::Deep`]; the type guards there enforce the precondition.
+/// Within objects: keys in `incoming` overwrite keys in `base`, but when both
+/// sides are objects the merge recurses. Non-object collisions (e.g. base has
+/// `{"x": [1, 2]}`, incoming has `{"x": [3]}`) are resolved by replacement —
+/// `incoming` wins. Arrays are NOT element-merged; this matches typical
+/// "deep merge" semantics in JSON tooling and keeps behavior predictable
+/// when authors collect heterogenous shapes.
+fn deep_merge_json(base: serde_json::Value, incoming: serde_json::Value) -> serde_json::Value {
+    match (base, incoming) {
+        (serde_json::Value::Object(mut b), serde_json::Value::Object(i)) => {
+            for (k, v) in i {
+                let merged = match b.remove(&k) {
+                    Some(existing) => deep_merge_json(existing, v),
+                    None => v,
+                };
+                b.insert(k, merged);
+            }
+            serde_json::Value::Object(b)
+        }
+        (_, incoming) => incoming,
     }
 }
 
