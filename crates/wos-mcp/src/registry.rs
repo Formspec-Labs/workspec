@@ -40,7 +40,7 @@ impl ProjectRegistry {
         if self.entries.len() >= MAX_PROJECTS {
             return Err(ToolError::TooManyProjects);
         }
-        let id = Uuid::new_v4();
+        let id = Uuid::now_v7();
         self.entries.insert(id, project);
         Ok(id)
     }

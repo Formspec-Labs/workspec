@@ -287,7 +287,8 @@ async fn seed_instance_with_active_task(state: &AppState) -> (String, String) {
     let instance = state
         .runtime
         .create_instance(CreateInstanceRequest {
-            instance_id: format!("urn:wos:instance:{}", uuid::Uuid::new_v4()),
+            instance_id: format!("urn:wos:instance:{}", uuid::Uuid::now_v7()),
+            tenant: None,
             definition_url: KERNEL_URL.to_string(),
             definition_version: KERNEL_VERSION.to_string(),
             initial_case_state: Some(serde_json::json!({ "approved": false })),

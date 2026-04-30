@@ -589,6 +589,7 @@ mod tests {
     fn minimal_case_instance() -> CaseInstance {
         CaseInstance {
             instance_id: "case_01".into(),
+            tenant: wos_core::typeid::DEFAULT_TENANT.to_string(),
             definition_url: "urn:wos:test:workflow".into(),
             definition_version: "1.0.0".into(),
             configuration: vec!["intake".into()],

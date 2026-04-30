@@ -114,8 +114,8 @@ impl AuthProvider for JwtAuth {
         };
 
         let epoch = user_row.auth_epoch;
-        let access_jti = Uuid::new_v4().to_string();
-        let refresh_jti = Uuid::new_v4().to_string();
+        let access_jti = Uuid::now_v7().to_string();
+        let refresh_jti = Uuid::now_v7().to_string();
         let (access_token, access_exp) =
             self.issue(&user, "access", self.access_ttl, &access_jti, epoch)?;
         let (refresh_token, refresh_exp) =
@@ -168,8 +168,8 @@ impl AuthProvider for JwtAuth {
             role: user_row.role.clone(),
             avatar: user_row.avatar.clone(),
         };
-        let access_jti = Uuid::new_v4().to_string();
-        let refresh_jti = Uuid::new_v4().to_string();
+        let access_jti = Uuid::now_v7().to_string();
+        let refresh_jti = Uuid::now_v7().to_string();
         let epoch = user_row.auth_epoch;
         let (access_token, access_exp) =
             self.issue(&user, "access", self.access_ttl, &access_jti, epoch)?;

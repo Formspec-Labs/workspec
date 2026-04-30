@@ -193,6 +193,7 @@ impl WosRuntime {
                         Err(RuntimeError::Store(StoreError::NotFound(_))) => {
                             self.create_instance(CreateInstanceRequest {
                                 instance_id: case_ref.clone(),
+                                tenant: None,
                                 definition_url: definition.definition_url.clone(),
                                 definition_version: definition.definition_version.clone(),
                                 initial_case_state: initial_case_state.clone(),

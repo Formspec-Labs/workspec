@@ -166,10 +166,11 @@ async fn create(
         .unwrap_or_else(|| kernel.version.clone());
     let instance_id = body
         .instance_id
-        .unwrap_or_else(|| format!("urn:wos:instance:{}", uuid::Uuid::new_v4()));
+        .unwrap_or_else(|| format!("urn:wos:instance:{}", uuid::Uuid::now_v7()));
 
     let req = CreateInstanceRequest {
         instance_id,
+        tenant: None,
         definition_url: body.definition_url,
         definition_version: version,
         initial_case_state: body.initial_case_state,

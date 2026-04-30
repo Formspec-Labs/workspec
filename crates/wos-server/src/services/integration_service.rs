@@ -119,7 +119,7 @@ impl IntegrationService {
         inputs: &serde_json::Value,
     ) -> ApiResult<serde_json::Value> {
         let _profile = Self::integration_profile(bundle, workflow_url).await?;
-        let correlation_token = Uuid::new_v4().to_string();
+        let correlation_token = Uuid::now_v7().to_string();
         if binding.eq_ignore_ascii_case("http")
             && let (Some(url), Some(method)) = (
                 inputs.get("url").and_then(|v| v.as_str()),

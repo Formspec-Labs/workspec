@@ -315,6 +315,7 @@ impl WorkflowEngine {
         self.runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: CONFORMANCE_INSTANCE_ID.to_string(),
+                tenant: None,
                 definition_url: self.definition_url.clone(),
                 definition_version: self.definition_version.clone(),
                 initial_case_state: Some(

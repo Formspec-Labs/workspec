@@ -140,7 +140,7 @@ impl AgentService {
     ) -> ApiResult<AgentView> {
         let now = Utc::now();
         let row = AgentRow {
-            id: format!("urn:wos:agent:{}", Uuid::new_v4()),
+            id: format!("urn:wos:agent:{}", Uuid::now_v7()),
             workflow_url: req.workflow_url,
             name: req.name,
             kind: req.kind,

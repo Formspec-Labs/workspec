@@ -238,6 +238,7 @@ fn runtime_formspec_intake_workflow_attach_survives_legacy_alias_canonicalizatio
     let created = runtime
         .create_instance(CreateInstanceRequest {
             instance_id: legacy_ref.to_string(),
+            tenant: None,
             definition_url: "urn:test:formspec-intake-runtime-it".to_string(),
             definition_version: "1.0.0".to_string(),
             initial_case_state: None,

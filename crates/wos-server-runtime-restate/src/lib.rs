@@ -201,6 +201,7 @@ mod tests {
             definition_url: "urn:wos:workflow:test:1.0.0".into(),
             definition_version: "1.0.0".into(),
             instance_id: instance_id.into(),
+            tenant: None,
             initial_case_state: None,
         }
     }

@@ -130,7 +130,7 @@ impl AssuranceService {
         req: RecordFactRequest,
     ) -> ApiResult<IdentityFactView> {
         let row = IdentityFactRow {
-            id: format!("urn:wos:identity-fact:{}", Uuid::new_v4()),
+            id: format!("urn:wos:identity-fact:{}", Uuid::now_v7()),
             instance_id: instance_id.to_string(),
             subject_ref: req.subject_ref,
             assurance_level: req.assurance_level.as_wire().to_string(),
@@ -157,7 +157,7 @@ impl AssuranceService {
             .map(|p| p.as_wire().to_string())
             .unwrap_or_else(|| prior.disclosure_posture.clone());
         let row = IdentityFactRow {
-            id: format!("urn:wos:identity-fact:{}", Uuid::new_v4()),
+            id: format!("urn:wos:identity-fact:{}", Uuid::now_v7()),
             instance_id: prior.instance_id.clone(),
             subject_ref: prior.subject_ref.clone(),
             assurance_level: req.new_assurance_level.as_wire().to_string(),

@@ -27,7 +27,7 @@ pub fn stub_config(fixtures_dir: PathBuf) -> Arc<ServerConfig> {
     let _ = fixtures_dir;
     let database_url = format!(
         "sqlite://file:test-{}?mode=memory&cache=shared",
-        Uuid::new_v4()
+        Uuid::now_v7()
     );
     Arc::new(ServerConfig {
         port: 0,
@@ -240,7 +240,7 @@ pub async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
     let _ = fixtures_dir;
     let database_url = format!(
         "sqlite://file:jwt-test-{}?mode=memory&cache=shared",
-        Uuid::new_v4()
+        Uuid::now_v7()
     );
     let store = Arc::new(
         SqliteStorage::connect(&database_url)

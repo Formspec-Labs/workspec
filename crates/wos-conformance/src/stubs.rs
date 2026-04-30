@@ -217,6 +217,7 @@ mod tests {
 
         let instance = CaseInstance {
             instance_id: "test-001".to_string(),
+            tenant: "default".to_string(),
             definition_url: "https://example.com/workflow".to_string(),
             definition_version: "1.0".to_string(),
             configuration: vec!["open".to_string()],

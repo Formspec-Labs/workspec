@@ -120,6 +120,7 @@ async fn tick_once_fires_expired_timer_and_advances_instance() {
         .runtime
         .create_instance(CreateInstanceRequest {
             instance_id: "urn:wos:instance:timer-poll-e2e:one".into(),
+            tenant: None,
             definition_url: "urn:wos:workflow:timer-poll-e2e:1.0.0".into(),
             definition_version: "1.0.0".into(),
             initial_case_state: None,

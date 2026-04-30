@@ -761,6 +761,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-determination".to_string(),
+                tenant: None,
                 definition_url: "urn:test:determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(case_state.clone()),
@@ -852,6 +853,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-join-determination".to_string(),
+                tenant: None,
                 definition_url: "urn:test:join-determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "reviewScore": 0 })),
@@ -935,6 +937,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-multi-determination".to_string(),
+                tenant: None,
                 definition_url: "urn:test:multi-determination-snapshot".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "firstOutcome": "pending" })),
@@ -1824,6 +1827,7 @@ mod tests {
             let created = runtime
                 .create_instance(CreateInstanceRequest {
                     instance_id: "case-trait".to_string(),
+                    tenant: None,
                     definition_url: "urn:test:durable-trait".to_string(),
                     definition_version: "1.0.0".to_string(),
                     initial_case_state: Some(serde_json::json!({ "approved": false })),
@@ -2008,6 +2012,7 @@ mod tests {
         let created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "urn:wos:case:case-2026-0042".to_string(),
+                tenant: None,
                 definition_url: "urn:test:intake-dispatch".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2066,6 +2071,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "urn:wos:case:case-policy-prov".to_string(),
+                tenant: None,
                 definition_url: "urn:test:intake-policy-prov".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2202,6 +2208,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "urn:wos:case:case-2026-0042".to_string(),
+                tenant: None,
                 definition_url: "urn:test:intake-policy-reject".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2688,6 +2695,7 @@ mod tests {
         let created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-receipt".to_string(),
+                tenant: None,
                 definition_url: "urn:test:receipt".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2737,6 +2745,7 @@ mod tests {
         let _created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-receipt-idem".to_string(),
+                tenant: None,
                 definition_url: "urn:test:receipt-idem".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2780,6 +2789,7 @@ mod tests {
         let _created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-receipt-conflict".to_string(),
+                tenant: None,
                 definition_url: "urn:test:receipt-conflict".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2822,6 +2832,7 @@ mod tests {
         let created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: pre_minted.clone(),
+                tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2844,6 +2855,7 @@ mod tests {
         let created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "   ".to_string(),
+                tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2870,6 +2882,7 @@ mod tests {
         let created = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "legacy-case-42".to_string(),
+                tenant: None,
                 definition_url: "urn:test:populator".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -2975,6 +2988,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-1".to_string(),
+                tenant: None,
                 definition_url: "urn:test:kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "approved": false })),
@@ -3041,6 +3055,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-token".to_string(),
+                tenant: None,
                 definition_url: "urn:test:event-token".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3097,6 +3112,7 @@ mod tests {
             runtime
                 .create_instance(CreateInstanceRequest {
                     instance_id: instance_id.to_string(),
+                    tenant: None,
                     definition_url: "urn:test:companion-idempotency".to_string(),
                     definition_version: "1.0.0".to_string(),
                     initial_case_state: None,
@@ -3184,6 +3200,7 @@ mod tests {
         let error = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-1a".to_string(),
+                tenant: None,
                 definition_url: "urn:test:presenter-order".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "approved": true })),
@@ -3243,6 +3260,7 @@ mod tests {
         let instance = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-1a".to_string(),
+                tenant: None,
                 definition_url: "urn:test:presented-state-order".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "approved": true })),
@@ -3280,6 +3298,7 @@ mod tests {
         let instance = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-1b".to_string(),
+                tenant: None,
                 definition_url: "urn:test:timer-metadata".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3319,6 +3338,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-2".to_string(),
+                tenant: None,
                 definition_url: "urn:test:submit-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3387,6 +3407,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-3".to_string(),
+                tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "decision": "pending" })),
@@ -3452,6 +3473,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-draft-pop".to_string(),
+                tenant: None,
                 definition_url: "urn:test:draft-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3515,6 +3537,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-4".to_string(),
+                tenant: None,
                 definition_url: "urn:test:dismiss-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3558,6 +3581,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-5".to_string(),
+                tenant: None,
                 definition_url: "urn:test:replay-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3632,6 +3656,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-6".to_string(),
+                tenant: None,
                 definition_url: "urn:test:actor-replay-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3713,6 +3738,7 @@ mod tests {
         let instance = runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-7".to_string(),
+                tenant: None,
                 definition_url: "urn:test:timer-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3784,6 +3810,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-8".to_string(),
+                tenant: None,
                 definition_url: "urn:test:unsupported-binding".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3857,6 +3884,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-9".to_string(),
+                tenant: None,
                 definition_url: "urn:test:atomic-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -3919,6 +3947,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-10".to_string(),
+                tenant: None,
                 definition_url: "urn:test:unavailable-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -4009,6 +4038,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-service".to_string(),
+                tenant: None,
                 definition_url: "urn:test:service-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: None,
@@ -4128,6 +4158,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-integration".to_string(),
+                tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({
@@ -4302,6 +4333,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-target-mismatch".to_string(),
+                tenant: None,
                 definition_url: "urn:test:integration-profile-kernel".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({
@@ -4400,6 +4432,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-tool-integration-binding".to_string(),
+                tenant: None,
                 definition_url: "urn:test:tool-integration-binding".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({
@@ -4512,6 +4545,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-invalid-idempotency".to_string(),
+                tenant: None,
                 definition_url: "urn:test:invalid-idempotency-expression".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({
@@ -4581,6 +4615,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-guards".to_string(),
+                tenant: None,
                 definition_url: "urn:test:drain-guard-evals".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "amount": 250 })),
@@ -4659,6 +4694,7 @@ mod tests {
         runtime
             .create_instance(CreateInstanceRequest {
                 instance_id: "case-scope".to_string(),
+                tenant: None,
                 definition_url: "urn:test:guard-scope".to_string(),
                 definition_version: "1.0.0".to_string(),
                 initial_case_state: Some(serde_json::json!({ "ok": true })),

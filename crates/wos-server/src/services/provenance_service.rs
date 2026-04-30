@@ -63,7 +63,7 @@ impl ProvenanceService {
                 )))?;
             let hash = chain_hash(&previous_hash, instance_id, next_seq, &timestamp, &tier, &payload);
             out.push(ProvenanceRow {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: uuid::Uuid::now_v7().to_string(),
                 instance_id: instance_id.to_string(),
                 seq: next_seq,
                 timestamp,
