@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/case-instance/1.0",
   "title": "WOS Case Instance",
-  "description": "A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact, not a WOS document type: it has no $wos* marker because it is produced and consumed by processors, not authored by workflow designers. The instance shape is normatively defined so that instances can migrate between conformant processors without data loss.",
+  "description": "A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact (per ADR 0063 §2.3): produced and consumed by processors, not authored by workflow designers. The required `$wosCaseInstance` marker gives runtime artifacts the same identity discipline as author-time documents and lets the lint parser detect them uniformly.",
   "type": "object",
   "required": [
+    "$wosCaseInstance",
     "instanceId",
     "definitionUrl",
     "definitionVersion",
@@ -24,6 +25,14 @@
   },
   "additionalProperties": false,
   "properties": {
+    "$wosCaseInstance": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Top-level marker identifying this object as a WOS Case Instance runtime artifact, pinned to the 1.0 line. Required per ADR 0063 §2.3 so the lint parser detects runtime artifacts uniformly with author-time documents.",
+      "examples": [
+        "1.0"
+      ]
+    },
     "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "instanceId": {
       "type": "string",

@@ -2,13 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/provenance-log/1.0",
   "title": "WOS Provenance Log",
-  "description": "Append-only audit log produced by WOS runtime execution. Per ADR 0076 D-4 this is a runtime artifact (not author-time), emitted by processors, never hand-authored. Wraps every persisted record kind: state-transition records (Kernel \u00a78), case-file snapshots (Kernel \u00a78 \u2014 required when transitionTags includes 'determination'), capability-invocation records (AI Integration \u00a73.3.1), signature-affirmation records (Signature Profile \u00a72.8), case-state mutation records carrying mutationSource / verificationLevel (Kernel \u00a75.4, ADR 0080), iteration records (Kernel \u00a74.10/foreach, ADR 0078), and verification certificates (formerly the runtime half of `wos-verification-report`). Facts-tier semantics are normative in the kernel and live in the merged `wos-workflow.schema.json` $defs (ADR 0076 step 5 promotion: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord). Higher tiers reuse the same envelope with `auditLayer` set accordingly. This schema validates the post-append export shape -- not unstamped in-memory constructors.",
+  "description": "Append-only audit log produced by WOS runtime execution. Per ADR 0063 \u00a72.3 this is a runtime artifact (not author-time), emitted by processors, never hand-authored. The required `$wosProvenanceLog` marker gives runtime artifacts the same identity discipline as author-time documents and lets the lint parser detect them uniformly. Wraps every persisted record kind: state-transition records (Kernel \u00a78), case-file snapshots (Kernel \u00a78 \u2014 required when transitionTags includes 'determination'), capability-invocation records (AI Integration \u00a73.3.1), signature-affirmation records (Signature Profile \u00a72.8), case-state mutation records carrying mutationSource / verificationLevel (Kernel \u00a75.4, ADR 0080), iteration records (Kernel \u00a74.10/foreach), and verification certificates (formerly the runtime half of `wos-verification-report`). Facts-tier semantics are normative in the kernel and live in the merged `wos-workflow.schema.json` $defs (ADR 0076 step 5 promotion: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord). Higher tiers reuse the same envelope with `auditLayer` set accordingly. This schema validates the post-append export shape -- not unstamped in-memory constructors.",
   "type": "object",
   "required": [
+    "$wosProvenanceLog",
     "provenanceLog"
   ],
   "additionalProperties": false,
   "properties": {
+    "$wosProvenanceLog": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Top-level marker identifying this object as a WOS Provenance Log runtime artifact, pinned to the 1.0 line. Required per ADR 0063 \u00a72.3 so the lint parser detects runtime artifacts uniformly with author-time documents.",
+      "examples": [
+        "1.0"
+      ]
+    },
     "provenanceLog": {
       "type": "array",
       "description": "Ordered sequence of persisted provenance records emitted during a workflow run. Records are append-only and their order matches emission order; consumers MUST preserve ordering when re-exporting.",

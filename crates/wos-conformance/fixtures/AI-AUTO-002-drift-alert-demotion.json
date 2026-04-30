@@ -1,7 +1,7 @@
 {
   "id": "AI-AUTO-002-drift-alert-demotion",
   "rule": "AI-AUTO-002",
-  "description": "Drift-alert-triggered demotion path: when a drift alert fires (per the DriftMonitor's alertThresholds with action=demoteToAssistive), the runtime MUST (1) emit driftReclassification provenance, (2) emit autonomyDemotion provenance with trigger='drift-alert', and (3) reroute the event through escalation so the kernel routes to the human-review state. Pairs with AI-028 (humanOverride-triggered demotion), AC-001 (calibration-expiry cap), and AI-AUTO-001 (escalation-expiry revocation) to close the autonomy-lifecycle revocation matrix (AI S5.5; DriftMonitor AlertThreshold\u2192DemotionRule binding).",
+  "description": "Drift-alert-triggered demotion path: when a drift alert fires (per the agent's driftMonitoring.alertThresholds with action=demoteToAssistive), the runtime MUST (1) emit driftReclassification provenance, (2) emit autonomyDemotion provenance with trigger='drift-alert', and (3) reroute the event through escalation so the kernel routes to the human-review state. Pairs with AI-028 (humanOverride-triggered demotion), AC-001 (calibration-expiry cap), and AI-AUTO-001 (escalation-expiry revocation) to close the autonomy-lifecycle revocation matrix (AI S5.5; agent-declaration AlertThreshold→DemotionRule binding). ADR 0063: embedded blocks govern the enclosing $wosWorkflow envelope; no targetWorkflow inside the embedded `agents` block.",
   "documents": {
     "kernel": "fixtures/kernel/autonomy-caps.json",
     "ai": "fixtures/ai/autonomy-caps-ai.json",
@@ -12,13 +12,17 @@
     "driftMonitor": {
       "$wosWorkflow": "1.0",
       "version": "1.0.0",
-      "url": "https://example.test/migrated-fixture",
-      "title": "Migrated Fixture",
-      "impactLevel": "operational",
+      "url": "https://test.wos-spec.org/workflows/autonomy-caps",
+      "title": "Autonomy Caps Drift Monitor Overlay",
+      "impactLevel": "rights-impacting",
       "actors": [
         {
-          "id": "system",
-          "type": "system"
+          "id": "triageAgent",
+          "type": "agent"
+        },
+        {
+          "id": "caseworker",
+          "type": "human"
         }
       ],
       "lifecycle": {
@@ -37,11 +41,10 @@
           }
         }
       },
-      "agents": {
-        "targetWorkflow": "https://test.wos-spec.org/workflows/autonomy-caps",
-        "monitors": [
-          {
-            "agentRef": "triageAgent",
+      "agents": [
+        {
+          "id": "triageAgent",
+          "driftMonitoring": {
             "evaluationWindow": "P30D",
             "metrics": [
               {
@@ -59,8 +62,8 @@
               }
             ]
           }
-        ]
-      }
+        }
+      ]
     }
   },
   "initial_case_state": {},

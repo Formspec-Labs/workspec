@@ -1258,6 +1258,43 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Declare `verificationLevel` on the `bindings[]` entries that govern outputs from this agent's fallback path.",
         ),
     },
+    // --- WOS-EMBED-* / WOS-SIDECAR-* (identity-boundary rules per ADR 0063) ---
+    RuleMetadata {
+        id: "WOS-EMBED-TARGET-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) MUST NOT declare `targetWorkflow`.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0063 §2.1; schemas/wos-workflow.schema.json allOf"),
+        suggested_fix: Some(
+            "Remove `targetWorkflow` from the embedded block. Embedded blocks govern the enclosing $wosWorkflow envelope; only sidecars target workflows by URI.",
+        ),
+    },
+    RuleMetadata {
+        id: "WOS-EMBED-IDENTITY-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Embedded blocks MUST NOT declare independent `url` or `version`. The enclosing $wosWorkflow envelope is the sole identity.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0063 §2.1; schemas/wos-workflow.schema.json allOf"),
+        suggested_fix: Some(
+            "Remove `url` and `version` from the embedded block. The merged envelope's identity (url, version) governs every embedded block.",
+        ),
+    },
+    RuleMetadata {
+        id: "WOS-SIDECAR-TARGET-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Sidecar documents ($wosDelivery, $wosOntologyAlignment) MUST declare `targetWorkflow` as a non-empty workflow URI.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0063 §2.2"),
+        suggested_fix: Some(
+            "Declare `targetWorkflow` on the sidecar root pointing at the $wosWorkflow envelope's `url`.",
+        ),
+    },
 ];
 
 #[cfg(test)]

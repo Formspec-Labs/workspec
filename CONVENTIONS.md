@@ -72,6 +72,18 @@ Minimum expectations:
 - For each non-trivial normative behavior, include at least one executable fixture that demonstrates it.
 - If a behavior cannot be expressed as a fixture yet (e.g., requires external time or IO), state the intended test strategy and the current limitation.
 
+## Examples normative status
+
+Schema `examples` entries are load-bearing for the LLM authoring loop: authors and authoring agents read examples first and copy from them. A drifted example is a factory for invalid documents.
+
+Every `examples[i]` entry MUST validate against the sub-schema that declares it. The CI test at `tests/schemas/test_examples_validate.py` walks every classified schema, collects every `examples` array under any sub-schema (root, `properties.<key>`, `$defs.<key>`, `items`, `oneOf`/`anyOf`/`allOf` branches, conditional branches), and asserts each entry validates against the fragment that owns it.
+
+When updating a schema:
+
+- Update the example in lockstep with the constraint change.
+- If an example becomes infeasible (e.g., needs runtime data the schema cannot describe), remove the example rather than leaving it drifted.
+- Prefer minimal, copy-pasteable examples that exercise one feature each. Composite examples are easier to drift and harder to repair.
+
 ## Sidecar Normative-Contract Audit Rubric (TODO #45)
 
 Use this when auditing sidecars and deciding whether to keep them as independent specs.

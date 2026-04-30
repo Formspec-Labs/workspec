@@ -1,14 +1,14 @@
 {
   "$wosWorkflow": "1.0",
   "version": "1.0.0",
-  "title": "Autonomy Caps AI Integration",
-  "description": "AI integration for testing autonomy level caps, escalation/demotion, and calibration expiry.",
-  "url": "https://example.test/migrated-fixture",
-  "impactLevel": "operational",
+  "title": "Autonomy Caps AI Integration Overlay",
+  "description": "AI integration overlay for testing autonomy level caps, escalation/demotion, and calibration expiry. Conformance-fixture transport wrapper: the conformance engine extracts the `aiOversight` block and embeds it under the kernel workflow at runtime. Per ADR 0063 §2.1, embedded blocks govern the enclosing envelope; the engine wires aiOversight.agents into the kernel's agents[].",
+  "url": "https://test.wos-spec.org/workflows/autonomy-caps",
+  "impactLevel": "rights-impacting",
   "actors": [
     {
-      "id": "system",
-      "type": "system"
+      "id": "triageAgent",
+      "type": "agent"
     }
   ],
   "lifecycle": {
@@ -28,8 +28,6 @@
     }
   },
   "aiOversight": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://test.wos-spec.org/workflows/autonomy-caps",
     "defaultAutonomy": "assistive",
     "agents": [
       {

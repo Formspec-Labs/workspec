@@ -21,6 +21,7 @@ CASE_INSTANCE_SCHEMA = (
 
 def _minimal_instance() -> dict:
     return {
+        "$wosCaseInstance": "1.0",
         "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
         "definitionUrl": "https://agency.gov/workflows/benefits-adjudication",
         "definitionVersion": "1.0.0",
