@@ -16,7 +16,11 @@ status: draft
 
 ## Abstract
 
-The WOS AI Integration Specification defines Layer 2 of the Workflow Orchestration Standard: the governance structures for AI agent participation in WOS workflows. An AI Integration Document -- itself a JSON document -- targets a WOS Kernel Document and declares agent registration, deontic constraints on agent behavior, autonomy levels with impact-level caps, the Formspec-as-validator pattern, a confidence framework with decay and calibration, fallback chains guaranteeing graceful degradation, decision drift detection, AI-specific oversight extensions, volume constraints, agent-specific review sampling, agent disclosure for due process, the Narrative provenance tier, and the Assist Governance Proxy.
+The WOS AI Integration Specification defines Layer 2 of the Workflow Orchestration Standard: the governance structures for AI agent participation in WOS workflows. The `agents[]` and `aiOversight` embedded blocks of a `$wosWorkflow` document declare agent registration, deontic constraints on agent behavior, autonomy levels with impact-level caps, the Formspec-as-validator pattern, a confidence framework with decay and calibration, fallback chains guaranteeing graceful degradation, decision drift detection, AI-specific oversight extensions, volume constraints, agent-specific review sampling, agent disclosure for due process, the Narrative provenance tier, and the Assist Governance Proxy.
+
+**ADR 0063 framing.** Per ADR 0063 §2.1, `agents[]` and `aiOversight` are *part of* the enclosing `$wosWorkflow` envelope; they are no longer standalone AI Integration Documents. The blocks govern the enclosing workflow and MUST NOT declare `targetWorkflow`, `url`, or `version`. Pre-merge prose in this spec that referenced "the AI Integration Document" or "targets a WOS Kernel Document via `targetWorkflow`" should be read in that light: the same content now lives under `$wosWorkflow.agents[]` + `$wosWorkflow.aiOversight`, joined to lifecycle, actors, governance, and case file in a single envelope.
+
+**ADR 0064 framing.** Per ADR 0064, agents are first-class actors (`ActorKind::Agent` in the Rust runtime) and invocation goes through a substrate-neutral `AgentInvoker` port. The `agents[].invoker` discriminator selects which adapter (`wos-agent-anthropic`, `wos-agent-claude-sdk`, `wos-agent-mcp`, `wos-agent-a2a`, `wos-agent-http`, `wos-agent-stub`) handles a given agent's invocations. WOS specifies the *governance contract* the runtime enforces — deontic constraints, confidence floor, autonomy caps, fallback chain — and treats the substrate as adapter-tier. Multi-agent orchestrators are *one kind* of `AgentInvoker`, not a special spec concept. See `crates/wos-core/src/agent/mod.rs` for the port definition.
 
 AI governance is not a separate track. Every Layer 2 concept extends a Layer 1 (Workflow Governance) concept through the kernel's named seams. Review protocols gain AI-specific suppression. Data validation pipelines gain Formspec-as-validator. Due process gains agent disclosure. Structured audit gains the Narrative tier. Quality controls gain agent-specific sampling.
 
@@ -59,14 +63,16 @@ This specification encodes these findings as structural requirements. The agent 
 
 ### 1.4 Relationship to Lower Layers
 
-An AI Integration Document targets a WOS Kernel Document via `targetWorkflow`. It extends kernel and governance structures through four seams:
+The `agents[]` and `aiOversight` embedded blocks govern the enclosing `$wosWorkflow` envelope's kernel surface. Per ADR 0063 §2.1, the blocks have no independent identity — the envelope's `url` and `version` are the sole identity boundary. Per ADR 0064, agents are first-class actors (`actors[]` entries with `type: "agent"`) joined to `agents[]` runtime declarations by `id` (lint `WOS-AGENT-XREF-001`). AI governance extends kernel and governance structures through four seams:
 
 | Seam | What Layer 2 Attaches |
 |------|----------------------|
-| `actorExtension` | Agent as actor type with taxonomy (deterministic/statistical/generative). |
+| `actorExtension` | Agent taxonomy (deterministic/statistical/generative) on `agents[]` declarations; `ActorKind::Agent` is first-class per ADR 0064. |
 | `contractHook` | Formspec-as-validator: agent output as untrusted input. |
 | `provenanceLayer` | Narrative tier: non-authoritative model-generated explanation. |
 | `lifecycleHook` | Deontic enforcement, autonomy enforcement, AI-specific oversight suppression, agent sampling, agent disclosure. |
+
+**Substrate portability.** The `agents[].invoker` discriminator selects an `AgentInvoker` adapter (Anthropic SDK / Claude Agent SDK / MCP / A2A orchestrator / HTTP service / deterministic stub) at deploy time. The spec is portable across substrates because the runtime never names a concrete adapter; deployment binds the discriminator. See `crates/wos-core/src/agent/mod.rs` for the port and `crates/wos-agent-stub` for the canonical deterministic implementation used by conformance fixtures.
 
 ### 1.5 How AI Extends Human Governance
 
