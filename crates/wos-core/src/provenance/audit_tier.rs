@@ -50,6 +50,9 @@ impl From<K> for ProvenanceAuditTier {
             | K::IntakeDeferred
             | K::TimerCreated
             | K::TimerFired
+            | K::ForEachIterationStarted
+            | K::ForEachIterationCompleted
+            | K::ForEachCompleted
             | K::TimerCancelled
             | K::OnEntry
             | K::OnExit
