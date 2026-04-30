@@ -125,6 +125,7 @@ def test_full_document_rejects_determination_record_missing_snapshot(schema):
     """
     validator = _document_validator(schema)
     document = {
+        "$wosProvenanceLog": "1.0",
         "provenanceLog": [
             {
                 **_facts_record("stateTransition"),
@@ -144,6 +145,7 @@ def test_full_document_rejects_determination_record_missing_snapshot(schema):
 def test_full_document_accepts_determination_record_with_snapshot(schema):
     validator = _document_validator(schema)
     document = {
+        "$wosProvenanceLog": "1.0",
         "provenanceLog": [
             {
                 **_facts_record("stateTransition"),

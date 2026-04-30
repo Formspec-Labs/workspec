@@ -1,0 +1,130 @@
+{
+  "id": "K-FOREACH-001-iteration-basic",
+  "rule": "K-FOREACH-001",
+  "description": "Basic foreach state: iterates over caseFile.attachments, runs an atomic body per item. Sub-PR D-2 wires the actual iteration runtime: collection FEL evaluation, sequential per-item $item/$index binding, ForEachIterationStarted/Completed provenance, ForEachCompleted summary, and auto-firing of the foreach state's anonymous outgoing transition with synthetic event `$foreachComplete`. With two attachments in the initial case state, the runtime emits two iteration pairs and lands on `completed`.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-basic",
+      "version": "1.0.0",
+      "title": "ForEach Iteration — Basic",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "attachments": {
+            "type": "array"
+          },
+          "processedCount": {
+            "type": "number"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submitted"
+                },
+                "target": "processAttachments"
+              }
+            ]
+          },
+          "processAttachments": {
+            "type": "foreach",
+            "collection": "caseFile.attachments",
+            "itemVariable": "$attachment",
+            "indexVariable": "$idx",
+            "body": {
+              "type": "atomic"
+            },
+            "transitions": [
+              {
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "attachments": [
+      {"id": "a1", "name": "passport.pdf"},
+      {"id": "a2", "name": "lease.pdf"}
+    ]
+  },
+  "event_sequence": [
+    {
+      "event": "submitted",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "processAttachments",
+      "event": "submitted"
+    },
+    {
+      "from": "processAttachments",
+      "target": "completed",
+      "event": "$foreachComplete"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 1
+      }
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 1
+      }
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "iterations": 2,
+        "broke": false
+      }
+    }
+  ],
+  "expected_errors": []
+}

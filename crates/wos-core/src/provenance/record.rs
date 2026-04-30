@@ -626,6 +626,58 @@ impl ProvenanceRecord {
         record
     }
 
+    // ── ForEach iteration builders (Kernel §4.3.1; Sub-PR D-2) ──────────────
+
+    /// One iteration of a `ForEach` state is starting.
+    pub fn foreach_iteration_started(
+        foreach_state: &str,
+        index: u32,
+        item: &serde_json::Value,
+    ) -> Self {
+        let mut record = Self::blank(ProvenanceKind::ForEachIterationStarted);
+        record.data = Some(serde_json::json!({
+            "foreachState": foreach_state,
+            "index": index,
+            "item": item,
+        }));
+        record
+    }
+
+    /// One iteration of a `ForEach` state has completed. When iteration
+    /// terminated early via `breakCondition`, `break_triggered` is `true`.
+    pub fn foreach_iteration_completed(
+        foreach_state: &str,
+        index: u32,
+        break_triggered: bool,
+    ) -> Self {
+        let mut record = Self::blank(ProvenanceKind::ForEachIterationCompleted);
+        let mut data = serde_json::json!({
+            "foreachState": foreach_state,
+            "index": index,
+        });
+        if break_triggered {
+            data["breakTriggered"] = serde_json::Value::Bool(true);
+        }
+        record.data = Some(data);
+        record
+    }
+
+    /// All iterations of a `ForEach` state have completed (or the empty-
+    /// collection fast path fired). Emitted exactly once per foreach state
+    /// entry, immediately before the foreach state's outgoing transition
+    /// fires. `iterations` is the number of iterations actually executed
+    /// (0 for empty-collection fast path); `broke` indicates whether the
+    /// loop terminated early via `breakCondition`.
+    pub fn foreach_completed(foreach_state: &str, iterations: u32, broke: bool) -> Self {
+        let mut record = Self::blank(ProvenanceKind::ForEachCompleted);
+        record.data = Some(serde_json::json!({
+            "foreachState": foreach_state,
+            "iterations": iterations,
+            "broke": broke,
+        }));
+        record
+    }
+
     /// Create a timer cancelled record (Lifecycle Detail S6.7).
     pub fn timer_cancelled(timer_id: &str, reason: &str) -> Self {
         let mut record = Self::blank(ProvenanceKind::TimerCancelled);

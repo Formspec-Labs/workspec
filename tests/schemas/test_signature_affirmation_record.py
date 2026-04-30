@@ -69,7 +69,7 @@ def _record() -> dict:
 
 
 def _log(record: dict) -> dict:
-    return {"provenanceLog": [record]}
+    return {"$wosProvenanceLog": "1.0", "provenanceLog": [record]}
 
 
 def test_signature_affirmation_with_required_fields_is_accepted(schema):

@@ -148,6 +148,14 @@ pub struct AgentDeclaration {
     #[serde(default)]
     pub deontic_constraints: Option<DeonticConstraints>,
 
+    /// Substrate adapter discriminator (ADR 0064). Selects which
+    /// `AgentInvoker` implementation handles invocations of this agent.
+    /// Optional so existing fixtures and authoring flows that have not yet
+    /// declared an invoker continue to deserialize; the runtime fails fast
+    /// when an agent is invoked without an `invoker`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invoker: Option<crate::agent::InvokerSpec>,
+
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,

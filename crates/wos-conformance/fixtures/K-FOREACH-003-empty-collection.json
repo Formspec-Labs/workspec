@@ -1,0 +1,94 @@
+{
+  "id": "K-FOREACH-003-empty-collection",
+  "rule": "K-FOREACH-001",
+  "description": "ForEach over an empty collection: when the FEL `collection` expression evaluates to [], no iterations happen and the foreach state's outgoing transitions fire immediately via synthetic event `$foreachComplete`. This is the empty-collection fast path mandated by Kernel §4.3.1 step 2. Sub-PR D-2 wires it through the same runtime path as non-empty iteration: 0 ForEachIterationStarted records, 1 ForEachCompleted summary with iterations=0, then the auto-fired outgoing transition.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-empty",
+      "version": "1.0.0",
+      "title": "ForEach Iteration — Empty Collection",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "attachments": {
+            "type": "array"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submitted"
+                },
+                "target": "processAttachments"
+              }
+            ]
+          },
+          "processAttachments": {
+            "type": "foreach",
+            "collection": "caseFile.attachments",
+            "body": {
+              "type": "atomic"
+            },
+            "transitions": [
+              {
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "attachments": []
+  },
+  "event_sequence": [
+    {
+      "event": "submitted",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "processAttachments",
+      "event": "submitted"
+    },
+    {
+      "from": "processAttachments",
+      "target": "completed",
+      "event": "$foreachComplete"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "iterations": 0,
+        "broke": false
+      }
+    }
+  ],
+  "expected_errors": []
+}

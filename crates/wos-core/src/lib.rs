@@ -19,6 +19,7 @@
 //! - `wos-conformance` feeds events through the evaluation algorithm.
 //! - A future `wos-runtime` adapts the algorithm to Temporal, Step Functions, etc.
 
+pub mod agent;
 pub mod autonomy;
 pub mod business_calendar;
 pub mod confidence;
@@ -37,6 +38,10 @@ pub mod timer;
 pub mod traits;
 pub mod typeid;
 
+pub use agent::{
+    AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult,
+    AgentTask, InvokerKind, InvokerSpec, StubResponse,
+};
 pub use context::EvalContext;
 pub use eval::{
     Configuration, EvalError, Evaluator, IndexedState, ObservedAction, ObservedTransition,
@@ -46,8 +51,8 @@ pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
 pub use model::governance::GovernanceDocument;
 pub use model::kernel::{
-    Action, ActionKind, KernelDocument, SignalScope, State, StateKind, TimerEventSource,
-    Transition, TransitionEvent,
+    Action, ActionKind, KernelDocument, KernelView, SignalScope, State, StateKind,
+    TimerEventSource, Transition, TransitionEvent, WorkflowDocument,
 };
 pub use model::kernel::{Actor, ActorKind, CaseFile, CaseRelationship, FieldDefinition};
 pub use model::kernel::{ContractReference, EvaluationMode, ExecutionConfig};

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/wos-workflow.schema.json",
   "title": "WOS Workflow",
-  "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rightsImpacting/safetyImpacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076.",
+  "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rights-impacting/safety-impacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076 (merged-envelope consolidation) and ADR 0063 (embedded-vs-sidecar identity boundary).",
   "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those \u00a7-numbered sections land. SCHEMA-DOC-001 violations under inner blocks are tracked, not hallucinated. The six canonical kernel extension seams (ADR 0077) \u2014 actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys \u2014 remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel \u00a710. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
   "type": "object",
   "required": [
@@ -65,7 +65,7 @@
       "description": "Free-text description of this workflow's purpose, scope, and intended audience. Consumed by documentation tooling and LLM authoring agents; not interpreted by the processor.",
       "examples": [
         "Internal workflow for approving purchase orders under $50k; routed to a manager for approval or rejection.",
-        "Medicaid eligibility redetermination with appeal branch; rightsImpacting, requires full due process."
+        "Medicaid eligibility redetermination with appeal branch; rights-impacting, requires full due process."
       ]
     },
     "status": {
@@ -88,12 +88,12 @@
         "rights-impacting",
         "safety-impacting"
       ],
-      "description": "Consequence level classification for decisions made within this workflow (Kernel \u00a76). `rightsImpacting`: decisions affect individual legal rights \u2014 full due process REQUIRED (governance block MUST be present). `safetyImpacting`: decisions affect safety \u2014 full due process REQUIRED (governance block MUST be present). `operational`: organizational operations \u2014 governance RECOMMENDED. `informational`: no binding decisions \u2014 governance OPTIONAL. Drives conditional block requirements via the schema's allOf rules.",
+      "description": "Consequence level classification for decisions made within this workflow (Kernel \u00a76). `rights-impacting`: decisions affect individual legal rights \u2014 full due process REQUIRED (governance block MUST be present). `safety-impacting`: decisions affect safety \u2014 full due process REQUIRED (governance block MUST be present). `operational`: organizational operations \u2014 governance RECOMMENDED. `informational`: no binding decisions \u2014 governance OPTIONAL. Drives conditional block requirements via the schema's allOf rules.",
       "examples": [
-        "rightsImpacting",
+        "rights-impacting",
         "operational",
         "informational",
-        "safetyImpacting"
+        "safety-impacting"
       ],
       "x-lm": {
         "critical": true,
@@ -167,8 +167,8 @@
               "type": "atomic",
               "transitions": [
                 {
-                  "on": {
-                    "kind": "signal",
+                  "event": {
+                    "kind": "message",
                     "name": "applicantSubmitted"
                   },
                   "target": "review"
@@ -204,7 +204,7 @@
     },
     "governance": {
       "$ref": "#/$defs/Governance",
-      "description": "Embedded Layer-1 governance (due process, review protocols, validation pipelines, policy parameters) inside the author-time workflow envelope. Required for rightsImpacting and safetyImpacting impactLevel per kernel and ADR 0076 D-2.",
+      "description": "Embedded Layer-1 governance (due process, review protocols, validation pipelines, policy parameters) inside the author-time workflow envelope. Required for rights-impacting and safety-impacting impactLevel per kernel and ADR 0076 D-2.",
       "examples": [
         {
           "dueProcess": {},
@@ -222,7 +222,7 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Embedded due-process / review / pipeline governance \u2014 REQUIRED for rightsImpacting/safetyImpacting workflows per ADR 0076 D-2"
+        "intent": "Embedded due-process / review / pipeline governance \u2014 REQUIRED for rights-impacting/safety-impacting workflows per ADR 0076 D-2"
       }
     },
     "agents": {
@@ -455,6 +455,31 @@
           "aiOversight"
         ]
       }
+    },
+    {
+      "title": "Embedded blocks MUST NOT declare targetWorkflow (ADR 0063 §2.1).",
+      "$comment": "The merged $wosWorkflow envelope is the sole author-time identity boundary. Embedded blocks govern the enclosing workflow; they do not target other workflows. Only sidecars (wos-delivery, wos-ontology-alignment) target workflows by URI. Lint WOS-EMBED-TARGET-001.",
+      "allOf": [
+        { "if": { "required": ["governance"] },  "then": { "properties": { "governance":  { "not": { "required": ["targetWorkflow"] } } } } },
+        { "if": { "required": ["agents"] },      "then": { "properties": { "agents":      { "items": { "not": { "required": ["targetWorkflow"] } } } } } },
+        { "if": { "required": ["aiOversight"] }, "then": { "properties": { "aiOversight": { "not": { "required": ["targetWorkflow"] } } } } },
+        { "if": { "required": ["signature"] },   "then": { "properties": { "signature":   { "not": { "required": ["targetWorkflow"] } } } } },
+        { "if": { "required": ["custody"] },     "then": { "properties": { "custody":     { "not": { "required": ["targetWorkflow"] } } } } },
+        { "if": { "required": ["advanced"] },    "then": { "properties": { "advanced":    { "not": { "required": ["targetWorkflow"] } } } } },
+        { "if": { "required": ["assurance"] },   "then": { "properties": { "assurance":   { "not": { "required": ["targetWorkflow"] } } } } }
+      ]
+    },
+    {
+      "title": "Embedded blocks MUST NOT declare independent url or version (ADR 0063 §2.1).",
+      "$comment": "The enclosing $wosWorkflow envelope's url and version are the sole identity. Embedded blocks have no independent identity. Lint WOS-EMBED-IDENTITY-001.",
+      "allOf": [
+        { "if": { "required": ["governance"] },  "then": { "properties": { "governance":  { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } },
+        { "if": { "required": ["aiOversight"] }, "then": { "properties": { "aiOversight": { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } },
+        { "if": { "required": ["signature"] },   "then": { "properties": { "signature":   { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } },
+        { "if": { "required": ["custody"] },     "then": { "properties": { "custody":     { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } },
+        { "if": { "required": ["advanced"] },    "then": { "properties": { "advanced":    { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } },
+        { "if": { "required": ["assurance"] },   "then": { "properties": { "assurance":   { "allOf": [{ "not": { "required": ["url"] } }, { "not": { "required": ["version"] } }] } } } }
+      ]
     }
   ],
   "$defs": {
@@ -813,7 +838,8 @@
             "integer",
             "null"
           ],
-          "description": "Foreach states only. Maximum number of items processed concurrently. Integer for bounded concurrency; null for unbounded (processor decides). Per ADR 0078, processors MAY refuse unbounded concurrency on rights-impacting workflows.",
+          "minimum": 1,
+          "description": "Foreach states only. Maximum number of items processed concurrently. Positive integer for bounded concurrency; null for unbounded (processor decides). Zero is rejected (would deadlock; lint K-FOREACH-003 also enforces post-coercion). Processors MAY refuse unbounded concurrency on rights-impacting workflows.",
           "examples": [
             1,
             5,
@@ -903,6 +929,17 @@
               ]
             }
           }
+        },
+        {
+          "title": "ForEach states MUST declare collection + body (lint K-FOREACH-001 / K-FOREACH-002).",
+          "if": {
+            "properties": {
+              "type": { "const": "foreach" }
+            }
+          },
+          "then": {
+            "required": ["collection", "body"]
+          }
         }
       ]
     },
@@ -912,8 +949,9 @@
         "target"
       ],
       "properties": {
-        "on": {
-          "$ref": "#/$defs/TransitionEvent"
+        "event": {
+          "$ref": "#/$defs/TransitionEvent",
+          "description": "Trigger event for this transition. When omitted, the transition is anonymous: it does not match an external event but still participates in continuous-mode guard re-scan (Runtime Companion §10.3)."
         },
         "guard": {
           "type": "string",
@@ -976,7 +1014,7 @@
         },
         "target": {
           "type": "string",
-          "description": "Identifier of the destination state. MUST match a key in the enclosing lifecycle's states (or a substate when nested). The processor MUST reject transitions whose `to` does not resolve.",
+          "description": "Identifier of the destination state. MUST match a key in the enclosing lifecycle's states (or a substate when nested). The processor MUST reject transitions whose `target` does not resolve.",
           "examples": [
             "review",
             "approved",
@@ -1194,7 +1232,7 @@
     },
     "Governance": {
       "type": "object",
-      "description": "Embedded due-process, review, and pipeline governance. Required for rightsImpacting and safetyImpacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
+      "description": "Embedded due-process, review, and pipeline governance. Required for rights-impacting and safety-impacting impactLevel. Was wos-workflow-governance.schema.json plus wos-policy-parameters.schema.json plus wos-due-process.schema.json plus wos-assertion-gate.schema.json.",
       "properties": {
         "dueProcess": {
           "type": "object",
@@ -1291,7 +1329,7 @@
             "supervised",
             "autonomous"
           ],
-          "$comment": "Capped by impactLevel. rightsImpacting MUST NOT exceed assistive without explicit governance permission."
+          "$comment": "Capped by impactLevel. rights-impacting MUST NOT exceed assistive without explicit governance permission."
         },
         "deonticConstraints": {
           "type": "array",
@@ -1331,7 +1369,7 @@
           "items": {
             "type": "string"
           },
-          "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rightsImpacting transitions."
+          "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rights-impacting transitions."
         },
         "capabilities": {
           "type": "array",
@@ -1339,8 +1377,97 @@
         },
         "driftMonitoring": {
           "type": "object"
+        },
+        "invoker": {
+          "$ref": "#/$defs/InvokerSpec",
+          "description": "Substrate adapter discriminator (ADR 0064). Selects which AgentInvoker implementation handles invocations of this agent at runtime. Each `kind` corresponds to one adapter crate (`wos-agent-anthropic`, `wos-agent-mcp`, `wos-agent-a2a`, `wos-agent-http`, `wos-agent-stub`, `wos-agent-sdk-claude`). Deployment binds the discriminator to a concrete adapter; the workflow stays substrate-portable."
         }
       }
+    },
+    "InvokerSpec": {
+      "type": "object",
+      "required": ["kind"],
+      "description": "Tagged union over substrate adapters. Each `kind` value selects one wos-agent-* adapter crate per ADR 0064.",
+      "oneOf": [
+        {
+          "title": "anthropic",
+          "type": "object",
+          "required": ["kind", "model"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "anthropic" },
+            "model": { "type": "string", "description": "Anthropic model identifier (e.g., claude-opus-4-7)." },
+            "configRef": { "type": "string", "description": "Optional opaque adapter-specific configuration reference." }
+          }
+        },
+        {
+          "title": "claudeAgentSdk",
+          "type": "object",
+          "required": ["kind", "configRef"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "claudeAgentSdk" },
+            "configRef": { "type": "string", "description": "Reference to a Claude Agent SDK config document." }
+          }
+        },
+        {
+          "title": "mcp",
+          "type": "object",
+          "required": ["kind", "server", "tool"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "mcp" },
+            "server": { "type": "string", "description": "MCP server identifier (resolved at deploy time)." },
+            "tool": { "type": "string", "description": "Tool name on the MCP server." }
+          }
+        },
+        {
+          "title": "a2a",
+          "type": "object",
+          "required": ["kind", "orchestrator"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "a2a" },
+            "orchestrator": { "type": "string", "description": "Orchestrator identifier (resolved at deploy time)." }
+          }
+        },
+        {
+          "title": "http",
+          "type": "object",
+          "required": ["kind", "endpoint"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "http" },
+            "endpoint": { "type": "string", "format": "uri", "description": "Endpoint URL." },
+            "schemaRef": { "type": "string", "format": "uri", "description": "Optional URI to OpenAPI / JSON Schema describing the contract." }
+          }
+        },
+        {
+          "title": "stub",
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "description": "Deterministic in-memory stub used by conformance fixtures (`wos-agent-stub`).",
+          "properties": {
+            "kind": { "const": "stub" },
+            "responses": {
+              "type": "array",
+              "description": "Canned responses streamed in declaration order per (capability_id, invocation_index).",
+              "items": {
+                "type": "object",
+                "required": ["output"],
+                "additionalProperties": false,
+                "properties": {
+                  "capabilityId": { "type": "string", "description": "Capability id this response satisfies. When omitted, matches any capability." },
+                  "output": { "description": "Output payload returned by the invoker." },
+                  "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Reported confidence; defaults to 1.0 when omitted." },
+                  "citations": { "type": "array", "description": "Optional citation array passed through unchanged." }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "AIOversight": {
       "type": "object",
@@ -1380,32 +1507,9 @@
           "format": "uri",
           "description": "Optional JSON-Schema annotation URI."
         },
-        "targetWorkflow": {
-          "type": "object",
-          "additionalProperties": false,
-          "description": "Target workflow declaration for cross-artifact Signature Profiles.",
-          "properties": {
-            "url": {
-              "type": "string",
-              "description": "Target workflow URL."
-            },
-            "compatibleVersions": {
-              "type": "string",
-              "description": "Compatible workflow versions (SemVer range)."
-            }
-          }
-        },
-        "version": {
-          "type": "string",
-          "description": "Profile version."
-        },
-        "title": {
-          "type": "string",
-          "description": "Profile title."
-        },
         "description": {
           "type": "string",
-          "description": "Profile description."
+          "description": "Optional human-readable note describing the embedded signature flow. Identity (url, version) is governed by the enclosing $wosWorkflow envelope per ADR 0063 §2.1; legacy `targetWorkflow` / `version` / `title` properties are retired."
         },
         "roles": {
           "type": "array",
@@ -1840,14 +1944,15 @@
     },
     "Advanced": {
       "type": "object",
-      "description": "Optional. DCR constraint zones, equity guardrails, SMT verifiable constraints, multi-step session config, circuit breakers. Was wos-advanced.schema.json plus wos-equity.schema.json plus wos-verification-report.schema.json (author-time half).",
+      "description": "Optional. Constraint zones (DCR), equity guardrails, SMT verifiable constraints, multi-step session config, circuit breakers. Was wos-advanced.schema.json plus wos-equity.schema.json plus wos-verification-report.schema.json (author-time half).",
       "properties": {
-        "dcrZones": {
-          "type": "array"
+        "constraintZones": {
+          "type": "array",
+          "$comment": "DCR constraint zones. Renamed from dcrZones for canonical naming."
         },
-        "equity": {
+        "equityGuardrails": {
           "type": "object",
-          "$comment": "Bias caps, disparity thresholds, equity FEL expressions."
+          "$comment": "Bias caps, disparity thresholds, equity FEL expressions. Renamed from equity for canonical naming."
         },
         "verifiableConstraints": {
           "type": "array",

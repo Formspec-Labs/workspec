@@ -62,6 +62,14 @@ fn empty_state(kind: StateKind) -> State {
         cancellation_policy: None,
         history_state: None,
         outcome_code: None,
+        collection: None,
+        item_variable: None,
+        index_variable: None,
+        concurrency: None,
+        break_condition: None,
+        output_path: None,
+        merge_strategy: None,
+        body: None,
         extensions: HashMap::new(),
     }
 }
@@ -92,6 +100,15 @@ fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument 
         execution: None,
         evaluation_mode: None,
         max_relationship_event_depth: None,
+        governance: None,
+        agents: Vec::new(),
+        ai_oversight: None,
+        signature: None,
+        custody: None,
+        advanced: None,
+        assurance: None,
+        intake: None,
+        bindings: Vec::new(),
         extensions: HashMap::new(),
     }
 }

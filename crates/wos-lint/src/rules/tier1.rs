@@ -24,12 +24,16 @@ pub fn check(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
         // custody, advanced, assurance in one envelope (ADR 0076).
         DocumentKind::Workflow => check_workflow(doc, diagnostics),
         // $wosDelivery carries calendar, notification templates, correspondence.
-        DocumentKind::Delivery => check_delivery(doc, diagnostics),
+        DocumentKind::Delivery => {
+            check_delivery(doc, diagnostics);
+            check_sidecar_target_workflow(doc, diagnostics);
+        }
+        // $wosOntologyAlignment is a sidecar; only the target-workflow rule applies for now.
+        DocumentKind::OntologyAlignment => {
+            check_sidecar_target_workflow(doc, diagnostics);
+        }
         // Other canonical markers have no Tier 1 rules yet.
-        DocumentKind::OntologyAlignment
-        | DocumentKind::CaseInstance
-        | DocumentKind::ProvenanceLog
-        | DocumentKind::Tooling => {}
+        DocumentKind::CaseInstance | DocumentKind::ProvenanceLog | DocumentKind::Tooling => {}
     }
 }
 
@@ -82,6 +86,10 @@ fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(bindings) = root.get("bindings") {
         check_bindings_block(bindings, "/bindings", diagnostics);
     }
+
+    // --- ADR 0063: embedded-vs-sidecar identity boundary ---
+    check_embedded_no_target_workflow(root, diagnostics);
+    check_embedded_no_independent_identity(root, diagnostics);
 }
 
 /// Tier 1 checks on the `governance:` embedded block of a `$wosWorkflow` document.
@@ -171,6 +179,106 @@ fn check_ai_integration_block(root: &Value, diagnostics: &mut Vec<LintDiagnostic
                 let path = format!("/agents/{i}/fallbackChain");
                 check_fallback_chain_termination_raw(chain, &path, diagnostics);
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WOS-EMBED-TARGET-001 / WOS-EMBED-IDENTITY-001 (ADR 0063 §2.1):
+// Embedded blocks MUST NOT carry targetWorkflow, url, or version. The merged
+// $wosWorkflow envelope is the sole author-time identity boundary.
+// ---------------------------------------------------------------------------
+
+const EMBEDDED_BLOCKS: &[&str] = &[
+    "governance",
+    "aiOversight",
+    "signature",
+    "custody",
+    "advanced",
+    "assurance",
+];
+
+fn check_embedded_no_target_workflow(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    for block in EMBEDDED_BLOCKS {
+        if let Some(value) = root.get(*block) {
+            if value.get("targetWorkflow").is_some() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "WOS-EMBED-TARGET-001",
+                    format!("/{block}/targetWorkflow"),
+                    format!(
+                        "embedded `{block}` block declares `targetWorkflow`; embedded blocks govern \
+                         the enclosing $wosWorkflow envelope and MUST NOT target other workflows \
+                         (ADR 0063 §2.1). Remove `targetWorkflow` from the embedded block; if the \
+                         block must point at a different workflow, extract it as a sidecar."
+                    ),
+                ));
+            }
+        }
+    }
+
+    // agents[] is an array of declarations; each entry is treated as part of the
+    // enclosing workflow and MUST NOT carry its own targetWorkflow.
+    if let Some(agents) = root.get("agents").and_then(Value::as_array) {
+        for (i, agent) in agents.iter().enumerate() {
+            if agent.get("targetWorkflow").is_some() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "WOS-EMBED-TARGET-001",
+                    format!("/agents/{i}/targetWorkflow"),
+                    "agents[] entry declares `targetWorkflow`; agent declarations are embedded in \
+                     the enclosing $wosWorkflow envelope and MUST NOT target other workflows \
+                     (ADR 0063 §2.1)."
+                        .to_string(),
+                ));
+            }
+        }
+    }
+}
+
+fn check_embedded_no_independent_identity(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
+    for block in EMBEDDED_BLOCKS {
+        let Some(value) = root.get(*block) else {
+            continue;
+        };
+        for key in &["url", "version"] {
+            if value.get(*key).is_some() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "WOS-EMBED-IDENTITY-001",
+                    format!("/{block}/{key}"),
+                    format!(
+                        "embedded `{block}` block declares `{key}`; the enclosing $wosWorkflow \
+                         envelope's url and version are the sole identity. Embedded blocks have no \
+                         independent identity (ADR 0063 §2.1). Remove `{key}` from the embedded block."
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WOS-SIDECAR-TARGET-001 (ADR 0063 §2.2): Sidecar documents MUST declare
+// targetWorkflow as a non-empty workflow URI.
+// ---------------------------------------------------------------------------
+
+fn check_sidecar_target_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
+    let target = doc.value.get("targetWorkflow").and_then(Value::as_str);
+    let kind_label = match doc.kind {
+        DocumentKind::Delivery => "$wosDelivery",
+        DocumentKind::OntologyAlignment => "$wosOntologyAlignment",
+        _ => return,
+    };
+    match target {
+        Some(uri) if !uri.is_empty() => {}
+        _ => {
+            diagnostics.push(LintDiagnostic::t1_error(
+                "WOS-SIDECAR-TARGET-001",
+                "/targetWorkflow",
+                format!(
+                    "sidecar document `{kind_label}` MUST declare `targetWorkflow` as a non-empty \
+                     workflow URI (ADR 0063 §2.2). Sidecars bind to a workflow at deploy time; the \
+                     URI MUST match a $wosWorkflow envelope's `url`."
+                ),
+            ));
         }
     }
 }
@@ -309,7 +417,62 @@ fn check_state_type_semantics_typed(
                 ));
             }
         }
+        StateKind::ForEach => {
+            // K-FOREACH-001: foreach states MUST declare a non-empty
+            // `collection` FEL expression that evaluates to an array at
+            // runtime.
+            if state.collection.as_deref().unwrap_or("").is_empty() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-001",
+                    path,
+                    "foreach state must declare a non-empty `collection` FEL expression",
+                ));
+            }
+            // K-FOREACH-002: foreach states MUST declare a `body` State that
+            // executes once per iteration. Schema models this as an inline
+            // `body: State` field (not the Compound `initialState` + `states`
+            // map shape).
+            if state.body.is_none() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-002",
+                    path,
+                    "foreach state must declare a `body` state to execute per iteration",
+                ));
+            }
+            // K-FOREACH-003: concurrency, when present, MUST be at least 1.
+            // Zero would deadlock the iteration; the schema's `minimum: 1`
+            // catches authoring; this catches programmatic construction.
+            if state.concurrency == Some(0) {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-003",
+                    path,
+                    "foreach state `concurrency` MUST be at least 1 (zero would deadlock)",
+                ));
+            }
+        }
         StateKind::Atomic => {}
+    }
+
+    // K-FOREACH-004: iteration fields (collection, itemVariable,
+    // indexVariable, concurrency, breakCondition, outputPath, mergeStrategy,
+    // body) are valid only on foreach-typed states. Catch authoring drift
+    // where they leak onto a non-foreach state.
+    if state.kind != StateKind::ForEach
+        && (state.collection.is_some()
+            || state.item_variable.is_some()
+            || state.index_variable.is_some()
+            || state.concurrency.is_some()
+            || state.break_condition.is_some()
+            || state.output_path.is_some()
+            || state.merge_strategy.is_some()
+            || state.body.is_some())
+    {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "K-FOREACH-004",
+            path,
+            "collection / itemVariable / indexVariable / concurrency / breakCondition / \
+             outputPath / mergeStrategy / body are only valid on foreach-typed states",
+        ));
     }
 
     // K-004: cancellationPolicy only on parallel
@@ -1391,6 +1554,165 @@ mod ver_level_tests {
         assert!(
             diags.iter().all(|d| d.rule_id != "WOS-VER-LEVEL-001"),
             "expected no WOS-VER-LEVEL-001 diagnostic: {diags:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod adr0063_identity_boundary_tests {
+    use super::*;
+    use crate::document::{DocumentKind, WosDocument};
+    use serde_json::json;
+
+    fn run_target(value: Value) -> Vec<LintDiagnostic> {
+        let mut diags = Vec::new();
+        check_embedded_no_target_workflow(&value, &mut diags);
+        diags
+    }
+
+    fn run_identity(value: Value) -> Vec<LintDiagnostic> {
+        let mut diags = Vec::new();
+        check_embedded_no_independent_identity(&value, &mut diags);
+        diags
+    }
+
+    fn run_sidecar(kind: DocumentKind, value: Value) -> Vec<LintDiagnostic> {
+        let mut diags = Vec::new();
+        let doc = WosDocument {
+            kind,
+            value,
+            source: None,
+        };
+        check_sidecar_target_workflow(&doc, &mut diags);
+        diags
+    }
+
+    // ── WOS-EMBED-TARGET-001 ─────────────────────────────────────────────────
+
+    #[test]
+    fn embed_target_001_governance_with_target_workflow_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "governance": {
+                "targetWorkflow": "https://other.example/workflows/x"
+            }
+        });
+        let diags = run_target(doc);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-EMBED-TARGET-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(matches[0].path, "/governance/targetWorkflow");
+    }
+
+    #[test]
+    fn embed_target_001_agents_array_entry_with_target_workflow_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "agents": [
+                {"id": "a", "targetWorkflow": "https://other.example/x"}
+            ]
+        });
+        let diags = run_target(doc);
+        assert!(
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-TARGET-001" && d.path == "/agents/0/targetWorkflow"),
+            "expected diagnostic on /agents/0/targetWorkflow: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn embed_target_001_clean_envelope_silent() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "governance": {"dueProcess": {}},
+            "agents": [{"id": "a"}]
+        });
+        let diags = run_target(doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-EMBED-TARGET-001"),
+            "expected no diagnostic: {diags:?}"
+        );
+    }
+
+    // ── WOS-EMBED-IDENTITY-001 ───────────────────────────────────────────────
+
+    #[test]
+    fn embed_identity_001_governance_with_url_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "governance": {"url": "https://other.example/x"}
+        });
+        let diags = run_identity(doc);
+        assert!(
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/governance/url"),
+            "expected diagnostic on /governance/url: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn embed_identity_001_advanced_with_version_flagged() {
+        let doc = json!({
+            "$wosWorkflow": "1.0",
+            "advanced": {"version": "2.0.0"}
+        });
+        let diags = run_identity(doc);
+        assert!(
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/advanced/version"),
+            "expected diagnostic on /advanced/version: {diags:?}"
+        );
+    }
+
+    // ── WOS-SIDECAR-TARGET-001 ───────────────────────────────────────────────
+
+    #[test]
+    fn sidecar_target_001_delivery_without_target_workflow_flagged() {
+        let doc = json!({
+            "$wosDelivery": "1.0"
+        });
+        let diags = run_sidecar(DocumentKind::Delivery, doc);
+        let matches: Vec<_> = diags
+            .iter()
+            .filter(|d| d.rule_id == "WOS-SIDECAR-TARGET-001")
+            .collect();
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+    }
+
+    #[test]
+    fn sidecar_target_001_delivery_with_empty_target_workflow_flagged() {
+        let doc = json!({
+            "$wosDelivery": "1.0",
+            "targetWorkflow": ""
+        });
+        let diags = run_sidecar(DocumentKind::Delivery, doc);
+        assert!(
+            diags.iter().any(|d| d.rule_id == "WOS-SIDECAR-TARGET-001"),
+            "expected diagnostic on empty targetWorkflow: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn sidecar_target_001_delivery_with_valid_target_workflow_silent() {
+        let doc = json!({
+            "$wosDelivery": "1.0",
+            "targetWorkflow": "https://agency.gov/workflows/benefits"
+        });
+        let diags = run_sidecar(DocumentKind::Delivery, doc);
+        assert!(
+            diags.iter().all(|d| d.rule_id != "WOS-SIDECAR-TARGET-001"),
+            "expected no diagnostic: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn sidecar_target_001_ontology_alignment_without_target_workflow_flagged() {
+        let doc = json!({
+            "$wosOntologyAlignment": "1.0"
+        });
+        let diags = run_sidecar(DocumentKind::OntologyAlignment, doc);
+        assert!(
+            diags.iter().any(|d| d.rule_id == "WOS-SIDECAR-TARGET-001"),
+            "expected diagnostic on missing targetWorkflow: {diags:?}"
         );
     }
 }

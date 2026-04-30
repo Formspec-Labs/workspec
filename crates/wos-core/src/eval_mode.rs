@@ -163,6 +163,14 @@ mod tests {
             history_state: None,
             cancellation_policy: None,
             outcome_code: None,
+            collection: None,
+            item_variable: None,
+            index_variable: None,
+            concurrency: None,
+            break_condition: None,
+            output_path: None,
+            merge_strategy: None,
+            body: None,
             extensions: HashMap::new(),
         }
     }
@@ -181,6 +189,14 @@ mod tests {
             history_state: None,
             cancellation_policy: None,
             outcome_code: None,
+            collection: None,
+            item_variable: None,
+            index_variable: None,
+            concurrency: None,
+            break_condition: None,
+            output_path: None,
+            merge_strategy: None,
+            body: None,
             extensions: HashMap::new(),
         }
     }
@@ -225,12 +241,15 @@ mod tests {
                         "ready".to_string(),
                         FieldDefinition {
                             kind: "boolean".to_string(),
+                            required: false,
                             description: None,
                             default: Some(serde_json::Value::Bool(false)),
                         },
                     );
                     fields
                 },
+                contract_ref: None,
+                contract_version: None,
                 relationships: Vec::new(),
             }),
             contracts: HashMap::new(),
@@ -238,6 +257,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         }
     }
@@ -373,6 +401,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         };
 
@@ -436,6 +473,15 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            governance: None,
+            agents: Vec::new(),
+            ai_oversight: None,
+            signature: None,
+            custody: None,
+            advanced: None,
+            assurance: None,
+            intake: None,
+            bindings: Vec::new(),
             extensions: HashMap::new(),
         };
 

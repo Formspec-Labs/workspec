@@ -5,7 +5,7 @@ date: 2026-04-09
 status: draft
 ---
 
-> **Absorbed (ADR 0076 D-1).** Advanced Governance is the embedded `advanced` block of the merged `$wosWorkflow` envelope. Schema home: [`schemas/wos-workflow.schema.json#/$defs/Advanced`](../../schemas/wos-workflow.schema.json) (`dcrZones`, `equity`, `verifiableConstraints`, `circuitBreaker`, `shadowMode` properties). The runtime half of the former `wos-verification-report` sidecar is absorbed into the provenance-log envelope (`schemas/wos-provenance-log.schema.json`); the standalone verification-report spec doc is retired (ADR 0076 D-4). This spec doc is retained for normative prose; references to "Advanced Governance Document" now mean the embedded block.
+> **Absorbed (ADR 0076 D-1; ADR 0063 §2.1).** Advanced Governance is the embedded `advanced` block of the merged `$wosWorkflow` envelope. Schema home: [`schemas/wos-workflow.schema.json#/$defs/Advanced`](../../schemas/wos-workflow.schema.json) (`constraintZones`, `equityGuardrails`, `verifiableConstraints`, `circuitBreaker`, `shadowMode` properties — the canonical names; the pre-merge `dcrZones` and `equity` aliases are retired). Per ADR 0063 §2.1 the block governs the enclosing workflow and MUST NOT declare `targetWorkflow`, `url`, or `version` (lint `WOS-EMBED-TARGET-001` / `WOS-EMBED-IDENTITY-001`). The runtime half of the former `wos-verification-report` sidecar is absorbed into the provenance-log envelope (`schemas/wos-provenance-log.schema.json`); the standalone verification-report spec doc is retired (ADR 0076 D-4). This spec doc is retained for normative prose; references to "Advanced Governance Document" now mean the embedded block.
 
 # WOS Advanced Governance Specification v1.0
 
@@ -18,7 +18,9 @@ status: draft
 
 ## Abstract
 
-The WOS Advanced Governance Specification defines Layer 3 of the Workflow Orchestration Standard: capabilities for formally verifiable constraints, statistical fairness monitoring, adaptive case management, structured multi-step agent interactions, tool use governance, agent lifecycle management, and operational resilience patterns. An Advanced Governance Document -- itself a JSON document -- targets a WOS Kernel Document and declares verifiable constraint subsets (SMT), equity guardrails, constraint zones (DCR-style), multi-step sessions, tool use governance, agent lifecycle state machines, calibration methods, drift detection methods, shadow mode, and circuit breaker patterns.
+The WOS Advanced Governance Specification defines Layer 3 of the Workflow Orchestration Standard: capabilities for formally verifiable constraints, statistical fairness monitoring, adaptive case management, structured multi-step agent interactions, tool use governance, agent lifecycle management, and operational resilience patterns. The `advanced` embedded block of a `$wosWorkflow` document declares verifiable constraint subsets (SMT), equity guardrails, constraint zones (DCR-style), multi-step sessions, tool use governance, agent lifecycle state machines, calibration methods, drift detection methods, shadow mode, and circuit breaker patterns.
+
+**Canonical naming.** Per ADR 0076 absorption + Sub-PR A schema rename, the canonical property names are `constraintZones` (was `dcrZones`) and `equityGuardrails` (was `equity`). The pre-merge aliases are retired in greenfield posture; lint `K-EXT-002` / schema validation reject the legacy names. Pre-merge prose elsewhere in this spec that uses the legacy names should be read as referring to the canonical ones.
 
 These capabilities serve any complex workflow, not just AI-assisted ones. DCR constraint zones model compliance rules for human case management. Equity monitoring of human decisions is a civil rights concern. The "Advanced Governance" name reflects that these are governance capabilities applicable across all workflow types.
 

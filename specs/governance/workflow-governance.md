@@ -16,7 +16,9 @@ status: draft
 
 ## Abstract
 
-The WOS Workflow Governance Specification defines Layer 1 of the Workflow Orchestration Standard: the governance structures that complex, regulated, and high-stakes human workflows require. A Workflow Governance Document -- itself a JSON document -- targets a WOS Kernel Document and declares due process requirements, review protocols, data validation pipelines with assertion gates, structured audit (Reasoning and Counterfactual tiers), quality controls (review sampling, separation of duties, override authority), rejection and remediation policies, a task catalog with verifiability matrix, and screener integration for intake routing.
+The WOS Workflow Governance Specification defines Layer 1 of the Workflow Orchestration Standard: the governance structures that complex, regulated, and high-stakes human workflows require. The `governance` embedded block of a `$wosWorkflow` document declares due process requirements, review protocols, data validation pipelines with assertion gates, structured audit (Reasoning and Counterfactual tiers), quality controls (review sampling, separation of duties, override authority), rejection and remediation policies, a task catalog with verifiability matrix, and screener integration for intake routing.
+
+**ADR 0063 framing.** Per ADR 0063 §2.1, the `governance` block is *part of* the enclosing `$wosWorkflow` envelope; it is no longer a standalone Workflow Governance Document. The block governs the enclosing workflow and MUST NOT declare `targetWorkflow`, `url`, or `version` (lint `WOS-EMBED-TARGET-001` / `WOS-EMBED-IDENTITY-001`). Pre-merge prose in this spec that referenced "the Workflow Governance Document" or "targets a WOS Kernel Document via `targetWorkflow`" should be read in that light: the same content now lives under `$wosWorkflow.governance`, joined to lifecycle, actors, and case file in a single envelope. Required for `rights-impacting` and `safety-impacting` `impactLevel` per the schema's conditional `allOf`.
 
 Layer 1 exists because human workflows need it. A pure-human benefits adjudication workflow needs due process, dual-blind review, separation of duties, data validation, and structured reasoning traces -- with zero AI involved. When AI arrives (Layer 2), it plugs into governance structures defined here.
 
@@ -59,11 +61,13 @@ These are human governance requirements. This specification defines them indepen
 
 ### 1.4 Relationship to the Kernel
 
-A Workflow Governance Document targets a WOS Kernel Document via the `targetWorkflow` property. Governance attaches to the kernel through three seams:
+The `governance` embedded block governs the enclosing `$wosWorkflow` envelope's kernel surface (lifecycle, actors, case file). Per ADR 0063 §2.1, the block has no independent identity — the envelope's `url` and `version` are the sole identity boundary. Governance attaches to the kernel through three seams:
 
 - **`lifecycleHook`:** Review protocols, due process, quality controls, delegation of authority, typed hold policies, and temporal parameter resolution attach to transitions via semantic tags.
 - **`contractHook`:** Data validation pipelines validate external data against contracts.
 - **`provenanceLayer`:** The Reasoning and Counterfactual tiers extend the kernel's Facts tier.
+
+Pre-ADR-0076 prose elsewhere in this spec that uses the standalone-document framing ("a Workflow Governance Document targets a Kernel Document via `targetWorkflow`") is retained for citation stability; the canonical author-time shape is now the `governance` embedded block under a single `$wosWorkflow` envelope.
 
 ### 1.5 Notational Conventions
 

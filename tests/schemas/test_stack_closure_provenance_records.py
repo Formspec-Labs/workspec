@@ -707,6 +707,7 @@ class TestStalledInstanceStatus:
     @staticmethod
     def _instance(status: str, **extra) -> dict:
         record = {
+            "$wosCaseInstance": "1.0",
             "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
             "definitionUrl": "https://agency.gov/workflows/benefits",
             "definitionVersion": "1.0.0",

@@ -1,0 +1,122 @@
+{
+  "id": "K-FOREACH-002-bounded-concurrency",
+  "rule": "K-FOREACH-003",
+  "description": "ForEach with bounded concurrency=3. Schema MUST accept positive integer concurrency; lint K-FOREACH-003 rejects concurrency=0 (deadlock guard). Sequential canonical semantics treat concurrency as advisory and Sub-PR D-2's iteration runtime processes the five applicants serially regardless of concurrency=3 — the bound is honored only when a parallel iteration adapter wires in. The fixture asserts iteration count + sequential ordering of the five applicants. `outputPath` + `mergeStrategy` writes are deferred to Sub-PR D-3.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-bounded",
+      "version": "1.0.0",
+      "title": "ForEach Iteration — Bounded Concurrency",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "applicants": {
+            "type": "array"
+          },
+          "verificationResults": {
+            "type": "array"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "started"
+                },
+                "target": "verifyApplicants"
+              }
+            ]
+          },
+          "verifyApplicants": {
+            "type": "foreach",
+            "collection": "caseFile.applicants",
+            "itemVariable": "$applicant",
+            "indexVariable": "$idx",
+            "concurrency": 3,
+            "outputPath": "caseFile.verificationResults",
+            "mergeStrategy": "collect",
+            "body": {
+              "type": "atomic"
+            },
+            "transitions": [
+              {
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "applicants": [
+      {"id": "p1"},
+      {"id": "p2"},
+      {"id": "p3"},
+      {"id": "p4"},
+      {"id": "p5"}
+    ]
+  },
+  "event_sequence": [
+    {
+      "event": "started",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "verifyApplicants",
+      "event": "started"
+    },
+    {
+      "from": "verifyApplicants",
+      "target": "completed",
+      "event": "$foreachComplete"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "index": 4
+      }
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "iterations": 5,
+        "broke": false
+      }
+    }
+  ],
+  "expected_errors": []
+}

@@ -9,32 +9,38 @@ const __dirname = path.dirname(__filename);
 const SCHEMAS_DIR = path.resolve(__dirname, '../../schemas');
 const OUTPUT_DIR = path.resolve(__dirname, '../src/types/wos');
 
+// Post-ADR-0076 / Sub-PR E layout. The schema family collapsed to six author-
+// time + runtime-artifact files at `schemas/`, plus two sidecars under
+// `schemas/sidecars/`. Legacy split-schema paths (`kernel/`, `governance/`,
+// `ai/`, `advanced/`, `companions/`, `assurance/`, `profiles/`) are retired:
+// their content is absorbed under embedded blocks of `wos-workflow.schema.json`
+// (governance, agents, aiOversight, signature, custody, advanced, assurance)
+// or absorbed into the runtime-artifact envelopes.
+//
+// Per ADR 0063, the generator emits one TypeScript module per canonical schema.
+// Consumers that previously imported `WOSAdvancedGovernanceDocument`,
+// `WOSAIIntegrationDocument`, etc. now import the corresponding embedded-block
+// types nested under `WOSWorkflowDocument` (regenerated `workflow.ts`).
 const schemas = [
-  { src: 'kernel/wos-kernel.schema.json', name: 'kernel' },
-  { src: 'companions/wos-case-instance.schema.json', name: 'case-instance' },
-  { src: 'governance/wos-workflow-governance.schema.json', name: 'workflow-governance' },
-  { src: 'governance/wos-due-process.schema.json', name: 'due-process' },
-  { src: 'governance/wos-assertion-gate.schema.json', name: 'assertion-gate' },
-  { src: 'governance/wos-policy-parameters.schema.json', name: 'policy-parameters' },
-  { src: 'ai/wos-ai-integration.schema.json', name: 'ai-integration' },
-  { src: 'ai/wos-agent-config.schema.json', name: 'agent-config' },
-  { src: 'ai/wos-drift-monitor.schema.json', name: 'drift-monitor' },
-  { src: 'advanced/wos-advanced.schema.json', name: 'advanced' },
-  { src: 'advanced/wos-equity.schema.json', name: 'equity' },
-  { src: 'advanced/wos-verification-report.schema.json', name: 'verification-report' },
-  { src: 'profiles/wos-integration-profile.schema.json', name: 'integration-profile' },
-  { src: 'profiles/wos-semantic-profile.schema.json', name: 'semantic-profile' },
-  { src: 'profiles/wos-signature-profile.schema.json', name: 'signature-profile' },
-  { src: 'companions/wos-lifecycle-detail.schema.json', name: 'lifecycle-detail' },
-  { src: 'kernel/wos-correspondence-metadata.schema.json', name: 'correspondence-metadata' },
-  { src: 'sidecars/wos-notification-template.schema.json', name: 'notification-template' },
-  { src: 'sidecars/wos-business-calendar.schema.json', name: 'business-calendar' },
-  { src: 'assurance/wos-assurance.schema.json', name: 'assurance' },
+  { src: 'wos-workflow.schema.json', name: 'workflow' },
+  { src: 'wos-case-instance.schema.json', name: 'case-instance' },
+  { src: 'wos-provenance-log.schema.json', name: 'provenance-log' },
+  { src: 'wos-tooling.schema.json', name: 'tooling' },
+  { src: 'sidecars/wos-delivery.schema.json', name: 'delivery' },
+  { src: 'sidecars/wos-ontology-alignment.schema.json', name: 'ontology-alignment' },
 ];
 
-/** Every schema module except `kernel` re-declares inlined kernel refs; star-exporting them together causes TS2308. */
+/**
+ * Every schema module except `workflow` re-declares types that exist in the
+ * merged workflow envelope (e.g. `Lifecycle`, `Actor`, `CaseFile`). Re-exporting
+ * them flat would trigger TS2308 (duplicate identifier). The generated `index.ts`
+ * star-exports `workflow.ts` and namespaces every other module.
+ *
+ * Pre-Sub-PR-E this filter excluded `kernel`; the canonical author-time module
+ * is now `workflow` (post-ADR-0076 merged envelope).
+ */
 function namespacedModuleNames(presentNames: string[]): Set<string> {
-  return new Set(presentNames.filter((n) => n !== 'kernel'));
+  return new Set(presentNames.filter((n) => n !== 'workflow'));
 }
 
 async function compileSchema(src: string, name: string): Promise<string | null> {

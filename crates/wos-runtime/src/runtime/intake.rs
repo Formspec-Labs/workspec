@@ -405,6 +405,7 @@ fn stamp_intake_provenance_fields(
             record.actor_type = Some(match actor.kind {
                 ActorKind::Human => "human".to_string(),
                 ActorKind::System => "system".to_string(),
+                ActorKind::Agent => "agent".to_string(),
             });
         }
 

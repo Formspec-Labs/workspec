@@ -1,0 +1,133 @@
+{
+  "id": "K-FOREACH-OUTPUT-001-collect-strategy",
+  "rule": "K-FOREACH-001",
+  "description": "ForEach with outputPath + mergeStrategy=collect (Sub-PR D-4): each iteration's `$item` is appended to the array at `caseFile.processedAttachments`. Initial value is absent → starts as []. After three iterations the array is identical to `caseFile.attachments` element-for-element (atomic body, identity capture). Each merge emits a `caseStateMutation` provenance record attributed to `processAttachments:output`. mergeStrategy=shallow / deep cover the same hook with object-merge semantics; this fixture covers the canonical collect path. Parallel iteration honoring `concurrency` and compound body transitions remain Sub-PR D-5.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-output-collect",
+      "version": "1.0.0",
+      "title": "ForEach OutputPath — Collect Strategy",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "attachments": {
+            "type": "array"
+          },
+          "processedAttachments": {
+            "type": "array"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submitted"
+                },
+                "target": "processAttachments"
+              }
+            ]
+          },
+          "processAttachments": {
+            "type": "foreach",
+            "collection": "caseFile.attachments",
+            "itemVariable": "currentAttachment",
+            "outputPath": "caseFile.processedAttachments",
+            "mergeStrategy": "collect",
+            "body": {
+              "type": "atomic"
+            },
+            "transitions": [
+              {
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "attachments": [
+      {"id": "a1", "name": "passport.pdf"},
+      {"id": "a2", "name": "lease.pdf"},
+      {"id": "a3", "name": "income.pdf"}
+    ]
+  },
+  "event_sequence": [
+    {
+      "event": "submitted",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "processAttachments",
+      "event": "submitted"
+    },
+    {
+      "from": "processAttachments",
+      "target": "completed",
+      "event": "$foreachComplete"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "caseStateMutation",
+      "toState": "processAttachments:output"
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 2
+      }
+    },
+    {
+      "recordKind": "caseStateMutation",
+      "toState": "processAttachments:output"
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "iterations": 3,
+        "broke": false
+      }
+    }
+  ],
+  "expected_errors": []
+}

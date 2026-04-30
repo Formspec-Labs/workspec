@@ -136,7 +136,7 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `type` | enum | REQUIRED | `atomic`, `compound`, `parallel`, or `final`. |
+| `type` | enum | REQUIRED | `atomic`, `compound`, `parallel`, `foreach`, or `final`. |
 | `onEntry` | array of Action | OPTIONAL | Actions executed on state entry. |
 | `onExit` | array of Action | OPTIONAL | Actions executed on state exit. |
 | `transitions` | array of Transition | OPTIONAL | Outgoing transitions from this state. |
@@ -156,6 +156,43 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 **Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions and MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`. A final state MAY carry an `outcomeCode` — a machine-readable string that allows downstream systems to branch on terminal outcome without parsing state names or tags. `outcomeCode` MUST NOT duplicate any entry in `tags`.
 
 The structural constraints above are enforced by the Kernel JSON Schema (`schemas/wos-workflow.schema.json`) via conditional `allOf` blocks on the `State` definition. A Kernel Structural processor MUST reject any document that violates them. The "final states MUST NOT have outgoing transitions" rule remains a semantic constraint enforced by a Kernel Complete processor (see S13.3).
+
+#### 4.3.1 ForEach States
+
+A **ForEach state** runs an inline `body` State once per element of a bounded collection. ForEach is a structural primitive — distinct from compound (single nested machine) and parallel (fixed concurrent regions) — because the branch count is *runtime-derived* from a FEL expression.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `collection` | string (FEL) | REQUIRED | FEL expression evaluated against case state at entry. MUST evaluate to a bounded array; unbounded streams are rejected. Each element drives one iteration. |
+| `body` | State | REQUIRED | Inline State executed once per iteration. MAY be `atomic`, `compound`, or `parallel` (nested ForEach is permitted but discouraged). |
+| `itemVariable` | string | OPTIONAL | Case-state binding name for the current iteration's item. Defaults to `$item`. |
+| `indexVariable` | string | OPTIONAL | Case-state binding name for the current iteration's zero-based index. Defaults to `$index`. |
+| `concurrency` | integer or null | OPTIONAL | Maximum number of items processed concurrently. Positive integer for bounded concurrency; `null` for unbounded (processor decides). MUST be at least 1 when present. Sequential canonical semantics treat `concurrency` as advisory; processors that implement parallel iteration honor the bound. Processors MAY refuse unbounded concurrency on rights-impacting workflows. |
+| `breakCondition` | string (FEL) | OPTIONAL | FEL expression evaluated after each iteration; when true, terminates the foreach early. Useful for early-exit on first match or threshold. |
+| `outputPath` | string | OPTIONAL | Case-file path where iteration results are written per `mergeStrategy`. The write goes through the governed output-commit pipeline. |
+| `mergeStrategy` | enum | OPTIONAL | `shallow` (per-iteration output replaces top-level keys), `deep` (deep-merges into existing structure), or `collect` (accumulates as an array). Required when `outputPath` is set. |
+| `transitions` | array of Transition | OPTIONAL | Fired after the foreach completes (all iterations done OR `breakCondition` triggered OR collection empty). |
+
+**Iteration semantics.** Sequential is the canonical semantics:
+
+1. On entry, the processor evaluates `collection` against case state. If the result is not an array, the processor MUST reject with a kernel-level error.
+2. If the array is **empty**, no iterations run; the foreach state's outgoing transitions become eligible immediately. This is the empty-collection fast path.
+3. For each element, the processor binds the element under `itemVariable` (default `$item`) and the zero-based index under `indexVariable` (default `$index`) in case state, then enters `body`. The body executes to completion (a final state within `body`, or an outgoing transition from `body`).
+4. After body completion, if `breakCondition` is set and evaluates to true, iteration terminates early.
+5. After all iterations (or early termination), the foreach state's outgoing transitions become eligible.
+
+**Per-iteration bindings** are scoped to the body's execution; they do NOT persist into case state after the foreach completes. Authors that need per-iteration outputs to survive use `outputPath` + `mergeStrategy`.
+
+**Cancellation and timers.** `cancellationPolicy` is reserved for parallel iteration semantics in a future revision; sequential foreach has a single in-flight branch and no cancellation surface. Timers created inside `body` are scoped to the iteration that created them (cancelled when the iteration completes or is broken).
+
+**Implementation status.** Sub-PR D shipped authoring + schema validity + lint coverage (`K-FOREACH-001`/`002`/`003`/`004`). Sub-PR D-2 wired sequential runtime iteration: `collection` FEL evaluation (rejects non-array with `EvalError::ForEach`), per-iteration `itemVariable` / `indexVariable` bindings (defaults `$item` / `$index`; restored to their prior values after the foreach completes), `breakCondition` FEL predicate evaluated after each iteration for early exit, the empty-collection fast path, and auto-firing of the foreach state's first eligible anonymous outgoing transition with synthetic event `$foreachComplete`. Provenance is emitted as `foreachIterationStarted` (per item, carrying `{foreachState, index, item}`) plus `foreachIterationCompleted` (carrying `{foreachState, index}` and `breakTriggered: true` when iteration broke early) plus exactly one `foreachCompleted` summary (`{foreachState, iterations, broke}`) before the outgoing transition fires. Sub-PR D-3 added per-iteration atomic-body action execution: `body.onEntry` actions run with the iteration's bindings visible, then `body.onExit` runs after the body but before `breakCondition` evaluation; mutations are attributed to the synthetic lifecycle-state label `<foreach-state>:body` so audit tooling can distinguish state-level onEntry mutations from body-iteration mutations. Sub-PR D-4 added `outputPath` + `mergeStrategy` writes: after each iteration's body executes, the post-body value of `case_state[itemVariable]` is captured per `mergeStrategy` (`collect` appends to the array at `outputPath`; `shallow` merges top-level object keys; `deep` recursively merges nested objects, replacing arrays wholesale and overwriting non-object collisions). Each merge emits a `caseStateMutation` record attributed to `<foreach-state>:output`. Type errors surface as `EvalError::ForEach`. Sub-PR D-5 added compound-body iteration: when `body.kind == compound`, the runtime walks the body's substate graph from `body.initialState`, firing anonymous transitions in document order until a Final substate is reached (or a 100-step cap surfaces a stuck/looping body as `EvalError::ForEach`). Substate-level provenance carries the synthetic label `<foreach-state>:body:<substate-id>`. Bodies with explicit-event transitions (kind `message`/`signal`/`timer`/`error`) cannot fire inside body execution because the runtime never receives external events between substate steps; authors MUST shape compound bodies with anonymous (auto-firing) transitions only. Parallel-body and nested-foreach body kinds are explicitly rejected at runtime (clear `EvalError::ForEach` rather than silent no-op).
+
+**Durable-runtime compatibility (Temporal / Restate).** The canonical sequential semantics are deliberately compatible with the workspace's durable-runtime adapters. Iteration order is deterministic (document-order over the FEL-evaluated `collection`); `breakCondition` and substate guards are pure reads of case state; auto-firing transitions resolve in document order. Both Temporal (replay-deterministic workflow functions) and Restate (deterministic virtual-object handlers) reproduce the same iteration trace from the journal. Side-effecting actions (`invokeService`, `emitEvent`, `createTask`) flow through their existing host ports — `InvokeServicesDyn`, the binding registry, the task presenter — which the durable adapter wraps as Temporal Activities or Restate `ctx.run()` boundaries. Two principles let large or long-running iterations work durably:
+
+1. **Iteration partitioning.** A processor MAY split a large foreach across multiple durable checkpoints (Temporal `continueAsNew`, Restate handler re-entry). Iteration ordering and the `foreachCompleted` summary semantics are preserved across the partition; observable behavior (which `foreachIterationStarted` records emit, in what order, with what `index`) MUST match a single-checkpoint run. Partitioning is an adapter-tier optimization, not a spec-level concern.
+2. **External-event bodies are excluded by design.** Bodies with explicit-event transitions are rejected at runtime because synchronous body execution cannot await external events; this aligns with both Temporal and Restate's models, which expose external signals at handler boundaries, not inside synchronous loops. Authors who need event-driven per-item processing hoist the work out of the body into a separate compound or parallel state.
+
+**Parallel iteration honoring `concurrency`** stays an adapter-tier concern under the same framing: the in-memory canonical evaluator is sequential per spec §4.3.1 ("Sequential is the canonical semantics... Sequential canonical semantics treat `concurrency` as advisory"). A Temporal adapter MAY spawn parallel Activities up to the `concurrency` bound; a Restate adapter MAY parallelize `ctx.run()` calls. Deployments that need real parallelism wire a parallel-iteration adapter that honors the bound, leaving the authoring surface unchanged.
 
 ### 4.4 Cancellation Policy
 

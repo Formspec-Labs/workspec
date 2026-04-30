@@ -1,0 +1,155 @@
+{
+  "id": "K-FOREACH-COMPOUND-001-compound-body",
+  "rule": "K-FOREACH-001",
+  "description": "ForEach with a compound body that walks a substate graph to a Final substate per iteration (Sub-PR D-5). Body shape: validate (atomic, setData onEntry, anonymous transition to complete) → complete (final). Each iteration MUST run validate's onEntry, fire the anonymous transition, and reach complete. Provenance attribution uses synthetic lifecycle-state labels `<foreach-state>:body:<substate-id>` (here `processItems:body:validate` and `processItems:body:complete`). After iterating over three items the foreach state's anonymous outgoing transition fires with synthetic event `$foreachComplete`. Parallel iteration honoring `concurrency` and parallel/foreach body kinds remain adapter-tier / future runtime extensions per spec §4.3.1.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-compound-body",
+      "version": "1.0.0",
+      "title": "ForEach Compound Body — Substate Walk",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "items": {
+            "type": "array"
+          },
+          "lastValidated": {
+            "type": "string"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submitted"
+                },
+                "target": "processItems"
+              }
+            ]
+          },
+          "processItems": {
+            "type": "foreach",
+            "collection": "caseFile.items",
+            "itemVariable": "currentItem",
+            "body": {
+              "type": "compound",
+              "initialState": "validate",
+              "states": {
+                "validate": {
+                  "type": "atomic",
+                  "onEntry": [
+                    {
+                      "action": "setData",
+                      "path": "caseFile.lastValidated",
+                      "value": "ok"
+                    }
+                  ],
+                  "transitions": [
+                    {
+                      "target": "complete"
+                    }
+                  ]
+                },
+                "complete": {
+                  "type": "final"
+                }
+              }
+            },
+            "transitions": [
+              {
+                "target": "done"
+              }
+            ]
+          },
+          "done": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "items": [
+      {"id": "x1"},
+      {"id": "x2"},
+      {"id": "x3"}
+    ]
+  },
+  "event_sequence": [
+    {
+      "event": "submitted",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "processItems",
+      "event": "submitted"
+    },
+    {
+      "from": "processItems",
+      "target": "done",
+      "event": "$foreachComplete"
+    }
+  ],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processItems",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "onEntry",
+      "toState": "processItems:body:validate",
+      "data": {
+        "actionType": "setData"
+      }
+    },
+    {
+      "recordKind": "caseStateMutation",
+      "toState": "processItems:body:validate"
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processItems",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processItems",
+        "index": 2
+      }
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processItems",
+        "iterations": 3,
+        "broke": false
+      }
+    }
+  ],
+  "expected_errors": []
+}

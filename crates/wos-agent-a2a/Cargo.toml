@@ -1,0 +1,10 @@
+[package]
+name = "wos-agent-a2a"
+version.workspace = true
+edition.workspace = true
+description = "A2A multi-agent orchestrator AgentInvoker adapter for WOS (skeleton; ADR 0064)"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+wos-core = { path = "../wos-core" }

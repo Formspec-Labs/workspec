@@ -21,7 +21,13 @@ members = [
     "crates/wos-synth-anthropic",
     "crates/wos-synth-cli",
     "crates/wos-authoring",
-    "crates/wos-mcp"
+    "crates/wos-mcp",
+    "crates/wos-agent-stub",
+    "crates/wos-agent-anthropic",
+    "crates/wos-agent-claude-sdk",
+    "crates/wos-agent-mcp",
+    "crates/wos-agent-a2a",
+    "crates/wos-agent-http"
 ]
 resolver = "3"
 
