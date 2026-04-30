@@ -19,7 +19,7 @@ Sidecars are exempt from the [`CONVENTIONS.md`](../../CONVENTIONS.md) three-sect
 **Schema:** [`schemas/sidecars/wos-ontology-alignment.schema.json`](../../schemas/sidecars/wos-ontology-alignment.schema.json) · 385 lines.
 **Purpose:** Per-deployment ontology alignment. JSON-LD `@context`, SHACL shapes, PROV-O export, XES/OCEL mapping for interop with downstream process-mining and provenance graph tools. Adds interpretation and export capability — never changes how WOS documents are processed at runtime.
 **Joins by:** `targetWorkflow` URI matching the workflow's `url`.
-**Conformance:** schema validation. SHACL shapes and JSON-LD `@context` are consumed by export pipelines (`wos-export`); kernel processing is unaffected.
+**Conformance:** schema validation. SHACL shapes and JSON-LD `@context` are consumed by export pipelines (`wos-export`); kernel processing is unaffected. Per ADR 0082, semantic graph projection/import is deterministic profile behavior, not a Kernel substrate.
 **Note on Step 0 (independence):** ontology alignment fits the "distinct semantic model" test in [`CONVENTIONS.md`](../../CONVENTIONS.md) Step 0 — RDF/SHACL/PROV-O is genuinely outside WOS's processing model. Independent existence justified.
 
 ## Legacy sidecar prose docs (retained, not re-authored)

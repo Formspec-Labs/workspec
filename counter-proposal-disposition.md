@@ -40,7 +40,7 @@ Row counts below match **data rows** in the disposition tables in this file (exc
 |---|---|---|
 | `$flowspec` / `id` / `version` / `name` / `description` (optional) / `status` / `extensions` | HELD | WOS workflow docs have these |
 | `formRef` URI\|version pattern | HELD | `contractRef` + Formspec binding |
-| Flat `nodes[]` + `edges[]` arrays | REJECT | Statechart is deliberate; authoring simplification is integration-profile concern |
+| Flat `nodes[]` + `edges[]` arrays | REJECT | Statechart is deliberate; authoring simplification is integration-profile concern. ADR 0082 absorbs graph-query value as semantic projection without replacing the statechart execution model. |
 | Edge `condition` (FEL) | HELD | Guards on transitions |
 | Edge `trigger` ("timeout"/"error"/"normal") | REJECT | Typed `TransitionEvent` kinds already first-class |
 | `$field.{path}` binding syntax | HELD | Formspec FEL uses definition/instance paths (`$fieldKey`, `$parent.child`, `@instance()` — Core §3.2). **`caseFile.*` is a WOS host projection for case data in workflow FEL, not a Formspec Core prefix.** Same role as FlowSpec’s `$field.{path}` binding into the composed form. |
@@ -109,7 +109,7 @@ Row counts below match **data rows** in the disposition tables in this file (exc
 | Feature | Disposition | Landing / rationale |
 |---|---|---|
 | Multi-way routing | HELD | Guarded transitions on atomic states |
-| X33 — conditional-node vs. conditional-edge heuristic | REJECT | Semantic `tags` on transitions (Kernel §4.12) is strictly superior for WOS — governance attaches to transitions, not merely to documentation. FlowSpec §3.6 already documents both routing mechanisms plus a heuristic; `counter-proposal-extra.md` X33 asks for more appendix guidance. This REJECT means **do not mirror FlowSpec’s dual-mechanism story in WOS**, not that FlowSpec failed to address it. |
+| X33 — conditional-node vs. conditional-edge heuristic | REJECT | Semantic `tags` on transitions (Kernel §4.12) is strictly superior for WOS — governance attaches to transitions, not merely to documentation. ADR 0082 may expose graph-projection guidance, but it does not reopen a dual topology. FlowSpec §3.6 already documents both routing mechanisms plus a heuristic; `counter-proposal-extra.md` X33 asks for more appendix guidance. This REJECT means **do not mirror FlowSpec’s dual-mechanism story in WOS**, not that FlowSpec failed to address it. |
 
 ## Node type: transform (FlowSpec §3.7)
 
@@ -220,7 +220,7 @@ Row counts below match **data rows** in the disposition tables in this file (exc
 | No governance layer (L1/L2 analog) | REJECT | Load-bearing for rights-impacting workflows |
 | No signature / Trellis custody story | REJECT | Stack commits to one signing pipeline (STACK.md commitment 3) |
 | Event log as audit ledger | REJECT | Platform decision register: durable execution checkpoints the ledger, does not become it; Trellis owns custody |
-| Hierarchical statechart → flat node-graph | REJECT | Statechart is deliberate; lint catches nesting errors (LLM-authorability is not a gap) |
+| Hierarchical statechart → flat node-graph | REJECT | Statechart is deliberate; lint catches nesting errors (LLM-authorability is not a gap). ADR 0082 keeps graph structure in ontology-alignment projection, not authoring or execution. |
 
 ## Sequenced absorption plan
 
@@ -271,7 +271,7 @@ Name the pipeline as one abstraction before Waves 2–4 land. Otherwise those wa
 Four rejects warrant explicit spec text so future contributors don't re-raise them:
 
 - **`onComplete` end-node triggers** — use `correlationKey` + relationship events. Note in Kernel §4.3 final-state prose.
-- **Flat edge-graph vs. statechart** — statechart is deliberate; integration-profile authoring simplification is the correct layer. Note in Kernel §4 overview.
+- **Flat edge-graph vs. statechart** — statechart is deliberate; integration-profile authoring simplification is the correct layer. ADR 0082 documents graph-query value as ontology projection, not a replacement topology. Note in Kernel §4 overview.
 - **Timeout-action-requires-explicit-edge (X31)** — statechart makes timeout routing structural via **`TransitionEvent`** (`kind: "timer"`). Note in Kernel **§4.10 / §9.7** (not §9.3 — that section is idempotency keys).
 - **Event log as audit ledger** — durable execution checkpoints, does not replace Trellis custody. Note in Runtime Companion introduction or pointer to platform decision register.
 

@@ -126,6 +126,10 @@ This section is normative.
 
 The lifecycle defines the statechart governing a workflow instance's progression. The semantics are based on Harel statecharts as formalized in W3C SCXML, adapted for case-oriented workflows.
 
+The hierarchical JSON lifecycle is the Kernel's authoring, processing, and conformance surface. Ontology-alignment processors MAY expose deterministic semantic projection or import for JSON-LD, RDF, SHACL, SPARQL, PROV-O, XES, or OCEL tooling. Imported semantic graphs MUST resolve to a normal `$wosWorkflow` document before Kernel processing. Projection and import MUST NOT change lifecycle evaluation, guard ordering, case state mutation, provenance emission, or any other Kernel processing guarantee.
+
+Processors that ignore ontology alignment and processors that support it MUST produce identical lifecycle behavior, case state, and provenance records for the same Kernel Document and event sequence. See the WOS Ontology Alignment sidecar for projection-specific context, shapes, and export obligations.
+
 ### 4.2 Deterministic Evaluation Algorithm
 
 The lifecycle is a **pure function** of (current states x event x guards -> next states). Two conformant Kernel Processors given the same Kernel Document and the same sequence of events MUST produce the same sequence of state transitions.

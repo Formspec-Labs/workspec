@@ -148,6 +148,10 @@ The `context` property declares the JSON-LD `@context` that a semantic processor
 
 A processor that applies the `@context` MUST NOT alter the JSON structure of the WOS document. The `@context` is an interpretation overlay, not a transformation.
 
+The Semantic Profile's graph surface is a projection of the Kernel statechart, not a replacement substrate. State, transition, actor, case-file, and provenance identifiers SHOULD be minted from stable workflow URLs, versions, authored identifiers, and lifecycle paths. Processors SHOULD avoid blank nodes for WOS-defined terms unless no stable source identifier exists. If a processor claims deterministic semantic projection support, it MUST produce the same expanded RDF graph for the same WOS document and same ontology-alignment configuration.
+
+Processors MAY also support semantic import: accepting a JSON-LD/RDF graph and lowering it into a hierarchical `$wosWorkflow` document. Import MUST be deterministic. If the graph cannot resolve to one lifecycle hierarchy, transition order, identifier set, and case-file shape, the processor MUST reject it with a stable diagnostic rather than choosing a hierarchy silently.
+
 ### 3.2 Context Configuration
 
 The `context` object declares:
@@ -460,6 +464,10 @@ This section is normative.
 **Semantic Structural.** Parse and validate Semantic Profile Documents against the JSON Schema. The processor MUST reject documents that fail schema validation.
 
 **Semantic Context.** Structural conformance plus: apply the declared `@context` to WOS documents, producing valid JSON-LD. The processor MUST preserve the `@context` during serialization round-trips. The processor MUST NOT alter the JSON structure of the source document when applying the context.
+
+**Semantic Projection.** Context conformance plus: produce a deterministic graph projection from WOS lifecycle, actor, case-file, and provenance structures. The projection MAY reify transitions or other relationships when RDF tooling requires relationship properties, but that reification is projection-local. It MUST NOT introduce a second authoring topology or alter Kernel statechart semantics.
+
+**Semantic Import.** Projection conformance plus: accept a JSON-LD/RDF graph and lower it into a hierarchical `$wosWorkflow` document. The imported document then follows ordinary Kernel validation and processing. Ambiguous graphs MUST be rejected with stable diagnostics.
 
 **Semantic Validation.** Context conformance plus: validate WOS documents against declared SHACL shapes. The processor MUST report SHACL validation results. The processor SHOULD record validation results as provenance records.
 

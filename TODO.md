@@ -315,7 +315,7 @@ WOS's first production runtime target is now the Restate adapter selected by WOS
 
 ### Ontology field identity — design not started
 
-`ontology-spec.md` does not exist. Informs AI integration, cross-document alignment, and §6 regulatory specs. Prerequisite design: JSON-LD `@context` decision, semantic-field-identity protocol, cross-document alignment. Move to active only once a draft exists.
+`ontology-spec.md` does not exist. ADR 0082 settles the lane: semantic projection/import belongs to `wos-ontology-alignment`, not Kernel substrate. Remaining prerequisite design: semantic-field-identity protocol, cross-document alignment, and executable projection/import conformance. Move to active only once a draft exists.
 
 ---
 
@@ -329,7 +329,7 @@ Captured but not active; re-score when the trigger fires.
 | #4 | Tripartite Object Model | 2/9/3 | Activity-definition reuse across workflows becomes a real pattern. |
 | #6 | Typed Patch Operations | 1/8/0 | Authoring tool ships structural edits. |
 | #7 | OCEL 2.0 Object-Centric Case Model | 2/9/5 | Multi-object mutation emerges, or flat→OCEL export shows systematic loss. |
-| #9 | JSON-LD Export Surface | 5/5/3 | Ontology spec drafts begin OR shipped PROV-O pulls `@context` into authoring. |
+| #9 | JSON-LD Projection/Import Surface | 5/5/3 | Ontology spec drafts begin OR shipped PROV-O pulls `@context` into authoring. |
 | #32 | Multi-Instance Iteration | 6/7/5 | #20 landed — unblocked. Highest-priority deferred item. |
 | #33 | Inclusive-OR / Event-Choice / Boundary Events | 3/5/2 | Authoring frustration with workarounds (externally observable signal). |
 
