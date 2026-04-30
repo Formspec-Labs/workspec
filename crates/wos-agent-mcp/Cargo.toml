@@ -1,0 +1,10 @@
+[package]
+name = "wos-agent-mcp"
+version.workspace = true
+edition.workspace = true
+description = "MCP server AgentInvoker adapter for WOS (skeleton; ADR 0064)"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+wos-core = { path = "../wos-core" }
