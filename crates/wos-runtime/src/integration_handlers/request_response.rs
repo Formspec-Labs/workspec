@@ -423,6 +423,7 @@ fn actor_kind_to_string(kind: wos_core::model::kernel::ActorKind) -> &'static st
     match kind {
         wos_core::model::kernel::ActorKind::Human => "human",
         wos_core::model::kernel::ActorKind::System => "system",
+        wos_core::model::kernel::ActorKind::Agent => "agent",
     }
 }
 

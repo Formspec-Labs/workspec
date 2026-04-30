@@ -192,6 +192,110 @@ fn create_task_formspec_coprocessor_fields_round_trip() {
     assert_eq!(action.failure_event.as_deref(), Some("intake.failed"));
 }
 
+// ── ADR 0064: Agent ActorKind variant ───────────────────────────────────────
+
+#[test]
+fn agent_actor_kind_round_trips() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/agent-actor-roundtrip",
+        "version": "1.0.0",
+        "title": "Agent Actor Round-Trip",
+        "impactLevel": "operational",
+        "actors": [
+            {"id": "extractor", "type": "agent"},
+            {"id": "caseworker", "type": "human"},
+            {"id": "scheduler", "type": "system"}
+        ],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json)
+        .expect("agent-typed actor MUST deserialize per ADR 0064");
+    assert_eq!(doc.actors.len(), 3);
+    assert_eq!(doc.actors[0].id, "extractor");
+    assert_eq!(doc.actors[0].kind, wos_core::model::kernel::ActorKind::Agent);
+    assert_eq!(doc.actors[1].kind, wos_core::model::kernel::ActorKind::Human);
+    assert_eq!(doc.actors[2].kind, wos_core::model::kernel::ActorKind::System);
+}
+
+// ── caseFile.contractRef + FieldDefinition.required ─────────────────────────
+
+#[test]
+fn case_file_contract_ref_round_trips() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/case-file-contract-ref",
+        "version": "1.0.0",
+        "title": "CaseFile contractRef Round-Trip",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        },
+        "caseFile": {
+            "contractRef": "https://agency.gov/contracts/benefits-applicant.json",
+            "contractVersion": "1.0.0"
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json)
+        .expect("caseFile.contractRef MUST deserialize");
+    let case_file = doc.case_file.expect("caseFile present");
+    assert_eq!(
+        case_file.contract_ref.as_deref(),
+        Some("https://agency.gov/contracts/benefits-applicant.json")
+    );
+    assert_eq!(case_file.contract_version.as_deref(), Some("1.0.0"));
+    assert!(
+        case_file.fields.is_empty(),
+        "contractRef shape MUST NOT carry inline fields (oneOf in schema)"
+    );
+}
+
+#[test]
+fn case_file_field_required_round_trips() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/field-required",
+        "version": "1.0.0",
+        "title": "FieldDefinition.required Round-Trip",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "start",
+            "states": {
+                "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                "done": {"type": "final"}
+            }
+        },
+        "caseFile": {
+            "fields": {
+                "applicantName": {"type": "string", "required": true},
+                "monthlyIncome": {"type": "number"}
+            }
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("fields with required MUST deserialize");
+    let case_file = doc.case_file.expect("caseFile present");
+    assert!(
+        case_file.fields["applicantName"].required,
+        "applicantName.required SHOULD be true"
+    );
+    assert!(
+        !case_file.fields["monthlyIncome"].required,
+        "monthlyIncome.required SHOULD default to false"
+    );
+}
+
 #[test]
 fn non_kernel_fixtures_do_not_parse() {
     // These files in fixtures/kernel/ are NOT KernelDocuments.

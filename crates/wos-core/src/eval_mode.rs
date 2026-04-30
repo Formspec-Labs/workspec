@@ -225,12 +225,15 @@ mod tests {
                         "ready".to_string(),
                         FieldDefinition {
                             kind: "boolean".to_string(),
+                            required: false,
                             description: None,
                             default: Some(serde_json::Value::Bool(false)),
                         },
                     );
                     fields
                 },
+                contract_ref: None,
+                contract_version: None,
                 relationships: Vec::new(),
             }),
             contracts: HashMap::new(),

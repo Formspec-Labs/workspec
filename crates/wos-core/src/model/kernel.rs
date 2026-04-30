@@ -180,11 +180,19 @@ pub struct Actor {
 }
 
 /// Actor type (Kernel S3).
+///
+/// `Agent` is a first-class variant per ADR 0064. Agent-typed actors live in
+/// the `actors[]` registry alongside humans and services; per-agent runtime
+/// declarations (capabilities, autonomy, deontic constraints, fallback chain,
+/// drift monitoring, invoker discriminator) live in the workflow's `agents[]`
+/// embedded block joined by `id`. Lint rule `WOS-AGENT-XREF-001` enforces the
+/// cross-reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActorKind {
     Human,
     System,
+    Agent,
 }
 
 /// Lifecycle topology (Kernel S4).
@@ -479,7 +487,13 @@ fn transition_event_coerce_from_str(s: &str) -> TransitionEvent {
             }
         }
         _ if s.starts_with("$related.") => TransitionEvent::Signal {
-            name: s.strip_prefix("$related.").unwrap_or(s).to_string(),
+            // Preserve the full `$related.*` name so that `matches_runtime_dispatch`
+            // (which compares Signal.name == event by exact equality) matches the
+            // kernel-defined relationship event names emitted at runtime
+            // (`$related.stateChanged`, `$related.resolved`, `$related.holdReleased`,
+            // …). Stripping the prefix here previously made bare-string transitions
+            // for relationship events silently unmatchable.
+            name: s.to_string(),
             scope: SignalScope::Related,
         },
         "$compensation.complete" => TransitionEvent::Signal {
@@ -724,11 +738,33 @@ pub enum ActionKind {
 }
 
 /// Case file schema (Kernel S5).
+///
+/// A case file is either declared inline via `fields` or referenced via
+/// `contract_ref` (recommended binding: Formspec Definition through the
+/// canonical `contractHook` seam, ADR 0077 §10.2). The two shapes are mutually
+/// exclusive at the schema level (`oneOf`); the Rust model carries both as
+/// `Option` and trusts the schema to enforce exclusivity at parse time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaseFile {
-    /// Field definitions.
-    #[serde(default)]
+    /// Inline field definitions. Mutually exclusive with `contract_ref` per
+    /// the schema's `oneOf`. When omitted, the case-file shape comes from the
+    /// referenced contract.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub fields: HashMap<String, FieldDefinition>,
+
+    /// External contract reference. Mutually exclusive with `fields`. The URI
+    /// names the contract document (Formspec Definition recommended, JSON
+    /// Schema baseline). Resolved through the contracts-resolver port at
+    /// runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contract_ref: Option<String>,
+
+    /// Optional version pin for `contract_ref`. When omitted, processors
+    /// resolve the latest published version. Pinning is RECOMMENDED for case
+    /// instances that must replay against archived semantics (Kernel §9.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contract_version: Option<String>,
 
     /// Case relationships (Kernel S5.5).
     #[serde(default)]
@@ -741,6 +777,13 @@ pub struct FieldDefinition {
     /// Field type.
     #[serde(rename = "type")]
     pub kind: String,
+
+    /// Whether the field is required at instance creation / contract
+    /// validation (Kernel §5; matches the schema's `FieldDeclaration.required`
+    /// surface). Authoring-time hint; runtime contract validation enforces it
+    /// through the contracts-resolver port.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub required: bool,
 
     /// Default value.
     #[serde(default)]

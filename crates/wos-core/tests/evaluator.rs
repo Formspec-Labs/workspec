@@ -163,12 +163,15 @@ fn guard_blocks_transition() {
                     "ready".to_string(),
                     FieldDefinition {
                         kind: "boolean".to_string(),
+                        required: false,
                         default: Some(serde_json::Value::Bool(false)),
                         description: None,
                     },
                 );
                 f
             },
+            contract_ref: None,
+            contract_version: None,
             relationships: vec![],
         }),
         ..minimal_kernel("start", states)

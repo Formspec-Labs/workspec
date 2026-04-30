@@ -96,9 +96,10 @@ fn parse_actor_kind(args: &Value) -> Result<ActorKind, ToolError> {
     match args.get("kind").and_then(Value::as_str) {
         None | Some("human") => Ok(ActorKind::Human),
         Some("system") => Ok(ActorKind::System),
+        Some("agent") => Ok(ActorKind::Agent),
         Some(other) => Err(ToolError::InvalidArguments(format!(
-            "unknown actor kind '{other}'; expected human|system \
-             (AI agents use x-wos-ai.agents, not actor declarations)"
+            "unknown actor kind '{other}'; expected human|system|agent \
+             (agent-typed actors require a matching agents[] declaration per ADR 0064)"
         ))),
     }
 }
