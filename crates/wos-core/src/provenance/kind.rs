@@ -28,6 +28,27 @@ pub enum ProvenanceKind {
     TimerCreated,
     /// Timer fired (Lifecycle Detail S6.7).
     TimerFired,
+
+    // ── ForEach iteration (Kernel §4.3.1) ──────────────────────────
+    /// One iteration of a `ForEach` state began. `data` carries
+    /// `{"foreachState": "<state-id>", "index": <0-based>, "item": <value>}`
+    /// so downstream replay can reconstruct iteration order. The matching
+    /// completion record is [`ProvenanceKind::ForEachIterationCompleted`].
+    /// Emitted once per iteration BEFORE body execution.
+    ForEachIterationStarted,
+    /// One iteration of a `ForEach` state finished. `data` carries
+    /// `{"foreachState": "<state-id>", "index": <0-based>}` plus an
+    /// optional `"breakTriggered": true` when iteration terminated early
+    /// via `breakCondition`. Emitted once per iteration AFTER body
+    /// execution (and AFTER per-iteration variable bindings are
+    /// restored).
+    ForEachIterationCompleted,
+    /// All iterations of a `ForEach` state completed (or the empty-collection
+    /// fast path fired). `data` carries `{"foreachState": "<state-id>",
+    /// "iterations": <count>, "broke": <bool>}`. Emitted exactly once per
+    /// foreach state entry, immediately before the foreach state's outgoing
+    /// transition fires.
+    ForEachCompleted,
     /// Timer cancelled (Lifecycle Detail S6.7).
     TimerCancelled,
     /// An `onEntry` lifecycle hook executed.

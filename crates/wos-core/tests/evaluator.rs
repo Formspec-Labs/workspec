@@ -697,3 +697,402 @@ fn guard_evaluation_inputs_include_event_data() {
         "unreferenced event data must not leak into inputs"
     );
 }
+
+// ── ForEach iteration semantics (Sub-PR D-2) ──────────────────────────────
+//
+// Kernel §4.3.1: `foreach` states evaluate `collection` against case state,
+// iterate sequentially, bind `$item` / `$index` per iteration, and auto-fire
+// the foreach state's anonymous outgoing transition with synthetic event
+// `$foreachComplete` after the loop completes (or the empty-collection fast
+// path).
+
+fn foreach_state(
+    collection_expr: &str,
+    item_var: Option<&str>,
+    index_var: Option<&str>,
+    break_condition: Option<&str>,
+    transitions: Vec<Transition>,
+) -> State {
+    State {
+        kind: StateKind::ForEach,
+        description: None,
+        transitions,
+        tags: vec![],
+        on_entry: vec![],
+        on_exit: vec![],
+        initial_state: None,
+        states: IndexMap::new(),
+        regions: IndexMap::new(),
+        cancellation_policy: None,
+        history_state: None,
+        outcome_code: None,
+        collection: Some(collection_expr.to_string()),
+        item_variable: item_var.map(str::to_string),
+        index_variable: index_var.map(str::to_string),
+        concurrency: None,
+        break_condition: break_condition.map(str::to_string),
+        output_path: None,
+        merge_strategy: None,
+        body: Some(Box::new(State {
+            kind: StateKind::Atomic,
+            description: None,
+            transitions: vec![],
+            tags: vec![],
+            on_entry: vec![],
+            on_exit: vec![],
+            initial_state: None,
+            states: IndexMap::new(),
+            regions: IndexMap::new(),
+            cancellation_policy: None,
+            history_state: None,
+            outcome_code: None,
+            collection: None,
+            item_variable: None,
+            index_variable: None,
+            concurrency: None,
+            break_condition: None,
+            output_path: None,
+            merge_strategy: None,
+            body: None,
+            extensions: HashMap::new(),
+        })),
+        extensions: HashMap::new(),
+    }
+}
+
+fn count_records(eval: &Evaluator, kind: ProvenanceKind) -> usize {
+    eval.provenance()
+        .records()
+        .iter()
+        .filter(|r| r.record_kind == kind)
+        .count()
+}
+
+fn first_record(eval: &Evaluator, kind: ProvenanceKind) -> &wos_core::provenance::ProvenanceRecord {
+    eval.provenance()
+        .records()
+        .iter()
+        .find(|r| r.record_kind == kind)
+        .unwrap_or_else(|| panic!("no provenance record with kind {kind:?}"))
+}
+
+#[test]
+fn foreach_empty_collection_fires_outgoing_immediately() {
+    // Empty-collection fast path (Kernel §4.3.1 step 2): the foreach state's
+    // outgoing transition fires with synthetic event `$foreachComplete`,
+    // exactly one ForEachCompleted provenance record is emitted with
+    // iterations=0 and broke=false, and zero iteration-pair records appear.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_state(
+            "caseFile.items",
+            None,
+            None,
+            None,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([]));
+
+    let fired = eval.process_event("submit", None, None).unwrap();
+    assert!(fired);
+
+    assert!(eval.configuration().contains("done"));
+    assert_eq!(
+        count_records(&eval, ProvenanceKind::ForEachIterationStarted),
+        0,
+        "empty collection MUST emit zero ForEachIterationStarted records"
+    );
+    assert_eq!(
+        count_records(&eval, ProvenanceKind::ForEachIterationCompleted),
+        0,
+        "empty collection MUST emit zero ForEachIterationCompleted records"
+    );
+    assert_eq!(
+        count_records(&eval, ProvenanceKind::ForEachCompleted),
+        1,
+        "exactly one ForEachCompleted record per foreach state entry"
+    );
+    let summary = first_record(&eval, ProvenanceKind::ForEachCompleted);
+    let data = summary.data.as_ref().unwrap();
+    assert_eq!(data["iterations"], 0);
+    assert_eq!(data["broke"], false);
+    assert_eq!(data["foreachState"], "loop");
+}
+
+#[test]
+fn foreach_iterates_collection_in_order() {
+    // Two-item iteration: assert (a) two ForEachIterationStarted records in
+    // index order, (b) two ForEachIterationCompleted records, (c) one
+    // ForEachCompleted summary with iterations=2, (d) the loop state's
+    // anonymous outgoing transition fires with synthetic event
+    // `$foreachComplete`, (e) the foreach state lands on `done`.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_state(
+            "caseFile.items",
+            None,
+            None,
+            None,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([{"x": 1}, {"x": 2}]),
+    );
+
+    let fired = eval.process_event("submit", None, None).unwrap();
+    assert!(fired);
+
+    assert!(eval.configuration().contains("done"));
+
+    let starts: Vec<_> = eval
+        .provenance()
+        .records()
+        .iter()
+        .filter(|r| r.record_kind == ProvenanceKind::ForEachIterationStarted)
+        .collect();
+    assert_eq!(starts.len(), 2, "two iterations expected");
+    assert_eq!(starts[0].data.as_ref().unwrap()["index"], 0);
+    assert_eq!(starts[1].data.as_ref().unwrap()["index"], 1);
+    assert_eq!(starts[0].data.as_ref().unwrap()["item"]["x"], 1);
+    assert_eq!(starts[1].data.as_ref().unwrap()["item"]["x"], 2);
+
+    assert_eq!(
+        count_records(&eval, ProvenanceKind::ForEachIterationCompleted),
+        2
+    );
+
+    let summary = first_record(&eval, ProvenanceKind::ForEachCompleted);
+    let data = summary.data.as_ref().unwrap();
+    assert_eq!(data["iterations"], 2);
+    assert_eq!(data["broke"], false);
+}
+
+#[test]
+fn foreach_break_condition_terminates_early() {
+    // breakCondition fires after the second item (index 1 has flag=true);
+    // iteration MUST stop with iterations=2 (not 3), broke=true, and the
+    // last ForEachIterationCompleted record carries breakTriggered=true.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_state(
+            "caseFile.items",
+            Some("currentItem"),
+            None,
+            Some("caseFile.currentItem.flag = true"),
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([
+            {"flag": false},
+            {"flag": true},
+            {"flag": false}
+        ]),
+    );
+
+    let fired = eval.process_event("submit", None, None).unwrap();
+    assert!(fired);
+    assert!(eval.configuration().contains("done"));
+
+    assert_eq!(
+        count_records(&eval, ProvenanceKind::ForEachIterationStarted),
+        2,
+        "break MUST stop iteration after the triggering item; third item never starts"
+    );
+
+    let completes: Vec<_> = eval
+        .provenance()
+        .records()
+        .iter()
+        .filter(|r| r.record_kind == ProvenanceKind::ForEachIterationCompleted)
+        .collect();
+    assert_eq!(completes.len(), 2);
+    assert_eq!(completes[0].data.as_ref().unwrap()["index"], 0);
+    assert!(
+        completes[0]
+            .data
+            .as_ref()
+            .unwrap()
+            .get("breakTriggered")
+            .is_none(),
+        "first iteration completes without break"
+    );
+    assert_eq!(completes[1].data.as_ref().unwrap()["index"], 1);
+    assert_eq!(
+        completes[1].data.as_ref().unwrap()["breakTriggered"],
+        true,
+        "second iteration emits breakTriggered=true"
+    );
+
+    let summary = first_record(&eval, ProvenanceKind::ForEachCompleted);
+    let data = summary.data.as_ref().unwrap();
+    assert_eq!(data["iterations"], 2);
+    assert_eq!(data["broke"], true);
+}
+
+#[test]
+fn foreach_iteration_bindings_do_not_persist() {
+    // Per spec §4.3.1: per-iteration bindings (`$item`, `$index` or their
+    // overrides) MUST NOT survive after the foreach state completes.
+    // Authors that need persistence use `outputPath` (Sub-PR D-3).
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_state(
+            "caseFile.items",
+            Some("currentItem"),
+            Some("currentIndex"),
+            None,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([1, 2, 3]));
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert!(eval.configuration().contains("done"));
+    assert!(
+        eval.case_state().get("currentItem").is_none(),
+        "iteration item-variable MUST be removed after foreach completes"
+    );
+    assert!(
+        eval.case_state().get("currentIndex").is_none(),
+        "iteration index-variable MUST be removed after foreach completes"
+    );
+}
+
+#[test]
+fn foreach_non_array_collection_is_rejected() {
+    // Kernel §4.3.1 step 1: collection MUST evaluate to a bounded array;
+    // a number / string / object / null causes the runtime to reject with
+    // EvalError::ForEach.
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_state(
+            "caseFile.notAnArray",
+            None,
+            None,
+            None,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut().insert(
+        "notAnArray".into(),
+        serde_json::Value::Number(serde_json::Number::from(42)),
+    );
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("non-array collection MUST be rejected");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("foreach error in state 'loop'"),
+        "error MUST identify the offending state: {msg}"
+    );
+    assert!(
+        msg.contains("MUST evaluate to a bounded array")
+            || msg.contains("collection"),
+        "error MUST mention the collection contract: {msg}"
+    );
+}
+
+fn transition_anonymous(target: &str) -> Transition {
+    Transition {
+        event: None,
+        target: target.to_string(),
+        guard: None,
+        actions: vec![],
+        description: None,
+        tags: vec![],
+    }
+}

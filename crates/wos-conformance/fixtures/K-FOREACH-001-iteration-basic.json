@@ -1,7 +1,7 @@
 {
   "id": "K-FOREACH-001-iteration-basic",
   "rule": "K-FOREACH-001",
-  "description": "Basic foreach state: iterates over caseFile.attachments, runs an atomic body per item. Schema-validity + lint coverage in this PR (Sub-PR D); full runtime iteration semantics land in Sub-PR D-2. The fixture asserts that a schema-valid foreach workflow loads through the parser and the foreach state's outgoing transition fires after the (no-op for now) iteration completes.",
+  "description": "Basic foreach state: iterates over caseFile.attachments, runs an atomic body per item. Sub-PR D-2 wires the actual iteration runtime: collection FEL evaluation, sequential per-item $item/$index binding, ForEachIterationStarted/Completed provenance, ForEachCompleted summary, and auto-firing of the foreach state's anonymous outgoing transition with synthetic event `$foreachComplete`. With two attachments in the initial case state, the runtime emits two iteration pairs and lands on `completed`.",
   "documents": {
     "kernel": "inline"
   },
@@ -81,8 +81,50 @@
       "from": "intake",
       "target": "processAttachments",
       "event": "submitted"
+    },
+    {
+      "from": "processAttachments",
+      "target": "completed",
+      "event": "$foreachComplete"
     }
   ],
-  "expected_provenance": [],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 1
+      }
+    },
+    {
+      "recordKind": "foreachIterationCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "index": 1
+      }
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "iterations": 2,
+        "broke": false
+      }
+    }
+  ],
   "expected_errors": []
 }

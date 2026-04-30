@@ -10,7 +10,9 @@
 
 use std::collections::HashMap;
 
-use fel_core::{ast::Expr, dependencies::extract_dependencies, evaluate, parse, types::FelValue};
+use fel_core::{
+    ast::Expr, dependencies::extract_dependencies, evaluate, fel_to_json, parse, types::FelValue,
+};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -203,6 +205,13 @@ pub enum EvalError {
     /// Internal consistency error.
     #[error("internal error: {0}")]
     Internal(String),
+
+    /// `ForEach` state evaluation failure (Kernel §4.3.1) — `collection` did
+    /// not parse, did not evaluate to a bounded array, or another iteration
+    /// invariant was violated. Sub-PR D-2 introduced this variant alongside
+    /// the runtime iteration semantics.
+    #[error("foreach error in state '{state}': {message}")]
+    ForEach { state: String, message: String },
 }
 
 fn transition_matches_dispatch(
@@ -771,25 +780,139 @@ impl Evaluator {
                 Ok(())
             }
             StateKind::ForEach => {
-                // ForEach is authoring + schema valid in this PR; runtime
-                // iteration semantics (Sub-PR D-2) are not yet wired. Treat
-                // entry like a compound state so the body subtree is reachable
-                // for static analysis (lint walks substates) and outgoing
-                // transitions still fire after the body's outcome — but emit
-                // a provenance note so callers know iteration didn't run.
+                // ForEach iteration semantics per Kernel §4.3.1 (Sub-PR D-2).
+                //
+                //   1. Enter state, run onEntry actions.
+                //   2. Evaluate `collection` FEL → Vec<Value>; reject non-array.
+                //   3. Empty-collection fast path: skip iteration loop entirely.
+                //   4. For each item:
+                //      - bind item under `itemVariable` (default `$item`),
+                //        index under `indexVariable` (default `$index`).
+                //      - emit ForEachIterationStarted provenance.
+                //      - body execution is a no-op in this PR's MVP scope:
+                //        the spec admits atomic / compound / parallel bodies,
+                //        but the `body` field is treated as authoring shape
+                //        only here. Full body execution (onEntry actions per
+                //        iteration, nested transitions, output_path / merge
+                //        strategy writes) is tracked as Sub-PR D-3.
+                //      - check `breakCondition` (FEL predicate); set
+                //        break_triggered if true.
+                //      - emit ForEachIterationCompleted provenance.
+                //      - if break_triggered, exit loop.
+                //   5. Restore prior `$item` / `$index` bindings.
+                //   6. Emit ForEachCompleted provenance.
+                //   7. Fire the foreach state's first eligible anonymous
+                //      outgoing transition (if any). When no eligible
+                //      transition exists, the foreach state stays active —
+                //      this matches kernel-level non-final-state semantics.
+
                 self.config.enter(state_id.to_string());
                 self.provenance
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
-                // Empty-iterator fast path: when the iterator FEL expression
-                // evaluates to an empty array, the body MUST NOT enter and the
-                // foreach state's outgoing transitions become eligible
-                // immediately. Until full iteration is wired, we treat ANY
-                // foreach body as no-op iteration so authors can validate
-                // schema-correct foreach workflows. The body subtree is
-                // declared via the `initial_state` + `states` IndexMap
-                // (Compound-shaped) but is not entered yet.
+                let collection_expr = indexed.state.collection.clone().ok_or_else(|| {
+                    EvalError::ForEach {
+                        state: state_id.to_string(),
+                        message: "missing required `collection` FEL expression".to_string(),
+                    }
+                })?;
+
+                let item_var = indexed
+                    .state
+                    .item_variable
+                    .clone()
+                    .unwrap_or_else(|| "$item".to_string());
+                let index_var = indexed
+                    .state
+                    .index_variable
+                    .clone()
+                    .unwrap_or_else(|| "$index".to_string());
+                let break_expr = indexed.state.break_condition.clone();
+
+                let items = self.evaluate_foreach_collection(
+                    state_id,
+                    &collection_expr,
+                    event_data,
+                )?;
+
+                // Save prior bindings so foreach is transparent w.r.t. case
+                // state — per spec, per-iteration bindings do NOT persist into
+                // case state after the foreach completes.
+                let prior_item = self.case_state.get(&item_var).cloned();
+                let prior_index = self.case_state.get(&index_var).cloned();
+
+                let mut iterations: u32 = 0;
+                let mut broke = false;
+
+                for (i, item) in items.iter().enumerate() {
+                    let i_u32 = u32::try_from(i).map_err(|_| EvalError::ForEach {
+                        state: state_id.to_string(),
+                        message: format!("iteration index {i} exceeds u32"),
+                    })?;
+
+                    self.case_state.insert(item_var.clone(), item.clone());
+                    self.case_state.insert(
+                        index_var.clone(),
+                        serde_json::Value::Number(i_u32.into()),
+                    );
+
+                    self.provenance
+                        .push(ProvenanceRecord::foreach_iteration_started(
+                            state_id, i_u32, item,
+                        ));
+
+                    iterations += 1;
+
+                    // Body execution is intentionally no-op in MVP (Sub-PR
+                    // D-2). Sub-PR D-3 lands per-iteration body actions /
+                    // nested-state semantics / output_path writes.
+
+                    let mut break_triggered = false;
+                    if let Some(ref expr) = break_expr {
+                        if self.evaluate_foreach_predicate(state_id, expr, event_data)? {
+                            break_triggered = true;
+                            broke = true;
+                        }
+                    }
+
+                    self.provenance
+                        .push(ProvenanceRecord::foreach_iteration_completed(
+                            state_id,
+                            i_u32,
+                            break_triggered,
+                        ));
+
+                    if break_triggered {
+                        break;
+                    }
+                }
+
+                // Restore prior bindings.
+                match prior_item {
+                    Some(v) => {
+                        self.case_state.insert(item_var.clone(), v);
+                    }
+                    None => {
+                        self.case_state.remove(&item_var);
+                    }
+                }
+                match prior_index {
+                    Some(v) => {
+                        self.case_state.insert(index_var.clone(), v);
+                    }
+                    None => {
+                        self.case_state.remove(&index_var);
+                    }
+                }
+
+                self.provenance
+                    .push(ProvenanceRecord::foreach_completed(
+                        state_id, iterations, broke,
+                    ));
+
+                self.fire_foreach_outgoing(state_id, actor, event_data)?;
+
                 Ok(())
             }
             StateKind::Atomic | StateKind::Final => {
@@ -1059,6 +1182,115 @@ impl Evaluator {
         });
 
         Ok(passed)
+    }
+
+    // ── ForEach iteration helpers (Kernel §4.3.1; Sub-PR D-2) ────────────────
+
+    /// Evaluate a `ForEach` state's `collection` FEL expression. Returns the
+    /// items as `Vec<serde_json::Value>` for sequential iteration. Rejects
+    /// any non-array result with a [`EvalError::ForEach`] — the spec demands
+    /// a bounded array; unbounded streams are not supported.
+    fn evaluate_foreach_collection(
+        &self,
+        state_id: &str,
+        expression: &str,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<Vec<serde_json::Value>, EvalError> {
+        let ctx = EvalContext::from_case_state(&self.case_state, event_data);
+        let env = ctx.to_fel_environment();
+
+        let parsed = parse(expression).map_err(|e| EvalError::ForEach {
+            state: state_id.to_string(),
+            message: format!("collection parse error in '{expression}': {e}"),
+        })?;
+        let result = evaluate(&parsed, &env);
+
+        let value = fel_to_json(&result.value);
+        match value {
+            serde_json::Value::Array(items) => Ok(items),
+            other => Err(EvalError::ForEach {
+                state: state_id.to_string(),
+                message: format!(
+                    "collection MUST evaluate to a bounded array; got {} for expression '{}'",
+                    json_kind(&other),
+                    expression
+                ),
+            }),
+        }
+    }
+
+    /// Evaluate a `ForEach` state's `breakCondition` FEL predicate against
+    /// case state (with the current iteration's `$item` / `$index` bindings
+    /// in place). Returns true to terminate iteration early.
+    fn evaluate_foreach_predicate(
+        &self,
+        state_id: &str,
+        expression: &str,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<bool, EvalError> {
+        let ctx = EvalContext::from_case_state(&self.case_state, event_data);
+        let env = ctx.to_fel_environment();
+
+        let parsed = parse(expression).map_err(|e| EvalError::ForEach {
+            state: state_id.to_string(),
+            message: format!("breakCondition parse error in '{expression}': {e}"),
+        })?;
+        let result = evaluate(&parsed, &env);
+        Ok(matches!(result.value, FelValue::Boolean(true)))
+    }
+
+    /// Fire the first eligible outgoing transition of a `ForEach` state after
+    /// iteration completes. "Eligible" means anonymous (no `event`), guard
+    /// passes (or absent). When no eligible transition exists the foreach
+    /// state stays active — outgoing transitions with explicit events still
+    /// fire later through normal `process_event` dispatch.
+    ///
+    /// The synthetic event name `$foreachComplete` labels the firing on
+    /// provenance and observed-transition records so downstream consumers can
+    /// distinguish foreach-completion firings from external events.
+    fn fire_foreach_outgoing(
+        &mut self,
+        state_id: &str,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        let transitions = self
+            .state_index
+            .get(state_id)
+            .map(|s| s.state.transitions.clone())
+            .unwrap_or_default();
+
+        const SYNTHETIC_EVENT: &str = "$foreachComplete";
+
+        for transition in transitions {
+            // Anonymous transitions only (event = None). Foreach-state
+            // transitions with an explicit event still fire later via normal
+            // dispatch when that event arrives.
+            if transition.event.is_some() {
+                continue;
+            }
+            let guard_passes = self.evaluate_guard(
+                transition.guard.as_deref(),
+                event_data,
+                state_id,
+                &transition.target,
+                SYNTHETIC_EVENT,
+            )?;
+            if !guard_passes {
+                continue;
+            }
+            self.fire_transition(
+                state_id,
+                &transition.target,
+                SYNTHETIC_EVENT,
+                actor,
+                &transition.actions,
+                &transition.tags,
+                event_data,
+            )?;
+            return Ok(());
+        }
+        Ok(())
     }
 
     // ── Timer management ─────────────────────────────────────────
@@ -1554,6 +1786,19 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> Result<u64, ()> {
 /// are expanded: the `[*]` segment is replaced with the full array, so
 /// the teaching signal shows every element the guard reasoned over rather
 /// than silently dropping the dependency.
+/// Human-readable JSON kind label for diagnostic messages — one of
+/// `"null" | "bool" | "number" | "string" | "object" | "array"`.
+fn json_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "bool",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
 fn build_guard_inputs(
     expr: &Expr,
     case_state: &HashMap<String, serde_json::Value>,

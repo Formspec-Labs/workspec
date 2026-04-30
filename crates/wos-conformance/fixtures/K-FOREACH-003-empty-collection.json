@@ -1,7 +1,7 @@
 {
   "id": "K-FOREACH-003-empty-collection",
   "rule": "K-FOREACH-001",
-  "description": "ForEach over an empty collection: when the FEL `collection` expression evaluates to [], no iterations happen and the foreach state's outgoing transitions fire immediately. This fixture exercises the empty-iterator fast path the evaluator implements today (full non-empty iteration is Sub-PR D-2). Schema validity + transition reachability are the assertions.",
+  "description": "ForEach over an empty collection: when the FEL `collection` expression evaluates to [], no iterations happen and the foreach state's outgoing transitions fire immediately via synthetic event `$foreachComplete`. This is the empty-collection fast path mandated by Kernel §4.3.1 step 2. Sub-PR D-2 wires it through the same runtime path as non-empty iteration: 0 ForEachIterationStarted records, 1 ForEachCompleted summary with iterations=0, then the auto-fired outgoing transition.",
   "documents": {
     "kernel": "inline"
   },
@@ -73,8 +73,22 @@
       "from": "intake",
       "target": "processAttachments",
       "event": "submitted"
+    },
+    {
+      "from": "processAttachments",
+      "target": "completed",
+      "event": "$foreachComplete"
     }
   ],
-  "expected_provenance": [],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "processAttachments",
+        "iterations": 0,
+        "broke": false
+      }
+    }
+  ],
   "expected_errors": []
 }

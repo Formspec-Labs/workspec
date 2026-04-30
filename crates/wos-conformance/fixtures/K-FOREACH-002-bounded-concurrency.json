@@ -1,7 +1,7 @@
 {
   "id": "K-FOREACH-002-bounded-concurrency",
   "rule": "K-FOREACH-003",
-  "description": "ForEach with bounded concurrency=3. Schema MUST accept positive integer concurrency; lint K-FOREACH-003 rejects concurrency=0 (deadlock guard). Sequential canonical semantics treat concurrency as advisory; parallel iteration honoring the bound is Sub-PR D-2. This fixture asserts schema-validity of the bounded-concurrency authoring shape.",
+  "description": "ForEach with bounded concurrency=3. Schema MUST accept positive integer concurrency; lint K-FOREACH-003 rejects concurrency=0 (deadlock guard). Sequential canonical semantics treat concurrency as advisory and Sub-PR D-2's iteration runtime processes the five applicants serially regardless of concurrency=3 — the bound is honored only when a parallel iteration adapter wires in. The fixture asserts iteration count + sequential ordering of the five applicants. `outputPath` + `mergeStrategy` writes are deferred to Sub-PR D-3.",
   "documents": {
     "kernel": "inline"
   },
@@ -87,8 +87,36 @@
       "from": "intake",
       "target": "verifyApplicants",
       "event": "started"
+    },
+    {
+      "from": "verifyApplicants",
+      "target": "completed",
+      "event": "$foreachComplete"
     }
   ],
-  "expected_provenance": [],
+  "expected_provenance": [
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "index": 0
+      }
+    },
+    {
+      "recordKind": "foreachIterationStarted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "index": 4
+      }
+    },
+    {
+      "recordKind": "foreachCompleted",
+      "data": {
+        "foreachState": "verifyApplicants",
+        "iterations": 5,
+        "broke": false
+      }
+    }
+  ],
   "expected_errors": []
 }
