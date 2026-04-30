@@ -136,7 +136,7 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `type` | enum | REQUIRED | `atomic`, `compound`, `parallel`, or `final`. |
+| `type` | enum | REQUIRED | `atomic`, `compound`, `parallel`, `foreach`, or `final`. |
 | `onEntry` | array of Action | OPTIONAL | Actions executed on state entry. |
 | `onExit` | array of Action | OPTIONAL | Actions executed on state exit. |
 | `transitions` | array of Transition | OPTIONAL | Outgoing transitions from this state. |
@@ -156,6 +156,36 @@ Events MUST be processed serially per instance. Concurrent event delivery MUST b
 **Final states** indicate completion of the enclosing scope. A top-level final state indicates workflow completion. Final states MUST NOT have outgoing transitions and MUST NOT declare `initialState`, `states`, `regions`, `cancellationPolicy`, or `historyState`. A final state MAY carry an `outcomeCode` — a machine-readable string that allows downstream systems to branch on terminal outcome without parsing state names or tags. `outcomeCode` MUST NOT duplicate any entry in `tags`.
 
 The structural constraints above are enforced by the Kernel JSON Schema (`schemas/wos-workflow.schema.json`) via conditional `allOf` blocks on the `State` definition. A Kernel Structural processor MUST reject any document that violates them. The "final states MUST NOT have outgoing transitions" rule remains a semantic constraint enforced by a Kernel Complete processor (see S13.3).
+
+#### 4.3.1 ForEach States
+
+A **ForEach state** runs an inline `body` State once per element of a bounded collection. ForEach is a structural primitive — distinct from compound (single nested machine) and parallel (fixed concurrent regions) — because the branch count is *runtime-derived* from a FEL expression.
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `collection` | string (FEL) | REQUIRED | FEL expression evaluated against case state at entry. MUST evaluate to a bounded array; unbounded streams are rejected. Each element drives one iteration. |
+| `body` | State | REQUIRED | Inline State executed once per iteration. MAY be `atomic`, `compound`, or `parallel` (nested ForEach is permitted but discouraged). |
+| `itemVariable` | string | OPTIONAL | Case-state binding name for the current iteration's item. Defaults to `$item`. |
+| `indexVariable` | string | OPTIONAL | Case-state binding name for the current iteration's zero-based index. Defaults to `$index`. |
+| `concurrency` | integer or null | OPTIONAL | Maximum number of items processed concurrently. Positive integer for bounded concurrency; `null` for unbounded (processor decides). MUST be at least 1 when present. Sequential canonical semantics treat `concurrency` as advisory; processors that implement parallel iteration honor the bound. Processors MAY refuse unbounded concurrency on rights-impacting workflows. |
+| `breakCondition` | string (FEL) | OPTIONAL | FEL expression evaluated after each iteration; when true, terminates the foreach early. Useful for early-exit on first match or threshold. |
+| `outputPath` | string | OPTIONAL | Case-file path where iteration results are written per `mergeStrategy`. The write goes through the governed output-commit pipeline. |
+| `mergeStrategy` | enum | OPTIONAL | `shallow` (per-iteration output replaces top-level keys), `deep` (deep-merges into existing structure), or `collect` (accumulates as an array). Required when `outputPath` is set. |
+| `transitions` | array of Transition | OPTIONAL | Fired after the foreach completes (all iterations done OR `breakCondition` triggered OR collection empty). |
+
+**Iteration semantics.** Sequential is the canonical semantics:
+
+1. On entry, the processor evaluates `collection` against case state. If the result is not an array, the processor MUST reject with a kernel-level error.
+2. If the array is **empty**, no iterations run; the foreach state's outgoing transitions become eligible immediately. This is the empty-collection fast path.
+3. For each element, the processor binds the element under `itemVariable` (default `$item`) and the zero-based index under `indexVariable` (default `$index`) in case state, then enters `body`. The body executes to completion (a final state within `body`, or an outgoing transition from `body`).
+4. After body completion, if `breakCondition` is set and evaluates to true, iteration terminates early.
+5. After all iterations (or early termination), the foreach state's outgoing transitions become eligible.
+
+**Per-iteration bindings** are scoped to the body's execution; they do NOT persist into case state after the foreach completes. Authors that need per-iteration outputs to survive use `outputPath` + `mergeStrategy`.
+
+**Cancellation and timers.** `cancellationPolicy` is reserved for parallel iteration semantics in a future revision; sequential foreach has a single in-flight branch and no cancellation surface. Timers created inside `body` are scoped to the iteration that created them (cancelled when the iteration completes or is broken).
+
+**Implementation status.** Authoring + schema validity + lint coverage (`K-FOREACH-001`/`002`/`003`/`004`) ship with this spec section. Full runtime iteration semantics — `collection` evaluation, per-iteration entry/exit, body execution loop, parallel iteration honoring `concurrency`, `outputPath` + `mergeStrategy` writes — are tracked as a follow-up runtime PR.
 
 ### 4.4 Cancellation Policy
 

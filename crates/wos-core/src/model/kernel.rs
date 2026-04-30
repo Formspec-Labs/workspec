@@ -471,18 +471,84 @@ pub struct State {
     #[serde(default)]
     pub outcome_code: Option<String>,
 
+    // ── ForEach iteration fields (Kernel S4.10 ForEach states) ─────────────
+    //
+    // Property names mirror the schema's `State` $def so authoring JSON
+    // round-trips through the typed model without coercion. Authoring +
+    // schema validity ship in this PR; full runtime iteration semantics are
+    // tracked as Sub-PR D-2.
+
+    /// FEL expression evaluated against case-state at entry into a `ForEach`
+    /// state. MUST evaluate to a bounded array; each element drives one
+    /// iteration of the body. Required when `kind == ForEach`; ignored on
+    /// other state kinds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
+
+    /// Case-state binding name for the current iteration's item. Defaults to
+    /// `"$item"` when omitted (matches the schema `itemVariable.default`).
+    /// Authors reference the bound name inside the body (e.g.
+    /// `$item.amount > 1000`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_variable: Option<String>,
+
+    /// Case-state binding name for the current iteration's zero-based index.
+    /// Defaults to `"$index"` when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_variable: Option<String>,
+
+    /// Maximum number of items processed concurrently. Integer for bounded
+    /// concurrency; `None` for unbounded (processor decides). Sequential
+    /// iteration treats `Some(1)` and `None` identically; parallel iteration
+    /// (Sub-PR D-2) honors the bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<u32>,
+
+    /// FEL expression evaluated after each iteration; when true, terminates
+    /// the foreach early. Useful for early-exit on first match or threshold
+    /// reached.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub break_condition: Option<String>,
+
+    /// Case-file path where iteration results are written per
+    /// `merge_strategy`. The write goes through the governed output-commit
+    /// pipeline (ADR 0080).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
+
+    /// How per-iteration outputs are merged into `output_path`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_strategy: Option<MergeStrategy>,
+
+    /// Body state executed once per iteration. Boxed because `State` is
+    /// recursively-typed (the body MAY itself be a Compound or Parallel
+    /// state with further nesting).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<Box<State>>,
+
     /// Extension data.
     #[serde(default)]
     pub extensions: HashMap<String, serde_json::Value>,
 }
 
 /// State type discriminator (Kernel S4.3).
+///
+/// `ForEach` is a compound-shaped state with iteration semantics: the body
+/// subtree (rooted at `State::initial_state` and stored in `State::states`)
+/// runs once per element of the FEL-evaluated `State::iterator`. Per-iteration
+/// case-state bindings expose the current item and index under
+/// `State::iterator_var` / `State::index_var` (defaults `$current` / `$index`).
+/// Sequential execution is the canonical semantics; parallel iteration capped
+/// by `State::max_concurrency` is a future extension whose runtime
+/// implementation is tracked separately. Authoring + schema validity ship in
+/// this PR; full runtime iteration semantics in Sub-PR D-2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StateKind {
     Atomic,
     Compound,
     Parallel,
+    ForEach,
     Final,
 }
 
@@ -493,6 +559,20 @@ pub enum CancellationPolicy {
     WaitAll,
     CancelSiblings,
     FailFast,
+}
+
+/// How per-iteration outputs of a `ForEach` state are merged into
+/// [`State::output_path`] (Kernel S4.10 ForEach states).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MergeStrategy {
+    /// Per-iteration output replaces top-level keys at `output_path`.
+    Shallow,
+    /// Per-iteration output deep-merges into existing structure at
+    /// `output_path`.
+    Deep,
+    /// Per-iteration outputs accumulate as an array at `output_path`.
+    Collect,
 }
 
 /// History state mode (Kernel S4.14).

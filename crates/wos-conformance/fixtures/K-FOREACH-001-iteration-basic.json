@@ -1,0 +1,88 @@
+{
+  "id": "K-FOREACH-001-iteration-basic",
+  "rule": "K-FOREACH-001",
+  "description": "Basic foreach state: iterates over caseFile.attachments, runs an atomic body per item. Schema-validity + lint coverage in this PR (Sub-PR D); full runtime iteration semantics land in Sub-PR D-2. The fixture asserts that a schema-valid foreach workflow loads through the parser and the foreach state's outgoing transition fires after the (no-op for now) iteration completes.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "https://test.wos-spec.org/workflows/foreach-basic",
+      "version": "1.0.0",
+      "title": "ForEach Iteration — Basic",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "system",
+          "type": "system"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "attachments": {
+            "type": "array"
+          },
+          "processedCount": {
+            "type": "number"
+          }
+        }
+      },
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": {
+                  "kind": "message",
+                  "name": "submitted"
+                },
+                "target": "processAttachments"
+              }
+            ]
+          },
+          "processAttachments": {
+            "type": "foreach",
+            "collection": "caseFile.attachments",
+            "itemVariable": "$attachment",
+            "indexVariable": "$idx",
+            "body": {
+              "type": "atomic"
+            },
+            "transitions": [
+              {
+                "target": "completed"
+              }
+            ]
+          },
+          "completed": {
+            "type": "final"
+          }
+        }
+      }
+    }
+  },
+  "initial_case_state": {
+    "attachments": [
+      {"id": "a1", "name": "passport.pdf"},
+      {"id": "a2", "name": "lease.pdf"}
+    ]
+  },
+  "event_sequence": [
+    {
+      "event": "submitted",
+      "actor": "system"
+    }
+  ],
+  "expected_transitions": [
+    {
+      "from": "intake",
+      "target": "processAttachments",
+      "event": "submitted"
+    }
+  ],
+  "expected_provenance": [],
+  "expected_errors": []
+}

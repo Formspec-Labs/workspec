@@ -838,7 +838,8 @@
             "integer",
             "null"
           ],
-          "description": "Foreach states only. Maximum number of items processed concurrently. Integer for bounded concurrency; null for unbounded (processor decides). Per ADR 0078, processors MAY refuse unbounded concurrency on rights-impacting workflows.",
+          "minimum": 1,
+          "description": "Foreach states only. Maximum number of items processed concurrently. Positive integer for bounded concurrency; null for unbounded (processor decides). Zero is rejected (would deadlock; lint K-FOREACH-003 also enforces post-coercion). Processors MAY refuse unbounded concurrency on rights-impacting workflows.",
           "examples": [
             1,
             5,
@@ -927,6 +928,17 @@
                 { "required": ["regions"] }
               ]
             }
+          }
+        },
+        {
+          "title": "ForEach states MUST declare collection + body (lint K-FOREACH-001 / K-FOREACH-002).",
+          "if": {
+            "properties": {
+              "type": { "const": "foreach" }
+            }
+          },
+          "then": {
+            "required": ["collection", "body"]
           }
         }
       ]

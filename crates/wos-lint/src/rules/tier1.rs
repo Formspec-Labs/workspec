@@ -417,7 +417,62 @@ fn check_state_type_semantics_typed(
                 ));
             }
         }
+        StateKind::ForEach => {
+            // K-FOREACH-001: foreach states MUST declare a non-empty
+            // `collection` FEL expression that evaluates to an array at
+            // runtime.
+            if state.collection.as_deref().unwrap_or("").is_empty() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-001",
+                    path,
+                    "foreach state must declare a non-empty `collection` FEL expression",
+                ));
+            }
+            // K-FOREACH-002: foreach states MUST declare a `body` State that
+            // executes once per iteration. Schema models this as an inline
+            // `body: State` field (not the Compound `initialState` + `states`
+            // map shape).
+            if state.body.is_none() {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-002",
+                    path,
+                    "foreach state must declare a `body` state to execute per iteration",
+                ));
+            }
+            // K-FOREACH-003: concurrency, when present, MUST be at least 1.
+            // Zero would deadlock the iteration; the schema's `minimum: 1`
+            // catches authoring; this catches programmatic construction.
+            if state.concurrency == Some(0) {
+                diagnostics.push(LintDiagnostic::t1_error(
+                    "K-FOREACH-003",
+                    path,
+                    "foreach state `concurrency` MUST be at least 1 (zero would deadlock)",
+                ));
+            }
+        }
         StateKind::Atomic => {}
+    }
+
+    // K-FOREACH-004: iteration fields (collection, itemVariable,
+    // indexVariable, concurrency, breakCondition, outputPath, mergeStrategy,
+    // body) are valid only on foreach-typed states. Catch authoring drift
+    // where they leak onto a non-foreach state.
+    if state.kind != StateKind::ForEach
+        && (state.collection.is_some()
+            || state.item_variable.is_some()
+            || state.index_variable.is_some()
+            || state.concurrency.is_some()
+            || state.break_condition.is_some()
+            || state.output_path.is_some()
+            || state.merge_strategy.is_some()
+            || state.body.is_some())
+    {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "K-FOREACH-004",
+            path,
+            "collection / itemVariable / indexVariable / concurrency / breakCondition / \
+             outputPath / mergeStrategy / body are only valid on foreach-typed states",
+        ));
     }
 
     // K-004: cancellationPolicy only on parallel

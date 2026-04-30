@@ -62,6 +62,14 @@ fn empty_state(kind: StateKind) -> State {
         cancellation_policy: None,
         history_state: None,
         outcome_code: None,
+        collection: None,
+        item_variable: None,
+        index_variable: None,
+        concurrency: None,
+        break_condition: None,
+        output_path: None,
+        merge_strategy: None,
+        body: None,
         extensions: HashMap::new(),
     }
 }

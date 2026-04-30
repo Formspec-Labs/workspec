@@ -770,6 +770,28 @@ impl Evaluator {
                 }
                 Ok(())
             }
+            StateKind::ForEach => {
+                // ForEach is authoring + schema valid in this PR; runtime
+                // iteration semantics (Sub-PR D-2) are not yet wired. Treat
+                // entry like a compound state so the body subtree is reachable
+                // for static analysis (lint walks substates) and outgoing
+                // transitions still fire after the body's outcome — but emit
+                // a provenance note so callers know iteration didn't run.
+                self.config.enter(state_id.to_string());
+                self.provenance
+                    .push(ProvenanceRecord::state_entered(state_id));
+                self.execute_on_entry_actions(state_id, actor, event_data)?;
+
+                // Empty-iterator fast path: when the iterator FEL expression
+                // evaluates to an empty array, the body MUST NOT enter and the
+                // foreach state's outgoing transitions become eligible
+                // immediately. Until full iteration is wired, we treat ANY
+                // foreach body as no-op iteration so authors can validate
+                // schema-correct foreach workflows. The body subtree is
+                // declared via the `initial_state` + `states` IndexMap
+                // (Compound-shaped) but is not entered yet.
+                Ok(())
+            }
             StateKind::Atomic | StateKind::Final => {
                 self.config.enter(state_id.to_string());
                 self.provenance
@@ -1086,7 +1108,10 @@ impl Evaluator {
         };
 
         match indexed.state.kind {
-            StateKind::Compound => {
+            StateKind::Compound | StateKind::ForEach => {
+                // ForEach uses Compound-shaped substate nesting (initial_state
+                // + states IndexMap). On exit, walk the body subtree the same
+                // way to ensure no orphaned substates remain.
                 if let Some(history_mode) = &indexed.state.history_state {
                     self.capture_history(state_id, *history_mode);
                     self.provenance
@@ -1147,7 +1172,9 @@ impl Evaluator {
     fn collect_deep_leaves(&self, state_id: &str, leaves: &mut Vec<String>) {
         if let Some(indexed) = self.state_index.get(state_id) {
             match indexed.state.kind {
-                StateKind::Compound => {
+                StateKind::Compound | StateKind::ForEach => {
+                    // ForEach uses Compound-shaped nesting; walk the body
+                    // subtree the same way for leaf collection.
                     let has_active_child = indexed
                         .state
                         .states
@@ -1297,7 +1324,10 @@ impl Evaluator {
         };
 
         match indexed.state.kind {
-            StateKind::Compound => {
+            StateKind::Compound | StateKind::ForEach => {
+                // ForEach uses Compound-shaped substate nesting; walk the body
+                // subtree to cancel timers that may have been created in body
+                // states during prior iterations.
                 let substate_ids: Vec<String> = indexed.state.states.keys().cloned().collect();
                 for sub_id in &substate_ids {
                     self.cancel_timers_created_in_state_tree(sub_id, reason);

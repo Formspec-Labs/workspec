@@ -855,6 +855,55 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // ── K-FOREACH-* (foreach state semantics; ADR 0076 / Sub-PR D) ─────────
+    RuleMetadata {
+        id: "K-FOREACH-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach states MUST declare a non-empty `collection` FEL expression.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Declare an FEL expression in `collection` that evaluates to a bounded array against case state (e.g., `caseFile.attachments`).",
+        ),
+    },
+    RuleMetadata {
+        id: "K-FOREACH-002",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach states MUST declare a `body` State to execute per iteration.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Declare an inline `body: State` describing the work performed per iteration. The body MAY be atomic, compound, or parallel.",
+        ),
+    },
+    RuleMetadata {
+        id: "K-FOREACH-003",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach `concurrency` MUST be at least 1 when present.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Set `concurrency` to a positive integer or omit it (sequential iteration is the canonical default).",
+        ),
+    },
+    RuleMetadata {
+        id: "K-FOREACH-004",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Iteration fields (collection, itemVariable, indexVariable, concurrency, breakCondition, outputPath, mergeStrategy, body) are valid only on `foreach`-typed states.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Move iteration fields to a `foreach`-typed state, or remove them from this state.",
+        ),
+    },
     RuleMetadata {
         id: "K-006",
         tier: Tier::T1,

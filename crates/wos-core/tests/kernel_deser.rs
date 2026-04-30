@@ -356,6 +356,88 @@ fn kernel_view_is_zero_cost_borrow() {
     );
 }
 
+// ── Sub-PR D: ForEach state ─────────────────────────────────────────────────
+
+#[test]
+fn foreach_state_round_trips_with_required_fields() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/foreach-deser",
+        "version": "1.0.0",
+        "title": "ForEach Round-Trip",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "iter",
+            "states": {
+                "iter": {
+                    "type": "foreach",
+                    "collection": "caseFile.items",
+                    "body": {"type": "atomic"},
+                    "transitions": [{"target": "done"}]
+                },
+                "done": {"type": "final"}
+            }
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("foreach state deserializes");
+    let iter_state = &doc.lifecycle.states["iter"];
+    assert_eq!(
+        iter_state.kind,
+        wos_core::model::kernel::StateKind::ForEach
+    );
+    assert_eq!(iter_state.collection.as_deref(), Some("caseFile.items"));
+    assert!(iter_state.body.is_some(), "body MUST round-trip");
+    assert!(
+        iter_state.item_variable.is_none(),
+        "itemVariable defaults to $item (None means 'use default')"
+    );
+}
+
+#[test]
+fn foreach_state_preserves_optional_fields() {
+    let json = serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "url": "https://test.wos-spec.org/workflows/foreach-full",
+        "version": "1.0.0",
+        "title": "ForEach Full Shape",
+        "impactLevel": "operational",
+        "actors": [{"id": "system", "type": "system"}],
+        "lifecycle": {
+            "initialState": "iter",
+            "states": {
+                "iter": {
+                    "type": "foreach",
+                    "collection": "caseFile.applicants",
+                    "itemVariable": "$applicant",
+                    "indexVariable": "$idx",
+                    "concurrency": 5,
+                    "breakCondition": "$applicant.eligibility == 'denied'",
+                    "outputPath": "caseFile.results",
+                    "mergeStrategy": "collect",
+                    "body": {"type": "atomic"},
+                    "transitions": [{"target": "done"}]
+                },
+                "done": {"type": "final"}
+            }
+        }
+    });
+    let doc: KernelDocument = serde_json::from_value(json).expect("full foreach deserializes");
+    let s = &doc.lifecycle.states["iter"];
+    assert_eq!(s.item_variable.as_deref(), Some("$applicant"));
+    assert_eq!(s.index_variable.as_deref(), Some("$idx"));
+    assert_eq!(s.concurrency, Some(5));
+    assert_eq!(
+        s.break_condition.as_deref(),
+        Some("$applicant.eligibility == 'denied'")
+    );
+    assert_eq!(s.output_path.as_deref(), Some("caseFile.results"));
+    assert_eq!(
+        s.merge_strategy,
+        Some(wos_core::model::kernel::MergeStrategy::Collect)
+    );
+}
+
 // ── ADR 0064: Agent ActorKind variant ───────────────────────────────────────
 
 #[test]

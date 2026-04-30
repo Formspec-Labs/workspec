@@ -163,6 +163,14 @@ mod tests {
             history_state: None,
             cancellation_policy: None,
             outcome_code: None,
+            collection: None,
+            item_variable: None,
+            index_variable: None,
+            concurrency: None,
+            break_condition: None,
+            output_path: None,
+            merge_strategy: None,
+            body: None,
             extensions: HashMap::new(),
         }
     }
@@ -181,6 +189,14 @@ mod tests {
             history_state: None,
             cancellation_policy: None,
             outcome_code: None,
+            collection: None,
+            item_variable: None,
+            index_variable: None,
+            concurrency: None,
+            break_condition: None,
+            output_path: None,
+            merge_strategy: None,
+            body: None,
             extensions: HashMap::new(),
         }
     }
