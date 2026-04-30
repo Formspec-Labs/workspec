@@ -1847,3 +1847,383 @@ fn foreach_output_path_persists_after_foreach_completes() {
         "outputPath value MUST persist after foreach completes"
     );
 }
+
+// ── ForEach compound body (Sub-PR D-5) ─────────────────────────────────────
+
+fn body_substate(
+    on_entry: Vec<Action>,
+    on_exit: Vec<Action>,
+    transitions: Vec<Transition>,
+    kind: StateKind,
+) -> State {
+    State {
+        kind,
+        description: None,
+        transitions,
+        tags: vec![],
+        on_entry,
+        on_exit,
+        initial_state: None,
+        states: IndexMap::new(),
+        regions: IndexMap::new(),
+        cancellation_policy: None,
+        history_state: None,
+        outcome_code: None,
+        collection: None,
+        item_variable: None,
+        index_variable: None,
+        concurrency: None,
+        break_condition: None,
+        output_path: None,
+        merge_strategy: None,
+        body: None,
+        extensions: HashMap::new(),
+    }
+}
+
+fn compound_body(initial: &str, substates: IndexMap<String, State>) -> State {
+    State {
+        kind: StateKind::Compound,
+        description: None,
+        transitions: vec![],
+        tags: vec![],
+        on_entry: vec![],
+        on_exit: vec![],
+        initial_state: Some(initial.to_string()),
+        states: substates,
+        regions: IndexMap::new(),
+        cancellation_policy: None,
+        history_state: None,
+        outcome_code: None,
+        collection: None,
+        item_variable: None,
+        index_variable: None,
+        concurrency: None,
+        break_condition: None,
+        output_path: None,
+        merge_strategy: None,
+        body: None,
+        extensions: HashMap::new(),
+    }
+}
+
+#[test]
+fn foreach_compound_body_walks_substates_to_final() {
+    // Compound body with two substates: validate (atomic, has setData
+    // onEntry, anonymous transition to complete) → complete (final). The
+    // body MUST run to completion per iteration, emitting OnEntry records
+    // for both substates with attribution `<state>:body:<sub-id>`.
+    let mut body_substates = IndexMap::new();
+    body_substates.insert(
+        "validate".into(),
+        body_substate(
+            vec![set_data_action(
+                "caseFile.lastValidation",
+                serde_json::json!("ok"),
+            )],
+            vec![],
+            vec![transition_anonymous("complete")],
+            StateKind::Atomic,
+        ),
+    );
+    body_substates.insert(
+        "complete".into(),
+        body_substate(vec![], vec![], vec![], StateKind::Final),
+    );
+
+    let body = compound_body("validate", body_substates);
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_with_body(
+            "caseFile.items",
+            None,
+            body,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([1, 2]));
+
+    eval.process_event("submit", None, None).unwrap();
+
+    assert!(eval.configuration().contains("done"));
+
+    // Every iteration walks validate → complete: 2 iterations × 1 setData
+    // mutation each = 2 :body:validate mutations.
+    let validate_mutations: Vec<_> = eval
+        .provenance()
+        .records()
+        .iter()
+        .filter(|r| {
+            r.record_kind == ProvenanceKind::CaseStateMutation
+                && r.to_state.as_deref() == Some("loop:body:validate")
+        })
+        .collect();
+    assert_eq!(
+        validate_mutations.len(),
+        2,
+        "compound body MUST run validate substate's onEntry setData once per iteration; got {}",
+        validate_mutations.len()
+    );
+
+    // Final value of caseFile.lastValidation: "ok" (set by the second
+    // iteration's body run).
+    assert_eq!(
+        eval.case_state()["lastValidation"],
+        serde_json::json!("ok")
+    );
+}
+
+#[test]
+fn foreach_compound_body_guard_branches_pick_first_eligible() {
+    // Body with one substate that has TWO anonymous transitions, the
+    // first guarded "false", the second guarded "true". Document order MUST
+    // win — the second transition fires.
+    let mut body_substates = IndexMap::new();
+    body_substates.insert(
+        "decide".into(),
+        body_substate(
+            vec![],
+            vec![],
+            vec![
+                Transition {
+                    event: None,
+                    target: "rejected".to_string(),
+                    guard: Some("false".to_string()),
+                    actions: vec![],
+                    description: None,
+                    tags: vec![],
+                },
+                Transition {
+                    event: None,
+                    target: "accepted".to_string(),
+                    guard: Some("true".to_string()),
+                    actions: vec![set_data_action(
+                        "caseFile.outcome",
+                        serde_json::json!("accepted"),
+                    )],
+                    description: None,
+                    tags: vec![],
+                },
+            ],
+            StateKind::Atomic,
+        ),
+    );
+    body_substates.insert(
+        "rejected".into(),
+        body_substate(vec![], vec![], vec![], StateKind::Final),
+    );
+    body_substates.insert(
+        "accepted".into(),
+        body_substate(vec![], vec![], vec![], StateKind::Final),
+    );
+
+    let body = compound_body("decide", body_substates);
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_with_body(
+            "caseFile.items",
+            None,
+            body,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!(["a"]));
+
+    eval.process_event("submit", None, None).unwrap();
+    assert_eq!(eval.case_state()["outcome"], serde_json::json!("accepted"));
+}
+
+#[test]
+fn foreach_compound_body_stuck_substate_errors() {
+    // A compound body whose initial substate is non-Final and has NO
+    // eligible anonymous transitions (only an explicit-event transition,
+    // which body execution can't fire) MUST error with EvalError::ForEach
+    // citing the stuck substate.
+    let mut body_substates = IndexMap::new();
+    body_substates.insert(
+        "stuck".into(),
+        body_substate(
+            vec![],
+            vec![],
+            // Only explicit-event transitions — body can't auto-fire these.
+            vec![transition("externalSignal", "complete")],
+            StateKind::Atomic,
+        ),
+    );
+    body_substates.insert(
+        "complete".into(),
+        body_substate(vec![], vec![], vec![], StateKind::Final),
+    );
+
+    let body = compound_body("stuck", body_substates);
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_with_body(
+            "caseFile.items",
+            None,
+            body,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!(["only"]));
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("stuck compound body MUST error");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("compound body stuck at substate 'stuck'"),
+        "error message MUST identify the stuck substate: {msg}"
+    );
+}
+
+#[test]
+fn foreach_compound_body_missing_initial_state_errors() {
+    // Compound body without `initial_state` is structurally invalid.
+    // The runtime errors before iterating.
+    let body = State {
+        kind: StateKind::Compound,
+        // No initial_state — required for compound.
+        ..body_substate(vec![], vec![], vec![], StateKind::Compound)
+    };
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_with_body(
+            "caseFile.items",
+            None,
+            body,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([1]));
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("compound body without initial_state MUST error");
+    assert!(format!("{err}").contains("compound body MUST declare `initialState`"));
+}
+
+#[test]
+fn foreach_unsupported_body_kind_errors() {
+    // Parallel / ForEach body kinds aren't implemented at runtime in
+    // Sub-PR D-5; the runtime MUST reject rather than silently no-op.
+    let body = State {
+        kind: StateKind::Parallel,
+        ..body_substate(vec![], vec![], vec![], StateKind::Parallel)
+    };
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
+    states.insert(
+        "loop".into(),
+        foreach_with_body(
+            "caseFile.items",
+            None,
+            body,
+            vec![transition_anonymous("done")],
+        ),
+    );
+    states.insert("done".into(), final_state());
+
+    let mut eval = Evaluator::new(KernelDocument {
+        case_file: Some(CaseFile {
+            fields: HashMap::new(),
+            contract_ref: None,
+            contract_version: None,
+            relationships: vec![],
+        }),
+        ..minimal_kernel("intake", states)
+    })
+    .unwrap();
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([1]));
+
+    let err = eval
+        .process_event("submit", None, None)
+        .expect_err("parallel body MUST error in this PR");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("not yet implemented")
+            && (msg.contains("Parallel") || msg.contains("parallel")),
+        "error message MUST identify body.kind: {msg}"
+    );
+}

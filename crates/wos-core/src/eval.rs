@@ -882,33 +882,69 @@ impl Evaluator {
                     // specific foreach state.
                     let body_state_label = format!("{state_id}:body");
                     if let Some(body) = indexed.state.body.as_deref() {
-                        let entry_actions = body.on_entry.clone();
-                        for action in &entry_actions {
-                            let action_name = action_kind_camel(action.action);
-                            self.provenance.push(ProvenanceRecord::on_entry(
-                                &body_state_label,
-                                action_name,
-                            ));
-                            self.execute_action_in_state(
-                                action,
-                                actor,
-                                &body_state_label,
-                                event_data,
-                            )?;
-                        }
-                        let exit_actions = body.on_exit.clone();
-                        for action in &exit_actions {
-                            let action_name = action_kind_camel(action.action);
-                            self.provenance.push(ProvenanceRecord::on_exit(
-                                &body_state_label,
-                                action_name,
-                            ));
-                            self.execute_action_in_state(
-                                action,
-                                actor,
-                                &body_state_label,
-                                event_data,
-                            )?;
+                        match body.kind {
+                            // Atomic body: onEntry actions, then onExit
+                            // actions. The body has no internal transition
+                            // graph to walk.
+                            StateKind::Atomic => {
+                                let entry_actions = body.on_entry.clone();
+                                for action in &entry_actions {
+                                    let action_name = action_kind_camel(action.action);
+                                    self.provenance.push(ProvenanceRecord::on_entry(
+                                        &body_state_label,
+                                        action_name,
+                                    ));
+                                    self.execute_action_in_state(
+                                        action,
+                                        actor,
+                                        &body_state_label,
+                                        event_data,
+                                    )?;
+                                }
+                                let exit_actions = body.on_exit.clone();
+                                for action in &exit_actions {
+                                    let action_name = action_kind_camel(action.action);
+                                    self.provenance.push(ProvenanceRecord::on_exit(
+                                        &body_state_label,
+                                        action_name,
+                                    ));
+                                    self.execute_action_in_state(
+                                        action,
+                                        actor,
+                                        &body_state_label,
+                                        event_data,
+                                    )?;
+                                }
+                            }
+                            // Compound body: walk the body's substate graph
+                            // to a Final state, firing anonymous transitions
+                            // in document order. Sub-PR D-5.
+                            StateKind::Compound => {
+                                let body_clone = body.clone();
+                                self.run_compound_body_to_completion(
+                                    state_id,
+                                    &body_clone,
+                                    actor,
+                                    event_data,
+                                )?;
+                            }
+                            // Parallel / ForEach / Final body kinds are not
+                            // yet implemented at runtime. The schema admits
+                            // parallel bodies; nested foreach is permitted
+                            // but discouraged per spec §4.3.1. Reject so
+                            // authors get a clear signal rather than silent
+                            // no-op.
+                            other => {
+                                return Err(EvalError::ForEach {
+                                    state: state_id.to_string(),
+                                    message: format!(
+                                        "body.kind = {other:?} is not yet implemented at \
+                                         runtime; supported body kinds are atomic and compound \
+                                         (Sub-PR D-5). Parallel-body and nested-foreach iteration \
+                                         are tracked as a follow-up runtime PR."
+                                    ),
+                                });
+                            }
                         }
                     }
 
@@ -1308,6 +1344,188 @@ impl Evaluator {
         })?;
         let result = evaluate(&parsed, &env);
         Ok(matches!(result.value, FelValue::Boolean(true)))
+    }
+
+    /// Walk a compound `body` substate graph to a Final state (Sub-PR D-5).
+    ///
+    /// Per Kernel §4.3.1: "The body executes to completion (a final state
+    /// within `body`, or an outgoing transition from `body`)." This helper
+    /// implements the canonical sequential semantic for that:
+    ///
+    ///   1. Enter the body's `initial_state`.
+    ///   2. Run that substate's `onEntry` actions.
+    ///   3. If the substate is `kind: final`, the body has completed.
+    ///   4. Otherwise, walk the substate's outgoing transitions in document
+    ///      order. Pick the first transition whose `event` is `None`
+    ///      (anonymous) AND whose guard passes. Run the transition's
+    ///      `actions`, then the source substate's `onExit` actions, then
+    ///      enter the target substate.
+    ///   5. Repeat until a Final substate is reached or the per-iteration
+    ///      step cap is hit.
+    ///
+    /// Bodies with explicit-event transitions (kind: `message` / `signal` /
+    /// `timer` / `error`) cannot fire here — body execution is synchronous
+    /// per-iteration and the runtime never receives external events between
+    /// substate-level steps. Authors MUST shape their compound bodies with
+    /// anonymous (auto-firing) transitions only.
+    ///
+    /// All body provenance carries the synthetic lifecycle-state label
+    /// `<foreach-state>:body:<substate-id>` so audit tooling can trace
+    /// per-iteration sub-graph progression alongside foreach iteration
+    /// records.
+    ///
+    /// A 100-step cap on substate transitions per iteration prevents an
+    /// infinite-loop body from blocking the runtime; exceeding the cap
+    /// surfaces as [`EvalError::ForEach`].
+    fn run_compound_body_to_completion(
+        &mut self,
+        foreach_state_id: &str,
+        body: &State,
+        actor: Option<&str>,
+        event_data: Option<&serde_json::Value>,
+    ) -> Result<(), EvalError> {
+        const MAX_BODY_STEPS: u32 = 100;
+        const SYNTHETIC_EVENT: &str = "$bodyAuto";
+
+        let initial_id = body.initial_state.as_deref().ok_or_else(|| EvalError::ForEach {
+            state: foreach_state_id.to_string(),
+            message: "compound body MUST declare `initialState`".to_string(),
+        })?;
+        if body.states.is_empty() {
+            return Err(EvalError::ForEach {
+                state: foreach_state_id.to_string(),
+                message: "compound body MUST declare a non-empty `states` map".to_string(),
+            });
+        }
+
+        let mut current_id = initial_id.to_string();
+
+        for _step in 0..MAX_BODY_STEPS {
+            let substate = body.states.get(&current_id).ok_or_else(|| EvalError::ForEach {
+                state: foreach_state_id.to_string(),
+                message: format!(
+                    "compound body references missing substate '{current_id}'"
+                ),
+            })?;
+
+            let substate_label = format!("{foreach_state_id}:body:{current_id}");
+
+            // Substate onEntry — atomic and final substates emit them; we
+            // intentionally don't recurse for nested compound substates in
+            // this PR (parallel / foreach / nested compound inside a body
+            // are deferred). Only Atomic and Final substate kinds are
+            // supported in MVP.
+            match substate.kind {
+                StateKind::Atomic | StateKind::Final => {}
+                other => {
+                    return Err(EvalError::ForEach {
+                        state: foreach_state_id.to_string(),
+                        message: format!(
+                            "compound body substate '{current_id}' has kind {other:?}; \
+                             only Atomic and Final substates are supported in this PR. \
+                             Nested compound / parallel / foreach inside a body is a \
+                             future runtime extension."
+                        ),
+                    });
+                }
+            }
+
+            let entry_actions = substate.on_entry.clone();
+            for action in &entry_actions {
+                let action_name = action_kind_camel(action.action);
+                self.provenance.push(ProvenanceRecord::on_entry(
+                    &substate_label,
+                    action_name,
+                ));
+                self.execute_action_in_state(
+                    action,
+                    actor,
+                    &substate_label,
+                    event_data,
+                )?;
+            }
+
+            // Final substate ⇒ body has completed.
+            if substate.kind == StateKind::Final {
+                return Ok(());
+            }
+
+            // Find the first eligible anonymous outgoing transition.
+            let transitions = substate.transitions.clone();
+            let mut next_id: Option<String> = None;
+            for transition in &transitions {
+                if transition.event.is_some() {
+                    // Explicit-event transitions do not auto-fire inside a
+                    // body; they would require the runtime to receive an
+                    // external event between substate steps, which body
+                    // execution does not accommodate.
+                    continue;
+                }
+                let passes = self.evaluate_guard(
+                    transition.guard.as_deref(),
+                    event_data,
+                    &current_id,
+                    &transition.target,
+                    SYNTHETIC_EVENT,
+                )?;
+                if !passes {
+                    continue;
+                }
+                // Run transition actions — attributed to the source substate
+                // for provenance — before walking the source's onExit.
+                for action in &transition.actions {
+                    self.execute_action_in_state(
+                        action,
+                        actor,
+                        &substate_label,
+                        event_data,
+                    )?;
+                }
+                next_id = Some(transition.target.clone());
+                break;
+            }
+
+            let next = match next_id {
+                Some(n) => n,
+                None => {
+                    return Err(EvalError::ForEach {
+                        state: foreach_state_id.to_string(),
+                        message: format!(
+                            "compound body stuck at substate '{current_id}': no eligible \
+                             anonymous transition (event=None with passing guard) and the \
+                             substate is not Final. Compound bodies MUST progress to a Final \
+                             substate via auto-firing transitions."
+                        ),
+                    });
+                }
+            };
+
+            // Source onExit before transitioning out.
+            let exit_actions = substate.on_exit.clone();
+            for action in &exit_actions {
+                let action_name = action_kind_camel(action.action);
+                self.provenance.push(ProvenanceRecord::on_exit(
+                    &substate_label,
+                    action_name,
+                ));
+                self.execute_action_in_state(
+                    action,
+                    actor,
+                    &substate_label,
+                    event_data,
+                )?;
+            }
+
+            current_id = next;
+        }
+
+        Err(EvalError::ForEach {
+            state: foreach_state_id.to_string(),
+            message: format!(
+                "compound body exceeded {MAX_BODY_STEPS}-step cap at substate '{current_id}'; \
+                 possible infinite loop in body's auto-firing transitions"
+            ),
+        })
     }
 
     /// Merge a per-iteration value into a `ForEach` state's `outputPath`
