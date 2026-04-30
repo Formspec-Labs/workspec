@@ -11,12 +11,23 @@ use std::collections::HashMap;
 
 use crate::typeid;
 
+fn default_tenant() -> String {
+    typeid::DEFAULT_TENANT.to_string()
+}
+
 /// A running workflow instance (Runtime Companion S3.1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaseInstance {
     /// Globally unique instance identifier.
     pub instance_id: String,
+
+    /// Tenant this instance belongs to (ADR 0068 D-1 / PLN-0004).
+    ///
+    /// MUST match the TypeID prefix when `instance_id` is a WOS TypeID.
+    /// Sourced from `payload.tenant` (the authoritative field per ADR 0068 D-1.2).
+    #[serde(default = "default_tenant")]
+    pub tenant: String,
 
     /// Canonical URL of the governing Kernel Document.
     pub definition_url: String,

@@ -9,6 +9,7 @@
 
 use wos_core::eval::Evaluator;
 use wos_core::instance::{CaseInstance, InstanceStatus, PendingEvent};
+use wos_core::typeid;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput};
 use crate::store::RuntimeRecord;
@@ -36,10 +37,41 @@ impl WosRuntime {
         let now_iso = format_timestamp(now_ms)?;
         let CreateInstanceRequest {
             instance_id,
+            tenant: requested_tenant,
             definition_url,
             definition_version,
             initial_case_state,
         } = request;
+
+        // ADR 0068 D-1.2: resolve the authoritative tenant.
+        // 1. If the caller supplied an explicit tenant, validate it.
+        // 2. If instance_id is a valid TypeID, extract the prefix.
+        // 3. If both are present, they must match.
+        // 4. Fall back to the deployment-default tenant.
+        let type_id_tenant = typeid::extract_tenant(&instance_id).map(String::from);
+        let tenant = match (requested_tenant, &type_id_tenant) {
+            (Some(explicit), Some(prefix)) => {
+                if !typeid::is_valid_tenant(&explicit) {
+                    return Err(RuntimeError::TenantInvalid(explicit));
+                }
+                if explicit != *prefix {
+                    return Err(RuntimeError::TenantMismatch {
+                        explicit,
+                        type_id_prefix: prefix.clone(),
+                    });
+                }
+                explicit
+            }
+            (Some(explicit), None) => {
+                if !typeid::is_valid_tenant(&explicit) {
+                    return Err(RuntimeError::TenantInvalid(explicit));
+                }
+                explicit
+            }
+            (None, Some(prefix)) => prefix.clone(),
+            (None, None) => typeid::DEFAULT_TENANT.to_string(),
+        };
+
         let (instance_id, legacy_alias) = if CaseInstance::is_case_id(&instance_id) {
             (instance_id, None)
         } else if instance_id.trim().is_empty() {
@@ -61,6 +93,7 @@ impl WosRuntime {
             timers_to_state(evaluator.timers(), self.business_calendar.as_ref())?;
         let instance = CaseInstance {
             instance_id,
+            tenant,
             definition_url,
             definition_version,
             configuration: evaluator.configuration().active_states().to_vec(),

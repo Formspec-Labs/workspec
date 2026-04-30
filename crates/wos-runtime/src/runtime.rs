@@ -56,6 +56,12 @@ const FAILURE_EVENT_EXTENSION_KEY: &str = "x-wos-runtime-failure-event";
 pub struct CreateInstanceRequest {
     /// Stable WOS instance identifier.
     pub instance_id: String,
+    /// Tenant this instance belongs to (ADR 0068 D-1).
+    ///
+    /// When `None`, the runtime extracts the tenant from the TypeID prefix
+    /// (if `instance_id` is a valid TypeID) or falls back to the
+    /// deployment-default tenant.
+    pub tenant: Option<String>,
     /// Governing kernel URL.
     pub definition_url: String,
     /// Governing kernel version.
@@ -287,6 +293,17 @@ pub enum RuntimeError {
         "custody receipt conflict: existing canonical_event_hash {existing} differs from attempted {attempted}"
     )]
     CustodyReceiptConflict { existing: String, attempted: String },
+
+    /// Tenant identifier does not satisfy the ADR 0068 D-1.1 grammar.
+    #[error("invalid tenant identifier: {0}")]
+    TenantInvalid(String),
+
+    /// Explicit tenant disagrees with the TypeID tenant prefix.
+    #[error("tenant mismatch: explicit {explicit} differs from TypeID prefix {type_id_prefix}")]
+    TenantMismatch {
+        explicit: String,
+        type_id_prefix: String,
+    },
 }
 
 impl From<provenance::CustodyReceiptStampError> for RuntimeError {

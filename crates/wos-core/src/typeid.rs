@@ -198,7 +198,7 @@ fn decode_uuid_v7_tail(tail: &str) -> Option<Uuid> {
 /// Validate a tenant identifier per ADR 0068 D-1.1 grammar
 /// `^[a-z][a-z0-9-]{0,62}$` (RFC 1035 DNS-label-compatible: ≤63 chars,
 /// lowercase-kebab; tenants map 1:1 to DNS subdomains for free).
-fn is_valid_tenant(value: &str) -> bool {
+pub fn is_valid_tenant(value: &str) -> bool {
     // RFC 1035 DNS-label-compatible upper bound (ADR 0068 D-1.1).
     if value.len() > 63 {
         return false;
@@ -211,6 +211,26 @@ fn is_valid_tenant(value: &str) -> bool {
         return false;
     }
     chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
+/// Extracts the tenant prefix from a TypeID string.
+///
+/// Returns `None` when the value is not a valid TypeID (fewer than three
+/// `_`-separated segments, invalid tenant grammar, or invalid UUIDv7 tail).
+#[must_use]
+pub fn extract_tenant(type_id: &str) -> Option<&str> {
+    let mut parts = type_id.split('_');
+    let tenant = parts.next()?;
+    let _prefix = parts.next()?;
+    let _tail = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    if is_valid_tenant(tenant) {
+        Some(tenant)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
