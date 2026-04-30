@@ -864,9 +864,53 @@ impl Evaluator {
 
                     iterations += 1;
 
-                    // Body execution is intentionally no-op in MVP (Sub-PR
-                    // D-2). Sub-PR D-3 lands per-iteration body actions /
-                    // nested-state semantics / output_path writes.
+                    // Body execution per Sub-PR D-3.
+                    //
+                    //   - Atomic body: per-iteration `body.onEntry` actions
+                    //     run with the current `$item` / `$index` bindings
+                    //     visible in case state, then `body.onExit` actions.
+                    //   - Compound / parallel body (transitions inside the
+                    //     body subtree, nested state machines): tracked as
+                    //     Sub-PR D-4. The body's `kind` field is read but
+                    //     non-atomic kinds are accepted-and-ignored at the
+                    //     transition level for now; their `onEntry` and
+                    //     `onExit` actions still run.
+                    //
+                    // The synthetic lifecycle-state label `<state>:body`
+                    // propagates into action / mutation provenance so audit
+                    // tooling can attribute mutations to the body of a
+                    // specific foreach state.
+                    let body_state_label = format!("{state_id}:body");
+                    if let Some(body) = indexed.state.body.as_deref() {
+                        let entry_actions = body.on_entry.clone();
+                        for action in &entry_actions {
+                            let action_name = action_kind_camel(action.action);
+                            self.provenance.push(ProvenanceRecord::on_entry(
+                                &body_state_label,
+                                action_name,
+                            ));
+                            self.execute_action_in_state(
+                                action,
+                                actor,
+                                &body_state_label,
+                                event_data,
+                            )?;
+                        }
+                        let exit_actions = body.on_exit.clone();
+                        for action in &exit_actions {
+                            let action_name = action_kind_camel(action.action);
+                            self.provenance.push(ProvenanceRecord::on_exit(
+                                &body_state_label,
+                                action_name,
+                            ));
+                            self.execute_action_in_state(
+                                action,
+                                actor,
+                                &body_state_label,
+                                event_data,
+                            )?;
+                        }
+                    }
 
                     let mut break_triggered = false;
                     if let Some(ref expr) = break_expr {
@@ -1786,6 +1830,23 @@ fn parse_duration_segment(segment: &str, is_time: bool) -> Result<u64, ()> {
 /// are expanded: the `[*]` segment is replaced with the full array, so
 /// the teaching signal shows every element the guard reasoned over rather
 /// than silently dropping the dependency.
+/// Map an [`ActionKind`] to its camelCase string form (the same labels
+/// `execute_on_entry_actions` / `execute_on_exit_actions` use). Lifted as a
+/// module-level helper so the foreach body executor can attribute body
+/// actions to the same provenance shape as state-level onEntry / onExit
+/// actions without duplicating the table.
+fn action_kind_camel(kind: ActionKind) -> &'static str {
+    match kind {
+        ActionKind::CreateTask => "createTask",
+        ActionKind::InvokeService => "invokeService",
+        ActionKind::SetData => "setData",
+        ActionKind::EmitEvent => "emitEvent",
+        ActionKind::StartTimer => "startTimer",
+        ActionKind::CancelTimer => "cancelTimer",
+        ActionKind::Log => "log",
+    }
+}
+
 /// Human-readable JSON kind label for diagnostic messages — one of
 /// `"null" | "bool" | "number" | "string" | "object" | "array"`.
 fn json_kind(value: &serde_json::Value) -> &'static str {
