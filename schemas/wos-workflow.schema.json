@@ -1365,8 +1365,97 @@
         },
         "driftMonitoring": {
           "type": "object"
+        },
+        "invoker": {
+          "$ref": "#/$defs/InvokerSpec",
+          "description": "Substrate adapter discriminator (ADR 0064). Selects which AgentInvoker implementation handles invocations of this agent at runtime. Each `kind` corresponds to one adapter crate (`wos-agent-anthropic`, `wos-agent-mcp`, `wos-agent-a2a`, `wos-agent-http`, `wos-agent-stub`, `wos-agent-sdk-claude`). Deployment binds the discriminator to a concrete adapter; the workflow stays substrate-portable."
         }
       }
+    },
+    "InvokerSpec": {
+      "type": "object",
+      "required": ["kind"],
+      "description": "Tagged union over substrate adapters. Each `kind` value selects one wos-agent-* adapter crate per ADR 0064.",
+      "oneOf": [
+        {
+          "title": "anthropic",
+          "type": "object",
+          "required": ["kind", "model"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "anthropic" },
+            "model": { "type": "string", "description": "Anthropic model identifier (e.g., claude-opus-4-7)." },
+            "configRef": { "type": "string", "description": "Optional opaque adapter-specific configuration reference." }
+          }
+        },
+        {
+          "title": "claudeAgentSdk",
+          "type": "object",
+          "required": ["kind", "configRef"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "claudeAgentSdk" },
+            "configRef": { "type": "string", "description": "Reference to a Claude Agent SDK config document." }
+          }
+        },
+        {
+          "title": "mcp",
+          "type": "object",
+          "required": ["kind", "server", "tool"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "mcp" },
+            "server": { "type": "string", "description": "MCP server identifier (resolved at deploy time)." },
+            "tool": { "type": "string", "description": "Tool name on the MCP server." }
+          }
+        },
+        {
+          "title": "a2a",
+          "type": "object",
+          "required": ["kind", "orchestrator"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "a2a" },
+            "orchestrator": { "type": "string", "description": "Orchestrator identifier (resolved at deploy time)." }
+          }
+        },
+        {
+          "title": "http",
+          "type": "object",
+          "required": ["kind", "endpoint"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "http" },
+            "endpoint": { "type": "string", "format": "uri", "description": "Endpoint URL." },
+            "schemaRef": { "type": "string", "format": "uri", "description": "Optional URI to OpenAPI / JSON Schema describing the contract." }
+          }
+        },
+        {
+          "title": "stub",
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "description": "Deterministic in-memory stub used by conformance fixtures (`wos-agent-stub`).",
+          "properties": {
+            "kind": { "const": "stub" },
+            "responses": {
+              "type": "array",
+              "description": "Canned responses streamed in declaration order per (capability_id, invocation_index).",
+              "items": {
+                "type": "object",
+                "required": ["output"],
+                "additionalProperties": false,
+                "properties": {
+                  "capabilityId": { "type": "string", "description": "Capability id this response satisfies. When omitted, matches any capability." },
+                  "output": { "description": "Output payload returned by the invoker." },
+                  "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Reported confidence; defaults to 1.0 when omitted." },
+                  "citations": { "type": "array", "description": "Optional citation array passed through unchanged." }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "AIOversight": {
       "type": "object",

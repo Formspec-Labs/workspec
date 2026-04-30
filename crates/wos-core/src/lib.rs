@@ -19,6 +19,7 @@
 //! - `wos-conformance` feeds events through the evaluation algorithm.
 //! - A future `wos-runtime` adapts the algorithm to Temporal, Step Functions, etc.
 
+pub mod agent;
 pub mod autonomy;
 pub mod business_calendar;
 pub mod confidence;
@@ -37,6 +38,10 @@ pub mod timer;
 pub mod traits;
 pub mod typeid;
 
+pub use agent::{
+    AgentContext, AgentInvocationError, AgentInvoker, AgentResult, AgentTask, InvokerSpec,
+    StubResponse,
+};
 pub use context::EvalContext;
 pub use eval::{
     Configuration, EvalError, Evaluator, IndexedState, ObservedAction, ObservedTransition,

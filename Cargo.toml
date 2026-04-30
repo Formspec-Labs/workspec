@@ -21,7 +21,8 @@ members = [
     "crates/wos-synth-anthropic",
     "crates/wos-synth-cli",
     "crates/wos-authoring",
-    "crates/wos-mcp"
+    "crates/wos-mcp",
+    "crates/wos-agent-stub"
 ]
 resolver = "3"
 

@@ -1,0 +1,11 @@
+[package]
+name = "wos-agent-stub"
+version.workspace = true
+edition.workspace = true
+description = "Deterministic in-memory AgentInvoker adapter for WOS conformance fixtures"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = "1"
+wos-core = { path = "../wos-core" }
