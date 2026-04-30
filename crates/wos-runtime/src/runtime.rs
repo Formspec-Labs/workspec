@@ -404,6 +404,11 @@ pub struct WosRuntime {
     intake_acceptors: IntakeAcceptanceRegistry,
     intake_policy: Box<dyn IntakeAcceptancePolicy + Send + Sync>,
     signature_profiles: Vec<signature::SignatureProfileRegistration>,
+    /// Agent invoker registry per ADR 0064. Maps each [`InvokerKind`] to a
+    /// concrete adapter; the runtime looks up adapters by an agent
+    /// declaration's `invoker` discriminator. Empty by default — runtimes
+    /// without agent participation never need to populate it.
+    agent_invokers: wos_core::AgentInvokerRegistry,
 }
 
 impl WosRuntime {
@@ -446,6 +451,7 @@ impl WosRuntime {
             intake_acceptors: IntakeAcceptanceRegistry::new(),
             intake_policy: Box::new(NoopIntakeAcceptancePolicy),
             signature_profiles: Vec::new(),
+            agent_invokers: wos_core::AgentInvokerRegistry::new(),
         }
     }
 
@@ -489,6 +495,41 @@ impl WosRuntime {
     {
         self.intake_policy = Box::new(intake_policy);
         self
+    }
+
+    /// Replace the agent-invoker registry wholesale (ADR 0064).
+    ///
+    /// Use this when wiring multiple adapter crates at deployment time:
+    ///
+    /// ```ignore
+    /// let registry = AgentInvokerRegistry::new()
+    ///     .with(InvokerKind::Anthropic, Box::new(AnthropicInvoker::new(...)))
+    ///     .with(InvokerKind::Mcp, Box::new(McpInvoker::new(...)));
+    /// let runtime = WosRuntime::new(/* … */).with_agent_invokers(registry);
+    /// ```
+    pub fn with_agent_invokers(mut self, registry: wos_core::AgentInvokerRegistry) -> Self {
+        self.agent_invokers = registry;
+        self
+    }
+
+    /// Register a single agent invoker for `kind` (ADR 0064). Convenience
+    /// builder for deployments that wire one substrate (e.g., conformance
+    /// stubs registering only [`wos_core::InvokerKind::Stub`]).
+    pub fn with_agent_invoker(
+        mut self,
+        kind: wos_core::InvokerKind,
+        invoker: Box<dyn wos_core::AgentInvoker + Send + Sync>,
+    ) -> Self {
+        self.agent_invokers.register(kind, invoker);
+        self
+    }
+
+    /// Borrow the agent-invoker registry. Returns an empty registry when no
+    /// adapters have been wired (i.e., the runtime was constructed without
+    /// any `with_agent_invoker*` call).
+    #[must_use]
+    pub fn agent_invokers(&self) -> &wos_core::AgentInvokerRegistry {
+        &self.agent_invokers
     }
 }
 
@@ -4672,5 +4713,175 @@ mod tests {
             second.guard_evaluations[0].event, "next",
             "second drain only sees its own guard"
         );
+    }
+
+    // ── ADR 0064 / Sub-PR C-2: AgentInvoker DI wiring ───────────────────────
+    //
+    // Confirms `WosRuntime` accepts an `AgentInvokerRegistry` at construction
+    // (or via builder) and exposes it for the runtime's eventual transition-
+    // firing dispatch path. Transition-level integration with agent-typed
+    // actors lands in Sub-PR D-3 alongside foreach iteration semantics.
+
+    use wos_core::{
+        AgentContext as CoreAgentContext, AgentInvocationError, AgentInvoker,
+        AgentInvokerRegistry, AgentResult, AgentTask, InvokerKind, InvokerSpec,
+    };
+
+    /// Inline test invoker that records what it was asked to do. Independent
+    /// of `wos-agent-stub` so this crate's tests don't pull in a dev-dep
+    /// purely for a one-shot dispatch check.
+    struct CountingInvoker {
+        label: &'static str,
+    }
+
+    impl AgentInvoker for CountingInvoker {
+        fn invoke(
+            &self,
+            decl: &wos_core::model::ai::AgentDeclaration,
+            task: &AgentTask,
+            _ctx: &CoreAgentContext<'_>,
+        ) -> Result<AgentResult, AgentInvocationError> {
+            Ok(AgentResult {
+                output: serde_json::json!({
+                    "handledBy": self.label,
+                    "agent": decl.id,
+                    "capability": task.capability_id,
+                }),
+                confidence: 1.0,
+                citations: vec![],
+                telemetry: None,
+            })
+        }
+    }
+
+    fn empty_kernel() -> KernelDocument {
+        serde_json::from_value(serde_json::json!({
+            "$wosWorkflow": "1.0",
+            "url": "urn:test:c2-runtime",
+            "version": "1.0.0",
+            "lifecycle": {
+                "initialState": "start",
+                "states": {
+                    "start": {"type": "atomic", "transitions": [{"target": "done"}]},
+                    "done": {"type": "final"}
+                }
+            }
+        }))
+        .expect("test kernel parses")
+    }
+
+    #[test]
+    fn runtime_default_agent_invokers_is_empty() {
+        let runtime = runtime_with_kernel(empty_kernel());
+        assert!(
+            runtime.agent_invokers().is_empty(),
+            "freshly constructed runtime MUST start with an empty AgentInvokerRegistry; \
+             agent participation is opt-in per deployment (ADR 0064)"
+        );
+    }
+
+    #[test]
+    fn runtime_with_agent_invoker_registers_single_kind() {
+        let runtime = runtime_with_kernel(empty_kernel()).with_agent_invoker(
+            InvokerKind::Stub,
+            Box::new(CountingInvoker { label: "stub" }),
+        );
+        assert!(!runtime.agent_invokers().is_empty());
+
+        let stub_spec = InvokerSpec::Stub { responses: vec![] };
+        assert!(
+            runtime.agent_invokers().lookup(&stub_spec).is_some(),
+            "stub adapter MUST be discoverable through the registry by its InvokerSpec discriminator"
+        );
+
+        // No other kinds registered.
+        let anth_spec = InvokerSpec::Anthropic {
+            model: "claude-opus-4-7".into(),
+            config_ref: None,
+        };
+        assert!(runtime.agent_invokers().lookup(&anth_spec).is_none());
+    }
+
+    #[test]
+    fn runtime_with_agent_invokers_replaces_registry_wholesale() {
+        let registry = AgentInvokerRegistry::new()
+            .with(InvokerKind::Stub, Box::new(CountingInvoker { label: "stub" }))
+            .with(
+                InvokerKind::Anthropic,
+                Box::new(CountingInvoker {
+                    label: "anthropic",
+                }),
+            );
+        let runtime = runtime_with_kernel(empty_kernel()).with_agent_invokers(registry);
+
+        let mut kinds: Vec<&'static str> = runtime
+            .agent_invokers()
+            .registered_kinds()
+            .map(InvokerKind::as_str)
+            .collect();
+        kinds.sort();
+        assert_eq!(kinds, vec!["anthropic", "stub"]);
+    }
+
+    #[test]
+    fn runtime_routes_invocation_to_registered_adapter_via_lookup() {
+        let runtime = runtime_with_kernel(empty_kernel())
+            .with_agent_invoker(
+                InvokerKind::Stub,
+                Box::new(CountingInvoker { label: "stub" }),
+            )
+            .with_agent_invoker(
+                InvokerKind::Anthropic,
+                Box::new(CountingInvoker {
+                    label: "anthropic",
+                }),
+            );
+
+        // Build an agent declaration with an Anthropic invoker spec.
+        use wos_core::model::ai::{AgentDeclaration, AgentType};
+        let decl = AgentDeclaration {
+            id: "extractor".into(),
+            kind: "agent".into(),
+            agent_type: AgentType::Generative,
+            model_identifier: "claude-opus-4-7".into(),
+            model_version: "4.7".into(),
+            description: None,
+            capabilities: vec![],
+            model_version_policy: None,
+            confidence_decay: None,
+            fallback_chain: vec![],
+            cascading_invocations: vec![],
+            deontic_constraints: None,
+            invoker: Some(InvokerSpec::Anthropic {
+                model: "claude-opus-4-7".into(),
+                config_ref: None,
+            }),
+            extensions: Default::default(),
+        };
+
+        let invoker = runtime
+            .agent_invokers()
+            .lookup(decl.invoker.as_ref().expect("invoker declared"))
+            .expect("anthropic adapter registered");
+
+        let task = AgentTask {
+            capability_id: "extract".into(),
+            prompt: None,
+            inputs: Default::default(),
+            correlation_key: None,
+        };
+        let case = serde_json::json!({});
+        let ctx = CoreAgentContext {
+            instance_id: "case-scope",
+            invocation_index: 0,
+            case_state: &case,
+        };
+
+        let result = invoker.invoke(&decl, &task, &ctx).unwrap();
+        assert_eq!(
+            result.output["handledBy"], "anthropic",
+            "InvokerSpec::Anthropic MUST route to the anthropic-bound adapter, not the stub"
+        );
+        assert_eq!(result.output["agent"], "extractor");
     }
 }
