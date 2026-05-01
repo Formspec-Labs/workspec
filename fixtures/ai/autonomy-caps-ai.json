@@ -2,7 +2,7 @@
   "$wosWorkflow": "1.0",
   "version": "1.0.0",
   "title": "Autonomy Caps AI Integration Overlay",
-  "description": "AI integration overlay for testing autonomy level caps, escalation/demotion, and calibration expiry. Conformance-fixture transport wrapper: the conformance engine extracts the `aiOversight` block and embeds it under the kernel workflow at runtime. Per ADR 0063 §2.1, embedded blocks govern the enclosing envelope; the engine wires aiOversight.agents into the kernel's agents[].",
+  "description": "AI integration overlay for testing autonomy level caps, escalation/demotion, and calibration expiry. Conformance-fixture transport wrapper: the conformance engine extracts the `aiOversight` block and embeds it under the kernel workflow at runtime. Per ADR 0063 \u00a72.1, embedded blocks govern the enclosing envelope; the engine wires aiOversight.agents into the kernel's agents[]. Rich per-agent transport payload (capabilities, fallbackChain, legacy deontic shape) is preserved under `x-transportAgentDetails` for tests that merge this overlay into a host workflow.",
   "url": "https://test.wos-spec.org/workflows/autonomy-caps",
   "impactLevel": "rights-impacting",
   "actors": [
@@ -27,9 +27,28 @@
       }
     }
   },
+  "governance": {
+    "dueProcess": {}
+  },
+  "agents": [
+    {
+      "id": "triageAgent",
+      "modelIdentifier": "test-model",
+      "modelVersion": "1.0",
+      "autonomy": "assistive",
+      "deonticConstraints": [
+        {
+          "kind": "permission",
+          "expression": "output.action = 'categorize' or output.action = 'prioritize'"
+        }
+      ]
+    }
+  ],
   "aiOversight": {
     "defaultAutonomy": "assistive",
-    "agents": [
+    "disclosure": {},
+    "driftDetection": {},
+    "x-transportAgentDetails": [
       {
         "id": "triageAgent",
         "type": "agent",

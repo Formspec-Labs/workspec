@@ -78,10 +78,7 @@ async fn timer_style_pagination_visits_all_instances_over_200() {
         })
         .await
         .expect("page1");
-    assert_eq!(
-        listed.items.len(),
-        LIST_INSTANCES_PAGE_SIZE_MAX as usize
-    );
+    assert_eq!(listed.items.len(), LIST_INSTANCES_PAGE_SIZE_MAX as usize);
 
     let ids = collect_all_instance_ids(&store).await;
     assert_eq!(ids.len(), total as usize);

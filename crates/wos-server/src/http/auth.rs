@@ -85,10 +85,7 @@ async fn logout(
     State(state): State<AppState>,
     AuthCtx(ctx): AuthCtx,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let access = ctx
-        .access_token
-        .as_deref()
-        .ok_or(ApiError::Unauthorized)?;
+    let access = ctx.access_token.as_deref().ok_or(ApiError::Unauthorized)?;
     state.auth.logout(access).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }

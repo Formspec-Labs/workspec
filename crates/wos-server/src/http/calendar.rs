@@ -1,7 +1,7 @@
 use axum::Json;
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::routing::post;
-use axum::Router;
 
 use crate::AppState;
 use crate::error::ApiResult;
@@ -16,5 +16,7 @@ async fn compute_deadline(
     Path(url): Path<String>,
     Json(req): Json<ComputeDeadlineRequest>,
 ) -> ApiResult<Json<ComputeDeadlineResponse>> {
-    Ok(Json(s.services.calendar.compute_deadline(&url, &req).await?))
+    Ok(Json(
+        s.services.calendar.compute_deadline(&url, &req).await?,
+    ))
 }

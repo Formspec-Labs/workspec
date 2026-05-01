@@ -174,20 +174,13 @@ struct CountingSigner {
 impl ProvenanceSigner for CountingSigner {
     type Error = wos_server::runtime::signer::SignerError;
 
-    fn sign(
-        &self,
-        _record: &ProvenanceRecord,
-    ) -> Result<Vec<u8>, Self::Error> {
+    fn sign(&self, _record: &ProvenanceRecord) -> Result<Vec<u8>, Self::Error> {
         self.invocations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(b"COUNTED".to_vec())
     }
 
-    fn verify(
-        &self,
-        _record: &ProvenanceRecord,
-        _signature: &[u8],
-    ) -> Result<bool, Self::Error> {
+    fn verify(&self, _record: &ProvenanceRecord, _signature: &[u8]) -> Result<bool, Self::Error> {
         Ok(true)
     }
 }

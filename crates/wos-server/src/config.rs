@@ -37,10 +37,7 @@ pub struct ExportArgs {
     pub format: ExportFormat,
 
     /// Namespace for minted IRIs. Must end with `:` or `/`.
-    #[arg(
-        long,
-        default_value = "urn:wos:prov:wos-server:"
-    )]
+    #[arg(long, default_value = "urn:wos:prov:wos-server:")]
     pub namespace: String,
 
     /// Output path. `-` (default) writes to stdout.
@@ -60,9 +57,7 @@ pub enum ExportFormat {
 }
 
 #[derive(Args, Debug, Clone)]
-#[command(
-    about = "Boot the HTTP + Socket.IO server"
-)]
+#[command(about = "Boot the HTTP + Socket.IO server")]
 pub struct ServerConfig {
     /// TCP port to listen on.
     #[arg(long, env = "PORT", default_value_t = 4000)]
@@ -106,11 +101,7 @@ pub struct ServerConfig {
 
     /// CORS allow-origin value. `*` disables credentials; set a specific origin
     /// to enable cookie/authorization-header sharing.
-    #[arg(
-        long,
-        env = "WOS_CORS_ORIGIN",
-        default_value = "http://localhost:3000"
-    )]
+    #[arg(long, env = "WOS_CORS_ORIGIN", default_value = "http://localhost:3000")]
     pub cors_origin: String,
 
     /// When set, refuse to start if `WOS_CORS_ORIGIN` is not `*` and is not a
@@ -254,7 +245,9 @@ impl ServerConfig {
         if self.cors_origin == "*" && matches!(self.auth, AuthKind::Mock) {
             anyhow::bail!("Refusing to start with WOS_CORS_ORIGIN=* and WOS_AUTH=mock (unsafe)");
         }
-        if self.cors_strict && self.cors_origin != "*" && HeaderValue::from_str(&self.cors_origin).is_err()
+        if self.cors_strict
+            && self.cors_origin != "*"
+            && HeaderValue::from_str(&self.cors_origin).is_err()
         {
             anyhow::bail!(
                 "WOS_CORS_STRICT is enabled but WOS_CORS_ORIGIN is not a valid HTTP header value ({:?}); set a valid origin URL, use \"*\", or unset WOS_CORS_STRICT",
@@ -301,10 +294,7 @@ mod tests {
         cfg.cors_strict = true;
         cfg.cors_origin = "http://bad\nhost".into();
         let err = cfg.validate().unwrap_err();
-        assert!(
-            err.to_string().contains("WOS_CORS_STRICT"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("WOS_CORS_STRICT"), "{err}");
     }
 
     #[test]

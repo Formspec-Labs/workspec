@@ -122,8 +122,14 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK, "POST /api/instances should succeed");
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "POST /api/instances should succeed"
+    );
+    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
     let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
 
     let actual_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
@@ -134,7 +140,11 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let alias = post_val
         .pointer("/extensions/x-wos-legacy-instance-alias")
         .and_then(|x| x.as_str());
-    assert_eq!(alias, Some(requested_id), "legacy alias should match requested ID");
+    assert_eq!(
+        alias,
+        Some(requested_id),
+        "legacy alias should match requested ID"
+    );
 
     let encoded_id = actual_id.replace(':', "%3A");
     let response = app
@@ -147,7 +157,9 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
         v.get("instanceId").and_then(|x| x.as_str()),

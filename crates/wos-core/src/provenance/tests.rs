@@ -197,12 +197,20 @@ fn new_fields_default_to_none_or_empty_vec() {
 
     assert_zero_defaults(&ProvenanceRecord::state_transition("a", "b", "ev", None));
     assert_zero_defaults(&ProvenanceRecord::unmatched_event("ev", None));
-    assert_zero_defaults(&ProvenanceRecord::case_state_mutation(
-        "/p",
-        &serde_json::json!(1),
-        None,
-        "active",
-    ));
+    let mutation =
+        ProvenanceRecord::case_state_mutation("/p", &serde_json::json!(1), None, "active");
+    assert!(mutation.audit_layer.is_none());
+    assert!(mutation.actor_type.is_none());
+    assert_eq!(mutation.lifecycle_state.as_deref(), Some("active"));
+    assert_eq!(mutation.to_state.as_deref(), Some("active"));
+    assert!(mutation.definition_version.is_none());
+    assert!(mutation.inputs.is_empty());
+    assert!(mutation.outputs.is_empty());
+    assert!(mutation.input_digest.is_none());
+    assert!(mutation.output_digest.is_none());
+    assert!(mutation.transition_tags.is_empty());
+    assert!(mutation.case_file_snapshot.is_none());
+    assert!(mutation.outcome.is_none());
     assert_zero_defaults(&ProvenanceRecord::timer_created("t", "PT1S", "fire"));
     assert_zero_defaults(&ProvenanceRecord::timer_fired("t", "fire"));
     assert_zero_defaults(&ProvenanceRecord::timer_cancelled("t", "reason"));
@@ -643,8 +651,14 @@ fn configuration_warning_unresolved_ref_subject_serializes_required_fields() {
 
     assert_eq!(json["recordKind"], "configurationWarning");
     assert_eq!(json["data"]["subject"], "drift-monitor.policyRef");
-    assert_eq!(json["data"]["unresolvedRef"], "DemotionRule.id::nonexistent");
-    assert_eq!(json["data"]["workflowUri"], "urn:agency.gov:wos:benefits:v1");
+    assert_eq!(
+        json["data"]["unresolvedRef"],
+        "DemotionRule.id::nonexistent"
+    );
+    assert_eq!(
+        json["data"]["workflowUri"],
+        "urn:agency.gov:wos:benefits:v1"
+    );
 }
 
 #[test]
@@ -728,7 +742,10 @@ fn capability_invocation_round_trips_through_serde() {
         restored.record_kind,
         ProvenanceKind::CapabilityInvocation
     ));
-    assert_eq!(restored.outcome.as_deref(), Some("preconditionNotSatisfied"));
+    assert_eq!(
+        restored.outcome.as_deref(),
+        Some("preconditionNotSatisfied")
+    );
     assert_eq!(restored.actor_id.as_deref(), Some("intake-classifier"));
 }
 
@@ -812,9 +829,7 @@ fn correction_authorized_round_trips_through_serde() {
 fn correction_authorized_field_set_is_array_of_pointer_strings() {
     let record = ProvenanceRecord::correction_authorized(correction_authorized_input());
     let json = serde_json::to_value(&record).expect("serialize");
-    let arr = json["data"]["correctedFieldSet"]
-        .as_array()
-        .expect("array");
+    let arr = json["data"]["correctedFieldSet"].as_array().expect("array");
     assert_eq!(arr.len(), 2);
     assert!(arr.iter().all(|v| v.is_string()));
 }
@@ -1101,10 +1116,7 @@ fn determination_rescinded_round_trips_through_serde() {
     let record = ProvenanceRecord::determination_rescinded(determination_rescinded_input());
     let json = serde_json::to_string(&record).expect("serialize");
     let restored: ProvenanceRecord = serde_json::from_str(&json).expect("deserialize");
-    assert_eq!(
-        restored.record_kind,
-        ProvenanceKind::DeterminationRescinded
-    );
+    assert_eq!(restored.record_kind, ProvenanceKind::DeterminationRescinded);
 }
 
 fn reinstated_input() -> ReinstatedInput<'static> {
@@ -1423,10 +1435,7 @@ fn clock_resolved_drops_context_keys_that_collide_with_required_fields() {
 
 #[test]
 fn clock_resolved_classifies_as_facts() {
-    assert_eq!(
-        audit_layer_for_kind(ProvenanceKind::ClockResolved),
-        "facts"
-    );
+    assert_eq!(audit_layer_for_kind(ProvenanceKind::ClockResolved), "facts");
 }
 
 #[test]

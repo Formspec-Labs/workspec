@@ -1,6 +1,6 @@
 // Rust guideline compliant 2026-02-21
 
-//! TransitionEvent legacy coercion and dispatch label invariants.
+//! `TransitionEvent` coercion from bare strings and dispatch-label invariants.
 
 use wos_core::TransitionEvent;
 use wos_core::model::kernel::SignalScope;

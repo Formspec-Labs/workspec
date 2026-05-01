@@ -208,8 +208,7 @@ impl AssuranceService {
             .into_iter()
             .map(Into::into)
             .collect();
-        let known: std::collections::HashSet<&str> =
-            facts.iter().map(|f| f.id.as_str()).collect();
+        let known: std::collections::HashSet<&str> = facts.iter().map(|f| f.id.as_str()).collect();
         let broken_at = facts
             .iter()
             .find(|f| {
@@ -225,4 +224,3 @@ impl AssuranceService {
         })
     }
 }
-

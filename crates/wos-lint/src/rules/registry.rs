@@ -801,7 +801,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         summary: "`outputBinding` JSONPath MUST NOT use filter expressions or recursive descent.",
         fixtures: &[],
         graduation: Graduation::Draft,
-        spec_ref: Some("kernel/spec.md §9.2 (per ADR 0076 step 12 — Integration Profile §3.3.1 absorbed)"),
+        spec_ref: Some(
+            "kernel/spec.md §9.2 (per ADR 0076 step 12 — Integration Profile §3.3.1 absorbed)",
+        ),
         suggested_fix: None,
     },
     // --- K (Kernel + Lifecycle Detail + Correspondence Metadata) -----
@@ -854,55 +856,6 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         graduation: Graduation::Draft,
         spec_ref: None,
         suggested_fix: None,
-    },
-    // ── K-FOREACH-* (foreach state semantics; ADR 0076 / Sub-PR D) ─────────
-    RuleMetadata {
-        id: "K-FOREACH-001",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "ForEach states MUST declare a non-empty `collection` FEL expression.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("specs/kernel/spec.md ForEach states"),
-        suggested_fix: Some(
-            "Declare an FEL expression in `collection` that evaluates to a bounded array against case state (e.g., `caseFile.attachments`).",
-        ),
-    },
-    RuleMetadata {
-        id: "K-FOREACH-002",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "ForEach states MUST declare a `body` State to execute per iteration.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("specs/kernel/spec.md ForEach states"),
-        suggested_fix: Some(
-            "Declare an inline `body: State` describing the work performed per iteration. The body MAY be atomic, compound, or parallel.",
-        ),
-    },
-    RuleMetadata {
-        id: "K-FOREACH-003",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "ForEach `concurrency` MUST be at least 1 when present.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("specs/kernel/spec.md ForEach states"),
-        suggested_fix: Some(
-            "Set `concurrency` to a positive integer or omit it (sequential iteration is the canonical default).",
-        ),
-    },
-    RuleMetadata {
-        id: "K-FOREACH-004",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "Iteration fields (collection, itemVariable, indexVariable, concurrency, breakCondition, outputPath, mergeStrategy, body) are valid only on `foreach`-typed states.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("specs/kernel/spec.md ForEach states"),
-        suggested_fix: Some(
-            "Move iteration fields to a `foreach`-typed state, or remove them from this state.",
-        ),
     },
     RuleMetadata {
         id: "K-006",
@@ -1100,7 +1053,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: Some("Kernel S4.3"),
-        suggested_fix: Some("Remove the duplicate from `tags` or choose a different `outcomeCode` value."),
+        suggested_fix: Some(
+            "Remove the duplicate from `tags` or choose a different `outcomeCode` value.",
+        ),
     },
     // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
     // crates/wos-lint/src/rules/tier2.rs (e.g. `k_ext_002_root_level_x_wos_key_flagged`).
@@ -1118,6 +1073,58 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
+    },
+    // K-FOREACH-001: inline-evidence in tier1.rs foreach-state unit coverage.
+    RuleMetadata {
+        id: "K-FOREACH-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach states MUST declare a non-empty `collection` FEL expression.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Declare an FEL expression in `collection` that evaluates to a bounded array against case state (e.g., `caseFile.attachments`).",
+        ),
+    },
+    // K-FOREACH-002: inline-evidence in tier1.rs foreach-state unit coverage.
+    RuleMetadata {
+        id: "K-FOREACH-002",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach states MUST declare a `body` State to execute per iteration.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Declare an inline `body: State` describing the work performed per iteration. The body MAY be atomic, compound, or parallel.",
+        ),
+    },
+    // K-FOREACH-003: inline-evidence in tier1.rs foreach-state unit coverage.
+    RuleMetadata {
+        id: "K-FOREACH-003",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "ForEach `concurrency` MUST be at least 1 when present.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Set `concurrency` to a positive integer or omit it (sequential iteration is the canonical default).",
+        ),
+    },
+    // K-FOREACH-004: inline-evidence in tier1.rs foreach-state unit coverage.
+    RuleMetadata {
+        id: "K-FOREACH-004",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Iteration fields (collection, itemVariable, indexVariable, concurrency, breakCondition, outputPath, mergeStrategy, body) are valid only on `foreach`-typed states.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md ForEach states"),
+        suggested_fix: Some(
+            "Move iteration fields to a `foreach`-typed state, or remove them from this state.",
+        ),
     },
     // --- SCHEMA-DOC (schema documentation coverage) -------------------
     RuleMetadata {
@@ -1265,12 +1272,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         suggested_fix: None,
     },
     // --- WOS-* (cross-reference rules per ADR 0076 D-2 / step 12) -----
-    // WOS-AGENT-XREF-001 / WOS-SIG-COVER-001 / WOS-VER-LEVEL-001:
-    // Tested via inline JSON in the `wos_agent_xref_001_*`,
-    // `wos_sig_cover_001_*`, and `ver_level_001_*` unit tests in
-    // `tier1.rs::ver_level_tests` and `tier2.rs::tests`. Inline fixtures are
-    // sufficient evidence per the K-EXT-002 precedent (see registry comment
-    // above). Fixture file paths are intentionally empty until promotion.
+    // WOS-AGENT-XREF-001: inline-evidence in `wos_agent_xref_001_*` tests.
     RuleMetadata {
         id: "WOS-AGENT-XREF-001",
         tier: Tier::T2,
@@ -1283,43 +1285,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Add an `agents[]` entry whose `id` matches the agent-typed actor, or change the actor `type` to `human`/`system`.",
         ),
     },
-    RuleMetadata {
-        id: "WOS-SIG-COVER-001",
-        tier: Tier::T2,
-        severity: LintSeverity::Error,
-        summary: "Signature-gated transitions MUST be covered by a `signature.signers[]` entry.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("ADR 0076 D-2 + step 12; schemas/wos-workflow.schema.json allOf $comment"),
-        suggested_fix: Some(
-            "Declare a `signature` block at the document root with `signers[]` covering the actor that signs the gating transition.",
-        ),
-    },
-    RuleMetadata {
-        id: "WOS-VER-LEVEL-001",
-        tier: Tier::T1,
-        severity: LintSeverity::Warning,
-        summary: "Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("ADR 0076 step 12 (Q6 owner decision)"),
-        suggested_fix: Some(
-            "Declare `verificationLevel` on the `bindings[]` entries that govern outputs from this agent's fallback path.",
-        ),
-    },
-    // --- WOS-EMBED-* / WOS-SIDECAR-* (identity-boundary rules per ADR 0063) ---
-    RuleMetadata {
-        id: "WOS-EMBED-TARGET-001",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "Embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) MUST NOT declare `targetWorkflow`.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
-        spec_ref: Some("ADR 0063 §2.1; schemas/wos-workflow.schema.json allOf"),
-        suggested_fix: Some(
-            "Remove `targetWorkflow` from the embedded block. Embedded blocks govern the enclosing $wosWorkflow envelope; only sidecars target workflows by URI.",
-        ),
-    },
+    // WOS-EMBED-IDENTITY-001: inline-evidence in `embed_identity_001_*` tests.
     RuleMetadata {
         id: "WOS-EMBED-IDENTITY-001",
         tier: Tier::T1,
@@ -1332,6 +1298,20 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Remove `url` and `version` from the embedded block. The merged envelope's identity (url, version) governs every embedded block.",
         ),
     },
+    // WOS-EMBED-TARGET-001: inline-evidence in `embed_target_001_*` tests.
+    RuleMetadata {
+        id: "WOS-EMBED-TARGET-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "Embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) MUST NOT declare `targetWorkflow`.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0063 §2.1; schemas/wos-workflow.schema.json allOf"),
+        suggested_fix: Some(
+            "Remove `targetWorkflow` from the embedded block. Embedded blocks govern the enclosing $wosWorkflow envelope; only sidecars target workflows by URI.",
+        ),
+    },
+    // WOS-SIDECAR-TARGET-001: inline-evidence in `sidecar_target_001_*` tests.
     RuleMetadata {
         id: "WOS-SIDECAR-TARGET-001",
         tier: Tier::T1,
@@ -1342,6 +1322,32 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: Some("ADR 0063 §2.2"),
         suggested_fix: Some(
             "Declare `targetWorkflow` on the sidecar root pointing at the $wosWorkflow envelope's `url`.",
+        ),
+    },
+    // WOS-SIG-COVER-001: inline-evidence in `wos_sig_cover_001_*` tests.
+    RuleMetadata {
+        id: "WOS-SIG-COVER-001",
+        tier: Tier::T2,
+        severity: LintSeverity::Error,
+        summary: "Signature-gated transitions MUST be covered by a `signature.signers[]` entry.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0076 D-2 + step 12; schemas/wos-workflow.schema.json allOf $comment"),
+        suggested_fix: Some(
+            "Declare a `signature` block at the document root with `signers[]` covering the actor that signs the gating transition.",
+        ),
+    },
+    // WOS-VER-LEVEL-001: inline-evidence in `ver_level_001_*` tests.
+    RuleMetadata {
+        id: "WOS-VER-LEVEL-001",
+        tier: Tier::T1,
+        severity: LintSeverity::Warning,
+        summary: "Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("ADR 0076 step 12 (Q6 owner decision)"),
+        suggested_fix: Some(
+            "Declare `verificationLevel` on the `bindings[]` entries that govern outputs from this agent's fallback path.",
         ),
     },
 ];

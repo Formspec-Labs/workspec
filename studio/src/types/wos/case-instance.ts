@@ -6,25 +6,26 @@
  */
 
 /**
- * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosKernel': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ * A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact (per ADR 0063 §2.3): produced and consumed by processors, not authored by workflow designers. The required `$wosCaseInstance` marker gives runtime artifacts the same identity discipline as author-time documents and lets the lint parser detect them uniformly.
  */
-export type JsonSchemaUri = string;
-
-/**
- * A WOS CaseInstance document per the WOS Runtime Companion v1.0. A CaseInstance is the serialization format for a running workflow instance -- it captures the complete runtime state needed to resume processing after a crash, migrate between processors, or audit past behavior. This is a runtime artifact, not a WOS document type: it has no $wos* marker because it is produced and consumed by processors, not authored by workflow designers. The instance shape is normatively defined so that instances can migrate between conformant processors without data loss.
- */
-export interface WOSCaseInstance {
+export type WOSCaseInstance = {
+  [k: string]: unknown;
+} & {
+  /**
+   * Top-level marker identifying this object as a WOS Case Instance runtime artifact, pinned to the 1.0 line. Required per ADR 0063 §2.3 so the lint parser detects runtime artifacts uniformly with author-time documents.
+   */
+  $wosCaseInstance: '1.0';
   $schema?: JsonSchemaUri;
   /**
    * TypeID-structured case identifier for this workflow instance. Stable for the lifetime of the instance — never reused or changed after creation. Used for routing events, correlating provenance records, and linking cross-case relationships (Runtime Companion S3.1). Processors assign this at createInstance time; authors do not choose it. Reserved family prefix: `case`.
    */
   instanceId: string;
   /**
-   * Canonical URL of the Kernel Document governing this instance. Together with definitionVersion, identifies the exact document that controls this instance's lifecycle, case state schema, and contract bindings.
+   * Canonical URL of the Workflow Document governing this instance. Together with definitionVersion, identifies the exact document that controls this instance's lifecycle, case state schema, and contract bindings.
    */
   definitionUrl: string;
   /**
-   * Version of the Kernel Document, pinned at instance creation (Kernel S9.6). Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion S11).
+   * Version of the Workflow Document, pinned at instance creation (Kernel S9.6). Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion S11).
    */
   definitionVersion: string;
   /**
@@ -67,9 +68,13 @@ export interface WOSCaseInstance {
     [k: string]: CompensationLog;
   };
   /**
-   * Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. Completed and terminated are irreversible terminal states.
+   * Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. 'stalled': commit retry budget exhausted -- instance has emitted commitAttemptFailure records and cannot make further progress until operator intervention (ADR 0070 D-5; reframed per maximalist Q18 as a reserved `InstanceStatus` variant, not a kernel statechart node type). Completed and terminated are irreversible terminal states; stalled is recoverable.
    */
-  status: 'active' | 'suspended' | 'migrating' | 'completed' | 'terminated';
+  status: 'active' | 'suspended' | 'migrating' | 'completed' | 'terminated' | 'stalled';
+  /**
+   * RFC 3339 timestamp recording when the instance entered `stalled` status (ADR 0070 D-5). REQUIRED when status is `stalled`; absent otherwise. Operators consume this for stuck-instance dashboards and retry-budget reset decisions. The `if/then` guard at the document level enforces the conditional requirement.
+   */
+  stalledSince?: string;
   /**
    * ISO 8601 timestamp when this instance was created by the processor (Runtime Companion S3.1). Immutable after creation — never updated on transitions or state changes.
    */
@@ -85,7 +90,12 @@ export interface WOSCaseInstance {
   governanceState?: GovernanceState;
   volumeCounters?: VolumeCounters;
   extensions?: ExtensionsMap;
-}
+};
+/**
+ * Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.
+ */
+export type JsonSchemaUri = string;
+
 /**
  * Captures the state of a pending durable timer.
  */

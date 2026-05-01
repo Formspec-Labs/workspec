@@ -62,10 +62,26 @@ export function loadSignatureProfiles(): Map<string, WOSSignatureProfileDocument
   ];
   const map = new Map<string, WOSSignatureProfileDocument>();
   for (const [id, raw] of entries) {
-    const normalized =
-      raw && typeof raw === 'object' && !Array.isArray(raw) && 'signature' in raw
-        ? (raw as Record<string, unknown>).signature
-        : raw;
+    let normalized: unknown = raw;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'signature' in raw) {
+      const shell = raw as Record<string, unknown>;
+      const inner = shell.signature as Record<string, unknown>;
+      const workflowUrl =
+        typeof shell.url === 'string' && shell.url.length > 0
+          ? shell.url
+          : `https://example.test/fixtures/${id}`;
+      normalized = {
+        $wosSignatureProfile: '1.0',
+        ...inner,
+        targetWorkflow: { url: workflowUrl },
+        ...(typeof shell.title === 'string' ? { title: shell.title } : {}),
+      };
+    } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const doc = raw as Record<string, unknown>;
+      if (doc.$wosSignatureProfile === undefined) {
+        normalized = { $wosSignatureProfile: '1.0', ...doc };
+      }
+    }
     map.set(id, validateAndCast<WOSSignatureProfileDocument>(normalized, 'WOSSignatureProfileDocument'));
   }
   return map;

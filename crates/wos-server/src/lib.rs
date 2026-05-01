@@ -81,7 +81,9 @@ pub async fn run(cfg: ServerConfig) -> anyhow::Result<()> {
         }
         RuntimeKind::Restate => {
             #[cfg(any(feature = "runtime-restate", feature = "runtime-restate-stub"))]
-            anyhow::bail!("WOS_RUNTIME=restate scaffold loaded; WS-094 adapter wiring still pending");
+            anyhow::bail!(
+                "WOS_RUNTIME=restate scaffold loaded; WS-094 adapter wiring still pending"
+            );
             #[cfg(not(any(feature = "runtime-restate", feature = "runtime-restate-stub")))]
             anyhow::bail!(
                 "WOS_RUNTIME=restate requested but crate built without feature `runtime-restate` or `runtime-restate-stub`"

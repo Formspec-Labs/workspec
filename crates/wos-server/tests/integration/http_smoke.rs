@@ -41,7 +41,11 @@ async fn build_app_state() -> AppState {
     });
     let storage = storage::build(&cfg).await.unwrap();
     let auth = auth::build(&cfg, storage.clone()).expect("auth build");
-    let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await.unwrap());
+    let services = Arc::new(
+        AppServices::new(cfg.clone(), storage.clone())
+            .await
+            .unwrap(),
+    );
     let (_layer, io) = realtime::build_io_only();
     let runtime = AppRuntime::build(
         storage.clone(),
@@ -102,7 +106,10 @@ async fn health_returns_service_health_array() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     // Governance /health returns a `ServiceHealthView[]`; empty when no
     // bundles are loaded.
-    assert!(json.is_array(), "health response must be an array, got {json}");
+    assert!(
+        json.is_array(),
+        "health response must be an array, got {json}"
+    );
 }
 
 #[tokio::test]

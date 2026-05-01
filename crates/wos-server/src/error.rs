@@ -106,9 +106,12 @@ impl IntoResponse for ApiError {
                 Some(issues.clone()),
             ),
             ApiError::Conflict(m) => (StatusCode::CONFLICT, "conflict", Some(m.clone()), None),
-            ApiError::PayloadTooLarge => {
-                (StatusCode::PAYLOAD_TOO_LARGE, "payload_too_large", None, None)
-            }
+            ApiError::PayloadTooLarge => (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "payload_too_large",
+                None,
+                None,
+            ),
             ApiError::ServiceUnavailable(m) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "service_unavailable",

@@ -139,10 +139,7 @@ impl KernelCollections {
     }
 }
 
-fn check_outcome_code_not_in_tags(
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
+fn check_outcome_code_not_in_tags(kernel: &KernelDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     check_outcome_code_recursive(&kernel.lifecycle.states, "/lifecycle/states", diagnostics);
 }
 
@@ -292,6 +289,35 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
                 value: gov_value,
                 source: wf.source.clone(),
             };
+            if let Some(target) = gov.value.get("targetWorkflow").and_then(Value::as_str)
+                && target != gov_url
+            {
+                diagnostics.push(LintDiagnostic::t2_error(
+                    "G-034",
+                    "/governance/targetWorkflow",
+                    format!(
+                        "embedded governance targetWorkflow '{target}' does not match workflow url '{gov_url}'"
+                    ),
+                ));
+            }
+            if let Some(target_governance) =
+                gov.value.get("targetGovernance").and_then(Value::as_str)
+            {
+                let expected_governance = gov
+                    .value
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or(gov_url);
+                if target_governance != expected_governance {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        "G-035",
+                        "/targetGovernance",
+                        format!(
+                            "targetGovernance '{target_governance}' does not match governance url '{expected_governance}'"
+                        ),
+                    ));
+                }
+            }
             let typed_gov =
                 serde_json::from_value::<wos_core::GovernanceDocument>(gov.value.clone()).ok();
 
@@ -301,9 +327,6 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
             check_sla_escalation_step_ids(&gov, diagnostics);
 
             if let (Some(kernel), Some(kc)) = (&typed_kernel, kernel_collections.as_ref()) {
-                // G-034: targetWorkflow must match kernel url (embedded blocks
-                // share the same document, so this is always true — skip to avoid
-                // spurious errors when the gov block has no independent url).
                 if let Some(tg) = &typed_gov {
                     check_delegation_actors_exist_typed(tg, kernel, diagnostics);
                     check_hold_policies_attach_to_hold_states_typed(tg, kernel, diagnostics);
@@ -334,9 +357,7 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
                 .value
                 .get("assertionLibrary")
                 .cloned()
-                .or_else(|| {
-                    gov.value.get("assertions").map(|_| gov.value.clone())
-                });
+                .or_else(|| gov.value.get("assertions").map(|_| gov.value.clone()));
             if let Some(al_val) = al_value {
                 let al_doc = crate::document::WosDocument {
                     kind: DocumentKind::Workflow,
@@ -354,15 +375,21 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         // in-process. The synthetic doc is internal scaffolding — never
         // emitted, never validated against any schema.
         let workflow_url = wf.value.get("url").and_then(Value::as_str).unwrap_or("");
-        let has_agents = wf.value.get("agents").is_some()
-            || wf.value.get("aiOversight").is_some();
+        let has_agents = wf.value.get("agents").is_some() || wf.value.get("aiOversight").is_some();
         if has_agents {
             let mut ai_value = serde_json::json!({
                 "targetWorkflow": workflow_url,
             });
             // Copy agents, aiOversight, fallbackChain, narrativeProvenance, provenance
             // from the workflow root into the synthetic AI doc.
-            for field in &["agents", "aiOversight", "fallbackChain", "narrativeProvenance", "provenance", "agentDisclosure"] {
+            for field in &[
+                "agents",
+                "aiOversight",
+                "fallbackChain",
+                "narrativeProvenance",
+                "provenance",
+                "agentDisclosure",
+            ] {
                 if let Some(v) = wf.value.get(*field) {
                     ai_value[field] = v.clone();
                 }
@@ -538,8 +565,7 @@ fn check_agent_xref(doc: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
             diagnostics.push(LintDiagnostic::t2_error(
                 "WOS-AGENT-XREF-001",
                 &format!("/actors/{i}"),
-                "actor has type='agent' but no `id` field; cannot xref to agents[]"
-                    .to_string(),
+                "actor has type='agent' but no `id` field; cannot xref to agents[]".to_string(),
             ));
             continue;
         };
@@ -599,10 +625,7 @@ fn check_signature_coverage(doc: &Value, diagnostics: &mut Vec<LintDiagnostic>) 
                 return;
             }
             if signer_actor_ids.is_empty() {
-                findings.push((
-                    path.to_string(),
-                    "signature.signers[] is empty".to_string(),
-                ));
+                findings.push((path.to_string(), "signature.signers[] is empty".to_string()));
                 return;
             }
 
@@ -666,8 +689,13 @@ fn walk_transitions<F: FnMut(&str, &Value)>(
         walk_transitions(state.get("states"), &format!("{state_path}/states"), visit);
         if let Some(Value::Object(regions)) = state.get("regions") {
             for (region_name, region) in regions {
-                let region_path = format!("{state_path}/regions/{}", json_pointer_escape(region_name));
-                walk_transitions(region.get("states"), &format!("{region_path}/states"), visit);
+                let region_path =
+                    format!("{state_path}/regions/{}", json_pointer_escape(region_name));
+                walk_transitions(
+                    region.get("states"),
+                    &format!("{region_path}/states"),
+                    visit,
+                );
             }
         }
     }
@@ -1499,8 +1527,7 @@ fn business_calendar_targets_workflow(project: &WosProject, workflow_url: &str) 
             .get("targetWorkflow")
             .and_then(Value::as_str)
             .unwrap_or("");
-        (target == workflow_url || target.is_empty())
-            && d.value.get("calendar").is_some()
+        (target == workflow_url || target.is_empty()) && d.value.get("calendar").is_some()
     });
     if in_delivery {
         return true;
@@ -3161,7 +3188,11 @@ mod tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-AGENT-XREF-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
         assert_eq!(matches[0].path, "/actors/0/id");
         assert!(matches[0].message.contains("extractor"));
     }
@@ -3211,7 +3242,11 @@ mod tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-SIG-COVER-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
         assert!(matches[0].message.contains("no signature block"));
     }
 
@@ -3276,7 +3311,11 @@ mod tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-SIG-COVER-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
         assert!(matches[0].message.contains("signer-b"));
     }
 }

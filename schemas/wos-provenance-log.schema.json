@@ -24,6 +24,7 @@
       "examples": [
         [
           {
+            "id": "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd",
             "recordKind": "stateTransition",
             "timestamp": "2026-04-19T12:00:00Z",
             "auditLayer": "facts",

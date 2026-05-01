@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "title": "Benefits Adjudication AI Integration",
   "description": "Extends the benefits adjudication workflow with AI-assisted document extraction and eligibility pre-screening. The kernel and governance documents are unchanged. AI governance plugs into Layer 1 structures via named seams: agent output validated through the same pipeline, review protocols gain suppression, due process gains agent disclosure.",
-  "url": "https://example.test/migrated-fixture",
+  "url": "https://agency.gov/workflows/benefits-adjudication",
   "impactLevel": "operational",
   "actors": [
     {
@@ -28,8 +28,6 @@
     }
   },
   "aiOversight": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
     "defaultAutonomy": "assistive",
     "agents": [
       {

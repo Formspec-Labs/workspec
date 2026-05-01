@@ -10,9 +10,9 @@ semantic-only linter).
 
 Some catalog entries describe violations that pure JSON Schema cannot
 express (e.g. "final states must not have outgoing transitions" — that
-requires cross-property reasoning the Rust lint pass owns). Those are
-marked xfail with a reason so the file remains a single source of
-truth without silently losing coverage.
+requires cross-property reasoning the Rust lint pass owns). Those cases
+are strict xfails: if schema coverage later catches one, XPASS fails the
+suite and forces this classification to be updated.
 """
 from __future__ import annotations
 
@@ -44,17 +44,33 @@ def _load_cases():
 NEGATIVE_CASES = _load_cases()
 
 
+def _semantic_only_reason(case_id: str, case: dict) -> str:
+    return (
+        f"{case_id}: violation requires semantic checks beyond JSON Schema "
+        f"(expected error: {case.get('expectedError', 'unspecified')})"
+    )
+
+
+def _case_params():
+    params = []
+    for case_id, case in NEGATIVE_CASES:
+        marks = []
+        if case_id in SEMANTIC_ONLY_CASES:
+            marks.append(
+                pytest.mark.xfail(
+                    reason=_semantic_only_reason(case_id, case),
+                    strict=True,
+                )
+            )
+        params.append(pytest.param(case_id, case, id=case_id, marks=marks))
+    return params
+
+
 @pytest.mark.parametrize(
     "case_id,case",
-    NEGATIVE_CASES,
-    ids=[cid for cid, _ in NEGATIVE_CASES],
+    _case_params(),
 )
 def test_invalid_workflow_document_is_rejected(case_id, case, validators):
-    if case_id in SEMANTIC_ONLY_CASES:
-        pytest.xfail(
-            f"{case_id}: violation requires semantic checks beyond JSON Schema "
-            f"(expected error: {case.get('expectedError', 'unspecified')})"
-        )
     errors = list(validators["$wosWorkflow"].iter_errors(case["document"]))
     assert errors, (
         f"{case_id} was expected to fail validation but passed. "

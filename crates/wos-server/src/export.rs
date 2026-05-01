@@ -61,11 +61,12 @@ fn write_output(out: &str, bytes: &[u8]) -> anyhow::Result<()> {
 pub fn rows_to_log(rows: &[ProvenanceRow]) -> anyhow::Result<ProvenanceLog> {
     let mut log = ProvenanceLog::default();
     for r in rows {
-        let record: ProvenanceRecord = serde_json::from_value(r.payload.clone())
-            .map_err(|e| anyhow::anyhow!(
+        let record: ProvenanceRecord = serde_json::from_value(r.payload.clone()).map_err(|e| {
+            anyhow::anyhow!(
                 "stored payload for seq {} is not a ProvenanceRecord: {e}",
                 r.seq,
-            ))?;
+            )
+        })?;
         log.push(record);
     }
     Ok(log)

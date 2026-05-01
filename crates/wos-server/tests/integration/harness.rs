@@ -91,10 +91,7 @@ pub fn make_instance_row(id: &str) -> InstanceRow {
     }
 }
 
-pub async fn seed_instance_with_one_provenance(
-    store: &storage::StorageHandle,
-    instance_id: &str,
-) {
+pub async fn seed_instance_with_one_provenance(store: &storage::StorageHandle, instance_id: &str) {
     store
         .create_instance(&make_instance_row(instance_id))
         .await

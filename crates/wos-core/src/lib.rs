@@ -39,8 +39,8 @@ pub mod traits;
 pub mod typeid;
 
 pub use agent::{
-    AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult,
-    AgentTask, InvokerKind, InvokerSpec, StubResponse,
+    AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult, AgentTask,
+    InvokerKind, InvokerSpec, StubResponse,
 };
 pub use context::EvalContext;
 pub use eval::{

@@ -159,7 +159,10 @@ async fn policy_resolve_get_returns_active_set_at_boundary_date() {
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
     assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v2"));
-    assert_eq!(body.get("label").and_then(|v| v.as_str()), Some("2026 schedule"));
+    assert_eq!(
+        body.get("label").and_then(|v| v.as_str()),
+        Some("2026 schedule")
+    );
     let params = body.get("parameters").expect("parameters present");
     assert_eq!(
         params.get("incomeCeiling").and_then(|v| v.as_i64()),
@@ -213,7 +216,9 @@ async fn policy_resolve_get_inclusive_at_effective_date() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v1"));
 }
@@ -240,7 +245,9 @@ async fn policy_resolve_get_exclusive_at_expiry_date() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v2"));
 }
@@ -291,7 +298,9 @@ async fn policy_resolve_get_picks_latest_effective_when_versions_out_of_order() 
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 16384).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 16384)
+        .await
+        .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(body.get("id").and_then(|v| v.as_str()), Some("v2"));
 }

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "title": "Benefits Adjudication Governance",
   "description": "Governance for a pure-human benefits adjudication workflow. Dual-blind review, due process with 30-day notice and appeal, separation of duties, income verification pipeline, structured reasoning traces. No AI -- proves Layer 1 serves human workflows independently.",
-  "url": "https://example.test/migrated-fixture",
+  "url": "https://agency.gov/workflows/benefits-adjudication",
   "impactLevel": "operational",
   "actors": [
     {
@@ -28,8 +28,6 @@
     }
   },
   "governance": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
     "dueProcess": {
       "adverseDecisionPolicy": {
         "noticeRequired": true,

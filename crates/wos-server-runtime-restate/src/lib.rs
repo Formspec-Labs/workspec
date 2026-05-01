@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use wos_core::instance::CaseInstance;
-use wos_core::provenance::ProvenanceRecord;
 use wos_core::instance::PendingEvent;
+use wos_core::provenance::ProvenanceRecord;
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 use wos_server_ports::runtime::{
@@ -28,17 +28,18 @@ impl RestateRuntimeAdapter {
     }
 
     fn unsupported(op: &str) -> RuntimeAdapterError {
-        RuntimeAdapterError::Message(format!("WS-094: `{op}` is not yet supported by restate adapter"))
+        RuntimeAdapterError::Message(format!(
+            "WS-094: `{op}` is not yet supported by restate adapter"
+        ))
     }
 }
 
 #[async_trait]
 impl RuntimeOps for RestateRuntimeAdapter {
     async fn create_instance(&self, request: CreateInstanceRequest) -> RuntimeResult<CaseInstance> {
-        let mut guard = self
-            .state
-            .lock()
-            .map_err(|_| RuntimeAdapterError::Message("restate adapter state lock poisoned".into()))?;
+        let mut guard = self.state.lock().map_err(|_| {
+            RuntimeAdapterError::Message("restate adapter state lock poisoned".into())
+        })?;
         if guard.instances.contains_key(&request.instance_id) {
             return Err(RuntimeAdapterError::Message(format!(
                 "instance `{}` already exists",
@@ -76,39 +77,36 @@ impl RuntimeOps for RestateRuntimeAdapter {
         Ok(instance)
     }
     async fn load_instance(&self, instance_id: &str) -> RuntimeResult<CaseInstance> {
-        let guard = self
-            .state
-            .lock()
-            .map_err(|_| RuntimeAdapterError::Message("restate adapter state lock poisoned".into()))?;
-        guard
-            .instances
-            .get(instance_id)
-            .cloned()
-            .ok_or_else(|| RuntimeAdapterError::Message(format!("instance `{instance_id}` not found")))
+        let guard = self.state.lock().map_err(|_| {
+            RuntimeAdapterError::Message("restate adapter state lock poisoned".into())
+        })?;
+        guard.instances.get(instance_id).cloned().ok_or_else(|| {
+            RuntimeAdapterError::Message(format!("instance `{instance_id}` not found"))
+        })
     }
-    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value) -> RuntimeResult<()> {
+    async fn enqueue_event(
+        &self,
+        instance_id: &str,
+        event: serde_json::Value,
+    ) -> RuntimeResult<()> {
         let pending: PendingEvent = serde_json::from_value(event)
             .map_err(|e| RuntimeAdapterError::Message(format!("invalid event payload: {e}")))?;
-        let mut guard = self
-            .state
-            .lock()
-            .map_err(|_| RuntimeAdapterError::Message("restate adapter state lock poisoned".into()))?;
-        let queue = guard
-            .queue
-            .get_mut(instance_id)
-            .ok_or_else(|| RuntimeAdapterError::Message(format!("instance `{instance_id}` not found")))?;
+        let mut guard = self.state.lock().map_err(|_| {
+            RuntimeAdapterError::Message("restate adapter state lock poisoned".into())
+        })?;
+        let queue = guard.queue.get_mut(instance_id).ok_or_else(|| {
+            RuntimeAdapterError::Message(format!("instance `{instance_id}` not found"))
+        })?;
         queue.push_back(pending);
         Ok(())
     }
     async fn drain_once(&self, instance_id: &str) -> RuntimeResult<DrainOnceResult> {
-        let mut guard = self
-            .state
-            .lock()
-            .map_err(|_| RuntimeAdapterError::Message("restate adapter state lock poisoned".into()))?;
-        let queue = guard
-            .queue
-            .get_mut(instance_id)
-            .ok_or_else(|| RuntimeAdapterError::Message(format!("instance `{instance_id}` not found")))?;
+        let mut guard = self.state.lock().map_err(|_| {
+            RuntimeAdapterError::Message("restate adapter state lock poisoned".into())
+        })?;
+        let queue = guard.queue.get_mut(instance_id).ok_or_else(|| {
+            RuntimeAdapterError::Message(format!("instance `{instance_id}` not found"))
+        })?;
         let Some(_event) = queue.pop_front() else {
             return Ok(DrainOnceResult {
                 processed_event: None,
@@ -177,10 +175,14 @@ impl SeamAccess for RestateRuntimeAdapter {
     type SignerError = std::convert::Infallible;
     type RendererError = std::convert::Infallible;
 
-    fn signer(&self) -> &(dyn wos_core::traits::ProvenanceSigner<Error = Self::SignerError> + Send + Sync) {
+    fn signer(
+        &self,
+    ) -> &(dyn wos_core::traits::ProvenanceSigner<Error = Self::SignerError> + Send + Sync) {
         panic!("WS-094: signer seam not wired for restate adapter")
     }
-    fn renderer(&self) -> &(dyn wos_core::traits::ReportRenderer<Error = Self::RendererError> + Send + Sync) {
+    fn renderer(
+        &self,
+    ) -> &(dyn wos_core::traits::ReportRenderer<Error = Self::RendererError> + Send + Sync) {
         panic!("WS-094: renderer seam not wired for restate adapter")
     }
 }
@@ -252,12 +254,7 @@ mod tests {
             .expect("instance create should succeed");
 
         let err = adapter
-            .persist_task_draft(
-                "task-1",
-                serde_json::json!({}),
-                "actor-1",
-                Some("idem-1"),
-            )
+            .persist_task_draft("task-1", serde_json::json!({}), "actor-1", Some("idem-1"))
             .await
             .expect_err("persist_task_draft should be unsupported");
         assert!(err.to_string().contains("not yet supported"));

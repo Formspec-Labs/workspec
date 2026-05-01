@@ -128,6 +128,7 @@ impl WorkflowEngine {
                         .to_string(),
                 )
             })?;
+            let block = normalize_ai_oversight_block(&ai_json, block);
             let doc: AIIntegrationDocument = serde_json::from_value(block)
                 .map_err(|e| ConformanceError::Parse(format!("AI doc parse error: {e}")))?;
             Some(doc)
@@ -665,11 +666,37 @@ fn fixture_document_json(
 /// Extract an embedded block (e.g., `aiOversight`, `governance`, `signature`,
 /// `calendar`, `notifications`) from a parsed `$wosWorkflow` envelope per
 /// ADR 0076 D-1/D-3. Returns `None` if the field is absent.
-fn extract_embedded_block(envelope: &serde_json::Value, block_key: &str) -> Option<serde_json::Value> {
+fn extract_embedded_block(
+    envelope: &serde_json::Value,
+    block_key: &str,
+) -> Option<serde_json::Value> {
     envelope
         .as_object()
         .and_then(|obj| obj.get(block_key))
         .cloned()
+}
+
+fn normalize_ai_oversight_block(
+    envelope: &serde_json::Value,
+    mut block: serde_json::Value,
+) -> serde_json::Value {
+    let Some(obj) = block.as_object_mut() else {
+        return block;
+    };
+    if !obj.contains_key("targetWorkflow") {
+        if let Some(url) = envelope.get("url").and_then(serde_json::Value::as_str) {
+            obj.insert(
+                "targetWorkflow".to_string(),
+                serde_json::Value::String(url.to_string()),
+            );
+        }
+    }
+    if !obj.contains_key("agents") {
+        if let Some(agents) = obj.get("x-transportAgentDetails").cloned() {
+            obj.insert("agents".to_string(), agents);
+        }
+    }
+    block
 }
 
 /// Map a fixture document role to its embedded-block key per ADR 0076 D-1/D-3.

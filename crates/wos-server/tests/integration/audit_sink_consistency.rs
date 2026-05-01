@@ -33,7 +33,9 @@ struct AlwaysFailAuditSink;
 #[async_trait::async_trait]
 impl AuditSink for AlwaysFailAuditSink {
     async fn append_provenance(&self, _records: &[ProvenanceRow]) -> AuditResult<()> {
-        Err(AuditError::Backend("intentional audit failure for consistency test".into()))
+        Err(AuditError::Backend(
+            "intentional audit failure for consistency test".into(),
+        ))
     }
 
     async fn append_export(&self, _envelope: ExportEnvelope) -> AuditResult<()> {
@@ -80,7 +82,11 @@ async fn state_with_failing_audit_sink() -> AppState {
         .expect("kernel upsert");
 
     let auth = auth::build(&cfg, storage.clone()).expect("auth build");
-    let services = Arc::new(AppServices::new(cfg.clone(), storage.clone()).await.expect("services"));
+    let services = Arc::new(
+        AppServices::new(cfg.clone(), storage.clone())
+            .await
+            .expect("services"),
+    );
     let (_layer, io) = realtime::build_io_only();
     let runtime = AppRuntime::build_with(
         storage.clone(),

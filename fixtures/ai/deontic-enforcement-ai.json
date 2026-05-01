@@ -28,8 +28,6 @@
     }
   },
   "aiOversight": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://test.wos-spec.org/workflows/deontic-enforcement",
     "defaultAutonomy": "assistive",
     "confidenceFloor": {
       "threshold": 0.85,

@@ -102,5 +102,3 @@ impl AppRuntime {
         panic!("runtime-local feature disabled")
     }
 }
-
-

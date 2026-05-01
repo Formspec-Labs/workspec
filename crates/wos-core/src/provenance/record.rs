@@ -84,9 +84,7 @@ pub enum ClockResolvedResolution<'a> {
         resolving_event_hash: Option<&'a str>,
     },
     /// Paused — the pause event itself is the resolving event (hash required).
-    Paused {
-        resolving_event_hash: &'a str,
-    },
+    Paused { resolving_event_hash: &'a str },
 }
 
 /// Closed failure-kind discriminant for
@@ -576,7 +574,14 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         lifecycle_state: &str,
     ) -> Self {
-        Self::case_state_mutation_with_source(path, new_value, actor_id, lifecycle_state, None, None)
+        Self::case_state_mutation_with_source(
+            path,
+            new_value,
+            actor_id,
+            lifecycle_state,
+            None,
+            None,
+        )
     }
 
     pub fn case_state_mutation_with_source(
@@ -602,6 +607,8 @@ impl ProvenanceRecord {
             data["verificationLevel"] = serde_json::Value::String(vl.to_string());
         }
         record.data = Some(data);
+        record.to_state = Some(lifecycle_state.to_string());
+        record.lifecycle_state = Some(lifecycle_state.to_string());
         record
     }
 
@@ -1089,10 +1096,7 @@ impl ProvenanceRecord {
     /// Create a determination-rescinded record (ADR 0066 §3).
     #[must_use]
     pub fn determination_rescinded(input: DeterminationRescindedInput<'_>) -> Self {
-        const REQUIRED: &[&str] = &[
-            "priorDeterminationHash",
-            "rescissionAuthorizationEventHash",
-        ];
+        const REQUIRED: &[&str] = &["priorDeterminationHash", "rescissionAuthorizationEventHash"];
         let mut data = merge_context(input.context, REQUIRED);
         data.insert(
             "priorDeterminationHash".to_string(),
@@ -1239,21 +1243,20 @@ impl ProvenanceRecord {
             "originClockHash".to_string(),
             serde_json::Value::String(input.origin_clock_hash.to_string()),
         );
-        let (resolution_str, resolving_event_hash): (&str, Option<&str>) =
-            match &input.resolution {
-                ClockResolvedResolution::Satisfied {
-                    resolving_event_hash,
-                } => ("satisfied", *resolving_event_hash),
-                ClockResolvedResolution::Elapsed {
-                    resolving_event_hash,
-                } => ("elapsed", *resolving_event_hash),
-                ClockResolvedResolution::Cancelled {
-                    resolving_event_hash,
-                } => ("cancelled", *resolving_event_hash),
-                ClockResolvedResolution::Paused {
-                    resolving_event_hash,
-                } => ("paused", Some(*resolving_event_hash)),
-            };
+        let (resolution_str, resolving_event_hash): (&str, Option<&str>) = match &input.resolution {
+            ClockResolvedResolution::Satisfied {
+                resolving_event_hash,
+            } => ("satisfied", *resolving_event_hash),
+            ClockResolvedResolution::Elapsed {
+                resolving_event_hash,
+            } => ("elapsed", *resolving_event_hash),
+            ClockResolvedResolution::Cancelled {
+                resolving_event_hash,
+            } => ("cancelled", *resolving_event_hash),
+            ClockResolvedResolution::Paused {
+                resolving_event_hash,
+            } => ("paused", Some(*resolving_event_hash)),
+        };
         data.insert(
             "resolution".to_string(),
             serde_json::Value::String(resolution_str.to_string()),

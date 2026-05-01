@@ -39,8 +39,7 @@ fn fixtures_validate_cleanly() {
         };
         // Skip non-kernel JSON (sidecars, etc.). Published fixtures use
         // `$wosWorkflow` at the root; tests and inline docs may use `$wosWorkflow`.
-        let is_kernel_doc =
-            doc.get("$wosWorkflow").is_some() || doc.get("$wosWorkflow").is_some();
+        let is_kernel_doc = doc.get("$wosWorkflow").is_some() || doc.get("$wosWorkflow").is_some();
         if !is_kernel_doc {
             continue;
         }

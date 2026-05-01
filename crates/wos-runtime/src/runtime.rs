@@ -4776,8 +4776,8 @@ mod tests {
     // actors lands in Sub-PR D-3 alongside foreach iteration semantics.
 
     use wos_core::{
-        AgentContext as CoreAgentContext, AgentInvocationError, AgentInvoker,
-        AgentInvokerRegistry, AgentResult, AgentTask, InvokerKind, InvokerSpec,
+        AgentContext as CoreAgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry,
+        AgentResult, AgentTask, InvokerKind, InvokerSpec,
     };
 
     /// Inline test invoker that records what it was asked to do. Independent
@@ -4858,12 +4858,13 @@ mod tests {
     #[test]
     fn runtime_with_agent_invokers_replaces_registry_wholesale() {
         let registry = AgentInvokerRegistry::new()
-            .with(InvokerKind::Stub, Box::new(CountingInvoker { label: "stub" }))
+            .with(
+                InvokerKind::Stub,
+                Box::new(CountingInvoker { label: "stub" }),
+            )
             .with(
                 InvokerKind::Anthropic,
-                Box::new(CountingInvoker {
-                    label: "anthropic",
-                }),
+                Box::new(CountingInvoker { label: "anthropic" }),
             );
         let runtime = runtime_with_kernel(empty_kernel()).with_agent_invokers(registry);
 
@@ -4885,9 +4886,7 @@ mod tests {
             )
             .with_agent_invoker(
                 InvokerKind::Anthropic,
-                Box::new(CountingInvoker {
-                    label: "anthropic",
-                }),
+                Box::new(CountingInvoker { label: "anthropic" }),
             );
 
         // Build an agent declaration with an Anthropic invoker spec.

@@ -6,9 +6,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use std::str::FromStr;
 
 use wos_server_ports::storage::{
-    AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator,
-    InstanceQuery, InstanceRow, IntakeRecordRow, KernelRow, Page, ProvenanceRow, SessionRow,
-    Storage, StorageError, StorageResult, UserRow, LIST_INSTANCES_PAGE_SIZE_MAX,
+    AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator, InstanceQuery,
+    InstanceRow, IntakeRecordRow, KernelRow, LIST_INSTANCES_PAGE_SIZE_MAX, Page, ProvenanceRow,
+    SessionRow, Storage, StorageError, StorageResult, UserRow,
 };
 
 fn se(e: sqlx::Error) -> StorageError {
@@ -37,7 +37,8 @@ pub struct SqliteStorage {
 
 impl SqliteStorage {
     pub async fn connect(url: &str) -> StorageResult<Self> {
-        let opts = SqliteConnectOptions::from_str(url).map_err(se)?
+        let opts = SqliteConnectOptions::from_str(url)
+            .map_err(se)?
             .create_if_missing(true)
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .busy_timeout(std::time::Duration::from_secs(5));
@@ -181,7 +182,9 @@ fn map_delegation(r: &SqliteRow) -> StorageResult<DelegationRow> {
         authority: r.try_get("authority").map_err(se)?,
         legal_instrument: r.try_get("legal_instrument").map_err(se)?,
         start_date: r.try_get::<DateTime<Utc>, _>("start_date").map_err(se)?,
-        end_date: r.try_get::<Option<DateTime<Utc>>, _>("end_date").map_err(se)?,
+        end_date: r
+            .try_get::<Option<DateTime<Utc>>, _>("end_date")
+            .map_err(se)?,
         status: r.try_get("status").map_err(se)?,
     })
 }
@@ -320,7 +323,12 @@ impl Storage for SqliteStorage {
         }
         let count_row = count_q.fetch_one(&self.pool).await.map_err(se)?;
         let total: i64 = count_row.try_get(0).map_err(se)?;
-        let rows = list_q.bind(limit).bind(offset).fetch_all(&self.pool).await.map_err(se)?;
+        let rows = list_q
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(se)?;
         let items: Vec<InstanceRow> = rows.iter().map(map_instance).collect::<Result<_, _>>()?;
 
         Ok(Page {
@@ -393,24 +401,21 @@ impl Storage for SqliteStorage {
     }
 
     async fn list_provenance(&self, instance_id: &str) -> StorageResult<Vec<ProvenanceRow>> {
-        let rows = sqlx::query(
-            "SELECT * FROM provenance WHERE instance_id = ? ORDER BY seq ASC",
-        )
-        .bind(instance_id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(se)?;
+        let rows = sqlx::query("SELECT * FROM provenance WHERE instance_id = ? ORDER BY seq ASC")
+            .bind(instance_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(se)?;
         rows.iter().map(map_provenance).collect()
     }
 
     async fn last_provenance(&self, instance_id: &str) -> StorageResult<Option<ProvenanceRow>> {
-        let row = sqlx::query(
-            "SELECT * FROM provenance WHERE instance_id = ? ORDER BY seq DESC LIMIT 1",
-        )
-        .bind(instance_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(se)?;
+        let row =
+            sqlx::query("SELECT * FROM provenance WHERE instance_id = ? ORDER BY seq DESC LIMIT 1")
+                .bind(instance_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(se)?;
         row.as_ref().map(map_provenance).transpose()
     }
 
@@ -459,14 +464,12 @@ impl Storage for SqliteStorage {
     }
 
     async fn revoke_delegation(&self, workflow_url: &str, id: &str) -> StorageResult<()> {
-        sqlx::query(
-            "UPDATE delegations SET status = 'revoked' WHERE workflow_url = ? AND id = ?",
-        )
-        .bind(workflow_url)
-        .bind(id)
-        .execute(&self.pool)
-        .await
-        .map_err(se)?;
+        sqlx::query("UPDATE delegations SET status = 'revoked' WHERE workflow_url = ? AND id = ?")
+            .bind(workflow_url)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(se)?;
         Ok(())
     }
 
@@ -516,13 +519,11 @@ impl Storage for SqliteStorage {
     }
 
     async fn list_agents(&self, workflow_url: &str) -> StorageResult<Vec<AgentRow>> {
-        let rows = sqlx::query(
-            "SELECT * FROM agents WHERE workflow_url = ? ORDER BY name ASC",
-        )
-        .bind(workflow_url)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(se)?;
+        let rows = sqlx::query("SELECT * FROM agents WHERE workflow_url = ? ORDER BY name ASC")
+            .bind(workflow_url)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(se)?;
         rows.iter().map(map_agent).collect()
     }
 
@@ -556,10 +557,7 @@ impl Storage for SqliteStorage {
         row.as_ref().map(map_identity_fact).transpose()
     }
 
-    async fn list_identity_facts(
-        &self,
-        instance_id: &str,
-    ) -> StorageResult<Vec<IdentityFactRow>> {
+    async fn list_identity_facts(&self, instance_id: &str) -> StorageResult<Vec<IdentityFactRow>> {
         let rows = sqlx::query(
             "SELECT * FROM identity_facts WHERE instance_id = ? ORDER BY created_at ASC",
         )
@@ -570,10 +568,7 @@ impl Storage for SqliteStorage {
         rows.iter().map(map_identity_fact).collect()
     }
 
-    async fn list_assurance_chain(
-        &self,
-        subject_ref: &str,
-    ) -> StorageResult<Vec<IdentityFactRow>> {
+    async fn list_assurance_chain(&self, subject_ref: &str) -> StorageResult<Vec<IdentityFactRow>> {
         let rows = sqlx::query(
             "SELECT * FROM identity_facts WHERE subject_ref = ? ORDER BY created_at ASC",
         )
@@ -596,10 +591,7 @@ impl Storage for SqliteStorage {
         row.as_ref().map(map_inbound_event).transpose()
     }
 
-    async fn insert_inbound_cloud_event(
-        &self,
-        row: &InboundCloudEventRow,
-    ) -> StorageResult<bool> {
+    async fn insert_inbound_cloud_event(&self, row: &InboundCloudEventRow) -> StorageResult<bool> {
         let payload = serde_json::to_string(&row.payload_json)?;
         let result = sqlx::query(
             "INSERT OR IGNORE INTO integration_inbound (cloud_event_id, instance_id, binding, received_at, payload_json)
@@ -621,14 +613,12 @@ impl Storage for SqliteStorage {
         binding: &str,
         intake_id: &str,
     ) -> StorageResult<Option<IntakeRecordRow>> {
-        let row = sqlx::query(
-            "SELECT * FROM intake_records WHERE binding = ? AND intake_id = ?",
-        )
-        .bind(binding)
-        .bind(intake_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(se)?;
+        let row = sqlx::query("SELECT * FROM intake_records WHERE binding = ? AND intake_id = ?")
+            .bind(binding)
+            .bind(intake_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(se)?;
         row.as_ref().map(map_intake_record).transpose()
     }
 
@@ -811,10 +801,7 @@ impl Storage for SqliteStorage {
         Ok(())
     }
 
-    async fn sweep_expired_sessions(
-        &self,
-        now: DateTime<Utc>,
-    ) -> StorageResult<u64> {
+    async fn sweep_expired_sessions(&self, now: DateTime<Utc>) -> StorageResult<u64> {
         let cutoff_unrevoked = now - chrono::Duration::days(7);
         let cutoff_revoked = now - chrono::Duration::days(30);
         let result = sqlx::query(

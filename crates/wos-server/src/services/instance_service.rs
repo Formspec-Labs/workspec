@@ -67,11 +67,7 @@ impl InstanceService {
     /// Flatten active tasks across an instance into `TaskListItem`s.
     pub async fn tasks_for(&self, row: &InstanceRow) -> ApiResult<Vec<TaskListItem>> {
         let instance = Self::parse(row)?;
-        let definition_title = self
-            .bundle
-            .get(&row.definition_url)
-            .await
-            .map(|k| k.title);
+        let definition_title = self.bundle.get(&row.definition_url).await.map(|k| k.title);
         Ok(instance
             .active_tasks
             .iter()

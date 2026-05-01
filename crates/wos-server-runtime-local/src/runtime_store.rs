@@ -116,10 +116,9 @@ impl RuntimeStore for StorageBackedRuntimeStore {
                 let rows_for_mutator = rows.clone();
                 let update_ctx = instance_id.clone();
                 storage
-                    .update_instance_atomic(
-                        &instance_id,
-                        &move |_current| Ok(rows_for_mutator.clone()),
-                    )
+                    .update_instance_atomic(&instance_id, &move |_current| {
+                        Ok(rows_for_mutator.clone())
+                    })
                     .await
                     .map_err(|e| storage_err_with(e, &update_ctx))?;
                 if let Err(e) = audit_sink.append_provenance(&rows).await {
@@ -205,7 +204,10 @@ impl RuntimeStore for StorageBackedRuntimeStore {
                 .await
                 .map_err(|e| storage_err_with(e, &update_ctx))?;
             if !appended_rows_shared.is_empty() {
-                if let Err(e) = audit_sink.append_provenance(appended_rows_shared.as_ref()).await {
+                if let Err(e) = audit_sink
+                    .append_provenance(appended_rows_shared.as_ref())
+                    .await
+                {
                     tracing::warn!(
                         instance_id = %instance_id,
                         error = %e,
@@ -378,7 +380,8 @@ pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
                     }
                 },
                 ReplayValue::Intake(decision) => {
-                    let decision_json = serde_json::to_value(decision).unwrap_or(serde_json::json!({}));
+                    let decision_json =
+                        serde_json::to_value(decision).unwrap_or(serde_json::json!({}));
                     serde_json::json!({
                         "kind": "intake",
                         "decision": decision_json,
@@ -628,7 +631,8 @@ mod tests {
             calls: AtomicUsize::new(0),
         });
         let handle = tokio::runtime::Handle::current();
-        let mut store = StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
+        let mut store =
+            StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
 
         let mut record = RuntimeRecord::new(minimal_case_instance());
         tokio::task::spawn_blocking(move || {
@@ -639,12 +643,14 @@ mod tests {
                 output: serde_json::json!({"ok": true}),
                 recorded_at: "2026-01-01T00:00:01Z".into(),
             });
-            record.provenance_log.push(ProvenanceRecord::state_transition(
-                "intake",
-                "review",
-                "submit",
-                Some("sys"),
-            ));
+            record
+                .provenance_log
+                .push(ProvenanceRecord::state_transition(
+                    "intake",
+                    "review",
+                    "submit",
+                    Some("sys"),
+                ));
             store
                 .save_record(record.clone())
                 .expect("save record should not fail");
@@ -676,7 +682,10 @@ mod tests {
         let decoded = aux_from_json(&aux);
         assert_eq!(decoded.step_results.len(), 1);
         assert_eq!(decoded.step_results[0].service_ref, "service.ref");
-        assert_eq!(decoded.step_results[0].idempotency_key.as_deref(), Some("idempotency-1"));
+        assert_eq!(
+            decoded.step_results[0].idempotency_key.as_deref(),
+            Some("idempotency-1")
+        );
         assert_eq!(decoded.step_results[0].output["value"], 7);
     }
 
@@ -910,12 +919,14 @@ mod tests {
             StorageBackedRuntimeStore::new(storage.clone(), provenance, audit.clone(), handle);
 
         let mut record = RuntimeRecord::new(minimal_case_instance());
-        record.provenance_log.push(ProvenanceRecord::state_transition(
-            "intake",
-            "review",
-            "submit",
-            Some("sys"),
-        ));
+        record
+            .provenance_log
+            .push(ProvenanceRecord::state_transition(
+                "intake",
+                "review",
+                "submit",
+                Some("sys"),
+            ));
 
         let storage_for_check = storage.clone();
         let audit_for_check = audit.clone();

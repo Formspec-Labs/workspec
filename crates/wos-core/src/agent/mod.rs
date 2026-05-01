@@ -242,7 +242,9 @@ pub enum AgentInvocationError {
 
     /// The stub adapter has no canned response for the
     /// `(capability_id, invocation_index)` pair the runtime requested.
-    #[error("stub exhausted: no canned response for capability='{capability_id}' index={invocation_index}")]
+    #[error(
+        "stub exhausted: no canned response for capability='{capability_id}' index={invocation_index}"
+    )]
     StubExhausted {
         /// Capability that was requested.
         capability_id: String,
@@ -333,22 +335,14 @@ impl AgentInvokerRegistry {
     /// registration for the same kind (deployment authors typically wire each
     /// kind exactly once at startup; replacement is allowed for test
     /// scenarios).
-    pub fn register(
-        &mut self,
-        kind: InvokerKind,
-        invoker: Box<dyn AgentInvoker + Send + Sync>,
-    ) {
+    pub fn register(&mut self, kind: InvokerKind, invoker: Box<dyn AgentInvoker + Send + Sync>) {
         self.invokers.insert(kind, invoker);
     }
 
     /// Builder-form registration. Useful when constructing a registry
     /// inline for runtime DI (`AgentInvokerRegistry::new().with(...)`).
     #[must_use]
-    pub fn with(
-        mut self,
-        kind: InvokerKind,
-        invoker: Box<dyn AgentInvoker + Send + Sync>,
-    ) -> Self {
+    pub fn with(mut self, kind: InvokerKind, invoker: Box<dyn AgentInvoker + Send + Sync>) -> Self {
         self.register(kind, invoker);
         self
     }
@@ -357,7 +351,9 @@ impl AgentInvokerRegistry {
     /// no adapter is registered for this kind.
     #[must_use]
     pub fn lookup(&self, spec: &InvokerSpec) -> Option<&(dyn AgentInvoker + Send + Sync)> {
-        self.invokers.get(&InvokerKind::from(spec)).map(|b| b.as_ref())
+        self.invokers
+            .get(&InvokerKind::from(spec))
+            .map(|b| b.as_ref())
     }
 
     /// Lookup by `InvokerKind` directly, when the caller already has the
@@ -409,7 +405,9 @@ mod tests {
              with model passed through"
         );
         let back: InvokerSpec = serde_json::from_value(json).unwrap();
-        assert!(matches!(back, InvokerSpec::Anthropic { ref model, .. } if model == "claude-opus-4-7"));
+        assert!(
+            matches!(back, InvokerSpec::Anthropic { ref model, .. } if model == "claude-opus-4-7")
+        );
     }
 
     #[test]
@@ -546,9 +544,7 @@ mod tests {
         );
         registry.register(
             InvokerKind::Anthropic,
-            Box::new(RecordingInvoker {
-                label: "anthropic",
-            }),
+            Box::new(RecordingInvoker { label: "anthropic" }),
         );
 
         let stub_spec = InvokerSpec::Stub { responses: vec![] };
@@ -617,8 +613,10 @@ mod tests {
                 Box::new(RecordingInvoker { label: "mcp" }),
             );
         assert!(!registry.is_empty());
-        let mut kinds: Vec<&'static str> =
-            registry.registered_kinds().map(InvokerKind::as_str).collect();
+        let mut kinds: Vec<&'static str> = registry
+            .registered_kinds()
+            .map(InvokerKind::as_str)
+            .collect();
         kinds.sort();
         assert_eq!(kinds, vec!["mcp", "stub"]);
     }

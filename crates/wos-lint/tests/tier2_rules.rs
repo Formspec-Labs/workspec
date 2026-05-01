@@ -9,7 +9,7 @@
 // functions through the public `lint_document()` for T1, plus we build
 // a temporary directory to test `lint_project()` end-to-end.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use std::io::Write;
 use std::path::PathBuf;
 use wos_lint::LintSeverity;
@@ -37,14 +37,209 @@ fn path_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<St
 /// Write multiple WOS documents to a temporary directory and run `lint_project`.
 fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::LintDiagnostic> {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
-    for (filename, doc) in &docs {
+    for (filename, doc) in normalize_legacy_project_docs(docs) {
         let path = dir.path().join(filename);
         let mut file = std::fs::File::create(&path).expect("failed to create file");
-        let json_str = serde_json::to_string_pretty(doc).expect("serialization failed");
+        let json_str = serde_json::to_string_pretty(&doc).expect("serialization failed");
         file.write_all(json_str.as_bytes())
             .expect("failed to write");
     }
     wos_lint::lint_project(dir.path()).expect("lint_project returned Err")
+}
+
+/// Fold pre-ADR-0076 standalone test snippets into the merged `$wosWorkflow`.
+///
+/// The production loader no longer recognizes standalone governance / AI /
+/// advanced author-time documents. These tests still author small legacy-shaped
+/// snippets because that keeps each rule case cold-readable. Normalize the
+/// snippets at the test boundary so the exercised path is the current embedded
+/// dispatcher, not obsolete marker plumbing.
+fn normalize_legacy_project_docs(docs: Vec<(&str, Value)>) -> Vec<(String, Value)> {
+    let mut primary_index = docs.iter().position(|(_, doc)| {
+        doc.get("$wosWorkflow").is_some()
+            && doc.get("lifecycle").is_some()
+            && doc.get("targetWorkflow").is_none()
+    });
+
+    if primary_index.is_none() {
+        primary_index = docs.iter().position(|(_, doc)| {
+            doc.get("$wosWorkflow").is_some()
+                && doc.get("targetWorkflow").is_some()
+                && (doc.get("governance").is_some()
+                    || doc.get("dueProcess").is_some()
+                    || doc.get("tasks").is_some()
+                    || doc.get("holdPolicies").is_some())
+        });
+    }
+
+    let mut primary = primary_index.map(|i| {
+        let mut value = docs[i].1.clone();
+        if value.get("lifecycle").is_none() {
+            let workflow_url = value
+                .get("targetWorkflow")
+                .and_then(Value::as_str)
+                .unwrap_or("https://example.com/workflow/test")
+                .to_string();
+            let gov = embedded_block_from_legacy_doc(&value, &workflow_url);
+            value = json!({
+                "$wosWorkflow": "1.0",
+                "url": workflow_url,
+                "governance": gov
+            });
+        }
+        value
+    });
+
+    let mut out: Vec<(String, Value)> = Vec::new();
+    for (i, (filename, doc)) in docs.into_iter().enumerate() {
+        if Some(i) == primary_index {
+            continue;
+        }
+        if filename.contains("verification-report") || doc.get("results").is_some() {
+            let mut provenance_log = doc;
+            if let Some(obj) = provenance_log.as_object_mut() {
+                obj.remove("$wosWorkflow");
+                obj.insert("$wosProvenanceLog".to_string(), json!("1.0"));
+            }
+            out.push((filename.to_string(), provenance_log));
+            continue;
+        }
+        if doc.get("$wosDelivery").is_some()
+            || doc.get("$wosOntologyAlignment").is_some()
+            || doc.get("$wosCaseInstance").is_some()
+            || doc.get("$wosProvenanceLog").is_some()
+            || doc.get("$wosTooling").is_some()
+        {
+            out.push((filename.to_string(), doc));
+            continue;
+        }
+        if doc.get("$wosWorkflow").is_some() && doc.get("lifecycle").is_none() {
+            let workflow = primary.get_or_insert_with(|| {
+                let workflow_url = doc
+                    .get("targetWorkflow")
+                    .and_then(Value::as_str)
+                    .unwrap_or("https://example.com/workflow/test")
+                    .to_string();
+                json!({
+                    "$wosWorkflow": "1.0",
+                    "url": workflow_url
+                })
+            });
+            merge_legacy_doc_into_workflow(workflow, filename, &doc);
+            continue;
+        }
+        out.push((filename.to_string(), doc));
+    }
+
+    if let Some(workflow) = primary {
+        out.insert(0, ("kernel.json".to_string(), workflow));
+    }
+    out
+}
+
+fn merge_legacy_doc_into_workflow(workflow: &mut Value, filename: &str, doc: &Value) {
+    let workflow_url = workflow
+        .get("url")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    if filename.contains("advanced") || doc.get("tools").is_some() {
+        merge_workflow_object_field(
+            workflow,
+            "advanced",
+            embedded_block_from_legacy_doc(doc, &workflow_url),
+        );
+        return;
+    }
+
+    if filename.contains("drift-monitor") || doc.get("deploymentSequence").is_some() {
+        merge_workflow_object_field(
+            workflow,
+            "advanced",
+            embedded_block_from_legacy_doc(doc, &workflow_url),
+        );
+        return;
+    }
+
+    if filename.contains("ai") || doc.get("agents").is_some() || doc.get("aiOversight").is_some() {
+        if let Some(obj) = workflow.as_object_mut() {
+            for field in [
+                "agents",
+                "aiOversight",
+                "fallbackChain",
+                "narrativeProvenance",
+                "provenance",
+                "agentDisclosure",
+                "cascadingInvocations",
+            ] {
+                if let Some(value) = doc.get(field) {
+                    let value = if field == "agents" {
+                        normalize_legacy_agents(value)
+                    } else {
+                        value.clone()
+                    };
+                    obj.insert(field.to_string(), value);
+                }
+            }
+        }
+        return;
+    }
+
+    merge_workflow_object_field(
+        workflow,
+        "governance",
+        embedded_block_from_legacy_doc(doc, &workflow_url),
+    );
+}
+
+fn merge_workflow_object_field(workflow: &mut Value, field: &str, value: Value) {
+    let Some(incoming) = value.as_object() else {
+        workflow[field] = value;
+        return;
+    };
+    if !workflow.get(field).is_some_and(Value::is_object) {
+        workflow[field] = json!({});
+    }
+    let Some(existing) = workflow.get_mut(field).and_then(Value::as_object_mut) else {
+        return;
+    };
+    for (key, child) in incoming {
+        existing.insert(key.clone(), child.clone());
+    }
+}
+
+fn normalize_legacy_agents(value: &Value) -> Value {
+    if let Some(map) = value.as_object() {
+        Value::Array(
+            map.iter()
+                .map(|(id, agent)| {
+                    let mut agent = agent.clone();
+                    if let Some(obj) = agent.as_object_mut() {
+                        obj.entry("id").or_insert_with(|| Value::String(id.clone()));
+                    }
+                    agent
+                })
+                .collect(),
+        )
+    } else {
+        value.clone()
+    }
+}
+
+fn embedded_block_from_legacy_doc(doc: &Value, workflow_url: &str) -> Value {
+    let mut block = doc.clone();
+    if let Some(obj) = block.as_object_mut() {
+        obj.remove("$wosWorkflow");
+        if obj
+            .get("targetWorkflow")
+            .and_then(Value::as_str)
+            .is_some_and(|target| target == workflow_url)
+        {
+            obj.remove("targetWorkflow");
+        }
+    }
+    block
 }
 
 /// Minimal valid kernel document for cross-doc tests.

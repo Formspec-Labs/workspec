@@ -1,7 +1,7 @@
 use axum::Json;
+use axum::Router;
 use axum::extract::State;
 use axum::routing::get;
-use axum::Router;
 
 use crate::AppState;
 use crate::domain::{

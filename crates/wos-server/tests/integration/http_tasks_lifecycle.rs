@@ -456,9 +456,7 @@ async fn task_submit_response_returns_completed_view() {
         "must not emit snake_case `emitted_event`; use `emittedEvent` when present. body={json}"
     );
     assert!(
-        json["artifactId"]
-            .as_str()
-            .is_some_and(|s| !s.is_empty()),
+        json["artifactId"].as_str().is_some_and(|s| !s.is_empty()),
         "expected non-empty artifactId in Completed view: {json}"
     );
 }

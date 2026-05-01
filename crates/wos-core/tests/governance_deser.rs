@@ -23,10 +23,13 @@ fn load_fixture(name: &str) -> GovernanceDocument {
         Some("1.0"),
         "fixture {name} must carry $wosWorkflow envelope per ADR 0076 D-1"
     );
-    let block = envelope
+    let mut block = envelope
         .get("governance")
         .cloned()
         .unwrap_or_else(|| panic!("fixture {name} missing governance embedded block"));
+    if let (Some(map), Some(target)) = (block.as_object_mut(), envelope.get("url").cloned()) {
+        map.entry("targetWorkflow".to_string()).or_insert(target);
+    }
     serde_json::from_value(block)
         .unwrap_or_else(|e| panic!("failed to deserialize governance from {name}: {e}"))
 }

@@ -152,8 +152,7 @@ fn signature_profile_target_workflow_mismatch_is_flagged() {
     // is to override targetWorkflow inside the signature block — the
     // dispatcher's per-key copy lets a hand-set `targetWorkflow` survive.
     let mut workflow = workflow_with_signature();
-    workflow["signature"]["targetWorkflow"] =
-        serde_json::json!({ "url": "urn:test:wrong" });
+    workflow["signature"]["targetWorkflow"] = serde_json::json!({ "url": "urn:test:wrong" });
     let diagnostics = lint_project_with_docs(vec![("workflow.json", workflow)]);
     assert!(
         has_rule(&diagnostics, "SIG-001"),
@@ -175,8 +174,7 @@ fn signature_profile_system_actor_is_flagged() {
 #[test]
 fn signature_profile_bad_step_references_are_flagged() {
     let mut workflow = workflow_with_signature();
-    workflow["signature"]["signingFlow"]["steps"][0]["roleId"] =
-        serde_json::json!("missingRole");
+    workflow["signature"]["signingFlow"]["steps"][0]["roleId"] = serde_json::json!("missingRole");
     workflow["signature"]["signingFlow"]["steps"][0]["documentId"] =
         serde_json::json!("missingDocument");
     workflow["signature"]["signingFlow"]["steps"][0]["dependsOn"] =

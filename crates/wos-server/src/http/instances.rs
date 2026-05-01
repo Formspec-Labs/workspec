@@ -1,9 +1,9 @@
 use axum::Json;
+use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
-use axum::Router;
 use serde::Deserialize;
 use wos_runtime::runtime::CreateInstanceRequest;
 
@@ -57,7 +57,11 @@ async fn explain(
     Path(id): Path<String>,
     Query(q): Query<ExplainQuery>,
 ) -> ApiResult<Json<ExplainResponse>> {
-    let _instance = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
+    let _instance = s
+        .storage
+        .get_instance(&id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
 
     let prov_responses = s.services.provenance.list(&id).await?;
     let records: Vec<wos_core::provenance::ProvenanceRecord> =
@@ -76,12 +80,8 @@ async fn explain(
         .unwrap_or_else(|| vec!["adverse-decision".into()]);
 
     let assembled_at = chrono::Utc::now().to_rfc3339();
-    let explanation = wos_core::explain::assemble_explanation(
-        &records,
-        &q.transition_id,
-        &tags,
-        &assembled_at,
-    );
+    let explanation =
+        wos_core::explain::assemble_explanation(&records, &q.transition_id, &tags, &assembled_at);
 
     let explanation_value = serde_json::to_value(&explanation)
         .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -245,8 +245,7 @@ async fn export_provenance(
     Query(q): Query<ExportQuery>,
 ) -> ApiResult<impl IntoResponse> {
     let format = q.format.unwrap_or(ExportFormat::ProvO);
-    let payload =
-        SemanticService::export(&s.services.provenance, &id, format, q.namespace).await?;
+    let payload = SemanticService::export(&s.services.provenance, &id, format, q.namespace).await?;
     let ct = payload.content_type().to_string();
     let body = payload.body();
     let mut headers = HeaderMap::new();
@@ -288,7 +287,11 @@ async fn submit_event(
     }
 
     // Capture previous configuration before we touch the runtime.
-    let before = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
+    let before = s
+        .storage
+        .get_instance(&id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let before_instance: wos_core::instance::CaseInstance =
         serde_json::from_value(before.instance_json.clone())
             .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -302,17 +305,14 @@ async fn submit_event(
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "idempotencyToken": req.idempotency_token,
     });
-    s.runtime
-        .enqueue_event(&id, envelope)
-        .await
-        ?;
-    let drain = s
-        .runtime
-        .drain_once(&id)
-        .await
-        ?;
+    s.runtime.enqueue_event(&id, envelope).await?;
+    let drain = s.runtime.drain_once(&id).await?;
 
-    let after = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
+    let after = s
+        .storage
+        .get_instance(&id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let after_instance: wos_core::instance::CaseInstance =
         serde_json::from_value(after.instance_json.clone())
             .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -335,11 +335,7 @@ async fn submit_event(
     let result = EvaluationResultView {
         previous_configuration,
         new_configuration,
-        events_fired: drain
-            .transitions
-            .iter()
-            .map(|t| t.event.clone())
-            .collect(),
+        events_fired: drain.transitions.iter().map(|t| t.event.clone()).collect(),
         head_record,
         case_state_mutations: mutations,
     };
@@ -361,11 +357,7 @@ async fn drain(
     _: RequireRole<Supervisor>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<DrainStepSummary>>> {
-    let results = s
-        .runtime
-        .drain_until_idle(&id)
-        .await
-        ?;
+    let results = s.runtime.drain_until_idle(&id).await?;
     Ok(Json(
         results
             .into_iter()
@@ -439,9 +431,7 @@ async fn create_hold(
         hold_state: req.hold_state.or(default_state),
     };
     let idx = HoldService::append(&s.storage, &id, hold).await?;
-    Ok(Json(
-        serde_json::json!({ "ok": true, "holdIndex": idx }),
-    ))
+    Ok(Json(serde_json::json!({ "ok": true, "holdIndex": idx })))
 }
 
 async fn release_hold(

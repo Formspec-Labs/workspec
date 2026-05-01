@@ -1,13 +1,13 @@
 //! Runtime adapter traits shared across runtime backends.
 // Rust guideline compliant 2026-02-21
 
+use crate::storage::ProvenanceRow;
 use async_trait::async_trait;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{ProvenanceSigner, ReportRenderer};
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
-use crate::storage::ProvenanceRow;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RuntimeAdapterError {
@@ -21,7 +21,8 @@ pub type RuntimeResult<T> = Result<T, RuntimeAdapterError>;
 pub trait RuntimeOps: Send + Sync + 'static {
     async fn create_instance(&self, request: CreateInstanceRequest) -> RuntimeResult<CaseInstance>;
     async fn load_instance(&self, instance_id: &str) -> RuntimeResult<CaseInstance>;
-    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value) -> RuntimeResult<()>;
+    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value)
+    -> RuntimeResult<()>;
     async fn drain_once(&self, instance_id: &str) -> RuntimeResult<DrainOnceResult>;
     async fn drain_until_idle(&self, instance_id: &str) -> RuntimeResult<Vec<DrainOnceResult>>;
     async fn persist_task_draft(
@@ -71,7 +72,10 @@ pub trait TimerCoord: Send + Sync + 'static {
 #[async_trait]
 pub trait BundleResolverPort: Send + Sync + 'static {
     async fn resolve_kernel_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
-    async fn resolve_governance_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
+    async fn resolve_governance_bundle(
+        &self,
+        workflow_url: &str,
+    ) -> RuntimeResult<serde_json::Value>;
     async fn resolve_sidecar_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
 }
 

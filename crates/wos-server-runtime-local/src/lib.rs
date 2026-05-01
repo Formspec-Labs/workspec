@@ -8,9 +8,13 @@ use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{ProvenanceSigner, ReportRenderer};
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, WosRuntime};
-use wos_runtime::{BindingRegistry, PersistDraftResult, RuntimeError, SystemClock, TaskSubmissionResult};
+use wos_runtime::{
+    BindingRegistry, PersistDraftResult, RuntimeError, SystemClock, TaskSubmissionResult,
+};
 use wos_server_ports::audit::{AuditSink, NoopAuditSink};
-use wos_server_ports::runtime::{RuntimeAdapterError, RuntimeOps, RuntimeResult, SeamAccess, TimerCoord};
+use wos_server_ports::runtime::{
+    RuntimeAdapterError, RuntimeOps, RuntimeResult, SeamAccess, TimerCoord,
+};
 use wos_server_ports::storage::StorageHandle;
 
 pub mod access;
@@ -194,12 +198,7 @@ impl AppRuntime {
         let idempotency_token = idempotency_token.map(str::to_string);
         tokio::task::spawn_blocking(move || {
             let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
-            guard.persist_task_draft(
-                &task_id,
-                response,
-                &actor_id,
-                idempotency_token.as_deref(),
-            )
+            guard.persist_task_draft(&task_id, response, &actor_id, idempotency_token.as_deref())
         })
         .await
         .expect("wos-runtime blocking task panicked")
@@ -218,12 +217,7 @@ impl AppRuntime {
         let idempotency_token = idempotency_token.map(str::to_string);
         tokio::task::spawn_blocking(move || {
             let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
-            guard.submit_task_response(
-                &task_id,
-                response,
-                &actor_id,
-                idempotency_token.as_deref(),
-            )
+            guard.submit_task_response(&task_id, response, &actor_id, idempotency_token.as_deref())
         })
         .await
         .expect("wos-runtime blocking task panicked")
@@ -276,7 +270,11 @@ impl RuntimeOps for AppRuntime {
             .map_err(as_runtime_error)
     }
 
-    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value) -> RuntimeResult<()> {
+    async fn enqueue_event(
+        &self,
+        instance_id: &str,
+        event: serde_json::Value,
+    ) -> RuntimeResult<()> {
         AppRuntime::enqueue_event(self, instance_id, event)
             .await
             .map_err(as_runtime_error)

@@ -64,7 +64,8 @@ fn setup_tempdir() -> TempDir {
     });
     std::fs::create_dir_all(root.join("notification-template")).unwrap();
     std::fs::write(
-        root.join("notification-template").join(format!("{SLUG}.json")),
+        root.join("notification-template")
+            .join(format!("{SLUG}.json")),
         serde_json::to_vec_pretty(&tmpl).unwrap(),
     )
     .unwrap();
@@ -95,7 +96,9 @@ async fn adverse_notice_render_joins_template_with_due_process() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/governance/{enc}/notices/adverse-decision/render"))
+                .uri(format!(
+                    "/api/governance/{enc}/notices/adverse-decision/render"
+                ))
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({ "context": { "caseId": "CASE-001" } }).to_string(),
@@ -154,7 +157,9 @@ async fn adverse_notice_different_template_same_due_process() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/governance/{enc}/notices/no-due-process/render"))
+                .uri(format!(
+                    "/api/governance/{enc}/notices/no-due-process/render"
+                ))
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({ "context": { "caseId": "CASE-002" } }).to_string(),
@@ -190,9 +195,7 @@ async fn adverse_notice_unknown_template_returns_404() {
                 .method("POST")
                 .uri(format!("/api/governance/{enc}/notices/nonexistent/render"))
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({ "context": {} }).to_string(),
-                ))
+                .body(Body::from(serde_json::json!({ "context": {} }).to_string()))
                 .unwrap(),
         )
         .await
@@ -211,9 +214,7 @@ async fn adverse_notice_unknown_workflow_returns_404() {
                 .method("POST")
                 .uri("/api/governance/urn%3Awos%3Aworkflow%3Aghost%3A1/notices/any/render")
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({ "context": {} }).to_string(),
-                ))
+                .body(Body::from(serde_json::json!({ "context": {} }).to_string()))
                 .unwrap(),
         )
         .await

@@ -6,21 +6,19 @@ use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 use wos_server::http;
 
-use crate::{harness, slice_b};
 use crate::harness::{
     bring_up, bring_up_with_cfg, make_instance_row, seed_instance_with_one_provenance, stub_config,
 };
-use slice_b::{
-    int_consume_001_fixture_path, slice_b_tempdir, slice_b_workflow_path_encoded,
-};
+use crate::{harness, slice_b};
+use slice_b::{int_consume_001_fixture_path, slice_b_tempdir, slice_b_workflow_path_encoded};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn conformance_fixture_int_consume_happy_path() {
     let state = bring_up().await;
     let app = http::router(state);
     let path = int_consume_001_fixture_path();
-    let raw = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let raw =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let fixture: serde_json::Value = serde_json::from_str(&raw).unwrap();
     let base_dir = path
         .parent()
@@ -127,9 +125,17 @@ async fn calendar_compute_deadline_happy_path_slice_b() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    for key in ["deadline", "from", "duration", "calendarUrl", "calendarTimezone"] {
+    for key in [
+        "deadline",
+        "from",
+        "duration",
+        "calendarUrl",
+        "calendarTimezone",
+    ] {
         assert!(
             v.get(key).is_some(),
             "compute-deadline response missing `{key}`: {v}"
@@ -184,11 +190,15 @@ async fn notifications_render_happy_path_slice_b() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v.get("templateId"), Some(&serde_json::json!("notice")));
     assert!(
-        v.get("body").and_then(|b| b.as_str()).is_some_and(|s| s.contains("Ada")),
+        v.get("body")
+            .and_then(|b| b.as_str())
+            .is_some_and(|s| s.contains("Ada")),
         "expected interpolated body, got {v}"
     );
 }
@@ -233,7 +243,9 @@ async fn integration_profile_happy_path_slice_b() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert!(
         v.get("bindings").is_some(),
@@ -274,7 +286,9 @@ async fn deontic_violations_returns_json_array_for_instance() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert!(
         v.is_array(),
@@ -303,7 +317,9 @@ async fn assurance_identity_facts_list_returns_array() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert!(v.is_array(), "identity-facts must return a JSON array: {v}");
 }

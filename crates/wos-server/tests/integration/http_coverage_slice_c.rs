@@ -88,7 +88,8 @@ fn setup_tempdir() -> tempfile::TempDir {
     });
     std::fs::create_dir_all(root.join("integration-profile")).unwrap();
     std::fs::write(
-        root.join("integration-profile").join(format!("{SLUG}.json")),
+        root.join("integration-profile")
+            .join(format!("{SLUG}.json")),
         serde_json::to_vec_pretty(&ip).unwrap(),
     )
     .unwrap();
@@ -197,12 +198,7 @@ async fn bring_up_with_fixtures() -> (tempfile::TempDir, AppState) {
     (tmp, state)
 }
 
-
-async fn start_one_shot_http_server(
-    status_line: &str,
-    content_type: &str,
-    body: &str,
-) -> String {
+async fn start_one_shot_http_server(status_line: &str, content_type: &str, body: &str) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("local addr");
     let status_line = status_line.to_string();
@@ -250,7 +246,9 @@ async fn verify_returns_inconclusive_for_known_workflow() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["results"][0]["constraintRef"], "c1");
     assert_eq!(v["results"][0]["result"], "inconclusive");
@@ -269,7 +267,8 @@ async fn verify_unknown_workflow_returns_404() {
                 .uri("/api/verification/verify")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    serde_json::json!({ "workflowUrl": "urn:wos:workflow:ghost:1.0.0" }).to_string(),
+                    serde_json::json!({ "workflowUrl": "urn:wos:workflow:ghost:1.0.0" })
+                        .to_string(),
                 ))
                 .unwrap(),
         )
@@ -296,7 +295,9 @@ async fn constraint_zones_returns_zones_for_workflow() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let zones = v.as_array().unwrap();
     assert_eq!(zones.len(), 1);
@@ -330,7 +331,9 @@ async fn valid_actions_in_zone_returns_stubbed_activities() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["zoneId"], "zone-a");
     assert!(v["validActions"].as_array().unwrap().len() >= 1);
@@ -365,7 +368,9 @@ async fn equity_evaluate_requires_supervisor_jwt() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["workflowUrl"], WORKFLOW_URL);
     assert!(v["groups"].is_array());
@@ -417,13 +422,17 @@ async fn integration_invoke_echoes_binding() {
                 .uri(format!("/api/integration/{enc}/invoke/adjudicate"))
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {adj_token}"))
-                .body(Body::from(serde_json::json!({ "caseData": "test" }).to_string()))
+                .body(Body::from(
+                    serde_json::json!({ "caseData": "test" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["binding"], "adjudicate");
     assert_eq!(v["output"]["status"], "accepted");
@@ -455,7 +464,6 @@ async fn integration_invoke_rejects_anonymous() {
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn integration_invoke_http_dispatch_success() {
     let tmp = setup_tempdir();
@@ -473,14 +481,17 @@ async fn integration_invoke_http_dispatch_success() {
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {adj_token}"))
                 .body(Body::from(
-                    serde_json::json!({ "url": url, "method": "POST", "body": {"x": 1} }).to_string(),
+                    serde_json::json!({ "url": url, "method": "POST", "body": {"x": 1} })
+                        .to_string(),
                 ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["output"]["status"], "dispatched");
     assert_eq!(v["output"]["httpStatus"], 200);
@@ -503,7 +514,8 @@ async fn integration_invoke_http_invalid_method_returns_400() {
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {adj_token}"))
                 .body(Body::from(
-                    serde_json::json!({ "url": "http://127.0.0.1:9", "method": "NOT A METHOD" }).to_string(),
+                    serde_json::json!({ "url": "http://127.0.0.1:9", "method": "NOT A METHOD" })
+                        .to_string(),
                 ))
                 .unwrap(),
         )
@@ -528,7 +540,8 @@ async fn integration_invoke_http_network_failure_returns_503() {
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {adj_token}"))
                 .body(Body::from(
-                    serde_json::json!({ "url": "http://127.0.0.1:1/fail", "method": "GET" }).to_string(),
+                    serde_json::json!({ "url": "http://127.0.0.1:1/fail", "method": "GET" })
+                        .to_string(),
                 ))
                 .unwrap(),
         )
@@ -561,7 +574,9 @@ async fn integration_invoke_http_non_json_body_falls_back_to_empty_payload() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v["output"]["status"], "dispatched");
     assert_eq!(v["output"]["payload"], serde_json::json!({}));
@@ -607,7 +622,9 @@ async fn assurance_record_and_upgrade_round_trip() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let fact: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(fact["subjectRef"], "sub-001");
     assert_eq!(fact["assuranceLevel"], "l1");
@@ -621,7 +638,9 @@ async fn assurance_record_and_upgrade_round_trip() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/instances/{iid_enc}/identity-facts/{fact_id_enc}/upgrade"))
+                .uri(format!(
+                    "/api/instances/{iid_enc}/identity-facts/{fact_id_enc}/upgrade"
+                ))
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {sup_token}"))
                 .body(Body::from(
@@ -636,7 +655,9 @@ async fn assurance_record_and_upgrade_round_trip() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let upgraded: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(upgraded["assuranceLevel"], "l3");
     assert_eq!(upgraded["upgradedFrom"], fact_id);
@@ -652,7 +673,9 @@ async fn assurance_record_and_upgrade_round_trip() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let chain: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(chain["facts"].as_array().unwrap().len(), 2);
     assert!(chain["chainValid"].as_bool().unwrap());

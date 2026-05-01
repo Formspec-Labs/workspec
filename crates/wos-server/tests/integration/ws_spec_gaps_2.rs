@@ -11,8 +11,8 @@ use chrono::Utc;
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
-use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 use wos_server::storage::{IdentityFactRow, InstanceRow, SqliteStorage, Storage, UserRow};
+use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 
 async fn test_app_state() -> AppState {
     let store = Arc::new(
@@ -98,9 +98,7 @@ fn app(state: AppState) -> axum::Router {
 }
 
 async fn body_str(res: axum::response::Response) -> String {
-    let bytes = axum::body::to_bytes(res.into_body(), 16384)
-        .await
-        .unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 16384).await.unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
@@ -495,10 +493,7 @@ async fn lifecycle_activation_blocked_when_calibration_expired() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let body = body_str(res).await;
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(json["message"]
-        .as_str()
-        .unwrap()
-        .contains("calibration"));
+    assert!(json["message"].as_str().unwrap().contains("calibration"));
 }
 
 // ── WS-013: EvalService parse-failure surface ─────────────────────────

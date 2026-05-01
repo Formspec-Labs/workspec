@@ -48,7 +48,9 @@ async fn lint_document_happy_path() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     // LintResult serialises as `{ isValid, diagnostics: [...] }`. The current
     // handler always returns a `diagnostics` array (possibly empty).
@@ -84,9 +86,15 @@ async fn lint_document_validation_failure() {
         .unwrap();
 
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(status, StatusCode::OK, "lint parse-failure path must respond 200: {v}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "lint parse-failure path must respond 200: {v}"
+    );
     assert_eq!(
         v.get("isValid"),
         Some(&serde_json::Value::Bool(false)),
@@ -159,9 +167,11 @@ async fn provenance_export_prov_o_returns_jsonld() {
         ct, "application/ld+json",
         "PROV-O export must serve content-type=application/ld+json, got `{ct}`"
     );
-    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&bytes)
-        .expect("PROV-O export body must be valid JSON-LD JSON");
+    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("PROV-O export body must be valid JSON-LD JSON");
     let obj = v
         .as_object()
         .expect("PROV-O export must be a JSON object (`ProvODocument`)");
@@ -200,7 +210,9 @@ async fn provenance_export_xes_returns_xml() {
         ct, "application/xml",
         "XES export must serve content-type=application/xml, got `{ct}`"
     );
-    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024)
+        .await
+        .unwrap();
     let body = std::str::from_utf8(&bytes).expect("XES body must be UTF-8");
     // XES is XML — the serializer emits a `<log>` root, optionally preceded
     // by `<?xml ...?>`. Pin both prologues so a future serialiser change
@@ -240,9 +252,11 @@ async fn provenance_export_ocel_returns_json() {
         ct, "application/json",
         "OCEL export must serve content-type=application/json, got `{ct}`"
     );
-    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&bytes)
-        .expect("OCEL export body must be valid JSON");
+    let bytes = axum::body::to_bytes(res.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("OCEL export body must be valid JSON");
     let obj = v.as_object().expect("OCEL document must be a JSON object");
     // OCEL 2.0 top-level shape — see `wos-export::ocel::export`. All four
     // arrays are emitted even when the log is small; pinning the keys
@@ -327,7 +341,9 @@ async fn dashboard_metrics_returns_shape() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let obj = v
         .as_object()

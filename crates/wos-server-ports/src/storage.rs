@@ -70,7 +70,9 @@ impl InstanceRow {
     }
 
     pub fn governance_state(&self) -> Option<&serde_json::Value> {
-        self.instance_json.get("governanceState").filter(|v| !v.is_null())
+        self.instance_json
+            .get("governanceState")
+            .filter(|v| !v.is_null())
     }
 }
 
@@ -273,7 +275,8 @@ pub trait Storage: Send + Sync + 'static {
     async fn get_user(&self, id: &str) -> StorageResult<Option<UserRow>>;
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()>;
     async fn bump_user_auth_epoch(&self, user_id: &str) -> StorageResult<()>;
-    async fn set_user_password_hash(&self, user_id: &str, password_hash: &str) -> StorageResult<()>;
+    async fn set_user_password_hash(&self, user_id: &str, password_hash: &str)
+    -> StorageResult<()>;
     async fn upsert_session(&self, row: &SessionRow) -> StorageResult<()>;
     async fn revoke_session(&self, jti: &str) -> StorageResult<()>;
     async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()>;

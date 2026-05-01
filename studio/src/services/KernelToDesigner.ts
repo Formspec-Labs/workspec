@@ -1,13 +1,16 @@
-import type { WOSKernelDocument, State, Transition, Action as WosAction, Region } from '../types/wos/kernel';
+import type {
+  WOSKernelDocument,
+  State,
+  Transition,
+  Action as WosAction,
+  Region,
+} from '../types/wos/kernel';
+import { validateTransitionEventPayload } from './wos-kernel-validator';
 
 /** Wire value for transitions with no `event` (guard-only / continuous rescan). */
 const DESIGNER_NO_EVENT_TRIGGER = '__wos_no_event__';
 
-/**
- * Placeholder `TransitionEventError.code` when a designer connection used
- * the bare kernel dispatch label `$error` with no typed payload (Kernel §4.10).
- */
-const LEGACY_BARE_ERROR_CODE = 'wos.designer.unspecified';
+const TRANSITION_EVENT_KINDS = new Set(['timer', 'message', 'signal', 'condition', 'error']);
 
 /** Stable identity for comparing connection sets (typed `event` objects). */
 function transitionEventIdentityKey(event: Transition['event'] | undefined): string {
@@ -15,34 +18,40 @@ function transitionEventIdentityKey(event: Transition['event'] | undefined): str
   return JSON.stringify(event);
 }
 
-/**
- * Parse legacy plain-string `trigger` values when `connection.event` is absent.
- * Authoritative transition shape is always `event` on new round-trips from the kernel.
- */
-function triggerStringToTransitionEvent(trigger: string): Transition['event'] | undefined {
-  if (trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
-  // Bare `$error` is the kernel error class dispatch label, not a signal name (Kernel §4.10).
-  if (trigger === '$error') {
-    return { kind: 'error', code: LEGACY_BARE_ERROR_CODE };
-  }
-  if (trigger === '$join' || trigger === '$compensation.complete' || trigger.startsWith('$')) {
-    return { kind: 'signal', name: trigger, scope: 'instance' };
-  }
-  return { kind: 'message', name: trigger };
-}
-
 function defaultSyntheticEvent(from: string, to: string): Transition['event'] {
   return { kind: 'message', name: `${from}_to_${to}` };
 }
 
-/** Resolve facts-tier event: prefer typed `event`, then parse legacy `trigger`, else synthetic message. */
+/**
+ * When `connection.event` is absent, `trigger` may still echo a typed event as JSON
+ * (see `kernelToDesigner`, which sets `trigger` to `JSON.stringify(transition.event)`).
+ * Any other non-empty trigger is ignored for kernel output — use typed `event` only.
+ */
+function tryParseTriggerAsTypedEvent(trigger: string): Transition['event'] | undefined {
+  const s = trigger.trim();
+  if (!s.startsWith('{')) return undefined;
+  try {
+    const raw = JSON.parse(s) as unknown;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const kind = (raw as { kind?: unknown }).kind;
+    if (typeof kind !== 'string' || !TRANSITION_EVENT_KINDS.has(kind)) return undefined;
+    if (!validateTransitionEventPayload(raw)) return undefined;
+    return raw as Transition['event'];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve facts-tier event: prefer typed `event`, then JSON echo on `trigger`, else synthetic. */
 function connectionTransitionEvent(c: WorkflowConnection): Transition['event'] | undefined {
   if (c.event !== undefined) return c.event;
   if (c.trigger === undefined || c.trigger === '') {
     return defaultSyntheticEvent(c.from, c.to);
   }
   if (c.trigger === DESIGNER_NO_EVENT_TRIGGER) return undefined;
-  return triggerStringToTransitionEvent(c.trigger);
+  const parsed = tryParseTriggerAsTypedEvent(c.trigger);
+  if (parsed !== undefined) return parsed;
+  return defaultSyntheticEvent(c.from, c.to);
 }
 
 export interface WorkflowStage {
@@ -66,11 +75,11 @@ export interface WorkflowConnection {
   from: string;
   to: string;
   condition?: string;
-  /** Facts-tier transition event (Kernel §4.5–§4.10). Authoritative for kernel round-trip. */
+  /** Facts-tier transition event (Kernel §4.5). Authoritative for kernel round-trip. */
   event?: Transition['event'];
   /**
-   * Legacy display / string-only edits: plain message name, `$join`, `$error`, or
-   * {@link DESIGNER_NO_EVENT_TRIGGER} when guard-only. Prefer `event` for new data.
+   * Echo of typed `event` as JSON (see `kernelToDesigner`) or {@link DESIGNER_NO_EVENT_TRIGGER}
+   * when the kernel transition has no `event`. Not used to infer kernel reserved strings.
    */
   trigger?: string;
 }

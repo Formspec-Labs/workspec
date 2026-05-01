@@ -5,7 +5,7 @@ use wos_server_ports::audit::{AuditError, AuditResult, AuditSink, ExportEnvelope
 use wos_server_ports::storage::ProvenanceRow;
 
 pub struct PostgresAuditSink {
-    client: Arc<Mutex<Client>>,
+    client: Arc<Mutex<Option<Client>>>,
 }
 
 impl PostgresAuditSink {
@@ -35,82 +35,113 @@ impl PostgresAuditSink {
             )
             .map_err(|e| AuditError::Backend(e.to_string()))?;
         Ok(Self {
-            client: Arc::new(Mutex::new(client)),
+            client: Arc::new(Mutex::new(Some(client))),
         })
+    }
+}
+
+impl Drop for PostgresAuditSink {
+    fn drop(&mut self) {
+        let Ok(mut guard) = self.client.lock() else {
+            return;
+        };
+        let Some(client) = guard.take() else {
+            return;
+        };
+        drop_postgres_client(client);
+    }
+}
+
+fn drop_postgres_client(client: Client) {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        let _ = std::thread::spawn(move || drop(client)).join();
+    } else {
+        drop(client);
     }
 }
 
 #[async_trait]
 impl AuditSink for PostgresAuditSink {
     async fn append_provenance(&self, records: &[ProvenanceRow]) -> AuditResult<()> {
-        let mut client = self
-            .client
-            .lock()
-            .map_err(|_| AuditError::Backend("audit client mutex poisoned".into()))?;
-        let mut tx = client
-            .transaction()
-            .map_err(|e| AuditError::Backend(e.to_string()))?;
-        for row in records {
-            if row
-                .payload
-                .get("__injectAuditFailure")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                return Err(AuditError::Backend(
-                    "injected failure before audit transaction commit".into(),
-                ));
-            }
-            let payload = serde_json::to_string(&row.payload)
+        let client = Arc::clone(&self.client);
+        let records = records.to_vec();
+        tokio::task::spawn_blocking(move || -> AuditResult<()> {
+            let mut guard = client
+                .lock()
+                .map_err(|_| AuditError::Backend("audit client mutex poisoned".into()))?;
+            let client = guard
+                .as_mut()
+                .ok_or_else(|| AuditError::Backend("audit client closed".into()))?;
+            let mut tx = client
+                .transaction()
                 .map_err(|e| AuditError::Backend(e.to_string()))?;
-            let ts = row.timestamp.to_rfc3339();
-            tx.execute(
-                "INSERT INTO provenance_audit
-                (id, instance_id, seq, timestamp, tier, payload, hash, previous_hash)
-                VALUES ($1,$2,$3,$4::timestamptz,$5,$6::jsonb,$7,$8)
-                ON CONFLICT (id) DO NOTHING",
-                &[
-                    &row.id,
-                    &row.instance_id,
-                    &row.seq,
-                    &ts,
-                    &row.tier,
-                    &payload,
-                    &row.hash,
-                    &row.previous_hash,
-                ],
-            )
-            .map_err(|e| AuditError::Backend(e.to_string()))?;
-        }
-        tx.commit()
-            .map_err(|e| AuditError::Backend(e.to_string()))?;
-        Ok(())
+            for row in &records {
+                if row
+                    .payload
+                    .get("__injectAuditFailure")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
+                    return Err(AuditError::Backend(
+                        "injected failure before audit transaction commit".into(),
+                    ));
+                }
+                tx.execute(
+                    "INSERT INTO provenance_audit
+                    (id, instance_id, seq, timestamp, tier, payload, hash, previous_hash)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                    ON CONFLICT (id) DO NOTHING",
+                    &[
+                        &row.id,
+                        &row.instance_id,
+                        &row.seq,
+                        &row.timestamp,
+                        &row.tier,
+                        &row.payload,
+                        &row.hash,
+                        &row.previous_hash,
+                    ],
+                )
+                .map_err(|e| AuditError::Backend(e.to_string()))?;
+            }
+            tx.commit()
+                .map_err(|e| AuditError::Backend(e.to_string()))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| AuditError::Backend(format!("audit blocking task failed: {e}")))?
     }
 
     async fn append_export(&self, envelope: ExportEnvelope) -> AuditResult<()> {
-        let mut client = self
-            .client
-            .lock()
-            .map_err(|_| AuditError::Backend("audit client mutex poisoned".into()))?;
-        let record = serde_json::to_string(&envelope.record)
-            .map_err(|e| AuditError::Backend(e.to_string()))?;
-        let mut tx = client
-            .transaction()
-            .map_err(|e| AuditError::Backend(e.to_string()))?;
-        tx.execute(
+        let client = Arc::clone(&self.client);
+        tokio::task::spawn_blocking(move || -> AuditResult<()> {
+            let mut guard = client
+                .lock()
+                .map_err(|_| AuditError::Backend("audit client mutex poisoned".into()))?;
+            let client = guard
+                .as_mut()
+                .ok_or_else(|| AuditError::Backend("audit client closed".into()))?;
+            let mut tx = client
+                .transaction()
+                .map_err(|e| AuditError::Backend(e.to_string()))?;
+            tx.execute(
                 "INSERT INTO export_audit (case_id, record_id, event_type, record)
-                VALUES ($1,$2,$3,$4::jsonb)
-                ON CONFLICT (case_id, record_id) DO NOTHING",
+                    VALUES ($1,$2,$3,$4)
+                    ON CONFLICT (case_id, record_id) DO NOTHING",
                 &[
                     &envelope.case_id,
                     &envelope.record_id,
                     &envelope.event_type,
-                    &record,
+                    &envelope.record,
                 ],
-            ).map_err(|e| AuditError::Backend(e.to_string()))?;
-        tx.commit()
+            )
             .map_err(|e| AuditError::Backend(e.to_string()))?;
-        Ok(())
+            tx.commit()
+                .map_err(|e| AuditError::Backend(e.to_string()))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| AuditError::Backend(format!("audit blocking task failed: {e}")))?
     }
 }
 
@@ -129,8 +160,13 @@ mod tests {
         let Some(cluster) = TestCluster::start() else {
             return;
         };
-        let sink = PostgresAuditSink::connect(&cluster.dsn()).expect("sink connect");
-        let mut client = postgres::Client::connect(&cluster.dsn(), postgres::NoTls).expect("probe");
+        let sink = {
+            let dsn = cluster.dsn();
+            tokio::task::spawn_blocking(move || PostgresAuditSink::connect(&dsn))
+                .await
+                .expect("sink connect task")
+                .expect("sink connect")
+        };
 
         let now = chrono::Utc::now();
         let ok = ProvenanceRow {
@@ -157,12 +193,21 @@ mod tests {
             .append_provenance(&[ok, fail])
             .await
             .expect_err("failure injection should fail");
-        assert!(err.to_string().contains("injected failure"));
+        assert!(
+            err.to_string().contains("injected failure"),
+            "unexpected audit error: {err}"
+        );
 
-        let row = client
-            .query_one("SELECT COUNT(*) AS n FROM provenance_audit", &[])
-            .expect("count rows");
-        let n: i64 = row.get("n");
+        let dsn = cluster.dsn();
+        let n = tokio::task::spawn_blocking(move || {
+            let mut client = postgres::Client::connect(&dsn, postgres::NoTls).expect("probe");
+            let row = client
+                .query_one("SELECT COUNT(*) AS n FROM provenance_audit", &[])
+                .expect("count rows");
+            row.get::<_, i64>("n")
+        })
+        .await
+        .expect("count task");
         assert_eq!(n, 0, "batch should fully rollback on injected failure");
     }
 
@@ -210,11 +255,18 @@ mod tests {
             if !wait_for_postgres(port) {
                 return None;
             }
-            Some(Self { temp_dir, port, pg_ctl })
+            Some(Self {
+                temp_dir,
+                port,
+                pg_ctl,
+            })
         }
 
         fn dsn(&self) -> String {
-            format!("host=127.0.0.1 port={} user=postgres dbname=postgres", self.port)
+            format!(
+                "host=127.0.0.1 port={} user=postgres dbname=postgres",
+                self.port
+            )
         }
     }
 

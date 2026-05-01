@@ -24,9 +24,7 @@ mod document;
 pub mod output;
 pub mod rules;
 
-pub use diagnostic::{
-    LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier,
-};
+pub use diagnostic::{LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier};
 pub use document::{DocumentKind, WosDocument, WosProject};
 pub use rules::{Graduation, RuleMetadata, all_lint_rules};
 
@@ -83,9 +81,8 @@ pub fn lint_project(dir: &std::path::Path) -> Result<Vec<LintDiagnostic>, LintEr
 /// Count the total number of SCHEMA-DOC-001 leaf properties in a schema.
 ///
 /// Companion to `lint_schema` — same walk, but returns the count instead of
-/// the diagnostics. Used by the leaf-count companion ratchet in
-/// `schema_doc_zero_regression.rs` to detect "fill 1, sketch 1" gaming where
-/// violation count stays flat but total leaf count grows.
+/// the diagnostics. Use this for inventory reporting and ad hoc schema-doc
+/// audits when callers need denominator data rather than per-property findings.
 ///
 /// # Errors
 ///

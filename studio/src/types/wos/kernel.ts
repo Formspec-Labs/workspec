@@ -279,7 +279,7 @@ export interface TransitionEventTimer {
    */
   timerId: string;
   /**
-   * Kernel §4.10 timeout category used when synthesizing $timeout.* dispatch names. task, service, state, signal, and workflow map to fixed $timeout.<category> strings; custom covers author-defined timers and dotted names, often combined with firesAs.
+   * Kernel §4.9.10 timeout category used when synthesizing $timeout.* dispatch names. task, service, state, signal, and workflow map to fixed $timeout.<category> strings; custom covers author-defined timers and dotted names, often combined with firesAs.
    */
   source: 'task' | 'service' | 'state' | 'signal' | 'workflow' | 'custom';
   /**
@@ -321,7 +321,7 @@ export interface TransitionEventSignal {
    */
   kind: 'signal';
   /**
-   * Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel §4.8) and `$compensation.complete` (LCD §5.9), plus author-defined identifiers without a leading `$`.
+   * Signal name for lifecycle delivery. Kernel-reserved identifiers include `$join` (Kernel §4.8), `$compensation.complete` (LCD §5.9), and full `$related.*` names (Kernel §4.9.10); those MAY begin with `$`. Author-defined signals that are not kernel sentinels SHOULD omit a leading `$`.
    */
   name: string;
   /**
@@ -345,7 +345,7 @@ export interface TransitionEventError {
    */
   kind: 'error';
   /**
-   * Normative error code for synthetic `$error` class dispatch (Kernel §4.10). Dot-separated codes align with integration failures, contract violations, and processor faults.
+   * Normative error code for synthetic `$error` class dispatch (Kernel §4.9.10). Dot-separated codes align with integration failures, contract violations, and processor faults.
    */
   code: string;
   /**

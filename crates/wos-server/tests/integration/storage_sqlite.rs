@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use wos_server::storage::{
-    self, InboundCloudEventRow, InstanceQuery, InstanceRow, KernelRow, ProvenanceRow, SqliteStorage,
-    Storage, StorageHandle, UserRow,
+    self, InboundCloudEventRow, InstanceQuery, InstanceRow, KernelRow, ProvenanceRow,
+    SqliteStorage, Storage, StorageHandle, UserRow,
 };
 
 async fn fresh() -> SqliteStorage {
@@ -147,9 +147,8 @@ async fn atomic_update_appends_provenance_in_same_txn() {
         tier: "facts".into(),
         payload: serde_json::json!({"event": "approve"}),
         hash: "sha256:abc".into(),
-        previous_hash:
-            "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-                .into(),
+        previous_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            .into(),
     };
 
     let prov_ref = prov.clone();
@@ -337,7 +336,7 @@ async fn list_instances_all_pages_collects_beyond_single_sqlite_page() {
         InstanceQuery::default(),
         storage::LIST_INSTANCES_PAGE_SIZE_MAX,
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
     assert_eq!(rows.len(), 250);
 }

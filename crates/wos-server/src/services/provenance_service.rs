@@ -31,7 +31,9 @@ impl ProvenanceService {
         instance_id: &str,
         record: &ProvenanceRecord,
     ) -> StorageResult<ProvenanceRow> {
-        let rows = self.prepare_batch(instance_id, std::slice::from_ref(record)).await?;
+        let rows = self
+            .prepare_batch(instance_id, std::slice::from_ref(record))
+            .await?;
         rows.into_iter().next().ok_or_else(|| {
             crate::storage::StorageError::Other("prepare_batch returned empty".into())
         })
@@ -57,11 +59,17 @@ impl ProvenanceService {
                 .clone()
                 .unwrap_or_else(|| "facts".to_string());
             let timestamp = chrono::Utc::now();
-            let payload = serde_json::to_value(record)
-                .map_err(|e| crate::storage::StorageError::Other(format!(
-                    "ProvenanceRecord serialise: {e}"
-                )))?;
-            let hash = chain_hash(&previous_hash, instance_id, next_seq, &timestamp, &tier, &payload);
+            let payload = serde_json::to_value(record).map_err(|e| {
+                crate::storage::StorageError::Other(format!("ProvenanceRecord serialise: {e}"))
+            })?;
+            let hash = chain_hash(
+                &previous_hash,
+                instance_id,
+                next_seq,
+                &timestamp,
+                &tier,
+                &payload,
+            );
             out.push(ProvenanceRow {
                 id: uuid::Uuid::now_v7().to_string(),
                 instance_id: instance_id.to_string(),
@@ -132,10 +140,11 @@ pub fn verify_chain(rows: &[ProvenanceRow]) -> Result<(), usize> {
 }
 
 pub fn row_to_response(r: &ProvenanceRow) -> ApiResult<ProvenanceResponse> {
-    let record: ProvenanceRecord = serde_json::from_value(r.payload.clone())
-        .map_err(|e| ApiError::ServiceUnavailable(format!(
+    let record: ProvenanceRecord = serde_json::from_value(r.payload.clone()).map_err(|e| {
+        ApiError::ServiceUnavailable(format!(
             "provenance payload is not a wos_core::ProvenanceRecord: {e}"
-        )))?;
+        ))
+    })?;
     Ok(ProvenanceResponse {
         record,
         id: r.id.clone(),

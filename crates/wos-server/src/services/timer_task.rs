@@ -69,10 +69,16 @@ pub async fn tick_once(state: &AppState) -> anyhow::Result<()> {
     .await?;
 
     for row in &all {
-        let Some(timers) = row.timers().as_array() else { continue };
+        let Some(timers) = row.timers().as_array() else {
+            continue;
+        };
         for t in timers {
-            let Some(deadline) = t.get("deadline").and_then(|v| v.as_str()) else { continue };
-            let Some(event_name) = t.get("event").and_then(|v| v.as_str()) else { continue };
+            let Some(deadline) = t.get("deadline").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some(event_name) = t.get("event").and_then(|v| v.as_str()) else {
+                continue;
+            };
             let Ok(when) = chrono::DateTime::parse_from_rfc3339(deadline) else {
                 continue;
             };

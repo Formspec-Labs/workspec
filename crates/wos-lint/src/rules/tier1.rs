@@ -168,7 +168,11 @@ fn check_ai_integration_block(root: &Value, diagnostics: &mut Vec<LintDiagnostic
     }
     if let Some(ai_oversight) = root.get("aiOversight") {
         if let Some(np) = ai_oversight.get("narrativeProvenance") {
-            check_narrative_tier_authoritative_in(np, "/aiOversight/narrativeProvenance", diagnostics);
+            check_narrative_tier_authoritative_in(
+                np,
+                "/aiOversight/narrativeProvenance",
+                diagnostics,
+            );
         }
     }
 
@@ -340,10 +344,7 @@ fn check_ver_level_for_fallback_chain(root: &Value, diagnostics: &mut Vec<LintDi
     let has_verification_level = root
         .get("bindings")
         .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .any(|b| b.get("verificationLevel").is_some())
-        })
+        .map(|arr| arr.iter().any(|b| b.get("verificationLevel").is_some()))
         .unwrap_or(false)
         || root
             .get("advanced")
@@ -844,11 +845,7 @@ fn check_hold_expected_duration_raw(
 }
 
 /// I-001: outputBinding JSONPath checks on the `bindings` embedded block.
-fn check_bindings_block(
-    bindings: &Value,
-    base_path: &str,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
+fn check_bindings_block(bindings: &Value, base_path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
     let Some(bindings_obj) = bindings.as_object() else {
         return;
     };
@@ -1516,7 +1513,11 @@ mod ver_level_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-VER-LEVEL-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
         assert!(matches[0].message.contains("extractor"));
     }
 
@@ -1602,7 +1603,11 @@ mod adr0063_identity_boundary_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-EMBED-TARGET-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
         assert_eq!(matches[0].path, "/governance/targetWorkflow");
     }
 
@@ -1616,7 +1621,9 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_target(doc);
         assert!(
-            diags.iter().any(|d| d.rule_id == "WOS-EMBED-TARGET-001" && d.path == "/agents/0/targetWorkflow"),
+            diags.iter().any(
+                |d| d.rule_id == "WOS-EMBED-TARGET-001" && d.path == "/agents/0/targetWorkflow"
+            ),
             "expected diagnostic on /agents/0/targetWorkflow: {diags:?}"
         );
     }
@@ -1645,7 +1652,9 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_identity(doc);
         assert!(
-            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/governance/url"),
+            diags
+                .iter()
+                .any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/governance/url"),
             "expected diagnostic on /governance/url: {diags:?}"
         );
     }
@@ -1658,7 +1667,9 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_identity(doc);
         assert!(
-            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/advanced/version"),
+            diags
+                .iter()
+                .any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/advanced/version"),
             "expected diagnostic on /advanced/version: {diags:?}"
         );
     }
@@ -1675,7 +1686,11 @@ mod adr0063_identity_boundary_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-SIDECAR-TARGET-001")
             .collect();
-        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one diagnostic: {diags:?}"
+        );
     }
 
     #[test]

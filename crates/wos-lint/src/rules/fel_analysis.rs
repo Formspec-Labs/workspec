@@ -248,7 +248,8 @@ fn is_boolean_returning_builtin(name: &str) -> bool {
 fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(constraints) = doc
         .value
-        .get("verifiableConstraints")
+        .pointer("/advanced/verifiableConstraints")
+        .or_else(|| doc.value.get("verifiableConstraints"))
         .and_then(Value::as_array)
     {
         for (i, constraint) in constraints.iter().enumerate() {
@@ -261,7 +262,6 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDi
         }
     }
 }
-
 /// Check FEL in an Assertion Library document (G-042).
 fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(assertions) = doc.value.get("assertions").and_then(Value::as_array) {

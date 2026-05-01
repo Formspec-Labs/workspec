@@ -120,7 +120,12 @@ async fn governance_read_routes_and_delegation_lifecycle() {
     ] {
         let res = app
             .clone()
-            .oneshot(Request::builder().uri(path).body(Body::empty()).expect("request"))
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .body(Body::empty())
+                    .expect("request"),
+            )
             .await
             .expect("response");
         assert_eq!(res.status(), StatusCode::OK);
@@ -169,7 +174,8 @@ async fn governance_read_routes_and_delegation_lifecycle() {
     let create_bytes = axum::body::to_bytes(create.into_body(), 8192)
         .await
         .expect("create body");
-    let create_json: serde_json::Value = serde_json::from_slice(&create_bytes).expect("create json");
+    let create_json: serde_json::Value =
+        serde_json::from_slice(&create_bytes).expect("create json");
     assert_eq!(create_json["ok"], true);
     assert_eq!(create_json["id"], "deleg-1");
 

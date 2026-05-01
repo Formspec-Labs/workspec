@@ -10,9 +10,9 @@ use chrono::Utc;
 use tower::ServiceExt;
 use wos_core::provenance::ProvenanceRecord;
 use wos_server::config::{AiChatKind, AuthKind, ServerConfig, StorageKind};
+use wos_server::services::provenance_service::chain_hash;
 use wos_server::storage::ProvenanceRow;
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
-use wos_server::services::provenance_service::chain_hash;
 
 const INSTANCE_ID: &str = "urn:wos:instance:test:sig-affirmations";
 
@@ -79,18 +79,17 @@ fn make_instance_row(id: &str) -> storage::InstanceRow {
 }
 
 async fn seed_mixed_provenance(store: &storage::StorageHandle) {
-    store.create_instance(&make_instance_row(INSTANCE_ID)).await.unwrap();
+    store
+        .create_instance(&make_instance_row(INSTANCE_ID))
+        .await
+        .unwrap();
 
-    let mut transition_record = ProvenanceRecord::state_transition(
-        "draft",
-        "signing",
-        "submit",
-        Some("applicant"),
-    );
+    let mut transition_record =
+        ProvenanceRecord::state_transition("draft", "signing", "submit", Some("applicant"));
     transition_record.audit_layer = Some("facts".into());
 
-    let mut sig_record = ProvenanceRecord::signature_affirmation(
-        wos_core::provenance::SignatureAffirmationInput {
+    let mut sig_record =
+        ProvenanceRecord::signature_affirmation(wos_core::provenance::SignatureAffirmationInput {
             ceremony_id: "ceremony-1",
             role_id: "applicantSigner",
             role: "signer",
@@ -109,17 +108,12 @@ async fn seed_mixed_provenance(store: &storage::StorageHandle) {
             profile_key: None,
             formspec_response_ref: "urn:test:formspec-response:application",
             custody_hook_eligible: true,
-        },
-    );
+        });
     sig_record.actor_id = Some("applicant".into());
     sig_record.audit_layer = Some("facts".into());
 
-    let mut another_transition = ProvenanceRecord::state_transition(
-        "signing",
-        "complete",
-        "allSigned",
-        Some("system"),
-    );
+    let mut another_transition =
+        ProvenanceRecord::state_transition("signing", "complete", "allSigned", Some("system"));
     another_transition.audit_layer = Some("facts".into());
 
     const ZERO_HASH: &str =
@@ -185,7 +179,11 @@ async fn signature_affirmations_filters_from_mixed_provenance() {
         .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let items = body.as_array().expect("response should be an array");
-    assert_eq!(items.len(), 1, "should return exactly 1 signature affirmation");
+    assert_eq!(
+        items.len(),
+        1,
+        "should return exactly 1 signature affirmation"
+    );
     let sig = &items[0];
     assert_eq!(
         sig.get("recordKind").and_then(|v| v.as_str()),

@@ -27,8 +27,6 @@
     }
   },
   "advanced": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://test.wos-spec.org/workflows/dcr-zone",
     "constraintZones": [
       {
         "id": "investigationZone",
@@ -75,20 +73,22 @@
         ]
       }
     ],
-    "equityGuardrails": [
-      {
-        "id": "determination-disparity",
-        "metric": "approvalRate",
-        "groupBy": "caseFile.applicantDemographic",
-        "maxDisparity": 0.15,
-        "evaluationWindow": "P90D",
-        "minimumSampleSize": 30,
-        "onViolation": "alert",
-        "reason": "Monitor for disparate approval rates across demographics",
-        "monitorTags": [
-          "determination"
-        ]
-      }
-    ]
+    "equityGuardrails": {
+      "monitors": [
+        {
+          "id": "determination-disparity",
+          "metric": "approvalRate",
+          "groupBy": "caseFile.applicantDemographic",
+          "maxDisparity": 0.15,
+          "evaluationWindow": "P90D",
+          "minimumSampleSize": 30,
+          "onViolation": "alert",
+          "reason": "Monitor for disparate approval rates across demographics",
+          "monitorTags": [
+            "determination"
+          ]
+        }
+      ]
+    }
   }
 }

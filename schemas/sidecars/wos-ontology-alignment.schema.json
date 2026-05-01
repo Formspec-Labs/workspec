@@ -30,7 +30,7 @@
     "targetWorkflow": {
       "$ref": "#/$defs/TargetWorkflow",
       "description": "The WOS Kernel Document this ontology alignment targets. Specifies URL and compatible version range. The ontology processor resolves the JSON-LD context, SHACL shapes, PROV-O namespace, and process mining configuration when the kernel document URI matches.",
-      "examples": [{ "url": "https://agency.gov/workflows/benefits-adjudication", "compatibleVersions": ["1.0.*"] }],
+      "examples": [{ "url": "https://agency.gov/workflows/benefits-adjudication", "compatibleVersions": ">=1.0.0 <2.0.0" }],
       "x-lm": {
         "critical": true,
         "intent": "Binds this ontology-alignment sidecar to a specific kernel workflow and version range"

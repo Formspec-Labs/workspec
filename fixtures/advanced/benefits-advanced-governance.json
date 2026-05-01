@@ -28,56 +28,56 @@
     }
   },
   "advanced": {
-    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
-    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
-    "equityGuardrails": [
-      {
-        "id": "approvalRateByRegion",
-        "metric": "approvalRate",
-        "groupBy": "caseFile.application.geographicRegion",
-        "maxDisparity": 0.15,
-        "evaluationWindow": "P30D",
-        "minimumSampleSize": 50,
-        "onViolation": "alert",
-        "monitorTags": [
-          "determination"
-        ],
-        "notifyRoles": [
-          "equityOfficer",
-          "programDirector"
-        ],
-        "reason": "Monitors for geographic disparity in benefits approval rates -- applies to human and AI decisions alike"
-      },
-      {
-        "id": "denialRateByAgeGroup",
-        "metric": "denialRate",
-        "groupBy": "caseFile.application.ageGroup",
-        "maxDisparity": 0.1,
-        "evaluationWindow": "P90D",
-        "minimumSampleSize": 100,
-        "onViolation": "alert",
-        "monitorTags": [
-          "adverse-decision"
-        ],
-        "notifyRoles": [
-          "equityOfficer"
-        ],
-        "reason": "Monitors for age-based disparity in denial rates"
-      },
-      {
-        "id": "processingTimeByRegion",
-        "metric": "processingTimeDays",
-        "groupBy": "caseFile.application.geographicRegion",
-        "maxDisparity": 0.2,
-        "evaluationWindow": "P30D",
-        "minimumSampleSize": 30,
-        "onViolation": "flag",
-        "monitorTags": [
-          "determination"
-        ],
-        "reason": "Monitors for geographic disparity in processing times"
-      }
-    ],
+    "equityGuardrails": {
+      "monitors": [
+        {
+          "id": "approvalRateByRegion",
+          "metric": "approvalRate",
+          "groupBy": "caseFile.application.geographicRegion",
+          "maxDisparity": 0.15,
+          "evaluationWindow": "P30D",
+          "minimumSampleSize": 50,
+          "onViolation": "alert",
+          "monitorTags": [
+            "determination"
+          ],
+          "notifyRoles": [
+            "equityOfficer",
+            "programDirector"
+          ],
+          "reason": "Monitors for geographic disparity in benefits approval rates -- applies to human and AI decisions alike"
+        },
+        {
+          "id": "denialRateByAgeGroup",
+          "metric": "denialRate",
+          "groupBy": "caseFile.application.ageGroup",
+          "maxDisparity": 0.1,
+          "evaluationWindow": "P90D",
+          "minimumSampleSize": 100,
+          "onViolation": "alert",
+          "monitorTags": [
+            "adverse-decision"
+          ],
+          "notifyRoles": [
+            "equityOfficer"
+          ],
+          "reason": "Monitors for age-based disparity in denial rates"
+        },
+        {
+          "id": "processingTimeByRegion",
+          "metric": "processingTimeDays",
+          "groupBy": "caseFile.application.geographicRegion",
+          "maxDisparity": 0.2,
+          "evaluationWindow": "P30D",
+          "minimumSampleSize": 30,
+          "onViolation": "flag",
+          "monitorTags": [
+            "determination"
+          ],
+          "reason": "Monitors for geographic disparity in processing times"
+        }
+      ]
+    },
     "constraintZones": [
       {
         "id": "fraudInvestigation",

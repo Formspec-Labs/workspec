@@ -116,7 +116,6 @@ pub struct KernelDocument {
     // MUST NOT declare targetWorkflow — that is a sidecar concept. Lint rule
     // WOS-EMBED-TARGET-001 catches violations at the JSON layer; this Rust
     // surface assumes well-formed envelopes.
-
     /// Embedded due-process / review-protocol / pipeline / task-catalog
     /// governance (Governance spec). Required for `rights-impacting` and
     /// `safety-impacting` workflows; the schema's `allOf` enforces this
@@ -477,7 +476,6 @@ pub struct State {
     // round-trips through the typed model without coercion. Authoring +
     // schema validity ship in this PR; full runtime iteration semantics are
     // tracked as Sub-PR D-2.
-
     /// FEL expression evaluated against case-state at entry into a `ForEach`
     /// state. MUST evaluate to a bounded array; each element drives one
     /// iteration of the body. Required when `kind == ForEach`; ignored on
@@ -548,6 +546,8 @@ pub enum StateKind {
     Atomic,
     Compound,
     Parallel,
+    /// JSON wire value is lowercase `foreach` (Kernel schema `lifecycle.states.*.type` enum), not default camelCase `forEach`.
+    #[serde(rename = "foreach")]
     ForEach,
     Final,
 }

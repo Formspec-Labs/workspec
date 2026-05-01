@@ -93,9 +93,7 @@ struct KernelRejected {
 /// afterwards via [`attach_namespaces`] once the full `AppState` exists.
 pub fn build_io_only() -> (SocketIoLayer, SocketIo) {
     let realtime = Arc::new(RealtimeState::default());
-    SocketIo::builder()
-        .with_state(realtime)
-        .build_layer()
+    SocketIo::builder().with_state(realtime).build_layer()
 }
 
 /// Register the server's namespace handlers on the given `SocketIo` handle.
@@ -162,7 +160,10 @@ async fn on_connect(
                 name,
                 cursor: Cursor::default(),
             };
-            rt.collaborators.write().await.insert(s.id.to_string(), collab);
+            rt.collaborators
+                .write()
+                .await
+                .insert(s.id.to_string(), collab);
             broadcast_users(&s, &rt).await;
         },
     );
@@ -189,9 +190,7 @@ async fn on_connect(
     let state_for_kernel = state.clone();
     socket.on(
         "kernel:update",
-        move |s: SocketRef,
-              Data::<KernelUpdate>(body),
-              SocketState::<Arc<RealtimeState>>(rt)| {
+        move |s: SocketRef, Data::<KernelUpdate>(body), SocketState::<Arc<RealtimeState>>(rt)| {
             let state = state_for_kernel.clone();
             async move {
                 let allowed = match state.cfg.auth {
@@ -244,7 +243,12 @@ async fn on_connect(
                     );
                     return;
                 }
-                match state.services.bundle.replace(&body.url, body.kernel.clone()).await {
+                match state
+                    .services
+                    .bundle
+                    .replace(&body.url, body.kernel.clone())
+                    .await
+                {
                     Ok(row) => {
                         let envelope = KernelChanged {
                             url: row.url,
@@ -268,11 +272,16 @@ async fn on_connect(
         },
     );
 
-    socket.on_disconnect(async |s: SocketRef, SocketState::<Arc<RealtimeState>>(rt)| {
-        rt.collaborators.write().await.remove(&s.id.to_string());
-        rt.socket_access_token.write().await.remove(&s.id.to_string());
-        broadcast_users(&s, &rt).await;
-    });
+    socket.on_disconnect(
+        async |s: SocketRef, SocketState::<Arc<RealtimeState>>(rt)| {
+            rt.collaborators.write().await.remove(&s.id.to_string());
+            rt.socket_access_token
+                .write()
+                .await
+                .remove(&s.id.to_string());
+            broadcast_users(&s, &rt).await;
+        },
+    );
 }
 
 async fn broadcast_users(socket: &SocketRef, rt: &Arc<RealtimeState>) {

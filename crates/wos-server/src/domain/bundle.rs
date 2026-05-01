@@ -28,7 +28,10 @@ pub struct BundleView {
     pub ai: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "policyParameters")]
     pub policy_parameters: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "notificationTemplates")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "notificationTemplates"
+    )]
     pub notification_templates: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "businessCalendar")]
     pub business_calendar: Option<serde_json::Value>,
@@ -42,7 +45,10 @@ pub struct BundleView {
     pub agent_configs: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "verificationReport")]
     pub verification_report: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "correspondenceMetadata")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "correspondenceMetadata"
+    )]
     pub correspondence_metadata: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "semanticProfile")]
     pub semantic_profile: Option<serde_json::Value>,

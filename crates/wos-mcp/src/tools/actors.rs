@@ -1,8 +1,8 @@
 //! Actor tool handlers: declare actors and attach actor-level extensions.
 //!
 //! Each handler is a thin wrapper over the corresponding `WosProject` method.
-//! Per the WOS kernel spec (§S3), actors are `Human` or `System` only — AI
-//! agents route through `x-wos-ai.agents`, not through new `ActorKind` variants.
+//! Per ADR 0064, actors may be `Human`, `System`, or `Agent`; agent-typed
+//! actors still require matching `agents[]` declarations at validation time.
 
 use serde_json::Value;
 use wos_authoring::ActorKind;
@@ -159,12 +159,11 @@ mod tests {
         let err = wos_add_actor(
             &mut registry,
             "",
-            json!({ "project_id": pid, "actor_id": "bot", "kind": "agent" }),
+            json!({ "project_id": pid, "actor_id": "bot", "kind": "robot" }),
         )
         .await
         .unwrap_err();
 
-        // "agent" is not a valid ActorKind — AI agents route through x-wos-ai.
         assert!(matches!(err, ToolError::InvalidArguments(_)));
     }
 

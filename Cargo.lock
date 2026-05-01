@@ -4995,6 +4995,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "wos-agent-a2a"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
+name = "wos-agent-anthropic"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
+name = "wos-agent-claude-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
+name = "wos-agent-http"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
+name = "wos-agent-mcp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
+name = "wos-agent-stub"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wos-core",
+]
+
+[[package]]
 name = "wos-authoring"
 version = "0.0.1"
 dependencies = [

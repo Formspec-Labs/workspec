@@ -25,8 +25,8 @@ impl DirectToolContext {
 #[async_trait]
 impl ToolContext for DirectToolContext {
     async fn lint_document(&self, document_json: &str) -> Result<Vec<LintFinding>, ToolError> {
-        let diagnostics = wos_lint::lint_document(document_json)
-            .map_err(|e| ToolError::Lint(e.to_string()))?;
+        let diagnostics =
+            wos_lint::lint_document(document_json).map_err(|e| ToolError::Lint(e.to_string()))?;
 
         Ok(diagnostics.into_iter().map(into_finding).collect())
     }

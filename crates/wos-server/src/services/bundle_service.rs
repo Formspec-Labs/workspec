@@ -125,7 +125,8 @@ impl BundleService {
             .get_kernel(url)
             .await?
             .ok_or(StorageError::NotFound)?;
-        let mut row = kernel_row_from_doc(document).map_err(|e| StorageError::Other(e.to_string()))?;
+        let mut row =
+            kernel_row_from_doc(document).map_err(|e| StorageError::Other(e.to_string()))?;
         // Keep the URL the PUT was addressed to — the client is the authority
         // on the path; spare them from surprising us if the body's `url`
         // differs from the path slug.
@@ -138,7 +139,10 @@ impl BundleService {
             row.version = existing.version;
         }
         self.storage.upsert_kernel(&row).await?;
-        self.cache.write().await.insert(url.to_string(), row.clone());
+        self.cache
+            .write()
+            .await
+            .insert(url.to_string(), row.clone());
         Ok(row)
     }
 
@@ -192,7 +196,9 @@ impl BundleResolverPort for BundleService {
         self.get(workflow_url)
             .await
             .map(|row| row.document)
-            .ok_or_else(|| RuntimeAdapterError::Message(format!("kernel `{workflow_url}` not found")))
+            .ok_or_else(|| {
+                RuntimeAdapterError::Message(format!("kernel `{workflow_url}` not found"))
+            })
     }
 
     async fn resolve_governance_bundle(

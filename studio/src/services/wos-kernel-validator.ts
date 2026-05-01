@@ -49,6 +49,34 @@ export function validateKernelDocument(kernel: unknown): KernelValidationResult 
   return { isValid: false, issues };
 }
 
+/** Minimal workflow URI so `format: uri` passes AJV when validating stub documents. */
+const TRANSITION_EVENT_STUB_URL = 'https://wos-spec.internal/stub/transition-event';
+
+/**
+ * True when `event` is a complete `TransitionEvent` branch per
+ * `schemas/wos-workflow.schema.json` (validated in context of a one-transition stub).
+ * Used by the designer to reject partial JSON in `WorkflowConnection.trigger` echoes.
+ */
+export function validateTransitionEventPayload(event: unknown): boolean {
+  const stub = {
+    $wosWorkflow: '1.0',
+    url: TRANSITION_EVENT_STUB_URL,
+    version: '1.0.0',
+    title: 'Transition event stub',
+    status: 'draft' as const,
+    impactLevel: 'operational' as const,
+    actors: [{ id: 'stub', type: 'human' as const }],
+    lifecycle: {
+      initialState: 's0',
+      states: {
+        s0: { type: 'atomic' as const, transitions: [{ event, target: 's1' }] },
+        s1: { type: 'final' as const },
+      },
+    },
+  };
+  return validateKernelDocument(stub).isValid;
+}
+
 export function assertValidKernelDocument(kernel: unknown, context: string): void {
   const result = validateKernelDocument(kernel);
   if (!result.isValid) {

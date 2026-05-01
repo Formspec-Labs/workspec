@@ -63,14 +63,16 @@ pub fn slice_b_tempdir() -> TempDir {
     });
     std::fs::create_dir_all(root.join("notification-template")).unwrap();
     std::fs::write(
-        root.join("notification-template").join(format!("{slug}.json")),
+        root.join("notification-template")
+            .join(format!("{slug}.json")),
         serde_json::to_vec_pretty(&tmpl).unwrap(),
     )
     .unwrap();
 
     std::fs::create_dir_all(root.join("integration-profile")).unwrap();
     std::fs::write(
-        root.join("integration-profile").join(format!("{slug}.json")),
+        root.join("integration-profile")
+            .join(format!("{slug}.json")),
         br#"{"bindings":[]}"#,
     )
     .unwrap();

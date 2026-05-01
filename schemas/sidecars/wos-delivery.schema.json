@@ -308,9 +308,39 @@
                 "category": "adverse-decision",
                 "description": "Notice of adverse benefits determination",
                 "sections": [
-                  { "id": "determination", "contentType": "structured", "content": "Your application for {{programName}} has been {{determination}}." },
-                  { "id": "reasons", "contentType": "structured", "content": "Reason(s): {{reasonCodes}}" },
-                  { "id": "appealRights", "contentType": "appeal-rights", "content": "You have the right to appeal this decision." }
+                  {
+                    "id": "determination",
+                    "contentType": "structured",
+                    "content": "Your application for {{programName}} has been {{determination}}."
+                  },
+                  {
+                    "id": "reasons",
+                    "contentType": "structured",
+                    "content": "Reason(s): {{reasonCodes}}"
+                  },
+                  {
+                    "id": "appealRights",
+                    "contentType": "appeal-rights",
+                    "content": "You have the right to appeal this decision."
+                  }
+                ]
+              }
+            },
+            {
+              "caseHoldNotice": {
+                "category": "hold-notification",
+                "description": "Notice that case processing is on hold pending applicant action.",
+                "sections": [
+                  {
+                    "id": "holdReason",
+                    "contentType": "structured",
+                    "content": "Your case is on hold because {{holdReason}}."
+                  },
+                  {
+                    "id": "nextStep",
+                    "contentType": "structured",
+                    "content": "Please submit {{requestedItem}} by {{dueDate}}."
+                  }
                 ]
               }
             }

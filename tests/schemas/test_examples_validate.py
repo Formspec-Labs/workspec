@@ -19,6 +19,50 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry
 
 
+def _validator_for_fragment(
+    marker: str,
+    pointer: str,
+    sub_schema: dict[str, Any],
+    registry: Registry,
+    schemas_by_marker: dict[str, dict[str, Any]],
+) -> Draft202012Validator:
+    """Build a validator for a sub-schema that may use ``#/$defs/...`` refs.
+
+    Fragment nodes under ``properties`` / ``$defs`` / ``items`` often use
+    ``$ref`` or nested ``items.$ref`` to ``#/$defs/X``. A bare fragment root
+    cannot resolve those pointers (``#`` is the fragment, which has no
+    ``$defs``). Re-anchor every **non-root** sub-schema by merging the host
+    resource's ``$defs`` plus a synthetic ``$id`` so internal pointers resolve
+    the same way as validating against the full schema document.
+    """
+    host = schemas_by_marker.get(marker)
+    if (
+        host
+        and pointer
+        and host.get("$defs")
+        and id(sub_schema) != id(host)
+    ):
+        safe = pointer.replace("/", "_").replace("~", "_") or "sub"
+        composed: dict[str, Any] = {
+            "$schema": host.get(
+                "$schema", "https://json-schema.org/draft/2020-12/schema"
+            ),
+            "$id": f"{host.get('$id', 'urn:wos:fragment')}#fragment{safe}",
+            "$defs": host["$defs"],
+        }
+        composed.update(sub_schema)
+        return Draft202012Validator(
+            composed,
+            registry=registry,
+            format_checker=FormatChecker(),
+        )
+    return Draft202012Validator(
+        sub_schema,
+        registry=registry,
+        format_checker=FormatChecker(),
+    )
+
+
 def _walk_schema_with_pointer(
     node: Any, pointer: str = ""
 ) -> Iterator[tuple[str, dict[str, Any]]]:
@@ -95,10 +139,8 @@ def test_every_schema_example_validates_against_its_fragment(
             if not _is_validatable_subschema(sub_schema):
                 continue
             try:
-                validator = Draft202012Validator(
-                    sub_schema,
-                    registry=registry,
-                    format_checker=FormatChecker(),
+                validator = _validator_for_fragment(
+                    marker, pointer, sub_schema, registry, schemas_by_marker
                 )
             except Exception as e:
                 failures.append(

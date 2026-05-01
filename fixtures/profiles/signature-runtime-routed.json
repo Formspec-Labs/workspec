@@ -4,10 +4,6 @@
   "title": "signature-runtime-routed",
   "url": "https://example.test/fixtures/signature-runtime-routed",
   "signature": {
-    "$wosSignatureProfile": "1.0",
-    "targetWorkflow": {
-      "url": "urn:test:signature-runtime"
-    },
     "roles": [
       {
         "id": "applicantSigner",
@@ -64,6 +60,29 @@
         "assuranceLevel": "standard"
       },
       "custodyHookEligible": true
+    }
+  },
+  "impactLevel": "operational",
+  "actors": [
+    {
+      "id": "applicant",
+      "type": "human"
+    }
+  ],
+  "lifecycle": {
+    "initialState": "_s",
+    "states": {
+      "_s": {
+        "type": "atomic",
+        "transitions": [
+          {
+            "target": "_f"
+          }
+        ]
+      },
+      "_f": {
+        "type": "final"
+      }
     }
   }
 }

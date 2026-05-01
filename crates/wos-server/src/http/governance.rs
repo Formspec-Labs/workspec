@@ -1,7 +1,7 @@
 use axum::Json;
+use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
-use axum::Router;
 use serde::Deserialize;
 
 use crate::AppState;
@@ -68,10 +68,7 @@ async fn quality_controls(
         .ok_or(ApiError::NotFound)
 }
 
-async fn pipelines(
-    State(s): State<AppState>,
-    Path(url): Path<String>,
-) -> Json<Vec<PipelineView>> {
+async fn pipelines(State(s): State<AppState>, Path(url): Path<String>) -> Json<Vec<PipelineView>> {
     Json(s.services.governance.pipelines(&url).await)
 }
 
@@ -112,7 +109,10 @@ async fn delegation_create(
     _: RequireRole<Supervisor>,
     Json(entry): Json<DelegationEntryView>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    s.services.governance.create_delegation(&url, &entry).await?;
+    s.services
+        .governance
+        .create_delegation(&url, &entry)
+        .await?;
     Ok(Json(serde_json::json!({ "ok": true, "id": entry.id })))
 }
 

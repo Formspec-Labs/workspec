@@ -19,9 +19,24 @@ pub async fn run(state: &AppState) -> anyhow::Result<()> {
 
 async fn seed_users(state: &AppState) -> anyhow::Result<()> {
     let demo = [
-        ("user-jane-doe", "jane.doe@example.gov", "Jane Doe", "Supervisor"),
-        ("user-sarah-j", "sarah.jenkins@example.gov", "Sarah Jenkins", "Caseworker"),
-        ("user-maria-a", "maria.applicant@example.com", "Maria Applicant", "Applicant"),
+        (
+            "user-jane-doe",
+            "jane.doe@example.gov",
+            "Jane Doe",
+            "Supervisor",
+        ),
+        (
+            "user-sarah-j",
+            "sarah.jenkins@example.gov",
+            "Sarah Jenkins",
+            "Caseworker",
+        ),
+        (
+            "user-maria-a",
+            "maria.applicant@example.com",
+            "Maria Applicant",
+            "Applicant",
+        ),
     ];
     for (id, email, name, role) in demo {
         if state.storage.get_user(id).await?.is_some() {
@@ -132,14 +147,11 @@ async fn seed_instances(state: &AppState) -> anyhow::Result<()> {
 }
 
 fn url_to_slug(url: &str) -> String {
-    url.rsplit(':')
-        .nth(1)
-        .map(String::from)
-        .unwrap_or_else(|| {
-            url.rsplit('/')
-                .next()
-                .unwrap_or(url)
-                .trim_end_matches(".json")
-                .to_string()
-        })
+    url.rsplit(':').nth(1).map(String::from).unwrap_or_else(|| {
+        url.rsplit('/')
+            .next()
+            .unwrap_or(url)
+            .trim_end_matches(".json")
+            .to_string()
+    })
 }

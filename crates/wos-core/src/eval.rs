@@ -789,12 +789,8 @@ impl Evaluator {
                 //      - bind item under `itemVariable` (default `$item`),
                 //        index under `indexVariable` (default `$index`).
                 //      - emit ForEachIterationStarted provenance.
-                //      - body execution is a no-op in this PR's MVP scope:
-                //        the spec admits atomic / compound / parallel bodies,
-                //        but the `body` field is treated as authoring shape
-                //        only here. Full body execution (onEntry actions per
-                //        iteration, nested transitions, output_path / merge
-                //        strategy writes) is tracked as Sub-PR D-3.
+                //      - run the `body` subtree (atomic onEntry/onExit; compound
+                //        walk to Final; output_path merge after body).
                 //      - check `breakCondition` (FEL predicate); set
                 //        break_triggered if true.
                 //      - emit ForEachIterationCompleted provenance.
@@ -811,12 +807,15 @@ impl Evaluator {
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
-                let collection_expr = indexed.state.collection.clone().ok_or_else(|| {
-                    EvalError::ForEach {
-                        state: state_id.to_string(),
-                        message: "missing required `collection` FEL expression".to_string(),
-                    }
-                })?;
+                let collection_expr =
+                    indexed
+                        .state
+                        .collection
+                        .clone()
+                        .ok_or_else(|| EvalError::ForEach {
+                            state: state_id.to_string(),
+                            message: "missing required `collection` FEL expression".to_string(),
+                        })?;
 
                 let item_var = indexed
                     .state
@@ -830,11 +829,8 @@ impl Evaluator {
                     .unwrap_or_else(|| "$index".to_string());
                 let break_expr = indexed.state.break_condition.clone();
 
-                let items = self.evaluate_foreach_collection(
-                    state_id,
-                    &collection_expr,
-                    event_data,
-                )?;
+                let items =
+                    self.evaluate_foreach_collection(state_id, &collection_expr, event_data)?;
 
                 // Save prior bindings so foreach is transparent w.r.t. case
                 // state — per spec, per-iteration bindings do NOT persist into
@@ -852,10 +848,8 @@ impl Evaluator {
                     })?;
 
                     self.case_state.insert(item_var.clone(), item.clone());
-                    self.case_state.insert(
-                        index_var.clone(),
-                        serde_json::Value::Number(i_u32.into()),
-                    );
+                    self.case_state
+                        .insert(index_var.clone(), serde_json::Value::Number(i_u32.into()));
 
                     self.provenance
                         .push(ProvenanceRecord::foreach_iteration_started(
@@ -1013,10 +1007,9 @@ impl Evaluator {
                     }
                 }
 
-                self.provenance
-                    .push(ProvenanceRecord::foreach_completed(
-                        state_id, iterations, broke,
-                    ));
+                self.provenance.push(ProvenanceRecord::foreach_completed(
+                    state_id, iterations, broke,
+                ));
 
                 self.fire_foreach_outgoing(state_id, actor, event_data)?;
 
@@ -1387,10 +1380,13 @@ impl Evaluator {
         const MAX_BODY_STEPS: u32 = 100;
         const SYNTHETIC_EVENT: &str = "$bodyAuto";
 
-        let initial_id = body.initial_state.as_deref().ok_or_else(|| EvalError::ForEach {
-            state: foreach_state_id.to_string(),
-            message: "compound body MUST declare `initialState`".to_string(),
-        })?;
+        let initial_id = body
+            .initial_state
+            .as_deref()
+            .ok_or_else(|| EvalError::ForEach {
+                state: foreach_state_id.to_string(),
+                message: "compound body MUST declare `initialState`".to_string(),
+            })?;
         if body.states.is_empty() {
             return Err(EvalError::ForEach {
                 state: foreach_state_id.to_string(),
@@ -1401,12 +1397,13 @@ impl Evaluator {
         let mut current_id = initial_id.to_string();
 
         for _step in 0..MAX_BODY_STEPS {
-            let substate = body.states.get(&current_id).ok_or_else(|| EvalError::ForEach {
-                state: foreach_state_id.to_string(),
-                message: format!(
-                    "compound body references missing substate '{current_id}'"
-                ),
-            })?;
+            let substate = body
+                .states
+                .get(&current_id)
+                .ok_or_else(|| EvalError::ForEach {
+                    state: foreach_state_id.to_string(),
+                    message: format!("compound body references missing substate '{current_id}'"),
+                })?;
 
             let substate_label = format!("{foreach_state_id}:body:{current_id}");
 
@@ -1433,16 +1430,9 @@ impl Evaluator {
             let entry_actions = substate.on_entry.clone();
             for action in &entry_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance.push(ProvenanceRecord::on_entry(
-                    &substate_label,
-                    action_name,
-                ));
-                self.execute_action_in_state(
-                    action,
-                    actor,
-                    &substate_label,
-                    event_data,
-                )?;
+                self.provenance
+                    .push(ProvenanceRecord::on_entry(&substate_label, action_name));
+                self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
             // Final substate ⇒ body has completed.
@@ -1474,12 +1464,7 @@ impl Evaluator {
                 // Run transition actions — attributed to the source substate
                 // for provenance — before walking the source's onExit.
                 for action in &transition.actions {
-                    self.execute_action_in_state(
-                        action,
-                        actor,
-                        &substate_label,
-                        event_data,
-                    )?;
+                    self.execute_action_in_state(action, actor, &substate_label, event_data)?;
                 }
                 next_id = Some(transition.target.clone());
                 break;
@@ -1504,16 +1489,9 @@ impl Evaluator {
             let exit_actions = substate.on_exit.clone();
             for action in &exit_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance.push(ProvenanceRecord::on_exit(
-                    &substate_label,
-                    action_name,
-                ));
-                self.execute_action_in_state(
-                    action,
-                    actor,
-                    &substate_label,
-                    event_data,
-                )?;
+                self.provenance
+                    .push(ProvenanceRecord::on_exit(&substate_label, action_name));
+                self.execute_action_in_state(action, actor, &substate_label, event_data)?;
             }
 
             current_id = next;

@@ -768,6 +768,46 @@ fn count_records(eval: &Evaluator, kind: ProvenanceKind) -> usize {
         .count()
 }
 
+/// Counts `OnEntry` records for foreach **body** action hooks only.
+///
+/// Structural `state_entered` records reuse [`ProvenanceKind::OnEntry`] with
+/// `data.state` and no `actionType`; body hooks set `to_state` under
+/// `<foreach-id>:body` and include `actionType` in `data`.
+fn count_foreach_body_on_entry(eval: &Evaluator, foreach_state_id: &str) -> usize {
+    let prefix = format!("{foreach_state_id}:body");
+    eval.provenance()
+        .records()
+        .iter()
+        .filter(|r| {
+            r.record_kind == ProvenanceKind::OnEntry
+                && r.to_state
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with(&prefix))
+                && r.data
+                    .as_ref()
+                    .is_some_and(|d| d.get("actionType").is_some())
+        })
+        .count()
+}
+
+/// Counts `OnExit` records for foreach **body** action hooks only.
+fn count_foreach_body_on_exit(eval: &Evaluator, foreach_state_id: &str) -> usize {
+    let prefix = format!("{foreach_state_id}:body");
+    eval.provenance()
+        .records()
+        .iter()
+        .filter(|r| {
+            r.record_kind == ProvenanceKind::OnExit
+                && r.from_state
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with(&prefix))
+                && r.data
+                    .as_ref()
+                    .is_some_and(|d| d.get("actionType").is_some())
+        })
+        .count()
+}
+
 fn first_record(eval: &Evaluator, kind: ProvenanceKind) -> &wos_core::provenance::ProvenanceRecord {
     eval.provenance()
         .records()
@@ -783,10 +823,7 @@ fn foreach_empty_collection_fires_outgoing_immediately() {
     // exactly one ForEachCompleted provenance record is emitted with
     // iterations=0 and broke=false, and zero iteration-pair records appear.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_state(
@@ -846,10 +883,7 @@ fn foreach_iterates_collection_in_order() {
     // anonymous outgoing transition fires with synthetic event
     // `$foreachComplete`, (e) the foreach state lands on `done`.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_state(
@@ -872,10 +906,8 @@ fn foreach_iterates_collection_in_order() {
         ..minimal_kernel("intake", states)
     })
     .unwrap();
-    eval.case_state_mut().insert(
-        "items".into(),
-        serde_json::json!([{"x": 1}, {"x": 2}]),
-    );
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([{"x": 1}, {"x": 2}]));
 
     let fired = eval.process_event("submit", None, None).unwrap();
     assert!(fired);
@@ -911,10 +943,7 @@ fn foreach_break_condition_terminates_early() {
     // iteration MUST stop with iterations=2 (not 3), broke=true, and the
     // last ForEachIterationCompleted record carries breakTriggered=true.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_state(
@@ -992,10 +1021,7 @@ fn foreach_iteration_bindings_do_not_persist() {
     // overrides) MUST NOT survive after the foreach state completes.
     // Authors that need persistence use `outputPath` (Sub-PR D-3).
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_state(
@@ -1040,10 +1066,7 @@ fn foreach_non_array_collection_is_rejected() {
     // a number / string / object / null causes the runtime to reject with
     // EvalError::ForEach.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_state(
@@ -1080,8 +1103,7 @@ fn foreach_non_array_collection_is_rejected() {
         "error MUST identify the offending state: {msg}"
     );
     assert!(
-        msg.contains("MUST evaluate to a bounded array")
-            || msg.contains("collection"),
+        msg.contains("MUST evaluate to a bounded array") || msg.contains("collection"),
         "error MUST mention the collection contract: {msg}"
     );
 }
@@ -1201,10 +1223,7 @@ fn foreach_body_on_entry_setdata_runs_per_iteration() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1252,9 +1271,10 @@ fn foreach_body_on_entry_setdata_runs_per_iteration() {
         body_mutations.len()
     );
 
-    // Three OnEntry records emitted for the body actions.
+    // Three OnEntry records emitted for the body actions (excluding structural
+    // `state_entered` OnEntry records for intake / loop / done).
     assert_eq!(
-        count_records(&eval, ProvenanceKind::OnEntry),
+        count_foreach_body_on_entry(&eval, "loop"),
         3,
         "OnEntry record MUST be emitted once per body-action invocation per iteration"
     );
@@ -1279,10 +1299,7 @@ fn foreach_body_on_exit_setdata_runs_after_break_condition_fires() {
     };
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1338,9 +1355,9 @@ fn foreach_body_on_exit_setdata_runs_after_break_condition_fires() {
         body_mutations.len()
     );
 
-    // OnEntry + OnExit records: 2 of each.
-    assert_eq!(count_records(&eval, ProvenanceKind::OnEntry), 2);
-    assert_eq!(count_records(&eval, ProvenanceKind::OnExit), 2);
+    // OnEntry + OnExit records: 2 of each (body hooks only).
+    assert_eq!(count_foreach_body_on_entry(&eval, "loop"), 2);
+    assert_eq!(count_foreach_body_on_exit(&eval, "loop"), 2);
 }
 
 #[test]
@@ -1354,10 +1371,7 @@ fn foreach_body_actions_skipped_for_empty_collection() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1390,9 +1404,9 @@ fn foreach_body_actions_skipped_for_empty_collection() {
         "body.onEntry MUST NOT execute when the collection is empty"
     );
     assert_eq!(
-        count_records(&eval, ProvenanceKind::OnEntry),
+        count_foreach_body_on_entry(&eval, "loop"),
         0,
-        "no body actions ⇒ no OnEntry records"
+        "no body actions ⇒ no foreach-body OnEntry hook records"
     );
 }
 
@@ -1420,10 +1434,7 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1456,7 +1467,7 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
         eval.case_state().get("currentItem").is_none(),
         "iteration binding MUST NOT persist after foreach completes"
     );
-    assert_eq!(count_records(&eval, ProvenanceKind::OnEntry), 3);
+    assert_eq!(count_foreach_body_on_entry(&eval, "loop"), 3);
 }
 
 // ── ForEach outputPath + mergeStrategy (Sub-PR D-4) ───────────────────────
@@ -1468,10 +1479,7 @@ fn foreach_output_path_collect_appends_each_item_to_array() {
     // one per iteration. After three iterations, `caseFile.results` is the
     // input collection element-for-element (atomic body, identity capture).
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1536,10 +1544,7 @@ fn foreach_output_path_collect_appends_to_existing_array() {
     // workflow patterns where multiple foreach states funnel into a single
     // accumulator.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1567,10 +1572,8 @@ fn foreach_output_path_collect_appends_to_existing_array() {
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["new1", "new2"]));
-    eval.case_state_mut().insert(
-        "results".into(),
-        serde_json::json!(["existing1"]),
-    );
+    eval.case_state_mut()
+        .insert("results".into(), serde_json::json!(["existing1"]));
 
     eval.process_event("submit", None, None).unwrap();
 
@@ -1587,10 +1590,7 @@ fn foreach_output_path_shallow_replaces_top_level_keys() {
     // has its top-level keys merged into the existing object at outputPath.
     // Later iterations overwrite earlier keys when names collide.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1638,10 +1638,7 @@ fn foreach_output_path_deep_recursively_merges_objects() {
     // mergeStrategy=deep: nested objects merge key-by-key. Non-object
     // collisions are replaced wholesale; arrays are NOT element-merged.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1704,10 +1701,7 @@ fn foreach_output_path_collect_rejects_non_array_existing() {
     // collect MUST reject — author intent (collect) and runtime state are
     // inconsistent.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1733,7 +1727,8 @@ fn foreach_output_path_collect_rejects_non_array_existing() {
         ..minimal_kernel("intake", states)
     })
     .unwrap();
-    eval.case_state_mut().insert("items".into(), serde_json::json!([{}]));
+    eval.case_state_mut()
+        .insert("items".into(), serde_json::json!([{}]));
     eval.case_state_mut().insert(
         "results".into(),
         serde_json::Value::String("not-an-array".into()),
@@ -1754,10 +1749,7 @@ fn foreach_output_path_shallow_rejects_non_object_item() {
     // mergeStrategy=shallow requires per-iteration items to be objects;
     // a primitive item (string / number / null) MUST be rejected.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1803,10 +1795,7 @@ fn foreach_output_path_persists_after_foreach_completes() {
     // outputPath exists. Sanity-check: after the foreach completes, the
     // accumulated outputPath value is still readable from case_state.
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         State {
@@ -1934,10 +1923,7 @@ fn foreach_compound_body_walks_substates_to_final() {
     let body = compound_body("validate", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1986,10 +1972,7 @@ fn foreach_compound_body_walks_substates_to_final() {
 
     // Final value of caseFile.lastValidation: "ok" (set by the second
     // iteration's body run).
-    assert_eq!(
-        eval.case_state()["lastValidation"],
-        serde_json::json!("ok")
-    );
+    assert_eq!(eval.case_state()["lastValidation"], serde_json::json!("ok"));
 }
 
 #[test]
@@ -2039,10 +2022,7 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
     let body = compound_body("decide", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2096,10 +2076,7 @@ fn foreach_compound_body_stuck_substate_errors() {
     let body = compound_body("stuck", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2145,10 +2122,7 @@ fn foreach_compound_body_missing_initial_state_errors() {
     };
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2189,10 +2163,7 @@ fn foreach_unsupported_body_kind_errors() {
     };
 
     let mut states = IndexMap::new();
-    states.insert(
-        "intake".into(),
-        atomic(vec![transition("submit", "loop")]),
-    );
+    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
     states.insert(
         "loop".into(),
         foreach_with_body(

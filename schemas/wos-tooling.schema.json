@@ -376,10 +376,18 @@
           "additionalProperties": false
         },
         "$wosTooling": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling document marker for the lint diagnostic root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
+          "examples": [
+            "1.0"
+          ]
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling kind discriminator for the lint diagnostic root view; consumers use it to select the matching schema sub-view.",
+          "examples": [
+            "lintDiagnostic"
+          ]
         }
       },
       "additionalProperties": false,
@@ -861,10 +869,18 @@
           }
         },
         "$wosTooling": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling document marker for the conformance trace root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
+          "examples": [
+            "1.0"
+          ]
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling kind discriminator for the conformance trace root view; consumers use it to select the matching schema sub-view.",
+          "examples": [
+            "conformanceTrace"
+          ]
         }
       }
     },
@@ -1330,10 +1346,18 @@
           }
         },
         "$wosTooling": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling document marker for the mcp tool catalog root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
+          "examples": [
+            "1.0"
+          ]
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling kind discriminator for the mcp tool catalog root view; consumers use it to select the matching schema sub-view.",
+          "examples": [
+            "mcpToolCatalog"
+          ]
         }
       },
       "additionalProperties": false,
@@ -2413,10 +2437,18 @@
           "$ref": "#/$defs/extensionRegistry__ExtensionsMap"
         },
         "$wosTooling": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling document marker for the extension registry root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
+          "examples": [
+            "1.0"
+          ]
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "Tooling kind discriminator for the extension registry root view; consumers use it to select the matching schema sub-view.",
+          "examples": [
+            "extensionRegistry"
+          ]
         }
       }
     }

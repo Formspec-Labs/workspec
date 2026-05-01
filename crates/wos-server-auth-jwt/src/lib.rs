@@ -1,8 +1,8 @@
-use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wos_server_ports::auth::{
@@ -156,7 +156,12 @@ impl AuthProvider for JwtAuth {
         if claims.auth_epoch != user_row.auth_epoch {
             return Err(AuthError::Revoked);
         }
-        if !self.storage.session_is_valid(&claims.jti).await.map_err(ae)? {
+        if !self
+            .storage
+            .session_is_valid(&claims.jti)
+            .await
+            .map_err(ae)?
+        {
             return Err(AuthError::Revoked);
         }
         self.storage.revoke_session(&claims.jti).await.map_err(ae)?;
@@ -201,8 +206,14 @@ impl AuthProvider for JwtAuth {
         if claims.kind != "access" {
             return Err(AuthError::InvalidToken);
         }
-        self.storage.bump_user_auth_epoch(&claims.sub).await.map_err(ae)?;
-        self.storage.revoke_sessions_for_user(&claims.sub).await.map_err(ae)?;
+        self.storage
+            .bump_user_auth_epoch(&claims.sub)
+            .await
+            .map_err(ae)?;
+        self.storage
+            .revoke_sessions_for_user(&claims.sub)
+            .await
+            .map_err(ae)?;
         Ok(())
     }
 
@@ -220,7 +231,12 @@ impl AuthProvider for JwtAuth {
         if claims.auth_epoch != user_row.auth_epoch {
             return Err(AuthError::Revoked);
         }
-        if !self.storage.session_is_valid(&claims.jti).await.map_err(ae)? {
+        if !self
+            .storage
+            .session_is_valid(&claims.jti)
+            .await
+            .map_err(ae)?
+        {
             return Err(AuthError::Revoked);
         }
         Ok(AuthContext {

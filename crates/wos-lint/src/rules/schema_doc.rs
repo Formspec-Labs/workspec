@@ -48,9 +48,8 @@ pub fn check_schema(root: &Value, diagnostics: &mut Vec<LintDiagnostic>) {
 /// Count the total number of leaf properties in the parsed schema.
 ///
 /// Mirrors `check_schema`'s walk but only counts leaves; does not produce
-/// diagnostics. The companion ratchet for `EXCLUDED_SCHEMAS_CEILINGS` uses
-/// this to detect "fill 1, sketch 1" gaming where violation count stays
-/// flat but total leaf count grows.
+/// diagnostics. This supports schema-doc inventory reporting where callers
+/// need denominator data rather than per-property findings.
 pub fn count_leaves(root: &Value) -> usize {
     let mut count = 0usize;
     walk_count(root, &mut count);

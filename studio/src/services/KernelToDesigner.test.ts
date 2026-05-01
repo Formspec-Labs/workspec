@@ -242,25 +242,6 @@ describe('KernelToDesigner round-trip', () => {
     walk(kernel.lifecycle.states, roundTripped.lifecycle.states, []);
   });
 
-  it('maps legacy bare $error connection trigger to TransitionEventError, not signal', () => {
-    const base = makeKernel({
-      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
-      b: { type: 'final' },
-    }, 'a');
-    const designer = designerFromKernel(base);
-    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
-    expect(out).toBeDefined();
-    // Simulate trigger-only designer data: typed `event` must be cleared so `trigger` is authoritative.
-    delete out!.event;
-    out!.trigger = '$error';
-    const rt = designerToKernel(designer, base);
-    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({
-      kind: 'error',
-      code: 'wos.designer.unspecified',
-    });
-    expect(validateKernelDocument(rt).isValid).toBe(true);
-  });
-
   it('round-trips a typed error event set on the connection', () => {
     const base = makeKernel({
       a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
@@ -276,9 +257,26 @@ describe('KernelToDesigner round-trip', () => {
       kind: 'error',
       code: 'wos.designer.invalid_trigger_json',
     });
+    expect(validateKernelDocument(rt).isValid).toBe(true);
   });
 
-  it('still maps $join to a parallel-completion signal', () => {
+  it('round-trips join signal when connection carries typed event (or JSON trigger echo)', () => {
+    const base = makeKernel({
+      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
+      b: { type: 'final' },
+    }, 'a');
+    const designer = designerFromKernel(base);
+    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
+    expect(out).toBeDefined();
+    const join = joinSignal();
+    out!.event = join;
+    out!.trigger = JSON.stringify(join);
+    const rt = designerToKernel(designer, base);
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual(join);
+    expect(validateKernelDocument(rt).isValid).toBe(true);
+  });
+
+  it('falls back to synthetic message when typed event is cleared and trigger is not a schema-valid JSON echo', () => {
     const base = makeKernel({
       a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
       b: { type: 'final' },
@@ -287,9 +285,24 @@ describe('KernelToDesigner round-trip', () => {
     const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
     expect(out).toBeDefined();
     delete out!.event;
-    out!.trigger = '$join';
+    out!.trigger = 'submit';
     const rt = designerToKernel(designer, base);
-    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual(joinSignal());
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({ kind: 'message', name: 'a_to_b' });
+    expect(validateKernelDocument(rt).isValid).toBe(true);
+  });
+
+  it('ignores trigger JSON that fails TransitionEvent schema (e.g. signal without scope)', () => {
+    const base = makeKernel({
+      a: { type: 'atomic', transitions: [{ event: msg('go'), target: 'b' }] },
+      b: { type: 'final' },
+    }, 'a');
+    const designer = designerFromKernel(base);
+    const out = designer.connections.find(c => c.from === 'a' && c.to === 'b');
+    expect(out).toBeDefined();
+    delete out!.event;
+    out!.trigger = JSON.stringify({ kind: 'signal', name: 'x' });
+    const rt = designerToKernel(designer, base);
+    expect(rt.lifecycle.states.a.transitions?.[0].event).toEqual({ kind: 'message', name: 'a_to_b' });
     expect(validateKernelDocument(rt).isValid).toBe(true);
   });
 });

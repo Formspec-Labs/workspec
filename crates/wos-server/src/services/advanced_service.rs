@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::error::{ApiError, ApiResult};
 use crate::services::bundle_service::BundleService;
 use crate::services::json_util::lookup_dotted;
-use crate::storage::{InstanceQuery, StorageHandle, LIST_INSTANCES_PAGE_SIZE_MAX};
+use crate::storage::{InstanceQuery, LIST_INSTANCES_PAGE_SIZE_MAX, StorageHandle};
 
 // ── Verification (SMT stub) ────────────────────────────────────────
 
@@ -57,10 +57,7 @@ pub struct VerifySummary {
     pub inconclusive: u64,
 }
 
-pub async fn verify(
-    bundle: &Arc<BundleService>,
-    req: &VerifyRequest,
-) -> ApiResult<VerifyResponse> {
+pub async fn verify(bundle: &Arc<BundleService>, req: &VerifyRequest) -> ApiResult<VerifyResponse> {
     let bundle_view = bundle
         .full_bundle(&req.workflow_url)
         .await
@@ -78,11 +75,7 @@ pub async fn verify(
     } else {
         advanced
             .iter()
-            .filter_map(|c| {
-                c.get("id")
-                    .and_then(|v| v.as_str())
-                    .map(String::from)
-            })
+            .filter_map(|c| c.get("id").and_then(|v| v.as_str()).map(String::from))
             .collect()
     };
     let results: Vec<VerifyResult> = refs
@@ -193,9 +186,9 @@ pub async fn evaluate_equity(
             },
         })
         .collect();
-    let (min, max) = groups
-        .iter()
-        .fold((f64::INFINITY, 0.0_f64), |(lo, hi), g| (lo.min(g.rate), hi.max(g.rate)));
+    let (min, max) = groups.iter().fold((f64::INFINITY, 0.0_f64), |(lo, hi), g| {
+        (lo.min(g.rate), hi.max(g.rate))
+    });
     let disparity = if min.is_finite() { max - min } else { 0.0 };
     Ok(EquityReport {
         workflow_url: req.workflow_url.clone(),
