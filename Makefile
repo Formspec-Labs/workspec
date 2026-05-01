@@ -10,7 +10,8 @@ STUDIO_DIR = studio
 .PHONY: all build test lint clean help \
 	rust-build rust-test rust-check \
 	python-test \
-	studio-build studio-test studio-lint studio-clean studio-install studio-types
+	studio-build studio-test studio-lint studio-clean studio-install studio-types \
+	postgres-up postgres-down
 
 # Default target: build and test everything
 all: build test
@@ -31,6 +32,11 @@ help:
 	@echo "  rust-build    Build all Rust crates"
 	@echo "  rust-test     Run all Rust tests"
 	@echo "  rust-check    Run cargo check on the workspace"
+	@echo ""
+	@echo "Postgres (integration tests):"
+	@echo "  postgres-up   docker compose up (port 5433, user postgres / wostest)"
+	@echo "  postgres-down docker compose down"
+	@echo "  export DATABASE_URL=postgres://postgres:wostest@127.0.0.1:5433/postgres"
 	@echo ""
 	@echo "Python Targets:"
 	@echo "  python-test   Run Python schema-conformance tests"
@@ -57,7 +63,18 @@ test: rust-test python-test studio-test
 rust-test:
 	@echo "Running Rust workspace tests (nextest)."
 	@echo "Note: discovery for large integration binaries (e.g. wos-server) can take a while before PASS lines appear."
-	$(CARGO) nextest run --workspace --status-level pass
+	$(CARGO) nextest run --workspace --no-fail-fast
+
+COMPOSE_POSTGRES := docker compose -f docker-compose.postgres.yml
+
+postgres-up:
+	$(COMPOSE_POSTGRES) up -d
+	@echo "Postgres listening on 127.0.0.1:5433"
+	@echo "export DATABASE_URL='postgres://postgres:wostest@127.0.0.1:5433/postgres'"
+	@echo "export WOS_POSTGRES_TEST_URL='postgres://postgres:wostest@127.0.0.1:5433/postgres'"
+
+postgres-down:
+	$(COMPOSE_POSTGRES) down
 
 python-test:
 	$(PYTEST) tests/schemas -q

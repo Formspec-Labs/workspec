@@ -1,0 +1,27 @@
+# Local Postgres for WOS / Trellis integration tests (wos-server-postgres, etc.).
+#
+# Start:  docker compose -f docker-compose.postgres.yml up -d
+# Stop:   docker compose -f docker-compose.postgres.yml down
+#
+# Then point tests at the server (host port 5433 → container 5432):
+#   export DATABASE_URL='postgres://postgres:wostest@127.0.0.1:5433/postgres'
+# or (preferred by wos-server-postgres tests):
+#   export WOS_POSTGRES_TEST_URL='postgres://postgres:wostest@127.0.0.1:5433/postgres'
+#
+# Image tag aligns with common dev installs (postgresql@16) used in test binary search paths.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wos-spec-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: wostest
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
