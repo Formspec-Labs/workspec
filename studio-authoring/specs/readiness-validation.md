@@ -159,13 +159,16 @@ Surfaces findings about **the moment of publication**: critical findings unresol
 Representative rules:
 
 - `PUB-LINT-001` — no `error` or `block` findings remain unresolved at publication.
-- `PUB-LINT-002` — every required reviewer role has at least one ApprovalDecision (per [`review-and-approval.md`](review-and-approval.md), forthcoming).
-- `PUB-LINT-003` — the compiled `$wosWorkflow` artifact passes `wos-workflow.schema.json` validation.
-- `PUB-LINT-004` — the compiled artifact passes WOS lint (`crates/wos-lint`).
-- `PUB-LINT-005` — the approval package contains: `$wosWorkflow`, scenario suite, validation report, citation manifest, release notes, approval certificate.
-- `PUB-LINT-006` — every `unmappedButApproved` mapping is listed in the release notes (`SA-MUST-map-042`).
+- `PUB-LINT-002` — every required reviewer role has at least one ApprovalDecision (per [`review-and-approval.md`](review-and-approval.md)).
+- `PUB-LINT-003` — the compiled `$wosWorkflow` artifact passes `wos-workflow.schema.json` validation. Lifted from the **`schema-pass`** external gate per [`compiler-contract.md`](compiler-contract.md) `SA-MUST-cmp-030`.
+- `PUB-LINT-004` — the compiled artifact passes WOS lint (`crates/wos-lint`). Lifted from the **`lint-pass`** external gate per `compiler-contract.md` `SA-MUST-cmp-030`.
+- `PUB-LINT-005` — the approval package contains: `$wosWorkflow`, scenario suite, validation report, citation manifest, release notes, approval certificate. (Cross-cuts `compiler-contract.md` phase 8.)
+- `PUB-LINT-006` — every `unmappedButApproved` mapping is listed in the release notes (`SA-MUST-map-042` + `SA-MUST-cmp-023`).
+- `PUB-LINT-007` — emitted scenarios pass `crates/wos-conformance` against the compiled artifact. Lifted from the **`conformance-pass`** external gate per `compiler-contract.md` `SA-MUST-cmp-030`.
 
-Default severity: `block` for incomplete artifact / failing schema / missing reviewer; `error` for unresolved error-tier findings; `warn` for soft gaps.
+The three external gate names — `schema-pass`, `lint-pass`, `conformance-pass` — are anchored in [`compiler-contract.md`](compiler-contract.md) `SA-MUST-cmp-032` and MUST be preserved verbatim across spec versions and compiler versions; they are the contract by which technical implementers triage publication failures.
+
+Default severity: `block` for incomplete artifact / failing schema / missing reviewer / failing lint / failing conformance; `error` for unresolved error-tier findings; `warn` for soft gaps.
 
 ## Finding lifecycle
 

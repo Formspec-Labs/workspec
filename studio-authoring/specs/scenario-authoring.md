@@ -333,6 +333,6 @@ This satisfies `SA-MUST-scn-005` and supports the parent CLAUDE.md invariant tha
 - Concept model: [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.13, §2.5.
 - PRD: [`../VISION.md`](../VISION.md) §9.7, §16 Phase-2 Epic 2.3, §12 user stories.
 - Upstream: [`policy-object-model.md`](policy-object-model.md), [`studio-to-wos-mapping.md`](studio-to-wos-mapping.md).
-- Downstream: [`readiness-validation.md`](readiness-validation.md), [`change-impact.md`](change-impact.md), [`runtime-observation.md`](runtime-observation.md).
+- Downstream: [`readiness-validation.md`](readiness-validation.md), [`change-impact.md`](change-impact.md). (Phase-4 RuntimeObservation → Scenario promotion is a forward reference; the spec is deferred.)
 - WOS: [`../../schemas/wos-tooling.schema.json`](../../schemas/wos-tooling.schema.json), [`../../crates/wos-conformance`](../../crates/wos-conformance), [`../../specs/profiles/`](../../specs/profiles/).
 - Repo conventions: [`../../CONVENTIONS.md`](../../CONVENTIONS.md).

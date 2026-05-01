@@ -25,7 +25,7 @@ Section numbering here is local; cross-references to PRD use `VISION §N`.
 
 ## 1. Core entities
 
-The 18 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes.
+The 23 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes. (§1.17 RuntimeObservation is a Phase-4 placeholder name; §1.20–1.23 are introduced by `specs/binding-and-integration.md`; §1.19 WorkflowIntent has its data-model home in `specs/workflow-intent.md`; §1.24 Workspace has its data-model home in `specs/workspace.md`.)
 
 ### 1.1 Workspace
 
@@ -139,19 +139,58 @@ The terminal Studio artifact: an approved, version-stamped bundle that ships out
 **Key fields:** `id`, `workflowIntentRef`, `version`, `wosArtifact` (or ref), `scenarioSuiteRef[]`, `validationReportRef`, `approvalCertificate` (aggregated ApprovalDecisions + signatures), `sourceManifest` (every SourceVersion citation), `releaseNotes`, `publishedBy`, `publishedAt`, `supersededBy` (later package, when applicable).
 **Relationships:** derives from WorkflowIntent at the moment of publication; references every contributing PolicyObject + Mapping + Scenario + ApprovalDecision; subject of ChangeImpactReport when sources change post-publication.
 
-### 1.17 RuntimeObservation
+### 1.17 RuntimeObservation (Phase-4 placeholder)
 
-(Phase-4 forward-looking entity; full data model in [`specs/runtime-observation.md`](specs/runtime-observation.md).) An imported case/event history normalized into a comparable trace. Used for designed-vs-observed comparison, bottleneck/drift detection, and evidence-backed improvement proposals (PRD §9.11).
-
-**Key fields:** `id`, `caseId` (in the source system), `workflowVersion` (the published version the case followed), `eventSequence[]`, `actualPath`, `bottlenecks[]`, `manualOverrides[]`, `unmodeledSteps[]`.
-**Relationships:** linked to PublishedWorkflowPackage version; can be promoted into a Scenario (`Generate scenarios from observed edge cases`, PRD §9.11); subject of ChangeImpactReport when divergence triggers iteration.
+**Status:** Phase-4 forward-looking entity. Removed from the Stage-2 spec set; no `specs/runtime-observation.md` exists at this stage. The entity name is reserved here so other specs may forward-reference it (e.g., `originClass = runtime-observed` in `authoring-provenance.md`, `triggerKind = runtime-observation-cluster` in `change-impact.md`); the data model and normative contract are deferred to Phase-4 work. When Phase 4 is real, write the spec then.
 
 ### 1.18 ChangeImpactReport
 
-The artifact connecting a source/policy change to its downstream effects. Drives Phase-3 change management (PRD §9.8).
+The artifact connecting a source/policy change to its downstream effects. Drives Phase-3 change management (PRD §9.8). Full data model in [`specs/change-impact.md`](specs/change-impact.md).
 
-**Key fields:** `id`, `triggerKind` (`source-version-change` | `policy-object-edit` | `runtime-observation-cluster`), `triggerRef`, `affectedPolicyObjects[]`, `affectedMappings[]`, `affectedWorkflowElements[]`, `affectedScenarios[]`, `affectedPublishedPackages[]`, `affectedAssumptions[]`, `affectedReviewerResolutions[]`, `summary`, `producedAt`, `acknowledgedBy`, `acknowledgedAt`.
-**Relationships:** triggered by SourceVersion supersession or PolicyObject revision; references the entire downstream chain; closes when each affected artifact is reviewed/updated/waived.
+**Key fields:** `id`, `triggerKind` (`source-version-change` | `policy-object-edit` | `mapping-update` | `runtime-observation-cluster` (Phase-4 placeholder)), `triggerRef`, `affectedPolicyObjects[]`, `affectedMappings[]`, `affectedWorkflowElements[]`, `affectedScenarios[]`, `affectedPublishedPackages[]`, `affectedAssumptions[]`, `affectedReviewerResolutions[]`, `summary`, `producedAt`, `acknowledgedBy`, `acknowledgedAt`, `closedAt?`, `closureRationale?`.
+**Relationships:** triggered by SourceVersion supersession, PolicyObject edit, or mapping update; references the entire downstream chain; closes when each affected artifact is reviewed/updated/waived.
+
+### 1.19 WorkflowIntent (data model home: [`specs/workflow-intent.md`](specs/workflow-intent.md))
+
+The user-facing draft of a workflow before compilation to `$wosWorkflow`. WorkflowIntent is composed of `WorkflowElement`s of the 16 user-facing kinds (PRD §9.4: phase / step / decision / review / notice / deadline / appeal / exception / hold / data-collection / evidence-request / system-check / AI-assistance / manual-override / completion-outcome / phase-end). Each element has a `bridge` field that determines how it compiles to kernel constructs (state, transition, timer, task, guard).
+
+**Key fields:** `id`, `workspaceId`, `title`, `impactLevel`, `lifecycleState`, `elements[]` (WorkflowElement), `policyObjectRefs[]`, `mappingRefs[]`, `bindingRefs[]`, `compiledArtifactRef?`, `expertModeView?`, `version`, `parentVersion?`, `provenance`.
+**Relationships:** derives from PolicyObject* via StudioToWosMapping*; carries Bindings (Service / Event / PolicyEngine / DecisionTable); compiled by the Studio→WOS compiler ([`specs/compiler-contract.md`](specs/compiler-contract.md)); exercised by Scenario*; produces PublishedWorkflowPackage on approval.
+
+### 1.20 ServiceBinding (data model home: [`specs/binding-and-integration.md`](specs/binding-and-integration.md))
+
+A workflow step ↔ external API operation binding. Maps a `system-check`, `data-collection`, `evidence-request`, or `notice` WorkflowElement to an OpenAPI operation, an Arazzo step, or a custom integration ref.
+
+**Key fields:** `operationRef`, `operationKind` (openapi | arazzo | custom), `apiSpecRef`, `inputBindings[]`, `outputBindings[]`, `errorHandling`, `sensitivityHandling`, `sequencePosition?`.
+**Relationships:** attached to a WorkflowElement (kind-specific); compiles to `$.integration.bindings[*]` of type `openapi-call` or `arazzo-step`; attaches at `contractHook` kernel seam.
+
+### 1.21 EventBinding (data model home: [`specs/binding-and-integration.md`](specs/binding-and-integration.md))
+
+A workflow event ↔ kernel event binding. Carries CloudEvents extension attributes (`woscausationeventid`, `woscorrelationkey`) for case correlation and causal chains.
+
+**Key fields:** `eventName`, `direction` (consumed | emitted), `payloadShape[]`, `cloudEventsExtensions`, `channel?`, `bindsTo` (workflow attachment).
+**Relationships:** attached to a WorkflowIntent trigger, transition, or action; compiles to `$.integration.bindings[*]` of type `event-consume` or `event-emit`; attaches at `lifecycleHook` kernel seam.
+
+### 1.22 PolicyEngineBinding (data model home: [`specs/binding-and-integration.md`](specs/binding-and-integration.md))
+
+A workflow check ↔ external policy engine (OPA / Cedar / XACML) binding. The engine's response is normalized to `{decision, reasons[], obligations[]}` per the WOS PolicyDecision contract; composition is `deny-overrides` (engine deny overrides Studio-side permit).
+
+**Key fields:** `engineKind`, `engineEndpointRef`, `policyRef`, `inputContract`, `outputNormalization`, `composition`.
+**Relationships:** attached at a transition guard or output-validation boundary; compiles to `$.integration.bindings[*]` of type `policy-engine`; attaches at `contractHook` kernel seam.
+
+### 1.23 DecisionTable (data model home: [`specs/binding-and-integration.md`](specs/binding-and-integration.md))
+
+An extension to the existing `DecisionRule` PolicyObject kind for multi-row decision authoring. Compiles to a chained-FEL-guard sequence; **no DMN export** per the audit findings.
+
+**Key fields:** `form: "table"`, `inputs[]`, `outputs[]`, `rows[]`, `hitPolicy` (first-match | priority | unique | output-merge), `completenessRequirement`, `fallback?`.
+**Relationships:** referenced by `decision` WorkflowElements; compiles to `$.lifecycle.transitions[*].guard` (chained FEL).
+
+### 1.24 Workspace (extended; data model home: [`specs/workspace.md`](specs/workspace.md))
+
+The bounded authoring environment that owns one or more workflows. The data model is detailed in `specs/workspace.md`; this entry summarizes the entities the Workspace owns:
+
+**Owned entities:** ReviewerRole registry (workspace-scoped), WorkspacePolicy (administrator-configured behavior), WorkspaceAuditLogEntry (queryable view over AuthoringProvenanceRecords + non-provenance events), permissions surface, identity model.
+**Lifecycle:** `created → active → { archived | suspended }`; `suspended → active`; `archived` is terminal (read-only).
 
 ## 2. Lifecycles
 
@@ -294,9 +333,16 @@ The table below extends PRD §6 with concrete pointers into existing wos-spec do
 | Scenario | WOS Tooling scenario / conformance trace | [`../specs/profiles/`](../specs/profiles/), conformance fixtures (`crates/wos-conformance`) | `wos-tooling.schema.json` → `scenarios[]` |
 | ReviewerResolution | Authoring provenance / governance rationale | [`../specs/kernel/spec.md`](../specs/kernel/spec.md) §provenance, [`../specs/governance/workflow-governance.md`](../specs/governance/workflow-governance.md) | `wos-workflow.schema.json` → provenance config + `governance.rationale` |
 | PolicySource / SourceCitation | RuleReference citation / source authority / authoring provenance | [`../specs/kernel/spec.md`](../specs/kernel/spec.md) §provenance, [`../specs/governance/assertion-library.md`](../specs/governance/assertion-library.md) | `wos-workflow.schema.json` → `RuleReference` / authoring provenance |
+| ServiceBinding | OpenAPI / Arazzo integration binding | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.1, §12.3 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `openapi-call` / `arazzo-step`) |
+| EventBinding | CloudEvents kernel event | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.2 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `event-consume` / `event-emit`) |
+| PolicyEngineBinding | OPA / Cedar / XACML policy engine bridge | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.5, [`../specs/ai/ai-integration.md`](../specs/ai/ai-integration.md) §4.6 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `policy-engine`) |
+| DecisionTable (DecisionRule.form=table) | Lifecycle guard (chained FEL) | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), [`specs/compiler-contract.md`](specs/compiler-contract.md) | `wos-workflow.schema.json` → `lifecycle.transitions[*].guard` (chained FEL sequence; **not DMN**) |
+| WorkflowIntent | (the user-facing draft itself; compiles to `$wosWorkflow`) | [`specs/workflow-intent.md`](specs/workflow-intent.md) | not emitted directly; element kinds project per `specs/workflow-intent.md` §"WOS mappings" |
 | Workspace, SourceDocument, SourceVersion, SourceSection, ExtractedClaim, Assumption, Conflict, Workflow Health Dashboard, Improvement Backlog | (no WOS counterpart) | — | `authoringOnly` — Studio-internal; never emitted to `$wosWorkflow` |
 | StudioToWosMapping | (Studio control plane) | — | `authoringOnly` — the mapping record itself is metadata, not WOS content |
-| ChangeImpactReport, RuntimeObservation | (no WOS counterpart) | — | `authoringOnly` — change-management and observation are Studio concerns |
+| ChangeImpactReport | (no WOS counterpart) | [`specs/change-impact.md`](specs/change-impact.md) | `authoringOnly` — change-management is a Studio concern; release notes derived from SemanticDiff project compactly |
+| RuntimeObservation (Phase-4 placeholder) | (no current WOS counterpart) | — | `authoringOnly` — Phase-4 future-track |
+| ReviewerRole, WorkspacePolicy | (no WOS counterpart) | [`specs/workspace.md`](specs/workspace.md) | `authoringOnly` — workspace metadata; role names project compactly via ApprovalDecision provenance |
 
 Pointers into [`../schemas/`](../schemas/) reference the consolidated `wos-workflow.schema.json` per [ADR-0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md). Embedded blocks (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`) live inside that single schema; their behavioral semantics live in the per-stream specs.
 
@@ -308,7 +354,7 @@ The following questions are **deliberately deferred** to Stage-2 specs or later.
 - **PolicyObject kind closure.** PRD §9.2 lists 30+ structured object kinds. Whether this list is closed at Stage 3 (schema) or open via an `x-` extension axis is unsettled. [`specs/policy-object-model.md`](specs/policy-object-model.md) will decide.
 - **Scenario-to-conformance-trace identity.** A Studio Scenario is the authorable input; a WOS conformance trace is the observed output. The exact field-by-field mapping (and whether they share an id space) is not yet fixed. [`specs/scenario-authoring.md`](specs/scenario-authoring.md) will resolve.
 - **Authoring provenance vs. WOS provenance.** Studio's authoring provenance (who reviewed what, when, with what rationale) overlaps WOS's runtime provenance records. The boundary at compilation — what Studio emits into the published artifact's provenance vs. what stays in Studio metadata — is unsettled. [`specs/authoring-provenance.md`](specs/authoring-provenance.md) will define.
-- **RuntimeObservation data model.** Phase-4 territory; only the entity is named here. [`specs/runtime-observation.md`](specs/runtime-observation.md) is `status: future-track`.
+- **RuntimeObservation data model.** Phase-4 territory; only the entity name is reserved here (see §1.17). The dedicated spec will be written when Phase 4 begins; until then, no `specs/runtime-observation.md` exists.
 - **Cross-workspace reuse.** PRD §9.8 / §16 Phase-3 imply approved PolicyObjects could be reused across workspaces. The reuse model — copy, reference, federate — is unsettled. [`specs/change-impact.md`](specs/change-impact.md) will note this as Phase-3 work.
 
 ## 7. Cross-references

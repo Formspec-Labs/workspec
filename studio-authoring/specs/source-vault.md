@@ -127,6 +127,15 @@ Each MUST below carries a tracking ID. IDs of the form `SA-MUST-source-NNN` are 
 - **`SA-SHOULD-source-032`** — Source-version comparison SHOULD highlight changed sections at the section level, not at the byte level. Reviewers expect to see *which §-numbered subsection moved*, not raw character diffs.
 - **`SA-MUST-source-033`** — A SourceVersion in `disputed` lifecycle state MUST NOT be the sole basis for any approved PolicyObject. An approved PolicyObject citing only disputed sources MUST surface a tier-S1 ValidationFinding until the dispute is resolved. *(lint-pending.)*
 
+### Cross-document supersession
+
+`SA-MUST-source-005` constrains supersession to **within** a single SourceDocument (a new SourceVersion supersedes a prior SourceVersion of the same document). Real workflows also have **cross-document** supersession: a federal corrective-action letter overrides an office procedure memo; a state directive overrides an agency guidance document; a court ruling overrides prior interpretation. These are *different* SourceDocuments with different authors and identifiers — Source Vault supersession does not handle them.
+
+The mechanism for cross-document supersession is the **`Supersession` PolicyObject kind** in [`policy-object-model.md`](policy-object-model.md) §"Source-and-authority objects". A reviewer authors a `Supersession` PolicyObject identifying both `superseder` and `superseded` (which may be PolicySource or PolicyObject refs across SourceDocuments), records the rationale via a ReviewerResolution, and the policy-object layer takes precedence over the unrelated SourceVersion lifecycles.
+
+- **`SA-MUST-source-006`** — When two PolicyObjects citing different SourceDocuments are both `approved` and a workspace-state `Supersession` PolicyObject identifies one as superseding the other, the implementation MUST treat the superseded PolicyObject as having reduced evidentiary weight: cross-document Conflicts (per [`policy-object-model.md`](policy-object-model.md) `SA-MUST-pom-040`) detected against the superseded object MUST resolve in favor of the superseder by default, with a reviewer override available. The `Supersession` PolicyObject's `effectiveAt` field bounds the supersession's effective range. *(runtime-pending; cross-spec coupling with `policy-object-model.md` and `change-impact.md`.)*
+- **`SA-MUST-source-007`** — A `Supersession` PolicyObject MUST be authored, reviewed, and approved through the standard PolicyObject lifecycle; it is not a Source-Vault auto-detection. The policy-level supersession is reviewer-driven by design — auto-supersession across documents would risk silently overriding policy authority. *(runtime-pending.)*
+
 ### Permissions + audit
 
 - **`SA-MUST-source-040`** — Every SourceDocument MUST carry a `permissionsRef` (even if it points to a permissive default) so access control can be uniformly evaluated across the workspace. *(schema-pending: required field.)*

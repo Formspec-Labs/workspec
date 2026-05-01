@@ -197,6 +197,24 @@ A specialization of ExplanationRequirement — the applicant is owed an explanat
 
 These objects are the **bridge** between structured policy and workflow shape. Reviewers author them after the underlying Requirements / due-process objects are approved; the Studio→WOS compiler reads them to emit the WOS `lifecycle`, `actors`, `caseFile`, and embedded blocks.
 
+### Bridge kinds (overview)
+
+The seven kinds in this family are collectively referred to as **Bridge kinds**. They are the load-bearing surface that produces the `$wosWorkflow` document's structural content (`$.lifecycle.states[*]`, `$.lifecycle.transitions[*]`, `$.lifecycle.timers`, `$.lifecycle.tasks[*]`, `$.actors[*]`, `$.caseFile.*`). Technical implementers consuming the artifact rely on these kinds to be present and well-formed; their projection rules are anchored in [`compiler-contract.md`](compiler-contract.md) phases 3–4.
+
+| Kind | Bridges to | WOS path |
+|---|---|---|
+| `WorkflowStepMapping` | user-facing step → kernel state | `$.lifecycle.states[*]` |
+| `LifecycleTagMapping` | step → kernel state with `kind` (atomic / compound / parallel) | `$.lifecycle.states[*].kind` |
+| `TransitionMapping` | inter-step movement → kernel transition | `$.lifecycle.transitions[*]` |
+| `TimerMapping` | Deadline → kernel timer | `$.lifecycle.timers` |
+| `ActorMapping` | applicant / staff / system / agent → WOS actor | `$.actors[*]` (and `$.agents[*]` when `actorKind = agent`) |
+| `TaskMapping` | unit of human work → kernel task | `$.lifecycle.tasks[*]` |
+| `CaseFileMapping` | DataElement → caseFile path | `$.caseFile.<path>` |
+
+A WorkflowIntent that lacks any of these kinds where the [`workflow-intent.md`](workflow-intent.md) bridge requires them MUST be flagged as a tier-S4 ValidationFinding. These kinds are the structural glue between the user-facing workflow draft and the technical artifact; they are NOT optional metadata.
+
+The eighth kind in this family (`ScenarioMapping`) is documented for completeness but its semantics are anchored in [`scenario-authoring.md`](scenario-authoring.md), not here.
+
 ### `WorkflowStepMapping`
 
 A user-facing workflow step (PRD §9.4: phase / step / decision / review / notice / deadline / appeal / exception / hold / data collection / evidence request / system check / AI assistance / manual override / completion outcome) and the policy objects it implements.

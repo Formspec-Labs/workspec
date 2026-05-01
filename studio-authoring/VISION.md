@@ -364,6 +364,8 @@ This prevents each context-building session from becoming a bespoke artifact wit
 
 ---
 
+> **Editorial note (adopted spec set, 2026-04-30):** the PRD's "Suggested" spec list below names 9 specs. After persona-driven review (program-manager / compliance-reviewer / technical-implementer), the **adopted** spec set extends this to 12 by adding `workflow-intent.md`, `compiler-contract.md`, `workspace.md`, and `binding-and-integration.md`, and removes `runtime-observation.md` (Phase-4 future-track; will return when Phase 4 begins). Definitive index: [`specs/README.md`](specs/README.md). The PRD's prose below is preserved verbatim as authored.
+
 # 8. Studio Specs and Schemas
 
 Studio should derive internal W3C-style specs from this PRD and the Studio Concept Model.

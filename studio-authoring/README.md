@@ -1,6 +1,6 @@
 # WOS Studio (Authoring)
 
-**Status:** Stage 0–2 in progress — docs only, no code.
+**Status:** Stage 0–2 complete — 12 specs landed, docs-only, no code.
 **Sibling product to:** [`../studio/`](../studio/README.md) (the runtime case-management UI).
 
 ## What this is
@@ -19,8 +19,8 @@ The two products share a name family but have **no runtime dependency on each ot
 ## What's in this folder right now
 
 - [`VISION.md`](VISION.md) — durable product vision (the PRD as authored, with a short framing preface). 19 numbered sections; cite as `VISION §N`.
-- [`CONCEPT-MODEL.md`](CONCEPT-MODEL.md) — entity catalog, lifecycles, state boundaries, mapping states. Bridge between VISION and specs. *(Stage 1 — pending.)*
-- [`specs/`](specs/) — nine internal W3C-style specs that derive from the concept model. Each follows the three-section rubric (Normative Contract / Composition / Conformance) per [`../CONVENTIONS.md`](../CONVENTIONS.md). *(Stage 2 — pending.)*
+- [`CONCEPT-MODEL.md`](CONCEPT-MODEL.md) — entity catalog (23 entities), lifecycles, state boundaries, mapping states, WOS cross-reference. Bridge between VISION and specs.
+- [`specs/`](specs/) — 12 internal W3C-style specs across six families (pipeline core, bridge, trust, tooling, lifecycle, integration). Each follows the three-section rubric (Normative Contract / Composition / Conformance) per [`../CONVENTIONS.md`](../CONVENTIONS.md). See [`specs/README.md`](specs/README.md) for the index.
 
 ## What's NOT in this folder yet (and why)
 

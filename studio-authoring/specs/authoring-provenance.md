@@ -150,7 +150,7 @@ The Studio→WOS compiler (Stage 5) emits authoring provenance into the publishe
 
 ### Attachment point
 
-Authoring Provenance attaches at every Studio object that participates in authoring. It is the cross-cutting spine that ties [`source-vault.md`](source-vault.md), [`policy-object-model.md`](policy-object-model.md), [`studio-to-wos-mapping.md`](studio-to-wos-mapping.md), [`scenario-authoring.md`](scenario-authoring.md), [`review-and-approval.md`](review-and-approval.md), [`change-impact.md`](change-impact.md), and (Phase 4) [`runtime-observation.md`](runtime-observation.md) together.
+Authoring Provenance attaches at every Studio object that participates in authoring. It is the cross-cutting spine that ties [`source-vault.md`](source-vault.md), [`policy-object-model.md`](policy-object-model.md), [`studio-to-wos-mapping.md`](studio-to-wos-mapping.md), [`scenario-authoring.md`](scenario-authoring.md), [`review-and-approval.md`](review-and-approval.md), and [`change-impact.md`](change-impact.md) together. (Phase-4 forward reference: the `runtime-observed` origin class is reserved for when RuntimeObservation gains its own spec.)
 
 The Studio→WOS compiler (Stage 5) is the **only** consumer that emits provenance outside the workspace. Compiler-emitted provenance lands in the WOS artifact's authoring-provenance configuration (a non-`x-` extension; whether it lives directly in `wos-workflow.schema.json` or in a sidecar/seam is a Stage-3 schema decision).
 
@@ -273,7 +273,7 @@ A downstream auditor with access to `permit-handbook-2026` v3.1 can verify the c
 - **WOS path for projection.** Whether projected provenance lives directly in `wos-workflow.schema.json`, in a sidecar (e.g., `wos-authoring-provenance.schema.json`), or at the `provenanceLayer` kernel seam is unsettled. Pending Stage-3 schema work and consultation with the kernel/governance specs.
 - **Compaction policy.** The compaction allowance (`SA-MUST-prov-001` notes) is permissive — workspaces choose. Whether a per-workspace policy (compaction-window, retention duration) is configurable schema or hard-coded is unsettled.
 - **Cross-workspace provenance.** When a PolicyObject is reused across workspaces (deferred per [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §6), its provenance history is bound to the original workspace. Whether the second workspace can see the first workspace's provenance, and how citation hashes carry across, is deferred.
-- **Phase-4 origin transitions.** RuntimeObservation → workflow-element promotion (Phase 4) introduces the `runtime-observed` origin class. The transition rules (Phase 4 → published, Phase 4 → workspace-only improvement proposal) are sketched in [`runtime-observation.md`](runtime-observation.md) but not yet finalized.
+- **Phase-4 origin transitions.** RuntimeObservation → workflow-element promotion (Phase 4) introduces the `runtime-observed` origin class. The transition rules (Phase 4 → published, Phase 4 → workspace-only improvement proposal) will be defined when the RuntimeObservation spec is written; until then, no PolicyObject should carry `originClass = runtime-observed`.
 
 ## Cross-references
 

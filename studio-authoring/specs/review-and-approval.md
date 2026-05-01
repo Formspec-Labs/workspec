@@ -69,6 +69,8 @@ Comments are conversational; they do not gate advance. They feed into authoring 
 
 ### `ReviewerRole`
 
+The ReviewerRole entity is **defined in [`workspace.md`](workspace.md)** §"Data model" — the role registry is workspace-level state, not approval-level state. Repeated here for reference:
+
 ```text
 ReviewerRole {
   id (workspace-scoped), name, displayName,
@@ -79,7 +81,7 @@ ReviewerRole {
 }
 ```
 
-The default role set per workspace SHOULD include at least: `workflow-owner` (override + required), `compliance-reviewer` (required), `legal-reviewer` (required for rights-impacting workflows), `technical-reviewer` (required), `operations-reviewer` (required). Workspaces MAY add roles (e.g., `governance-reviewer`, `equity-reviewer`).
+The default role set, integrity rules (`SA-MUST-ws-010`–`013`), and the no-id-reuse-after-retirement constraint live in [`workspace.md`](workspace.md). This spec consumes them; it does not define them.
 
 ### `ApprovalPackage`
 

@@ -142,7 +142,7 @@ A StudioToWosMapping changes state or targets (e.g., `requiresSpecExtension → 
 
 ### `runtime-observation-cluster` (Phase 4)
 
-Multiple RuntimeObservations cluster around a particular workflow element, suggesting that designed behavior diverges from observed behavior at scale (e.g., 30 cases stuck at the same step). The trigger is the cluster detection event. The report walks from the workflow element to the upstream PolicyObjects that could be revised. (Full semantics in [`runtime-observation.md`](runtime-observation.md).)
+Multiple RuntimeObservations cluster around a particular workflow element, suggesting that designed behavior diverges from observed behavior at scale (e.g., 30 cases stuck at the same step). The trigger is the cluster detection event. The report walks from the workflow element to the upstream PolicyObjects that could be revised. (This is a Phase-4 forward reference; full semantics will live in the future RuntimeObservation spec when Phase 4 begins.)
 
 ### Workflow-version-compare (request-driven)
 
@@ -361,6 +361,6 @@ The reviewer asks Studio to compare `wf-A v1.0` (currently published) to `wf-A v
 - Concept model: [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.18, §2.3 (PolicyObject lifecycle demotion), §2.5 (Scenario regression).
 - PRD: [`../VISION.md`](../VISION.md) §9.8, §16 Phase-2 Epic 2.5, §16 Phase-3 (full Phase-3 epic set), §12 user stories.
 - Upstream (read state): every other Studio spec.
-- Downstream (drives action): [`policy-object-model.md`](policy-object-model.md) (demotion), [`scenario-authoring.md`](scenario-authoring.md) (regression flags), [`review-and-approval.md`](review-and-approval.md) (re-approval), [`runtime-observation.md`](runtime-observation.md) (Phase-4 trigger).
+- Downstream (drives action): [`policy-object-model.md`](policy-object-model.md) (demotion), [`scenario-authoring.md`](scenario-authoring.md) (regression flags), [`review-and-approval.md`](review-and-approval.md) (re-approval). (Phase-4 RuntimeObservation cluster trigger is a forward reference; the spec is deferred.)
 - WOS: published workflow versioning (`$wosWorkflow.version`), release notes in PublishedWorkflowPackage.
 - Repo conventions: [`../../CONVENTIONS.md`](../../CONVENTIONS.md).
