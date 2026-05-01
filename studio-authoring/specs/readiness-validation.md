@@ -170,6 +170,65 @@ The three external gate names — `schema-pass`, `lint-pass`, `conformance-pass`
 
 Default severity: `block` for incomplete artifact / failing schema / missing reviewer / failing lint / failing conformance; `error` for unresolved error-tier findings; `warn` for soft gaps.
 
+### Cross-cutting rules from v3/v4 spec additions
+
+The following readiness rules cross-cut the new specs added in v3/v4. They live in their primary tier but reference cross-spec semantics:
+
+#### Effectiveness rules (tier S2 + S3)
+
+- `EFF-LINT-001` (S2) — redundant effectiveness duplicate (PolicyObject wraps source effectiveness verbatim instead of inheriting). Per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md) `SA-MUST-eff-002`.
+- `EFF-LINT-002` (S2) — effectiveness widening disallowed (PolicyObject/Mapping widens its source's scope). Per `SA-MUST-eff-003`.
+- `EFF-LINT-003` (S2) — enjoined-but-no-enjoinedScope. Per `SA-MUST-eff-001` shape constraint.
+- `EFF-LINT-004` (S3) — mapping effectiveness collision (two mappings of the same PolicyObject with overlapping but conflicting scopes).
+- `EFF-LINT-005` (S6) — sunset window: workflow depends on Effectiveness sunsetting in <90 days.
+
+#### AI-provenance rules (tier S2 + S6)
+
+- `AI-LINT-001` (S2) — AI-extracted ExtractedClaim missing `aiLineage` block. Per [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-070`.
+- `AI-LINT-002` (S2) — AI-extracted PolicyObject promoted past `extracted` without `humanApprover`. Per `SA-MUST-prov-074`.
+- `AI-LINT-003` (S6) — workflow with agent-typed actor lacks at least one `agent-fallback` Scenario. Cross-cutting `scenario-authoring.md`.
+
+#### WOS-version-pin rules (tier S6)
+
+- `CMP-LINT-010` (S6) — wos-version-deprecation pending: a stream version pinned by this WorkflowIntent reaches deprecation in <90 days. Per [`compiler-contract.md`](compiler-contract.md) `SA-MUST-cmp-054`.
+- `CMP-LINT-011` (S6) — wos-version-deprecation effective: a stream version pinned by this published workflow has deprecated; migration via `change-impact.md` `triggerKind = wos-version-deprecation` is required.
+
+#### Equity rules (tier S2 + S4)
+
+- `EQ-LINT-001` (S4) — workflows with `impactLevel = rights-impacting` MUST declare at least 3 ProtectedCategories per workspace policy default. Per [`policy-object-model.md`](policy-object-model.md) ProtectedCategory.
+- `EQ-LINT-002` (S2) — every ProtectedCategory MUST cite a SourceCitation (`legalBasis`).
+- `EQ-LINT-003` (S5) — workflows declaring ProtectedCategory MUST have at least one `equity-probe` Scenario per ProtectedCategory dimension. Cross-cutting [`scenario-authoring.md`](scenario-authoring.md) `SA-MUST-scn-040`.
+
+#### Accessibility rules (tier S5)
+
+- `ACC-LINT-001` (S5) — workflow with notice-bearing Outcomes MUST have at least one `accessibility-check` Scenario per supported `contentLocale`. Per `scenario-authoring.md` `SA-MUST-scn-041`.
+
+#### Jurisdictional-variation rules (tier S5)
+
+- `JUR-LINT-001` (S5) — workflow Effectiveness with multiple jurisdictions MUST have at least one `jurisdictional-variation` Scenario per declared jurisdiction. Per `scenario-authoring.md` `SA-MUST-scn-042`.
+
+#### Identity-and-attestation rules (tier S6)
+
+- `ID-LINT-001` (S6) — IdP role unmapped to workspace ReviewerRole; subject can act only via direct grants. Per [`identity-and-attestation.md`](identity-and-attestation.md) `SA-MUST-id-011`.
+- `ID-LINT-002` (S6) — required-publication approver revoked before publication; re-approval required.
+- `ID-LINT-003` (S6) — `attestationLevel` insufficient for action attempted (e.g., `session`-level attempted publication; `high-assurance` required for `originClass = local-practice` attestation).
+
+#### Compliance-attestation rules (tier S6)
+
+- `COMP-LINT-001` (S6) — workspace declares a compliance baseline; workflow does not satisfy required-controls per [`workspace.md`](workspace.md) `SA-MUST-ws-060`.
+- `COMP-LINT-002` (S6) — compliance-attestation expiring: any declared regime's attestation expires in <90 days per `SA-MUST-ws-061`.
+
+#### Cryptographic-anchoring rules (tier S6)
+
+- `CHAIN-LINT-001` (S6) — AuthoringProvenanceRecord chain integrity broken (`prevRecordHash` does not match predecessor's `selfHash`). Per `authoring-provenance.md` `SA-MUST-prov-080`.
+- `CHAIN-LINT-002` (S6) — workspace audit log not anchored within configured cadence (per workspace policy + `SA-MUST-prov-081`).
+
+#### Terminology rules (tier S2)
+
+- `TERM-LINT-001` (S2) — TerminologyMap entry points to deprecated CanonicalTerm. Per [`terminology-and-canonical-vocabulary.md`](terminology-and-canonical-vocabulary.md) `SA-MUST-term-003`.
+- `TERM-LINT-002` (S2) — DataElement `canonicalTermRef` is `manual-pending`; awaits reviewer attestation.
+- `TERM-LINT-003` (S2 / warn) — DataElement uses legacy `sensitivity` alias on a NEW PolicyObject (recommend DPV IRI).
+
 ## Finding lifecycle
 
 ```text

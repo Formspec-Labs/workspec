@@ -42,9 +42,16 @@ Every Studio object that participates in authoring (PolicyObject, StudioToWosMap
 
 ```text
 AuthoringProvenanceRecord {
-  id, recordedAt, recordedBy, role,
-  eventKind, payload,
-  parentRecordIds[], originClass
+  id, recordedAt, recordedBy (subjectId per identity-and-attestation.md), role,
+  eventKind, eventSubtype?,
+  payload,
+  parentRecordIds[], originClass,
+  hashChain {                       // cryptographic integrity (composes parent custodyHook)
+    prevRecordHash,
+    selfHash,
+    anchoredAt?,                     // when this record was last anchored to Trellis via custodyHook
+    custodyAppendReceiptRef?         // CustodyAppendReceipt.canonical_event_hash per parent ADR-0061
+  }
 }
 ```
 
@@ -64,6 +71,90 @@ Every PolicyObject and every WorkflowIntent element MUST carry exactly one `orig
 - **`local-practice`** — established by the operating organization, not by external policy. E.g., "this office reviews all denials twice." MUST NOT be promoted out of authoring-only mappings without explicit reviewer attestation that the local practice is policy-permissible.
 - **`assumption`** — backed by an approved Assumption (CM §1.8), not by source citation.
 - **`runtime-observed`** (Phase 4 only) — promoted from a RuntimeObservation that was reviewed and accepted as a workflow improvement. Distinguished from the above three because the basis is observed practice, not policy.
+
+### AI-assisted extraction subtype
+
+When `eventKind ∈ {extracted, normalized}` AND the action was performed by AI (not a human reviewer), the AuthoringProvenanceRecord MUST carry an `eventSubtype = "ai-assisted"` and an additional `aiLineage` block:
+
+```text
+aiLineage {
+  modelId,                          // e.g., 'claude-opus-4-7'
+  modelVersion,                     // e.g., '20260301'
+  modelVersionPolicy,               // 'pinned' | 'approved' | 'latest' (per parent ai-integration.md §3.4)
+  promptTemplateRef,                // pointer to the prompt template used
+  promptTemplateVersion,
+  temperature?,                     // sampling parameter (when applicable)
+  seed?,                            // when reproducibility was sought
+  toolUse[]?,                       // capabilities the model invoked (per parent agent-config.md)
+  confidence?,                      // model-reported confidence (when available)
+  inputContextHash,                 // hash of the context the model saw (privacy-redacted)
+  humanApprover?,                   // when this AI action was reviewed and approved
+  humanApprovedAt?,
+  humanRationale?
+}
+```
+
+The `aiLineage` block is the **audit-boundary closure** Marco identified: AI proposes ⇒ humans approve ⇒ both are recorded. Without this, AI authorship leaves no audit trail. With it, every AI-extracted claim can be traced to the model + prompt + reviewer + rationale.
+
+- **`SA-MUST-prov-070`** — Every AuthoringProvenanceRecord with `recordedBy` resolving to an agent-typed actor (per parent `ai-integration.md`) MUST carry `aiLineage`. AI-authored events without lineage MUST be rejected. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-prov-071`** — `aiLineage.modelId`, `modelVersion`, `promptTemplateRef`, `promptTemplateVersion`, and `inputContextHash` are REQUIRED. Other fields optional. *(schema-pending.)*
+- **`SA-MUST-prov-072`** — `inputContextHash` MUST be computed over a privacy-redacted view of the model's context — fields with `dpv:` sensitivity classes MUST be redacted before hashing per workspace policy. The hash provides reproducibility AND privacy. *(runtime-pending.)*
+- **`SA-MUST-prov-073`** — When the model version changes (per `modelVersionPolicy`), an `agentVersionChange` provenance record MUST be emitted referencing the prior model version (composition with parent `ai-integration.md` §3.4 `agentVersionChange`). *(runtime-pending.)*
+- **`SA-MUST-prov-074`** — Promotion of an AI-extracted claim past `extracted` lifecycle state MUST require a human approver (`humanApprover` populated). AI-only promotion is disallowed. *(lint-pending: tier-S2.)*
+
+### Cryptographic anchoring (composes parent custodyHook)
+
+The Studio authoring audit log itself anchors to Trellis via the parent `custodyHook` four-field append wire surface (per [`../../specs/kernel/custody-hook-encoding.md`](../../specs/kernel/custody-hook-encoding.md), parent ADR-0061, parent PLN-0385). This closes Marcus's persona-round-2 concern: a workspace operator could be the litigation defendant; "MUST NOT be edited" by policy is not enough; cryptographic chain + external anchoring is.
+
+- **`SA-MUST-prov-080`** — Every AuthoringProvenanceRecord MUST carry `hashChain.prevRecordHash` and `hashChain.selfHash`, computing a Merkle-chain over the workspace audit log. Records that fail to chain (where `prevRecordHash != predecessor.selfHash`) MUST surface as a tier-S6 ValidationFinding. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-prov-081`** — At workspace-policy-configurable intervals, Studio MUST emit a custody-hook append (per parent ADR-0061 four-field input: `caseId, recordId, eventType, record`) anchoring the workspace audit log's current head. The receipt's `canonical_event_hash` MUST be stored on the AuthoringProvenanceRecord at the head. Default cadence: every 1000 records OR every 24 hours, whichever first; configurable per WorkspacePolicy. *(runtime-pending.)*
+- **`SA-MUST-prov-082`** — Studio's custody-hook event types MUST use the `wos.authoring.*` namespace per parent **PLN-0384** (`wos-event-types.md` taxonomy). The "Audit event catalog" subsection below enumerates the specific event types. *(coordination-pending: parent PLN-0384 ratification.)*
+- **`SA-MUST-prov-083`** — Workspace audit log retention MUST satisfy parent custody-tier requirements (per `crates/wos-server/VISION.md` zero-trust posture: encrypted-at-rest, key-bagged per access class). *(deployment-environment configuration.)*
+
+### Audit event catalog
+
+Studio emits the following event types into the `wos.authoring.*` namespace via parent `wos-event-types.md` (composition; Studio adds; parent PLN-0384 ratifies the broader taxonomy):
+
+| Event type | Description | Custody-anchored |
+|---|---|---|
+| `wos.authoring.source-uploaded` | New SourceDocument or SourceVersion uploaded | YES |
+| `wos.authoring.source-superseded` | SourceVersion lifecycle transitioned to superseded | YES |
+| `wos.authoring.claim-extracted` | ExtractedClaim created (often AI-assisted; see aiLineage) | YES |
+| `wos.authoring.claim-approved` | ExtractedClaim promoted to PolicyObject | YES |
+| `wos.authoring.policy-object-edited` | PolicyObject body edited | YES |
+| `wos.authoring.policy-object-demoted` | PolicyObject demoted to draft (e.g., source superseded) | YES |
+| `wos.authoring.mapping-assigned` | StudioToWosMapping record created | YES |
+| `wos.authoring.mapping-state-changed` | mappingState transitioned | YES |
+| `wos.authoring.scenario-authored` | Scenario created or edited | YES |
+| `wos.authoring.scenario-tested` | Scenario simulated; pass/fail recorded | YES |
+| `wos.authoring.finding-raised` | ValidationFinding produced | YES |
+| `wos.authoring.finding-waived` | Tier-S6 finding waived (consults AuthorityGrant) | YES |
+| `wos.authoring.approval-decided` | ApprovalDecision recorded | YES |
+| `wos.authoring.workflow-published` | PublishedWorkflowPackage created | YES |
+| `wos.authoring.change-impact-acknowledged` | ChangeImpactReport `acknowledged` lifecycle transition | YES |
+| `wos.authoring.change-impact-closed` | ChangeImpactReport `closed` with closureRationale | YES |
+| `wos.authoring.local-practice-attested` | A reviewer attests `originClass = local-practice` (high-assurance attestation level required) | YES |
+| `wos.authoring.compliance-attested` | ComplianceAttestation recorded against ApprovalPackage | YES |
+
+Custody-anchored events are subject to `SA-MUST-prov-080/081/082`. Anchoring frequency is workspace-policy-configurable; high-stakes events (compliance attestations, local-practice attestations) anchor immediately rather than batched.
+
+### Compaction (immutable log + projection)
+
+Compaction is allowed for the **projection** (what reviewers see in the UI / what auditors see in compact reports), NEVER for the underlying log. The Plan agent's review identified this as a litigation hazard if not separated.
+
+- **`SA-MUST-prov-090`** — The underlying AuthoringProvenanceRecord log is **immutable**. No record may be deleted, modified, or compacted in the underlying log. Compaction operates on a derived projection; the projection is rebuildable from the log at any time. *(architectural commitment; runtime-pending.)*
+- **`SA-MUST-prov-091`** — Compacted projections MAY summarize "redundant" runs (e.g., 47 successive `editedBody` events on the same draft compress to "47 edits between T1 and T2 by reviewer R") in reviewer-facing UI. The compacted form MUST display a "show full log" affordance that recomputes from the underlying log. *(runtime-pending.)*
+- **`SA-MUST-prov-092`** — Workspace administrators MUST NOT have authority to compact the underlying log, regardless of WorkspacePolicy retention settings. The closest a workspace administrator can do is *delete the workspace entirely* (terminal state per [`workspace.md`](workspace.md) `SA-MUST-ws-004`); they cannot selectively prune. *(architectural commitment.)*
+- **`SA-MUST-prov-093`** — Custody-anchored events (per audit event catalog above) MUST be retained for at least the parent ADR-0061 retention window (7 years default) regardless of workspace retention policy. The custody anchor's external anchor in Trellis means deletion locally MUST NOT erase the global audit chain. *(deployment-environment + parent custody-tier policy.)*
+
+### PROV-O export
+
+The **W3C PROV-O** vocabulary is the canonical interop format for provenance graphs. Auditors and regulators understand PROV-O directly. Studio adopts PROV-O as a **first-class export format** for AuthoringProvenanceRecord chains.
+
+- **`SA-MUST-prov-100`** — Studio MUST be able to export the workspace audit log (or any sub-graph of it; e.g., "the provenance chain leading to NoticeRequirement N") in W3C PROV-O JSON-LD. The export composes the existing parent [`schemas/sidecars/wos-ontology-alignment.schema.json`](../../schemas/sidecars/wos-ontology-alignment.schema.json) PROV-O sidecar. *(runtime-pending.)*
+- **`SA-MUST-prov-101`** — PROV-O export MUST be deterministic: identical workspace state produces byte-identical (modulo JSON key order) PROV-O graphs. *(fixture-pending.)*
+- **`SA-MUST-prov-102`** — PROV-O exports MUST redact privacy-classified content (per DPV class membership and viewing-reviewer's authority grants per `identity-and-attestation.md`). The export carries the structural graph; redacted leaves are noted as such. *(runtime-pending.)*
+- **`SA-MUST-prov-103`** — PROV-O export MUST include the cryptographic chain heads (custody-hook receipts) so that an external verifier can confirm the export covers the actual audit log without redirection. *(runtime-pending.)*
 
 ### Provenance edges
 

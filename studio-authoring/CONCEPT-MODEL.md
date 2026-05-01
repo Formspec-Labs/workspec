@@ -25,7 +25,18 @@ Section numbering here is local; cross-references to PRD use `VISION §N`.
 
 ## 1. Core entities
 
-The 23 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes. (§1.17 RuntimeObservation is a Phase-4 placeholder name; §1.20–1.23 are introduced by `specs/binding-and-integration.md`; §1.19 WorkflowIntent has its data-model home in `specs/workflow-intent.md`; §1.24 Workspace has its data-model home in `specs/workspace.md`.)
+The 33 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes. Provenance via §5.1 Schema composition strategy: ~12 entities (PolicyObject kinds, Bridge kinds, Bindings) are projected as `{Studio metadata wrapper + WOS schema $ref}`, reducing Stage-3 schema count substantially.
+
+**Source-of-truth notes:**
+- §1.17 RuntimeObservation = the Phase-4 placeholder *entity*; §1.26 RuntimeObservationSeam = the *seam contract* (which IS specified now in `specs/runtime-observation-seam.md`, even though the entity is Phase-4).
+- §1.20–§1.23 (Bindings, DecisionTable) are introduced by `specs/binding-and-integration.md`.
+- §1.19 WorkflowIntent has its data-model home in `specs/workflow-intent.md`.
+- §1.24 Workspace has its data-model home in `specs/workspace.md`.
+- §1.27 IdentitySubject composes parent **PLN-0381** (identity attestation, P0 WOS-side commitment per [TODO.md](../TODO.md) 2026-04-27 synthesis-merge); Studio does NOT re-define attestation primitives.
+- §1.32 ProtectedCategory composes parent [`specs/advanced/equity-config.md`](../specs/advanced/equity-config.md); equity semantics live in WOS advanced stream.
+- §1.33 MigrationPath composes parent [`RELEASE-STREAMS.md`](../RELEASE-STREAMS.md) + [`COMPATIBILITY-MATRIX.md`](../COMPATIBILITY-MATRIX.md).
+- AuthoringProvenanceRecord audit-event tags compose parent **PLN-0384** (`wos-event-types.md` taxonomy, ratifying `wos.signing.*` / `wos.identity.*` / `wos.governance.access-*` namespace; Studio adds `wos.authoring.*` namespace).
+- Cryptographic anchoring composes parent [`specs/kernel/custody-hook-encoding.md`](../specs/kernel/custody-hook-encoding.md) (parent **PLN-0385**) — the four-field append wire surface.
 
 ### 1.1 Workspace
 
@@ -192,6 +203,75 @@ The bounded authoring environment that owns one or more workflows. The data mode
 **Owned entities:** ReviewerRole registry (workspace-scoped), WorkspacePolicy (administrator-configured behavior), WorkspaceAuditLogEntry (queryable view over AuthoringProvenanceRecords + non-provenance events), permissions surface, identity model.
 **Lifecycle:** `created → active → { archived | suspended }`; `suspended → active`; `archived` is terminal (read-only).
 
+### 1.25 Effectiveness (data model home: [`specs/effectiveness-and-applicability.md`](specs/effectiveness-and-applicability.md))
+
+A single composable object describing **when and where** a SourceVersion / PolicyObject / Mapping applies. SourceVersion / PolicyObject (where appropriate) / Mapping carry an `effectivenessRef` pointing to a single canonical Effectiveness instance — never copied — so that updating jurisdictional or temporal scope is one edit, not three. Models court injunctions in single circuits, errata memos that supersede paragraphs, and partial-supersession transitions that policy actually exhibits.
+
+**Key fields:** `id`, `jurisdictions[]` (e.g., `{kind: "federal" | "state" | "circuit" | "district" | "local", code, displayName}`), `temporalScope` (effective intervals; sunsets), `appellateState` (`final` | `on-appeal` | `enjoined` | `provisional`), `enjoinedScope?` (when appellateState=enjoined: which jurisdictions are enjoined), `supersedingRef?`, `supersededBy?`, `notesRef?`.
+**Relationships:** referenced by SourceVersion (every version), PolicyObject (where applicability matters), Mapping (where applicability narrows or widens); cited by Conflict resolution; tracked in ChangeImpactReport when shape changes.
+
+### 1.26 RuntimeObservationSeam (data model home: [`specs/runtime-observation-seam.md`](specs/runtime-observation-seam.md))
+
+The **seam contract** by which Studio receives runtime case-trace observations from the runtime tier. Implementation deferred to Phase 4; the contract itself is named now to close dangling references in `change-impact.md` (`triggerKind = runtime-observation-cluster`), `authoring-provenance.md` (`originClass = runtime-observed`), and the prior §1.17 placeholder.
+
+**Key fields:** `wireFormat` (case trace: caseId, eventSequence, decisions, manualOverrides, timeBuckets), `ingestPath` (subscription | poll | batch), `triggers[]` (cluster heuristics that produce ChangeImpactReport entries), `replayContract` (replay against the published workflow for divergence detection).
+**Relationships:** observation-cluster events trigger ChangeImpactReport (§1.18); observed traces become candidate Scenarios (per `scenario-authoring.md` runtime-observation-replay scenario type); `runtime-observed` claims become PolicyObjects via the same review pipeline as source-derived claims.
+
+### 1.27 IdentitySubject (data model home: [`specs/identity-and-attestation.md`](specs/identity-and-attestation.md))
+
+The Studio-side surface for identity claims that authorize authoring actions. Composes parent `PLN-0381` (identity attestation as P0 WOS-side commitment, supersedes prior PLN-0310) — Studio does NOT re-define attestation primitives; it references and binds to them.
+
+**Key fields:** `subjectId`, `claims[]` (signed claim envelope), `attestationRef` (reference to parent attestation primitive), `validFrom/validUntil`, `revocation?`, `bindingScope` (workspace | workflow | object).
+**Relationships:** referenced by every AuthoringProvenanceRecord (`recordedBy` resolves to a SubjectId); referenced by ApprovalDecision (`signatureRef`); cross-referenced from `wos-event-types.md` `wos.identity.*` namespace (parent PLN-0384).
+
+### 1.28 ComplianceAttestation (section in [`specs/workspace.md`](specs/workspace.md); attached to ApprovalPackage in [`specs/review-and-approval.md`](specs/review-and-approval.md))
+
+A structured attestation that a Workspace's policies and a workflow's published artifact satisfy a named compliance regime (SOC 2 type II, FedRAMP Moderate/High, StateRAMP Moderate/High, NIST 800-53 Rev. 5 control families, HIPAA, GDPR DPIA, etc.).
+
+**Key fields:** `regime`, `regimeVersion`, `controls[]` (`{controlId, controlName, status, evidenceRef, attestor}`), `attestedAt`, `expiresAt?`, `auditorRef?`.
+**Relationships:** attaches to Workspace (the workspace's controls baseline) and to ApprovalPackage (the workflow's compliance derivation); does not appear in `$wosWorkflow` body content; projects compactly in release notes.
+
+### 1.29 AuthorityGrant (section in [`specs/workspace.md`](specs/workspace.md))
+
+A workspace-administrator-issued grant authorizing a specific role/subject to perform a specific authoring action — finer-grained than ReviewerRole. Examples: "compliance-reviewer may attest `originClass = local-practice` for Workspace W"; "workflow-owner may waive `WF-LINT-001` block findings on rights-impacting workflows".
+
+**Key fields:** `grantId`, `grantedTo` (RoleRef | SubjectId), `action` (`attestOrigin:{class}` | `waive:{ruleId}` | `override:{category}` | `approve:{subjectKind}`), `scope` (workspace | workflow-class | per-object), `grantedBy`, `grantedAt`, `revokedAt?`, `expiresAt?`.
+**Relationships:** consulted by readiness engine when resolving "who may waive" / "who may attest" decisions; emits AuthoringProvenanceRecord on every grant/revoke; appears in compliance audit trail.
+
+### 1.30 TerminologyMap (data model home: [`specs/terminology-and-canonical-vocabulary.md`](specs/terminology-and-canonical-vocabulary.md))
+
+Canonical-term registry that resolves cross-workspace DataElement identity. When two workspaces both have "household income," the TerminologyMap declares whether they're the same canonical term. Also carries the **plain-English projection** for every CONCEPT-MODEL entity (Sarah's "I won't learn 23 entities" concern as a structural artifact).
+
+**Key fields:** `canonicalId`, `displayName`, `definition`, `synonyms[]`, `dataType`, `sensitivity` (DPV controlled vocabulary; see §1.32 footnote on DPV), `dprUnit?` (units of measure), `references[]` (URIs to canonical definitions, e.g., USDA SNAP terminology, HHS HIPAA terminology, DPV concepts), `plainEnglishLabel?`, `operationalDescription?`.
+**Relationships:** every Studio DataElement and entity carries an optional `canonicalTermRef`; cross-workspace federation (§1.34) requires terminology agreement; reviewer-friendly UI renders entities via `plainEnglishLabel`.
+
+### 1.31 CanonicalSourceRef (extension in [`specs/source-vault.md`](specs/source-vault.md))
+
+A reference pattern letting a SourceDocument declare it IS a canonical document (e.g., "this workspace's copy of 7 CFR §273") OR REFERENCES a canonical document published authoritatively elsewhere (e.g., eCFR.gov's JSON-LD-published version of 7 CFR §273). A federation precursor — full federation is §1.34 (deferred); CanonicalSourceRef is the cite-don't-copy primitive that 50 states can share.
+
+**Key fields:** `referencedUri`, `referencedHash?`, `referencedAt`, `localCopyOf?` (when the source is a local archive of the canonical), `canonicalPublisher?`, `jsonLdContext?` (when canonical is JSON-LD published).
+**Relationships:** attached to SourceDocument; consumed by reviewers verifying citation integrity; consumed by ChangeImpactReport when canonical publisher updates.
+
+### 1.32 ProtectedCategory (PolicyObject kind defined in [`specs/policy-object-model.md`](specs/policy-object-model.md))
+
+A demographic category for which the workflow conducts equity monitoring (Title VI race/ethnicity, ADA disability, ECOA-protected groups, language-spoken, jurisdictional sub-population). Sourced from compliance/policy documents (e.g., USDA Title VI regs at 7 CFR §15.2); maps to the parent `wos-workflow.schema.json` `advanced.equity.protectedCategories[*]` per `specs/advanced/equity-config.md`. Studio is the authoring layer; equity semantics live in the WOS advanced stream — Studio does NOT re-implement.
+
+**Key fields:** `categoryId`, `dimensionName` (race/ethnicity/disability/language/...), `legalBasis` (citationRef), `monitoringMethod`, `disparityThreshold?`, `remediationTriggerRef?` (Deadline + Notice combination when threshold crossed).
+**Relationships:** referenced by equity-probe Scenarios (§1.13); cited by ProtectedCategory readiness rules in `readiness-validation.md`; projects to `advanced.equity.protectedCategories[*]` in `$wosWorkflow`.
+
+> **DPV (Data Privacy Vocabulary) footnote.** Studio's DataElement `sensitivity` field uses [W3C DPV](https://www.w3.org/TR/dpv/) controlled-vocabulary IRIs (e.g., `dpv:HealthData`, `dpv:FinancialPreference`, `dpv:Identifier`) instead of a hand-rolled `pii | phi | restricted` enum. This unlocks: (a) automated retention/access-policy derivation from DPV's policy machinery, (b) GDPR/CCPA/HIPAA mapping, (c) interop with privacy-engineering tools that already speak DPV. Hand-rolled equivalents (`pii`/`phi`/`restricted`) remain as machine-readable aliases for backward continuity but the DPV IRI is the canonical truth.
+
+### 1.33 MigrationPath (cross-cutting; concept lives in [`specs/compiler-contract.md`](specs/compiler-contract.md), [`specs/workflow-intent.md`](specs/workflow-intent.md), [`specs/change-impact.md`](specs/change-impact.md))
+
+The contract by which a published WorkflowIntent migrates when WOS schemas evolve. Composes parent [`RELEASE-STREAMS.md`](../RELEASE-STREAMS.md) + [`COMPATIBILITY-MATRIX.md`](../COMPATIBILITY-MATRIX.md). Studio's responsibility is **tracking and alerting** (when a published workflow targets a deprecated stream version, surface a SchemaVersionDeprecationAlert); the versioning model itself is parent-defined.
+
+**Key fields:** `wosVersionPin` (claim string per RELEASE-STREAMS.md, e.g., `kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3`), `pinnedAt`, `deprecationAlerts[]`, `migrationStrategy` (regenerate | preserve | manual-review).
+**Relationships:** stored on WorkflowIntent; carried in compile manifest (per `compiler-contract.md`); triggers ChangeImpactReport via `triggerKind = wos-version-deprecation`.
+
+### 1.34 FederationLink (reserved; concept noted in [`specs/workspace.md`](specs/workspace.md))
+
+**Status:** Deferred. Reserved as `x-federation` extensibility slot in `workspace.md`. Documents the future capability for one Workspace in Tenant A to declare a dependency on a SourceDocument or PolicyObject from Tenant B (e.g., "this workflow implements 7 CFR §273 as published by USDA; track upstream changes"). When implementation begins, this entity gains its own data model home.
+
 ## 2. Lifecycles
 
 The five lifecycles below are normative — Stage-2 specs and (later) Stage-3 schemas enforce these state machines. Allowed transitions are listed; any other transition is invalid.
@@ -345,6 +425,75 @@ The table below extends PRD §6 with concrete pointers into existing wos-spec do
 | ReviewerRole, WorkspacePolicy | (no WOS counterpart) | [`specs/workspace.md`](specs/workspace.md) | `authoringOnly` — workspace metadata; role names project compactly via ApprovalDecision provenance |
 
 Pointers into [`../schemas/`](../schemas/) reference the consolidated `wos-workflow.schema.json` per [ADR-0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md). Embedded blocks (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`) live inside that single schema; their behavioral semantics live in the per-stream specs.
+
+## 5.1 Schema composition strategy (Stage-3 design)
+
+A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content is already defined by a parent WOS schema. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to ~10 by composition.
+
+### The pattern
+
+For every Studio entity that **projects to a WOS schema target**, the Stage-3 schema is:
+
+```text
+StudioEntity = {
+  studioMetadataEnvelope: {  // Studio-only
+    id, workspaceId, version, parentVersion?,
+    citations[], provenance, originClass,
+    lifecycleState, reviewState,
+    mappingRef, mappingState,
+    canonicalTermRef?,        // §1.30 TerminologyMap
+    effectivenessRef?,        // §1.25 Effectiveness
+    authorityGrantsApplied[]  // §1.29 AuthorityGrant
+  },
+  wosTargetContent: $ref → wos-workflow.schema.json#/$defs/<TargetType>
+}
+```
+
+The structural truth lives in `wos-workflow.schema.json` (the WOS schema's `$defs`). Studio's schema declares the *envelope* + the *reference*. When the WOS schema evolves a target shape (e.g., a new field on `governance.notices[*]`), Studio inherits automatically; no Studio schema edit needed for backward-compatible additions.
+
+### Composition table
+
+| Studio entity | Composition strategy | Stage-3 schema |
+|---|---|---|
+| **PolicyObject kinds projecting to WOS** (NoticeRequirement, AppealRight, ExplanationRequirement, Deadline, ActorMapping, EvidenceRequirement, Outcome, DecisionRule) | Layered view: envelope + `$ref` to wos-workflow.schema.json `$defs` | **1 polymorphic schema:** `wos-studio-policy-object.schema.json` (oneOf discriminated by `kind`) |
+| **Bridge kinds** (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) | Layered view: envelope + `$ref` to wos-workflow.schema.json target paths | Folded into `wos-studio-policy-object.schema.json` |
+| **Bindings** (ServiceBinding, EventBinding, PolicyEngineBinding) | Layered view: envelope + `$ref` to `wos-workflow.schema.json#/integration/bindings[*]` shape | **1 schema:** `wos-studio-binding.schema.json` |
+| **Studio-only PolicyObject kinds** (PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod, Supersession, Conflict, Assumption, OpenQuestion, ProtectedCategory) | Studio-defined — no WOS counterpart | Folded into `wos-studio-policy-object.schema.json` (the `oneOf` extends to cover authoring-only kinds) |
+| **WorkflowIntent** | Genuinely different from `$wosWorkflow` (16 user-facing element kinds + bridges + authoring metadata) | **1 schema:** `wos-studio-workflow-intent.schema.json` |
+| **Scenario** | Layered view: envelope + `$ref` to `wos-tooling.schema.json` `scenarios[*]` shape | **1 schema:** `wos-studio-scenario.schema.json` |
+| **AuthoringProvenanceRecord** | Studio-defined; AI-extraction subtype + audit event-type tags compose parent **PLN-0384** `wos-event-types.md` | **1 schema:** `wos-studio-provenance.schema.json` |
+| **DecisionTable** (the table form of DecisionRule) | Studio-defined authoring shape (rows + hit policy + completeness); compiles to chained FEL guards via compiler. Optional **slight WOS-side extension** proposal queued to `wos-tooling.scenarios[*].decisionTable` for row-coverage traceability | Folded into `wos-studio-policy-object.schema.json` |
+| **Source vault** (SourceDocument, SourceVersion, SourceSection, SourceCitation, ExtractedClaim, CanonicalSourceRef) | Studio-defined; canonical sources may carry JSON-LD `@context` + content (when source is published in JSON-LD, e.g., eCFR.gov) | **1 schema:** `wos-studio-source.schema.json` |
+| **Workspace + ReviewerRole + WorkspacePolicy + AuthorityGrant + ComplianceAttestation** | Studio-defined | **1 schema:** `wos-studio-workspace.schema.json` |
+| **ApprovalDecision + ApprovalPackage + ChangeImpactReport** | Studio-defined; approval-package composes (or attaches) Effectiveness + ComplianceAttestation | **1 schema:** `wos-studio-approval.schema.json` |
+| **ValidationFinding + readiness rule registry** | Studio-defined | **1 schema:** `wos-studio-readiness.schema.json` |
+| **Effectiveness, IdentitySubject, TerminologyMap, MigrationPath** | Studio-defined; Effectiveness is referenced by ref (one canonical home, never copied) | **1 schema each (4 small):** `wos-studio-effectiveness.schema.json`, `wos-studio-identity-subject.schema.json`, `wos-studio-terminology-map.schema.json`, `wos-studio-migration-path.schema.json` |
+
+Net Stage-3 Studio schemas: **~10** (from ~33 naive). Studio inherits WOS structural truth via `$ref` everywhere a target exists.
+
+### Slight WOS-side extension proposals (queued)
+
+Two minor WOS-side extensions would further reduce Studio complexity. Listed as **ExtensionRecord candidates** in [`specs/studio-to-wos-mapping.md`](specs/studio-to-wos-mapping.md); not implemented Studio-side until WOS-side ratifies:
+
+1. **`wos-tooling.scenarios[*].decisionTable`** — a row-coverage shape so that a DecisionTable's rows can each be traced to scenario coverage. Today scenarios reference guard expressions; with this extension, a DecisionTable's row #3 can be marked "covered by scenario S-007."
+2. **`wos-workflow.x-wos-studio`** — a reserved extension envelope on the published `$wosWorkflow` artifact where Studio's compact provenance / citation manifest projects. Today this content is in the ApprovalPackage; a reserved slot in the artifact itself would allow downstream consumers to fetch it without a separate package retrieval.
+
+Both are within ADR-0077's `x-` extensibility patternProperties; neither requires a new kernel seam.
+
+### External-standard reuse (selective)
+
+| Standard | Adopted? | Where | What it unlocks |
+|---|---|---|---|
+| **W3C JSON-LD** | YES | `source-vault.md` ingest path | Native ingest of regs published in JSON-LD (eCFR.gov, increasingly common); preserves semantic context across re-parsing |
+| **W3C DPV (Data Privacy Vocabulary)** | YES | `policy-object-model.md` DataElement.sensitivity | Replaces hand-rolled `pii \| phi \| restricted` enum; unlocks GDPR/CCPA/HIPAA mapping; interop with privacy-engineering tools |
+| **W3C PROV-O** | YES | `authoring-provenance.md` export format | First-class auditor interop (auditors already understand PROV-O); leverages existing `wos-ontology-alignment.schema.json` sidecar |
+| **OASIS LegalRuleML** | YES | `policy-object-model.md` deontic kinds | Direct on-the-wire shape for Obligation/Permission/Prohibition/Right; legal-tech tool interop; already cited in parent CLAUDE.md |
+| **DMN one-way import** | YES | `binding-and-integration.md` import binding kind | Procurement-friendly: many state agencies have DMN tables; one-way import → DecisionTable → FEL chain at compile. **No DMN export** (rejection stands per CLAUDE.md). |
+| **BPMN one-way import** | DEFERRED | — | Lossy + large transpiler; revisit when concrete agency demand surfaces |
+| **W3C SHACL** | DEFERRED | — | Reconsider when JSON-LD ingest matures + an agency publishes shapes |
+| **RDF / Turtle export** | DEFERRED | — | JSON-LD covers the export need; revisit only if a customer needs Turtle |
+| **AsyncAPI** | REJECTED (parent CLAUDE.md) | — | Superseded by CloudEvents; rejection holds |
+| **DMN export, FEEL, SHACL as authority languages** | REJECTED (parent CLAUDE.md) | — | FEL is the WOS authority; rejection holds for *export* and *authority*; only one-way *import* paths are adopted |
 
 ## 6. Open issues
 

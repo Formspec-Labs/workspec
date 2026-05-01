@@ -1,0 +1,219 @@
+{
+  "$wosWorkflow": "1.0",
+  "$comment": "Compiled artifact produced by Studio's compiler from workflow-intent.json + policy-objects/ + mappings/ + bindings. Shape-compatible with parent examples/benefits-adjudication.workflow.json (ADR 0076 D-2 envelope). Illustrative — Stage-3 schemas not yet authored, so this does not yet validate.",
+  "url": "https://dhs.state.tx.us/workflows/snap-redetermination-2026",
+  "version": "1.0.0",
+  "title": "SNAP Redetermination — Texas",
+  "description": "Texas SNAP redetermination workflow. Federal CFR §273.10/§273.15 + State SNAP Manual Ch. 8 + 2024 federal corrective-action letter. Compiled by Studio v0.1; full provenance in ApprovalPackage. Stage-2 illustrative.",
+  "impactLevel": "rightsImpacting",
+  "status": "active",
+  "wosVersionPin": "kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0",
+  "x-wos-studio": {
+    "applicability": {
+      "$comment": "Per studio-to-wos-mapping.md slight WOS-side extension proposal: ApplicabilityScope as workflow-level field. Until ratified, stored here.",
+      "jurisdictions": [{"kind": "state", "code": "US-TX", "displayName": "Texas"}],
+      "programs": ["SNAP", "SNAP-E&T"]
+    },
+    "compileManifestRef": "manifest-wfi-snap-redetermination-tx-v1.0.0",
+    "approvalPackageRef": "appkg-snap-redetermination-tx-v1.0.0",
+    "compactProvenance": {
+      "$comment": "Compact projection per authoring-provenance.md SA-MUST-prov-030/031. Full provenance in workspace; this is the auditor view.",
+      "sourcesUsed": [
+        { "version": "src-cfr-7-273", "ranges": ["§273.10(a)(1)", "§273.10(a)(2)", "§273.10(g)", "§273.15"] },
+        { "version": "src-state-tx-snap-manual-ch8", "ranges": ["§8.4", "§8.5", "§8.7", "§8.9"] },
+        { "version": "src-office-memo-recert-v3.2", "ranges": ["§2", "§3", "§5"] },
+        { "version": "src-fns-corrective-action-2024-q3", "ranges": ["Finding 1", "Finding 2"] }
+      ],
+      "supersessions": [
+        { "superseder": "src-fns-corrective-action-2024-q3§Finding 1", "superseded": "src-office-memo-recert-v3.2§4(a)" }
+      ],
+      "unmappedListings": [
+        { "policyObjectRef": "pol-assumption-holiday-period-flex", "rationale": "Workspace-specific holiday-period operational practice; no WOS counterpart by design." }
+      ]
+    }
+  },
+  "intake": { "contractRef": "fs-snap-redetermination-tx-2026-v3.formspec.json", "mode": "publicIntake" },
+  "actors": [
+    { "id": "applicant", "type": "human" },
+    { "id": "caseworker", "type": "human" },
+    { "id": "supervisor", "type": "human" },
+    { "id": "fair-hearing-officer", "type": "human" },
+    { "id": "triage-agent", "type": "agent" },
+    { "id": "fraud-screen-engine", "type": "system" },
+    { "id": "fed-income-verify-broker", "type": "system" }
+  ],
+  "agents": [
+    {
+      "id": "triage-agent",
+      "modelIdentifier": "claude-opus-4-7",
+      "modelVersion": "20260301",
+      "modelVersionPolicy": "pinned",
+      "autonomyLevel": "advisory",
+      "deonticConstraints": [
+        { "lrml:Permission": "may suggest extracted claims", "lrml:Prohibition": "may NOT autonomously approve a PolicyObject", "lrml:Obligation": "MUST emit confidence and aiLineage on every suggestion" }
+      ],
+      "confidenceFloor": 0.7,
+      "fallbackChain": [{ "step": "human-review", "ref": "supervisor" }]
+    }
+  ],
+  "aiOversight": {
+    "disclosure": "AI-assisted authoring per EU AI Act Art. 13 / OMB M-24-10. All AI-extracted claims reviewed by named human approvers; lineage in ApprovalPackage.",
+    "driftDetection": "drift-monitor.daily-health-check"
+  },
+  "caseFile": {
+    "fields": {
+      "applicantId": { "type": "string", "required": true, "x-canonical-term": "usda-snap:ApplicantId", "x-dpv-sensitivity": "dpv:Identifier" },
+      "household": {
+        "type": "structured",
+        "fields": {
+          "size": { "type": "integer", "required": true, "x-canonical-term": "usda-snap:HouseholdSize" },
+          "primaryLanguage": { "type": "string", "x-canonical-term": "usda-snap:PrimaryLanguage", "x-dpv-sensitivity": "dpv:Demographic" },
+          "income": { "type": "structured", "fields": { "monthlyGross": { "type": "money", "required": true, "x-canonical-term": "usda-snap:HouseholdIncome", "x-dpv-sensitivity": "dpv:FinancialPreference" } } }
+        }
+      },
+      "redetermination": {
+        "type": "structured",
+        "fields": {
+          "dueDate": { "type": "date", "required": true },
+          "outcome": { "type": "enum", "values": ["approved", "denied", "manual-review"] },
+          "decisionRationale": { "type": "string" }
+        }
+      },
+      "appeal": { "type": "structured", "fields": { "filedAt": { "type": "datetime" }, "method": { "type": "enum", "values": ["written", "phone", "in-person"] }, "continuationOfServicesElected": { "type": "boolean" }, "outcome": { "type": "enum", "values": ["upheld", "reversed", "pending"] } } }
+    }
+  },
+  "lifecycle": {
+    "initialState": "intake",
+    "states": {
+      "intake": { "type": "compound", "states": { "applicantForm": { "type": "atomic" }, "fedIncomeVerify": { "type": "atomic" }, "intakeComplete": { "type": "final" } } },
+      "determination": {
+        "type": "compound",
+        "states": {
+          "eligibilityDecision": { "type": "atomic" },
+          "fraudScreen": { "type": "atomic" },
+          "supervisorAdverseReview": { "type": "atomic" },
+          "determinationComplete": { "type": "final" }
+        }
+      },
+      "approved": { "type": "final", "polarity": "favorable" },
+      "denied": { "type": "final", "polarity": "adverse", "triggersDueProcess": true, "linkedNoticeRef": "notice-adverse-action", "linkedAppealRef": "appeal-fair-hearing" },
+      "appeal-resolution": {
+        "type": "compound",
+        "states": {
+          "fairHearingScheduled": { "type": "atomic" },
+          "fairHearingHeld": { "type": "atomic" },
+          "appealOutcomeRendered": { "type": "final" }
+        }
+      }
+    },
+    "transitions": [
+      {
+        "id": "intake-to-determination",
+        "source": "intake.intakeComplete",
+        "target": "determination",
+        "guard": "(household.size == 1 and household.income.monthlyGross <= 1473) or (household.size == 2 and household.income.monthlyGross <= 1984) or (household.size == 3 and household.income.monthlyGross <= 2495) or (household.size >= 4 and household.income.monthlyGross <= (2495 + (household.size - 3) * 511))",
+        "$comment_guard": "Compiled from pol-decision-table-eligibility (DecisionTable) per binding-and-integration.md. First-match hit policy preserved as guard ordering."
+      },
+      {
+        "id": "determination-to-approved",
+        "source": "determination.determinationComplete",
+        "target": "approved",
+        "guard": "redetermination.outcome == 'approved'"
+      },
+      {
+        "id": "determination-to-denied",
+        "source": "determination.determinationComplete",
+        "target": "denied",
+        "guard": "redetermination.outcome == 'denied'",
+        "actions": [{ "kind": "issue-notice", "noticeRef": "notice-adverse-action" }]
+      },
+      {
+        "id": "denied-to-appeal-resolution",
+        "source": "denied",
+        "target": "appeal-resolution",
+        "guard": "appeal.filedAt != null and (appeal.filedAt - redetermination.outcomeIssuedAt) <= duration('90 days')",
+        "trigger": "appealFiled"
+      },
+      {
+        "id": "appeal-resolution-to-approved",
+        "source": "appeal-resolution.appealOutcomeRendered",
+        "target": "approved",
+        "guard": "appeal.outcome == 'reversed'"
+      },
+      {
+        "id": "appeal-resolution-to-denied-final",
+        "source": "appeal-resolution.appealOutcomeRendered",
+        "target": "denied",
+        "guard": "appeal.outcome == 'upheld'"
+      }
+    ],
+    "timers": {
+      "appealWindow": { "calendarDays": 90, "trigger": "deniedAt", "expiryAction": "terminate" },
+      "fairHearingDeadline": { "calendarDays": 60, "trigger": "appealFiledAt", "expiryAction": "escalate" },
+      "renoticePreWindow": { "calendarDays": 10, "trigger": "adverseDecisionAt", "expiryAction": "auto-issue-notice" }
+    },
+    "tasks": [
+      { "id": "task-applicant-form", "actorRef": "applicant", "kind": "data-collection" },
+      { "id": "task-fed-income-verify", "actorRef": "fed-income-verify-broker", "kind": "system-call" },
+      { "id": "task-supervisor-adverse-review", "actorRef": "supervisor", "kind": "human-review", "signatureGated": true, "signatureRequirement": "supervisor-co-sign" },
+      { "id": "task-fair-hearing", "actorRef": "fair-hearing-officer", "kind": "human-review" }
+    ]
+  },
+  "governance": {
+    "notices": [
+      {
+        "id": "notice-adverse-action",
+        "trigger": "deniedAt",
+        "audience": "applicant",
+        "content": ["reasonForAdverseAction", "regulatoryCitation", "effectiveDate", "appealRightAndDeadline", "continuationOfServicesElection", "contactForAssistance"],
+        "deliveryMethod": ["mail", "case-management-system-portal"],
+        "timing": { "noLaterThanCalendarDaysBefore": 10, "trigger": "adverseAction.effectiveDate" },
+        "language": ["en-US", "es-US"]
+      }
+    ],
+    "appeals": [
+      {
+        "id": "appeal-fair-hearing",
+        "linkedNoticeRef": "notice-adverse-action",
+        "deadline": { "calendarDaysFromNoticeDate": 90 },
+        "requestMethods": ["written", "phone", "in-person"],
+        "$comment": "phone+in-person added per 2024 corrective letter Finding 1; supersedes office memo §4(a) written-only restriction",
+        "hearingTimingDeadline": { "calendarDaysFromRequest": 60 },
+        "continuationOfServicesElection": true
+      }
+    ],
+    "deonticConstraints": [
+      { "lrml:Obligation": "Caseworker MUST issue Notice of Adverse Action no later than 10 calendar days before adverse-action effective date", "appliesTo": "caseworker", "scope": "deniedAt → noticeIssuedAt" },
+      { "lrml:Permission": "Caseworker MAY extend pre-notice window by up to 5 calendar days", "appliesTo": "caseworker", "scope": "documented-disruption-only" },
+      { "lrml:Prohibition": "Caseworker MUST NOT issue Notice of Adverse Action without supervisor co-signature", "appliesTo": "caseworker", "scope": "denial path" },
+      { "lrml:Right": "Applicant has the RIGHT to request fair hearing within 90 calendar days of notice issuance", "appliesTo": "applicant" },
+      { "lrml:Obligation": "Agency MUST continue benefits at prior level pending fair hearing if applicant elects continuation-of-services", "appliesTo": "agency", "scope": "appeal pending" },
+      { "lrml:Obligation": "Notice MUST be issued in Spanish for households with primary-language=Spanish", "appliesTo": "agency", "lrml:defeasible": false }
+    ],
+    "explanations": [{ "tier": "narrative-tier-2", "obligation": "decision rationale must cite regulatory basis", "appliesTo": "deniedAt" }]
+  },
+  "signature": {
+    "signers": [
+      { "id": "supervisor-co-sign", "role": "supervisor", "kind": "wet-or-electronic", "signingOrder": "sequential-after-caseworker", "trigger": "supervisorAdverseReview" }
+    ],
+    "auditCertificate": { "kind": "supervisor-signed-determination" }
+  },
+  "custody": { "trustProfile": "trellis-default", "anchorRequirements": ["adverse-decisions", "appeal-outcomes", "supervisor-signatures"] },
+  "advanced": {
+    "equity": {
+      "protectedCategories": [
+        { "categoryId": "language-spoken-spanish", "dimensionName": "language-spoken", "monitoringMethod": "statistical-disparity-test", "disparityThreshold": "≥5pp approval-rate difference between Spanish-primary and English-primary households", "remediationTriggerRef": "remediation-30day-spanish-disparity" },
+        { "categoryId": "race-ethnicity", "dimensionName": "race-ethnicity", "monitoringMethod": "aggregate-reporting", "reportingSchedule": "quarterly" },
+        { "categoryId": "disability", "dimensionName": "disability", "monitoringMethod": "individual-case-review", "$comment": "ADA-protected; per ADA Title II + 7 CFR §15.2" }
+      ]
+    }
+  },
+  "assurance": { "level": "moderate", "attestation": { "regimeRef": "FedRAMP-Moderate", "controlsBaselineRef": "NIST-800-53-Rev5-Moderate" } },
+  "integration": {
+    "bindings": [
+      { "id": "bind-svc-fed-income-verify", "type": "openapi-call", "operationRef": "POST /eligibility/income-verify", "apiSpecRef": "fed-broker-2026.openapi.json", "errorHandling": { "onError": "fallback", "fallbackBindingRef": "manual-income-verification-task" } },
+      { "id": "bind-evt-application-submitted", "type": "event-consume", "eventName": "application.submitted", "cloudEventsExtensions": { "woscausationeventid": "${prior.eventId}", "woscorrelationkey": "${case.id}" } },
+      { "id": "bind-pe-fraud-screen", "type": "policy-engine", "engineKind": "opa", "engineEndpointRef": "https://policy.dhs.state.tx.us/v1/data/snap/fraud-screening", "policyRef": "snap.fraud_screening.v3", "composition": "deny-overrides" }
+    ]
+  }
+}

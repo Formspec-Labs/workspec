@@ -44,6 +44,8 @@ WorkflowIntent {
   id, workspaceId, title, description?,
   impactLevel,                 // mirrors $wosWorkflow.impactLevel: rights-impacting | safety-impacting | informational | other
   lifecycleState,              // draft | mapped | validationReady | scenarioTested | approved | published | deprecated
+  wosVersionPin,               // claim string per parent RELEASE-STREAMS.md (e.g., "kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0"); per CM §1.33 MigrationPath
+  effectivenessRef?,           // workspace-level Effectiveness per effectiveness-and-applicability.md §1.25; the workflow's overall jurisdictional + temporal scope
   elements[],                  // ordered or graph-structured set of WorkflowElements
   policyObjectRefs[],          // PolicyObjects this intent is derived from
   mappingRefs[],               // StudioToWosMappings active in this intent
@@ -56,6 +58,10 @@ WorkflowIntent {
   createdBy, createdAt, lastEditedBy, lastEditedAt
 }
 ```
+
+**`wosVersionPin`** is load-bearing for reproducibility (per `compiler-contract.md` `SA-MUST-cmp-050`) AND for migration (per `change-impact.md` `triggerKind = wos-version-deprecation`). When the parent stack ratifies a new minor stream version, existing WorkflowIntents continue to compile against their pinned version; the pin is updated only via explicit reviewer migration action.
+
+**`effectivenessRef`** at the workflow level declares the workflow's overall jurisdictional + temporal scope. Individual elements MAY narrow further via element-level effectiveness on bridges (see WorkflowElement extension below).
 
 ### `WorkflowElement`
 
@@ -71,12 +77,15 @@ WorkflowElement {
   policyObjectRefs[],          // approved PolicyObjects backing this element
   citations[],                 // SourceCitation refs (typically inherited from policyObjectRefs)
   bridge,                      // BridgeAssertion: how this element compiles to kernel constructs
+  effectivenessRef?,           // optional element-level Effectiveness narrowing the workflow-level effectiveness; per effectiveness-and-applicability.md
   reviewState,                 // draft | reviewed | approved
   workspaceId
 }
 ```
 
 The `bridge` field is load-bearing — it's how the compiler knows what to emit. It is NOT free-form: it is one of a closed set of forms, one per element kind (defined below).
+
+**`effectivenessRef` on an element** narrows the workflow-level effectiveness for cases matching the element. Example: a NoticeRequirement element narrowing to `{jurisdictions: [{kind: "state", code: "US-TX"}]}` means the notice fires only for Texas cases. Compilation translates this to a derived FEL `appliesWhen` on the corresponding `governance.notices[*]` (per `effectiveness-and-applicability.md` §"WOS mappings"). Elements without `effectivenessRef` inherit the workflow's effectiveness.
 
 ### The 16 user-facing element kinds
 

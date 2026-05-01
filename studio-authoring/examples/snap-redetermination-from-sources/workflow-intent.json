@@ -1,0 +1,49 @@
+{
+  "$comment": "Studio WorkflowIntent — the user-facing draft. 16 user-facing element kinds (per workflow-intent.md). Compiles to wos-workflow.json.",
+  "id": "wfi-snap-redetermination-tx",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "title": "SNAP Redetermination — Texas (workflow intent)",
+  "description": "User-facing draft of the SNAP redetermination workflow for Travis County DHS. Compiles to a $wosWorkflow per compiler-contract.md.",
+  "impactLevel": "rights-impacting",
+  "lifecycleState": "approved",
+  "wosVersionPin": "kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0",
+  "effectivenessRef": "eff-state-tx-snap-current",
+  "version": "1.0.0",
+  "policyObjectRefs": [
+    "pol-notice-adverse-action", "pol-appeal-right-fair-hearing", "pol-deadline-appeal-90-day",
+    "pol-actor-caseworker", "pol-protected-category-language", "pol-decision-table-eligibility",
+    "pol-data-household-income", "pol-supersession-corrective-letter-vs-office-memo",
+    "pol-applicability-tx-snap-2026", "pol-assumption-holiday-period-flex",
+    "pol-conflict-cfr-vs-state-redeterm-interval", "pol-authority-rank-fed-state-local", "pol-source-cfr-7-273"
+  ],
+  "mappingRefs": [
+    "map-pol-notice-adverse-action", "map-pol-appeal-right-fair-hearing", "map-pol-deadline-appeal-90-day",
+    "map-pol-actor-caseworker", "map-pol-protected-category-language", "map-pol-decision-table-eligibility",
+    "map-pol-data-household-income", "map-pol-supersession-letter-vs-memo",
+    "map-pol-applicability-tx-snap-2026", "map-pol-assumption-holiday-period-flex",
+    "map-pol-conflict-redeterm-interval", "map-pol-authority-rank", "map-pol-source-cfr-7-273"
+  ],
+  "bindingRefs": ["bind-svc-fed-income-verify", "bind-evt-application-submitted", "bind-pe-fraud-screen"],
+  "elements": [
+    { "id": "el-phase-intake", "kind": "phase", "name": "Intake", "body": { "description": "Application intake and case-file completion", "contains": ["el-data-collection-application", "el-system-check-income-verify"] }, "bridge": { "kernelKind": "compound-state", "stateName": "intake" }, "reviewState": "approved" },
+    { "id": "el-data-collection-application", "kind": "data-collection", "name": "Applicant submits redetermination form", "body": { "collected": ["pol-data-household-income", "pol-data-household-size"], "formRef": "fs-snap-redetermination-tx-2026-v3" }, "bridge": { "kernelKind": "task", "taskRef": "task-applicant-form" }, "reviewState": "approved" },
+    { "id": "el-system-check-income-verify", "kind": "system-check", "name": "Federal income verification", "body": { "checkPurpose": "Verify household income against federal IRS data broker", "serviceBindingRef": "bind-svc-fed-income-verify" }, "bridge": { "kernelKind": "task", "taskRef": "task-fed-income-verify" }, "reviewState": "approved" },
+    { "id": "el-phase-determination", "kind": "phase", "name": "Determination", "body": { "description": "Eligibility decision + supervisor review for adverse outcomes", "contains": ["el-decision-eligibility", "el-review-supervisor", "el-system-check-fraud-screen"] }, "bridge": { "kernelKind": "compound-state", "stateName": "determination" }, "reviewState": "approved" },
+    { "id": "el-decision-eligibility", "kind": "decision", "name": "Eligibility determination", "body": { "question": "Is the household eligible at the redetermination?", "decisionRuleRef": "pol-decision-table-eligibility", "possibleOutcomes": ["pol-outcome-eligibility-determination"] }, "bridge": { "kernelKind": "transition", "transitionId": "intake-to-determination", "guardKind": "fel-chain" }, "reviewState": "approved" },
+    { "id": "el-system-check-fraud-screen", "kind": "system-check", "name": "Fraud screening", "body": { "checkPurpose": "Run OPA fraud-screen policy", "serviceBindingRef": "bind-pe-fraud-screen" }, "bridge": { "kernelKind": "transition-guard", "guardRef": "policy-engine-fraud-screen" }, "reviewState": "approved" },
+    { "id": "el-review-supervisor", "kind": "review", "name": "Supervisor signs adverse determination", "body": { "reviewer": "pol-actor-supervisor", "scope": ["pol-outcome-eligibility-determination"], "outcomeWhen": "adverse" }, "bridge": { "kernelKind": "task", "taskRef": "task-supervisor-adverse-review", "signatureGated": true }, "reviewState": "approved" },
+    { "id": "el-notice-adverse-action", "kind": "notice", "name": "Notice of Adverse Action", "body": { "noticeRequirementRef": "pol-notice-adverse-action", "deliveryBindingRef": null }, "bridge": { "kernelKind": "governance-notice", "noticeId": "notice-adverse-action" }, "reviewState": "approved" },
+    { "id": "el-deadline-appeal-window", "kind": "deadline", "name": "90-day appeal window", "body": { "deadlinePolicyObjectRef": "pol-deadline-appeal-90-day", "attachedTo": "el-notice-adverse-action", "expiryAction": "terminate" }, "bridge": { "kernelKind": "timer", "timerRef": "appealWindow" }, "reviewState": "approved" },
+    { "id": "el-appeal-fair-hearing", "kind": "appeal", "name": "Fair hearing branch", "body": { "appealRightRef": "pol-appeal-right-fair-hearing", "branchEntryPoint": "el-phase-appeal-resolution", "deadlineRef": "pol-deadline-appeal-90-day" }, "bridge": { "kernelKind": "sub-flow", "subFlowEntry": "appeal-resolution-state" }, "reviewState": "approved" },
+    { "id": "el-phase-appeal-resolution", "kind": "phase", "name": "Appeal resolution", "body": { "description": "Fair hearing held; outcome upheld or reversed", "contains": ["el-task-fair-hearing-held", "el-decision-appeal-outcome"] }, "bridge": { "kernelKind": "compound-state", "stateName": "appeal-resolution" }, "reviewState": "approved" },
+    { "id": "el-task-fair-hearing-held", "kind": "review", "name": "Fair hearing officer reviews case + applicant statement", "body": { "reviewer": "pol-actor-hearing-officer", "scope": ["entire-case-file"] }, "bridge": { "kernelKind": "task", "taskRef": "task-fair-hearing" }, "reviewState": "approved" },
+    { "id": "el-decision-appeal-outcome", "kind": "decision", "name": "Appeal outcome", "body": { "question": "Is the prior adverse determination upheld or reversed?", "possibleOutcomes": ["pol-outcome-appeal-upheld", "pol-outcome-appeal-reversed"] }, "bridge": { "kernelKind": "transition", "transitionId": "appeal-resolution-to-terminal" }, "reviewState": "approved" },
+    { "id": "el-manual-override-extension", "kind": "manual-override", "name": "Caseworker extends pre-notice window", "body": { "overridingActor": "pol-actor-caseworker", "defaultPath": "el-notice-adverse-action", "overridePath": "el-deferred-notice", "justificationRequired": true, "recordRationale": true, "scopeLimit": "up to 5 calendar days, documented disruption only" }, "bridge": { "kernelKind": "transition", "transitionId": "default-or-extended-notice", "guardKind": "actor-authority + documented-disruption" }, "reviewState": "approved" },
+    { "id": "el-completion-approved", "kind": "completion-outcome", "name": "Redetermination approved", "body": { "outcomeRef": "pol-outcome-approval", "polarity": "favorable", "postClosureActions": ["update-case-file", "issue-approval-notice"] }, "bridge": { "kernelKind": "terminal-state", "stateName": "approved" }, "reviewState": "approved" },
+    { "id": "el-completion-denied", "kind": "completion-outcome", "name": "Redetermination denied", "body": { "outcomeRef": "pol-outcome-denial", "polarity": "adverse", "triggersDueProcess": true, "postClosureActions": ["update-case-file", "schedule-cessation-of-benefits"] }, "bridge": { "kernelKind": "terminal-state", "stateName": "denied", "linkedNoticeRef": "el-notice-adverse-action", "linkedAppealRef": "el-appeal-fair-hearing" }, "reviewState": "approved" }
+  ],
+  "compiledArtifactRef": "wfi-snap-redetermination-tx-compiled-v1.0.0",
+  "provenance": [
+    { "id": "prov-wfi-001", "eventKind": "approved", "recordedBy": "subj-sarah-chen", "role": "workflow-owner", "originClass": "source", "rationale": "Workflow draft reviewed across compliance-, legal-, technical-, operations-reviewer roles per workspace policy. Multi-role gating satisfied per workspace.md SA-MUST-ws-002." }
+  ]
+}

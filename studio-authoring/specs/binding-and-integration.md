@@ -133,6 +133,81 @@ DecisionTable (DecisionRule with form = "table") {
 
 Each row is reviewer-reviewable independently; a row's `sourceCitation` is preserved through the whole lifecycle. Compilation produces a chained-FEL-guard sequence (see [`compiler-contract.md`](compiler-contract.md)). **The table is NOT emitted as DMN.**
 
+### `DMNImport` (one-way import only)
+
+A new binding kind that ingests existing DMN tables (DMN 1.3 / 1.4) authored by state agencies and transpiles them to internal `DecisionTable` PolicyObjects. **One-way only**: import is supported; export remains rejected per parent CLAUDE.md `:76`. The transpiler converts DMN `decisionTable` elements (with FEEL row expressions) to Studio's `DecisionTable.rows[]` (with FEL row expressions) at import time.
+
+```text
+DMNImport {
+  id, kind: "DMNImport",
+  body: {
+    sourceDmnUri,                   // origin DMN file (or inlined dmnXml)
+    dmnXml?,                        // inline DMN (when ingested directly)
+    sourceDecisionId,               // DMN <decision id="..."> being imported
+    feelToFelMapping {              // record of FEEL → FEL transpilation
+      transpilerVersion,
+      transpiledAt,
+      issues[]                      // FEEL expressions that didn't transpile cleanly
+    },
+    producedDecisionTableRef        // the resulting Studio DecisionTable PolicyObject id
+  },
+  citations[],                      // SourceCitations to the policy backing the DMN
+  provenance,
+  lifecycleState ('imported' | 'reviewed' | 'approved' | 'superseded'),
+  workspaceId
+}
+```
+
+**Why this exists.** Many state agencies have DMN tables for SNAP/TANF/Medicaid eligibility decisions. Marco's persona-round-2 review surfaced this: refusing to import = procurement friction with no benefit. The transpiler is small (FEEL → FEL is a focused dialect translation); the one-way constraint preserves the parent rejection of DMN as an authority language.
+
+**FEEL-to-FEL transpilation.** Common forms:
+- DMN `>= 18` → FEL `>= 18`.
+- DMN `[1..10]` (range) → FEL `>= 1 and <= 10`.
+- DMN `not("X")` → FEL `!= "X"`.
+- DMN `string(...)` / `number(...)` → FEL native types.
+- DMN `decision table` hit policies map to Studio's: `UNIQUE` → `unique`, `FIRST` → `first-match`, `PRIORITY` → `priority`, `COLLECT (sum/max/min)` → `output-merge` with aggregator.
+
+Issues that don't transpile (e.g., FEEL temporal arithmetic without a corresponding FEL form) MUST be surfaced as tier-S2 ValidationFindings with `DMN-LINT-001` (`feel-to-fel-transpile-issue`); the reviewer either rewrites in FEL or rejects the import.
+
+- **`SA-MUST-bind-060`** — DMNImport produces an internal DecisionTable PolicyObject; it MUST NOT directly produce `$wosWorkflow` content. The DecisionTable is the canonical Studio representation; the DMN file is the import provenance, retained but not authoritative. *(runtime-pending.)*
+- **`SA-MUST-bind-061`** — DMNImport MUST preserve the DMN file as a provenance artifact (referenced via `sourceDmnUri` or inline `dmnXml`); the FEEL→FEL transpilation rationale MUST be queryable for audit. *(runtime-pending; cross-cutting `authoring-provenance.md` audit event catalog: `wos.authoring.dmn-imported`.)*
+- **`SA-MUST-bind-062`** — DMNImport workflows that fail to transpile cleanly MUST surface tier-S2 findings. The implementation MUST NOT silently approximate; reviewer MUST resolve the issues. *(lint-pending.)*
+
+### Scenario-as-contract-test relationship
+
+Every binding (Service / Event / PolicyEngine / DecisionTable / DMNImport) declares the Scenario(s) that exercise it. The Scenario IS the binding's contract test. This closes the v3 plan-agent's "contract testing as a first-class artifact" gap.
+
+```text
+binding.exercisedByScenarios[]   // pointers to Scenarios that exercise this binding
+```
+
+- **`SA-MUST-bind-070`** — Every binding in lifecycleState ≥ `approved` MUST have at least one Scenario in `exercisedByScenarios[]` exercising the binding's happy-path. Bindings without exercising scenarios MUST be flagged as tier-S5 ValidationFindings (`BIND-LINT-030`, "binding-without-contract-test"). *(lint-pending.)*
+- **`SA-MUST-bind-071`** — ServiceBindings that declare `errorHandling.onError != fail-workflow` MUST have at least one additional Scenario exercising the error path. *(lint-pending: tier-S5.)*
+- **`SA-MUST-bind-072`** — PolicyEngineBindings MUST have at least one Scenario exercising both `permit` and `deny` decision outcomes. *(lint-pending.)*
+- **`SA-MUST-bind-073`** — DecisionTable bindings MUST have Scenario coverage for every row's distinct outcome. (Cross-cutting parent slight-extension proposal: `wos-tooling.scenarios[*].decisionTable` row-coverage shape per `studio-to-wos-mapping.md` ExtensionRecord candidates.) *(lint-pending.)*
+
+### Runtime-observation seam attachment hook
+
+When [`runtime-observation-seam.md`](runtime-observation-seam.md) ingest mode is `subscription`, the subscription IS an EventBinding consuming runtime-emitted observation events. The hook:
+
+```text
+EventBinding (specialized for runtime-observation-seam) {
+  body: {
+    eventName: "wos.runtime.observation.emitted",
+    direction: "consumed",
+    payloadShape: ...,              // RuntimeObservation wire format per runtime-observation-seam.md
+    cloudEventsExtensions: {
+      woscausationeventid: "${observation.causalChain.priorObservationId}",
+      woscorrelationkey:  "${observation.caseId}"
+    },
+    bindsTo: { kind: "runtime-observation-seam", ref: "subscription-{workspaceId}" }
+  },
+  seam: "lifecycleHook"
+}
+```
+
+The hook is workspace-policy-configurable: workspaces that opt-in to runtime observation declare this EventBinding; workspaces that don't, omit it. Phase-4 implementation lights up the consumer side.
+
 ## Lifecycle
 
 All four kinds follow the standard PolicyObject lifecycle from [`policy-object-model.md`](policy-object-model.md) §"Lifecycle":

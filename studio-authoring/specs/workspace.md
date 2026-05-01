@@ -100,6 +100,66 @@ WorkspaceAuditLogEntry {
 
 The audit log aggregates AuthoringProvenanceRecords across all objects in the workspace; this entity is the queryable view, not a separate store.
 
+### `AuthorityGrant` (per CM §1.29)
+
+A workspace-administrator-issued grant authorizing a specific role/subject to perform a specific authoring action. Finer-grained than ReviewerRole; resolves through the identity-and-attestation seam (per [`identity-and-attestation.md`](identity-and-attestation.md)) at action-time.
+
+```text
+AuthorityGrant {
+  grantId, workspaceId,
+  grantedTo: { kind: 'role' | 'subject', ref },
+  action: 'attestOrigin:{class}'      // attest a specific originClass: source | approved-interpretation | local-practice | assumption | runtime-observed
+        | 'waive:{ruleId}'             // waive a specific readiness rule
+        | 'override:{category}'        // override a block-severity finding category
+        | 'approve:{subjectKind}'      // approve a specific subject kind: PolicyObject | Mapping | WorkflowIntent | Scenario | ApprovalPackage
+        | 'compaction:{scope}'         // (NOT GRANTED — see SA-MUST-ws-050 below; reserved for completeness, always rejected)
+        | 'federation:{relation}',     // x-federation slot (deferred)
+  scope: 'workspace' | 'workflow-class' | 'per-object',
+  scopeRef?,                          // when not workspace-wide
+  grantedBy, grantedAt, revokedAt?, expiresAt?,
+  rationale?
+}
+```
+
+### Compliance metadata section (per CM §1.28 ComplianceAttestation)
+
+Workspace policy carries declared compliance baselines; ApprovalPackage carries per-workflow attestations. The structures:
+
+```text
+WorkspaceComplianceBaseline {
+  workspaceId,
+  regimes[] {                         // declared baselines
+    regime ('SOC2-Type-II' | 'FedRAMP-Moderate' | 'FedRAMP-High' | 'StateRAMP-Moderate' | 'StateRAMP-High' | 'NIST-800-53-Rev5' | 'HIPAA' | 'GDPR-DPIA' | 'CCPA' | ...),
+    regimeVersion,
+    controlsBaseline[],               // controls the workspace asserts coverage for
+    attestor,
+    attestedAt, expiresAt?
+  }
+}
+
+(ApprovalPackage carries derivations of these per-workflow per CM §1.28; see review-and-approval.md.)
+```
+
+### Federation extensibility slot (per CM §1.34)
+
+**Status:** Deferred. The `x-federation` extensibility slot on Workspace reserves the future capability for cross-tenant SourceDocument or PolicyObject sharing. Today: `x-federation: {}` is permitted but not consumed. When PLN-0387 / federation track lands in the parent stack, this slot's shape ratifies.
+
+### Key management (signing keys)
+
+Per [`identity-and-attestation.md`](identity-and-attestation.md) `SA-MUST-id-020`: Studio MUST NOT hold private signing keys. The Workspace MUST declare:
+
+```text
+WorkspaceKeyConfig {
+  workspaceId,
+  signingKeyResolutionMode ('ephemeral-session' | 'persistent-attestation' | 'hsm-bound' | 'kms-bound'),
+  signingKeyIssuerRef,                // identifier of the IdP / KMS / HSM / WebAuthn issuer
+  rotationCadenceHint?,               // workspace-administrator-recommended rotation interval
+  emergencyRevocationContact          // who to call when revocation is needed
+}
+```
+
+The Workspace stores config; private keys live in the issuer.
+
 ## Lifecycle
 
 A Workspace lifecycle:
@@ -148,6 +208,31 @@ A WorkspacePolicy is **edit-in-place** with an audit-log entry per change; polic
 - **`SA-MUST-ws-031`** — Audit-log entries MUST NOT be alterable; corrections are appended as compensating entries. (Same shape as [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-002` for AuthoringProvenanceRecords; this rule applies to non-provenance entries like workspace-policy edits.) *(schema-pending.)*
 - **`SA-MUST-ws-032`** — Audit-log retention MUST be at least the maximum retention required by any DataElement's `sensitivity` plus one year, OR per workspace policy, whichever is longer. *(runtime-pending.)*
 - **`SA-SHOULD-ws-033`** — Audit-log queries SHOULD be answerable in plain language ("what changed in this workspace last week?") via reviewer-friendly rendering.
+
+### AuthorityGrants (RBAC authority-per-action)
+
+- **`SA-MUST-ws-040`** — AuthorityGrant resolution MUST consult the identity-and-attestation seam at action-time per [`identity-and-attestation.md`](identity-and-attestation.md) `SA-MUST-id-040`. Cached resolution MUST NOT be used. *(runtime-pending.)*
+- **`SA-MUST-ws-041`** — Workspace-administrator-issued grants MUST be append-only auditable: every grant + revoke creates a `wos.authoring.authority-granted` / `wos.authoring.authority-revoked` audit event. *(runtime-pending.)*
+- **`SA-MUST-ws-042`** — Self-grants are disallowed (per `SA-MUST-id-042` cross-cutting). The implementation MUST reject. *(lint-pending.)*
+- **`SA-MUST-ws-043`** — `attestOrigin:local-practice` grants MUST require subjects with `attestationLevel = high-assurance` (per `SA-MUST-id-012`). Local-practice attestations are high-stakes; the grant gates on attestation level. *(runtime-pending.)*
+
+### Compaction policy (cross-cutting authoring-provenance)
+
+- **`SA-MUST-ws-050`** — Workspace administrators MUST NOT have authority to compact the underlying authoring audit log. The `compaction:` AuthorityGrant action shape exists for completeness; the implementation MUST always reject grant attempts (cross-cutting [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-092`). Workspace-administrator powers stop short of audit-log redaction. *(architectural commitment.)*
+
+### Compliance metadata
+
+- **`SA-MUST-ws-060`** — When a Workspace declares a compliance baseline (`WorkspaceComplianceBaseline.regimes[*]`), the implementation MUST validate that workspace policies + readiness rules + retention configurations satisfy the regime's controls baseline. Gaps MUST be flagged as tier-S6 ValidationFindings (`COMP-LINT-001`). *(lint-pending.)*
+- **`SA-MUST-ws-061`** — Compliance attestation expiration (`WorkspaceComplianceBaseline.regimes[*].expiresAt`) MUST trigger 90 days before expiry: tier-S6 finding `COMP-LINT-002` "compliance-attestation-expiring." Workflows in `published` state targeting an expiring regime require re-attestation. *(lint-pending.)*
+
+### Federation slot
+
+- **`SA-SHOULD-ws-070`** — Workspaces SHOULD treat the `x-federation` extensibility slot as reserved. Implementations MAY validate that consumed `x-federation` content is structurally well-formed but MUST NOT act on its semantics until federation track lands. (Per CM §1.34.)
+
+### Key management
+
+- **`SA-MUST-ws-080`** — Studio MUST NOT hold private signing keys (cross-cutting [`identity-and-attestation.md`](identity-and-attestation.md) `SA-MUST-id-020`). Workspace key configuration declares the issuer, never the key. *(architectural commitment.)*
+- **`SA-MUST-ws-081`** — Key-rotation events from the issuer MUST trigger workspace public-key cache invalidation per `SA-MUST-id-022`. *(runtime-pending.)*
 
 ## Composition
 

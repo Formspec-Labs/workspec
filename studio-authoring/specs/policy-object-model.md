@@ -83,11 +83,15 @@ Defines when a Requirement / Obligation / etc. applies — by program, jurisdict
 
 **Body fields:** `programs[]`, `jurisdictions[]`, `caseFilters[]` (structured predicates over case-file facts), `dateRange`.
 
+**Mapping note:** ApplicabilityScope is a Studio-only authoring-metadata kind (`authoringOnly`) that ALSO carries an `effectivenessRef` (per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md)) for consistency with cross-cutting effectiveness modeling. **Slight WOS-side extension queued:** a workflow-level `wos-workflow.schema.json#applicabilityScope` would let `ApplicabilityScope` map to `requiresSpecExtension` rather than remain `authoringOnly`. Until ratified, the compiler emits derived FEL `appliesWhen` expressions on the relevant `governance.notices[*]` / `lifecycle.transitions[*]` / `governance.appeals[*]` per the Effectiveness object referenced. ExtensionRecord candidate logged in [`studio-to-wos-mapping.md`](studio-to-wos-mapping.md).
+
 ### `EffectivePeriod`
 
 A reusable period record. Many PolicyObjects carry an inline `effectivePeriod`; an `EffectivePeriod` PolicyObject lets a workspace define a named period (e.g., "Pandemic-Era Waivers") referenced by many objects.
 
 **Body fields:** `name`, `start`, `end?`, `triggerCondition?` (FEL expression — see [`../specs/`](../specs/) for FEL anchor), `description`.
+
+**Mapping note:** Same as ApplicabilityScope — `authoringOnly` today; ExtensionRecord candidate to promote to `requiresSpecExtension` if a workflow-level effective-period field lands in `wos-workflow.schema.json`. Effectiveness composition: an EffectivePeriod PolicyObject MAY itself reference an `effectivenessRef` carrying jurisdictional + appellate-state nuance.
 
 ### `Supersession`
 
@@ -97,7 +101,25 @@ Records that one PolicySource (or PolicyObject) supersedes another in a specific
 
 ## Requirement objects
 
-These describe *what the workflow must, may, or must not do*. The deontic kinds (Obligation / Permission / Prohibition) follow the OASIS LegalRuleML convention referenced in the parent [`../../CLAUDE.md`](../../CLAUDE.md).
+These describe *what the workflow must, may, or must not do*. The deontic kinds (Obligation / Permission / Prohibition / Right) follow the **OASIS LegalRuleML** convention referenced in the parent [`../../CLAUDE.md`](../../CLAUDE.md). See §"Deontic constraint composition" below for how these compose when they overlap or contradict.
+
+### Deontic constraint composition (LegalRuleML serialization + composition rules)
+
+Studio's deontic kinds are not mere labels; they have **composition semantics** drawn from OASIS LegalRuleML. When two deontic constraints apply to the same subject + action, they MUST resolve via these rules:
+
+1. **Prohibition wins over Permission.** A `Prohibition` ("must not do X") ALWAYS wins over a `Permission` ("may do X") on the same subject + action, when both apply. Reviewers may NOT author exceptions that grant Permission inside a covering Prohibition's scope without an explicit `ExceptionRule` carving out the exception.
+2. **Specific wins over general.** When a `Prohibition` applies to subject S in jurisdiction J, and a more-specific `Permission` applies to subject S in jurisdiction J for case characteristic C, the more-specific Permission wins for cases matching C. The "more-specific" relationship MUST be explicit (via citation chain or explicit `narrowsRef` on the Permission).
+3. **Obligation does not auto-conflict with Permission.** "MUST do X" and "MAY do X" are compatible. A Permission to NOT do X (i.e., a permitted abstention) DOES conflict with an Obligation to do X; this MUST be modeled as a Prohibition (of NOT doing X) for clarity, not as a conflicting Permission.
+4. **`Right` is a constraint on the agency, not the applicant.** A `Right` (e.g., "applicant has the right to a fair hearing") implies an Obligation on the agency to provide that right, plus a Prohibition on the agency from interfering. The Studio surface translates Rights into agency-side Obligations + Prohibitions per LegalRuleML guidance.
+5. **Defeasibility.** A constraint MAY be marked `defeasible` (overridden under explicit ExceptionRule). Non-defeasible constraints MUST NOT be overridden; ExceptionRules attempting to override non-defeasible constraints MUST be flagged as tier-S2 ValidationFindings.
+6. **Cross-cutting Effectiveness.** Deontic composition is evaluated within the intersection of the constraints' Effectiveness scopes (jurisdictions × temporal × appellate state per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md)). Two Permissions with non-overlapping Effectivenesses do not compose; they apply to disjoint case sets.
+
+**Serialization.** When the published `$wosWorkflow` artifact carries deontic constraints (in `governance.deonticConstraints[*]` per the WOS schema), Studio compiles the deontic kinds with **OASIS LegalRuleML JSON-LD** vocabulary terms (`lrml:Obligation`, `lrml:Permission`, `lrml:Prohibition`, `lrml:Right`, `lrml:defeasible`). This unlocks legal-tech tool interop and gives auditors a standard on-the-wire shape.
+
+- **`SA-MUST-pom-050`** — Every authored Obligation / Permission / Prohibition / Right MUST be representable in OASIS LegalRuleML JSON-LD. Studio's compiler emits the LegalRuleML form into the published artifact's `governance.deonticConstraints[*]` (slight WOS-side composition; the WOS schema's existing field accepts LegalRuleML-shaped content). *(schema-pending; runtime-pending: compiler emission per `compiler-contract.md`.)*
+- **`SA-MUST-pom-051`** — Two deontic constraints on the same `(subject, action, condition, effectiveness-intersection)` MUST be detected as candidates for composition. Implementations MUST surface the composition (Prohibition-wins, specific-wins, etc.) as a tier-S2 finding when reviewer attestation is missing. *(lint-pending: tier-S2.)*
+- **`SA-MUST-pom-052`** — Non-defeasible constraints MUST NOT be carved by ExceptionRules. Implementations MUST reject ExceptionRule creations that target non-defeasible parents. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-pom-053`** — `Right` PolicyObjects MUST translate to corresponding agency-side Obligation + Prohibition pairs at compile-time per LegalRuleML §"Rights as obligations" guidance. Studio MAY display the Right as a distinct kind in the reviewer UI; the compiled `$wosWorkflow` carries the Obligation + Prohibition pair. *(runtime-pending: compiler.)*
 
 ### `Requirement`
 
@@ -151,7 +173,26 @@ What evidence (documents, attestations, system data) is needed to substantiate a
 
 A discrete data field the workflow uses or collects (e.g., "household income", "SSN", "applicant signature").
 
-**Body fields:** `name`, `dataType` (`string` | `number` | `date` | `boolean` | `enum<...>` | `document` | `structured`), `sensitivity` (`public` | `internal` | `pii` | `phi` | `restricted`), `definition`, `derivation?` (if computed).
+**Body fields:** `name`, `dataType` (`string` | `number` | `date` | `boolean` | `enum<...>` | `document` | `structured`), `sensitivity` (a **W3C DPV** IRI per [`terminology-and-canonical-vocabulary.md`](terminology-and-canonical-vocabulary.md) §"DPV adoption" — replaces the legacy `pii | phi | restricted` enum; legacy values remain as machine-readable aliases), `definition`, `derivation?` (if computed), `canonicalTermRef?` (CanonicalTerm IRI per §1.30 TerminologyMap; resolves cross-workspace identity).
+
+**Sensitivity vocabulary (DPV).** The `sensitivity` field accepts:
+- **W3C DPV IRIs** (canonical, preferred for new PolicyObjects): `dpv:PersonalData`, `dpv:HealthData`, `dpv:Identifier`, `dpv:FinancialPreference`, `dpv:Demographic`, `dpv:Disability`, `dpv:HousingStatus`, `dpv:LegalProceeding`, `dpv:GovernmentBenefit`.
+- **Legacy aliases** (preserved): `public | internal | pii | phi | restricted` — maintained for existing PolicyObjects; new PolicyObjects MUST use DPV IRI per `SA-MUST-term-011`.
+
+The DPV adoption unlocks: (a) automated retention/access policy derivation from DPV's policy machinery, (b) GDPR/CCPA/HIPAA legal-compliance mapping, (c) interop with privacy-engineering tools that already speak DPV. See [`terminology-and-canonical-vocabulary.md`](terminology-and-canonical-vocabulary.md) for full mapping.
+
+### `ProtectedCategory`
+
+A demographic category for which the workflow conducts equity monitoring (Title VI race/ethnicity, ADA disability, ECOA-protected groups, language-spoken, jurisdictional sub-population). Sourced from compliance/policy documents (e.g., USDA Title VI regs at 7 CFR §15.2). **Equity authoring composes the parent advanced equity stream — Studio is the authoring layer; equity semantics live in [`../../specs/advanced/equity-config.md`](../../specs/advanced/equity-config.md).**
+
+**Body fields:** `categoryId`, `dimensionName` (`race-ethnicity` | `gender` | `disability` | `language-spoken` | `national-origin` | `religion` | `age` | `tribal-status` | ...), `legalBasis` (SourceCitation backing the protection), `monitoringMethod` (`statistical-disparity-test` | `individual-case-review` | `aggregate-reporting` | ...), `disparityThreshold?` (e.g., "if approval rates differ by ≥5pp across categories, trigger remediation"), `remediationTriggerRef?` (Deadline + Notice combination when threshold crossed), `dpvSensitivity` (the DPV IRI for this category's data, e.g., `dpv:Demographic` or `dpv:Disability`).
+
+**Mapping:** `mapsToWos` → projects to `wos-workflow.schema.json#/advanced/equity/protectedCategories[*]` per the parent equity-config sidecar. Studio does NOT re-implement equity semantics; it provides the authoring path.
+
+**Readiness rules** (cross-cutting [`readiness-validation.md`](readiness-validation.md) tier-S4):
+- `EQ-LINT-001` — workflows with `impactLevel = rights-impacting` MUST declare at least 3 ProtectedCategories per workspace policy default (Title VI race/ethnicity + ADA disability + language-spoken).
+- `EQ-LINT-002` — every ProtectedCategory MUST cite a SourceCitation (`legalBasis`).
+- `EQ-LINT-003` — workflows declaring ProtectedCategory MUST have at least one equity-probe Scenario (per [`scenario-authoring.md`](scenario-authoring.md)).
 
 ### `Outcome`
 

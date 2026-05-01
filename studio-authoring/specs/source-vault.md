@@ -52,6 +52,10 @@ Adds:
 - `indexingResult` — `{status, sectionCount, fullTextIndexId, indexedAt}`.
 - `classificationResult` — `{status, type, program, jurisdiction, language, effectiveStart, effectiveEnd, confidence, classifiedBy}`. `classifiedBy` is `human | ai | mixed`.
 - `pageable` (boolean) — true iff sections have stable page anchors.
+- **`effectivenessRef`** — pointer to an Effectiveness object (per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md) §1.25). REPLACES the simpler `effectiveStart` / `effectiveEnd` for new SourceVersions. Existing simple fields remain readable; new SourceVersions MUST carry `effectivenessRef`.
+- **`canonicalSourceRef`** — when this SourceVersion is the local copy of a canonically-published document (e.g., this workspace's copy of 7 CFR §273 as published on eCFR.gov), the canonical reference per §1.31 CanonicalSourceRef.
+- **`contentLocales[]`** — ordered list of locales for which this version's content is authoritative (e.g., `["en-US", "es-US"]` when the regulation is bilingually published). When more than one, the SourceSection text becomes locale-keyed.
+- **`ingestFormat`** — how the version was ingested: `pdf | html | docx | markdown | json-ld | rdf-xml | turtle`. Determines parser path; `json-ld` invokes the JSON-LD ingest pipeline (see §"JSON-LD source ingest" below).
 
 ### SourceSection (CM §1.4)
 
@@ -126,6 +130,32 @@ Each MUST below carries a tracking ID. IDs of the form `SA-MUST-source-NNN` are 
 - **`SA-MUST-source-031`** — Supersession MUST trigger a ChangeImpactReport (see [`change-impact.md`](change-impact.md)) enumerating every PolicyObject, Mapping, Scenario, and PublishedWorkflowPackage that cites the prior `current` version. *(runtime-pending; cross-spec coupling with change-impact.)*
 - **`SA-SHOULD-source-032`** — Source-version comparison SHOULD highlight changed sections at the section level, not at the byte level. Reviewers expect to see *which §-numbered subsection moved*, not raw character diffs.
 - **`SA-MUST-source-033`** — A SourceVersion in `disputed` lifecycle state MUST NOT be the sole basis for any approved PolicyObject. An approved PolicyObject citing only disputed sources MUST surface a tier-S1 ValidationFinding until the dispute is resolved. *(lint-pending.)*
+
+### JSON-LD source ingest
+
+Real gov sources increasingly publish in **JSON-LD** with semantic context (eCFR.gov, regulations.gov, Federal Register publications). Studio adopts JSON-LD ingest as a first-class path because: (a) the semantic context is preserved across re-parsing, eliminating excerpt-drift on minor reformatting; (b) JSON-LD `@id` provides a stable canonical-source reference; (c) controlled vocabularies (DPV, PROV-O, schema.org) attach naturally to claim extraction.
+
+- **`SA-MUST-source-050`** — A SourceVersion with `ingestFormat = json-ld` MUST preserve the source's `@context` and IRI structure in the indexed form. Reviewers MAY view both the JSON-LD-native form and the human-readable rendering. *(runtime-pending.)*
+- **`SA-MUST-source-051`** — A SourceVersion ingested as JSON-LD MUST carry `canonicalSourceRef.referencedUri` resolving to the source's canonical IRI (e.g., `https://www.ecfr.gov/api/renderer/v1/title-7/section-273.10`). The `@id` IRIs of nested objects in the JSON-LD MAY be cited directly via SourceCitation `relation: derivedFrom`. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-source-052`** — When a JSON-LD-ingested source is re-fetched and the `@context` differs from the prior version, supersession event MUST trigger AND a tier-S1 ValidationFinding MUST surface (`SOURCE-LINT-006`, "json-ld-context-drift") so reviewers verify semantic continuity. *(lint-pending.)*
+
+### Multi-language source content
+
+When a regulation is bilingually published (e.g., Spanish + English) or when a state agency publishes in multiple languages, content is locale-keyed:
+
+- SourceSection.text becomes `{ "en-US": "...", "es-US": "..." }` for multi-locale sources.
+- SourceCitation.excerpt is locale-tagged: `{ excerpt: "...", excerptLocale: "es-US" }`.
+- `contentLocales[]` on SourceVersion enumerates supported locales; the FIRST locale is the authoritative original; others are translations (with `translationProvenance` noting translator + verification status).
+
+- **`SA-MUST-source-060`** — When a SourceVersion has `len(contentLocales) > 1`, every SourceSection MUST carry text for the FIRST (authoritative) locale. Other locales MAY be missing per-section; missing translations MUST be flagged but do NOT block ingest. *(schema-pending.)*
+- **`SA-MUST-source-061`** — A SourceCitation that quotes a non-authoritative translation MUST carry `excerptLocale` AND a back-reference to the authoritative-locale equivalent excerpt. Reviewer-driven equivalence MUST be attested via ReviewerResolution if the translation is contested. *(runtime-pending.)*
+
+### Canonical-source references (federation precursor)
+
+Per §1.31 CanonicalSourceRef, a SourceVersion MAY declare it IS a canonical document or REFERENCES a canonical published elsewhere:
+
+- **`SA-MUST-source-070`** — A SourceVersion ingested from a canonical-publishing source (eCFR.gov, regulations.gov) SHOULD carry `canonicalSourceRef.referencedUri` AND `canonicalSourceRef.referencedHash` (snapshot hash for supersession detection). When the canonical publisher updates the document, the differing hash triggers a ChangeImpactReport via `triggerKind = source-version-change`. *(runtime-pending: depends on canonical-publisher polling — Phase-4 capability.)*
+- **`SA-SHOULD-source-071`** — Workspaces SHOULD prefer canonical references over local copies for federally-published documents. Local copies remain valid (offline operation, regulated network environments) but lose canonical-supersession alerting.
 
 ### Cross-document supersession
 

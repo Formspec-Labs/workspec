@@ -140,17 +140,31 @@ Phases are strictly ordered. A phase MUST NOT begin until the prior phase comple
 - **`SA-MUST-cmp-042`** — `emit-with-warnings` applies for: `unmappedButApproved` mappings (warn-perpetual per `SA-MUST-map-041`), failing scenarios marked `acceptedAsKnownGap`, soft tier-S5 coverage gaps.
 - **`SA-MUST-cmp-043`** — `emit-with-blockers` applies for: failing scenarios not marked `acceptedAsKnownGap`, tier-S6 findings unresolved at severity `block`, lint failures.
 
-### Versioning contract
+### Versioning contract (composition with parent RELEASE-STREAMS.md + COMPATIBILITY-MATRIX.md)
 
-- **`SA-MUST-cmp-050`** — Every compile manifest MUST record `compilerVersion`, `schemaVersion` (the version of `wos-workflow.schema.json`), and the `workflowIntentVersion` consumed. *(schema-pending.)*
+Per CM §1.33 MigrationPath: every WorkflowIntent declares a `wosVersionPin` (a claim string per parent [`RELEASE-STREAMS.md`](../../RELEASE-STREAMS.md), e.g., `kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0`). The compile manifest carries this pin as load-bearing reproducibility metadata.
+
+- **`SA-MUST-cmp-050`** — Every compile manifest MUST record `compilerVersion`, `schemaVersion` (the version of `wos-workflow.schema.json`), `wosVersionPin` (claim string per parent RELEASE-STREAMS.md), and the `workflowIntentVersion` consumed. *(schema-pending.)*
 - **`SA-MUST-cmp-051`** — A compiler version bump MAY change the artifact byte-for-byte (e.g., new optional fields populated, deprecated fields cleaned up); semantic equality with the prior compiler version's output for the same inputs MUST be preserved. *(fixture-pending.)*
-- **`SA-MUST-cmp-052`** — A schema version bump may invalidate prior published artifacts; the compiler MUST refuse to compile against a deprecated schema version unless a migration path is configured. *(runtime-pending; out-of-scope details deferred.)*
+- **`SA-MUST-cmp-052`** — A WorkflowIntent's `wosVersionPin` constrains compilation: the compiler MUST refuse to compile against schema/stream versions outside the pin. Updating the pin is an explicit reviewer action per `change-impact.md` `triggerKind = wos-version-deprecation`. *(runtime-pending.)*
 - **`SA-MUST-cmp-053`** — Two consecutive published versions of a WorkflowIntent MUST produce a SemanticDiff (per [`change-impact.md`](change-impact.md)) used to derive release notes. The diff is computed from the WorkflowIntent versions, not from the compiled artifacts; this avoids cosmetic-only diffs cluttering the release notes. *(runtime-pending.)*
+- **`SA-MUST-cmp-054`** — When a parent stream version reaches deprecation per parent `COMPATIBILITY-MATRIX.md`, the compiler MUST surface a tier-S6 ValidationFinding `CMP-LINT-010` "wos-version-deprecation-pending" 90 days before the deprecation effective date, prompting reviewer-driven migration. *(lint-pending.)*
 
-### Reproducibility
+### Reproducibility / disaster-recovery
 
-- **`SA-MUST-cmp-060`** — Given the compile manifest, the workspace state at the recorded time, and the recorded compiler/schema versions, the same compile MUST be reproducible. *(fixture-pending.)*
+- **`SA-MUST-cmp-060`** — Given the compile manifest, the workspace state at the recorded time, and the recorded compiler/schema/wosVersionPin versions, the same compile MUST be reproducible. *(fixture-pending.)*
 - **`SA-MUST-cmp-061`** — The compile manifest MUST be small enough to be embedded in the published artifact. (Manifest details that exceed embedding capacity are stored in the workspace export per [`authoring-provenance.md`](authoring-provenance.md) `SA-SHOULD-prov-034`.) *(schema-pending.)*
+- **`SA-MUST-cmp-062`** — Workspace-export-driven disaster recovery: given a workspace export bundle (sources + PolicyObjects + mappings + scenarios + provenance log + compile manifest + custody-anchored receipts per [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-081`) and the recorded compiler version, an external party MUST be able to reproduce the published artifact byte-for-byte (modulo JSON key order). The workspace export is the disaster-recovery primitive. *(runtime-pending.)*
+- **`SA-MUST-cmp-063`** — The workspace export bundle MUST be self-contained: every external reference (parent schemas, parent custody receipts) MUST either (a) be inlined, or (b) carry an externally-resolvable URI + content hash. *(schema-pending.)*
+
+### Composition with parent wos-event-types.md (PLN-0384)
+
+The compiler emits **provenance events** during compile (start, phase transitions, gate results, halt-or-success). These events MUST conform to parent **PLN-0384** `wos-event-types.md` taxonomy in the `wos.compiler.*` namespace:
+
+- **`SA-MUST-cmp-070`** — Compiler-phase transitions MUST emit `wos.compiler.phase-started` / `wos.compiler.phase-completed` / `wos.compiler.phase-halted` events with phase identifier and outcome. *(runtime-pending; coordination-pending parent PLN-0384.)*
+- **`SA-MUST-cmp-071`** — External gate results (schema-pass / lint-pass / conformance-pass) MUST emit `wos.compiler.gate-passed` / `wos.compiler.gate-failed` with gate name and finding refs. *(runtime-pending.)*
+- **`SA-MUST-cmp-072`** — Compile success / failure MUST emit `wos.compiler.compile-succeeded` (with manifest ref) / `wos.compiler.compile-failed` (with failureKind). *(runtime-pending.)*
+- **`SA-MUST-cmp-073`** — Compiler events MUST custody-anchor per [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-081`. The compile manifest's `manifestHash` and the ApprovalPackage's binding to the artifact derive their authenticity from this anchor chain. *(runtime-pending.)*
 
 ## Composition
 

@@ -86,7 +86,7 @@ ActualTrace {
 
 ### Scenario types (PRD §9.7, normatively listed)
 
-The 12 canonical scenario types — each scenario MUST declare exactly one:
+The 16 canonical scenario types — each scenario MUST declare exactly one:
 
 1. **`happy-path`** — typical case, favorable outcome, no exceptions.
 2. **`incomplete-application`** — missing data or evidence at intake.
@@ -100,8 +100,19 @@ The 12 canonical scenario types — each scenario MUST declare exactly one:
 10. **`system-failure-fallback`** — an integration or system check fails; fallback path runs.
 11. **`agent-fallback`** — an agent's confidence drops below floor; fallback (typically human review) runs.
 12. **`policy-change`** — a SourceVersion changes mid-flight; tests how active cases are handled.
+13. **`equity-probe`** — exercises a workflow's fairness across ProtectedCategory dimensions; composes parent [`../../specs/advanced/equity-config.md`](../../specs/advanced/equity-config.md). Scenarios of this type author cohorts varying by protected category and assert disparate-impact thresholds. Required (per `EQ-LINT-003`) for any workflow declaring a ProtectedCategory PolicyObject.
+14. **`accessibility-check`** — exercises notice/communication accessibility (WCAG / Section 508 conformance, multi-language coverage, alternate format availability). Probes whether notice content satisfies accessibility requirements for protected populations (vision-impaired, hearing-impaired, limited-English-proficient).
+15. **`jurisdictional-variation`** — exercises a workflow's behavior across jurisdictional Effectiveness scopes (per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md)). Cohort 1 in CA vs. cohort 2 in TX; assert that the workflow correctly applies state-specific notices, deadlines, and appeals.
+16. **`runtime-observation-replay`** — replays a real RuntimeObservation against the published WorkflowIntent for divergence detection. **Phase-4 active**: when [`runtime-observation-seam.md`](runtime-observation-seam.md) implementation lands, observations promote to Scenarios of this type. The scenario asserts the replay produces no divergence (or expected divergence; e.g., a manual-override observation expects exactly one `manual-override-divergence` finding).
 
-Workspaces MAY define additional `scenarioType` values via an `x-` extension only when no canonical type fits and a reviewer has documented the gap. Stage-3 schema work decides whether the type list is closed; the spec's normative position is that the 12 cover real-world workflows.
+Workspaces MAY define additional `scenarioType` values via an `x-` extension only when no canonical type fits and a reviewer has documented the gap. Stage-3 schema work decides whether the type list is closed; the spec's normative position is that the 16 cover real-world workflows.
+
+**Cross-cutting normative tightenings (added with the 4 new types):**
+
+- **`SA-MUST-scn-040`** — A workflow declaring at least one `ProtectedCategory` PolicyObject MUST have at least one `equity-probe` Scenario per ProtectedCategory dimension. Workflows without equity-probe coverage MUST surface tier-S4 `EQ-LINT-003`. *(lint-pending.)*
+- **`SA-MUST-scn-041`** — A workflow with `impactLevel = rights-impacting` AND notice-bearing Outcomes MUST have at least one `accessibility-check` Scenario per supported `contentLocale` per `source-vault.md`. *(lint-pending.)*
+- **`SA-MUST-scn-042`** — A workflow whose Effectiveness has `jurisdictions[]` with `len > 1` MUST have at least one `jurisdictional-variation` Scenario exercising each declared jurisdiction. *(lint-pending.)*
+- **`SA-MUST-scn-043`** — `runtime-observation-replay` Scenarios MUST carry `observationRef` (pointer to the RuntimeObservation per `runtime-observation-seam.md`) and `expectedDivergenceFindings[]` (the divergences the reviewer accepts as expected; empty list = no divergence expected). *(schema-pending; runtime-pending: Phase 4.)*
 
 ## Lifecycle
 

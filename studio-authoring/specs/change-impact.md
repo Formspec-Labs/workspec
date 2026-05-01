@@ -40,6 +40,8 @@ This spec defines:
 
 ### `ChangeImpactReport` (CM §1.18, extended)
 
+(Note: `triggerKind` enum is extended to seven values — see §"Triggers" below.)
+
 ```text
 ChangeImpactReport {
   id, triggerKind, triggerRef,
@@ -126,7 +128,7 @@ The walk stops at:
 
 ## Triggers
 
-Four kinds of changes trigger a ChangeImpactReport:
+Seven kinds of changes trigger a ChangeImpactReport:
 
 ### `source-version-change`
 
@@ -140,9 +142,25 @@ An approved PolicyObject's body is edited (typically following demotion to `draf
 
 A StudioToWosMapping changes state or targets (e.g., `requiresSpecExtension → mapsToWos` after the upstream extension landed). The report walks from the mapping's subject PolicyObject.
 
-### `runtime-observation-cluster` (Phase 4)
+### `runtime-observation-cluster`
 
-Multiple RuntimeObservations cluster around a particular workflow element, suggesting that designed behavior diverges from observed behavior at scale (e.g., 30 cases stuck at the same step). The trigger is the cluster detection event. The report walks from the workflow element to the upstream PolicyObjects that could be revised. (This is a Phase-4 forward reference; full semantics will live in the future RuntimeObservation spec when Phase 4 begins.)
+Multiple RuntimeObservations cluster around a particular workflow element, suggesting that designed behavior diverges from observed behavior at scale (e.g., 30 cases stuck at the same step). The trigger is the cluster detection event per [`runtime-observation-seam.md`](runtime-observation-seam.md). The report walks from the workflow element to the upstream PolicyObjects that could be revised. **The seam contract is now active** (per `runtime-observation-seam.md` `SA-MUST-rtos-010`); the cluster-detection implementation is Phase-4.
+
+### `jurisdictional-supersession`
+
+A cross-document supersession occurs (per `source-vault.md` `SA-MUST-source-006/007`) OR an Effectiveness object's `appellateState` shifts (per [`effectiveness-and-applicability.md`](effectiveness-and-applicability.md) `SA-MUST-eff-011/012`). E.g.: a court enjoins a regulation in one circuit; an errata memo retroactively supersedes paragraphs of a prior version. The report walks from every PolicyObject whose Effectiveness intersects the changed scope.
+
+### `wos-version-deprecation`
+
+A parent stream version reaches deprecation per parent [`COMPATIBILITY-MATRIX.md`](../../COMPATIBILITY-MATRIX.md). E.g., `wos-ai@0.5` is superseded by `wos-ai@1.0`. The report walks from every WorkflowIntent whose `wosVersionPin` (per `compiler-contract.md` `SA-MUST-cmp-052`) targets the deprecating stream. Reviewer-driven migration produces a new `wosVersionPin` per CM §1.33 MigrationPath.
+
+### `compliance-attestation-expiry`
+
+A WorkspaceComplianceBaseline regime attestation reaches its `expiresAt` (per [`workspace.md`](workspace.md) `SA-MUST-ws-061`). The report walks from every PublishedWorkflowPackage whose ApprovalPackage carries an attestation referencing the expiring baseline.
+
+### Workflow-version-compare (request-driven)
+
+Not a propagation trigger — a *user-driven* comparison between two existing workflow versions. Produces a SemanticDiff but does not necessarily produce a propagation chain (the workflows already exist; this is an inspection, not a change-detection). The two are intentionally distinct: propagation is about **discovering** the surface of a change; semantic diff is about **summarizing** a known change for stakeholders.
 
 ### Workflow-version-compare (request-driven)
 

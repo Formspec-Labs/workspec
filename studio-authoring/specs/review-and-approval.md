@@ -88,6 +88,7 @@ The default role set, integrity rules (`SA-MUST-ws-010`–`013`), and the no-id-
 ```text
 ApprovalPackage {
   id, workflowIntentRef, workflowVersion,
+  wosVersionPin,              // claim string per parent RELEASE-STREAMS.md (per CM §1.33 MigrationPath); gates re-compilation if streams deprecate
   approvals[],                // every ApprovalDecision contributing to publication
   citationManifest,           // every SourceVersion cited by any approved object (compact form)
   scenarioSuiteRef[],
@@ -95,12 +96,36 @@ ApprovalPackage {
   releaseNotes,
   unmappedListings[],         // every unmappedButApproved mapping per `SA-MUST-map-042`
   waivedFindings[],           // every waived finding per readiness-validation `SA-MUST-rv-023`
+  complianceAttestations[],   // ComplianceAttestation per CM §1.28; one per declared regime
+  identitySigningKeyRefs[],   // public-key references per identity-and-attestation.md `SA-MUST-id-021`; for downstream verifiers to validate signatures
+  custodyAnchorReceipt,       // CustodyAppendReceipt covering this package per parent ADR-0061; cryptographically anchors the package
   publishedBy, publishedAt,
   workspaceId
 }
 ```
 
-The ApprovalPackage IS the audit record at publication. It MUST be reproducible from the workspace state at the publication timestamp.
+The ApprovalPackage IS the audit record at publication. It MUST be reproducible from the workspace state at the publication timestamp AND independently verifiable via the custody-anchor receipt.
+
+### `ComplianceAttestation` (per CM §1.28)
+
+Attached to the ApprovalPackage; one entry per regime the workspace claims:
+
+```text
+ComplianceAttestation {
+  regime ('SOC2-Type-II' | 'FedRAMP-Moderate' | 'FedRAMP-High' | 'StateRAMP-Moderate' | 'StateRAMP-High' | 'NIST-800-53-Rev5' | 'HIPAA' | 'GDPR-DPIA' | 'CCPA' | ...),
+  regimeVersion,
+  controls[] {                // controls satisfied by THIS workflow (subset of workspace baseline)
+    controlId, controlName,
+    status ('met' | 'partially-met' | 'not-applicable' | 'compensating-control'),
+    evidenceRef,              // pointer to readiness findings, scenario passes, signature events, etc.
+    attestor                  // SubjectId per identity-and-attestation.md
+  },
+  attestedAt, expiresAt?,
+  auditorRef?                 // when an external auditor signs off
+}
+```
+
+When a workspace declares a compliance baseline (per `workspace.md` `WorkspaceComplianceBaseline`), publication MUST emit a ComplianceAttestation per regime. The compiler derives this from workspace baseline + workflow's actually-met controls.
 
 ## Review levels
 
@@ -174,6 +199,15 @@ ReviewerComments have no lifecycle beyond `created → resolved (boolean) → ar
 - **`SA-MUST-ra-031`** — The ApprovalPackage MUST be reproducible from the workspace state at the publication timestamp — given the same {workspace state, registry version, compiler version}, the package's content MUST be identical. *(fixture-pending.)*
 - **`SA-MUST-ra-032`** — The ApprovalPackage MUST be stored alongside the published `$wosWorkflow` artifact and referenced from the [`authoring-provenance.md`](authoring-provenance.md) `published` provenance record. *(runtime-pending.)*
 - **`SA-SHOULD-ra-033`** — Workspaces SHOULD render the ApprovalPackage as a human-readable summary at publication time, suitable for inclusion in a release announcement.
+- **`SA-MUST-ra-034`** — When a Workspace declares a compliance baseline (per `workspace.md` `WorkspaceComplianceBaseline`), the ApprovalPackage MUST include a ComplianceAttestation per declared regime. Workflows that fail to satisfy any required-control for any declared regime MUST NOT publish (tier-S6 finding `COMP-LINT-001` per `workspace.md` `SA-MUST-ws-060`). *(lint-pending; runtime-pending.)*
+- **`SA-MUST-ra-035`** — The ApprovalPackage MUST be cryptographically anchored: `custodyAnchorReceipt` MUST be a valid `CustodyAppendReceipt` per parent ADR-0061 covering the package's content hash. External verifiers without workspace access can validate the package's authenticity via the receipt + parent Trellis verifier. (Cross-cutting [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-081`.) *(runtime-pending.)*
+- **`SA-MUST-ra-036`** — `wosVersionPin` MUST be present in the ApprovalPackage (cross-cutting `compiler-contract.md` `SA-MUST-cmp-050`). On parent stream deprecation per `change-impact.md` `triggerKind = wos-version-deprecation`, the pin gates which package versions need migration. *(schema-pending.)*
+
+### Key rotation handling
+
+- **`SA-MUST-ra-040-keys`** — When an identity issuer rotates a signing key (per [`identity-and-attestation.md`](identity-and-attestation.md) `SA-MUST-id-022`), in-flight ApprovalDecisions referencing the rotated key MUST be re-verifiable against the new key via standard rotation chain semantics (issuer-published verification keys with rotation timestamps). The implementation MUST NOT invalidate prior decisions on rotation — they were valid at the time of decision; rotation is forward-going. *(runtime-pending.)*
+- **`SA-MUST-ra-041-keys`** — The ApprovalPackage's `identitySigningKeyRefs[]` MUST include the public-key reference active at decision-time, NOT the key currently in force. Downstream verifiers resolve the historical key via the issuer's rotation chain. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-ra-042-keys`** — When a key is REVOKED (not rotated; revocation indicates compromise), the implementation MUST surface a tier-S6 finding (`ID-LINT-002` per `identity-and-attestation.md`) for every PublishedWorkflowPackage whose ApprovalDecisions reference the revoked key. Re-attestation by uncompromised subjects MUST be required to keep the workflow `published`. *(runtime-pending.)*
 
 ### Publication gate
 
