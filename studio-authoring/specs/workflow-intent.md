@@ -203,6 +203,35 @@ A marker that closes a phase and transitions to the next.
 - **Body:** `{phaseRef, nextPhaseRef? | terminalRef?}`.
 - **Bridge:** kernel transition closing one compound state and entering the next.
 
+### Bridge inference rules
+
+The bridge type is **inferred from the element `kind`** in the unambiguous cases — authors do not specify it. This is deliberate: authors work in domain-language (phase / decision / notice / appeal); knowing whether something projects to a `compound-state` vs a `transition` vs a `task` is a substrate concern that the compiler resolves. Requiring authors to write both is pure redundancy.
+
+The bridge **body** (the kernel-construct identifier — `stateName`, `taskRef`, `transitionId`, `timerRef`, `noticeId`, `subFlowEntry`, `agentRef`) is always required because it names the specific construct produced. The bridge **kind discriminant** is inferred per the table below.
+
+| Element kind | Inferred bridge kind | Required body fields | Author-specified? |
+|---|---|---|---|
+| `phase` | compound-state | `{stateName}` | No (inferred) |
+| `step` | atomic-state OR task | `{stateName}` if state-shaped; `{taskRef}` if task-shaped | **Yes — ambiguous** |
+| `decision` | transition (with guard) | `{transitionId, guardKind?}` | No (inferred) |
+| `review` | task | `{taskRef, signatureGated?}` | No (inferred) |
+| `notice` | governance-notice | `{noticeId}` | No (inferred) |
+| `deadline` | timer | `{timerRef}` | No (inferred) |
+| `appeal` | sub-flow | `{subFlowEntry}` | No (inferred) |
+| `exception` | alternate-transition | `{transitionId, guardSource}` | No (inferred) |
+| `hold` | atomic-state (no auto-transitions) | `{stateName}` | No (inferred) |
+| `data-collection` | task | `{taskRef, formspecCoprocessorRef?}` | No (inferred) |
+| `evidence-request` | task (+ optional timer) | `{taskRef, deadlineRef?}` | No (inferred) |
+| `system-check` | task OR transition-guard | `{taskRef}` if blocking task; `{guardRef}` if inline guard | **Yes — ambiguous** |
+| `AI-assistance` | agent (`agents[]`) | `{agentRef}` | No (inferred) |
+| `manual-override` | transition (with authority guard) | `{transitionId, guardKind}` | No (inferred) |
+| `completion-outcome` | terminal-state | `{stateName}` (polarity comes from `outcomeRef`) | No (inferred) |
+| `phase-end` | transition | `{transitionId}` | No (inferred) |
+
+**Two ambiguous kinds (`step` and `system-check`) MUST carry an explicit `kernelKind` discriminant in their bridge** because the element kind alone does not pin which kernel construct is produced. All other kinds infer.
+
+Authors MAY override the inferred kind by specifying `kernelKind` explicitly when an unusual projection is intended (e.g., a `step` element that should compile to a transition rather than an atomic state). Such overrides are recorded in authoring provenance for reviewer scrutiny (`SA-MUST-wfi-006`).
+
 ## Lifecycle
 
 The WorkflowIntent lifecycle (CM §2.4):
@@ -229,10 +258,12 @@ Allowed transitions:
 
 ### Element integrity
 
-- **`SA-MUST-wfi-001`** — Every WorkflowElement MUST carry `kind` (one of the 16) and `bridge` (the kind-specific bridge form). Elements with unknown kind or missing bridge MUST be rejected at creation. *(schema-pending: discriminated `oneOf`.)*
+- **`SA-MUST-wfi-001`** — Every WorkflowElement MUST carry `kind` (one of the 16) and `bridge` (the kind-specific bridge body that names the kernel construct produced — `stateName`, `taskRef`, `transitionId`, `timerRef`, `noticeId`, `subFlowEntry`, or `agentRef`). The bridge **kind discriminant** (`kernelKind`) is OPTIONAL for unambiguous element kinds (per the inference table above); REQUIRED for ambiguous kinds (`step`, `system-check`). Elements with unknown kind, missing bridge body, or missing `kernelKind` on an ambiguous kind MUST be rejected at creation. *(schema-pending: discriminated `oneOf`.)*
 - **`SA-MUST-wfi-002`** — Every WorkflowElement MUST carry at least one `policyObjectRefs[]` entry — backing the element with at least one approved PolicyObject. The exception: `phase` and `phase-end` elements which are structural-only. Elements without policy backing MUST be flagged as tier-S4 ValidationFindings (`WF-LINT-008`). *(lint-pending: cross-cutting with [`authoring-provenance.md`](authoring-provenance.md) `SA-MUST-prov-020`.)*
 - **`SA-MUST-wfi-003`** — Element `id`s MUST be unique within a WorkflowIntent. *(schema-pending.)*
 - **`SA-MUST-wfi-004`** — `position` references (e.g., `phase.contains[*]`, `exception.divertsFrom`, `manual-override.defaultPath`) MUST resolve to existing elements within the same WorkflowIntent. Dangling references MUST be rejected. *(schema-pending; runtime-pending.)*
+- **`SA-MUST-wfi-005`** — When an element omits `bridge.kernelKind`, the compiler MUST infer it from the element's `kind` per the inference table above. The compiler MUST reject elements whose bridge body fields are inconsistent with the inferred kind (e.g., a `phase` element with `taskRef` instead of `stateName` is rejected). *(schema-pending; runtime-pending.)*
+- **`SA-MUST-wfi-006`** — When an element specifies an explicit `bridge.kernelKind` that differs from the kind's inferred default (an "override projection"), the override MUST be recorded as an `AuthoringProvenanceRecord` event with `eventKind = bridge-override` so reviewers see the unusual projection (cross-cutting [`authoring-provenance.md`](authoring-provenance.md)). Overrides without recorded rationale MUST be flagged as tier-S4 ValidationFindings. *(lint-pending; runtime-pending.)*
 
 ### Element-kind rules
 

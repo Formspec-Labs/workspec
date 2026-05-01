@@ -285,7 +285,7 @@ Both workspaces are explicitly modeling the same concept. When federation (§1.3
 
 ## Cross-references
 
-- Concept model: [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.30 TerminologyMap; §1.32 ProtectedCategory (uses DPV); §5.1 Schema composition strategy (this spec is a load-bearing input).
+- Concept model: [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.30 TerminologyMap; §1.32 ProtectedCategory (uses DPV); §6.1 Schema composition strategy (this spec is a load-bearing input).
 - Cross-cutting: [`policy-object-model.md`](policy-object-model.md) (DataElement.sensitivity uses DPV; canonicalTermRef on every DataElement), [`source-vault.md`](source-vault.md) (CanonicalSourceRef as a federation precursor).
 - Composes with: [W3C DPV](https://www.w3.org/TR/dpv/) (canonical sensitivity vocabulary), parent [`schemas/sidecars/wos-ontology-alignment.schema.json`](../../schemas/sidecars/wos-ontology-alignment.schema.json) (parent semantic-vocab sidecar; Studio aligns).
 - Repo conventions: [`../../CONVENTIONS.md`](../../CONVENTIONS.md).

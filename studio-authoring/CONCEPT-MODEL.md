@@ -25,7 +25,7 @@ Section numbering here is local; cross-references to PRD use `VISION §N`.
 
 ## 1. Core entities
 
-The 33 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes. Provenance via §5.1 Schema composition strategy: ~12 entities (PolicyObject kinds, Bridge kinds, Bindings) are projected as `{Studio metadata wrapper + WOS schema $ref}`, reducing Stage-3 schema count substantially.
+The 34 entities below are the durable authoring vocabulary. Each entity has: a definition, the load-bearing fields, and the relationships it participates in. Field lists are illustrative — Stage 3 schemas will fix exact shapes. Per §6.1 Schema composition strategy, ~12 entities (PolicyObject kinds, Bridge kinds, Bindings) are projected as `{Studio metadata wrapper + WOS schema $ref}`, reducing Stage-3 schema count substantially. The substrate this projects to is named in §5 (WOS as canonical substrate).
 
 **Source-of-truth notes:**
 - §1.17 RuntimeObservation = the Phase-4 placeholder *entity*; §1.26 RuntimeObservationSeam = the *seam contract* (which IS specified now in `specs/runtime-observation-seam.md`, even though the entity is Phase-4).

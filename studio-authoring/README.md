@@ -19,7 +19,7 @@ The two products share a name family but have **no runtime dependency on each ot
 ## What's in this folder right now
 
 - [`VISION.md`](VISION.md) — durable product vision (the PRD as authored, with a short framing preface). 19 numbered sections; cite as `VISION §N`.
-- [`CONCEPT-MODEL.md`](CONCEPT-MODEL.md) — entity catalog (33 entities), lifecycles, state boundaries, mapping states, WOS cross-reference. **§5.1 Schema composition strategy** reduces Stage-3 schemas from ~33 to ~10 by composition with parent WOS schemas. Bridge between VISION and specs.
+- [`CONCEPT-MODEL.md`](CONCEPT-MODEL.md) — entity catalog (34 entities), lifecycles, state boundaries, mapping states, **§5 WOS as canonical substrate** (load-bearing principle), **§6.1 Schema composition strategy** (reduces Stage-3 schemas from ~33 to ~10 by composition with parent WOS schemas), WOS cross-reference. Bridge between VISION and specs.
 - [`specs/`](specs/) — 16 internal W3C-style specs across seven families (pipeline core, foundation seams, bridge, trust, workspace+tooling, lifecycle, integration). Each follows the three-section rubric (Normative Contract / Composition / Conformance) per [`../CONVENTIONS.md`](../CONVENTIONS.md). See [`specs/README.md`](specs/README.md) for the index.
 - [`examples/`](examples/) — vertical slices producing concrete `wos-spec` artifacts via the Studio authoring path. Started in v4.
 

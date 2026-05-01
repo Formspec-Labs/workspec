@@ -137,7 +137,7 @@ See [`../VISION.md`](../VISION.md) §17 (Implementation Roadmap) for the staging
 ## Cross-references
 
 - Product vision: [`../VISION.md`](../VISION.md).
-- Concept model (entity definitions): [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md). **§5.1 Schema composition strategy** explains how Stage-3 reduces from ~33 schemas to ~10 by composition with parent WOS schemas.
+- Concept model (entity definitions): [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md). **§5 WOS as canonical substrate** names the load-bearing principle that lets Studio's authoring vocabulary stay target-neutral while WOS scales down for low-risk workflows. **§6.1 Schema composition strategy** explains how Stage-3 reduces from ~33 schemas to ~10 by composition with parent WOS schemas.
 - Folder entry-point: [`../README.md`](../README.md).
 - Examples / vertical slice: [`../examples/`](../examples/).
 - Repo conventions (three-section rubric): [`../../CONVENTIONS.md`](../../CONVENTIONS.md).
