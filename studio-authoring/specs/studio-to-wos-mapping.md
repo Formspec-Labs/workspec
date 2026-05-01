@@ -2,7 +2,7 @@
 
 **Status:** draft (Stage 2 of [Implementation Roadmap](../VISION.md#17-implementation-roadmap))
 **Date:** 2026-04-30
-**Concept-model anchor:** [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.11 StudioToWosMapping, §3 Mapping states, §5 WOS concept cross-reference.
+**Concept-model anchor:** [`../CONCEPT-MODEL.md`](../CONCEPT-MODEL.md) §1.11 StudioToWosMapping, §3 Mapping states, §5 WOS as canonical substrate, §6 WOS concept cross-reference.
 **PRD anchor:** [`../VISION.md`](../VISION.md) §6 (Studio-to-WOS Mapping Contract), §16 Phase-1 Epic 1.3.
 **Depends on:** [`policy-object-model.md`](policy-object-model.md), [`authoring-provenance.md`](authoring-provenance.md).
 
@@ -21,6 +21,17 @@ This spec defines:
 - the normative contract for mapping declaration, target validity, extension proposals, and the cross-cutting requirement that workflow-bearing PolicyObjects map to WOS before publication.
 
 This spec is the **reviewable contract** that lets technical reviewers (PRD §3 "Technical implementers", §12 "Studio-to-WOS Mapping" user stories) inspect how Studio output relates to WOS without needing to read the entire workspace.
+
+### Authoring vocabulary vs. substrate (the four mapping states encode this split)
+
+Studio's authoring vocabulary is intentionally broader than the WOS substrate (see CM §5 "WOS as canonical substrate"). The four mapping states are the structural mechanism that lets authors capture rights-impacting authoring discipline — *who said what, when, with what authority, what we assumed, what was superseded* — without forcing the WOS substrate to grow concepts that do not belong in it. The states partition every PolicyObject into one of four dispositions:
+
+- **`mapsToWos`** — authoring concept and substrate concept align; the PolicyObject's content projects into a specific `wos-workflow.schema.json` JSON path. This is the common case for rights-impacting workflows (NoticeRequirement, AppealRight, ActorMapping, DecisionRule, EvidenceRequirement, …).
+- **`authoringOnly`** — authoring concept exists for review, citation, and reproducibility, but the substrate does not need to evaluate it at runtime. Examples: PolicySource, AuthorityRank, Assumption, Conflict, ReviewerResolution, Supersession, ApplicabilityScope, EffectivePeriod. These project as **provenance and rationale** (via ApprovalPackage citations and `AuthoringProvenanceRecord`s), not as schema content.
+- **`requiresSpecExtension`** — authoring concept identifies a real gap in the substrate; the ExtensionRecord queues it as a candidate WOS-side enhancement at one of the six canonical kernel seams. Stays workspace-local until the substrate ratifies the extension.
+- **`unmappedButApproved`** — escape hatch with required rationale. Expected to be **rare and noisy**; reviewers are explicitly required to justify each one.
+
+This split is what makes "WOS is the canonical substrate" non-restrictive. The substrate stays focused on what it must evaluate at runtime; the workspace carries everything authoring needs without bleeding into the artifact. The precedence rule (`mapsToWos > authoringOnly > requiresSpecExtension > unmappedButApproved`) keeps the substrate clean by preferring projection over workspace-only carriage whenever both are possible.
 
 ## Out of scope
 

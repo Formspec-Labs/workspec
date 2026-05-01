@@ -29,6 +29,24 @@ This spec defines:
 - the **projection rules** that govern what workspace metadata projects compactly into the artifact vs. stays in the workspace.
 - the **versioning contract**: how compiler version bumps, schema version bumps, and workflow version bumps interact.
 
+## Substrate choice
+
+This spec compiles to a **single canonical substrate**: the consolidated `$wosWorkflow` envelope per [ADR-0076](../../thoughts/adr/0076-product-tier-consolidation.md). Studio does not maintain a pluggable projection-target registry. The advisor framing — *"project into the appropriate artifact shape for the workflow's risk profile, runtime target, and implementation context"* — is satisfied **inside** the WOS substrate, not by swapping substrates. See CM §5 for the full architectural framing.
+
+Risk-profile differentiation is internal to WOS: per ADR-0076, the embedded blocks (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`) are **conditionally required** by `impactLevel`. This produces a graduated projection:
+
+- **`operational` / `informational` workflows** project to a **thin `$wosWorkflow`** carrying only the required core (`$wosWorkflow`, `url`, `version`, `title`, `impactLevel`, `actors`, `lifecycle`) plus any `caseFile` / `integration` content the WorkflowIntent references. None of `governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, or `assurance` is emitted. The full WOS apparatus is opt-in by impact level — a low-risk workflow does not drag rights-impacting machinery along.
+- **`safety-impacting` workflows** project additional governance + advanced blocks per parent [ADR-0076](../../thoughts/adr/0076-product-tier-consolidation.md) §"Conditional schema rules".
+- **`rights-impacting` workflows** require the full set of governance + due-process + AI-oversight + signature + custody + assurance blocks per parent ADR-0076 conditional rules; phase-4 emission populates them from the WorkflowIntent's PolicyObject coverage.
+
+**`SA-MUST-cmp-005`** — Phase-4 emission MUST omit any embedded block that the WorkflowIntent's `impactLevel` does not require AND for which no element-level PolicyObject content motivates emission. Producing an empty-but-present block is a determinism violation per `SA-MUST-cmp-001`. *(fixture-pending: thin-projection round-trip tests for each impactLevel.)*
+
+**`SA-MUST-cmp-006`** — The compile manifest's `embeddedBlocksEmitted[]` field MUST enumerate exactly the blocks present in the produced `$wosWorkflow`. Reviewers and downstream verifiers use this to audit that the projection matches the workflow's risk profile (no over-emission inflating the artifact's compliance surface; no under-emission silently dropping required blocks). *(runtime-pending.)*
+
+Runtime-target neutrality is inherited from WOS — the parent stack treats Temporal, Restate, Camunda, and Step Functions as `DurableRuntime` adapters. Studio does not encode adapter selection in the compile output; the produced `$wosWorkflow` is engine-agnostic by construction.
+
+Implementation-context detail (workspace integrations, deployment-environment delivery configuration, ontology alignment) lands in the existing seams: `integration.bindings[*]` in the core schema; `wos-delivery.schema.json` and `wos-ontology-alignment.schema.json` sidecars (per parent CLAUDE.md). None of this changes the substrate.
+
 ## Out of scope
 
 - The compiler implementation language (Rust per `wos-core` philosophy is the working assumption, but the contract is implementation-language-agnostic).

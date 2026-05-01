@@ -121,7 +121,7 @@ Studio composes (does not reinvent) the following parent-stack contracts:
 
 ## What is not (yet) in this folder
 
-- **JSON Schemas** (Stage 3) — the structural form of every Studio object. Per CM §5.1 schema composition strategy: ~10 schemas (not ~33) by composition with parent WOS schemas.
+- **JSON Schemas** (Stage 3) — the structural form of every Studio object. Per CM §6.1 schema composition strategy: ~10 schemas (not ~33) by composition with parent WOS schemas. WOS is the canonical projection substrate per CM §5 (target-neutral authoring + risk-profile differentiation via embedded-block conditionality).
 - **Lint engine** (Stage 4) — the implementation of the rule registry that fires the readiness findings these specs name.
 - **Studio→WOS compiler** (Stage 5) — the implementation of `compiler-contract.md`.
 - **Scenario simulator** (Stage 6) — the runtime that exercises Scenarios.

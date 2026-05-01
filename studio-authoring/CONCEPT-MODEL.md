@@ -393,7 +393,47 @@ Approved WOS artifacts, scenario suites, approval packages, release notes, and e
 - **No backwards leakage**: a published artifact never gains new content retroactively. Edits produce a new published version with a ChangeImpactReport.
 - **Citations cross only one boundary**: a Published artifact may cite Workspace state (sources, policy objects, mappings, scenarios), but Workspace state may not cite Session state.
 
-## 5. WOS concept cross-reference
+## 5. WOS as canonical substrate
+
+Studio's authoring vocabulary (the 16 user-facing WorkflowElement kinds, the PolicyObject family, Scenarios, Bindings, Workspace, ReviewerResolution, etc.) is **target-neutral and authoring-domain**. The compile step projects that authoring vocabulary into a single canonical substrate: the consolidated WOS workflow envelope (`wos-workflow.schema.json` per [ADR-0076](../thoughts/adr/0076-product-tier-consolidation.md)). This section names that choice as a load-bearing principle and defines why it does not constrain low-risk workflows or alternative runtime targets.
+
+### 5.1 Why one substrate, not many
+
+Studio does not maintain a pluggable projection-target registry. The advisor framing — "project into the appropriate artifact shape for the workflow's risk profile, runtime target, and implementation context" — is satisfied **inside** the WOS substrate, not by swapping substrates:
+
+- **Risk-profile differentiation is internal to WOS.** Per [ADR-0076](../thoughts/adr/0076-product-tier-consolidation.md), the embedded blocks (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`) are **conditionally required** by `impactLevel`. A workflow with `impactLevel: "operational"` projects to a thin `$wosWorkflow` carrying kernel + lifecycle and no other blocks; a `rights-impacting` workflow projects to a fuller envelope. The risk-appropriate output shape emerges from block presence, not from selecting a different substrate.
+- **Runtime-target neutrality is inherited from WOS.** Parent [`../CLAUDE.md`](../../CLAUDE.md) fixes WOS as execution-substrate-agnostic — Temporal, Restate, Camunda, and Step Functions are all valid `DurableRuntime` adapters. Studio gets execution-target plurality for free; it does not need to encode adapter selection in the authoring layer.
+- **Implementation context is carried in workspace metadata.** ServiceBinding, EventBinding, PolicyEngineBinding, and DecisionTable (CM §1.20–§1.23) carry the workspace-local "how this connects to our infrastructure" detail. None of that bleeds into the WOS artifact's *semantics*; it lands in `integration.bindings[*]`, where the binding shape is the same regardless of deployment context.
+
+The result: one substrate, three orthogonal axes of variation (risk profile via embedded-block conditionality, runtime target via adapter selection, implementation context via bindings).
+
+### 5.2 What "doesn't restrict you" means concretely
+
+A non-rights-impacting workflow authored in Studio compiles to a thin `$wosWorkflow` with no `governance`, no `agents`, no `aiOversight`, no `signature`, no `custody`, no `advanced`, no `assurance` blocks — just the kernel envelope (`url`, `version`, `title`, `impactLevel`, `actors`, `lifecycle`) and any required `caseFile` / `integration` content. The full WOS apparatus is not dragged along; it is opt-in by `impactLevel` and by author intent. This is the property that makes WOS-as-substrate non-restrictive.
+
+`compiler-contract.md` is normative on the thin-projection path; this section frames it conceptually.
+
+### 5.3 What stays in the workspace (authoring vocabulary that does not project)
+
+Studio's authoring vocabulary is intentionally broader than WOS. Several PolicyObject kinds and entities have no WOS counterpart and are explicitly `authoringOnly` per CM §3.2:
+
+- **Source-and-authority**: PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod (the latter two also surface as `requiresSpecExtension` candidates per `studio-to-wos-mapping.md`).
+- **Review-and-uncertainty**: Assumption, Conflict, Supersession, ReviewerResolution.
+- **Workspace control plane**: StudioToWosMapping itself, AuthorityGrant, ComplianceAttestation (the workspace-level baseline; ApprovalPackage carries per-workflow derivations), Workspace, SourceDocument, SourceVersion, SourceSection, ExtractedClaim, ChangeImpactReport, Workflow Health Dashboard, Improvement Backlog.
+
+These exist because rights-impacting authoring requires modeling things WOS does not need to evaluate at runtime — *who said what, when, with what authority, what we assumed, what was superseded*. They project as **provenance and rationale** alongside the artifact (via ApprovalPackage citations, AuthoringProvenanceRecords, and reviewer-resolution tags), not as schema content. This separation is enforced by the four mapping states (CM §3); the precedence rule keeps the substrate clean.
+
+### 5.4 When this principle would need to change
+
+This single-substrate posture is correct **as long as**:
+
+1. WOS continues to scale down (kernel-only workflows remain a first-class shape; embedded-block conditionality holds).
+2. WOS remains execution-substrate-agnostic (no kernel feature ties to a specific runtime).
+3. No Studio authoring concept arises that *cannot* be carried as either a projected WOS field, an `authoringOnly` workspace artifact, a `requiresSpecExtension` candidate, or workspace-local provenance.
+
+If any of those breaks, this section is the right place to revisit. Until then, "WOS is the canonical substrate" is the architectural simplifier that lets Studio stay focused on authoring discipline rather than projection-target management.
+
+## 6. WOS concept cross-reference
 
 The table below extends PRD §6 with concrete pointers into existing wos-spec docs. Studio object → WOS concept → spec path → schema location.
 
@@ -426,7 +466,7 @@ The table below extends PRD §6 with concrete pointers into existing wos-spec do
 
 Pointers into [`../schemas/`](../schemas/) reference the consolidated `wos-workflow.schema.json` per [ADR-0076 (product-tier consolidation)](../thoughts/adr/0076-product-tier-consolidation.md). Embedded blocks (`governance`, `agents`, `aiOversight`, `signature`, `custody`, `advanced`, `assurance`) live inside that single schema; their behavioral semantics live in the per-stream specs.
 
-## 5.1 Schema composition strategy (Stage-3 design)
+## 6.1 Schema composition strategy (Stage-3 design)
 
 A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content is already defined by a parent WOS schema. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to ~10 by composition.
 
@@ -495,7 +535,7 @@ Both are within ADR-0077's `x-` extensibility patternProperties; neither require
 | **AsyncAPI** | REJECTED (parent CLAUDE.md) | — | Superseded by CloudEvents; rejection holds |
 | **DMN export, FEEL, SHACL as authority languages** | REJECTED (parent CLAUDE.md) | — | FEL is the WOS authority; rejection holds for *export* and *authority*; only one-way *import* paths are adopted |
 
-## 6. Open issues
+## 7. Open issues
 
 The following questions are **deliberately deferred** to Stage-2 specs or later. They are listed here so reviewers see what is unsettled.
 
@@ -506,7 +546,7 @@ The following questions are **deliberately deferred** to Stage-2 specs or later.
 - **RuntimeObservation data model.** Phase-4 territory; only the entity name is reserved here (see §1.17). The dedicated spec will be written when Phase 4 begins; until then, no `specs/runtime-observation.md` exists.
 - **Cross-workspace reuse.** PRD §9.8 / §16 Phase-3 imply approved PolicyObjects could be reused across workspaces. The reuse model — copy, reference, federate — is unsettled. [`specs/change-impact.md`](specs/change-impact.md) will note this as Phase-3 work.
 
-## 7. Cross-references
+## 8. Cross-references
 
 - Product vision: [`VISION.md`](VISION.md).
 - Specs derived from this concept model: [`specs/`](specs/).
