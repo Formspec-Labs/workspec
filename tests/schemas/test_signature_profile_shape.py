@@ -191,6 +191,11 @@ class TestSignatureProfilePositiveShapes:
         }
         assert _errors(doc, validator) == []
 
+    def test_audit_certificate_signing_mode_valid(self, validator):
+        doc = _minimal_profile()
+        doc["signature"]["auditCertificate"] = {"signingMode": "free-for-all"}
+        assert _errors(doc, validator) == []
+
 
 class TestSignatureProfileNegativeShapes:
     def test_missing_consent_reference_rejected(self, validator):
@@ -236,4 +241,31 @@ class TestSignatureProfileNegativeShapes:
     def test_missing_evidence_rejected(self, validator):
         doc = _minimal_profile()
         del doc["signature"]["evidence"]
+        assert _errors(doc, validator)
+
+    def test_noncanonical_document_hash_algorithm_rejected(self, validator):
+        doc = _minimal_profile()
+        doc["signature"]["documents"][0]["documentHashAlgorithm"] = "sha-512"
+        assert _errors(doc, validator)
+
+    def test_noncanonical_identity_binding_method_rejected(self, validator):
+        doc = _minimal_profile()
+        doc["signature"]["evidence"]["identityBinding"]["method"] = "login.gov"
+        assert _errors(doc, validator)
+
+    def test_noncanonical_authentication_policy_method_rejected(self, validator):
+        doc = _minimal_profile()
+        doc["signature"]["authenticationPolicies"][0]["method"] = "witness-present"
+        assert _errors(doc, validator)
+
+    def test_x_vendor_hash_and_methods_accepted(self, validator):
+        doc = copy.deepcopy(_minimal_profile())
+        doc["signature"]["documents"][0]["documentHashAlgorithm"] = "x-acme-sha-256"
+        doc["signature"]["authenticationPolicies"][0]["method"] = "x-acme-auth"
+        doc["signature"]["evidence"]["identityBinding"]["method"] = "x-acme-auth"
+        assert _errors(doc, validator) == []
+
+    def test_noncanonical_audit_certificate_signing_mode_rejected(self, validator):
+        doc = _minimal_profile()
+        doc["signature"]["auditCertificate"] = {"signingMode": "waterfall"}
         assert _errors(doc, validator)

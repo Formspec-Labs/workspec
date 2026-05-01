@@ -4,6 +4,12 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 ---
 
+## Session 2026-05-01 — Closed-vocabulary hardening review follow-ups
+
+- [x] **`assurance_rank` IAL/AAL recognition** — `assurance_rank` now recognizes NIST SP 800-63 IAL/AAL labels (`ial1`/`aal1`=1, `ial2`/`aal2`=2, `ial3`/`aal3`=3); previously these returned 0 (unknown). Aligns runtime with Signature Profile §2.7 ("Identity binding is provider-neutral … records authentication method, provider reference, assurance strength"). Behavior change for any prior fixture that relied on IAL labels being unrecognized; SIG-008 (notary, very-high) and SIG-013 (email-otp, low vs standard) cover the new path.
+
+---
+
 ## Specs and schemas
 
 - [x] Kernel spec (S4.2, S4.10, S9.2) — concurrency, cascade depth, async actions.

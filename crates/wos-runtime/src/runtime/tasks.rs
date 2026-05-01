@@ -12,19 +12,19 @@ use crate::milestones::evaluate_milestones;
 use crate::store::{
     ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, TaskArtifact, TaskArtifactKind,
 };
-use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine as _;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
 use wos_core::model::governance::DelegationScope;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::AccessControl;
 
 use super::{
-    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, PersistDraftResult, RuntimeError,
-    TaskSubmissionResult, WosRuntime, contract_validation_record, format_timestamp,
-    merge_case_state, populate_provenance_record_fields,
+    contract_validation_record, format_timestamp, impact_level_label, merge_case_state,
+    populate_provenance_record_fields,
     signature::{signed_at_for_response, signer_id_for_response},
-    stamp_provenance,
+    stamp_provenance, PersistDraftResult, RuntimeError, TaskSubmissionResult, WosRuntime,
+    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
 };
 
 impl WosRuntime {
@@ -525,7 +525,7 @@ fn authorize_actor(
         conditions: None,
     };
     if let Some(impact_level) = &task.impact_level {
-        scope.impact_levels.push(impact_level.clone());
+        scope.impact_levels.push(impact_level_label(*impact_level));
     }
     if access_control.can_delegate(assigned_actor, actor_id, &scope) {
         Ok(())

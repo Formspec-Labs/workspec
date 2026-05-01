@@ -926,8 +926,8 @@ impl Evaluator {
                             // yet implemented at runtime. The schema admits
                             // parallel bodies; nested foreach is permitted
                             // but discouraged per spec §4.3.1. Reject so
-                            // authors get a clear signal rather than silent
-                            // no-op.
+                            // authors get a clear signal rather than silently
+                            // skipping unsupported body kinds.
                             other => {
                                 return Err(EvalError::ForEach {
                                     state: state_id.to_string(),
@@ -1409,9 +1409,9 @@ impl Evaluator {
 
             // Substate onEntry — atomic and final substates emit them; we
             // intentionally don't recurse for nested compound substates in
-            // this PR (parallel / foreach / nested compound inside a body
+            // this evaluator path (parallel / foreach / nested compound inside a body
             // are deferred). Only Atomic and Final substate kinds are
-            // supported in MVP.
+            // supported here.
             match substate.kind {
                 StateKind::Atomic | StateKind::Final => {}
                 other => {
@@ -2012,6 +2012,23 @@ fn build_state_index(kernel: &KernelDocument) -> HashMap<String, IndexedState> {
     let mut index = HashMap::new();
     index_states_recursive(&kernel.lifecycle.states, None, None, None, &mut index);
     index
+}
+
+/// Validates that every active configuration leaf exists in `kernel`.
+///
+/// Used by instance migration (Kernel S11.2 step 1). When any active state
+/// id is absent from the target definition, returns [`EvalError::StateNotFound`].
+pub fn validate_migration_configuration(
+    kernel: &KernelDocument,
+    configuration: &[String],
+) -> Result<(), EvalError> {
+    let index = build_state_index(kernel);
+    for id in configuration {
+        if !index.contains_key(id) {
+            return Err(EvalError::StateNotFound(id.clone()));
+        }
+    }
+    Ok(())
 }
 
 /// Recursively index states from a states map.

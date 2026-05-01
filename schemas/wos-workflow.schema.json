@@ -3,7 +3,7 @@
   "$id": "https://wos-spec.org/schemas/wos-workflow.schema.json",
   "title": "WOS Workflow",
   "description": "Single author-time schema for a WOS workflow. Scales from Forms+ intake (~30 lines) to complex case management (~3000 lines) without changing shape. Required core: impactLevel, actors, lifecycle. Optional embedded blocks (governance, agents, aiOversight, signature, custody, advanced, assurance) appear only when product behavior demands them. Conditional rules require governance for rights-impacting/safety-impacting workflows, agents block for agent-typed actors, and signature block for signature-gated transitions. Deployment-environment configuration (calendars, notification templates, ontology alignment) lives in two sidecars referenced by targetWorkflow URI. See ADR 0076 (merged-envelope consolidation) and ADR 0063 (embedded-vs-sidecar identity boundary).",
-  "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those §-numbered sections land. SCHEMA-DOC-001 violations under inner blocks are tracked, not hallucinated. The six canonical kernel extension seams (ADR 0077) — actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys — remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel §10. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
+  "$comment": "Promotion status (PLN-0314): top-level core leaves carry full normative description + examples + x-lm.critical annotations on load-bearing nodes. Inner-block leaves under governance/agents/aiOversight/signature/custody/advanced/assurance remain sketch-quality pending the spec absorption pass (PLN-0176..0207); the canonical descriptions for those leaves are owned by kernel/spec.md, governance/spec.md, ai/ai-integration.md, and advanced/spec.md and absorb here once those §-numbered sections land. SCHEMA-DOC-001 is CI-gated at zero violations for the full workflow schema (including inner blocks); PLN-0176..0207 tracks richer normative prose cross-walk from specs into those nodes. The six canonical kernel extension seams (ADR 0077) — actorExtension, contractHook, provenanceLayer, lifecycleHook, custodyHook, extensions/x- keys — remain authoritative; new kernel extension points MUST attach to one of these or be ratified via a new ADR amending Kernel §10. Step 5 ($defs promotion) landed: FactsTierRecord, MutationSource, VerificationLevel, CaseFileSnapshot, CapabilityInvocationRecord live here (plus transitive ProvenanceOutcome); the runtime log schema (wos-provenance-log.schema.json) $refs them at https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/<Name> and layers runtime-record-shape allOf entries (CaseCreated/IntakeAccepted/IntakeRejected/IntakeDeferred/SignatureAffirmation) on top.",
   "type": "object",
   "required": [
     "$wosWorkflow",
@@ -286,12 +286,12 @@
               "actorId": "applicant"
             }
           ],
-          "documents": [
-            {
-              "id": "primaryDoc",
-              "documentRef": "urn:example:documents:application",
-              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-              "documentHashAlgorithm": "sha-256"
+            "documents": [
+              {
+                "id": "primaryDoc",
+                "documentRef": "urn:example:documents:application",
+                "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "documentHashAlgorithm": "sha-256"
             }
           ],
           "signingFlow": {
@@ -307,7 +307,7 @@
               "type": "all-required"
             }
           },
-          "evidence": {
+            "evidence": {
             "recordKind": "signatureAffirmation",
             "requiredFields": [
               "response.signature.acceptedAt",
@@ -320,7 +320,7 @@
               "affirmationPath": "response.signature.affirmed"
             },
             "identityBinding": {
-              "method": "knowledge",
+              "method": "knowledge-based",
               "assuranceLevel": "standard"
             },
             "custodyHookEligible": false
@@ -424,9 +424,15 @@
         },
         "instanceVersioning": {
           "type": "string",
-          "description": "Policy controlling whether running instances stay pinned to their creation version or may adopt compatible workflow revisions.",
+          "enum": [
+            "pinned",
+            "migrateable"
+          ],
+          "default": "pinned",
+          "description": "Instance versioning policy (Kernel §9.6). `pinned` keeps each running instance bound to the (url, version) of the Kernel Document that created it. `migrateable` permits explicit migration to a newer compatible revision when the runtime records the migration. Omitted policy MUST be treated as `pinned` (spec §1483).",
           "examples": [
-            "pinned"
+            "pinned",
+            "migrateable"
           ]
         }
       }
@@ -966,6 +972,7 @@
       "properties": {
         "id": {
           "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
           "description": "Stable identifier for this actor within the workflow document. MUST be unique across actors[]. Cross-references include `Transition.actor` (who acts on the transition) and, when type=='agent', `agents[].id`. Identifier convention: camelCase or kebab-case strings; no whitespace.",
           "examples": [
             "caseworker",
@@ -976,12 +983,25 @@
         },
         "type": {
           "type": "string",
-          "$comment": "Kernel: 'human' | 'system'. AI Integration adds 'agent' via actorExtension seam (ADR 0077). Open via x- prefix.",
-          "description": "Actor classification. Kernel layer recognizes 'human' and 'system'; the AI Integration layer adds 'agent' via the `actorExtension` seam (ADR 0077). Vendor-defined types ride on `x-` prefixed values per §10.6.",
+          "$comment": "Canonical actor kinds: human, system, agent. Vendor-defined kinds use x- prefix.",
+          "oneOf": [
+            {
+              "enum": [
+                "human",
+                "system",
+                "agent"
+              ]
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Actor classification. Canonical values are `human`, `system`, and `agent`; vendor-defined values MUST use an `x-` prefixed identifier via the `actorExtension` seam (ADR 0077).",
           "examples": [
             "human",
             "system",
-            "agent"
+            "agent",
+            "x-acme-review-bot"
           ]
         },
         "role": {
@@ -1029,6 +1049,8 @@
         },
         "initialState": {
           "type": "string",
+          "minLength": 1,
+          "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
           "description": "Identifier of the lifecycle's initial state — the state instances enter on creation. MUST match a key in `states`. Per Kernel §4.1, every workflow has exactly one initial state.",
           "examples": [
             "intake",
@@ -1227,6 +1249,8 @@
         },
         "initialState": {
           "type": "string",
+          "minLength": 1,
+          "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
           "description": "Identifier of the initial substate for compound states. MUST be a key in `states`. Required when `type=='compound'` (Kernel S4.3).",
           "examples": [
             "reviewing",
@@ -1236,6 +1260,8 @@
         "outcomeCode": {
           "type": "string",
           "$comment": "Final states only.",
+          "minLength": 1,
+          "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
           "description": "Final states only (`type=='final'`). Stable code identifying the workflow's terminal outcome. Recorded in Facts-tier provenance and consumed by reporting / case-closure pipelines. Distinct from `tags` (which compose) — outcomeCode is singular.",
           "examples": [
             "approved",
@@ -1362,7 +1388,9 @@
         },
         "actor": {
           "type": "string",
-          "description": "Actor identifier responsible for performing this transition. MUST match an entry in the workflow's `actors[].id`. Single-actor transitions name one actor; multi-actor (signature-gated) transitions use the `actors` array (lint WOS-SIG-COVER-001 enforces signer coverage). Load-bearing for authority decisions and signature workflow correctness.",
+          "minLength": 1,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "description": "Actor identifier responsible for performing this transition. MUST match an entry in the workflow's `actors[].id` and MUST use the same lexical pattern as `actors[].id` (ASCII letter first, then letters, digits, `.`, `_`, `-`). Single-actor transitions name one actor; multi-actor (signature-gated) transitions use the `actors` array (lint WOS-SIG-COVER-001 enforces signer coverage). Load-bearing for authority decisions and signature workflow correctness.",
           "x-lm": {
             "critical": true,
             "intent": "Who acts on the transition — load-bearing for authority decisions, signature coverage (WOS-SIG-COVER-001), and audit traceability"
@@ -1394,6 +1422,8 @@
         },
         "target": {
           "type": "string",
+          "minLength": 1,
+          "pattern": "^[_a-zA-Z0-9][a-zA-Z0-9_.-]*$",
           "description": "Identifier of the destination state. MUST match a key in the enclosing lifecycle's states (or a substate when nested). The processor MUST reject transitions whose `target` does not resolve.",
           "examples": [
             "review",
@@ -2211,10 +2241,23 @@
                 ]
               },
               "documentHashAlgorithm": {
-                "type": "string",
-                "description": "Hash algorithm used to compute documentHash for this signable document.",
+                "description": "Hash algorithm used to compute documentHash for this signable document. Core admits sha-256; vendor algorithms must use the x-* extension namespace.",
                 "examples": [
-                  "sha-256"
+                  "sha-256",
+                  "x-acme-sha-256"
+                ],
+                "oneOf": [
+                  {
+                    "const": "sha-256"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^x-[a-z][a-z0-9-]*$",
+                    "description": "Vendor-defined hash algorithm token. Vendor algorithm names MUST use the `x-*` extension namespace so core processors never confuse them with WOS-standard hash algorithms.",
+                    "examples": [
+                      "x-acme-sha-256"
+                    ]
+                  }
                 ]
               },
               "renderingRef": {
@@ -2441,17 +2484,86 @@
               ],
               "properties": {
                 "method": {
-                  "type": "string",
-                  "description": "Identity-binding method recorded in signature evidence, such as login session, credential check, or notary verification.",
+                  "description": "Canonical authentication method recorded in signature evidence, or an x-* vendor token.",
                   "examples": [
-                    "login.gov"
+                    "email-otp",
+                    "x-acme-identity"
+                  ],
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "description": "WOS-standard authentication method recorded for signature evidence and compared against the signature profile's authentication policy.",
+                      "enum": [
+                        "none",
+                        "email-otp",
+                        "sms-otp",
+                        "knowledge-based",
+                        "oidc",
+                        "webauthn",
+                        "credential",
+                        "in-person",
+                        "notary"
+                      ],
+                      "examples": [
+                        "email-otp"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^x-[a-z][a-z0-9-]*$",
+                      "description": "Vendor-defined authentication method token. Vendor methods MUST use the `x-*` namespace so profile policy matching remains explicit.",
+                      "examples": [
+                        "x-acme-identity"
+                      ]
+                    }
                   ]
                 },
                 "assuranceLevel": {
-                  "type": "string",
-                  "description": "Identity-assurance level captured in signature evidence for the signer identity binding.",
+                  "description": "Identity-assurance level for the signer binding. Accepts NIST-style `ial1`–`ial3` / `aal1`–`aal3`, ranked `low`–`very-high`, or vendor `x-*` tokens.",
                   "examples": [
-                    "ial2"
+                    "ial2",
+                    "standard"
+                  ],
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "ial1",
+                        "ial2",
+                        "ial3",
+                        "aal1",
+                        "aal2",
+                        "aal3"
+                      ],
+                      "description": "NIST SP 800-63-style subscriber and authenticator assurance labels (IAL/AAL) for identity evidence in signature audit.",
+                      "examples": [
+                        "ial2",
+                        "aal2"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "standard",
+                        "high",
+                        "very-high"
+                      ],
+                      "description": "Ranked assurance labels aligned with governance authority claims elsewhere in this schema for cross-tooling comparison.",
+                      "examples": [
+                        "standard",
+                        "high"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^x-[a-z][a-z0-9-]*$",
+                      "description": "Vendor-defined assurance discriminator using the `x-` extension namespace (ADR 0077). Processors MUST ignore unknown vendor tokens for forward compatibility. Conformance runtimes do not impose an ordinal rank between `x-*` assurance values and IAL/AAL or ranked tiers; they still enforce `method` match and `requiresInPerson` against declared authentication policies.",
+                      "examples": [
+                        "x-acme-identity-tier-gold",
+                        "x-vendor-assurance-tier-2"
+                      ]
+                    }
                   ]
                 },
                 "providerRef": {
@@ -2499,17 +2611,86 @@
                 ]
               },
               "method": {
-                "type": "string",
-                "description": "Authentication method required by this policy, such as login, identity proofing, witness, or in-person notary verification.",
+                "description": "Canonical authentication method required by this policy, or an x-* vendor token.",
                 "examples": [
-                  "login.gov"
+                  "notary",
+                  "x-acme-notary"
+                ],
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "WOS-standard authentication method required by this signature authentication policy.",
+                    "enum": [
+                      "none",
+                      "email-otp",
+                      "sms-otp",
+                      "knowledge-based",
+                      "oidc",
+                      "webauthn",
+                      "credential",
+                      "in-person",
+                      "notary"
+                    ],
+                    "examples": [
+                      "notary"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^x-[a-z][a-z0-9-]*$",
+                    "description": "Vendor-defined authentication method required by this policy. Vendor methods MUST use the `x-*` namespace and are matched literally by the runtime.",
+                    "examples": [
+                      "x-acme-notary"
+                    ]
+                  }
                 ]
               },
               "assuranceLevel": {
-                "type": "string",
-                "description": "Required identity-assurance level for this authentication policy before a signer may affirm the document.",
+                "description": "Required identity-assurance level before a signer may affirm. Same union as `evidence.identityBinding.assuranceLevel`: IAL/AAL, ranked labels, or `x-*` vendor tokens.",
                 "examples": [
-                  "ial2"
+                  "ial2",
+                  "high"
+                ],
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ial1",
+                      "ial2",
+                      "ial3",
+                      "aal1",
+                      "aal2",
+                      "aal3"
+                    ],
+                    "description": "NIST SP 800-63-style subscriber and authenticator assurance labels (IAL/AAL) for identity evidence in signature audit.",
+                    "examples": [
+                      "ial2",
+                      "aal2"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "standard",
+                      "high",
+                      "very-high"
+                    ],
+                    "description": "Ranked assurance labels aligned with governance authority claims elsewhere in this schema for cross-tooling comparison.",
+                    "examples": [
+                      "standard",
+                      "high"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^x-[a-z][a-z0-9-]*$",
+                    "description": "Vendor-defined assurance discriminator using the `x-` extension namespace (ADR 0077). Processors MUST ignore unknown vendor tokens for forward compatibility. Conformance runtimes do not impose an ordinal rank between `x-*` assurance values and IAL/AAL or ranked tiers; they still enforce `method` match and `requiresInPerson` against this policy.",
+                    "examples": [
+                      "x-acme-identity-tier-gold",
+                      "x-vendor-assurance-tier-2"
+                    ]
+                  }
                 ]
               },
               "providerRef": {
@@ -2688,7 +2869,13 @@
             },
             "signingMode": {
               "type": "string",
-              "description": "Signing mode summarized in the audit certificate, such as sequential, parallel, routed, witness, or notary signing.",
+              "description": "Signing mode summarized in the audit certificate, using the existing signing-flow type values.",
+              "enum": [
+                "sequential",
+                "parallel",
+                "routed",
+                "free-for-all"
+              ],
               "examples": [
                 "sequential"
               ]
@@ -2884,6 +3071,7 @@
     },
     "FactsTierRecord": {
       "type": "object",
+      "$comment": "Composition: top-level recordKind enum selects which payload fields apply; per-kind MUSTs are expressed via allOf conjunct $refs at the provenance log item layer. Do not add conflicting const recordKind on sibling conjunct arms (globally unsatisfiable instances). A oneOf-per-record-kind layout at the log item layer is a separate ADR-level decision, not a silent schema tweak.",
       "description": "A persisted WOS provenance record emitted by runtime execution. Facts-tier semantics are normative in the kernel; higher tiers reuse the same envelope and advertise their tier through `auditLayer`. State transition records whose transitionTags include 'determination' MUST include a caseFileSnapshot so later notices, appeals, and override reviews can reproduce the exact factual basis used by the decision.",
       "required": [
         "id",
@@ -2936,7 +3124,32 @@
         },
         "recordKind": {
           "type": "string",
-          "description": "Provenance record discriminator. For determination snapshot enforcement, the relevant value is 'stateTransition'. Other record kinds MAY also carry caseFileSnapshot for implementation-specific diagnostics.",
+          "enum": [
+            "authorizationAttestation",
+            "authorizationRejected",
+            "amendmentAuthorized",
+            "capabilityInvocation",
+            "caseCreated",
+            "caseStateMutation",
+            "clockResolved",
+            "clockSkewObserved",
+            "clockStarted",
+            "commitAttemptFailure",
+            "correctionAuthorized",
+            "determinationAmended",
+            "determinationRescinded",
+            "identityAttestation",
+            "intakeAccepted",
+            "intakeDeferred",
+            "intakeRejected",
+            "instanceMigrated",
+            "migrationPinChanged",
+            "reinstated",
+            "rescissionAuthorized",
+            "signatureAffirmation",
+            "stateTransition"
+          ],
+          "description": "Provenance record discriminator naming which facts-tier payload shape and processing rules apply. Includes kernel lifecycle and mutation kinds plus ADR-0066/0070/0071 shapes and provenance-log overlays (`caseCreated`, intake outcomes, `signatureAffirmation`) merged at the log `items` allOf seam. Determination snapshot enforcement applies when this value is `stateTransition` and transition tags include `determination`.",
           "examples": [
             "stateTransition",
             "caseStateMutation"
@@ -7345,6 +7558,9 @@
         },
         "code": {
           "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]*$",
+          "$comment": "Reserved finite enum + normative reserved-code table for `TransitionEventError.code` stay trigger-gated until the WG publishes the closed set; until then the pattern-shaped string (plus examples) is the conformance surface.",
           "description": "Normative error code for synthetic `$error` class dispatch while the runtime boundary still receives the literal process_event name `$error` (Kernel §4.5, §4.9.10). Dot-separated codes align integration failures, contract violations, and processor faults.",
           "examples": [
             "kernel.error",

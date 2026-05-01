@@ -1,0 +1,86 @@
+{
+  "binding": "formspec",
+  "id": "MIG-001-migrate-version-bump",
+  "rule": "WS-042",
+  "description": "WosRuntime::migrate MUST bump definitionVersion and append instanceMigrated provenance when the target kernel still contains the active state.",
+  "documents": {
+    "kernel": "inline",
+    "kernel@1.1.0": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:migrate-kernel",
+      "version": "1.0.0",
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic"
+          }
+        }
+      },
+      "actors": [
+        {
+          "id": "operator",
+          "type": "human"
+        }
+      ],
+      "contracts": {}
+    },
+    "kernel@1.1.0": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:migrate-kernel",
+      "version": "1.1.0",
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic"
+          },
+          "closed": {
+            "type": "final"
+          }
+        }
+      },
+      "actors": [
+        {
+          "id": "operator",
+          "type": "human"
+        }
+      ],
+      "contracts": {}
+    }
+  },
+  "event_sequence": [
+    {
+      "event": "$migrate",
+      "actor": "supervisor-1",
+      "data": {
+        "targetDefinitionVersion": "1.1.0",
+        "migrationMap": {
+          "fieldRenames": {},
+          "fieldRemovals": [],
+          "fieldDefaults": {},
+          "fieldCoercions": {}
+        }
+      }
+    }
+  ],
+  "expected_transitions": [],
+  "expected_provenance": [
+    {
+      "record_kind": "instanceMigrated",
+      "data": {
+        "fromVersion": "1.0.0",
+        "toVersion": "1.1.0",
+        "migrationMap": {
+          "fieldRenames": {},
+          "fieldRemovals": [],
+          "fieldDefaults": {},
+          "fieldCoercions": {}
+        }
+      }
+    }
+  ]
+}

@@ -21,6 +21,10 @@ export type WOSCaseInstance = {
    */
   instanceId: string;
   /**
+   * Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When instanceId is a WOS case TypeID, this value MUST equal the tenant prefix before the `_case_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.
+   */
+  tenant?: string;
+  /**
    * Canonical URL of the Workflow Document governing this instance. Together with definitionVersion, identifies the exact document that controls this instance's lifecycle, case state schema, and contract bindings.
    */
   definitionUrl: string;
@@ -296,7 +300,7 @@ export interface CompensationEntry {
   /**
    * Type of the original action that completed (e.g., invokeService, setData, createTask). Matches a Kernel action type (Kernel S9.2).
    */
-  actionType: string;
+  actionType: 'createTask' | 'invokeService' | 'setData' | 'emitEvent' | 'startTimer' | 'cancelTimer' | 'log';
   /**
    * The compensating action to execute during backward recovery in reverse entry order. Structure matches a Kernel Action (Kernel S9.2).
    */

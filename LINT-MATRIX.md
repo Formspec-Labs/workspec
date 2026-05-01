@@ -1,10 +1,10 @@
 # WOS Verification Matrix
 
-> **Updated 2026-04-28** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). 119 rules across 36 T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 104 Draft).
+> **Updated 2026-05-01** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). **2026-05-01:** Tier 1 adds `K-031` (`transition.actor` pattern + declared `actors[].id`), `K-032` (root and compound `initialState` resolution), and `SCHEMA-OPEN-001` (`x-wos.openStringKind` for honest-open string leaves). **122** rules across **39** T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 15 Tested, 106 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)            36 rules                  │
+│  Tier 1: wos-lint (static)            39 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -65,11 +65,14 @@
 | `K-022` | K | draft | Digest present implies algorithm recorded in extensions. | — |
 | `K-029` | K | draft | `startTimer` MUST specify exactly one of `duration` or `deadline`. | — |
 | `K-030` | K | draft | Extension keys MUST be `x-` prefixed. | — |
+| `K-031` | K | draft | `transition.actor` when present MUST use the `actors[].id` lexical pattern and MUST name a declared kernel `actors[].id` (membership, not pattern alone). | inline (`tier1.rs::transition_actor_and_initial_state_tests`) |
+| `K-032` | K | draft | Root `lifecycle.initialState` MUST be a key of `lifecycle.states`; compound `initialState` MUST be a key of that compound's `states` map (same rule id — diagnostic `path` distinguishes root vs compound). | inline (`tier1.rs::transition_actor_and_initial_state_tests`) |
 | `K-048` | K | draft | Non-standard case relationship `type` values MUST use `x-` prefix. | — |
 | `SCHEMA-DOC-001` | SCHEMA-DOC | draft | Schema leaf properties MUST carry sufficient `description` and `examples`. | — |
+| `SCHEMA-OPEN-001` | SCHEMA-OPEN | tested | Open string leaves MUST declare `x-wos.openStringKind` unless `enum`/`const`/`pattern` already close the leaf. | inline (`tests/schema_open_string_kind.rs`) |
 | `WOS-VER-LEVEL-001` | WOS | tested | Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings (ADR 0076 step 12, Q6). | inline (`tier1.rs::ver_level_tests`) |
 
-**T1 total: 36** (0 LoadBearing, 0 Stable, 3 Tested, 33 Draft)
+**T1 total: 39** (0 LoadBearing, 0 Stable, 4 Tested, 35 Draft)
 
 ---
 
@@ -178,7 +181,7 @@
 
 | Tier | Total | LoadBearing | Stable | Tested | Draft |
 |------|-------|-------------|--------|--------|-------|
-| T1 | 36 | 0 | 0 | 3 | 33 |
+| T1 | 39 | 0 | 0 | 4 | 35 |
 | T2 | 74 | 1 | 0 | 4 | 69 |
 | T3 | 9 | 0 | 0 | 7 | 2 |
-| **Total** | **119** | **1** | **0** | **14** | **104** |
+| **Total** | **122** | **1** | **0** | **15** | **106** |

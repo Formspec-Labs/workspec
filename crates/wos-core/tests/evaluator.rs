@@ -109,6 +109,7 @@ fn transition(event: &str, target: &str) -> Transition {
         target: target.to_string(),
         guard: None,
         actions: vec![],
+        actor: None,
         description: None,
         tags: vec![],
     }
@@ -120,6 +121,7 @@ fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
         target: target.to_string(),
         guard: Some(guard.to_string()),
         actions: vec![],
+        actor: None,
         description: None,
         tags: vec![],
     }
@@ -301,6 +303,7 @@ fn set_data_action_mutates_case_state() {
                 target: "end".to_string(),
                 guard: None,
                 actions: vec![set_action],
+                actor: None,
                 description: None,
                 tags: vec![],
             }],
@@ -1114,6 +1117,7 @@ fn transition_anonymous(target: &str) -> Transition {
         target: target.to_string(),
         guard: None,
         actions: vec![],
+        actor: None,
         description: None,
         tags: vec![],
     }
@@ -1992,6 +1996,7 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                     target: "rejected".to_string(),
                     guard: Some("false".to_string()),
                     actions: vec![],
+                    actor: None,
                     description: None,
                     tags: vec![],
                 },
@@ -2003,6 +2008,7 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                         "caseFile.outcome",
                         serde_json::json!("accepted"),
                     )],
+                    actor: None,
                     description: None,
                     tags: vec![],
                 },

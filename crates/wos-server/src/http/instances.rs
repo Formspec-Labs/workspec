@@ -6,6 +6,7 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use serde::Deserialize;
 use wos_runtime::runtime::CreateInstanceRequest;
+use wos_runtime::{MigrationMap, MigrationOutcome};
 
 use crate::AppState;
 use crate::auth::{Adjudicator, RequireRole, Supervisor};
@@ -31,6 +32,7 @@ pub fn routes() -> Router<AppState> {
         .route("/instances/{id}/transitions", get(transitions))
         .route("/instances/{id}/events", post(submit_event))
         .route("/instances/{id}/drain", post(drain))
+        .route("/instances/{id}/migrate", post(migrate_instance))
         .route("/instances/{id}/holds", get(list_holds).post(create_hold))
         .route("/instances/{id}/holds/{hold_idx}", delete(release_hold))
 }
@@ -137,7 +139,7 @@ async fn get_one(
 }
 
 /// `POST /api/instances` — create a fresh case instance from a
-/// `{ definitionUrl, definitionVersion?, instanceId?, initialCaseState? }`
+/// `{ definitionUrl, definitionVersion?, instanceId?, tenant?, initialCaseState? }`
 /// body. Wos-runtime assigns and enters the initial state, writes any
 /// onEntry provenance, and returns the canonical `CaseInstance`.
 #[derive(Debug, Clone, Deserialize)]
@@ -146,6 +148,10 @@ pub struct CreateInstanceBody {
     pub definition_url: String,
     pub definition_version: Option<String>,
     pub instance_id: Option<String>,
+    /// When set, must satisfy ADR 0068 D-1.1 and match the case TypeID tenant
+    /// prefix when `instance_id` is a WOS case TypeID (see `WosRuntime::create_instance`).
+    #[serde(default)]
+    pub tenant: Option<String>,
     #[serde(default)]
     pub initial_case_state: Option<serde_json::Value>,
 }
@@ -170,7 +176,7 @@ async fn create(
 
     let req = CreateInstanceRequest {
         instance_id,
-        tenant: None,
+        tenant: body.tenant,
         definition_url: body.definition_url,
         definition_version: version,
         initial_case_state: body.initial_case_state,
@@ -348,6 +354,45 @@ async fn submit_event(
     }
 
     Ok(Json(result))
+}
+
+/// `POST /api/instances/:id/migrate` — operator migration to a new kernel
+/// `definitionVersion` for the same workflow URL (Kernel S11.2, ADR 0083,
+/// WS-042). Supervisor-gated; delegates to `wos_runtime::WosRuntime::migrate`.
+///
+/// **Idempotency:** When `targetDefinitionVersion` equals the instance's
+/// current version, the runtime returns [`MigrationOutcome`] without a store
+/// write or new provenance. This route does not yet accept an HTTP idempotency
+/// key.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrateInstanceRequest {
+    pub target_definition_version: String,
+    #[serde(default)]
+    pub migration_map: MigrationMap,
+}
+
+async fn migrate_instance(
+    State(s): State<AppState>,
+    auth: RequireRole<Supervisor>,
+    Path(id): Path<String>,
+    Json(req): Json<MigrateInstanceRequest>,
+) -> ApiResult<Json<MigrationOutcome>> {
+    if req.target_definition_version.trim().is_empty() {
+        return Err(ApiError::BadRequest(
+            "target_definition_version must be non-empty".into(),
+        ));
+    }
+    let out = s
+        .runtime
+        .migrate_instance(
+            &id,
+            &req.target_definition_version,
+            req.migration_map,
+            Some(auth.0.user.id.as_str()),
+        )
+        .await?;
+    Ok(Json(out))
 }
 
 /// `POST /api/instances/:id/drain` — drain every queued event for this

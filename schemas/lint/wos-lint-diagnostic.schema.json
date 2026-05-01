@@ -8,7 +8,8 @@
   "properties": {
     "ruleId": {
       "type": "string",
-      "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN (e.g. K-001, G-037, AI-024). Callers switch on this field to suppress, escalate, or route diagnostics.",
+      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]{3,}$",
+      "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN: an uppercase family code (single token like `K`, `G`, `AI`, or hyphenated like `SCHEMA-DOC`) followed by a 3+ digit suffix. Callers switch on this field to suppress, escalate, or route diagnostics.",
       "examples": ["K-001", "G-037", "AI-024", "SCHEMA-DOC-001"],
       "x-lm": { "critical": true }
     },
@@ -28,7 +29,8 @@
     },
     "path": {
       "type": "string",
-      "description": "JSONPath expression pointing to the offending node in the source document. Always starts with '$.' for document-scoped diagnostics. Used by consumers to highlight the exact location in an editor or diff view.",
+      "pattern": "^\\$($|[.\\[].*)$",
+      "description": "JSONPath expression pointing to the offending node in the source document. Starts with `$` (document root) optionally followed by `.member` or `[index]` access chains. Used by consumers to highlight the exact location in an editor or diff view.",
       "examples": ["$.states.approved", "$.lifecycle.transitions[2]", "$.actors.reviewer.permissions"],
       "x-lm": { "critical": true }
     },
@@ -54,7 +56,8 @@
         },
         "path": {
           "type": "string",
-          "description": "JSONPath to the node that should be added, removed, or replaced. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
+          "pattern": "^\\$($|[.\\[].*)$",
+          "description": "JSONPath to the node that should be added, removed, or replaced. Same shape as the top-level diagnostic `path`: starts with `$` then optional `.member` / `[index]` chain. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
           "examples": ["$.states.approved.type", "$.lifecycle.transitions[0].guard"]
         },
         "value": {

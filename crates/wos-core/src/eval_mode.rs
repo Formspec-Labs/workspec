@@ -213,6 +213,7 @@ mod tests {
                 guard: Some("caseFile.ready == true".to_string()),
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );
@@ -306,6 +307,7 @@ mod tests {
                 guard: Some("caseFile.ready == true".to_string()),
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );
@@ -364,6 +366,7 @@ mod tests {
                 guard: None, // Always true.
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );
@@ -376,6 +379,7 @@ mod tests {
                 guard: None,
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );
@@ -437,6 +441,7 @@ mod tests {
                 guard: None,
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );
@@ -448,6 +453,7 @@ mod tests {
                 guard: None,
                 tags: Vec::new(),
                 actions: Vec::new(),
+                actor: None,
                 description: None,
             }]),
         );

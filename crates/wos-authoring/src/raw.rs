@@ -371,6 +371,7 @@ impl RawWosProject {
             target: to_state.clone(),
             guard,
             actions: Vec::new(),
+            actor: None,
             description: None,
             tags: Vec::new(),
         };

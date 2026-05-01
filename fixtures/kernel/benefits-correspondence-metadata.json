@@ -9,7 +9,7 @@
         "description": "Physical mail received from applicant or authorized representative",
         "channel": "mail",
         "direction": "inbound",
-        "actorType": "applicant",
+        "correspondenceRole": "applicant",
         "requiredFields": [
           "contentRef"
         ]
@@ -19,14 +19,14 @@
         "description": "Email received from applicant via secure messaging",
         "channel": "email",
         "direction": "inbound",
-        "actorType": "applicant"
+        "correspondenceRole": "applicant"
       },
       {
         "id": "inboundPortal",
         "description": "Document or message submitted through the self-service portal",
         "channel": "portal",
         "direction": "inbound",
-        "actorType": "applicant",
+        "correspondenceRole": "applicant",
         "requiredFields": [
           "contentRef"
         ]
@@ -36,7 +36,7 @@
         "description": "Documentation received from third party (employer, medical provider, etc.)",
         "channel": "mail",
         "direction": "inbound",
-        "actorType": "third-party",
+        "correspondenceRole": "third-party",
         "requiredFields": [
           "contentRef"
         ]
@@ -46,21 +46,21 @@
         "description": "Phone call with applicant or representative",
         "channel": "phone",
         "direction": "inbound",
-        "actorType": "applicant"
+        "correspondenceRole": "applicant"
       },
       {
         "id": "inPersonVisit",
         "description": "In-person visit at agency office",
         "channel": "in-person",
         "direction": "inbound",
-        "actorType": "applicant"
+        "correspondenceRole": "applicant"
       },
       {
         "id": "outboundNotice",
         "description": "Official notice mailed to applicant (adverse decision, request for information, etc.)",
         "channel": "mail",
         "direction": "outbound",
-        "actorType": "agency",
+        "correspondenceRole": "agency",
         "requiredFields": [
           "contentRef",
           "relatedTaskRef"
@@ -71,14 +71,14 @@
         "description": "Email sent to applicant from caseworker or system",
         "channel": "email",
         "direction": "outbound",
-        "actorType": "agency"
+        "correspondenceRole": "agency"
       },
       {
         "id": "systemNotification",
         "description": "Automated system-generated notification (portal alert, status update)",
         "channel": "portal",
         "direction": "outbound",
-        "actorType": "system"
+        "correspondenceRole": "system"
       }
     ]
   }

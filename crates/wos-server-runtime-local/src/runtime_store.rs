@@ -5,8 +5,8 @@ use tokio::runtime::Handle;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_runtime::store::{
-    IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore,
-    StepResultRecord, StoreError, TaskArtifact, TaskArtifactKind,
+    IntakeRecord, ReplayKey, ReplayValue, RuntimeRecord, RuntimeStore, StepResultRecord, StoreError,
+    TaskArtifact,
 };
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 use wos_server_ports::audit::AuditSink;
@@ -75,7 +75,7 @@ impl RuntimeStore for StorageBackedRuntimeStore {
         let instance = record.instance.clone();
         let instance_json = serde_json::to_value(&instance)
             .map_err(|e| StoreError::Failed(format!("serialise instance: {e}")))?;
-        let aux_json = aux_to_json(&record);
+        let aux_json = wos_runtime::store::runtime_aux_to_json(&record);
         let impact_level = impact_level_hint(&instance);
         let now = Utc::now();
 
@@ -148,7 +148,7 @@ impl RuntimeStore for StorageBackedRuntimeStore {
                 .map(|r| serde_json::from_value::<ProvenanceRecord>(r.payload.clone()))
                 .collect::<Result<_, _>>()
                 .map_err(|e| StoreError::Failed(format!("deserialise provenance: {e}")))?;
-            let aux = aux_from_json(&row.runtime_aux_json);
+            let aux = wos_runtime::store::runtime_aux_from_json(&row.runtime_aux_json);
             Ok(RuntimeRecord {
                 instance,
                 provenance_log,
@@ -163,7 +163,7 @@ impl RuntimeStore for StorageBackedRuntimeStore {
         let instance = record.instance.clone();
         let instance_json = serde_json::to_value(&instance)
             .map_err(|e| StoreError::Failed(format!("serialise instance: {e}")))?;
-        let aux_json = aux_to_json(&record);
+        let aux_json = wos_runtime::store::runtime_aux_to_json(&record);
         let impact_level = impact_level_hint(&instance);
         let status = status_str(&instance.status).to_string();
         let log_snapshot = record.provenance_log.clone();
@@ -308,224 +308,12 @@ pub(super) struct DecodedAux {
     pub replay_entries: std::collections::HashMap<ReplayKey, ReplayValue>,
 }
 
-pub(super) fn aux_to_json(record: &RuntimeRecord) -> serde_json::Value {
-    let step_results: Vec<_> = record
-        .step_results
-        .iter()
-        .map(|s| {
-            serde_json::json!({
-                "serviceRef": s.service_ref,
-                "idempotencyKey": s.idempotency_key,
-                "output": s.output,
-                "recordedAt": s.recorded_at,
-            })
-        })
-        .collect();
-    let artifacts: serde_json::Map<String, serde_json::Value> = record
-        .artifacts
-        .iter()
-        .map(|(k, a)| {
-            let kind = match a.kind {
-                TaskArtifactKind::Draft => "draft",
-                TaskArtifactKind::Accepted => "accepted",
-            };
-            (
-                k.clone(),
-                serde_json::json!({
-                    "artifactId": a.artifact_id,
-                    "taskId": a.task_id,
-                    "kind": kind,
-                    "response": a.response,
-                    "actorId": a.actor_id,
-                    "recordedAt": a.recorded_at,
-                }),
-            )
-        })
-        .collect();
-    let replay_entries: Vec<serde_json::Value> = record
-        .replay_entries
-        .iter()
-        .map(|(k, v)| {
-            let op = match k.operation {
-                ReplayOperation::PersistDraft => "persistDraft",
-                ReplayOperation::SubmitTaskResponse => "submitTaskResponse",
-                ReplayOperation::AcceptIntakeHandoff => "acceptIntakeHandoff",
-            };
-            let value_json = match v {
-                ReplayValue::Draft(d) => serde_json::json!({
-                    "kind": "draft",
-                    "artifactId": d.artifact_id,
-                }),
-                ReplayValue::Submission(s) => match s {
-                    TaskSubmissionResult::Completed {
-                        artifact_id,
-                        case_mutated,
-                        emitted_event,
-                    } => serde_json::json!({
-                        "kind": "completed",
-                        "artifactId": artifact_id,
-                        "caseMutated": case_mutated,
-                        "emittedEvent": emitted_event,
-                    }),
-                    TaskSubmissionResult::Failed {
-                        code,
-                        emitted_event,
-                    } => serde_json::json!({
-                        "kind": "failed",
-                        "code": code,
-                        "emittedEvent": emitted_event,
-                    }),
-                    TaskSubmissionResult::Rejected { code } => {
-                        serde_json::json!({ "kind": "rejected", "code": code })
-                    }
-                },
-                ReplayValue::Intake(decision) => {
-                    let decision_json =
-                        serde_json::to_value(decision).unwrap_or(serde_json::json!({}));
-                    serde_json::json!({
-                        "kind": "intake",
-                        "decision": decision_json,
-                    })
-                }
-            };
-            serde_json::json!({
-                "key": {
-                    "operation": op,
-                    "taskId": k.task_id,
-                    "actorId": k.actor_id,
-                    "token": k.token,
-                },
-                "value": value_json,
-            })
-        })
-        .collect();
-    serde_json::json!({
-        "stepResults": step_results,
-        "artifacts": artifacts,
-        "replayEntries": replay_entries,
-    })
-}
-
 pub(super) fn aux_from_json(v: &serde_json::Value) -> DecodedAux {
-    let step_results = v
-        .get("stepResults")
-        .and_then(|x| x.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|s| {
-                    Some(StepResultRecord {
-                        service_ref: s.get("serviceRef")?.as_str()?.to_string(),
-                        idempotency_key: s
-                            .get("idempotencyKey")
-                            .and_then(|x| x.as_str())
-                            .map(String::from),
-                        output: s.get("output").cloned().unwrap_or(serde_json::json!({})),
-                        recorded_at: s
-                            .get("recordedAt")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let artifacts = v
-        .get("artifacts")
-        .and_then(|x| x.as_object())
-        .map(|m| {
-            m.iter()
-                .filter_map(|(k, a)| {
-                    let kind = match a.get("kind").and_then(|x| x.as_str())? {
-                        "draft" => TaskArtifactKind::Draft,
-                        "accepted" => TaskArtifactKind::Accepted,
-                        _ => return None,
-                    };
-                    Some((
-                        k.clone(),
-                        TaskArtifact {
-                            artifact_id: a.get("artifactId")?.as_str()?.to_string(),
-                            task_id: a.get("taskId")?.as_str()?.to_string(),
-                            kind,
-                            response: a.get("response").cloned().unwrap_or(serde_json::json!({})),
-                            actor_id: a
-                                .get("actorId")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            recorded_at: a
-                                .get("recordedAt")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                        },
-                    ))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let replay_entries = v
-        .get("replayEntries")
-        .and_then(|x| x.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|entry| {
-                    let k = entry.get("key")?;
-                    let v = entry.get("value")?;
-                    let op = match k.get("operation").and_then(|x| x.as_str())? {
-                        "persistDraft" => ReplayOperation::PersistDraft,
-                        "submitTaskResponse" => ReplayOperation::SubmitTaskResponse,
-                        "acceptIntakeHandoff" => ReplayOperation::AcceptIntakeHandoff,
-                        _ => return None,
-                    };
-                    let key = ReplayKey {
-                        operation: op,
-                        task_id: k.get("taskId")?.as_str()?.to_string(),
-                        actor_id: k.get("actorId")?.as_str()?.to_string(),
-                        token: k.get("token")?.as_str()?.to_string(),
-                    };
-                    let value = match v.get("kind").and_then(|x| x.as_str())? {
-                        "draft" => ReplayValue::Draft(PersistDraftResult {
-                            artifact_id: v.get("artifactId")?.as_str()?.to_string(),
-                        }),
-                        "completed" => ReplayValue::Submission(TaskSubmissionResult::Completed {
-                            artifact_id: v.get("artifactId")?.as_str()?.to_string(),
-                            case_mutated: v
-                                .get("caseMutated")
-                                .and_then(|x| x.as_bool())
-                                .unwrap_or(false),
-                            emitted_event: v
-                                .get("emittedEvent")
-                                .and_then(|x| x.as_str())
-                                .map(String::from),
-                        }),
-                        "failed" => ReplayValue::Submission(TaskSubmissionResult::Failed {
-                            code: v.get("code")?.as_str()?.to_string(),
-                            emitted_event: v
-                                .get("emittedEvent")
-                                .and_then(|x| x.as_str())
-                                .map(String::from),
-                        }),
-                        "rejected" => ReplayValue::Submission(TaskSubmissionResult::Rejected {
-                            code: v.get("code")?.as_str()?.to_string(),
-                        }),
-                        "intake" => {
-                            let decision_val = v.get("decision")?.clone();
-                            let decision: wos_runtime::intake::IntakeAcceptanceDecision =
-                                serde_json::from_value(decision_val).ok()?;
-                            ReplayValue::Intake(decision)
-                        }
-                        _ => return None,
-                    };
-                    Some((key, value))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let aux = wos_runtime::store::runtime_aux_from_json(v);
     DecodedAux {
-        step_results,
-        artifacts,
-        replay_entries,
+        step_results: aux.step_results,
+        artifacts: aux.artifacts,
+        replay_entries: aux.replay_entries,
     }
 }
 
@@ -678,7 +466,7 @@ mod tests {
             recorded_at: "2026-01-01T00:00:01Z".into(),
         });
 
-        let aux = aux_to_json(&record);
+        let aux = wos_runtime::store::runtime_aux_to_json(&record);
         let decoded = aux_from_json(&aux);
         assert_eq!(decoded.step_results.len(), 1);
         assert_eq!(decoded.step_results[0].service_ref, "service.ref");
@@ -790,7 +578,7 @@ mod tests {
             ReplayValue::Intake(intake_decision.clone()),
         );
 
-        let aux = aux_to_json(&record);
+        let aux = wos_runtime::store::runtime_aux_to_json(&record);
         let decoded = aux_from_json(&aux);
         assert_eq!(decoded.replay_entries.len(), 5);
 

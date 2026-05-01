@@ -29,7 +29,8 @@ pub use record::{
     CapabilityInvocationInput, ClockResolvedInput, ClockResolvedResolution, ClockSkewObservedInput,
     ClockStartedInput, CommitAttemptFailureInput, CommitFailureKind, ConfigurationWarningInput,
     CorrectionAuthorizedInput, DeterminationAmendedInput, DeterminationRescindedInput,
-    IdentityAttestationInput, MigrationPinChangedInput, ProvenanceRecord, ReinstatedInput,
+    IdentityAttestationInput, InstanceMigratedInput, MigrationPinChangedInput, ProvenanceRecord,
+    ReinstatedInput,
     RescissionAuthorizedInput, SignatureAffirmationInput,
 };
 pub use snapshot::CaseFileSnapshot;

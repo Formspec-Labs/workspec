@@ -65,6 +65,7 @@ impl From<wos_runtime::RuntimeError> for ApiError {
         match e {
             R::Store(StoreError::NotFound(_)) => ApiError::NotFound,
             R::TaskNotFound(_) | R::ContractNotFound(_) => ApiError::NotFound,
+            R::KernelWorkflowNotFound { .. } => ApiError::NotFound,
             R::Store(StoreError::AlreadyExists(m)) => ApiError::Conflict(m),
             R::Unauthorized(_) => ApiError::Forbidden,
             R::InvalidResponseStatus(_)
@@ -72,7 +73,13 @@ impl From<wos_runtime::RuntimeError> for ApiError {
             | R::UnsupportedBinding(_)
             | R::UnsupportedBindingKind(_)
             | R::MissingMetadata(_)
-            | R::ContractValidation(_) => ApiError::BadRequest(e.to_string()),
+            | R::ContractValidation(_)
+            // ADR 0068 D-1.1: tenant identifier errors are caller errors, not server errors.
+            | R::TenantInvalid(_)
+            | R::TenantMismatch { .. }
+            | R::MigrationRejected(_)
+            | R::KernelDefinitionVersionMismatch { .. }
+            | R::FeatureDisabled(_) => ApiError::BadRequest(e.to_string()),
             other => ApiError::ServiceUnavailable(other.to_string()),
         }
     }

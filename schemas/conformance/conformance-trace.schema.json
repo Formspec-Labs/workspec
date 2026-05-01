@@ -108,7 +108,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose 'on' value matches this name.",
+          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose `event` field (string or TransitionEvent object) matches this name (Kernel S4.5).",
           "examples": ["applicationComplete", "$timeout.state"]
         },
         "sourceActor": {

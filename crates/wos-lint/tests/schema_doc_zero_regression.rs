@@ -8,6 +8,8 @@
 //!
 //! To diagnose a failure, run:
 //!   cargo run -p wos-lint --example count_schema_violations -- <path> --list
+//! Open string-leaf triage (no enum/const/pattern at leaf):
+//!   cargo run -p wos-lint --example schema_string_leaf_report -- <path> [--csv]
 
 use std::path::{Path, PathBuf};
 

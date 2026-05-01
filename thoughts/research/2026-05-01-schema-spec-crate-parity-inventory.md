@@ -1,6 +1,6 @@
 # WOS schema-spec-crate parity inventory
 
-Current open-string-leaf inventory from `wos-lint` example reports, frozen as stable row IDs for C6 dispatch. Total open rows across the inventoried schemas: `394`.
+Current open-string-leaf inventory from `wos-lint` example reports, frozen as stable row IDs for C6 dispatch. Stable C0 row set: `394`; current open rows after C2 signature-vocabulary closure: `390`.
 
 ## Regeneration
 
@@ -13,7 +13,7 @@ Current open-string-leaf inventory from `wos-lint` example reports, frozen as st
 
 | Schema | Prefix | String leaves | Constrained | Open | Row range |
 | --- | --- | ---: | ---: | ---: | --- |
-| `wos-workflow.schema.json` | `WS` | 264 | 71 | 193 | `WS-001..WS-193` |
+| `wos-workflow.schema.json` | `WS` | 266 | 77 | 189 | `WS-001..WS-193` |
 | `wos-tooling.schema.json` | `WT` | 78 | 24 | 54 | `WT-001..WT-054` |
 | `wos-case-instance.schema.json` | `WC` | 61 | 12 | 49 | `WC-001..WC-049` |
 | `wos-provenance-log.schema.json` | `WP` | 31 | 11 | 20 | `WP-001..WP-020` |
@@ -153,14 +153,14 @@ Row range: `WS-001..WS-193`.
 | `WS-120` | `/$defs/SeparationOfDuties/properties/excludeRoles/items` | `SeparationOfDuties` | `TODO` | shape clues (minLength) do not close the vocabulary; close with enum/const/pattern if finite, else HONESTLY-OPEN. Role identifier excluded from reviewing its own category of work under separation of duties. |
 | `WS-121` | `/$defs/Signature/properties/$schema` | `Signature` | `TODO` | shape clues (format) do not close the vocabulary; close with enum/const/pattern if finite, else HONESTLY-OPEN. Optional JSON Schema URI annotation for the embedded signature block; workflow identity remains on the enclosing envelope. |
 | `WS-122` | `/$defs/Signature/properties/auditCertificate/properties/format` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Audit certificate format emitted when signature evidence is summarized for downstream verification or export. |
-| `WS-123` | `/$defs/Signature/properties/auditCertificate/properties/signingMode` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Signing mode summarized in the audit certificate, such as sequential, parallel, routed, witness, or notary signing. |
+| `WS-123` | `/$defs/Signature/properties/auditCertificate/properties/signingMode` | `Signature` | `CLOSED-C2` | Closed by C2 signature-vocabulary closure: enum mirrors the runtime `SigningFlowType` set. |
 | `WS-124` | `/$defs/Signature/properties/authenticationPolicies/items/properties/key` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Stable authentication-policy key referenced by signature roles and signing steps. |
-| `WS-125` | `/$defs/Signature/properties/authenticationPolicies/items/properties/method` | `Signature` | `TODO` | shape clues (minLength) do not close the vocabulary; close with enum/const/pattern if finite, else HONESTLY-OPEN. Authentication method required by this policy, such as login, identity proofing, witness, or in-person notary verification. Opaque label identifying the ceremon… |
+| `WS-125` | `/$defs/Signature/properties/authenticationPolicies/items/properties/method` | `Signature` | `CLOSED-C2` | Closed by C2 signature-vocabulary closure: canonical authentication methods plus `x-*` vendor extension pattern. |
 | `WS-126` | `/$defs/Signature/properties/authenticationPolicies/items/properties/providerRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Reference to the identity provider, notary system, or credential service used to satisfy this authentication policy. |
 | `WS-127` | `/$defs/Signature/properties/declinePolicy/properties/transitionId` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Transition identifier fired when a signer declines and the signature workflow follows the decline path. |
 | `WS-128` | `/$defs/Signature/properties/description` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Optional human-readable note describing the embedded signature flow. Identity (url, version) is governed by the enclosing $wosWorkflow envelope per ADR 0063 §2.… |
 | `WS-129` | `/$defs/Signature/properties/documents/items/properties/documentHash` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Digest value for the signable document, computed with documentHashAlgorithm and bound into signature evidence. |
-| `WS-130` | `/$defs/Signature/properties/documents/items/properties/documentHashAlgorithm` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Hash algorithm used to compute documentHash for this signable document. |
+| `WS-130` | `/$defs/Signature/properties/documents/items/properties/documentHashAlgorithm` | `Signature` | `CLOSED-C2` | Closed by C2 signature-vocabulary closure: `sha-256` core const plus `x-*` vendor extension pattern. |
 | `WS-131` | `/$defs/Signature/properties/documents/items/properties/documentRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Reference to the signable document artifact that the signer is affirming. |
 | `WS-132` | `/$defs/Signature/properties/documents/items/properties/formspecResponseRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Reference to the Formspec response whose rendered content or data is bound into the signable document. |
 | `WS-133` | `/$defs/Signature/properties/documents/items/properties/id` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Stable signable-document identifier referenced by signing steps, evidence records, and custody bindings. |
@@ -170,7 +170,7 @@ Row range: `WS-001..WS-193`.
 | `WS-137` | `/$defs/Signature/properties/evidence/properties/consentReference/properties/consentTextRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Reference to the exact consent text shown to the signer before affirmation. |
 | `WS-138` | `/$defs/Signature/properties/evidence/properties/consentReference/properties/consentVersion` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Version identifier for the consent text shown to the signer before affirmation. |
 | `WS-139` | `/$defs/Signature/properties/evidence/properties/identityBinding/properties/externalAttestationRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Reference to an external identity attestation that supports the signer identity binding. |
-| `WS-140` | `/$defs/Signature/properties/evidence/properties/identityBinding/properties/method` | `Signature` | `TODO` | shape clues (minLength) do not close the vocabulary; close with enum/const/pattern if finite, else HONESTLY-OPEN. Identity-binding method recorded in signature evidence, such as login session, credential check, or notary verification. Opaque provider-specific label (e.g. \`l… |
+| `WS-140` | `/$defs/Signature/properties/evidence/properties/identityBinding/properties/method` | `Signature` | `CLOSED-C2` | Closed by C2 signature-vocabulary closure: canonical authentication methods plus `x-*` vendor extension pattern. |
 | `WS-141` | `/$defs/Signature/properties/evidence/properties/identityBinding/properties/providerRef` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Identity provider or credential service reference recorded with the signer identity binding. |
 | `WS-142` | `/$defs/Signature/properties/evidence/properties/requiredFields/items` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. Required evidence field name that must be present before signature affirmation evidence is complete. |
 | `WS-143` | `/$defs/Signature/properties/expiryPolicy/properties/after` | `Signature` | `TODO` | close with enum/const/pattern if the value set is finite, else HONESTLY-OPEN. ISO-8601 duration after which an incomplete signature request expires and follows the expiry path. |

@@ -7,8 +7,9 @@
 //! `WosRuntime`, but keeping them separate from the type declarations makes the
 //! adapter boundary easier to audit.
 
-use wos_core::eval::Evaluator;
+use wos_core::eval::{validate_migration_configuration, Evaluator};
 use wos_core::instance::{CaseInstance, InstanceStatus, PendingEvent};
+use wos_core::provenance::{InstanceMigratedInput, ProvenanceRecord};
 use wos_core::typeid;
 
 use crate::custody::{CustodyAppendContext, CustodyAppendInput};
@@ -19,9 +20,89 @@ use super::timers::{
     timers_to_state,
 };
 use super::{
-    CreateInstanceRequest, RuntimeError, WosRuntime, format_timestamp,
-    populate_provenance_record_fields, stamp_custody_receipt, stamp_provenance,
+    CreateInstanceRequest, MigrationMap, MigrationOutcome, RuntimeError, WosRuntime,
+    format_timestamp, populate_provenance_record_fields, stamp_custody_receipt, stamp_provenance,
 };
+
+fn apply_migration_map(
+    case_state: &mut serde_json::Value,
+    map: &MigrationMap,
+) -> Result<(), RuntimeError> {
+    let obj = case_state.as_object_mut().ok_or_else(|| {
+        RuntimeError::MigrationRejected(
+            "caseState must be a JSON object for migration map application".into(),
+        )
+    })?;
+    for key in &map.field_removals {
+        obj.remove(key);
+    }
+    for (old_key, new_key) in &map.field_renames {
+        if let Some(value) = obj.remove(old_key) {
+            obj.insert(new_key.clone(), value);
+        }
+    }
+    for (key, default_value) in &map.field_defaults {
+        obj.entry(key.clone()).or_insert_with(|| default_value.clone());
+    }
+    for (field, kind) in &map.field_coercions {
+        let Some(value) = obj.get_mut(field) else {
+            continue;
+        };
+        match kind.as_str() {
+            "number" => {
+                let n = match &*value {
+                    serde_json::Value::Number(n) => n
+                        .as_f64()
+                        .ok_or_else(|| RuntimeError::MigrationRejected(format!(
+                            "fieldCoercion number: field `{field}` is not a finite number"
+                        )))?,
+                    serde_json::Value::String(s) => s.parse::<f64>().map_err(|_| {
+                        RuntimeError::MigrationRejected(format!(
+                            "fieldCoercion number: cannot parse field `{field}`"
+                        ))
+                    })?,
+                    _ => {
+                        return Err(RuntimeError::MigrationRejected(format!(
+                            "fieldCoercion number: unsupported JSON type on field `{field}`"
+                        )));
+                    }
+                };
+                if !n.is_finite() {
+                    return Err(RuntimeError::MigrationRejected(format!(
+                        "fieldCoercion number: field `{field}` must be finite"
+                    )));
+                }
+                *value = serde_json::json!(n);
+            }
+            "string" => {
+                let s = match &*value {
+                    serde_json::Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                *value = serde_json::Value::String(s);
+            }
+            "boolean" => {
+                let b = match &*value {
+                    serde_json::Value::Bool(b) => *b,
+                    serde_json::Value::String(s) if s.eq_ignore_ascii_case("true") => true,
+                    serde_json::Value::String(s) if s.eq_ignore_ascii_case("false") => false,
+                    _ => {
+                        return Err(RuntimeError::MigrationRejected(format!(
+                            "fieldCoercion boolean: cannot coerce field `{field}`"
+                        )));
+                    }
+                };
+                *value = serde_json::Value::Bool(b);
+            }
+            other => {
+                return Err(RuntimeError::MigrationRejected(format!(
+                    "unknown fieldCoercion `{other}` for field `{field}`"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
 
 impl WosRuntime {
     /// Create and persist a new case instance.
@@ -241,5 +322,81 @@ impl WosRuntime {
         record.instance.updated_at = format_timestamp(self.clock.now_ms())?;
         self.store.save_record(record)?;
         Ok(())
+    }
+
+    /// Migrate a running instance to a new kernel `definitionVersion` for the
+    /// same `definitionUrl` (Kernel S11.2, ADR 0083 D1).
+    ///
+    /// Validates active states against the target kernel, applies
+    /// [`MigrationMap`] to `caseState`, appends one `instanceMigrated`
+    /// provenance record, and persists atomically via [`RuntimeStore::save_record`].
+    ///
+    /// **Idempotency:** When `target_definition_version` already matches the
+    /// instance's current version, this returns [`MigrationOutcome`] immediately
+    /// with no store write and no new provenance. There is no HTTP idempotency
+    /// key for migrate yet; duplicate version-bump requests are not deduped.
+    ///
+    /// # Errors
+    /// Returns [`RuntimeError::MigrationRejected`] when validation or map
+    /// application fails; the instance is not modified.
+    pub fn migrate(
+        &mut self,
+        instance_id: &str,
+        target_definition_version: &str,
+        migration_map: MigrationMap,
+        operator_actor_id: Option<&str>,
+    ) -> Result<MigrationOutcome, RuntimeError> {
+        let now_ms = self.clock.now_ms();
+        let now_iso = format_timestamp(now_ms)?;
+        let mut record = self.store.load_record(instance_id)?;
+        if record.instance.definition_version == target_definition_version {
+            return Ok(MigrationOutcome {
+                instance_id: instance_id.to_string(),
+                previous_definition_version: record.instance.definition_version.clone(),
+                new_definition_version: target_definition_version.to_string(),
+                migration_map,
+            });
+        }
+
+        let url = record.instance.definition_url.clone();
+        let previous_definition_version = record.instance.definition_version.clone();
+        let target_kernel = self
+            .resolver
+            .resolve_kernel(&url, target_definition_version)?;
+        validate_migration_configuration(&target_kernel, &record.instance.configuration)
+            .map_err(|e| RuntimeError::MigrationRejected(e.to_string()))?;
+
+        let mut new_case_state = record.instance.case_state.clone();
+        apply_migration_map(&mut new_case_state, &migration_map)?;
+
+        let migration_map_json = serde_json::to_value(&migration_map)
+            .map_err(|e| RuntimeError::MigrationRejected(e.to_string()))?;
+        let mut appended = vec![ProvenanceRecord::instance_migrated(InstanceMigratedInput {
+            from_version: previous_definition_version.as_str(),
+            to_version: target_definition_version,
+            migration_map: migration_map_json,
+            actor_id: operator_actor_id,
+            context: None,
+        })];
+        populate_provenance_record_fields(
+            &mut appended,
+            &target_kernel,
+            target_definition_version,
+        );
+        stamp_provenance(&mut appended, &now_iso);
+
+        record.instance.case_state = new_case_state;
+        record.instance.definition_version = target_definition_version.to_string();
+        record.instance.updated_at = now_iso;
+        record.provenance_log.extend(appended);
+        record.instance.provenance_position = record.provenance_log.len() as u64;
+        self.store.save_record(record)?;
+
+        Ok(MigrationOutcome {
+            instance_id: instance_id.to_string(),
+            previous_definition_version,
+            new_definition_version: target_definition_version.to_string(),
+            migration_map,
+        })
     }
 }

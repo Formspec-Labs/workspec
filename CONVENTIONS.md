@@ -84,6 +84,11 @@ When updating a schema:
 - If an example becomes infeasible (e.g., needs runtime data the schema cannot describe), remove the example rather than leaving it drifted.
 - Prefer minimal, copy-pasteable examples that exercise one feature each. Composite examples are easier to drift and harder to repair.
 
+## x-lm / x-wos Annotation Conventions
+
+- `x-lm.critical: true` marks load-bearing leaf properties. Those nodes MUST meet the stricter `description` and `examples` bar enforced by `SCHEMA-DOC-001`.
+- `x-wos.openStringKind` marks intentional open string leaves. Use it only on string leaves without `enum`, `const`, or `pattern`. Allowed values: `prose`, `fel`, `uri`, `identifier`, `pathExpression`, `hash`, `timestamp`, `tagLabel`. `SCHEMA-OPEN-001` enforces the annotation; it records why the leaf stays open.
+
 ## Sidecar Normative-Contract Audit Rubric (TODO #45)
 
 Use this when auditing sidecars and deciding whether to keep them as independent specs.
@@ -108,4 +113,3 @@ If neither is true, prefer merging it into the closest host spec.
 3. **Composition**
    - Is the attachment point explicit (where in evaluation/execution this applies)?
    - Are precedence and conflicts with other sidecars/specs resolved deterministically?
-

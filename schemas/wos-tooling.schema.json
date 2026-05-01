@@ -377,15 +377,19 @@
         },
         "$wosTooling": {
           "type": "string",
+          "const": "1.0",
           "description": "Tooling document marker for the lint diagnostic root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
           "examples": [
+            "1.0",
             "1.0"
           ]
         },
         "kind": {
           "type": "string",
+          "const": "lintDiagnostic",
           "description": "Tooling kind discriminator for the lint diagnostic root view; consumers use it to select the matching schema sub-view.",
           "examples": [
+            "lintDiagnostic",
             "lintDiagnostic"
           ]
         }
@@ -484,7 +488,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose 'on' value matches this name.",
+          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose `event` field (string or TransitionEvent object) matches this name (Kernel S4.5).",
           "examples": [
             "applicationComplete",
             "$timeout.state"
@@ -870,15 +874,19 @@
         },
         "$wosTooling": {
           "type": "string",
+          "const": "1.0",
           "description": "Tooling document marker for the conformance trace root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
           "examples": [
+            "1.0",
             "1.0"
           ]
         },
         "kind": {
           "type": "string",
+          "const": "conformanceTrace",
           "description": "Tooling kind discriminator for the conformance trace root view; consumers use it to select the matching schema sub-view.",
           "examples": [
+            "conformanceTrace",
             "conformanceTrace"
           ]
         }
@@ -1347,15 +1355,19 @@
         },
         "$wosTooling": {
           "type": "string",
+          "const": "1.0",
           "description": "Tooling document marker for the mcp tool catalog root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
           "examples": [
+            "1.0",
             "1.0"
           ]
         },
         "kind": {
           "type": "string",
+          "const": "mcpToolCatalog",
           "description": "Tooling kind discriminator for the mcp tool catalog root view; consumers use it to select the matching schema sub-view.",
           "examples": [
+            "mcpToolCatalog",
             "mcpToolCatalog"
           ]
         }
@@ -1490,7 +1502,18 @@
                   "type": "integer"
                 },
                 "impact_level": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "rights-impacting",
+                    "safety-impacting",
+                    "operational",
+                    "informational"
+                  ],
+                  "description": "Echo of the governing workflow document `impactLevel` after describe runs; MUST match the kernel impact-level vocabulary (Kernel §6).",
+                  "examples": [
+                    "operational",
+                    "rights-impacting"
+                  ]
                 },
                 "ai_agent_count": {
                   "type": "integer"
@@ -1840,7 +1863,18 @@
               ],
               "properties": {
                 "level": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "rights-impacting",
+                    "safety-impacting",
+                    "operational",
+                    "informational"
+                  ],
+                  "description": "Echo of the `level` written to the document; MUST match the kernel impact-level vocabulary.",
+                  "examples": [
+                    "operational",
+                    "rights-impacting"
+                  ]
                 }
               }
             }
@@ -2042,7 +2076,16 @@
                   "type": "string"
                 },
                 "format": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "mermaid",
+                    "dot"
+                  ],
+                  "description": "Echo of the `format` argument from the preview request; MUST be either `mermaid` or `dot`, matching the graph serialization dialect returned in `graph`.",
+                  "examples": [
+                    "mermaid",
+                    "dot"
+                  ]
                 }
               }
             }
@@ -2087,7 +2130,18 @@
                   "type": "array"
                 },
                 "kind": {
-                  "type": "string"
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "transition",
+                    "actor",
+                    "constraint"
+                  ],
+                  "description": "Echo of the search `kind` from the request; MUST match one of the four supported search surfaces.",
+                  "examples": [
+                    "state",
+                    "transition"
+                  ]
                 },
                 "query": {
                   "type": "string"
@@ -2355,7 +2409,8 @@
         "vendorPrefix": {
           "type": "string",
           "minLength": 1,
-          "description": "Required vendor namespace prefix for `vendor-extension` kinds. SHOULD match the regex shape `^x-[a-z0-9]+(-[a-z0-9]+)*$` per Kernel \u00a710.6 naming rules. Lint tooling enforces that any `x-` key whose prefix matches this pattern conforms to the entry's `schemaRef` (when one is declared).",
+          "pattern": "^x-[a-z0-9]+(?:-[a-z0-9]+)*-$",
+          "description": "Required vendor namespace prefix for `vendor-extension` kinds. SHOULD match the prefix shape `^x-[a-z0-9]+(?:-[a-z0-9]+)*-$` per Kernel \u00a710.6 naming rules. Lint tooling enforces that any `x-` key whose prefix matches this pattern conforms to the entry's `schemaRef` (when one is declared).",
           "examples": [
             "x-trellis-",
             "x-acme-tenant-"
@@ -2438,15 +2493,19 @@
         },
         "$wosTooling": {
           "type": "string",
+          "const": "1.0",
           "description": "Tooling document marker for the extension registry root view, pinning the embedded artifact to the merged WOS Tooling 1.0 schema.",
           "examples": [
+            "1.0",
             "1.0"
           ]
         },
         "kind": {
           "type": "string",
+          "const": "extensionRegistry",
           "description": "Tooling kind discriminator for the extension registry root view; consumers use it to select the matching schema sub-view.",
           "examples": [
+            "extensionRegistry",
             "extensionRegistry"
           ]
         }

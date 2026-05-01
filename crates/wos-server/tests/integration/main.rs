@@ -29,6 +29,7 @@ mod http_jwt_logout;
 mod http_policy_resolve_get;
 mod http_smoke;
 mod http_tasks_lifecycle;
+mod http_tenant_passthrough;
 mod json_util;
 mod provenance_chain;
 mod provenance_spec_shape;

@@ -849,6 +849,7 @@ mod tests {
             target: "adverseNotice".to_string(),
             guard: None,
             actions: Vec::new(),
+            actor: None,
             description: None,
             tags: vec!["adverse-decision".to_string()],
         };

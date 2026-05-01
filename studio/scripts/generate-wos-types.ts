@@ -1,7 +1,7 @@
-import { compileFromFile } from 'json-schema-to-typescript';
+import { compile, compileFromFile } from 'json-schema-to-typescript';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,19 +43,53 @@ function namespacedModuleNames(presentNames: string[]): Set<string> {
   return new Set(presentNames.filter((n) => n !== 'workflow'));
 }
 
+/**
+ * Remote `$ref` base URL used in schemas that cross-reference the workflow envelope
+ * during offline / CI runs where `https://wos-spec.org` is not reachable.
+ * Substitution rewrites ALL occurrences across every schema — not just provenance-log.
+ */
+const REMOTE_BASE = 'https://wos-spec.org/schemas/';
+
+/**
+ * Rewrite all remote `https://wos-spec.org/schemas/<filename>.schema.json` $ref
+ * occurrences in `rawText` to their local `file://` equivalents so that
+ * json-schema-to-typescript can resolve them offline.
+ *
+ * Walks every schema in `schemas[]` and substitutes its canonical remote URL with
+ * the `pathToFileURL` of its on-disk path. Falls back to `compileFromFile` when
+ * the substituted text is identical to the original (no remote refs present).
+ */
+function substituteRemoteRefs(rawText: string): string {
+  let result = rawText;
+  for (const { src } of schemas) {
+    const remoteUrl = `${REMOTE_BASE}${src}`;
+    const localUrl = pathToFileURL(path.join(SCHEMAS_DIR, src)).href;
+    result = result.split(remoteUrl).join(localUrl);
+  }
+  return result;
+}
+
 async function compileSchema(src: string, name: string): Promise<string | null> {
   const schemaPath = path.join(SCHEMAS_DIR, src);
   if (!fs.existsSync(schemaPath)) {
     console.warn(`SKIP ${src} — not found`);
     return null;
   }
+  const options = {
+    cwd: SCHEMAS_DIR,
+    declareExternallyReferenced: true,
+    enableConstEnums: true,
+    style: { singleQuote: true, trailingComma: 'all' as any, printWidth: 120 },
+  };
   try {
-    return await compileFromFile(schemaPath, {
-      cwd: SCHEMAS_DIR,
-      declareExternallyReferenced: true,
-      enableConstEnums: true,
-      style: { singleQuote: true, trailingComma: 'all' as any, printWidth: 120 },
-    });
+    // json-schema-to-typescript resolves $ref via fetch; offline runs need file URLs.
+    // substituteRemoteRefs rewrites all wos-spec.org $refs across every known schema.
+    const rawOriginal = fs.readFileSync(schemaPath, 'utf8');
+    const rawSubstituted = substituteRemoteRefs(rawOriginal);
+    if (rawSubstituted !== rawOriginal) {
+      return await compile(JSON.parse(rawSubstituted), name, options);
+    }
+    return await compileFromFile(schemaPath, options);
   } catch (err: any) {
     console.warn(`SKIP ${name} — compile failed: ${err?.message ?? err}`);
     return null;

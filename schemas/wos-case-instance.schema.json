@@ -48,6 +48,20 @@
         "intent": "Unique instance identity for routing, persistence, and cross-case references"
       }
     },
+    "tenant": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
+      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When instanceId is a WOS case TypeID, this value MUST equal the tenant prefix before the `_case_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.",
+      "examples": [
+        "sba-poc",
+        "default",
+        "acme-corp"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Tenant boundary for routing, storage partitioning, and cross-tenant audit"
+      }
+    },
     "definitionUrl": {
       "type": "string",
       "format": "uri",
@@ -650,6 +664,15 @@
         },
         "actionType": {
           "type": "string",
+          "enum": [
+            "createTask",
+            "invokeService",
+            "setData",
+            "emitEvent",
+            "startTimer",
+            "cancelTimer",
+            "log"
+          ],
           "description": "Type of the original action that completed (e.g., invokeService, setData, createTask). Matches a Kernel action type (Kernel S9.2).",
           "examples": ["invokeService", "setData", "createTask"]
         },

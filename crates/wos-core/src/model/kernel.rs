@@ -20,7 +20,7 @@
 
 use indexmap::IndexMap;
 use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
 // `GovernanceDocument` (in `crate::model::governance`) provides the typed view
@@ -73,7 +73,7 @@ pub struct KernelDocument {
 
     /// Document status.
     #[serde(default)]
-    pub status: Option<String>,
+    pub status: Option<PublicationStatus>,
 
     /// Impact level classification (Kernel S6).
     #[serde(default)]
@@ -351,6 +351,15 @@ pub enum EvaluationMode {
     Continuous,
 }
 
+/// Publication status for a workflow document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PublicationStatus {
+    Draft,
+    Active,
+    Deprecated,
+}
+
 /// Impact level classification (Kernel S6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -401,6 +410,140 @@ pub enum ActorKind {
     Human,
     System,
     Agent,
+}
+
+/// Provenance audit layer for facts-tier records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuditLayer {
+    Facts,
+    Reasoning,
+    Counterfactual,
+    Narrative,
+}
+
+/// Origin of a case-state mutation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MutationSource {
+    HumanEntered,
+    HumanCorrected,
+    AgentExtracted,
+    SystemFetched,
+    Computed,
+    SelfAttested,
+    /// Vendor-namespaced source token. SHOULD carry an `x-` prefix.
+    Vendor(String),
+}
+
+impl MutationSource {
+    /// Canonical wire token for this mutation source.
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
+        match self {
+            Self::HumanEntered => "human-entered",
+            Self::HumanCorrected => "human-corrected",
+            Self::AgentExtracted => "agent-extracted",
+            Self::SystemFetched => "system-fetched",
+            Self::Computed => "computed",
+            Self::SelfAttested => "self-attested",
+            Self::Vendor(value) => value.as_str(),
+        }
+    }
+
+    fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "human-entered" => Some(Self::HumanEntered),
+            "human-corrected" => Some(Self::HumanCorrected),
+            "agent-extracted" => Some(Self::AgentExtracted),
+            "system-fetched" => Some(Self::SystemFetched),
+            "computed" => Some(Self::Computed),
+            "self-attested" => Some(Self::SelfAttested),
+            value if value.starts_with("x-") => Some(Self::Vendor(value.to_string())),
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for MutationSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for MutationSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_wire(value.as_str()).ok_or_else(|| {
+            D::Error::custom(format!(
+                "invalid mutation source {value:?}; expected a reserved literal or x-* token"
+            ))
+        })
+    }
+}
+
+/// Verification strength for a case-state mutation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VerificationLevel {
+    Independent,
+    Attested,
+    Corroborated,
+    Authoritative,
+    /// Vendor-namespaced verification token. SHOULD carry an `x-` prefix.
+    Vendor(String),
+}
+
+impl VerificationLevel {
+    /// Canonical wire token for this verification level.
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
+        match self {
+            Self::Independent => "independent",
+            Self::Attested => "attested",
+            Self::Corroborated => "corroborated",
+            Self::Authoritative => "authoritative",
+            Self::Vendor(value) => value.as_str(),
+        }
+    }
+
+    fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "independent" => Some(Self::Independent),
+            "attested" => Some(Self::Attested),
+            "corroborated" => Some(Self::Corroborated),
+            "authoritative" => Some(Self::Authoritative),
+            value if value.starts_with("x-") => Some(Self::Vendor(value.to_string())),
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for VerificationLevel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for VerificationLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_wire(value.as_str()).ok_or_else(|| {
+            D::Error::custom(format!(
+                "invalid verification level {value:?}; expected a reserved literal or x-* token"
+            ))
+        })
+    }
 }
 
 /// Lifecycle topology (Kernel S4).
@@ -870,6 +1013,11 @@ pub struct Transition {
     /// Actions executed during this transition.
     #[serde(default)]
     pub actions: Vec<Action>,
+
+    /// Actor responsible for this transition, when a single actor is named.
+    /// MUST match `actors[].id` and the same lexical pattern as actor `id` values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
 
     /// Human-readable description.
     #[serde(default)]

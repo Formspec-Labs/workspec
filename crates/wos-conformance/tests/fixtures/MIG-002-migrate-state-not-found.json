@@ -1,0 +1,68 @@
+{
+  "binding": "formspec",
+  "id": "MIG-002-migrate-state-not-found",
+  "rule": "WS-042",
+  "description": "WosRuntime::migrate MUST reject when the target kernel does not define the active state.",
+  "documents": {
+    "kernel": "inline",
+    "kernel@1.1.0": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:migrate-missing-state",
+      "version": "1.0.0",
+      "lifecycle": {
+        "initialState": "open",
+        "states": {
+          "open": {
+            "type": "atomic"
+          }
+        }
+      },
+      "actors": [
+        {
+          "id": "operator",
+          "type": "human"
+        }
+      ],
+      "contracts": {}
+    },
+    "kernel@1.1.0": {
+      "$wosWorkflow": "1.0",
+      "url": "urn:test:migrate-missing-state",
+      "version": "1.1.0",
+      "lifecycle": {
+        "initialState": "closed",
+        "states": {
+          "closed": {
+            "type": "final"
+          }
+        }
+      },
+      "actors": [
+        {
+          "id": "operator",
+          "type": "human"
+        }
+      ],
+      "contracts": {}
+    }
+  },
+  "event_sequence": [
+    {
+      "event": "$migrate",
+      "actor": "supervisor-1",
+      "data": {
+        "targetDefinitionVersion": "1.1.0",
+        "migrationMap": {
+          "fieldRenames": {},
+          "fieldRemovals": [],
+          "fieldDefaults": {},
+          "fieldCoercions": {}
+        }
+      }
+    }
+  ],
+  "expected_transitions": []
+}

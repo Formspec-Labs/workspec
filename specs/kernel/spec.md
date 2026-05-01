@@ -1479,6 +1479,13 @@ Compensation is triggered when an action within a compensable scope fails and th
 
 A workflow instance is bound to its creation-time definition version unless explicitly migrated. When a Kernel Document is updated, existing instances continue executing under the version that created them. Instance migration is an explicit operation that MUST be recorded in provenance.
 
+Authors MAY set `execution.instanceVersioning` on the Kernel Document (merged envelope per ADR 0076; validated by `wos-workflow.schema.json`) to exactly one of two **normative author-time string literals**:
+
+- **`pinned`:** Each running instance remains bound to the Kernel Document URL and `definitionVersion` in effect at instance creation until an explicit `migrate` operation (Kernel S11.2) succeeds. When `execution.instanceVersioning` is **omitted**, processors MUST treat the policy as **`pinned`**.
+- **`migrateable`:** The workflow author declares that instances created under this definition MAY adopt a newer compatible kernel revision when the processor performs an explicit `migrate` operation recorded in provenance, subject to Kernel S11.2 state validation, migration maps, and atomicity requirements.
+
+The spellings `pinned` and `migrateable` are normative in JSON documents and in the merged workflow schema; editors or procurement-facing prose MAY gloss `migrateable` with the common English word *migratable* but MUST NOT introduce a third spelling in machine-readable payloads.
+
 Version pinning applies equally to Formspec Definitions referenced as contracts. When a Kernel Document references a Formspec Definition via `contractRef`, the version of that Definition is pinned at instance creation time (Formspec Changelog VP-01, VP-02). Instance migration SHOULD use the Formspec Changelog (Changelog S4) to generate migration maps for contract changes between versions.
 
 <!-- absorbed-from: companions/runtime.md §11 Multi-Version Coexistence per ADR 0076 D-8 — full content migrated; source section may be removed once cross-references are updated. -->
@@ -1487,13 +1494,13 @@ This section is normative.
 
 ### 11.1 Simultaneous Versions
 
-A conformant processor MUST support multiple Kernel Document versions simultaneously. New instances use the version specified at creation time. Running instances remain on their creation-time version (Kernel S9.6).
+A conformant processor MUST support multiple Kernel Document versions simultaneously. New instances use the version specified at creation time. Running instances remain on their creation-time version (Kernel S9.6), which corresponds to `execution.instanceVersioning` value **`pinned`** (including the default when the property is omitted).
 
 The processor MUST NOT apply a newer definition version to a running instance unless an explicit `migrate` operation is performed.
 
 ### 11.2 Migration
 
-Instance migration changes the governing Kernel Document version. The `migrate` operation (S3.3):
+Instance migration changes the governing Kernel Document version. Kernel S9.6 defines the author-time literals `pinned` and `migrateable` for `execution.instanceVersioning`; **both** are compatible with the explicit `migrate` operation below, and **neither** permits applying a newer definition version to a running instance **without** that operation (Kernel S11.1). The `migrate` operation (S3.3):
 
 1. **State validation.** Validates that the new definition contains all states the instance is currently in. If the configuration includes a state that does not exist in the new definition, the migration fails with a `stateNotFound` error.
 

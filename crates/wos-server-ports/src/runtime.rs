@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{ProvenanceSigner, ReportRenderer};
-use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult};
+use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, MigrationMap, MigrationOutcome};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -46,6 +46,14 @@ pub trait RuntimeOps: Send + Sync + 'static {
         offset: u64,
         limit: usize,
     ) -> RuntimeResult<Vec<ProvenanceRecord>>;
+
+    async fn migrate_instance(
+        &self,
+        instance_id: &str,
+        target_definition_version: &str,
+        migration_map: MigrationMap,
+        operator_actor_id: Option<&str>,
+    ) -> RuntimeResult<MigrationOutcome>;
 }
 
 pub trait SeamAccess: Send + Sync + 'static {

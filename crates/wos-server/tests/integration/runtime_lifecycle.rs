@@ -14,7 +14,7 @@ use wos_server::config::{
 };
 use wos_server::runtime::AppRuntime;
 use wos_server::storage::KernelRow;
-use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
+use wos_server::{auth, http, realtime, services::AppServices, storage, AppState};
 
 fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
     serde_json::json!({
@@ -169,4 +169,151 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let config = v.get("configuration").and_then(|x| x.as_array()).unwrap();
     assert_eq!(config.len(), 1);
     assert_eq!(config[0].as_str(), Some("intake"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn migrate_instance_via_http_same_version_is_idempotent() {
+    let state = bring_up().await;
+    let app = http::router(state.clone());
+
+    let body = serde_json::json!({
+        "definitionUrl": "urn:wos:workflow:test:1.0.0",
+        "definitionVersion": "1.0.0",
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/instances")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
+    let instance_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
+    let encoded_id = instance_id.replace(':', "%3A");
+
+    // Same-version migrate is a no-op (ADR 0083 idempotency sketch); exercises
+    // WS-042 wiring without requiring version-indexed bundle resolution (the
+    // reference `BundleService` cache is keyed by workflow URL only).
+    let mig_body = serde_json::json!({
+        "targetDefinitionVersion": "1.0.0",
+        "migrationMap": {}
+    });
+    let mig_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/instances/{encoded_id}/migrate"))
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
+                .body(Body::from(mig_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        mig_response.status(),
+        StatusCode::OK,
+        "POST /api/instances/:id/migrate should succeed for Supervisor"
+    );
+    let mig_bytes = axum::body::to_bytes(mig_response.into_body(), 8192)
+        .await
+        .unwrap();
+    let mig_val: serde_json::Value = serde_json::from_slice(&mig_bytes).unwrap();
+    assert_eq!(
+        mig_val.get("newDefinitionVersion").and_then(|x| x.as_str()),
+        Some("1.0.0")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn migrate_instance_via_http_duplicate_same_version_idempotency_key_still_falls_through() {
+    let state = bring_up().await;
+    let app = http::router(state.clone());
+
+    let body = serde_json::json!({
+        "definitionUrl": "urn:wos:workflow:test:1.0.0",
+        "definitionVersion": "1.0.0",
+    });
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/instances")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
+    let instance_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
+    let encoded_id = instance_id.replace(':', "%3A");
+
+    // WS-042 D5 is still open here: there is no migrate-specific replay cache
+    // yet, so `Idempotency-Key` only documents the duplicate request shape.
+    let mig_body = serde_json::json!({
+        "targetDefinitionVersion": "1.0.0",
+        "migrationMap": {}
+    });
+    let first = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/instances/{encoded_id}/migrate"))
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
+                .header("Idempotency-Key", "mig-dup-1")
+                .body(Body::from(mig_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_bytes = axum::body::to_bytes(first.into_body(), 8192).await.unwrap();
+    let first_val: serde_json::Value = serde_json::from_slice(&first_bytes).unwrap();
+
+    let second = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/instances/{encoded_id}/migrate"))
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer mock-access")
+                .header("Idempotency-Key", "mig-dup-1")
+                .body(Body::from(mig_body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_bytes = axum::body::to_bytes(second.into_body(), 8192)
+        .await
+        .unwrap();
+    let second_val: serde_json::Value = serde_json::from_slice(&second_bytes).unwrap();
+
+    assert_eq!(first_val, second_val);
+    assert_eq!(
+        first_val
+            .get("newDefinitionVersion")
+            .and_then(|x| x.as_str()),
+        Some("1.0.0")
+    );
 }

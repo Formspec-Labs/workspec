@@ -7,7 +7,7 @@ NPM = npm
 STUDIO_DIR = studio
 
 # Targets
-.PHONY: all build test lint clean help \
+.PHONY: all build test test-core lint clean help \
 	rust-build rust-test rust-check \
 	python-test \
 	studio-build studio-test studio-lint studio-clean studio-install studio-types \
@@ -25,6 +25,7 @@ help:
 	@echo "  all           Build and test everything"
 	@echo "  build         Build Rust workspace and Studio frontend"
 	@echo "  test          Run all tests (Rust, Python, Studio)"
+	@echo "  test-core     Run Rust + Python tests (skip Studio Vitest)"
 	@echo "  lint          Run all linters and checks"
 	@echo "  clean         Remove build artifacts"
 	@echo ""
@@ -59,6 +60,10 @@ studio-build: studio-install
 
 # Test
 test: rust-test python-test studio-test
+
+# Rust + Python schema tests only (no Studio Vitest). Use for a faster inner
+# loop; root CI `make test-wos-spec` intentionally stays aligned with full `test`.
+test-core: rust-test python-test
 
 rust-test:
 	@echo "Running Rust workspace tests (nextest)."

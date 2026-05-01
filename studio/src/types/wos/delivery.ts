@@ -6,7 +6,7 @@
  */
 
 /**
- * A WOS Delivery Config sidecar document. Consolidates three deployment-environment concerns that share a single tenancy and lifecycle: business calendar (working days, holidays, operating hours for SLA evaluation), notification templates (reusable notice bodies for adverse-decision, hold, appeal, and SLA notifications), and correspondence metadata (templates for cataloging inbound/outbound case communications). Joined to a workflow by `targetWorkflow` URI. Per ADR 0076 D-3: replaces the prior wos-business-calendar, wos-notification-template, and wos-correspondence-metadata sidecars; the schema family lands at six files with the delivery and ontology-alignment sidecars as the only sidecars. At least one of `calendar` / `notifications` / `correspondence` MUST be present; absent blocks indicate a deployment that does not require that concern.
+ * A WOS Delivery Config sidecar document. Consolidates three deployment-environment concerns that share a single tenancy and lifecycle: business calendar (working days, holidays, operating hours for SLA evaluation), notification templates (reusable notice bodies for adverse-decision, hold, appeal, and SLA notifications), and correspondence metadata (templates for cataloging inbound/outbound case communications). Delivery prose lives in `specs/sidecars/delivery.md`. Joined to a workflow by `targetWorkflow` URI. Per ADR 0076 D-3: replaces the prior wos-business-calendar, wos-notification-template, and wos-correspondence-metadata sidecars; the schema family lands at six files with the delivery and ontology-alignment sidecars as the only sidecars. At least one of `calendar` / `notifications` / `correspondence` MUST be present; absent blocks indicate a deployment that does not require that concern.
  */
 export type WOSDeliveryConfig = {
   [k: string]: unknown;
@@ -43,7 +43,7 @@ export type WOSDeliveryConfig = {
 export type JsonSchemaUri = string;
 
 /**
- * Business calendar block. Defines business days, holiday schedules, and operating hours for SLA evaluation and temporal parameter resolution. Government workflows measure deadlines in business days, not wall-clock time: a 30-day response window excludes weekends and holidays. Consumed by Governance S10.3 (SLA evaluation) and Governance S13.3 (temporal parameter resolution). When absent, SLA evaluation uses wall-clock time.
+ * Business calendar block. Defines business days, holiday schedules, and operating hours for SLA evaluation and temporal parameter resolution. Government workflows measure deadlines in business days, not wall-clock time: a 30-day response window excludes weekends and holidays. Consumed by Governance S10.3 (SLA evaluation) and Governance S13.3 (temporal parameter resolution). See Delivery §2. When absent, SLA evaluation uses wall-clock time.
  */
 export interface CalendarBlock {
   /**
@@ -87,9 +87,11 @@ export interface Holiday {
    */
   date?: string;
   /**
-   * Recurrence rule for floating holidays. Required when 'date' is not specified. Standard rules: 'nthWeekday(n, weekday, month)' for the nth weekday in a month, 'lastWeekday(weekday, month)' for the last weekday in a month. One of 'date' or 'rule' MUST be present.
+   * Recurrence rule for floating holidays. Required when 'date' is not specified. Standard rules: 'nthWeekday(n, weekday, month)' for the nth weekday in a month, 'lastWeekday(weekday, month)' for the last weekday in a month. Extension rules use the `x-` prefix. One of 'date' or 'rule' MUST be present.
    */
-  rule?: string;
+  rule?: {
+    [k: string]: unknown;
+  } & string;
   /**
    * Whether this entry is an observed date rather than the actual holiday. When a fixed-date holiday falls on a non-working day, a separate entry with 'observed: true' marks the actual day off.
    */
@@ -109,7 +111,7 @@ export interface OperatingHours {
   end: string;
 }
 /**
- * Notification templates block. Defines reusable templates for notices generated during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by `notificationTemplateKey` (Governance S12.2) and `noticeTemplateKey` (Governance S3.1).
+ * Notification templates block. Defines reusable templates for notices generated during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by `notificationTemplateKey` (Governance S12.2) and `noticeTemplateKey` (Governance S3.1). See Delivery §3.
  */
 export interface NotificationsBlock {
   /**
@@ -195,7 +197,7 @@ export interface ExtensionsMap {
   [k: string]: unknown;
 }
 /**
- * Correspondence metadata block. Declares the metadata schema for correspondence entries (letters, phone calls, emails, portal submissions, in-person interactions) stored in case state. The kernel's existing event mechanism handles correspondence events; this block defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.
+ * Correspondence metadata block. Declares the metadata schema for correspondence entries (letters, phone calls, emails, portal submissions, in-person interactions) stored in case state. The kernel's existing event mechanism handles correspondence events; this block defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics. See Delivery §4.
  */
 export interface CorrespondenceBlock {
   /**
@@ -203,12 +205,15 @@ export interface CorrespondenceBlock {
    */
   correspondenceField: string;
   /**
-   * Templates defining the metadata structure for correspondence entries. Each template declares the channel, direction, actor type, and required fields for a category of correspondence.
+   * Templates defining the metadata structure for correspondence entries. Each template declares the channel, direction, correspondenceRole, and required fields for a category of correspondence. See Delivery §4.2-§4.3.
    *
    * @minItems 1
    */
   entryTemplates: [EntryTemplate, ...EntryTemplate[]];
 }
+/**
+ * Template for correspondence entry metadata. See Delivery §4.2-§4.3 for the closed correspondence vocabulary and requiredFields convention.
+ */
 export interface EntryTemplate {
   /**
    * Unique template identifier. Referenced by correspondence entries via templateRef.
@@ -227,11 +232,11 @@ export interface EntryTemplate {
    */
   direction: 'inbound' | 'outbound';
   /**
-   * Who sent or received the correspondence. 'applicant': the primary case subject. 'representative': authorized representative acting on behalf of the applicant. 'third-party': external party (e.g., employer, medical provider). 'system': automated system-generated correspondence. 'agency': agency staff.
+   * Who sent or received the correspondence. 'applicant': the primary case subject. 'representative': authorized representative acting on behalf of the applicant. 'third-party': external party (e.g., employer, medical provider). 'system': automated system-generated correspondence. 'agency': agency staff. Delivery uses correspondenceRole, not kernel actorType, because the kernel term names actor classification rather than correspondence party role.
    */
-  actorType: 'applicant' | 'representative' | 'third-party' | 'system' | 'agency';
+  correspondenceRole: 'applicant' | 'representative' | 'third-party' | 'system' | 'agency';
   /**
-   * Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, actorType, contentRef, summary, timestamp).
+   * Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, correspondenceRole, contentRef, summary, timestamp). See Delivery §4.3.
    */
   requiredFields?: string[];
   extensions?: ExtensionsMap;

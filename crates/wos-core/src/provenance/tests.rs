@@ -1,6 +1,11 @@
 // Rust guideline compliant 2026-02-21
 
 use super::*;
+use crate::instance::{ActiveTask, ActiveTaskStatus};
+use crate::model::kernel::{
+    ActorKind, AuditLayer, ImpactLevel, MutationSource, PublicationStatus, VerificationLevel,
+    WorkflowDocument,
+};
 
 #[test]
 fn constructors_leave_timestamp_empty_for_runtime_to_stamp() {
@@ -45,6 +50,108 @@ fn round_trip_preserves_timestamp() {
     assert_eq!(restored.timestamp, "2026-04-15T12:34:56Z");
     assert_eq!(restored.record_kind, ProvenanceKind::CaseStateMutation);
     assert_eq!(restored.actor_id.as_deref(), Some("actor"));
+}
+
+#[test]
+fn workflow_document_status_round_trips_canonical_string() {
+    let document: WorkflowDocument = serde_json::from_value(serde_json::json!({
+        "$wosWorkflow": "1.0",
+        "status": "deprecated",
+        "lifecycle": {
+            "initialState": "draft",
+            "states": {
+                "draft": {
+                    "type": "final"
+                }
+            }
+        }
+    }))
+    .expect("deserialize");
+
+    assert_eq!(document.status, Some(PublicationStatus::Deprecated));
+
+    let json = serde_json::to_value(&document).expect("serialize");
+    assert_eq!(json["status"], "deprecated");
+}
+
+#[test]
+fn active_task_impact_level_round_trips_canonical_string() {
+    let task = ActiveTask {
+        task_id: "task-1".to_string(),
+        task_ref: "task-ref".to_string(),
+        status: ActiveTaskStatus::Created,
+        assigned_actor: None,
+        contract_ref: None,
+        binding: None,
+        definition_url: None,
+        definition_version: None,
+        prefill_mapping_ref: None,
+        response_mapping_ref: None,
+        deadline: None,
+        impact_level: Some(ImpactLevel::Operational),
+        context: None,
+        last_validation_outcome: None,
+        created_at: "2026-05-01T00:00:00Z".to_string(),
+        updated_at: "2026-05-01T00:00:00Z".to_string(),
+        extensions: std::collections::HashMap::new(),
+    };
+
+    let json = serde_json::to_value(&task).expect("serialize");
+    assert_eq!(json["impactLevel"], "operational");
+
+    let restored: ActiveTask = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(restored.impact_level, Some(ImpactLevel::Operational));
+}
+
+#[test]
+fn provenance_typed_accessors_round_trip_canonical_strings() {
+    let mut record = ProvenanceRecord::state_transition("a", "b", "ev", Some("actor"));
+    record.set_audit_layer_kind(AuditLayer::Reasoning);
+    record.set_actor_kind(ActorKind::Agent);
+
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert_eq!(json["auditLayer"], "reasoning");
+    assert_eq!(json["actorType"], "agent");
+
+    let restored: ProvenanceRecord = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(restored.audit_layer_kind(), Some(AuditLayer::Reasoning));
+    assert_eq!(restored.actor_kind(), Some(ActorKind::Agent));
+}
+
+#[test]
+fn case_state_mutation_with_source_round_trips_canonical_strings() {
+    let mut record = ProvenanceRecord::case_state_mutation_with_source(
+        "/path",
+        &serde_json::json!(42),
+        Some("actor"),
+        "active",
+        Some(MutationSource::AgentExtracted),
+        Some(VerificationLevel::Authoritative),
+    );
+    record.timestamp = "2026-05-01T00:00:00Z".to_string();
+
+    let json = serde_json::to_value(&record).expect("serialize");
+    assert_eq!(json["data"]["mutationSource"], "agent-extracted");
+    assert_eq!(json["data"]["verificationLevel"], "authoritative");
+
+    let restored: ProvenanceRecord = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(restored.timestamp, "2026-05-01T00:00:00Z");
+    assert_eq!(
+        restored
+            .data
+            .as_ref()
+            .and_then(|data| data.get("mutationSource"))
+            .and_then(serde_json::Value::as_str),
+        Some("agent-extracted")
+    );
+    assert_eq!(
+        restored
+            .data
+            .as_ref()
+            .and_then(|data| data.get("verificationLevel"))
+            .and_then(serde_json::Value::as_str),
+        Some("authoritative")
+    );
 }
 
 #[test]

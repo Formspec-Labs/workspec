@@ -8,6 +8,7 @@
 //! provenance when the profile requirements are satisfied.
 
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 
 use fel_core::{evaluate, has_error_diagnostics, parse, types::FelValue};
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,99 @@ pub const SIGNATURE_STEP_ID_EXTENSION: &str = "x-wos-signature-step-id";
 
 const SIGNATURE_COMPLETIONS_EXTENSION: &str = "x-wos-signature-completions";
 const SIGNATURE_ASSIGNMENTS_EXTENSION: &str = "x-wos-signature-assignments";
+
+/// Vendor-extension token prefix. Mirrors the schema-side
+/// `^x-[a-z][a-z0-9-]*$` pattern; lowercase-only by design — case-mismatched
+/// tokens (e.g. `X-Foo`) are not vendor extensions and intentionally fall
+/// through to the unknown-token branch in the comparators below.
+pub const VENDOR_TOKEN_PREFIX: &str = "x-";
+
+/// True when `token` carries the vendor-extension prefix that the schema
+/// permits via `^x-[a-z]...`. Case-sensitive on purpose (see
+/// [`VENDOR_TOKEN_PREFIX`]).
+#[inline]
+pub fn is_vendor_token(token: &str) -> bool {
+    token.starts_with(VENDOR_TOKEN_PREFIX)
+}
+
+fn is_identity_method_vendor_token(token: &str) -> bool {
+    // Match the schema's `^x-[a-z][a-z0-9-]*$` vendor-token shape.
+    let Some(rest) = token.strip_prefix(VENDOR_TOKEN_PREFIX) else {
+        return false;
+    };
+    let mut chars = rest.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
+/// Validated signature authentication-method token.
+///
+/// Identity methods are the canonical WOS signature methods or an `x-*`
+/// vendor token.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct IdentityMethod(String);
+
+impl IdentityMethod {
+    fn new(value: impl Into<String>) -> Result<Self, String> {
+        let value = value.into();
+        Self::validate(&value)?;
+        Ok(Self(value))
+    }
+
+    fn validate(value: &str) -> Result<(), String> {
+        if matches!(
+            value,
+            "none"
+                | "email-otp"
+                | "sms-otp"
+                | "knowledge-based"
+                | "oidc"
+                | "webauthn"
+                | "credential"
+                | "in-person"
+                | "notary"
+        ) || is_identity_method_vendor_token(value)
+        {
+            Ok(())
+        } else {
+            Err(format!(
+                "invalid signature identity method '{value}'; expected a canonical WOS method or an x-* vendor token"
+            ))
+        }
+    }
+}
+
+impl AsRef<str> for IdentityMethod {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<IdentityMethod> for String {
+    fn from(value: IdentityMethod) -> Self {
+        value.0
+    }
+}
+
+impl TryFrom<String> for IdentityMethod {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for IdentityMethod {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
 
 /// Signature content — the embedded `signature` block of a `$wosWorkflow`
 /// document (ADR 0076 D-1). Represents the interior shape of the `signature`
@@ -182,13 +276,38 @@ pub struct SigningStep {
     pub required: bool,
 }
 
+/// Closed enum mirroring `signature.signingFlow.completion.type` in
+/// `wos-workflow.schema.json` (lines 2358-2363). Vendor extensions live at
+/// the sibling `signingFlow.x-*` extension surface, not as new completion
+/// kinds — adding a kind requires a normative spec change. Unknown values
+/// fail serde deserialization by design (no `#[serde(other)]`); upstream
+/// schema validation catches this earlier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompletionRequirementKind {
+    /// Every selected required step must complete.
+    AllRequired,
+    /// At least one selected required step must complete.
+    AnyRequired,
+    /// At least `count` selected required steps must complete.
+    Count,
+    /// Every role id in `role_ids` must have a completed step.
+    RoleSet,
+}
+
+impl Default for CompletionRequirementKind {
+    fn default() -> Self {
+        Self::AllRequired
+    }
+}
+
 /// Completion requirement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompletionRequirement {
     /// Requirement type.
-    #[serde(rename = "type")]
-    pub requirement_type: String,
+    #[serde(rename = "type", default)]
+    pub requirement_type: CompletionRequirementKind,
     /// Count for `count` requirements.
     #[serde(default)]
     pub count: Option<usize>,
@@ -231,8 +350,8 @@ pub struct ConsentReference {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityBindingRequirement {
-    /// Authentication method.
-    pub method: String,
+    /// Canonical authentication method or x-* vendor token.
+    pub method: IdentityMethod,
     /// Assurance level.
     pub assurance_level: String,
     /// Provider URI.
@@ -249,8 +368,8 @@ pub struct IdentityBindingRequirement {
 pub struct AuthenticationPolicy {
     /// Policy key.
     pub key: String,
-    /// Authentication method.
-    pub method: String,
+    /// Canonical authentication method or x-* vendor token.
+    pub method: IdentityMethod,
     /// Assurance level.
     pub assurance_level: String,
     /// Provider URI.
@@ -537,17 +656,18 @@ impl WosRuntime {
             }
         }
 
-        let complete = match profile
+        let kind = profile
             .signing_flow
             .completion
             .as_ref()
-            .map(|completion| completion.requirement_type.as_str())
-            .unwrap_or("all-required")
-        {
-            "any-required" => selected_required
+            .map(|completion| completion.requirement_type)
+            .unwrap_or_default();
+
+        let complete = match kind {
+            CompletionRequirementKind::AnyRequired => selected_required
                 .iter()
                 .any(|step| completed.contains(&step.id)),
-            "count" => {
+            CompletionRequirementKind::Count => {
                 let required_count = profile
                     .signing_flow
                     .completion
@@ -560,7 +680,7 @@ impl WosRuntime {
                     .count()
                     >= required_count
             }
-            "role-set" => {
+            CompletionRequirementKind::RoleSet => {
                 let role_ids = profile
                     .signing_flow
                     .completion
@@ -575,7 +695,7 @@ impl WosRuntime {
                         .any(|step| &step.role_id == role_id && completed.contains(&step.id))
                 })
             }
-            _ => selected_required
+            CompletionRequirementKind::AllRequired => selected_required
                 .iter()
                 .all(|step| completed.contains(&step.id)),
         };
@@ -997,6 +1117,7 @@ impl WosRuntime {
             .get("method")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| RuntimeError::Signature("identityBinding.method missing".to_string()))?;
+        let method = IdentityMethod::new(method).map_err(RuntimeError::Signature)?;
         let assurance = identity_binding
             .get("assuranceLevel")
             .and_then(serde_json::Value::as_str)
@@ -1005,7 +1126,7 @@ impl WosRuntime {
             })?;
 
         if matches!(role.role.as_str(), "notary" | "in-person-signer")
-            && !matches!(method, "notary" | "in-person")
+            && !matches!(method.as_ref(), "notary" | "in-person")
         {
             return Err(RuntimeError::Signature(format!(
                 "role '{}' requires in-person or notary authentication",
@@ -1023,24 +1144,7 @@ impl WosRuntime {
                         "authentication policy '{policy_key}' is not declared"
                     ))
                 })?;
-            if method != policy.method {
-                return Err(RuntimeError::Signature(format!(
-                    "identity method '{method}' does not satisfy policy '{}'",
-                    policy.key
-                )));
-            }
-            if assurance_rank(assurance) < assurance_rank(&policy.assurance_level) {
-                return Err(RuntimeError::Signature(format!(
-                    "identity assurance '{assurance}' is below policy '{}'",
-                    policy.key
-                )));
-            }
-            if policy.requires_in_person && !matches!(method, "notary" | "in-person") {
-                return Err(RuntimeError::Signature(format!(
-                    "authentication policy '{}' requires in-person evidence",
-                    policy.key
-                )));
-            }
+            identity_binding_meets_policy(policy, &method, assurance)?;
         }
         Ok(())
     }
@@ -1324,12 +1428,57 @@ fn step_selected(
 fn assurance_rank(value: &str) -> u8 {
     match value {
         "none" => 0,
-        "low" => 1,
-        "standard" => 2,
-        "high" => 3,
+        "low" | "ial1" | "aal1" => 1,
+        "standard" | "ial2" | "aal2" => 2,
+        "high" | "ial3" | "aal3" => 3,
         "very-high" => 4,
+        s if is_vendor_token(s) => 2,
         _ => 0,
     }
+}
+
+/// Enforce `method`, optional assurance floor, and in-person requirements against
+/// a declared [`AuthenticationPolicy`].
+///
+/// **Deferred-strict-mode for vendor `x-*` assurance (fail-open posture).**
+/// Signature Profile §2.13 floors are normative when posture × intent-URI is
+/// declared; until the posture-floor table and Posture Declaration registry
+/// land (parent PLN-0384), `x-*` assurance tokens have no portable ordering
+/// against IAL/AAL or ranked tiers, so when either side is `x-*` the runtime
+/// skips ordinal comparison and lets the binding through. **Product /
+/// compliance impact:** affirmations can pass with vendor assurance that would
+/// not ordinally meet a named tier; treat as explicit posture debt, not a
+/// silent guarantee. **Close-out:** MUST flip to fail-closed once §2.13 admits
+/// a vendor-floor declaration — tracked in workspace-root `T4-TODO.md`
+/// (“Vendor `x-*` assurance floor enforcement”). Callers of this function
+/// participate in signature affirmation gates; coordinate changes with
+/// conformance SIG-013 and `identity_binding_meets_policy` unit tests below.
+fn identity_binding_meets_policy(
+    policy: &AuthenticationPolicy,
+    method: &IdentityMethod,
+    assurance: &str,
+) -> Result<(), RuntimeError> {
+    if method != &policy.method {
+        return Err(RuntimeError::Signature(format!(
+            "identity method '{}' does not satisfy policy '{}'",
+            method.as_ref(),
+            policy.key
+        )));
+    }
+    let vendor_assurance = is_vendor_token(assurance) || is_vendor_token(&policy.assurance_level);
+    if !vendor_assurance && assurance_rank(assurance) < assurance_rank(&policy.assurance_level) {
+        return Err(RuntimeError::Signature(format!(
+            "identity assurance '{assurance}' is below policy '{}'",
+            policy.key
+        )));
+    }
+    if policy.requires_in_person && !matches!(method.as_ref(), "notary" | "in-person") {
+        return Err(RuntimeError::Signature(format!(
+            "authentication policy '{}' requires in-person evidence",
+            policy.key
+        )));
+    }
+    Ok(())
 }
 
 pub(super) fn signed_at_for_response(
@@ -1374,5 +1523,134 @@ pub(super) fn append_signature_task_extensions(
         if let Some(context) = task.context.as_mut() {
             context.extensions.insert(key.clone(), value.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod assurance_binding_tests {
+    use super::*;
+
+    fn identity_method(value: &str) -> IdentityMethod {
+        IdentityMethod::new(value).unwrap()
+    }
+
+    fn policy(key: &str, method: &str, assurance_level: &str) -> AuthenticationPolicy {
+        AuthenticationPolicy {
+            key: key.to_string(),
+            method: identity_method(method),
+            assurance_level: assurance_level.to_string(),
+            provider_ref: None,
+            requires_in_person: false,
+            requires_credential_evidence: false,
+        }
+    }
+
+    #[test]
+    fn identity_method_round_trips_canonical_and_vendor_tokens() {
+        for value in ["email-otp", "x-acme-identity-method"] {
+            let method = identity_method(value);
+            let serialized = serde_json::to_value(&method).unwrap();
+            assert_eq!(serialized, serde_json::json!(value));
+            let roundtrip: IdentityMethod = serde_json::from_value(serialized).unwrap();
+            assert_eq!(roundtrip, method);
+        }
+    }
+
+    #[test]
+    fn identity_binding_deserializes_canonical_and_vendor_methods() {
+        let json = serde_json::json!({
+            "method": "credential",
+            "assuranceLevel": "ial2"
+        });
+        let binding: IdentityBindingRequirement = serde_json::from_value(json).unwrap();
+        assert_eq!(binding.method.as_ref(), "credential");
+        assert_eq!(binding.assurance_level, "ial2");
+        let json2 = serde_json::json!({
+            "method": "x-acme-credential",
+            "assuranceLevel": "high"
+        });
+        let binding2: IdentityBindingRequirement = serde_json::from_value(json2).unwrap();
+        assert_eq!(binding2.method.as_ref(), "x-acme-credential");
+        assert_eq!(binding2.assurance_level, "high");
+        let roundtrip: IdentityBindingRequirement =
+            serde_json::from_value(serde_json::to_value(&binding).unwrap()).unwrap();
+        assert_eq!(roundtrip.method, binding.method);
+    }
+
+    #[test]
+    fn assurance_rank_orders_ial_against_ranked_policy() {
+        assert!(super::assurance_rank("ial2") >= super::assurance_rank("standard"));
+        assert!(super::assurance_rank("high") > super::assurance_rank("ial2"));
+    }
+
+    #[test]
+    fn assurance_rank_known_tiers_and_unknown() {
+        assert_eq!(super::assurance_rank("none"), 0);
+        assert_eq!(super::assurance_rank("low"), 1);
+        assert_eq!(super::assurance_rank("aal1"), 1);
+        assert_eq!(super::assurance_rank("standard"), 2);
+        assert_eq!(super::assurance_rank("ial2"), 2);
+        assert_eq!(super::assurance_rank("x-vendor-tier"), 2);
+        assert_eq!(super::assurance_rank("very-high"), 4);
+        assert_eq!(super::assurance_rank("typo-tier"), 0);
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_method_mismatch_fails() {
+        let p = policy("p1", "email-otp", "ial2");
+        let err = super::identity_binding_meets_policy(&p, &identity_method("credential"), "ial2")
+            .unwrap_err();
+        assert!(err.to_string().contains("identity method"), "{err:?}");
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_assurance_below_floor_fails() {
+        let p = policy("p1", "email-otp", "high");
+        let method = identity_method("email-otp");
+        assert!(super::identity_binding_meets_policy(&p, &method, "ial1").is_err());
+        assert!(super::identity_binding_meets_policy(&p, &method, "low").is_err());
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_assurance_at_or_above_floor_ok() {
+        let p = policy("p1", "email-otp", "standard");
+        let method = identity_method("email-otp");
+        assert!(super::identity_binding_meets_policy(&p, &method, "ial2").is_ok());
+        assert!(super::identity_binding_meets_policy(&p, &method, "high").is_ok());
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_vendor_binding_skips_ordinal_vs_ranked_policy() {
+        let p = policy("p1", "email-otp", "very-high");
+        let method = identity_method("email-otp");
+        assert!(super::identity_binding_meets_policy(&p, &method, "x-vendor-a").is_ok());
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_vendor_policy_skips_ordinal_vs_ranked_binding() {
+        let p = policy("p1", "email-otp", "x-vendor-floor");
+        let method = identity_method("email-otp");
+        assert!(super::identity_binding_meets_policy(&p, &method, "ial1").is_ok());
+    }
+
+    #[test]
+    fn identity_binding_meets_policy_requires_in_person_enforced() {
+        let mut p = policy("p1", "email-otp", "ial1");
+        p.requires_in_person = true;
+        let method = identity_method("email-otp");
+        assert!(super::identity_binding_meets_policy(&p, &method, "ial2").is_err());
+        let mut notary_policy = policy("p2", "notary", "ial1");
+        notary_policy.requires_in_person = true;
+        let notary_method = identity_method("notary");
+        assert!(
+            super::identity_binding_meets_policy(&notary_policy, &notary_method, "ial1").is_ok()
+        );
+        let mut in_person_policy = policy("p3", "in-person", "ial1");
+        in_person_policy.requires_in_person = true;
+        let in_person_method = identity_method("in-person");
+        assert!(
+            super::identity_binding_meets_policy(&in_person_policy, &in_person_method, "ial1")
+                .is_ok()
+        );
     }
 }

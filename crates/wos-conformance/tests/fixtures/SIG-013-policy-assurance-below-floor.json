@@ -1,0 +1,44 @@
+{
+  "binding": "formspec",
+  "id": "SIG-013-policy-assurance-below-floor",
+  "rule": "SIG-RT",
+  "description": "Response identityBinding below the role's authenticationPolicy assurance floor blocks SignatureAffirmation. Exercises the full submission path: submit_task_response -> identity_binding_for_submission (response override branch) -> ensure_identity_satisfies_role -> authentication_policies lookup -> identity_binding_meets_policy. Closes the integration-coverage gap above the unit tests in signature.rs::assurance_binding_tests. Runtime mirror: wos-runtime `submit_task_response_sig013_policy_assurance_below_floor_blocks_affirmation` (uses Sig013HarnessFormspecAdapter so binding validation does not short-circuit before affirmation).",
+  "documents": {
+    "kernel": "../../../../fixtures/kernel/signature-runtime.json",
+    "signatureProfile": "../../../../fixtures/profiles/signature-runtime-sequential.json"
+  },
+  "event_sequence": [
+    {
+      "event": "start",
+      "actor": "applicant"
+    },
+    {
+      "event": "submit",
+      "task_submission": {
+        "task_ref": "applicantTask",
+        "response": {
+          "status": "completed",
+          "definitionUrl": "urn:test:formspec:signature",
+          "definitionVersion": "1.0.0",
+          "data": {
+            "signerId": "applicant",
+            "signatureProvider": "formspec",
+            "ceremonyId": "ceremony-sequential",
+            "identityBinding": {
+              "method": "email-otp",
+              "assuranceLevel": "low"
+            },
+            "signature": {
+              "acceptedAt": "2026-04-22T12:00:00Z",
+              "affirmed": true,
+              "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expected_errors": [
+    "is below policy 'emailOtp'"
+  ]
+}

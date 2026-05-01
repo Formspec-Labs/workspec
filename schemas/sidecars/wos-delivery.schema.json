@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/delivery/1.0",
   "title": "WOS Delivery Config",
-  "description": "A WOS Delivery Config sidecar document. Consolidates three deployment-environment concerns that share a single tenancy and lifecycle: business calendar (working days, holidays, operating hours for SLA evaluation), notification templates (reusable notice bodies for adverse-decision, hold, appeal, and SLA notifications), and correspondence metadata (templates for cataloging inbound/outbound case communications). Joined to a workflow by `targetWorkflow` URI. Per ADR 0076 D-3: replaces the prior wos-business-calendar, wos-notification-template, and wos-correspondence-metadata sidecars; the schema family lands at six files with the delivery and ontology-alignment sidecars as the only sidecars. At least one of `calendar` / `notifications` / `correspondence` MUST be present; absent blocks indicate a deployment that does not require that concern.",
+  "description": "A WOS Delivery Config sidecar document. Consolidates three deployment-environment concerns that share a single tenancy and lifecycle: business calendar (working days, holidays, operating hours for SLA evaluation), notification templates (reusable notice bodies for adverse-decision, hold, appeal, and SLA notifications), and correspondence metadata (templates for cataloging inbound/outbound case communications). Delivery prose lives in `specs/sidecars/delivery.md`. Joined to a workflow by `targetWorkflow` URI. Per ADR 0076 D-3: replaces the prior wos-business-calendar, wos-notification-template, and wos-correspondence-metadata sidecars; the schema family lands at six files with the delivery and ontology-alignment sidecars as the only sidecars. At least one of `calendar` / `notifications` / `correspondence` MUST be present; absent blocks indicate a deployment that does not require that concern.",
   "type": "object",
   "required": [
     "$wosDelivery",
@@ -64,7 +64,7 @@
     },
     "calendar": {
       "$ref": "#/$defs/CalendarBlock",
-      "description": "Business calendar block. Defines business days, holiday schedules, and operating hours for SLA evaluation and temporal parameter resolution. Government workflows measure deadlines in business days, not wall-clock time: a 30-day response window excludes weekends and holidays. Consumed by Governance S10.3 (SLA evaluation) and Governance S13.3 (temporal parameter resolution). When absent, SLA evaluation uses wall-clock time.",
+      "description": "Business calendar block. Defines business days, holiday schedules, and operating hours for SLA evaluation and temporal parameter resolution. Government workflows measure deadlines in business days, not wall-clock time: a 30-day response window excludes weekends and holidays. Consumed by Governance S10.3 (SLA evaluation) and Governance S13.3 (temporal parameter resolution). See Delivery §2. When absent, SLA evaluation uses wall-clock time.",
       "examples": [
         {
           "timezone": "America/New_York",
@@ -74,12 +74,12 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Business calendar block: working days, holidays, operating hours (was wos-business-calendar sidecar)"
+        "intent": "Business calendar block: working days, holidays, operating hours (Delivery §2; was wos-business-calendar sidecar)"
       }
     },
     "notifications": {
       "$ref": "#/$defs/NotificationsBlock",
-      "description": "Notification templates block. Defines reusable templates for notices generated during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by `notificationTemplateKey` (Governance S12.2) and `noticeTemplateKey` (Governance S3.1).",
+      "description": "Notification templates block. Defines reusable templates for notices generated during governance events: adverse decision notices, hold notifications, appeal acknowledgments, SLA warnings, and case status updates. Templates separate notice content from governance logic, enabling independent versioning, localization, and audit. Referenced by `notificationTemplateKey` (Governance S12.2) and `noticeTemplateKey` (Governance S3.1). See Delivery §3.",
       "examples": [
         {
           "templates": {
@@ -94,23 +94,23 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Notification templates block: notice bodies, channels, sections (was wos-notification-template sidecar)"
+        "intent": "Notification templates block: notice bodies, channels, sections (Delivery §3; was wos-notification-template sidecar)"
       }
     },
     "correspondence": {
       "$ref": "#/$defs/CorrespondenceBlock",
-      "description": "Correspondence metadata block. Declares the metadata schema for correspondence entries (letters, phone calls, emails, portal submissions, in-person interactions) stored in case state. The kernel's existing event mechanism handles correspondence events; this block defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics.",
+      "description": "Correspondence metadata block. Declares the metadata schema for correspondence entries (letters, phone calls, emails, portal submissions, in-person interactions) stored in case state. The kernel's existing event mechanism handles correspondence events; this block defines structured metadata for consistent cataloging and retrieval without adding new event types or modifying lifecycle semantics. See Delivery §4.",
       "examples": [
         {
           "correspondenceField": "caseFile.correspondence",
           "entryTemplates": [
-            { "id": "inboundMail", "channel": "mail", "direction": "inbound", "actorType": "applicant" }
+            { "id": "inboundMail", "channel": "mail", "direction": "inbound", "correspondenceRole": "applicant" }
           ]
         }
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Correspondence metadata block: entry templates and field path (was wos-correspondence-metadata sidecar)"
+        "intent": "Correspondence metadata block: entry templates and field path (Delivery §4; was wos-correspondence-metadata sidecar)"
       }
     },
     "extensions": { "$ref": "#/$defs/ExtensionsMap" }
@@ -118,6 +118,7 @@
   "$defs": {
     "CalendarBlock": {
       "type": "object",
+      "description": "Business calendar vocabulary for SLA evaluation and temporal parameter resolution. See Delivery §2 and the absorbed business-calendar reference.",
       "required": ["timezone", "workWeek"],
       "patternProperties": {
         "^x-": {
@@ -237,7 +238,16 @@
         "rule": {
           "type": "string",
           "minLength": 1,
-          "description": "Recurrence rule for floating holidays. Required when 'date' is not specified. Standard rules: 'nthWeekday(n, weekday, month)' for the nth weekday in a month, 'lastWeekday(weekday, month)' for the last weekday in a month. One of 'date' or 'rule' MUST be present.",
+          "$comment": "Lowercase weekday/month names are normative in this schema (the regex is case-sensitive). Authoring tools and processors MUST normalize input to lowercase before pattern match if they accept user-typed forms like `Monday` or `January`.",
+          "oneOf": [
+            {
+              "pattern": "^(?:nthWeekday\\([1-5], (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday), (?:january|february|march|april|may|june|july|august|september|october|november|december)\\)|lastWeekday\\((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday), (?:january|february|march|april|may|june|july|august|september|october|november|december)\\))$"
+            },
+            {
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "description": "Recurrence rule for floating holidays. Required when 'date' is not specified. Standard rules: 'nthWeekday(n, weekday, month)' for the nth weekday in a month, 'lastWeekday(weekday, month)' for the last weekday in a month. Extension rules use the `x-` prefix. One of 'date' or 'rule' MUST be present.",
           "examples": [
             "nthWeekday(3, monday, january)",
             "nthWeekday(1, monday, september)",
@@ -287,6 +297,7 @@
     },
     "NotificationsBlock": {
       "type": "object",
+      "description": "Notification template vocabulary for governance notices. See Delivery §3 and the absorbed notification-template reference.",
       "required": ["templates"],
       "patternProperties": {
         "^x-": {
@@ -503,6 +514,7 @@
     },
     "CorrespondenceBlock": {
       "type": "object",
+      "description": "Correspondence metadata vocabulary for case-state cataloging. See Delivery §4 and the absorbed correspondence reference.",
       "required": ["correspondenceField", "entryTemplates"],
       "patternProperties": {
         "^x-": {
@@ -527,7 +539,7 @@
             "$ref": "#/$defs/EntryTemplate"
           },
           "minItems": 1,
-          "description": "Templates defining the metadata structure for correspondence entries. Each template declares the channel, direction, actor type, and required fields for a category of correspondence.",
+          "description": "Templates defining the metadata structure for correspondence entries. Each template declares the channel, direction, correspondenceRole, and required fields for a category of correspondence. See Delivery §4.2-§4.3.",
           "examples": [
             [
               {
@@ -535,14 +547,14 @@
                 "description": "Physical mail received from applicant or representative",
                 "channel": "mail",
                 "direction": "inbound",
-                "actorType": "applicant"
+                "correspondenceRole": "applicant"
               },
               {
                 "id": "outboundNotice",
                 "description": "Official notice sent to applicant",
                 "channel": "mail",
                 "direction": "outbound",
-                "actorType": "agency",
+                "correspondenceRole": "agency",
                 "requiredFields": ["contentRef", "relatedTaskRef"]
               }
             ]
@@ -556,7 +568,8 @@
     },
     "EntryTemplate": {
       "type": "object",
-      "required": ["id", "channel", "direction", "actorType"],
+      "description": "Template for correspondence entry metadata. See Delivery §4.2-§4.3 for the closed correspondence vocabulary and requiredFields convention.",
+      "required": ["id", "channel", "direction", "correspondenceRole"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -591,14 +604,14 @@
           "description": "Direction of the correspondence. 'inbound': received by the agency. 'outbound': sent by the agency.",
           "examples": ["inbound", "outbound"]
         },
-        "actorType": {
+        "correspondenceRole": {
           "type": "string",
           "enum": ["applicant", "representative", "third-party", "system", "agency"],
-          "description": "Who sent or received the correspondence. 'applicant': the primary case subject. 'representative': authorized representative acting on behalf of the applicant. 'third-party': external party (e.g., employer, medical provider). 'system': automated system-generated correspondence. 'agency': agency staff.",
+          "description": "Who sent or received the correspondence. 'applicant': the primary case subject. 'representative': authorized representative acting on behalf of the applicant. 'third-party': external party (e.g., employer, medical provider). 'system': automated system-generated correspondence. 'agency': agency staff. Delivery uses correspondenceRole, not kernel actorType, because the kernel term names actor classification rather than correspondence party role.",
           "examples": ["applicant", "representative", "agency", "third-party"],
           "x-lm": {
             "critical": true,
-            "intent": "Identifies the actor role for this correspondence category"
+            "intent": "Identifies the correspondence party role for this category (Delivery §4.2)"
           }
         },
         "requiredFields": {
@@ -606,10 +619,10 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "description": "Name of a correspondence entry field that MUST be present for entries using this template, supplementing the base required fields (templateRef, channel, direction, actorType, contentRef, summary, timestamp).",
+            "description": "Name of a correspondence entry field that MUST be present for entries using this template, supplementing the base required fields (templateRef, channel, direction, correspondenceRole, contentRef, summary, timestamp).",
             "examples": ["contentRef", "relatedTaskRef"]
           },
-          "description": "Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, actorType, contentRef, summary, timestamp).",
+          "description": "Fields that MUST be present in a correspondence entry using this template, beyond the base metadata (templateRef, channel, direction, correspondenceRole, contentRef, summary, timestamp). See Delivery §4.3.",
           "examples": [["contentRef", "relatedTaskRef"]]
         },
         "extensions": { "$ref": "#/$defs/ExtensionsMap" }
@@ -617,7 +630,8 @@
     },
     "CorrespondenceEntry": {
       "type": "object",
-      "required": ["templateRef", "channel", "direction", "actorType", "contentRef", "summary", "timestamp"],
+      "description": "Stored correspondence entry metadata. See Delivery §4.3 for the closed entry shape and the correspondenceRole convention.",
+      "required": ["templateRef", "channel", "direction", "correspondenceRole", "contentRef", "summary", "timestamp"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -643,10 +657,10 @@
           "description": "Indicates whether this correspondence was received by the agency ('inbound') or sent by the agency ('outbound'). MUST match the 'direction' in the referenced EntryTemplate.",
           "examples": ["inbound", "outbound"]
         },
-        "actorType": {
+        "correspondenceRole": {
           "type": "string",
           "enum": ["applicant", "representative", "third-party", "system", "agency"],
-          "description": "Role of the actor who sent or received this correspondence. MUST match the 'actorType' in the referenced EntryTemplate. Allowed values: 'applicant', 'representative', 'third-party', 'system', 'agency'.",
+          "description": "Role of the party who sent or received this correspondence. MUST match the 'correspondenceRole' in the referenced EntryTemplate. Allowed values: 'applicant', 'representative', 'third-party', 'system', 'agency'.",
           "examples": ["applicant", "agency"]
         },
         "contentRef": {

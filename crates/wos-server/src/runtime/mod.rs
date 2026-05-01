@@ -27,6 +27,12 @@ impl AppRuntime {
         ))
     }
 
+    fn migrate_disabled_error() -> wos_runtime::RuntimeError {
+        wos_runtime::RuntimeError::FeatureDisabled(
+            "instance migration requires the wos-server `runtime-local` feature; rebuild with `--features runtime-local`.",
+        )
+    }
+
     pub fn build_with(
         _storage: wos_server_ports::storage::StorageHandle,
         _provenance: std::sync::Arc<dyn wos_server_ports::runtime::ProvenancePort>,
@@ -92,6 +98,16 @@ impl AppRuntime {
         _reason: &str,
     ) -> Result<(), wos_runtime::RuntimeError> {
         Err(Self::disabled_error())
+    }
+
+    pub async fn migrate_instance(
+        &self,
+        _instance_id: &str,
+        _target_definition_version: &str,
+        _migration_map: wos_runtime::MigrationMap,
+        _operator_actor_id: Option<&str>,
+    ) -> Result<wos_runtime::MigrationOutcome, wos_runtime::RuntimeError> {
+        Err(Self::migrate_disabled_error())
     }
 
     pub fn renderer(

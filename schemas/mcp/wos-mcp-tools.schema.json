@@ -20,7 +20,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly.",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly. Lowercase snake_case: leading letter, then letters/digits/underscores.",
             "examples": ["wos_ping", "wos_add_state"]
           },
           "description": {

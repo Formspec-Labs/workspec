@@ -7,7 +7,7 @@ use tokio::runtime::Handle;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{ProvenanceSigner, ReportRenderer};
-use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, WosRuntime};
+use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, MigrationMap, MigrationOutcome, WosRuntime};
 use wos_runtime::{
     BindingRegistry, PersistDraftResult, RuntimeError, SystemClock, TaskSubmissionResult,
 };
@@ -29,7 +29,7 @@ pub mod validator;
 use access::RoleBasedAccessControl;
 use presenter::SocketIoTaskPresenter;
 use renderer::JsonRenderer;
-use resolver::BundleServiceResolver;
+use resolver::RuntimeKernelResolver;
 use runtime_store::StorageBackedRuntimeStore;
 use service::EchoExternalService;
 use signer::NoopSigner;
@@ -90,7 +90,7 @@ impl AppRuntime {
             config.audit_sink.clone(),
             handle.clone(),
         );
-        let resolver = BundleServiceResolver::new(resolver_port, handle.clone());
+        let resolver = RuntimeKernelResolver::new(resolver_port, handle.clone());
         let presenter = SocketIoTaskPresenter::new(storage, io, handle);
         let rt = WosRuntime::new(
             store,
@@ -250,6 +250,25 @@ impl AppRuntime {
         .await
         .expect("wos-runtime blocking task panicked")
     }
+
+    pub async fn migrate_instance(
+        &self,
+        instance_id: &str,
+        target_definition_version: &str,
+        migration_map: MigrationMap,
+        operator_actor_id: Option<&str>,
+    ) -> Result<MigrationOutcome, RuntimeError> {
+        let inner = self.inner.clone();
+        let id = instance_id.to_string();
+        let ver = target_definition_version.to_string();
+        let actor = operator_actor_id.map(str::to_string);
+        tokio::task::spawn_blocking(move || {
+            let mut guard = inner.lock().expect("AppRuntime mutex poisoned");
+            guard.migrate(&id, &ver, migration_map, actor.as_deref())
+        })
+        .await
+        .expect("wos-runtime blocking task panicked")
+    }
 }
 
 fn as_runtime_error(e: RuntimeError) -> RuntimeAdapterError {
@@ -331,6 +350,24 @@ impl RuntimeOps for AppRuntime {
         AppRuntime::load_provenance_window(self, instance_id, offset, limit)
             .await
             .map_err(as_runtime_error)
+    }
+
+    async fn migrate_instance(
+        &self,
+        instance_id: &str,
+        target_definition_version: &str,
+        migration_map: MigrationMap,
+        operator_actor_id: Option<&str>,
+    ) -> RuntimeResult<MigrationOutcome> {
+        AppRuntime::migrate_instance(
+            self,
+            instance_id,
+            target_definition_version,
+            migration_map,
+            operator_actor_id,
+        )
+        .await
+        .map_err(as_runtime_error)
     }
 }
 

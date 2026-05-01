@@ -14,13 +14,14 @@
 //! are exercised through the runtime boundary.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use time::OffsetDateTime;
+use serde::Deserialize;
 use time::format_description::well_known::Rfc3339;
-use wos_core::eval::GuardEvaluation;
+use time::OffsetDateTime;
 use wos_core::eval::parse_iso_duration_to_ms;
+use wos_core::eval::GuardEvaluation;
 use wos_core::instance::{FormspecTaskContext, PendingEvent};
 use wos_core::model::ai::AIIntegrationDocument;
 use wos_core::model::governance::GovernanceDocument;
@@ -28,14 +29,15 @@ use wos_core::model::kernel::KernelDocument;
 use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 use wos_core::traits::{DocumentResolver, TaskPresenter};
 use wos_runtime::{
-    BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest, DrainOnceResult,
-    IntegrationProfileDocument, ReferenceCompanionPolicy, WosRuntime, stamp_provenance,
+    stamp_provenance, BindingRegistry, BusinessCalendarDocument, Clock, CreateInstanceRequest,
+    DrainOnceResult, IntegrationProfileDocument, MigrationMap, ReferenceCompanionPolicy,
+    RuntimeError, WosRuntime,
 };
 
-use crate::ConformanceError;
 use crate::fixture::ConformanceFixture;
 use crate::formspec_processor::FixtureFormspecProcessor;
 use crate::stubs::{StubService, StubValidator};
+use crate::ConformanceError;
 
 const CONFORMANCE_INSTANCE_ID: &str = "conformance-instance";
 
@@ -52,6 +54,10 @@ const RESERVED_DOCUMENT_ROLES: &[&str] = &[
     "businessCalendar",
     "signatureProfile",
 ];
+
+fn kernel_version_role(role: &str) -> Option<&str> {
+    role.strip_prefix("kernel@")
+}
 
 // ── Public types ─────────────────────────────────────────────────
 
@@ -115,6 +121,20 @@ impl WorkflowEngine {
             .clone()
             .unwrap_or_else(|| "urn:wos-conformance:kernel".to_string());
         let definition_version = kernel.version.clone().unwrap_or_default();
+
+        let mut kernels_by_version = HashMap::new();
+        kernels_by_version.insert(definition_version.clone(), kernel.clone());
+        // Migration fixtures can add extra kernel documents under `kernel@<version>`.
+        for key in fixture.documents.keys() {
+            if key == "kernel" || kernel_version_role(key).is_none() {
+                continue;
+            }
+            let raw = fixture_document_json(fixture, key)?;
+            let parsed: KernelDocument = serde_json::from_value(raw)
+                .map_err(|e| ConformanceError::Parse(format!("{key} parse error: {e}")))?;
+            let version = parsed.version.clone().unwrap_or_default();
+            kernels_by_version.insert(version, parsed);
+        }
 
         // Load AI integration content (the embedded `aiOversight` block of a
         // $wosWorkflow document, per ADR 0076 D-1). Conformance fixtures express
@@ -219,7 +239,8 @@ impl WorkflowEngine {
         // shape they were written against.
         let mut companion_docs = std::collections::HashMap::new();
         for key in fixture.documents.keys() {
-            if RESERVED_DOCUMENT_ROLES.contains(&key.as_str()) {
+            if RESERVED_DOCUMENT_ROLES.contains(&key.as_str()) || kernel_version_role(key).is_some()
+            {
                 continue;
             }
             let raw = fixture_document_json(fixture, key)?;
@@ -265,6 +286,7 @@ impl WorkflowEngine {
             wos_runtime::InMemoryStore::new(),
             FixtureResolver {
                 kernel: kernel.clone(),
+                kernels_by_version,
                 governance_json: governance_json.clone(),
                 sidecars: companion_docs.clone(),
             },
@@ -357,7 +379,10 @@ impl WorkflowEngine {
                 }
             }
 
-            if let Some(submission) = &event_entry.task_submission {
+            if event_entry.event == "$migrate" {
+                let results = self.process_migration_event(event_entry)?;
+                lifecycle_provenance.extend(results);
+            } else if let Some(submission) = &event_entry.task_submission {
                 let results = self.process_task_submission(submission)?;
                 for result in results {
                     append_runtime_result(
@@ -582,6 +607,124 @@ impl WorkflowEngine {
         Ok(results)
     }
 
+    fn process_migration_event(
+        &mut self,
+        event_entry: &crate::fixture::EventEntry,
+    ) -> Result<Vec<ProvenanceRecord>, ConformanceError> {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct MigrationEventData {
+            target_definition_version: String,
+            #[serde(default)]
+            migration_map: MigrationMap,
+            #[serde(default)]
+            operator_actor_id: Option<String>,
+        }
+
+        let data = event_entry.data.as_ref().ok_or_else(|| {
+            ConformanceError::Parse("$migrate event requires a data payload".to_string())
+        })?;
+        let migration: MigrationEventData =
+            serde_json::from_value(data.clone()).map_err(|error| {
+                ConformanceError::Parse(format!("migration event parse error: {error}"))
+            })?;
+
+        let before_instance = self
+            .runtime
+            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        let previous_definition_version = before_instance.definition_version.clone();
+        let provenance_before = self.load_runtime_provenance_window(0, usize::MAX)?.len();
+        let operator_actor_id = event_entry
+            .actor
+            .as_deref()
+            .or(migration.operator_actor_id.as_deref());
+
+        let outcome = match self.runtime.migrate(
+            CONFORMANCE_INSTANCE_ID,
+            migration.target_definition_version.as_str(),
+            migration.migration_map.clone(),
+            operator_actor_id,
+        ) {
+            Ok(outcome) => outcome,
+            Err(RuntimeError::MigrationRejected(message)) => {
+                let after_instance = self
+                    .runtime
+                    .load_instance(CONFORMANCE_INSTANCE_ID)
+                    .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+                if after_instance.definition_version != previous_definition_version {
+                    return Err(ConformanceError::Engine(format!(
+                        "migration rejection mutated instance version: before={}, after={}",
+                        previous_definition_version, after_instance.definition_version
+                    )));
+                }
+                return Err(ConformanceError::Engine(format!(
+                    "migration rejected: {message}"
+                )));
+            }
+            Err(error) => return Err(ConformanceError::Engine(error.to_string())),
+        };
+
+        if outcome.instance_id != CONFORMANCE_INSTANCE_ID {
+            return Err(ConformanceError::Engine(format!(
+                "migration outcome instance mismatch: expected {CONFORMANCE_INSTANCE_ID}, got {}",
+                outcome.instance_id
+            )));
+        }
+        if outcome.previous_definition_version != previous_definition_version {
+            return Err(ConformanceError::Engine(format!(
+                "migration outcome previous version mismatch: expected {}, got {}",
+                previous_definition_version, outcome.previous_definition_version
+            )));
+        }
+        if outcome.new_definition_version != migration.target_definition_version {
+            return Err(ConformanceError::Engine(format!(
+                "migration outcome target version mismatch: expected {}, got {}",
+                migration.target_definition_version, outcome.new_definition_version
+            )));
+        }
+        let outcome_migration_map = serde_json::to_value(&outcome.migration_map)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        let expected_migration_map = serde_json::to_value(&migration.migration_map)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        if outcome_migration_map != expected_migration_map {
+            return Err(ConformanceError::Engine(
+                "migration outcome map did not round-trip".to_string(),
+            ));
+        }
+
+        let after_instance = self
+            .runtime
+            .load_instance(CONFORMANCE_INSTANCE_ID)
+            .map_err(|error| ConformanceError::Engine(error.to_string()))?;
+        if after_instance.definition_version != migration.target_definition_version {
+            return Err(ConformanceError::Engine(format!(
+                "migration did not persist target version: expected {}, got {}",
+                migration.target_definition_version, after_instance.definition_version
+            )));
+        }
+
+        let provenance_after = self.load_runtime_provenance_window(0, usize::MAX)?;
+        let delta: Vec<ProvenanceRecord> = provenance_after
+            .into_iter()
+            .skip(provenance_before)
+            .collect();
+        if delta.len() != 1 {
+            return Err(ConformanceError::Engine(format!(
+                "migration must append exactly one provenance record, got {}",
+                delta.len()
+            )));
+        }
+        if delta[0].record_kind != ProvenanceKind::InstanceMigrated {
+            return Err(ConformanceError::Engine(format!(
+                "migration provenance kind mismatch: expected instanceMigrated, got {:?}",
+                delta[0].record_kind
+            )));
+        }
+
+        Ok(delta)
+    }
+
     fn drain_runtime_until_idle(&mut self) -> Result<Vec<DrainOnceResult>, ConformanceError> {
         self.runtime
             .drain_until_idle(CONFORMANCE_INSTANCE_ID)
@@ -731,6 +874,7 @@ fn embedded_block_for_role(role: &str) -> Option<&'static str> {
 #[derive(Debug, Clone)]
 struct FixtureResolver {
     kernel: KernelDocument,
+    kernels_by_version: HashMap<String, KernelDocument>,
     governance_json: Option<serde_json::Value>,
     sidecars: HashMap<String, serde_json::Value>,
 }
@@ -747,8 +891,12 @@ enum FixtureResolverError {
 impl DocumentResolver for FixtureResolver {
     type Error = FixtureResolverError;
 
-    fn resolve_kernel(&self, _url: &str, _version: &str) -> Result<KernelDocument, Self::Error> {
-        Ok(self.kernel.clone())
+    fn resolve_kernel(&self, _url: &str, version: &str) -> Result<KernelDocument, Self::Error> {
+        Ok(self
+            .kernels_by_version
+            .get(version)
+            .cloned()
+            .unwrap_or_else(|| self.kernel.clone()))
     }
 
     fn resolve_governance(

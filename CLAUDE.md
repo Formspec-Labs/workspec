@@ -137,7 +137,7 @@ Workspace depends on `fel-core` at `../crates/fel-core`. Normally checked out as
 
 ## Submodule awareness
 
-Checked out as `formspec/wos-spec/` inside parent repo. Commits here are separate; bump parent submodule pointer when landing meaningful work. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
+Checked out as `formspec/wos-spec/` inside parent repo. Commits here are separate; bump parent submodule pointer when landing meaningful work. **Code review:** when the parent repo only shows a dirty `wos-spec` submodule pointer, inspect the real diff with `git -C wos-spec status` and `git -C wos-spec diff` (or `git diff wos-spec` after `cd wos-spec`). Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
 
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>
