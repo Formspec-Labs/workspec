@@ -15,13 +15,13 @@ This spec defines four PolicyObject kinds:
 - `ServiceBinding` — workflow step ↔ OpenAPI operation or Arazzo step.
 - `EventBinding` — workflow event ↔ kernel event with CloudEvents extension attributes.
 - `PolicyEngineBinding` — workflow check ↔ external OPA / Cedar / XACML decision.
-- `DecisionTable` — multi-row decision logic that compiles to a chained-FEL-guard sequence (an extension to the existing `DecisionRule` kind).
+- `DecisionTable` — multi-row decision logic that compiles to a top-level `decisionTables[*]` entry plus a structured `DecisionTableGuard` on the relevant transition (parent Kernel §4.5.1; an extension to the existing `DecisionRule` kind).
 
 Each binding declares which of the **six canonical kernel seams** it attaches through (per [`../../CLAUDE.md`](../../CLAUDE.md): `actorExtension`, `contractHook`, `provenanceLayer`, `lifecycleHook`, `custodyHook`, `extensions`/`x-`).
 
 ## Out of scope
 
-- **DMN export.** Per audit findings: WOS rejects DMN as an expression-language authority (`CLAUDE.md:76`). DecisionTable compiles to chained FEL guards; it does NOT emit DMN. One-way DMN import is parked (`TODO.md:368`) until a customer asks.
+- **DMN export.** Per audit findings: WOS rejects DMN as an expression-language authority (`CLAUDE.md:76`). DecisionTable projects to parent kernel `decisionTables[*]` (Kernel §4.5.1); it does NOT emit DMN. One-way DMN import is supported via FEEL→FEL transpilation (parent Kernel §4.5.1.5 names the rationale).
 - **OpenTelemetry telemetry.** Per `CLAUDE.md:103` "Audit ⊥ observability": OTel is the operator channel; Studio is the audit channel. This spec has no OTel binding.
 - **AsyncAPI.** Superseded by CloudEvents in WOS 1.0; not adopted here.
 - **The runtime adapter implementations** (Restate, Temporal, Camunda) — these consume the artifact; Studio produces it.
@@ -131,7 +131,7 @@ DecisionTable (DecisionRule with form = "table") {
 }
 ```
 
-Each row is reviewer-reviewable independently; a row's `sourceCitation` is preserved through the whole lifecycle. Compilation produces a chained-FEL-guard sequence (see [`compiler-contract.md`](compiler-contract.md)). **The table is NOT emitted as DMN.**
+Each row is reviewer-reviewable independently; a row's `sourceCitation` is preserved through the whole lifecycle. Compilation produces a parent-kernel `decisionTables[*]` entry (per Kernel §4.5.1) with row ids preserved, plus a `DecisionTableGuard` on the relevant transition (`{kind: "decisionTable", ref, outputColumn, inputBindings}`). Round-trip is structurally lossless. **The table is NOT emitted as DMN.**
 
 ### `DMNImport` (one-way import only)
 
@@ -260,7 +260,7 @@ draft → reviewed → approved → mapsToWos → validated → published → su
 - **`SA-MUST-bind-041`** — Every row MUST carry at least one `sourceCitation` or be backed by an approved `Assumption`. Rows without source backing are unsupported decision logic. *(lint-pending: tier-S2 cross-cutting with `SA-MUST-pom-004`.)*
 - **`SA-MUST-bind-042`** — When `hitPolicy = unique`, the implementation MUST verify that at most one row matches any given input. Detected overlaps without explicit hit policy MUST be flagged as tier-S2 ValidationFindings (`POM-LINT-010`). *(lint-pending: requires symbolic input-range analysis.)*
 - **`SA-MUST-bind-043`** — When `completenessRequirement = all-inputs-covered`, the implementation MUST verify that every expected input combination matches at least one row OR a fallback is declared. Detected gaps MUST be flagged as tier-S2 ValidationFindings (`POM-LINT-011`). *(lint-pending.)*
-- **`SA-MUST-bind-044`** — DecisionTables compiling to chained-FEL-guard sequences MUST emit FEL expressions that match the table's hit-policy semantics deterministically. *(runtime-pending: compiler in [`compiler-contract.md`](compiler-contract.md).)*
+- **`SA-MUST-bind-044`** — DecisionTables MUST project to a parent-kernel `decisionTables[*]` entry preserving the input/output declarations, row ids, hit policy, and per-row rationale; the referencing transition MUST emit a `DecisionTableGuard` of form `{kind: "decisionTable", ref, outputColumn, inputBindings}` that resolves under parent Kernel §4.5.1 (lint K-051). *(runtime-pending: compiler in [`compiler-contract.md`](compiler-contract.md).)*
 
 ### Decision tables and adverse outcomes
 
@@ -327,7 +327,7 @@ Tier-S3 (Mapping readiness) rules planned:
 - EventBinding without CloudEvents extension attrs is rejected at schema.
 - PolicyEngineBinding with deny composes correctly (deny overrides permit).
 - DecisionTable with overlapping rows under `hitPolicy = unique` is flagged.
-- DecisionTable compiles to deterministic chained FEL guards.
+- DecisionTable projects to a deterministic parent-kernel `decisionTables[*]` entry + `DecisionTableGuard` on the relevant transition (Kernel §4.5.1; row evaluation deterministic per the table's hit policy).
 
 ### Current limitations
 
@@ -343,9 +343,9 @@ Tier-S3 (Mapping readiness) rules planned:
 | `EventBinding (consumed)` | `mapsToWos` | `$.integration.bindings[*]` (binding type: `event-consume`) per `WOS-FEATURE-MATRIX.md` §12.2; CloudEvents extension attrs project as `wos*` fields |
 | `EventBinding (emitted)` | `mapsToWos` | `$.integration.bindings[*]` (binding type: `event-emit`) per `WOS-FEATURE-MATRIX.md` §12.2 |
 | `PolicyEngineBinding` | `mapsToWos` | `$.integration.bindings[*]` (binding type: `policy-engine`) per `WOS-FEATURE-MATRIX.md` §12.5; output normalized to `{decision, reasons, obligations}` |
-| `DecisionTable` (= DecisionRule with form=table) | `mapsToWos` | `$.lifecycle.transitions[*].guard` (chained FEL expression sequence) per `wos-workflow.schema.json` |
+| `DecisionTable` (= DecisionRule with form=table) | `mapsToWos` | `$.decisionTables[*]` (table catalog) + `$.lifecycle.transitions[*].guard` of form `DecisionTableGuard` per `wos-workflow.schema.json` and parent Kernel §4.5.1. |
 
-The compiler (Stage 5) is responsible for producing the chained-FEL-guard sequence from a DecisionTable; this spec specifies the **input contract** to that compilation, not the FEL-emission algorithm.
+The compiler (Stage 5) is responsible for producing the `decisionTables[*]` entry + `DecisionTableGuard` from a Studio DecisionTable; row ids are preserved through projection so scenario coverage and reviewer comments stay row-anchored. This spec specifies the **input contract** to that compilation; the parent kernel spec is authoritative on evaluation semantics.
 
 ## Examples
 
@@ -472,7 +472,7 @@ DecisionTable (= DecisionRule with form="table") {
 }
 ```
 
-Compiles to a chained FEL guard sequence: `if (householdSize >= 1 && monthlyIncome <= 1473) return "eligible"; else if ... else return "not-eligible"`. **No DMN export.**
+Compiles to a parent-kernel `decisionTables[*]` entry (with row ids preserved) plus a `DecisionTableGuard` on the eligibility transition referencing it. Per Kernel §4.5.1: `inputBindings` map the table's `householdSize` / `monthlyIncome` inputs to FEL expressions over `caseFile`; the table evaluates per its hit policy; the boolean output column drives the transition. **No DMN export, and no chained-FEL flattening — round-trip is lossless.**
 
 ## Open issues
 

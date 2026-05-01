@@ -1,14 +1,16 @@
 # WOS Verification Matrix
 
+> **Updated 2026-05-01** — three decision-table rules registered (`K-051`/`K-052`/`K-053` per Kernel §4.5.1) backing the `decisionTable` first-class kernel construct that lands `requiresSpecExtension` queue item from Studio's mapping spec (Studio→`mapsToWos`). 122 rules across 38 T1 / 75 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 107 Draft). Rust impl + fixtures deferred (Stage-4 work in `crates/wos-lint`).
+>
 > **Updated 2026-04-28** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). 119 rules across 36 T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 104 Draft).
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tier 1: wos-lint (static)            36 rules                  │
+│  Tier 1: wos-lint (static)            38 rules                  │
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   74 rules                  │
+│  Tier 2: wos-lint --project (cross)   75 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -66,10 +68,12 @@
 | `K-029` | K | draft | `startTimer` MUST specify exactly one of `duration` or `deadline`. | — |
 | `K-030` | K | draft | Extension keys MUST be `x-` prefixed. | — |
 | `K-048` | K | draft | Non-standard case relationship `type` values MUST use `x-` prefix. | — |
+| `K-051` | K | draft | DecisionTableGuard `ref` MUST resolve to a top-level `decisionTables[]` entry; `outputColumn` MUST exist on the referenced table; every declared input MUST have an `inputBindings` entry (Kernel §4.5.1). | — |
+| `K-053` | K | draft | DecisionTable input cells MUST evaluate to boolean; transition-guard `outputColumn` MUST be `boolean`-typed; `collect` hit policy is rejected for transition-guard usage (Kernel §4.5.1.4). | — |
 | `SCHEMA-DOC-001` | SCHEMA-DOC | draft | Schema leaf properties MUST carry sufficient `description` and `examples`. | — |
 | `WOS-VER-LEVEL-001` | WOS | tested | Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings (ADR 0076 step 12, Q6). | inline (`tier1.rs::ver_level_tests`) |
 
-**T1 total: 36** (0 LoadBearing, 0 Stable, 3 Tested, 33 Draft)
+**T1 total: 38** (0 LoadBearing, 0 Stable, 3 Tested, 35 Draft)
 
 ---
 
@@ -147,12 +151,13 @@
 | `K-019` | K | draft | FEL functions MUST be declared built-ins or registered extensions. | — |
 | `K-037` | K | draft | Fail-fast `$join` fires only on an error final state. | — |
 | `K-049` | K | load_bearing | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | k-049-load-bearing-self-loop.json, k-049-load-bearing-two-node-cycle.json |
+| `K-052` | K | draft | DecisionTable rows for `hitPolicy = unique` MUST be pairwise disjoint over the declared input domain; `hitPolicy = priority` rows MUST have unique `priority` values among rows that overlap (Kernel §4.5.1.4). Cross-document because resolution depends on the table's declared input types and FEL AST analysis. | — |
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 | `WOS-AGENT-XREF-001` | WOS | tested | Every actor with `type=='agent'` MUST have a matching `agents[].id` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_agent_xref_001_*`) |
 | `WOS-SIG-COVER-001` | WOS | tested | Signature-gated transitions MUST be covered by `signature.signers[]` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_sig_cover_001_*`) |
 
-**T2 total: 74** (1 LoadBearing, 0 Stable, 4 Tested, 69 Draft)
+**T2 total: 75** (1 LoadBearing, 0 Stable, 4 Tested, 70 Draft)
 
 ---
 

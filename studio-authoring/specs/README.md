@@ -28,7 +28,7 @@ The four specs that define cross-cutting foundational seams. Three are seam-only
 
 The single spec that ties Studio objects to WOS concepts.
 
-- [**`studio-to-wos-mapping.md`**](studio-to-wos-mapping.md) — the four mapping states (`mapsToWos` / `authoringOnly` / `requiresSpecExtension` / `unmappedButApproved`); target resolution into `wos-workflow.schema.json` JSON paths; ExtensionRecord proposals; six-seam attachment per ADR-0077. Slight WOS-side extension proposals queued (decisionTable row coverage, ApplicabilityScope/EffectivePeriod first-class, x-wos-studio formalization, DPV/canonicalTermRef on caseFile.fields, top-level wosVersionPin).
+- [**`studio-to-wos-mapping.md`**](studio-to-wos-mapping.md) — the four mapping states (`mapsToWos` / `authoringOnly` / `requiresSpecExtension` / `unmappedButApproved`); target resolution into `wos-workflow.schema.json` JSON paths; ExtensionRecord proposals; six-seam attachment per ADR-0077. Slight WOS-side extension proposals queued (ApplicabilityScope/EffectivePeriod first-class, x-wos-studio formalization, DPV/canonicalTermRef on caseFile.fields, top-level wosVersionPin, governance.deonticConstraints LegalRuleML). **`decisionTable` LANDED parent-side as Kernel §4.5.1 (2026-05-01); now `mapsToWos`.**
 
 ## Trust
 
@@ -55,7 +55,7 @@ The two specs that gate publication and manage post-publication evolution.
 
 The single spec that defines binding-and-integration objects.
 
-- [**`binding-and-integration.md`**](binding-and-integration.md) — five kinds: `ServiceBinding` (workflow step ↔ OpenAPI/Arazzo), `EventBinding` (workflow event ↔ kernel event with CloudEvents extension attrs), `PolicyEngineBinding` (workflow check ↔ OPA/Cedar/XACML), `DecisionTable` (multi-row extension to `DecisionRule` compiling to chained-FEL-guard sequence), `DMNImport` (one-way DMN→DecisionTable transpilation; **no DMN export** stands). **Scenario-as-contract-test** relationship. **Runtime-observation seam attachment hook** as specialized EventBinding.
+- [**`binding-and-integration.md`**](binding-and-integration.md) — five kinds: `ServiceBinding` (workflow step ↔ OpenAPI/Arazzo), `EventBinding` (workflow event ↔ kernel event with CloudEvents extension attrs), `PolicyEngineBinding` (workflow check ↔ OPA/Cedar/XACML), `DecisionTable` (multi-row extension to `DecisionRule` projecting to parent kernel `decisionTables[*]` + `DecisionTableGuard` per Kernel §4.5.1), `DMNImport` (one-way DMN→DecisionTable transpilation; **no DMN export** stands). **Scenario-as-contract-test** relationship. **Runtime-observation seam attachment hook** as specialized EventBinding.
 
 ---
 

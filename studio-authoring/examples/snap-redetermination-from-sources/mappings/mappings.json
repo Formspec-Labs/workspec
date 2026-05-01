@@ -52,7 +52,8 @@
       "subjectPolicyObjectRef": "pol-decision-table-eligibility",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.lifecycle.transitions[?(@.id=='intake-to-determination')].guard", "shapeRef": "wos-workflow.schema.json#/$defs/Guard (FEL chained sequence)", "compilerNote": "DecisionTable rows compile to chained FEL guards via compiler-contract.md phase 4. ExtensionRecord candidate (decisionTable row-coverage in wos-tooling.scenarios) queued separately." }
+        { "wosJsonPath": "$.decisionTables[?(@.id=='eligibilityTable')]", "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTable", "compilerNote": "DecisionTable projects 1:1 to parent kernel decisionTables[*] entry per Kernel §4.5.1 (landed 2026-05-01). Row ids preserved; hit policy explicit; round-trip lossless." },
+        { "wosJsonPath": "$.lifecycle.transitions[?(@.id=='intake-to-determination')].guard", "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTableGuard", "compilerNote": "Transition guard becomes a structured DecisionTableGuard ({kind: 'decisionTable', ref: 'eligibilityTable', outputColumn: 'eligible', inputBindings: {...}}) per Kernel §4.5.1." }
       ],
       "lifecycleState": "approved"
     },

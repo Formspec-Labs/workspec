@@ -191,10 +191,10 @@ A workflow check ↔ external policy engine (OPA / Cedar / XACML) binding. The e
 
 ### 1.23 DecisionTable (data model home: [`specs/binding-and-integration.md`](specs/binding-and-integration.md))
 
-An extension to the existing `DecisionRule` PolicyObject kind for multi-row decision authoring. Compiles to a chained-FEL-guard sequence; **no DMN export** per the audit findings.
+An extension to the existing `DecisionRule` PolicyObject kind for multi-row decision authoring. Projects to parent kernel `decisionTables[*]` + a `DecisionTableGuard` on the relevant transition (Kernel §4.5.1; landed 2026-05-01). Round-trip is structurally lossless — row ids preserved through projection. **No DMN export** per parent CLAUDE.md; one-way DMN import is supported via FEEL→FEL transpilation.
 
 **Key fields:** `form: "table"`, `inputs[]`, `outputs[]`, `rows[]`, `hitPolicy` (first-match | priority | unique | output-merge), `completenessRequirement`, `fallback?`.
-**Relationships:** referenced by `decision` WorkflowElements; compiles to `$.lifecycle.transitions[*].guard` (chained FEL).
+**Relationships:** referenced by `decision` WorkflowElements; projects to `$.decisionTables[*]` (table catalog) + `$.lifecycle.transitions[*].guard` of form `DecisionTableGuard`.
 
 ### 1.24 Workspace (extended; data model home: [`specs/workspace.md`](specs/workspace.md))
 
@@ -456,7 +456,7 @@ The table below extends PRD §6 with concrete pointers into existing wos-spec do
 | ServiceBinding | OpenAPI / Arazzo integration binding | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.1, §12.3 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `openapi-call` / `arazzo-step`) |
 | EventBinding | CloudEvents kernel event | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.2 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `event-consume` / `event-emit`) |
 | PolicyEngineBinding | OPA / Cedar / XACML policy engine bridge | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), `WOS-FEATURE-MATRIX.md` §12.5, [`../specs/ai/ai-integration.md`](../specs/ai/ai-integration.md) §4.6 | `wos-workflow.schema.json` → `integration.bindings[*]` (binding type: `policy-engine`) |
-| DecisionTable (DecisionRule.form=table) | Lifecycle guard (chained FEL) | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), [`specs/compiler-contract.md`](specs/compiler-contract.md) | `wos-workflow.schema.json` → `lifecycle.transitions[*].guard` (chained FEL sequence; **not DMN**) |
+| DecisionTable (DecisionRule.form=table) | First-class kernel decision table per parent Kernel §4.5.1 | [`specs/binding-and-integration.md`](specs/binding-and-integration.md), [`specs/compiler-contract.md`](specs/compiler-contract.md), [`../specs/kernel/spec.md`](../specs/kernel/spec.md) §4.5.1 | `wos-workflow.schema.json` → `decisionTables[*]` (catalog) + `lifecycle.transitions[*].guard` of form `DecisionTableGuard`; row ids preserved; **no DMN export** |
 | WorkflowIntent | (the user-facing draft itself; compiles to `$wosWorkflow`) | [`specs/workflow-intent.md`](specs/workflow-intent.md) | not emitted directly; element kinds project per `specs/workflow-intent.md` §"WOS mappings" |
 | Workspace, SourceDocument, SourceVersion, SourceSection, ExtractedClaim, Assumption, Conflict, Workflow Health Dashboard, Improvement Backlog | (no WOS counterpart) | — | `authoringOnly` — Studio-internal; never emitted to `$wosWorkflow` |
 | StudioToWosMapping | (Studio control plane) | — | `authoringOnly` — the mapping record itself is metadata, not WOS content |
@@ -502,7 +502,7 @@ The structural truth lives in `wos-workflow.schema.json` (the WOS schema's `$def
 | **WorkflowIntent** | Genuinely different from `$wosWorkflow` (16 user-facing element kinds + bridges + authoring metadata) | **1 schema:** `wos-studio-workflow-intent.schema.json` |
 | **Scenario** | Layered view: envelope + `$ref` to `wos-tooling.schema.json` `scenarios[*]` shape | **1 schema:** `wos-studio-scenario.schema.json` |
 | **AuthoringProvenanceRecord** | Studio-defined; AI-extraction subtype + audit event-type tags compose parent **PLN-0384** `wos-event-types.md` | **1 schema:** `wos-studio-provenance.schema.json` |
-| **DecisionTable** (the table form of DecisionRule) | Studio-defined authoring shape (rows + hit policy + completeness); compiles to chained FEL guards via compiler. Optional **slight WOS-side extension** proposal queued to `wos-tooling.scenarios[*].decisionTable` for row-coverage traceability | Folded into `wos-studio-policy-object.schema.json` |
+| **DecisionTable** (the table form of DecisionRule) | Studio-defined authoring shape (rows + hit policy + completeness) projects 1:1 to parent kernel `decisionTables[*]` + `DecisionTableGuard` on the relevant transition (Kernel §4.5.1, landed 2026-05-01). Round-trip lossless; row ids preserved. Scenarios cite row ids directly. | Folded into `wos-studio-policy-object.schema.json` |
 | **Source vault** (SourceDocument, SourceVersion, SourceSection, SourceCitation, ExtractedClaim, CanonicalSourceRef) | Studio-defined; canonical sources may carry JSON-LD `@context` + content (when source is published in JSON-LD, e.g., eCFR.gov) | **1 schema:** `wos-studio-source.schema.json` |
 | **Workspace + ReviewerRole + WorkspacePolicy + AuthorityGrant + ComplianceAttestation** | Studio-defined | **1 schema:** `wos-studio-workspace.schema.json` |
 | **ApprovalDecision + ApprovalPackage + ChangeImpactReport** | Studio-defined; approval-package composes (or attaches) Effectiveness + ComplianceAttestation | **1 schema:** `wos-studio-approval.schema.json` |
