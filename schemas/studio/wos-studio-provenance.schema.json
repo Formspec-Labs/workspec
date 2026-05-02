@@ -134,14 +134,7 @@
           ]
         },
         "originClass": {
-          "type": "string",
-          "enum": [
-            "source",
-            "approved-interpretation",
-            "local-practice",
-            "assumption",
-            "runtime-observed"
-          ]
+          "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/OriginClass"
         },
         "rationale": {
           "type": "string"

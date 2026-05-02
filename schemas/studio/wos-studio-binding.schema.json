@@ -42,15 +42,13 @@
       "enum": ["draft", "reviewed", "approved", "published", "superseded", "deprecated"]
     },
     "originClass": {
-      "type": "string",
-      "enum": ["source", "approved-interpretation", "local-practice", "assumption", "runtime-observed"]
+      "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/OriginClass"
     },
     "citations": { "type": "array", "items": { "type": ["string", "object"] } },
     "provenance": { "type": "array", "items": { "type": ["string", "object"] } },
     "mappingRef": { "type": "string" },
     "mappingState": {
-      "type": "string",
-      "enum": ["mapsToWos", "authoringOnly", "requiresSpecExtension", "unmappedButApproved"]
+      "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/MappingState"
     },
     "wosTarget": { "type": "string" },
     "wosShapeRef": { "type": "string" },

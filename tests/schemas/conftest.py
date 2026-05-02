@@ -67,6 +67,7 @@ MARKER_TO_SCHEMA: dict[str, str] = {
     "$wosStudioIdentitySubject": "studio/wos-studio-identity-subject.schema.json",
     "$wosStudioTerminologyMap": "studio/wos-studio-terminology-map.schema.json",
     "$wosStudioMigrationPath": "studio/wos-studio-migration-path.schema.json",
+    "$wosStudioMapping": "studio/wos-studio-mapping.schema.json",
 }
 
 # Studio schemas that have NO document marker (they are pure $defs libraries

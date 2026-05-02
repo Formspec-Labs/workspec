@@ -243,9 +243,6 @@
     },
     "closureRationale": {
       "type": "string"
-    },
-    "wosVersionPin_$comment": {
-      "type": "string"
     }
   },
   "$defs": {

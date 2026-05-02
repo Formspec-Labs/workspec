@@ -1,4 +1,5 @@
 {
+  "$wosStudioMapping": "1.0",
   "$comment": "StudioToWosMapping records — one per PolicyObject. Demonstrates all 4 mapping states. Illustrative.",
   "workspaceId": "ws-snap-redetermination-tx-2026",
   "mappings": [

@@ -5,7 +5,7 @@
   "description": "Polymorphic Studio PolicyObject schema covering all author-time PolicyObject kinds per studio-authoring/specs/policy-object-model.md and the composition table in CONCEPT-MODEL.md §6.1. Discriminated by `kind`. Carries the StudioMetadataEnvelope inline (id, workspaceId, version, citations[], provenance, originClass, lifecycleState, mappingState, etc.). Body shape is per-kind: WOS-projecting kinds (NoticeRequirement, AppealRight, ExplanationRequirement, Deadline, ActorMapping, EvidenceRequirement, Outcome, DecisionRule, ContinuationOfServicesRequirement, CounterfactualRequirement) project to WOS via `wosTarget` JSONPath; AppealRight + DecisionRule additionally compose `wos-workflow.schema.json#/$defs/AppealMechanism` and `#/$defs/DecisionTable` via $ref where the WOS shape is authoritative. Studio-only kinds (PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod, Supersession, Conflict, Assumption, OpenQuestion, ProtectedCategory) define body shapes inline. Deontic kinds (Requirement, Obligation, Permission, Prohibition, Right, Condition, ExceptionRule, DataElement) carry `defeasible: boolean` for OASIS LegalRuleML interop. Stage-3 enforces envelope + kind discriminator strictly; per-kind body shapes are loosely validated (flexible body with documented field expectations); deeper per-field validation lives in Stage-4 lint rules.",
   "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; envelope + kind enum are load-bearing; per-kind body shapes are illustrative-and-flexible. Per CM §6.1 corrected pattern (2026-05-01), most kinds inline body with `wosTarget`/`wosShapeRef` documenting projection rather than $ref-composing absent WOS $defs.",
   "type": "object",
-  "required": ["$wosStudioPolicyObject", "id", "workspaceId", "kind", "lifecycleState", "originClass"],
+  "required": ["$wosStudioPolicyObject", "id", "kind", "lifecycleState", "originClass"],
   "additionalProperties": false,
   "patternProperties": { "^(\\$|x-)": {} },
   "properties": {
@@ -23,7 +23,10 @@
       "type": "string",
       "examples": ["pol-notice-adverse-action", "pol-appeal-right-fair-hearing", "pol-decision-table-eligibility"]
     },
-    "workspaceId": { "type": "string" },
+    "workspaceId": {
+      "type": "string",
+      "description": "Workspace this PolicyObject belongs to. RECOMMENDED on every standalone PolicyObject document. MAY be omitted when the PolicyObject is serialized inside a collection wrapper (e.g., `{workspaceId: ws-X, policyObjects: [...]}`) where workspaceId is implicit from the wrapper. Stage-4 lint rule SHOULD reject standalone documents without workspaceId."
+    },
     "kind": {
       "type": "string",
       "enum": [
@@ -52,9 +55,8 @@
     },
     "reviewState": { "type": "string" },
     "originClass": {
-      "type": "string",
-      "enum": ["source", "approved-interpretation", "local-practice", "assumption", "runtime-observed"],
-      "description": "Where this PolicyObject came from. Every approved PolicyObject MUST carry exactly one originClass per authoring-provenance.md.",
+      "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/OriginClass",
+      "description": "Where this PolicyObject came from. Every approved PolicyObject MUST carry exactly one originClass per authoring-provenance.md. Enum lives in wos-studio-common.schema.json #/$defs/OriginClass.",
       "examples": ["source", "approved-interpretation"],
       "x-lm": {
         "critical": true,
@@ -77,9 +79,8 @@
     },
     "mappingRef": { "type": "string" },
     "mappingState": {
-      "type": "string",
-      "enum": ["mapsToWos", "authoringOnly", "requiresSpecExtension", "unmappedButApproved"],
-      "description": "How this PolicyObject relates to the WOS substrate. Required on approved objects; optional on draft.",
+      "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/MappingState",
+      "description": "How this PolicyObject relates to the WOS substrate. Required on approved objects; optional on draft. Enum lives in wos-studio-common.schema.json #/$defs/MappingState.",
       "examples": ["mapsToWos", "authoringOnly"],
       "x-lm": {
         "critical": true,
@@ -91,6 +92,15 @@
     "canonicalTermRef": { "type": "string" },
     "effectivenessRef": { "type": "string" },
     "authorityGrantsApplied": { "type": "array", "items": { "type": "object" } },
+    "extensionRecord": {
+      "type": "object",
+      "description": "Optional inline ExtensionRecord (when mappingState = requiresSpecExtension). Authoritative copy lives on the StudioToWosMapping per studio-to-wos-mapping.md; this is a reviewer-readability denormalization at the PolicyObject site.",
+      "additionalProperties": true
+    },
+    "unmappedRationale": {
+      "type": "string",
+      "description": "Optional inline rationale (when mappingState = unmappedButApproved). Authoritative copy lives on the StudioToWosMapping; this is a reviewer-readability denormalization."
+    },
     "body": {
       "type": "object",
       "description": "Kind-specific body. Stage-3 accepts flexible body shape (additionalProperties: true) per kind; Stage-4 lint rules enforce per-kind required fields. See policy-object-model.md and binding-and-integration.md for the per-kind shape conventions. For DecisionRule with body.form='table' (DecisionTable), body.rows[] / body.hitPolicy / body.completenessRequirement project to parent kernel decisionTables[*] per Kernel §4.5.1 (lossless round-trip).",
