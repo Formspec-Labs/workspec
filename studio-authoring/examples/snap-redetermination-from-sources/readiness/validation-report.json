@@ -1,0 +1,41 @@
+{
+  "$wosStudioReadiness": "1.0",
+  "id": "vrep-snap-redet-tx-v1.0.0",
+  "kind": "ValidationReport",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "workflowIntentRef": "wfi-snap-redetermination-tx",
+  "findings": [
+    {
+      "id": "find-eq-lint-003-quarterly-race",
+      "ruleId": "EQ-LINT-003",
+      "tier": "S4",
+      "severity": "warn",
+      "subjectRef": "pol-protected-category-language",
+      "subjectKind": "PolicyObject",
+      "message": "ProtectedCategory covers language-spoken; race-ethnicity equity-probe scenario missing.",
+      "suggestedFix": "Add a race-ethnicity equity-probe scenario to scenarios/scenarios.json by 2026-Q3.",
+      "lifecycleState": "acknowledged",
+      "openedAt": "2026-04-23T09:00:00Z"
+    },
+    {
+      "id": "find-map-lint-004-unmapped-warn",
+      "ruleId": "MAP-LINT-004",
+      "tier": "S3",
+      "severity": "warn",
+      "subjectRef": "pol-assumption-holiday-period-flex",
+      "subjectKind": "PolicyObject",
+      "message": "Mapping state = unmappedButApproved with rationale recorded; perpetual-warn per SA-MUST-map-041.",
+      "lifecycleState": "waived",
+      "waivedBy": "subj-sarah-chen",
+      "waivedRationale": "Workspace-specific holiday-period operational practice; intentionally not generalized to a WOS extension."
+    }
+  ],
+  "tierSummary": {
+    "S1": {"open": 0, "acknowledged": 0, "waived": 0, "blocking": 0},
+    "S2": {"open": 0, "acknowledged": 0, "waived": 0, "blocking": 0},
+    "S3": {"open": 0, "acknowledged": 0, "waived": 1, "blocking": 0},
+    "S4": {"open": 0, "acknowledged": 1, "waived": 0, "blocking": 0},
+    "S5": {"open": 0, "acknowledged": 0, "waived": 0, "blocking": 0},
+    "S6": {"open": 0, "acknowledged": 0, "waived": 0, "blocking": 0}
+  }
+}

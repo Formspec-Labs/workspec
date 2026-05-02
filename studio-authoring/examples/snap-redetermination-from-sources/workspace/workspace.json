@@ -1,0 +1,70 @@
+{
+  "$wosStudioWorkspace": "1.0",
+  "id": "ws-snap-redetermination-tx-2026",
+  "title": "SNAP Redetermination — Texas (workspace)",
+  "description": "Workspace for the Travis County DHS SNAP redetermination authoring effort. Owners + reviewer roles + workspace policy + workspace-level compliance baselines.",
+  "owners": ["subj-sarah-chen"],
+  "programs": ["SNAP", "SNAP-E&T"],
+  "reviewerRoles": [
+    {
+      "id": "workflow-owner",
+      "name": "Workflow owner",
+      "responsibilities": ["overall content correctness", "publication authorization"],
+      "hasOverrideAuthority": true,
+      "requiredForPublication": true
+    },
+    {
+      "id": "compliance-reviewer",
+      "name": "Compliance reviewer",
+      "responsibilities": ["regulatory citation accuracy", "compliance attestation"],
+      "hasOverrideAuthority": false,
+      "requiredForPublication": true
+    },
+    {
+      "id": "legal-reviewer",
+      "name": "Legal reviewer",
+      "responsibilities": ["legal language vetting", "supersession determinations"],
+      "hasOverrideAuthority": false,
+      "requiredForPublication": true
+    },
+    {
+      "id": "technical-reviewer",
+      "name": "Technical reviewer",
+      "responsibilities": ["bridge correctness", "binding contract validation"],
+      "hasOverrideAuthority": false,
+      "requiredForPublication": true
+    },
+    {
+      "id": "operations-reviewer",
+      "name": "Operations reviewer",
+      "responsibilities": ["operational fitness", "local-practice attestation"],
+      "hasOverrideAuthority": false,
+      "requiredForPublication": true
+    }
+  ],
+  "policies": {
+    "selfApprovalProhibition": true,
+    "multiRoleGating": ["workflow-owner", "compliance-reviewer", "legal-reviewer", "technical-reviewer", "operations-reviewer"],
+    "unmappedButApprovedAuthority": "workflow-owner",
+    "conflictWaiverAuthority": "compliance-reviewer",
+    "retentionPolicies": {
+      "dpv:Identifier": "P7Y",
+      "dpv:FinancialPreference": "P7Y",
+      "dpv:HealthData": "P10Y",
+      "dpv:Demographic": "P3Y"
+    }
+  },
+  "complianceBaselines": [
+    {
+      "regime": "StateRAMP-Moderate",
+      "regimeVersion": "v3.0",
+      "controls": [
+        {"controlId": "AU-2", "controlName": "Audit Events", "status": "met", "evidenceRef": "authoring-provenance audit event catalog + custody anchoring"},
+        {"controlId": "AC-3", "controlName": "Access Enforcement", "status": "met", "evidenceRef": "AuthorityGrant resolution per workspace.md + identity-and-attestation.md"}
+      ],
+      "attestor": "subj-marcus-williams",
+      "attestedAt": "2026-04-25T11:30:00Z",
+      "expiresAt": "2027-04-25T11:30:00Z"
+    }
+  ]
+}
