@@ -1,0 +1,66 @@
+{
+  "id": "K-052-negative-overlapping-unique-rows",
+  "rule": "K-052",
+  "description": "Negative case: a DecisionTable with hitPolicy='unique' has two rows that both match `income == 1000` (row 1 covers income <= 1500; row 2 covers income <= 2000). Per Kernel §4.5.1.4 the unique policy permits at most one match; static FEL AST analysis can detect this overlap. Lint MUST emit K-052.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-052-overlap",
+      "version": "1.0.0",
+      "title": "K-052 Negative — Overlapping unique rows",
+      "description": "Two rows with overlapping income ranges; `unique` cannot accept both. K-052 fires.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [{ "id": "caseworker", "type": "human", "description": "Caseworker" }],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "eligibilityTable",
+                  "outputColumn": "eligible",
+                  "inputBindings": { "income": "caseFile.income" }
+                }
+              }
+            ]
+          },
+          "approved": { "type": "final" }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [{ "name": "income", "type": "number" }],
+          "outputs": [{ "name": "eligible", "type": "boolean" }],
+          "rows": [
+            { "id": "rTier1", "inputCells": ["income <= 1500"], "outputCells": ["true"] },
+            { "id": "rTier2", "inputCells": ["income <= 2000"], "outputCells": ["true"] }
+          ],
+          "hitPolicy": "unique"
+        }
+      ],
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "K-052: DecisionTable 'eligibilityTable' has hitPolicy='unique' but rows 'rTier1' and 'rTier2' have overlapping input domains (both match e.g. income == 1000)"
+  ]
+}
