@@ -186,15 +186,8 @@
           "description": "Single equity-probe assertion (e.g., 'abs(cohort-A.approvalRate - cohort-B.approvalRate) < 0.05')."
         },
         "lifecycleState": {
-          "type": "string",
-          "enum": [
-            "generated",
-            "reviewed",
-            "passing",
-            "failing",
-            "acceptedAsKnownGap",
-            "regression"
-          ]
+          "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/ScenarioLifecycleState",
+          "description": "Scenario lifecycle state per scenario-authoring.md. Enum lives in wos-studio-common.schema.json."
         },
         "decisionTableCoverage": {
           "type": "object",

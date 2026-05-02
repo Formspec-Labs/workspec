@@ -66,16 +66,8 @@
       }
     },
     "lifecycleState": {
-      "type": "string",
-      "enum": [
-        "draft",
-        "mapped",
-        "validationReady",
-        "scenarioTested",
-        "approved",
-        "published",
-        "deprecated"
-      ]
+      "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/WorkflowIntentLifecycleState",
+      "description": "WorkflowIntent lifecycle state per workflow-intent.md. Enum lives in wos-studio-common.schema.json."
     },
     "wosVersionPin": {
       "type": "string",
@@ -271,7 +263,10 @@
                   "contains"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -295,7 +290,10 @@
                 },
                 "description": "Step body. Recommended: description, performedBy (ActorMapping ref), expectedDurationHint, blockingOrInformational."
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -319,7 +317,10 @@
                 },
                 "description": "Decision body. Recommended: question, decisionRuleRef (DecisionRule|DecisionTable PolicyObject ref), possibleOutcomes[]."
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -346,7 +347,10 @@
                   "reviewer"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -373,7 +377,10 @@
                   "noticeRequirementRef"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -401,7 +408,10 @@
                   "attachedTo"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -429,7 +439,10 @@
                   "branchEntryPoint"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -458,7 +471,10 @@
                   "divertsTo"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -486,7 +502,10 @@
                   "releaseCondition"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -513,7 +532,10 @@
                   "collected"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -540,7 +562,10 @@
                   "evidenceRequirementRef"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -567,7 +592,10 @@
                   "checkPurpose"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -595,7 +623,10 @@
                   "fallbackRef"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -624,7 +655,10 @@
                   "overridePath"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -651,7 +685,10 @@
                   "outcomeRef"
                 ]
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
           }
         },
         {
@@ -675,7 +712,39 @@
                 },
                 "description": "Phase-end body. Recommended: phaseRef, nextPhaseRef OR terminalRef (one of)."
               }
-            }
+            },
+            "required": [
+              "body"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "step",
+                  "system-check"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bridge": {
+                "type": "object",
+                "required": [
+                  "kernelKind"
+                ],
+                "description": "On ambiguous element kinds (step, system-check) bridge.kernelKind MUST be specified explicitly per workflow-intent.md 'Bridge inference rules' SA-MUST-wfi-005."
+              }
+            },
+            "required": [
+              "bridge"
+            ]
           }
         }
       ]

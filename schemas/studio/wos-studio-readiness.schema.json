@@ -234,7 +234,76 @@
             "type": "string"
           }
         }
+      },
+      "patternProperties": {
+        "^(\\$|x-)": {}
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ValidationFinding"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "finding"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ValidationReport"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "type": "array",
+            "description": "ValidationReport MUST carry a findings collection (may be empty if no issues)."
+          }
+        },
+        "required": [
+          "findings"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RuleRegistry"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "description": "RuleRegistry MUST list at least one rule."
+          }
+        },
+        "required": [
+          "rules"
+        ]
+      }
+    }
+  ]
 }

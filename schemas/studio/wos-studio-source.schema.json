@@ -172,15 +172,8 @@
           ]
         },
         "lifecycleState": {
-          "type": "string",
-          "enum": [
-            "ingested",
-            "parsed",
-            "indexed",
-            "classified",
-            "approved",
-            "superseded"
-          ]
+          "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/SourceVersionLifecycleState",
+          "description": "SourceVersion lifecycle state per source-vault.md. Enum lives in wos-studio-common.schema.json."
         },
         "supersededByRef": {
           "type": [
@@ -338,16 +331,8 @@
           "maximum": 1
         },
         "reviewState": {
-          "type": "string",
-          "enum": [
-            "candidate",
-            "normalized",
-            "needsReview",
-            "approved",
-            "rejected",
-            "merged",
-            "split"
-          ]
+          "$ref": "https://wos-spec.org/schemas/studio-common/1.0#/$defs/ExtractedClaimReviewState",
+          "description": "ExtractedClaim review state per source-vault.md. Enum lives in wos-studio-common.schema.json."
         },
         "proposedBy": {
           "type": "object",

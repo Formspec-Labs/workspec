@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wos-spec.org/schemas/studio-mapping/1.0",
-  "title": "WOS Studio (Authoring) — Studio-to-WOS Mapping",
-  "description": "StudioToWosMapping records per studio-authoring/specs/studio-to-wos-mapping.md and CONCEPT-MODEL.md §1.11. Each mapping declares one of the four mapping states (mapsToWos | authoringOnly | requiresSpecExtension | unmappedButApproved) for a PolicyObject. The four states encode the authoring-vocabulary-vs-substrate split named in CM §5 'WOS as canonical substrate'. Top-level document MAY carry one mapping or a `mappings[]` collection.",
-  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; the `targets[]` shape (for mapsToWos state) and `extensionRecord` shape (for requiresSpecExtension state) are illustrative — Stage-4 lint enforces precedence + per-state required fields.",
+  "title": "WOS Studio (Authoring) \u2014 Studio-to-WOS Mapping",
+  "description": "StudioToWosMapping records per studio-authoring/specs/studio-to-wos-mapping.md and CONCEPT-MODEL.md \u00a71.11. Each mapping declares one of the four mapping states (mapsToWos | authoringOnly | requiresSpecExtension | unmappedButApproved) for a PolicyObject. The four states encode the authoring-vocabulary-vs-substrate split named in CM \u00a75 'WOS as canonical substrate'. Top-level document MAY carry one mapping or a `mappings[]` collection.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; the `targets[]` shape (for mapsToWos state) and `extensionRecord` shape (for requiresSpecExtension state) are illustrative \u2014 Stage-4 lint enforces precedence + per-state required fields.",
   "type": "object",
   "required": [
     "$wosStudioMapping"
@@ -75,7 +75,7 @@
           "description": "How the PolicyObject relates to the WOS substrate. Precedence: mapsToWos > authoringOnly > requiresSpecExtension > unmappedButApproved.",
           "x-lm": {
             "critical": true,
-            "intent": "Mapping state — load-bearing for compilation routing and reviewer attestation requirements"
+            "intent": "Mapping state \u2014 load-bearing for compilation routing and reviewer attestation requirements"
           },
           "examples": [
             "mapsToWos",
@@ -98,7 +98,7 @@
               },
               "shapeRef": {
                 "type": "string",
-                "description": "Citation of closest WOS $def or block path. May be an authoritative $ref URL when a $def exists, or prose path otherwise (per CM §6.1 corrected pattern, 2026-05-01).",
+                "description": "Citation of closest WOS $def or block path. May be an authoritative $ref URL when a $def exists, or prose path otherwise (per CM \u00a76.1 corrected pattern, 2026-05-01).",
                 "examples": [
                   "wos-workflow.schema.json#/$defs/AppealMechanism",
                   "wos-workflow.schema.json#/$defs/DecisionTable"
@@ -106,7 +106,7 @@
               },
               "fieldBindings": {
                 "type": "array",
-                "description": "Per-field map from Studio body fields → WOS schema fields.",
+                "description": "Per-field map from Studio body fields \u2192 WOS schema fields.",
                 "items": {
                   "type": "object",
                   "additionalProperties": true
@@ -217,8 +217,81 @@
             "string",
             "integer"
           ]
+        },
+        "extensionRecordRef": {
+          "type": "string",
+          "description": "Alternative to inline extensionRecord \u2014 refers to an externally-stored ExtensionRecord by id. Authoritative when present."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mappingState": {
+                "const": "mapsToWos"
+              }
+            },
+            "required": [
+              "mappingState"
+            ]
+          },
+          "then": {
+            "properties": {
+              "targets": {
+                "type": "array",
+                "minItems": 1,
+                "description": "mapsToWos requires at least one target descriptor."
+              }
+            },
+            "required": [
+              "targets"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mappingState": {
+                "const": "requiresSpecExtension"
+              }
+            },
+            "required": [
+              "mappingState"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "extensionRecord"
+                ]
+              },
+              {
+                "required": [
+                  "extensionRecordRef"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mappingState": {
+                "const": "unmappedButApproved"
+              }
+            },
+            "required": [
+              "mappingState"
+            ]
+          },
+          "then": {
+            "required": [
+              "unmappedRationale"
+            ]
+          }
+        }
+      ]
     }
   }
 }
