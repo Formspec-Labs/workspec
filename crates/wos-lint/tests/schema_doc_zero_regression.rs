@@ -26,10 +26,13 @@ use std::path::{Path, PathBuf};
 /// PLN-0176..0207 still owns the fill. Ceiling raised from 79 → 228 to
 /// reflect the post-cleanup snapshot.
 ///
-/// - `wos-workflow.schema.json` — ceiling **228** = violation count emitted
+/// - `wos-workflow.schema.json` — ceiling **255** = violation count emitted
 ///   by `lint_schema`. Distributes across the new Signature $def + execution
-///   block + per-block embeds. Tripwire pushed to 2026-09-30 to give the
-///   absorption pass + canonical-description fill time to land.
+///   block + per-block embeds + the 2026-05-01 `decisionTable` first-class
+///   construct ($defs/{DecisionTable, DecisionTableRow, DecisionTableGuard}
+///   + top-level decisionTables[] + Transition.guard polymorphic oneOf;
+///   adds 27 nested leaves not yet filled). Tripwire pushed to 2026-09-30
+///   to give the absorption pass + canonical-description fill time to land.
 /// - `wos-delivery.schema.json` — **1** leaf the merge agent missed;
 ///   tracked follow-up.
 ///
@@ -47,9 +50,31 @@ use std::path::{Path, PathBuf};
 /// count grows while violation count stays flat, the ratchet trips. The
 /// 2026-06-30 tripwire is the human-trust fallback until one of these lands.
 const EXCLUDED_SCHEMAS_CEILINGS: &[(&str, usize)] = &[
-    ("schemas/wos-workflow.schema.json", 228),
+    ("schemas/wos-workflow.schema.json", 255),
     ("schemas/sidecars/wos-delivery.schema.json", 1),
     ("schemas/wos-tooling.schema.json", 16),
+    // Studio Stage-3 schemas landed 2026-05-01; per the wos-studio-author
+    // discipline (CONCEPT-MODEL §6.1) only ~5 fields per schema were marked
+    // x-lm.critical=true with the description+examples treatment that
+    // SCHEMA-DOC-001 demands. The remaining leaves are sketch-quality and
+    // get filled as Stage-4 lint rules + Stage-5 compiler exercise them.
+    // Each ceiling matches the post-Wave-1 review-remediation snapshot
+    // (commits 1934032..fdb8c85). Ratchet still monotonic-decreasing.
+    ("schemas/studio/wos-studio-approval.schema.json", 95),
+    ("schemas/studio/wos-studio-binding.schema.json", 26),
+    ("schemas/studio/wos-studio-common.schema.json", 18),
+    ("schemas/studio/wos-studio-effectiveness.schema.json", 32),
+    ("schemas/studio/wos-studio-identity-subject.schema.json", 17),
+    ("schemas/studio/wos-studio-mapping.schema.json", 47),
+    ("schemas/studio/wos-studio-migration-path.schema.json", 21),
+    ("schemas/studio/wos-studio-policy-object.schema.json", 34),
+    ("schemas/studio/wos-studio-provenance.schema.json", 44),
+    ("schemas/studio/wos-studio-readiness.schema.json", 59),
+    ("schemas/studio/wos-studio-scenario.schema.json", 40),
+    ("schemas/studio/wos-studio-source.schema.json", 81),
+    ("schemas/studio/wos-studio-terminology-map.schema.json", 38),
+    ("schemas/studio/wos-studio-workflow-intent.schema.json", 68),
+    ("schemas/studio/wos-studio-workspace.schema.json", 62),
 ];
 
 /// Companion leaf-count ceilings (wos-spec-author F7 mitigation, 2026-04-28):
@@ -60,9 +85,12 @@ const EXCLUDED_SCHEMAS_CEILINGS: &[(&str, usize)] = &[
 /// Both ratchets MUST stay monotonic-decreasing. The expectation is leaves
 /// fill (violations decrease) WITHOUT new leaves being added (count stays).
 /// `wos-workflow` leaf ceiling bumped 2026-04-28 to match `count_schema_leaves`
-/// on the merged envelope (post–ADR 0076); lower only when leaves are removed.
+/// on the merged envelope (post–ADR 0076). Bumped 2026-05-02 from 314 → 335
+/// to match the `decisionTable` first-class construct landed per Kernel
+/// §4.5.1 (3 new $defs + top-level decisionTables[] + Transition.guard
+/// polymorphic oneOf). Lower only when leaves are removed.
 const EXCLUDED_SCHEMAS_LEAF_CEILINGS: &[(&str, usize)] = &[
-    ("schemas/wos-workflow.schema.json", 314),
+    ("schemas/wos-workflow.schema.json", 335),
     ("schemas/sidecars/wos-delivery.schema.json", 47),
     ("schemas/wos-tooling.schema.json", 93),
 ];

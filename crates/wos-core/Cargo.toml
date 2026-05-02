@@ -9,7 +9,7 @@ repository.workspace = true
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
-fel-core = { path = "../../../crates/fel-core" }
+fel-core = { path = "../../formspec/crates/fel-core" }
 indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

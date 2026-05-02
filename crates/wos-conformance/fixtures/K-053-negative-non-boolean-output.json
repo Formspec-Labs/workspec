@@ -1,7 +1,7 @@
 {
   "id": "K-053-negative-non-boolean-output",
   "rule": "K-053",
-  "description": "Negative case: a transition guard's DecisionTableGuard.outputColumn references an output column whose declared type is `string`, not `boolean`. Per Kernel §4.5.1.4 transition-guard tables MUST select a boolean output column (a guard's job is to produce a boolean). Lint MUST emit K-053.",
+  "description": "Negative case: a transition guard's DecisionTableGuard.outputColumn references an output column whose declared type is `string`, not `boolean`. Per Kernel \u00a74.5.1.4 transition-guard tables MUST select a boolean output column (a guard's job is to produce a boolean). Lint MUST emit K-053.",
   "documents": {
     "kernel": "inline"
   },
@@ -11,11 +11,17 @@
       "$schema": "https://wos-spec.org/schemas/workflow/1.0",
       "url": "https://test.example/workflows/k-053-non-bool",
       "version": "1.0.0",
-      "title": "K-053 Negative — Non-boolean output column for guard",
+      "title": "K-053 Negative \u2014 Non-boolean output column for guard",
       "description": "Guard references `outcome` which is string-typed. K-053 fires.",
       "status": "active",
       "impactLevel": "operational",
-      "actors": [{ "id": "caseworker", "type": "human", "description": "Caseworker" }],
+      "actors": [
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Caseworker"
+        }
+      ],
       "lifecycle": {
         "initialState": "intake",
         "states": {
@@ -29,27 +35,57 @@
                   "kind": "decisionTable",
                   "ref": "outcomeTable",
                   "outputColumn": "outcome",
-                  "inputBindings": { "income": "caseFile.income" }
+                  "inputBindings": {
+                    "income": "caseFile.income"
+                  }
                 }
               }
             ]
           },
-          "approved": { "type": "final" }
+          "approved": {
+            "type": "final"
+          }
         }
       },
       "decisionTables": [
         {
           "id": "outcomeTable",
-          "inputs": [{ "name": "income", "type": "number" }],
-          "outputs": [{ "name": "outcome", "type": "string" }],
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "outcome",
+              "type": "string"
+            }
+          ],
           "rows": [
-            { "id": "r1", "inputCells": ["income <= 1473"], "outputCells": ["\"approved\""] },
-            { "id": "rDefault", "inputCells": [], "outputCells": ["\"denied\""] }
+            {
+              "id": "r1",
+              "inputCells": [
+                "income <= 1473"
+              ],
+              "outputCells": [
+                "\"approved\""
+              ]
+            },
+            {
+              "id": "rDefault",
+              "inputCells": [],
+              "outputCells": [
+                "\"denied\""
+              ]
+            }
           ],
           "hitPolicy": "first"
         }
       ],
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P30D",
         "defaultTaskTimeout": "P7D",
@@ -61,6 +97,6 @@
   "expected_transitions": [],
   "expected_provenance": [],
   "expected_errors": [
-    "K-053: DecisionTableGuard at lifecycle.states.intake.transitions[0].guard selects outputColumn 'outcome' which is type 'string'; transition-guard tables MUST select a boolean-typed output column"
+    "K-053: DecisionTableGuard at /lifecycle/states/intake/transitions/0/guard selects outputColumn 'outcome' which is type 'string'; transition-guard tables MUST select a boolean-typed output column"
   ]
 }

@@ -1,7 +1,7 @@
 {
   "id": "K-051-negative-unresolved-table-ref",
   "rule": "K-051",
-  "description": "Negative case: a transition guard's DecisionTableGuard.ref points to a `decisionTables[]` id that does not exist in the document. Per Kernel §4.5.1, the lint MUST emit K-051 and reject the document.",
+  "description": "Negative case: a transition guard's DecisionTableGuard.ref points to a `decisionTables[]` id that does not exist in the document. Per Kernel \u00a74.5.1, the lint MUST emit K-051 and reject the document.",
   "documents": {
     "kernel": "inline"
   },
@@ -11,11 +11,17 @@
       "$schema": "https://wos-spec.org/schemas/workflow/1.0",
       "url": "https://test.example/workflows/k-051-bad-ref",
       "version": "1.0.0",
-      "title": "K-051 Negative — Unresolved DecisionTable ref",
+      "title": "K-051 Negative \u2014 Unresolved DecisionTable ref",
       "description": "Guard refs `nonExistentTable`; the document declares only `eligibilityTable`. K-051 fires.",
       "status": "active",
       "impactLevel": "operational",
-      "actors": [{ "id": "caseworker", "type": "human", "description": "Caseworker" }],
+      "actors": [
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Caseworker"
+        }
+      ],
       "lifecycle": {
         "initialState": "intake",
         "states": {
@@ -29,24 +35,50 @@
                   "kind": "decisionTable",
                   "ref": "nonExistentTable",
                   "outputColumn": "eligible",
-                  "inputBindings": { "income": "caseFile.income" }
+                  "inputBindings": {
+                    "income": "caseFile.income"
+                  }
                 }
               }
             ]
           },
-          "approved": { "type": "final" }
+          "approved": {
+            "type": "final"
+          }
         }
       },
       "decisionTables": [
         {
           "id": "eligibilityTable",
-          "inputs": [{ "name": "income", "type": "number" }],
-          "outputs": [{ "name": "eligible", "type": "boolean" }],
-          "rows": [{ "id": "r1", "inputCells": ["income <= 1473"], "outputCells": ["true"] }],
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "eligible",
+              "type": "boolean"
+            }
+          ],
+          "rows": [
+            {
+              "id": "r1",
+              "inputCells": [
+                "income <= 1473"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            }
+          ],
           "hitPolicy": "first"
         }
       ],
-      "caseFile": { "fields": {} },
+      "caseFile": {
+        "fields": {}
+      },
       "execution": {
         "workflowTimeout": "P30D",
         "defaultTaskTimeout": "P7D",
@@ -58,6 +90,6 @@
   "expected_transitions": [],
   "expected_provenance": [],
   "expected_errors": [
-    "K-051: DecisionTableGuard at lifecycle.states.intake.transitions[0].guard references unknown table 'nonExistentTable' (declared tables: eligibilityTable)"
+    "K-051: DecisionTableGuard at /lifecycle/states/intake/transitions/0/guard references unknown table 'nonExistentTable' (declared tables: eligibilityTable)"
   ]
 }

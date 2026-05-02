@@ -31,9 +31,13 @@ edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/formspec/formspec"
 
-# fel-core lives in the Formspec monorepo (`../crates/fel-core` when this tree is `formspec/wos-spec`).
+# fel-core lives in the Formspec monorepo. Two checkout layouts supported:
+#   1. As a submodule of this repo at `formspec/crates/fel-core` (the default
+#      since 2026-05-02; `git submodule update --init --recursive` populates it).
+#   2. As the parent monorepo at `../crates/fel-core` when this tree is
+#      checked out as `formspec/wos-spec/` inside it.
 [workspace.dependencies]
-fel-core = { path = "../crates/fel-core" }
+fel-core = { path = "formspec/crates/fel-core" }
 
 [profile.dev]
 # Trim debug metadata and increase codegen parallelism for faster compile-test loops.
