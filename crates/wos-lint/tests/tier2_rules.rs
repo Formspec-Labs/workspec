@@ -34,17 +34,200 @@ fn path_of(diagnostics: &[wos_lint::LintDiagnostic], rule_id: &str) -> Option<St
         .map(|d| d.path.clone())
 }
 
-/// Write multiple WOS documents to a temporary directory and run `lint_project`.
+/// Write WOS documents to a temporary directory and run `lint_project`.
+///
+/// Per ADR 0076, the author-time WOS envelope is a single `$wosWorkflow`
+/// document with embedded `governance` / `agents` / `aiOversight` /
+/// `advanced` / `signature` blocks. The historical four-document authoring
+/// shape (kernel + governance + ai + advanced) collapsed into one document.
+///
+/// These tier-2 tests were originally authored against the four-document
+/// shape and pass each block as a separate `$wosWorkflow` JSON. The lint
+/// dispatch (`tier2.rs`) reads governance / agents / advanced strictly from
+/// embedded blocks of a single workflow envelope, so passing two top-level
+/// `$wosWorkflow` documents would yield empty diagnostics for every governance,
+/// agents-from-governance, and advanced-block rule.
+///
+/// To preserve the existing test ergonomics while honouring the post-ADR
+/// invariant, this helper merges all `$wosWorkflow` inputs into a single
+/// envelope before writing to disk:
+///
+/// | filename hint                           | embed location                  |
+/// |-----------------------------------------|---------------------------------|
+/// | `kernel.json`                           | base envelope (used as-is)      |
+/// | `governance.json`                       | fields → `governance.*`         |
+/// | `assertions.json`                       | fields → `governance.*`         |
+/// | `due-process.json`                      | fields → `governance.dueProcess.*` |
+/// | `ai.json`, `ai-integration.json`        | fields → top level (where AI rules read) |
+/// | `advanced.json`, `advanced-governance.json`, `drift-monitor.json` | fields → `advanced.*` |
+/// | `verification-report.json`              | re-marked `$wosProvenanceLog` (kept separate) |
+///
+/// Other markers (`$wosDelivery`, `$wosCaseInstance`, `$wosProvenanceLog`)
+/// are written verbatim — they are real sidecar / artifact documents.
 fn lint_project_with_docs(docs: Vec<(&str, serde_json::Value)>) -> Vec<wos_lint::LintDiagnostic> {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
-    for (filename, doc) in &docs {
-        let path = dir.path().join(filename);
-        let mut file = std::fs::File::create(&path).expect("failed to create file");
-        let json_str = serde_json::to_string_pretty(doc).expect("serialization failed");
-        file.write_all(json_str.as_bytes())
-            .expect("failed to write");
+
+    // Bucket inputs into:
+    //   - workflow inputs: those carrying $wosWorkflow (to be merged)
+    //   - sidecar / artifact inputs: those with other $wos* markers (written as-is)
+    let mut workflow_inputs: Vec<(&str, serde_json::Value)> = Vec::new();
+    let mut sidecar_inputs: Vec<(String, serde_json::Value)> = Vec::new();
+    for (filename, doc) in docs {
+        if doc.get("$wosWorkflow").is_some() {
+            workflow_inputs.push((filename, doc));
+        } else {
+            sidecar_inputs.push((filename.to_string(), doc));
+        }
     }
+
+    // Pre-extract verification-report.json fixtures: VR-003 dispatches on
+    // $wosProvenanceLog artifacts, not on the $wosWorkflow envelope. Re-mark
+    // and treat as a sidecar/artifact regardless of position.
+    let mut i = 0;
+    while i < workflow_inputs.len() {
+        if workflow_inputs[i].0 == "verification-report.json" {
+            let (filename, doc) = workflow_inputs.remove(i);
+            let mut vr = doc;
+            if let Some(obj) = vr.as_object_mut() {
+                obj.remove("$wosWorkflow");
+                obj.insert("$wosProvenanceLog".to_string(), serde_json::json!("1.0"));
+            }
+            sidecar_inputs.push((filename.to_string(), vr));
+        } else {
+            i += 1;
+        }
+    }
+
+    // Build the merged workflow envelope.
+    if !workflow_inputs.is_empty() {
+        // Find the kernel envelope. If the test passed a kernel.json, use it
+        // as the base. Otherwise synthesize a minimal envelope so legacy
+        // governance-only fixtures (which expect the workflow URL to come
+        // from the legacy targetWorkflow field) still resolve correctly.
+        let kernel_idx = workflow_inputs
+            .iter()
+            .position(|(name, _)| *name == "kernel.json");
+        let mut base = match kernel_idx {
+            Some(i) => workflow_inputs.remove(i).1,
+            None => {
+                // Pull workflow url from any secondary's targetWorkflow so cross-doc
+                // resolution against $wosDelivery sidecars (G-060, G-063) still works.
+                let workflow_url = workflow_inputs
+                    .iter()
+                    .find_map(|(_, doc)| {
+                        doc.get("targetWorkflow")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string)
+                    })
+                    .unwrap_or_else(|| "https://example.com/workflow/test".to_string());
+                serde_json::json!({
+                    "$wosWorkflow": "1.0",
+                    "url": workflow_url,
+                })
+            }
+        };
+
+        for (filename, doc) in workflow_inputs {
+            embed_workflow_doc_into(&mut base, filename, doc);
+        }
+
+        // Write merged envelope as the single workflow file.
+        write_doc(&dir, "workflow.json", &base);
+    }
+
+    // Write all sidecar / artifact docs verbatim.
+    for (filename, doc) in &sidecar_inputs {
+        write_doc(&dir, filename, doc);
+    }
+
     wos_lint::lint_project(dir.path()).expect("lint_project returned Err")
+}
+
+/// Merge a secondary workflow doc's fields into the base envelope at the
+/// embedding location implied by `filename`. Preserves existing fields on the
+/// base; the secondary doc's `$wosWorkflow` and `url` markers are dropped.
+fn embed_workflow_doc_into(
+    base: &mut serde_json::Value,
+    filename: &str,
+    secondary: serde_json::Value,
+) {
+    let Some(secondary_obj) = secondary.as_object() else {
+        return;
+    };
+    let base_obj = base
+        .as_object_mut()
+        .expect("base workflow envelope must be a JSON object");
+
+    // Determine the embed mode from the filename hint.
+    enum Mode {
+        Top,                                // copy fields to top level
+        Nest(&'static str),                 // copy fields under base[<key>]
+        NestUnder(&'static [&'static str]), // copy fields under base[k1][k2]...
+    }
+    let mode = match filename {
+        "governance.json" | "assertions.json" => Mode::Nest("governance"),
+        "due-process.json" => Mode::NestUnder(&["governance", "dueProcess"]),
+        "ai.json" | "ai-integration.json" => Mode::Top,
+        "advanced.json" | "advanced-governance.json" | "drift-monitor.json" => {
+            Mode::Nest("advanced")
+        }
+        // Fallback: unknown filenames merge fields top-level (least surprising).
+        _ => Mode::Top,
+    };
+
+    // Fields to skip from any secondary workflow doc — they are envelope
+    // metadata, not authored content.
+    let skip = |k: &str| matches!(k, "$wosWorkflow" | "url");
+
+    match mode {
+        Mode::Top => {
+            for (k, v) in secondary_obj {
+                if skip(k) {
+                    continue;
+                }
+                base_obj.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+        }
+        Mode::Nest(block) => {
+            let target = base_obj
+                .entry(block.to_string())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            let target_obj = target
+                .as_object_mut()
+                .expect("embedded block must be a JSON object");
+            for (k, v) in secondary_obj {
+                if skip(k) {
+                    continue;
+                }
+                target_obj.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+        }
+        Mode::NestUnder(path) => {
+            let mut cursor: &mut serde_json::Map<String, serde_json::Value> = base_obj;
+            for segment in path {
+                let next = cursor
+                    .entry((*segment).to_string())
+                    .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+                cursor = next
+                    .as_object_mut()
+                    .expect("nested embed segment must be a JSON object");
+            }
+            for (k, v) in secondary_obj {
+                if skip(k) {
+                    continue;
+                }
+                cursor.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+        }
+    }
+}
+
+fn write_doc(dir: &tempfile::TempDir, filename: &str, doc: &serde_json::Value) {
+    let path = dir.path().join(filename);
+    let mut file = std::fs::File::create(&path).expect("failed to create file");
+    let json_str = serde_json::to_string_pretty(doc).expect("serialization failed");
+    file.write_all(json_str.as_bytes())
+        .expect("failed to write");
 }
 
 /// Minimal valid kernel document for cross-doc tests.
@@ -141,18 +324,17 @@ fn schema_valid_hold_policy(resume_trigger: &str) -> serde_json::Value {
 
 // ========================================================================
 // G-034: targetWorkflow MUST match kernel url.
+//
+// DEPRECATED post-ADR-0076: governance is an embedded block in the workflow
+// envelope, not a separate document with its own targetWorkflow link.
+// `crates/wos-lint/src/rules/tier2.rs` explicitly skips this check ("embedded
+// blocks share the same document, so this is always true"). The rule remains
+// in the registry as Draft for catalog completeness, but no fixture can fire
+// it under the merged-envelope authoring shape.
+//
+// The `_flagged` test was retired with this commit; the `_clean` test stays as
+// a regression guard that the dispatch never spuriously emits G-034.
 // ========================================================================
-
-#[test]
-fn g034_target_workflow_mismatch_flagged() {
-    let kernel = base_kernel();
-    let mut gov = base_governance();
-    gov["targetWorkflow"] = json!("https://wrong.example.com/workflow");
-
-    let diags = lint_project_with_docs(vec![("kernel.json", kernel), ("governance.json", gov)]);
-    assert!(has_rule(&diags, "G-034"), "expected G-034: {diags:?}");
-    assert_eq!(severity_of(&diags, "G-034"), Some(LintSeverity::Error));
-}
 
 #[test]
 fn g034_target_workflow_matches_clean() {
@@ -570,24 +752,16 @@ fn g028_hold_policy_with_hold_tagged_state_clean() {
 
 // ========================================================================
 // G-035: targetGovernance MUST reference a valid governance document.
+//
+// DEPRECATED post-ADR-0076: due-process content lives inside
+// `governance.dueProcess` of the merged workflow envelope. There is no
+// separate due-process document and therefore no `targetGovernance` link to
+// validate. The rule has no implementation in `tier2.rs` (only a registry
+// stub for catalog completeness).
+//
+// The `_flagged` test was retired with this commit; the `_clean` test stays
+// as a regression guard that the dispatch never spuriously emits G-035.
 // ========================================================================
-
-#[test]
-fn g035_target_governance_invalid_flagged() {
-    let kernel = base_kernel();
-    let gov = base_governance();
-    let dp = json!({
-        "$wosWorkflow": "1.0",
-        "targetGovernance": "https://wrong.example.com/governance"
-    });
-
-    let diags = lint_project_with_docs(vec![
-        ("kernel.json", kernel),
-        ("governance.json", gov),
-        ("due-process.json", dp),
-    ]);
-    assert!(has_rule(&diags, "G-035"), "expected G-035: {diags:?}");
-}
 
 #[test]
 fn g035_target_governance_valid_clean() {
