@@ -502,7 +502,10 @@ impl Evaluator {
                     continue;
                 }
                 if !self.evaluate_guard(
-                    transition.guard.as_deref(),
+                    transition
+                        .guard
+                        .as_ref()
+                        .and_then(crate::model::decision_table::Guard::as_fel_str),
                     event_data,
                     active_state,
                     &transition.target,
@@ -582,7 +585,10 @@ impl Evaluator {
                     continue;
                 }
                 if !self.evaluate_guard(
-                    transition.guard.as_deref(),
+                    transition
+                        .guard
+                        .as_ref()
+                        .and_then(crate::model::decision_table::Guard::as_fel_str),
                     event_data,
                     &active,
                     &transition.target,

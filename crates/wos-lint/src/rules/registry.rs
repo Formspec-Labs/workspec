@@ -1053,6 +1053,59 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: Some("Kernel S4.3"),
         suggested_fix: Some("Remove the duplicate from `tags` or choose a different `outcomeCode` value."),
     },
+    // K-051 / K-052 / K-053 — DecisionTable lint rules per Kernel §4.5.1.
+    // Unit tests in `crates/wos-lint/src/rules/decision_table.rs`; executable
+    // fixtures in `crates/wos-conformance/fixtures/K-05[123]-*.json` wired
+    // from `crates/wos-lint/tests/decision_table_fixtures.rs`.
+    RuleMetadata {
+        id: "K-051",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "DecisionTableGuard ref/outputColumn/inputBindings MUST resolve.",
+        fixtures: &[
+            "K-051-resolved-decision-table-guard.json",
+            "K-051-negative-unresolved-table-ref.json",
+            "K-051-negative-unresolved-output-column.json",
+            "K-051-negative-missing-input-binding.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1"),
+        suggested_fix: Some(
+            "Ensure DecisionTableGuard.ref names a top-level decisionTables[] entry, outputColumn names a declared output, and inputBindings covers every declared input.",
+        ),
+    },
+    RuleMetadata {
+        id: "K-052",
+        tier: Tier::T2,
+        severity: LintSeverity::Error,
+        summary: "DecisionTable rows for hitPolicy=unique/priority MUST be pairwise disjoint (or have distinct priorities under priority).",
+        fixtures: &[
+            "K-052-disjoint-unique-rows.json",
+            "K-052-negative-overlapping-unique-rows.json",
+            "K-052-negative-priority-tie.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1.4"),
+        suggested_fix: Some(
+            "Make rows pairwise disjoint, switch to hitPolicy=first, or assign distinct priority integers.",
+        ),
+    },
+    RuleMetadata {
+        id: "K-053",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "DecisionTable cell-shape: input cells boolean; transition-guard outputColumn boolean-typed; no collect hit policy on guards.",
+        fixtures: &[
+            "K-053-boolean-output-column.json",
+            "K-053-negative-non-boolean-output.json",
+            "K-053-negative-collect-hit-policy-on-guard.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1.4"),
+        suggested_fix: Some(
+            "Select a boolean-typed output column for transition-guard usage; avoid collect hit policy on tables referenced by guards.",
+        ),
+    },
     // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
     // crates/wos-lint/src/rules/tier2.rs (e.g. `k_ext_002_root_level_x_wos_key_flagged`).
     // The two linked `fixtures/validation/x-wos-*.json` files are authoring

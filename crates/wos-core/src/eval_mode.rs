@@ -238,6 +238,7 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            decision_tables: vec![],
             extensions: HashMap::new(),
         }
     }
@@ -373,6 +374,7 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            decision_tables: vec![],
             extensions: HashMap::new(),
         };
 
@@ -436,6 +438,7 @@ mod tests {
             execution: None,
             evaluation_mode: Some(EvaluationMode::Continuous),
             max_relationship_event_depth: None,
+            decision_tables: vec![],
             extensions: HashMap::new(),
         };
 

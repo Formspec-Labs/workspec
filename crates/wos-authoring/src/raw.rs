@@ -92,6 +92,7 @@ fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument 
         execution: None,
         evaluation_mode: None,
         max_relationship_event_depth: None,
+        decision_tables: vec![],
         extensions: HashMap::new(),
     }
 }

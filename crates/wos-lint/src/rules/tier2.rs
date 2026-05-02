@@ -247,6 +247,11 @@ pub fn check(project: &WosProject, diagnostics: &mut Vec<LintDiagnostic>) {
         check_fail_fast_error_final_states_typed(kernel, diagnostics);
         check_outcome_code_not_in_tags(kernel, diagnostics);
         super::continuous_mode::check(kernel, diagnostics);
+        // K-051 / K-052 / K-053 — DecisionTable lint rules per Kernel §4.5.1
+        // (landed 2026-05-01). K-051 + K-053 are T1-shaped structural checks;
+        // K-052 is T2 (FEL AST analysis). All three dispatch from the typed
+        // kernel here to share the table-index lookup.
+        super::decision_table::check(kernel, diagnostics);
     }
 
     // Governance rules — read from $wosWorkflow.governance embedded block.

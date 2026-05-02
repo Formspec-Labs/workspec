@@ -101,7 +101,16 @@ pub struct LintDiagnostic {
     /// Verification tier the rule belongs to.
     pub tier: Tier,
 
-    /// JSONPath to the offending location (e.g., `"$.states.approved"`).
+    /// JSON-pointer-shaped path to the offending location (e.g.,
+    /// `"/lifecycle/states/approved/transitions/0"`).
+    ///
+    /// **Format decision (2026-05-02, Stage 4 Wave 4 review remediation):**
+    /// Slash-separated, leading-slash-prefixed, parallel to RFC-6901 JSON
+    /// Pointer. This matches the K-049 implementation in
+    /// `rules/continuous_mode.rs:206-209,274` and is what the K-051/K-052/K-053
+    /// fixtures' `expected_errors` substrings will match against. Earlier
+    /// drafts of this doc said `$.`-prefixed JSONPath; that form is
+    /// **rejected** to avoid the three-way conflict surfaced in code review.
     pub path: String,
 
     /// Human-readable description of the problem.

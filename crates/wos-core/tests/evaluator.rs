@@ -37,6 +37,7 @@ fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocum
         execution: None,
         evaluation_mode: None,
         max_relationship_event_depth: None,
+        decision_tables: vec![],
         extensions: HashMap::new(),
     }
 }
@@ -93,7 +94,9 @@ fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
     Transition {
         event: Some(TransitionEvent::from_authoring_trigger(event)),
         target: target.to_string(),
-        guard: Some(guard.to_string()),
+        guard: Some(wos_core::model::decision_table::Guard::Fel(
+            guard.to_string(),
+        )),
         actions: vec![],
         description: None,
         tags: vec![],
