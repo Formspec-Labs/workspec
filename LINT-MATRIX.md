@@ -1,5 +1,7 @@
 # WOS Verification Matrix
 
+> **Updated 2026-05-02 (Wave-4 review remediation)** — `K-051`/`K-052`/`K-053` fixtures landed at `crates/wos-conformance/fixtures/K-05[123]-*.json` (10 files: 4+3+3 across the three rules). Status remains `draft` because the Rust impl is not yet shipped; graduation to `tested` requires the corrected Stage-4 plan at `thoughts/plans/2026-05-01-stage-4-decision-table-lint-rules.md` to land its three waves (wos-core typed surface area, new lint-test target, lint-rule impl).
+>
 > **Updated 2026-05-01** — three decision-table rules registered (`K-051`/`K-052`/`K-053` per Kernel §4.5.1) backing the `decisionTable` first-class kernel construct that lands `requiresSpecExtension` queue item from Studio's mapping spec (Studio→`mapsToWos`). 122 rules across 38 T1 / 75 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 107 Draft). Rust impl + fixtures deferred (Stage-4 work in `crates/wos-lint`).
 >
 > **Updated 2026-04-28** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). 119 rules across 36 T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 14 Tested, 104 Draft).

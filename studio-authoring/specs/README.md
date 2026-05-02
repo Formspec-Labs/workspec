@@ -121,7 +121,7 @@ Studio composes (does not reinvent) the following parent-stack contracts:
 
 ## What is not (yet) in this folder
 
-- **JSON Schemas** (Stage 3) — the structural form of every Studio object. Per CM §6.1 schema composition strategy: ~10 schemas (not ~33) by composition with parent WOS schemas. WOS is the canonical projection substrate per CM §5 (target-neutral authoring + risk-profile differentiation via embedded-block conditionality).
+- **JSON Schemas** (Stage 3) — the structural form of every Studio object. Landed 2026-05-01 at `schemas/studio/` (**15 schemas** total) per CM §6.1 schema composition strategy — was nominally ~14 in the original Stage-3 commit; the 15th (`wos-studio-mapping.schema.json`) landed in the audit-fix pass. Wave-1 review remediation (2026-05-02) tightened per-kind body enforcement, wired `wos-studio-common` lifecycle enums via `$ref`, and added 20 negative tests under `tests/schemas/test_studio_negative.py`. WOS is the canonical projection substrate per CM §5 (target-neutral authoring + risk-profile differentiation via embedded-block conditionality).
 - **Lint engine** (Stage 4) — the implementation of the rule registry that fires the readiness findings these specs name.
 - **Studio→WOS compiler** (Stage 5) — the implementation of `compiler-contract.md`.
 - **Scenario simulator** (Stage 6) — the runtime that exercises Scenarios.

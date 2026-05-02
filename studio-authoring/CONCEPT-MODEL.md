@@ -468,7 +468,7 @@ Pointers into [`../schemas/`](../schemas/) reference the consolidated `wos-workf
 
 ## 6.1 Schema composition strategy (Stage-3 design)
 
-A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content can be co-located cleanly with related entities. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to ~14 by composition.
+A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content can be co-located cleanly with related entities. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to **15** by composition (was nominally ~14 in the original Stage-3 commit; the 15th — `wos-studio-mapping.schema.json` — landed in the audit-fix pass and survives Wave 1 of review remediation).
 
 ### Pre-stage clarifications (2026-05-01)
 
@@ -479,6 +479,18 @@ A Stage-3 design review identified three corrections to earlier framings in this
 2. **`wos-tooling.schema.json` has no `scenarios` $def.** Studio Scenario is therefore a standalone schema; the runtime correlate is `conformanceTrace.fixtureRef` (already in `wos-tooling.schema.json`), which cites `scenario.id` at runtime.
 
 3. **Bridge kinds belong in workflow-intent, not policy-object.** The 6 bridge kinds (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) are products of bridge-inference compilation, not author-written PolicyObjects. They co-locate with WorkflowIntent so the kernel-kind / bridge-kind referential closure is local to one schema file.
+
+### Wave-1 review-remediation clarifications (2026-05-02)
+
+A second-round semi-formal code review (three agents using the methodology at https://raw.githubusercontent.com/mikewolfd/semi-formal-code-review-skill/main/SKILL.md) found that `wos-studio-common.schema.json` originally exported 13 `$defs` of which only 2 (`OriginClass`, `MappingState`) were actually `$ref`'d by other schemas — the rest were dead. Wave 1 of the remediation:
+
+- **Pruned common to 9 $defs:** kept `OriginClass`, `MappingState`, the 5 lifecycle/review enums, `AuthorityGrantApplied`, `Iri`. Deleted the `StudioMetadataEnvelope` (claimed-but-never-inherited), `CitationRef`, `ProvenanceRecordRef`, `FelExpression`.
+- **Wired the 5 lifecycle enums via `$ref`** in their consumers (policy-object, workflow-intent, scenario, source) — eliminates the inline-duplicate drift hazard.
+- **Updated common's description** to drop the false "every Studio object inherits StudioMetadataEnvelope" claim. The envelope is conceptual; per-host inlining is the actual contract.
+- **Per-kind body enforcement extended** to Approval, Readiness, Mapping (added `allOf` if/then clauses) and tightened on WorkflowIntent (added `required: ["body"]` on every element-kind clause + `kernelKind` requirement on ambiguous kinds `step` + `system-check`).
+- **`extensionRecord` denormalization clarified.** The PolicyObject schema no longer carries `extensionRecord` as an optional property; the authoritative copy lives on the StudioToWosMapping per studio-to-wos-mapping.md. Examples follow this invariant.
+- **Negative-fixture coverage** added at `tests/schemas/test_studio_negative.py` (20 tests) — locks the new `allOf` enforcement under CI so future schema regressions surface as test failures.
+- **Studio schema count: 15** (was nominally 14; the 15th is `wos-studio-mapping.schema.json` added in audit-fix #4).
 
 The composition table below reflects these corrections.
 

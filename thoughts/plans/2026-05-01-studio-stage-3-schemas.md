@@ -132,3 +132,19 @@ Branch `claude/wos-studio-setup-zFFDC` HEAD `ded8f31`. Commits this session:
 - `ded8f31` — bridge.kernelKind inference (SA-MUST-wfi-005/006; example dropped redundant field on 13 of 15 elements; cross-cutting audit cleanup)
 
 Stage 2 (16 specs, 34 entities, ~600 SA-MUST IDs across families) complete; ready for Stage 3 schemas per this plan.
+
+## Remediation closing notes (2026-05-02)
+
+This plan was executed (Stage-3 schemas at `ebeed47`, audit fixes at `0cc4928`, per-kind body enforcement at `0acfe09`, K-05X fixtures + Stage 4 plan at `3d3f979`). A subsequent semi-formal code-review pass (three background agents using the methodology at https://raw.githubusercontent.com/mikewolfd/semi-formal-code-review-skill/main/SKILL.md) surfaced **5 critical, 14 major, 10 minor findings**. Several commit messages over-claimed verification posture.
+
+The remediation plan is captured in the Stage 3 + Stage 4 review-remediation document and lands in 5 waves:
+
+- Wave 1 (`1934032`) — schema integrity fixes (8 schemas + new negative-fixture test)
+- Wave 2 (`e81a1bf`) — example artifact fixes (wos-workflow.json 23 → 0 errors; 4 new directories; extensionRecord denormalization)
+- Wave 3 (`30b913f`) — test harness gaps (collection-form expansion + studio-authoring CI gate; 5 more example artifacts to satisfy the new coverage gate)
+- Wave 4 (`9f02d89`) — Stage 4 plan rewrite (Wave-0 wos-core surface added; Wave-1' new lint-test target; JSONPath shape decision; fictional imports fixed; fixture rename + witness decoupling)
+- Wave 5 (this commit) — documentation reconciliation
+
+Final test state: **342 passing**, 8 pre-existing signature-profile failures unchanged. Every Studio schema has at least one example artifact. Negative-fixture coverage locks the per-kind/per-state `allOf` enforcement under CI.
+
+The corrected Stage 4 plan now sits at `thoughts/plans/2026-05-01-stage-4-decision-table-lint-rules.md` (replaced wholesale in Wave 4).
