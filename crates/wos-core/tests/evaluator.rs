@@ -672,3 +672,243 @@ fn guard_evaluation_inputs_include_event_data() {
         "unreferenced event data must not leak into inputs"
     );
 }
+
+// ── Decision-table guard end-to-end (Kernel §4.5.1.2) ───────────
+
+/// End-to-end: a kernel doc declaring a `decisionTables[]` entry plus a
+/// transition guarded by a `DecisionTableGuard` that points at it. The
+/// transition fires (or doesn't) based on case state and the
+/// hit-policy/output-cell evaluation per Kernel §4.5.1.2.
+///
+/// Pre-fix: the `as_fel_str` short-circuit at `eval.rs:505,585` returned
+/// `None` for `Guard::DecisionTable`, which `evaluate_guard` interpreted
+/// as "no guard", so the transition fired UNCONDITIONALLY regardless of
+/// case state — a workflow could not actually depend on a decision-table
+/// guard. This test would pass either way for the eligible case but
+/// would fire (incorrectly) for the ineligible case under the old code.
+#[test]
+fn decision_table_guard_routes_to_table_evaluator() {
+    use wos_core::model::decision_table::{
+        DecisionTable, DecisionTableGuard, DecisionTableGuardKind, DecisionTableInput,
+        DecisionTableOutput, DecisionTableRow, FelType, Guard, HitPolicy,
+    };
+
+    let table = DecisionTable {
+        id: "snap-elig".to_string(),
+        description: Some("SNAP income/household-size eligibility".to_string()),
+        inputs: vec![
+            DecisionTableInput {
+                name: "income".to_string(),
+                kind: FelType::Number,
+                description: None,
+            },
+            DecisionTableInput {
+                name: "householdSize".to_string(),
+                kind: FelType::Integer,
+                description: None,
+            },
+        ],
+        outputs: vec![DecisionTableOutput {
+            name: "eligible".to_string(),
+            kind: FelType::Boolean,
+            description: None,
+        }],
+        rows: vec![
+            DecisionTableRow {
+                id: "r-1or2-person".to_string(),
+                input_cells: vec![
+                    "householdSize <= 2".to_string(),
+                    "income <= 2500".to_string(),
+                ],
+                output_cells: vec!["true".to_string()],
+                priority: None,
+                rationale: Some("FFY26 1-2 person FPL bracket".to_string()),
+            },
+            DecisionTableRow {
+                id: "r-3or4-person".to_string(),
+                input_cells: vec![
+                    "householdSize >= 3".to_string(),
+                    "householdSize <= 4".to_string(),
+                    "income <= 4500".to_string(),
+                ],
+                output_cells: vec!["true".to_string()],
+                priority: None,
+                rationale: None,
+            },
+        ],
+        hit_policy: HitPolicy::First,
+    };
+
+    let mut bindings = IndexMap::new();
+    bindings.insert("income".to_string(), "caseFile.monthlyIncome".to_string());
+    bindings.insert(
+        "householdSize".to_string(),
+        "caseFile.householdSize".to_string(),
+    );
+    let guard = DecisionTableGuard {
+        kind: DecisionTableGuardKind::DecisionTable,
+        table_ref: "snap-elig".to_string(),
+        output_column: "eligible".to_string(),
+        input_bindings: bindings,
+        on_no_match: None,
+    };
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "screening".into(),
+        atomic(vec![Transition {
+            event: Some(TransitionEvent::from_authoring_trigger("screen")),
+            target: "approved".into(),
+            guard: Some(Guard::DecisionTable(guard)),
+            actions: vec![],
+            description: None,
+            tags: vec![],
+        }]),
+    );
+    states.insert("approved".into(), final_state());
+
+    let mut doc = minimal_kernel("screening", states);
+    doc.decision_tables = vec![table];
+
+    // Eligible case: 1-person household with $1,200 monthly income
+    // matches r-1or2-person → eligible=true → transition fires.
+    {
+        let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 1});
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        assert!(eval.configuration().contains("screening"));
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(fired, "eligible case should fire the transition");
+        assert!(eval.configuration().contains("approved"));
+        assert!(!eval.configuration().contains("screening"));
+        let evals = eval.guard_evaluations();
+        assert_eq!(evals.len(), 1);
+        assert!(evals[0].result);
+        assert_eq!(
+            evals[0].expression, "decisionTable(snap-elig).eligible",
+            "expression carries the synthesized decisionTable trace label"
+        );
+        // Row-scope inputs surfaced under their declared names.
+        let inputs = &evals[0].inputs;
+        assert_eq!(
+            inputs.pointer("/income"),
+            Some(&serde_json::json!(1200)),
+            "row scope exposes input bindings under their declared names"
+        );
+        assert_eq!(
+            inputs.pointer("/householdSize"),
+            Some(&serde_json::json!(1))
+        );
+    }
+
+    // Ineligible case: 5-person household — no row matches → guard false →
+    // transition does NOT fire. This is the regression-defining case: under
+    // the old `as_fel_str` short-circuit it would have fired regardless.
+    {
+        let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 5});
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(
+            !fired,
+            "ineligible case must NOT fire the transition (pre-fix bug regressed silently here)"
+        );
+        assert!(eval.configuration().contains("screening"));
+        let evals = eval.guard_evaluations();
+        assert_eq!(evals.len(), 1);
+        assert!(!evals[0].result);
+    }
+
+    // Edge: 2-person household at exactly $2500 boundary → matches first
+    // row (the boundary is inclusive per the cell expression).
+    {
+        let case = serde_json::json!({"monthlyIncome": 2500, "householdSize": 2});
+        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(fired, "boundary case should fire");
+    }
+}
+
+/// Verify that a FEL-string guard and a decision-table guard with
+/// identical effective semantics produce the same dispatch outcome — the
+/// polymorphic `Guard` field routes correctly through the dispatcher in
+/// either form.
+#[test]
+fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
+    use wos_core::model::decision_table::{
+        DecisionTable, DecisionTableGuard, DecisionTableGuardKind, DecisionTableInput,
+        DecisionTableOutput, DecisionTableRow, FelType, Guard, HitPolicy,
+    };
+
+    fn run_with_guard(
+        guard: Guard,
+        decision_tables: Vec<DecisionTable>,
+        case: &serde_json::Value,
+    ) -> bool {
+        let mut states = IndexMap::new();
+        states.insert(
+            "start".into(),
+            atomic(vec![Transition {
+                event: Some(TransitionEvent::from_authoring_trigger("go")),
+                target: "end".into(),
+                guard: Some(guard),
+                actions: vec![],
+                description: None,
+                tags: vec![],
+            }]),
+        );
+        states.insert("end".into(), final_state());
+
+        let mut doc = minimal_kernel("start", states);
+        doc.decision_tables = decision_tables;
+
+        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(case)).unwrap();
+        eval.process_event("go", None, None).unwrap()
+    }
+
+    let table = DecisionTable {
+        id: "ge-zero".to_string(),
+        description: None,
+        inputs: vec![DecisionTableInput {
+            name: "x".to_string(),
+            kind: FelType::Number,
+            description: None,
+        }],
+        outputs: vec![DecisionTableOutput {
+            name: "ok".to_string(),
+            kind: FelType::Boolean,
+            description: None,
+        }],
+        rows: vec![DecisionTableRow {
+            id: "r1".to_string(),
+            input_cells: vec!["x >= 0".to_string()],
+            output_cells: vec!["true".to_string()],
+            priority: None,
+            rationale: None,
+        }],
+        hit_policy: HitPolicy::First,
+    };
+    let mut bindings = IndexMap::new();
+    bindings.insert("x".to_string(), "caseFile.x".to_string());
+    let dt_guard = Guard::DecisionTable(DecisionTableGuard {
+        kind: DecisionTableGuardKind::DecisionTable,
+        table_ref: "ge-zero".to_string(),
+        output_column: "ok".to_string(),
+        input_bindings: bindings,
+        on_no_match: None,
+    });
+
+    for x in [-1, 0, 1, 100] {
+        let case = serde_json::json!({"x": x});
+        let fel_fires = run_with_guard(
+            Guard::Fel("caseFile.x >= 0".to_string()),
+            vec![],
+            &case,
+        );
+        let dt_fires = run_with_guard(dt_guard.clone(), vec![table.clone()], &case);
+        assert_eq!(
+            fel_fires, dt_fires,
+            "FEL and DecisionTable guards must agree for x={x}: fel={fel_fires}, dt={dt_fires}"
+        );
+    }
+}

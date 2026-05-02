@@ -194,7 +194,9 @@ mod tests {
             atomic_state(vec![Transition {
                 event: None,
                 target: "approved".to_string(),
-                guard: Some("caseFile.ready == true".to_string()),
+                guard: Some(crate::model::decision_table::Guard::Fel(
+                    "caseFile.ready == true".to_string(),
+                )),
                 tags: Vec::new(),
                 actions: Vec::new(),
                 description: None,
@@ -276,7 +278,9 @@ mod tests {
             atomic_state(vec![Transition {
                 event: None,
                 target: "approved".to_string(),
-                guard: Some("caseFile.ready == true".to_string()),
+                guard: Some(crate::model::decision_table::Guard::Fel(
+                    "caseFile.ready == true".to_string(),
+                )),
                 tags: Vec::new(),
                 actions: Vec::new(),
                 description: None,
