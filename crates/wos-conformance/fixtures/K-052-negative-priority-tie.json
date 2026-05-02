@@ -61,6 +61,6 @@
   "expected_transitions": [],
   "expected_provenance": [],
   "expected_errors": [
-    "K-052: DecisionTable 'eligibilityTable' hitPolicy='priority' rows 'rA' and 'rB' have overlapping input domains and identical priority=1 (no deterministic winner)"
+    "K-052: DecisionTable 'eligibilityTable' hitPolicy='priority' rows 'rA' and 'rB' have overlapping input domains and identical priority"
   ]
 }

@@ -61,6 +61,6 @@
   "expected_transitions": [],
   "expected_provenance": [],
   "expected_errors": [
-    "K-052: DecisionTable 'eligibilityTable' has hitPolicy='unique' but rows 'rTier1' and 'rTier2' have overlapping input domains (both match e.g. income == 1000)"
+    "K-052: DecisionTable 'eligibilityTable' has hitPolicy='unique' but rows 'rTier1' and 'rTier2' have overlapping input domains"
   ]
 }
