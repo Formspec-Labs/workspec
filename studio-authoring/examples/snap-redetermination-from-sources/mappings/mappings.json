@@ -1,6 +1,6 @@
 {
   "$wosStudioMapping": "1.0",
-  "$comment": "StudioToWosMapping records — one per PolicyObject. Demonstrates all 4 mapping states. Illustrative.",
+  "$comment": "StudioToWosMapping records \u2014 one per PolicyObject. Demonstrates all 4 mapping states. Illustrative.",
   "workspaceId": "ws-snap-redetermination-tx-2026",
   "mappings": [
     {
@@ -8,7 +8,12 @@
       "subjectPolicyObjectRef": "pol-notice-adverse-action",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.governance.notices[?(@.id=='notice-adverse-action')]", "shapeRef": "wos-workflow.schema.json#/$defs/GovernanceNotice", "reviewedBy": "subj-priya-krishnan", "reviewedAt": "2026-04-23T11:00:00Z" }
+        {
+          "wosJsonPath": "$.governance.notices[?(@.id=='notice-adverse-action')]",
+          "shapeRef": "wos-workflow.schema.json#/$defs/GovernanceNotice",
+          "reviewedBy": "subj-priya-krishnan",
+          "reviewedAt": "2026-04-23T11:00:00Z"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -17,7 +22,10 @@
       "subjectPolicyObjectRef": "pol-appeal-right-fair-hearing",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.governance.appeals[?(@.id=='appeal-fair-hearing')]", "shapeRef": "wos-workflow.schema.json#/$defs/GovernanceAppeal" }
+        {
+          "wosJsonPath": "$.governance.appeals[?(@.id=='appeal-fair-hearing')]",
+          "shapeRef": "wos-workflow.schema.json#/$defs/GovernanceAppeal"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -26,7 +34,10 @@
       "subjectPolicyObjectRef": "pol-deadline-appeal-90-day",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.lifecycle.timers.appealWindow", "shapeRef": "wos-workflow.schema.json#/$defs/Timer" }
+        {
+          "wosJsonPath": "$.lifecycle.timers.appealWindow",
+          "shapeRef": "wos-workflow.schema.json#/$defs/Timer"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -35,7 +46,10 @@
       "subjectPolicyObjectRef": "pol-actor-caseworker",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.actors[?(@.id=='caseworker')]", "shapeRef": "wos-workflow.schema.json#/$defs/Actor" }
+        {
+          "wosJsonPath": "$.actors[?(@.id=='caseworker')]",
+          "shapeRef": "wos-workflow.schema.json#/$defs/Actor"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -44,7 +58,10 @@
       "subjectPolicyObjectRef": "pol-protected-category-language",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.advanced.equity.protectedCategories[?(@.categoryId=='language-spoken-spanish')]", "shapeRef": "wos-workflow.schema.json#/$defs/AdvancedEquityProtectedCategory" }
+        {
+          "wosJsonPath": "$.advanced.equity.protectedCategories[?(@.categoryId=='language-spoken-spanish')]",
+          "shapeRef": "wos-workflow.schema.json#/$defs/AdvancedEquityProtectedCategory"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -53,8 +70,16 @@
       "subjectPolicyObjectRef": "pol-decision-table-eligibility",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.decisionTables[?(@.id=='eligibilityTable')]", "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTable", "compilerNote": "DecisionTable projects 1:1 to parent kernel decisionTables[*] entry per Kernel §4.5.1 (landed 2026-05-01). Row ids preserved; hit policy explicit; round-trip lossless." },
-        { "wosJsonPath": "$.lifecycle.transitions[?(@.id=='intake-to-determination')].guard", "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTableGuard", "compilerNote": "Transition guard becomes a structured DecisionTableGuard ({kind: 'decisionTable', ref: 'eligibilityTable', outputColumn: 'eligible', inputBindings: {...}}) per Kernel §4.5.1." }
+        {
+          "wosJsonPath": "$.decisionTables[?(@.id=='eligibilityTable')]",
+          "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTable",
+          "compilerNote": "DecisionTable projects 1:1 to parent kernel decisionTables[*] entry per Kernel \u00a74.5.1 (landed 2026-05-01). Row ids preserved; hit policy explicit; round-trip lossless."
+        },
+        {
+          "wosJsonPath": "$.lifecycle.transitions[?(@.id=='intake-to-determination')].guard",
+          "shapeRef": "wos-workflow.schema.json#/$defs/DecisionTableGuard",
+          "compilerNote": "Transition guard becomes a structured DecisionTableGuard ({kind: 'decisionTable', ref: 'eligibilityTable', outputColumn: 'eligible', inputBindings: {...}}) per Kernel \u00a74.5.1."
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -63,11 +88,21 @@
       "subjectPolicyObjectRef": "pol-data-household-income",
       "mappingState": "mapsToWos",
       "targets": [
-        { "wosJsonPath": "$.caseFile.fields.household.income.monthlyGross", "shapeRef": "wos-workflow.schema.json#/$defs/CaseFileField" }
+        {
+          "wosJsonPath": "$.caseFile.fields.household.income.monthlyGross",
+          "shapeRef": "wos-workflow.schema.json#/$defs/CaseFileField"
+        }
       ],
       "extensionsApplied": [
-        { "extensionKey": "x-canonical-term", "value": "usda-snap:HouseholdIncome", "$comment": "Per ADR-0077 x- patternProperties; ExtensionRecord candidate to promote to first-class field queued in studio-to-wos-mapping.md." },
-        { "extensionKey": "x-dpv-sensitivity", "value": "dpv:FinancialPreference" }
+        {
+          "extensionKey": "x-canonical-term",
+          "value": "usda-snap:HouseholdIncome",
+          "$comment": "Per ADR-0077 x- patternProperties; ExtensionRecord candidate to promote to first-class field queued in studio-to-wos-mapping.md."
+        },
+        {
+          "extensionKey": "x-dpv-sensitivity",
+          "value": "dpv:FinancialPreference"
+        }
       ],
       "lifecycleState": "approved"
     },
@@ -84,9 +119,18 @@
       "subjectPolicyObjectRef": "pol-applicability-tx-snap-2026",
       "mappingState": "requiresSpecExtension",
       "targets": [],
-      "extensionRecordRef": "ext-applicability-scope-workflow-level",
       "$comment_until_ratified": "Compiler emits an x-wos-studio.applicability envelope at workflow root + derived FEL appliesWhen on per-element notices. Once parent ratifies wos-workflow.schema.json#applicabilityScope, this mapping migrates to mapsToWos with the new target.",
-      "lifecycleState": "approved"
+      "lifecycleState": "approved",
+      "extensionRecord": {
+        "id": "ext-applicability-scope-workflow-level",
+        "proposedSeam": "extensions",
+        "candidateConceptName": "wos-workflow.applicabilityScope",
+        "proposedSemantics": "Workflow-level applicability metadata (jurisdictions, programs) at the $wosWorkflow root, complementing per-element appliesWhen FEL. Today, jurisdiction is implicit via wos-delivery sidecar's appliesWhen; promoting to a top-level field would let external verifiers parse the workflow's applicability without parsing FEL.",
+        "proposedSchemaSketch": "{ jurisdictions: [{kind, code, displayName}], programs: [string], temporalScope: { intervals: [{start, end}] } }",
+        "motivatingPolicyObjectRef": "pol-applicability-tx-snap-2026",
+        "lifecycleState": "open",
+        "$comment": "Per studio-to-wos-mapping.md slight extension proposals queue; until ratified, compiler emits derived FEL appliesWhen on relevant elements + an x-wos-studio.applicability envelope at the workflow root."
+      }
     },
     {
       "id": "map-pol-assumption-holiday-period-flex",

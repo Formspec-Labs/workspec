@@ -8,24 +8,42 @@
       "lifecycleState": "approved",
       "originClass": "source",
       "body": {
-        "$comment": "Cross-document supersession per source-vault.md SA-MUST-source-006/007: the federal corrective-action letter supersedes office memo §4(a). Reviewer-driven (not auto-detected).",
-        "superseder": { "sourceVersion": "src-fns-corrective-action-2024-q3", "sectionAnchor": "Finding 1" },
-        "superseded": { "sourceVersion": "src-office-memo-recert-v3.2", "sectionAnchor": "§4(a)" },
+        "$comment": "Cross-document supersession per source-vault.md SA-MUST-source-006/007: the federal corrective-action letter supersedes office memo \u00a74(a). Reviewer-driven (not auto-detected).",
+        "superseder": {
+          "sourceVersion": "src-fns-corrective-action-2024-q3",
+          "sectionAnchor": "Finding 1"
+        },
+        "superseded": {
+          "sourceVersion": "src-office-memo-recert-v3.2",
+          "sectionAnchor": "\u00a74(a)"
+        },
         "effectiveAt": "2024-11-15",
         "scope": "all-Texas-SNAP-cases-going-forward",
-        "supersessionRationale": "Federal sub-regulatory letter (FNS Director's authority per 7 CFR §271) supersedes any conflicting state or local guidance. Office memo restricted appeal-request to written-only; federal regulation requires phone, in-person, AND written equivalently."
+        "supersessionRationale": "Federal sub-regulatory letter (FNS Director's authority per 7 CFR \u00a7271) supersedes any conflicting state or local guidance. Office memo restricted appeal-request to written-only; federal regulation requires phone, in-person, AND written equivalently."
       },
       "citations": [
-        { "sourceVersion": "src-fns-corrective-action-2024-q3", "sectionAnchor": "Finding 1", "relation": "supersedes" }
+        {
+          "sourceVersion": "src-fns-corrective-action-2024-q3",
+          "sectionAnchor": "Finding 1",
+          "relation": "supersedes"
+        }
       ],
       "mappingRef": "map-pol-supersession-letter-vs-memo",
       "mappingState": "authoringOnly",
       "$comment_mapping": "Supersession is workspace metadata; never appears in $wosWorkflow body. The CONSEQUENCE (the appeal-right policy object now allows phone+in-person+written) does project to WOS via pol-appeal-right-fair-hearing's mapping.",
       "provenance": [
-        { "id": "prov-pol-supersession-001", "eventKind": "approved", "recordedBy": "subj-marcus-williams", "role": "compliance-reviewer",
-          "rationale": "I read the FNS letter and verified that it supersedes office-memo §4(a). The supersession is reviewer-driven per SA-MUST-source-007.",
+        {
+          "id": "prov-pol-supersession-001",
+          "eventKind": "approved",
+          "recordedBy": "subj-marcus-williams",
+          "role": "compliance-reviewer",
+          "rationale": "I read the FNS letter and verified that it supersedes office-memo \u00a74(a). The supersession is reviewer-driven per SA-MUST-source-007.",
           "originClass": "source",
-          "hashChain": { "prevRecordHash": "sha256:abc123...", "selfHash": "sha256:def456..." } }
+          "hashChain": {
+            "prevRecordHash": "sha256:abc123...",
+            "selfHash": "sha256:def456..."
+          }
+        }
       ]
     },
     {
@@ -34,26 +52,30 @@
       "lifecycleState": "approved",
       "originClass": "source",
       "body": {
-        "programs": ["SNAP", "SNAP-E&T"],
-        "jurisdictions": [{ "kind": "state", "code": "US-TX", "displayName": "Texas" }],
+        "programs": [
+          "SNAP",
+          "SNAP-E&T"
+        ],
+        "jurisdictions": [
+          {
+            "kind": "state",
+            "code": "US-TX",
+            "displayName": "Texas"
+          }
+        ],
         "effectivenessRef": "eff-state-tx-snap-current"
       },
       "citations": [
-        { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "Cover", "excerpt": "Texas SNAP", "relation": "supports" }
+        {
+          "sourceVersion": "src-state-tx-snap-manual-ch8",
+          "sectionAnchor": "Cover",
+          "excerpt": "Texas SNAP",
+          "relation": "supports"
+        }
       ],
       "mappingRef": "map-pol-applicability-tx-snap-2026",
       "mappingState": "requiresSpecExtension",
-      "extensionRecord": {
-        "id": "ext-applicability-scope-workflow-level",
-        "proposedSeam": "extensions",
-        "candidateConceptName": "wos-workflow.applicabilityScope",
-        "proposedSemantics": "Workflow-level applicability metadata (jurisdictions, programs) at the $wosWorkflow root, complementing per-element appliesWhen FEL. Today, jurisdiction is implicit via wos-delivery sidecar's appliesWhen; promoting to a top-level field would let external verifiers parse the workflow's applicability without parsing FEL.",
-        "proposedSchemaSketch": "{ jurisdictions: [{kind, code, displayName}], programs: [string], temporalScope: { intervals: [{start, end}] } }",
-        "motivatingPolicyObjectRef": "pol-applicability-tx-snap-2026",
-        "lifecycleState": "open",
-        "$comment": "Per studio-to-wos-mapping.md slight extension proposals queue; until ratified, compiler emits derived FEL appliesWhen on relevant elements + an x-wos-studio.applicability envelope at the workflow root."
-      },
-      "wosTarget": "$.x-wos-studio.applicability (pending extension ratification → would become $.applicabilityScope)"
+      "wosTarget": "$.x-wos-studio.applicability (pending extension ratification \u2192 would become $.applicabilityScope)"
     },
     {
       "id": "pol-assumption-holiday-period-flex",
@@ -70,7 +92,7 @@
           "attestedBy": "subj-marcus-williams",
           "attestedAt": "2026-04-22T15:42:00Z",
           "attestationLevel": "high-assurance",
-          "rationale": "Reviewed under Office Procedure Memo §2(b) review. Practice does not violate 7 CFR §273.10(a)(2) (the 30-day notice rule) because holiday-period notices are still issued — just batched on the next business day. The continuity-of-services framework still applies; no household is harmed."
+          "rationale": "Reviewed under Office Procedure Memo \u00a72(b) review. Practice does not violate 7 CFR \u00a7273.10(a)(2) (the 30-day notice rule) because holiday-period notices are still issued \u2014 just batched on the next business day. The continuity-of-services framework still applies; no household is harmed."
         }
       },
       "mappingRef": "map-pol-assumption-holiday-period-flex",
@@ -84,9 +106,12 @@
       "lifecycleState": "approved",
       "originClass": "source",
       "body": {
-        "$comment": "Note: state §8.5 narrows federal §273.10(a)(1) for seasonal-agricultural households (3 months vs 6). Not actually a conflict — narrowing is permissible. Reviewer attested with a ReviewerResolution.",
-        "narrative": "State manual §8.5 prescribes 3-month redetermination for seasonal-agricultural households during growing season; federal §273.10(a)(1) prescribes 6-month default. State narrows.",
-        "conflictingObjects": ["pol-deadline-redeterm-fed-6mo", "pol-deadline-redeterm-state-tx-3mo-seasonal"],
+        "$comment": "Note: state \u00a78.5 narrows federal \u00a7273.10(a)(1) for seasonal-agricultural households (3 months vs 6). Not actually a conflict \u2014 narrowing is permissible. Reviewer attested with a ReviewerResolution.",
+        "narrative": "State manual \u00a78.5 prescribes 3-month redetermination for seasonal-agricultural households during growing season; federal \u00a7273.10(a)(1) prescribes 6-month default. State narrows.",
+        "conflictingObjects": [
+          "pol-deadline-redeterm-fed-6mo",
+          "pol-deadline-redeterm-state-tx-3mo-seasonal"
+        ],
         "resolution": {
           "kind": "reviewer-resolution",
           "resolvedAt": "2026-04-23T10:15:00Z",
@@ -104,15 +129,36 @@
       "originClass": "source",
       "body": {
         "rankings": [
-          { "kind": "federal", "rank": 1, "rationale": "7 CFR is federal statutory regulation" },
-          { "kind": "federal-sub-regulatory-letter", "rank": 1, "rationale": "FNS Director letters supersede any conflicting state/local guidance per 7 CFR §271" },
-          { "kind": "state", "rank": 2, "rationale": "State manual narrows federal where permissible; cannot widen" },
-          { "kind": "local-office-memo", "rank": 3, "rationale": "Office practice; cannot supersede regulation" }
+          {
+            "kind": "federal",
+            "rank": 1,
+            "rationale": "7 CFR is federal statutory regulation"
+          },
+          {
+            "kind": "federal-sub-regulatory-letter",
+            "rank": 1,
+            "rationale": "FNS Director letters supersede any conflicting state/local guidance per 7 CFR \u00a7271"
+          },
+          {
+            "kind": "state",
+            "rank": 2,
+            "rationale": "State manual narrows federal where permissible; cannot widen"
+          },
+          {
+            "kind": "local-office-memo",
+            "rank": 3,
+            "rationale": "Office practice; cannot supersede regulation"
+          }
         ],
         "applicableTo": "Texas SNAP redetermination workflow"
       },
       "citations": [
-        { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§271", "excerpt": "FNS regulatory authority", "relation": "supports" }
+        {
+          "sourceVersion": "src-cfr-7-273",
+          "sectionAnchor": "\u00a7271",
+          "excerpt": "FNS regulatory authority",
+          "relation": "supports"
+        }
       ],
       "mappingRef": "map-pol-authority-rank",
       "mappingState": "authoringOnly"

@@ -94,7 +94,7 @@ Maps each BLUF-flagged "wrong-by-omission" gap to the Studio readiness rule that
 
 ## What Stage-3+ tightens
 
-- JSON Schema validation against future Studio Stage-3 schemas + parent `wos-workflow.schema.json` for the compiled artifact.
+- JSON Schema validation against Studio Stage-3 schemas (landed 2026-05-01 at `schemas/studio/`) + parent `wos-workflow.schema.json` for the compiled artifact. After Wave-2 review remediation (2026-05-02): `wos-workflow.json` validates clean against the parent schema; collection-form policy-object documents validate via the Stage-3 `oneOf` shape; Effectiveness, IdentitySubject, Binding, and Source artifacts all materialized under `effectiveness/`, `identity/`, `bindings/`, `sources/` directories.
 - Stage-4 lint runs: every readiness-rule fires correctly.
 - Stage-5 compiler reproduces `wos-workflow.json` byte-for-byte from `policy-objects/ + mappings/ + workflow-intent.json`.
 - Stage-6 scenario simulator runs the scenarios and verifies expected vs. actual.

@@ -1,0 +1,88 @@
+{
+  "$comment": "IdentitySubject collection for the snap-redetermination vertical slice. Each subject referenced by approval-package.json + provenance records is materialized here. $wosStudioIdentitySubject schema is per-subject; the wrapper carries workspace context. Stage-3 example; production identity claims will compose parent PLN-0381 envelopes when ratified.",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "subjects": [
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-sarah-chen",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "Sarah Chen",
+      "claims": [
+        { "kind": "role", "value": "workflow-owner" },
+        { "kind": "employer", "value": "Texas DHS" },
+        { "kind": "license-jurisdiction", "value": "US-TX" }
+      ],
+      "publicKeyRef": "did:web:dhs.state.tx.us#sarah-chen-key-2026-04",
+      "algorithm": "Ed25519",
+      "validFrom": "2026-04-01",
+      "validUntil": null,
+      "revoked": false
+    },
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-marcus-williams",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "Marcus Williams",
+      "claims": [
+        { "kind": "role", "value": "compliance-reviewer" },
+        { "kind": "employer", "value": "Texas Office of Inspector General" }
+      ],
+      "publicKeyRef": "did:web:oig.state.tx.us#marcus-williams-key-2026-04",
+      "algorithm": "Ed25519",
+      "validFrom": "2026-04-01",
+      "validUntil": null,
+      "revoked": false
+    },
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-priya-krishnan",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "Priya Krishnan",
+      "claims": [
+        { "kind": "role", "value": "technical-reviewer" },
+        { "kind": "employer", "value": "Texas DHS" }
+      ],
+      "publicKeyRef": "did:web:dhs.state.tx.us#priya-krishnan-key-2026-04",
+      "algorithm": "Ed25519",
+      "validFrom": "2026-04-01"
+    },
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-legal-reviewer-001",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "Legal Reviewer (anonymized)",
+      "claims": [
+        { "kind": "role", "value": "legal-reviewer" },
+        { "kind": "employer", "value": "Texas DHS Office of General Counsel" }
+      ],
+      "publicKeyRef": "did:web:dhs.state.tx.us#legal-reviewer-001-key-2026-04",
+      "algorithm": "Ed25519",
+      "validFrom": "2026-04-01"
+    },
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-ops-reviewer-001",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "Operations Reviewer (anonymized)",
+      "claims": [
+        { "kind": "role", "value": "operations-reviewer" },
+        { "kind": "employer", "value": "Texas DHS" }
+      ],
+      "publicKeyRef": "did:web:dhs.state.tx.us#ops-reviewer-001-key-2026-04",
+      "algorithm": "Ed25519",
+      "validFrom": "2026-04-01"
+    },
+    {
+      "$wosStudioIdentitySubject": "1.0",
+      "id": "subj-ai-claim-extractor",
+      "workspaceId": "ws-snap-redetermination-tx-2026",
+      "displayName": "AI Claim Extractor (claude-opus-4-7 pinned)",
+      "claims": [
+        { "kind": "role", "value": "agent" },
+        { "kind": "model-identifier", "value": "claude-opus-4-7" },
+        { "kind": "model-version", "value": "20260301" }
+      ],
+      "x-ai-only": "AI agents do not carry signing keys — provenance attribution is via aiLineage record on AuthoringProvenanceRecord, not signature. No publicKeyRef intentionally."
+    }
+  ]
+}

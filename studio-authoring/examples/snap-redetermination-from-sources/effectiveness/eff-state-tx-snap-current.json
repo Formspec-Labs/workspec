@@ -1,0 +1,18 @@
+{
+  "$wosStudioEffectiveness": "1.0",
+  "id": "eff-state-tx-snap-current",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "title": "Texas SNAP — current effective period",
+  "description": "Effectiveness scope for Texas SNAP redetermination workflow under current state SNAP Manual Ch. 8 + 7 CFR §273.10/§273.15 (federal) + 2024 federal corrective-action letter. Composes parent wos-delivery.schema.json#appliesWhen FEL semantics.",
+  "jurisdictions": [
+    { "kind": "state", "code": "US-TX", "displayName": "Texas" },
+    { "kind": "federal", "code": "US", "displayName": "United States (federal SNAP rules)" }
+  ],
+  "temporalScope": {
+    "intervals": [
+      { "start": "2026-01-01", "end": null }
+    ]
+  },
+  "appellateState": "final",
+  "citations": ["src-state-tx-snap-manual-ch8", "src-cfr-7-273", "src-fns-corrective-action-2024-q3"]
+}

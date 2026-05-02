@@ -181,11 +181,6 @@
             "type": "object"
           }
         },
-        "extensionRecord": {
-          "type": "object",
-          "description": "Optional inline ExtensionRecord (when mappingState = requiresSpecExtension). Authoritative copy lives on the StudioToWosMapping per studio-to-wos-mapping.md; this is a reviewer-readability denormalization at the PolicyObject site.",
-          "additionalProperties": true
-        },
         "unmappedRationale": {
           "type": "string",
           "description": "Optional inline rationale (when mappingState = unmappedButApproved). Authoritative copy lives on the StudioToWosMapping; this is a reviewer-readability denormalization."
