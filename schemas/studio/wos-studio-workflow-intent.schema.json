@@ -202,7 +202,7 @@
         },
         "body": {
           "type": "object",
-          "description": "Kind-specific body. Stage-3 accepts flexible body shape; Stage-4 lint rules enforce per-kind required fields.",
+          "description": "Kind-specific body. The `allOf` clauses below enforce required fields per element `kind`. Body remains `additionalProperties: true` so authors may extend per-kind shapes; Stage-4 lint rules layer deeper validation (cross-document refs to PolicyObjects, FEL syntax, etc.).",
           "additionalProperties": true
         },
         "position": {
@@ -245,7 +245,440 @@
         "workspaceId": {
           "type": "string"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "phase"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Phase body. Required: contains[] (refs to inner element ids). Recommended: description.",
+                "required": [
+                  "contains"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "step"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Step body. Recommended: description, performedBy (ActorMapping ref), expectedDurationHint, blockingOrInformational."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "decision"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Decision body. Recommended: question, decisionRuleRef (DecisionRule|DecisionTable PolicyObject ref), possibleOutcomes[]."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "review"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Review body. Required: reviewer (ActorMapping ref). Recommended: scope[] (caseFile paths or decision refs), outcomeWhen (e.g., 'adverse').",
+                "required": [
+                  "reviewer"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "notice"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Notice body. Required: noticeRequirementRef (NoticeRequirement PolicyObject ref). Recommended: deliveryBindingRef.",
+                "required": [
+                  "noticeRequirementRef"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "deadline"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Deadline body. Required: deadlinePolicyObjectRef, attachedTo (the WorkflowElement id this deadline is anchored to). Recommended: expiryAction.",
+                "required": [
+                  "deadlinePolicyObjectRef",
+                  "attachedTo"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "appeal"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Appeal body. Required: appealRightRef (AppealRight PolicyObject ref), branchEntryPoint (WorkflowElement id where the appeal branch enters). Recommended: deadlineRef.",
+                "required": [
+                  "appealRightRef",
+                  "branchEntryPoint"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "exception"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Exception body. Required: exceptionRuleRef, divertsFrom (default WorkflowElement id), divertsTo (alternate WorkflowElement id). Recommended: conditionRef.",
+                "required": [
+                  "exceptionRuleRef",
+                  "divertsFrom",
+                  "divertsTo"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "hold"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Hold body. Required: holdReason, releaseCondition (Condition ref or event ref). Recommended: maxDuration, escalation.",
+                "required": [
+                  "holdReason",
+                  "releaseCondition"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "data-collection"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Data-collection body. Required: collected[] (DataElement refs). Recommended: formRef (Formspec form id), requiredFields, optionalFields.",
+                "required": [
+                  "collected"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "evidence-request"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Evidence-request body. Required: evidenceRequirementRef. Recommended: deadlineRef.",
+                "required": [
+                  "evidenceRequirementRef"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "system-check"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "System-check body. Required: checkPurpose (free-text description of what's being verified). Recommended: serviceBindingRef (when delivered via API).",
+                "required": [
+                  "checkPurpose"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "AI-assistance"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "AI-assistance body. Required: aiUsePolicyObjectRef (AI Use PolicyObject ref), fallbackRef (the WorkflowElement id this falls back to when confidence is low or escalation triggers). Per parent CLAUDE.md fallback chain MUST terminate in human review. Recommended: actorMappingRef, confidenceFloor.",
+                "required": [
+                  "aiUsePolicyObjectRef",
+                  "fallbackRef"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "manual-override"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Manual-override body. Required: overridingActor (ActorMapping ref with override authority), defaultPath (default WorkflowElement id), overridePath (alternate WorkflowElement id). Recommended: justificationRequired, recordRationale, scopeLimit.",
+                "required": [
+                  "overridingActor",
+                  "defaultPath",
+                  "overridePath"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "completion-outcome"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Completion-outcome body. Required: outcomeRef (Outcome PolicyObject ref). Recommended: polarity (favorable | adverse | neutral), postClosureActions[], triggersDueProcess.",
+                "required": [
+                  "outcomeRef"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "phase-end"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "type": "object",
+                "additionalProperties": true,
+                "patternProperties": {
+                  "^(\\$|x-)": {}
+                },
+                "description": "Phase-end body. Recommended: phaseRef, nextPhaseRef OR terminalRef (one of)."
+              }
+            }
+          }
+        }
+      ]
     },
     "BridgeAssertion": {
       "type": "object",
