@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-common/1.0",
+  "title": "WOS Studio (Authoring) — Common $defs Library",
+  "description": "Shared $defs library for the Studio Stage-3 schema family. Carries the StudioMetadataEnvelope (the cross-cutting envelope every Studio object inherits) and the four canonical enums that govern authoring discipline: OriginClass (where this object came from), MappingState (how it relates to the WOS substrate), ReviewState, and LifecycleState. Also carries small reusable shapes (AuthorityGrantApplied, ProvenanceRecordRef, CitationRef). No document marker; this schema is registered by $id only and consumed by every other studio schema via $ref. See studio-authoring/CONCEPT-MODEL.md §6.1 (composition strategy) for the design.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shapes; field lists are illustrative, not exhaustive. Inner fields may evolve as Stage-3 hardens; structural conformance to envelope/originClass/mappingState is load-bearing now.",
+  "type": "object",
+  "$defs": {
+    "StudioMetadataEnvelope": {
+      "type": "object",
+      "description": "Cross-cutting envelope every Studio object carries. Defines the load-bearing identity, provenance, lifecycle, and substrate-relationship fields. Per CM §6.1, every Stage-3 schema's top-level shape is `{...envelope fields..., body: <kind-specific>}` — i.e., this $def's properties are SPREAD into the host schema, not nested under an `envelope` key. Schemas that consume this typically use `allOf` to inherit envelope properties + add a `body` property. The two `wosTarget` / `wosShapeRef` fields are present only on schemas whose objects can project to WOS (see CM §6.1 corrected pattern, 2026-05-01).",
+      "required": ["id", "workspaceId", "version", "lifecycleState"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier within the workspace. SHOULD be a UUID or workspace-namespaced URN; MUST be unique within the workspace per object-kind.",
+          "examples": ["pol-notice-adverse-action", "wfi-snap-redetermination-tx", "scn-snap-redet-happy-path"]
+        },
+        "workspaceId": {
+          "type": "string",
+          "description": "Workspace this object belongs to. Workspace ownership is load-bearing for permission resolution and citation scope.",
+          "examples": ["ws-snap-redetermination-tx-2026"]
+        },
+        "version": {
+          "type": ["string", "integer"],
+          "description": "Monotonic version. Strings allow SemVer (e.g., '1.0.0'); integers allow ordinal versioning. Either is acceptable; a workspace SHOULD pick one convention and stick with it.",
+          "examples": ["1.0.0", 3]
+        },
+        "parentVersion": {
+          "type": ["string", "integer", "null"],
+          "description": "Prior version (when this object supersedes a previous version). Null on first version."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short human-readable label. Used in reviewer UIs and audit summaries.",
+          "examples": ["Notice of Adverse Action", "SNAP Redetermination — Texas"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Longer human-readable description. Optional; used for context in review."
+        },
+        "citations": {
+          "type": "array",
+          "description": "SourceCitation references that ground this object. Per source-vault.md every approved object MUST carry at least one citation OR be backed by an Assumption.",
+          "items": { "$ref": "#/$defs/CitationRef" }
+        },
+        "provenance": {
+          "type": "array",
+          "description": "AuthoringProvenanceRecord references. Append-only audit trail for this object. Per authoring-provenance.md every state transition emits a record.",
+          "items": { "$ref": "#/$defs/ProvenanceRecordRef" }
+        },
+        "originClass": {
+          "$ref": "#/$defs/OriginClass",
+          "description": "Where this object came from (source-extracted, reviewer-interpreted, locally-asserted, assumed, runtime-observed). Every approved PolicyObject MUST carry exactly one originClass.",
+          "examples": ["source", "approved-interpretation"]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "description": "Lifecycle state per the entity's lifecycle state machine. Specific allowed values vary by entity (PolicyObject, WorkflowIntent, Scenario, etc. each have their own lifecycle); the host schema constrains values via enum where possible. See per-entity lifecycle in studio-authoring/CONCEPT-MODEL.md §2.",
+          "examples": ["draft", "reviewed", "approved", "published", "superseded", "deprecated"]
+        },
+        "reviewState": {
+          "type": "string",
+          "description": "Optional reviewer-facing review state (distinct from lifecycleState). Used when the host entity has a candidate→approved review flow distinct from publication lifecycle (notably ExtractedClaim and WorkflowElement).",
+          "examples": ["candidate", "needsReview", "approved", "rejected", "merged", "split"]
+        },
+        "mappingRef": {
+          "type": "string",
+          "description": "Reference to the StudioToWosMapping record for this object (when one exists). Required for objects whose mappingState is `mapsToWos` or `requiresSpecExtension`."
+        },
+        "mappingState": {
+          "$ref": "#/$defs/MappingState",
+          "description": "How this object relates to the WOS substrate. Load-bearing for compilation: `mapsToWos` projects to a WOS path; `authoringOnly` stays in workspace; `requiresSpecExtension` queues a parent-side extension; `unmappedButApproved` is the reviewed escape hatch (rare and noisy).",
+          "examples": ["mapsToWos", "authoringOnly"]
+        },
+        "wosTarget": {
+          "type": "string",
+          "description": "JSONPath naming the projection target in `wos-workflow.schema.json` (when mappingState is `mapsToWos`). Per CM §6.1 corrected pattern (2026-05-01): documents the projection without forcing structural inheritance via $ref.",
+          "examples": ["$.governance.notices[*]", "$.lifecycle.transitions[*].guard", "$.actors[*]", "$.decisionTables[*]"]
+        },
+        "wosShapeRef": {
+          "type": "string",
+          "description": "Citation of the closest WOS $def or block path for this projection. May be a $ref-style URL (`https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/AppealMechanism`) when an authoritative $def exists, or a prose path (`AdverseDecisionPolicy.notice fields`) when the WOS shape lives flat inside a larger block. Documentation only; not validated structurally.",
+          "examples": ["wos-workflow.schema.json#/$defs/AppealMechanism", "wos-workflow.schema.json#/$defs/DecisionTable", "AdverseDecisionPolicy.notice fields"]
+        },
+        "canonicalTermRef": {
+          "type": "string",
+          "description": "Canonical term IRI from the workspace TerminologyMap (per terminology-and-canonical-vocabulary.md). Resolves cross-workspace identity for DataElement-bearing objects.",
+          "examples": ["usda-snap:HouseholdIncome", "studio-meta:NoticeRequirement"]
+        },
+        "effectivenessRef": {
+          "type": "string",
+          "description": "Reference to an Effectiveness object (per effectiveness-and-applicability.md). Single composable scope (jurisdictions × temporal × appellate state); never copied. Workflow-level effectiveness on WorkflowIntent; element-level on WorkflowElement narrows it.",
+          "examples": ["eff-state-tx-snap-current", "eff-fed-snap-2026"]
+        },
+        "authorityGrantsApplied": {
+          "type": "array",
+          "description": "AuthorityGrant references consulted when waiving/overriding/approving this object. Audit trail for fine-grained permission decisions.",
+          "items": { "$ref": "#/$defs/AuthorityGrantApplied" }
+        }
+      },
+      "patternProperties": { "^(\\$|x-)": {} }
+    },
+    "OriginClass": {
+      "type": "string",
+      "enum": ["source", "approved-interpretation", "local-practice", "assumption", "runtime-observed"],
+      "description": "Origin classification per authoring-provenance.md. Every approved PolicyObject + WorkflowIntent element MUST carry exactly one originClass: `source` (lifted directly from a SourceCitation), `approved-interpretation` (reviewer-judged interpretation of source), `local-practice` (workspace-specific operational practice with no upstream source), `assumption` (explicit gap-fill backed by an Assumption PolicyObject), or `runtime-observed` (proposed by a runtime-observation cluster — Phase-4 reserved seam)."
+    },
+    "MappingState": {
+      "type": "string",
+      "enum": ["mapsToWos", "authoringOnly", "requiresSpecExtension", "unmappedButApproved"],
+      "description": "Mapping disposition per studio-to-wos-mapping.md. Precedence: mapsToWos > authoringOnly > requiresSpecExtension > unmappedButApproved. The four states encode the authoring-vocabulary-vs-substrate split (see CM §5 'WOS as canonical substrate')."
+    },
+    "PolicyObjectLifecycleState": {
+      "type": "string",
+      "enum": ["draft", "reviewed", "approved", "mapped", "validated", "published", "superseded", "deprecated", "demoted"],
+      "description": "PolicyObject lifecycle states per policy-object-model.md."
+    },
+    "WorkflowIntentLifecycleState": {
+      "type": "string",
+      "enum": ["draft", "mapped", "validationReady", "scenarioTested", "approved", "published", "deprecated"],
+      "description": "WorkflowIntent lifecycle states per workflow-intent.md."
+    },
+    "ScenarioLifecycleState": {
+      "type": "string",
+      "enum": ["generated", "reviewed", "passing", "failing", "acceptedAsKnownGap", "regression"],
+      "description": "Scenario lifecycle states per scenario-authoring.md."
+    },
+    "SourceVersionLifecycleState": {
+      "type": "string",
+      "enum": ["ingested", "parsed", "indexed", "classified", "approved", "superseded"],
+      "description": "SourceVersion lifecycle states per source-vault.md."
+    },
+    "ExtractedClaimReviewState": {
+      "type": "string",
+      "enum": ["candidate", "normalized", "needsReview", "approved", "rejected", "merged", "split"],
+      "description": "ExtractedClaim review state per source-vault.md."
+    },
+    "AuthorityGrantApplied": {
+      "type": "object",
+      "description": "Reference to an AuthorityGrant consulted during a permission decision. Records the grant id + the action it authorized.",
+      "required": ["grantRef", "actionTaken"],
+      "properties": {
+        "grantRef": {
+          "type": "string",
+          "description": "AuthorityGrant id from the workspace policy."
+        },
+        "actionTaken": {
+          "type": "string",
+          "description": "What the grant authorized (e.g., 'waive-tier-S6', 'approve-unmappedButApproved', 'override-block-finding').",
+          "examples": ["waive-tier-S6", "approve-unmappedButApproved", "attest-local-practice"]
+        },
+        "exercisedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the authority was exercised."
+        },
+        "exercisedBy": {
+          "type": "string",
+          "description": "Subject id (per identity-and-attestation.md) who exercised the authority."
+        }
+      },
+      "additionalProperties": false
+    },
+    "CitationRef": {
+      "type": ["string", "object"],
+      "description": "Reference to a SourceCitation. May be the citation id (string) for compact form, or an inline citation object for cases where the citation is materialized at use site."
+    },
+    "ProvenanceRecordRef": {
+      "type": ["string", "object"],
+      "description": "Reference to an AuthoringProvenanceRecord. May be the record id (string) or an inline record."
+    },
+    "Iri": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9+.\\-]*:",
+      "description": "Generic IRI (Internationalized Resource Identifier). Used for canonical term references, DPV terms, LegalRuleML terms, etc. Not enum-constrained — open vocabulary.",
+      "examples": ["dpv:FinancialPreference", "lrml:Obligation", "usda-snap:HouseholdIncome"]
+    },
+    "FelExpression": {
+      "type": "string",
+      "description": "FEL (Forms Expression Language) expression. Per parent CLAUDE.md FEL is the only expression language WOS uses; FEEL/DMN are rejected as substrate. Validated by parent fel-core at compile time.",
+      "examples": ["caseFile.income <= 1500", "household.size > 0", "applicant.primaryLanguage == 'es-US'"]
+    }
+  }
+}

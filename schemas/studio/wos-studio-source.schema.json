@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-source/1.0",
+  "title": "WOS Studio (Authoring) \u2014 Source Vault",
+  "description": "Source vault collective shape per studio-authoring/specs/source-vault.md. A single document under this schema MAY carry one or more of: SourceDocument, SourceVersion[], SourceSection[], SourceCitation[], ExtractedClaim[], CanonicalSourceRef. Workspaces typically materialize one document per logical source (CFR title, state manual, agency memo, federal corrective letter). JSON-LD `@context` accepted on canonicalSourceRef when source is published in JSON-LD (e.g., eCFR.gov).",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; workspaces may serialize as one-document-per-Source or one-document-aggregating-many; both are accepted.",
+  "type": "object",
+  "required": [
+    "$wosStudioSource",
+    "workspaceId"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(\\$|x-)": {}
+  },
+  "properties": {
+    "$wosStudioSource": {
+      "type": "string",
+      "const": "1.0",
+      "examples": [
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for the Studio Source Vault collective"
+      },
+      "description": "Document marker pinning this artifact to the Studio Source Vault 1.0 schema."
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "sourceDocument": {
+      "$ref": "#/$defs/SourceDocument"
+    },
+    "sourceVersions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceVersion"
+      }
+    },
+    "sourceSections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceSection"
+      }
+    },
+    "sourceCitations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceCitation"
+      }
+    },
+    "extractedClaims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExtractedClaim"
+      }
+    },
+    "canonicalSourceRef": {
+      "$ref": "#/$defs/CanonicalSourceRef"
+    }
+  },
+  "$defs": {
+    "SourceDocument": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "examples": [
+            "src-doc-cfr-7-273"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "regulation",
+            "statute",
+            "policy-manual",
+            "sop",
+            "memo",
+            "form",
+            "diagram",
+            "corrective-letter",
+            "guidance",
+            "other"
+          ]
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "primaryUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "originallyIngestedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "SourceVersion": {
+      "type": "object",
+      "required": [
+        "id",
+        "documentRef",
+        "lifecycleState"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "examples": [
+            "src-cfr-7-273"
+          ]
+        },
+        "documentRef": {
+          "type": "string"
+        },
+        "versionLabel": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ingestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ingestedHash": {
+          "type": "string",
+          "description": "SHA-256 hash of the ingested content for byte-verification (per source-vault.md SA-MUST-source-021).",
+          "examples": [
+            "sha256:f3d2a1..."
+          ]
+        },
+        "ingestFormat": {
+          "type": "string",
+          "enum": [
+            "pdf",
+            "html",
+            "markdown",
+            "json-ld",
+            "xml",
+            "text",
+            "other"
+          ]
+        },
+        "contentLocales": {
+          "type": "array",
+          "description": "Locales the source is available in (e.g., en-US, es-US).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "effectivenessRef": {
+          "type": "string",
+          "description": "Effectiveness scope per effectiveness-and-applicability.md."
+        },
+        "canonicalSourceRef": {
+          "type": [
+            "string",
+            "object",
+            "null"
+          ]
+        },
+        "lifecycleState": {
+          "type": "string",
+          "enum": [
+            "ingested",
+            "parsed",
+            "indexed",
+            "classified",
+            "approved",
+            "superseded"
+          ]
+        },
+        "supersededByRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parsingResult": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "indexingResult": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "classificationResult": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "SourceSection": {
+      "type": "object",
+      "required": [
+        "id",
+        "sourceVersionRef",
+        "anchor"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sourceVersionRef": {
+          "type": "string"
+        },
+        "anchor": {
+          "type": "string",
+          "description": "Stable anchor identifier within the source (e.g., '\u00a7273.10(g)(3)', 'Finding 1').",
+          "examples": [
+            "\u00a7273.10(g)(3)",
+            "Finding 1"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "section",
+            "subsection",
+            "paragraph",
+            "table",
+            "finding",
+            "appendix",
+            "other"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "object"
+          ],
+          "description": "Section text. May be a string for monolingual; or an object keyed by locale (en-US, es-US, ...) for multi-language source content."
+        },
+        "pageRange": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parentSectionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "SourceCitation": {
+      "type": "object",
+      "required": [
+        "id",
+        "sourceSectionRef"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sourceSectionRef": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string",
+          "description": "How the citation relates to the citing object.",
+          "examples": [
+            "grounds",
+            "supports",
+            "interprets",
+            "contradicts",
+            "supersedes"
+          ]
+        },
+        "excerpt": {
+          "type": "string"
+        },
+        "excerptLocale": {
+          "type": "string",
+          "examples": [
+            "en-US",
+            "es-US"
+          ]
+        },
+        "span": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional sub-section span (offset range)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExtractedClaim": {
+      "type": "object",
+      "required": [
+        "id",
+        "sourceSectionRef",
+        "candidateType"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sourceSectionRef": {
+          "type": "string"
+        },
+        "candidateType": {
+          "type": "string",
+          "description": "What kind of PolicyObject the AI extractor proposes this claim could become.",
+          "examples": [
+            "NoticeRequirement",
+            "Deadline",
+            "ActorMapping",
+            "Obligation"
+          ]
+        },
+        "extractedFields": {
+          "type": "object",
+          "description": "Free-form bag of extracted field values; reviewer normalizes into a PolicyObject body.",
+          "additionalProperties": true
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reviewState": {
+          "type": "string",
+          "enum": [
+            "candidate",
+            "normalized",
+            "needsReview",
+            "approved",
+            "rejected",
+            "merged",
+            "split"
+          ]
+        },
+        "proposedBy": {
+          "type": "object",
+          "description": "AI lineage of the extractor.",
+          "properties": {
+            "modelId": {
+              "type": "string"
+            },
+            "modelVersion": {
+              "type": "string"
+            },
+            "promptTemplateRef": {
+              "type": "string"
+            }
+          }
+        },
+        "promotedTo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "PolicyObject id this claim was promoted to (when reviewState = approved + reviewer chose 'normalize')."
+        }
+      },
+      "additionalProperties": true
+    },
+    "CanonicalSourceRef": {
+      "type": "object",
+      "description": "Federation precursor reference to a canonical source (e.g., eCFR.gov for federal regulations). May carry JSON-LD @context for semantic preservation.",
+      "properties": {
+        "canonicalUri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "canonicalIdentifier": {
+          "type": "string"
+        },
+        "publishedFormat": {
+          "type": "string",
+          "examples": [
+            "json-ld",
+            "xml",
+            "html"
+          ]
+        },
+        "jsonLdContext": {
+          "type": [
+            "object",
+            "string",
+            "array",
+            "null"
+          ],
+          "description": "JSON-LD @context (free-form). When source is published in JSON-LD, preserved verbatim for semantic continuity."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

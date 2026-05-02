@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-workflow-intent/1.0",
+  "title": "WOS Studio (Authoring) \u2014 Workflow Intent",
+  "description": "Studio WorkflowIntent per studio-authoring/specs/workflow-intent.md. The user-facing draft that compiles to a `$wosWorkflow` artifact (per compiler-contract.md). Carries 16 user-facing element kinds (phase / step / decision / review / notice / deadline / appeal / exception / hold / data-collection / evidence-request / system-check / AI-assistance / manual-override / completion-outcome / phase-end), each with a bridge field that names the kernel construct produced. Bridge.kernelKind is INFERRED for 14 unambiguous kinds (per workflow-intent.md 'Bridge inference rules', SA-MUST-wfi-005); REQUIRED only on the 2 ambiguous kinds (`step`, `system-check`). The 6 bridge construct kinds (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) are co-located here per CM \u00a76.1 corrected pattern (2026-05-01) \u2014 they're products of bridge-inference compilation, not author-written PolicyObjects.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; element body shapes are illustrative-and-flexible. Per-kind body validation lives in Stage-4 lint rules.",
+  "type": "object",
+  "required": [
+    "$wosStudioWorkflowIntent",
+    "id",
+    "workspaceId",
+    "title",
+    "impactLevel",
+    "lifecycleState",
+    "elements"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(\\$|x-)": {}
+  },
+  "properties": {
+    "$wosStudioWorkflowIntent": {
+      "type": "string",
+      "const": "1.0",
+      "examples": [
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for the Studio WorkflowIntent"
+      },
+      "description": "Document marker pinning this artifact to the Studio WorkflowIntent 1.0 schema."
+    },
+    "id": {
+      "type": "string",
+      "examples": [
+        "wfi-snap-redetermination-tx"
+      ]
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "impactLevel": {
+      "type": "string",
+      "enum": [
+        "rights-impacting",
+        "safety-impacting",
+        "informational",
+        "operational",
+        "other"
+      ],
+      "description": "Impact classification per parent kernel/spec.md \u00a76. Drives WOS embedded-block conditionality at compile time per substrate-choice (CM \u00a75).",
+      "examples": [
+        "rights-impacting",
+        "operational"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Risk-profile classifier \u2014 drives substrate-side embedded-block conditional emission per CM \u00a75"
+      }
+    },
+    "lifecycleState": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "mapped",
+        "validationReady",
+        "scenarioTested",
+        "approved",
+        "published",
+        "deprecated"
+      ]
+    },
+    "wosVersionPin": {
+      "type": "string",
+      "description": "WOS version claim string per parent RELEASE-STREAMS.md. Required at lifecycle 'mapped' or later.",
+      "examples": [
+        "kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0"
+      ]
+    },
+    "effectivenessRef": {
+      "type": "string",
+      "description": "Workflow-level Effectiveness ref (jurisdictional + temporal scope). Element-level effectivenessRef on individual WorkflowElements narrows further."
+    },
+    "version": {
+      "type": [
+        "string",
+        "integer"
+      ]
+    },
+    "parentVersion": {
+      "type": [
+        "string",
+        "integer",
+        "null"
+      ]
+    },
+    "policyObjectRefs": {
+      "type": "array",
+      "description": "PolicyObjects this intent is derived from.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mappingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "elements": {
+      "type": "array",
+      "description": "WorkflowElements (16 user-facing kinds). Each carries `kind` + body + bridge.",
+      "items": {
+        "$ref": "#/$defs/WorkflowElement"
+      }
+    },
+    "compiledArtifactRef": {
+      "type": "string"
+    },
+    "expertModeView": {
+      "type": "object",
+      "description": "Mapping from intent elements to compiled $wosWorkflow JSON paths.",
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      }
+    },
+    "$comment_bridge_inference": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "WorkflowElement": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "bridge"
+      ],
+      "additionalProperties": true,
+      "patternProperties": {
+        "^(\\$|x-)": {}
+      },
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "phase",
+            "step",
+            "decision",
+            "review",
+            "notice",
+            "deadline",
+            "appeal",
+            "exception",
+            "hold",
+            "data-collection",
+            "evidence-request",
+            "system-check",
+            "AI-assistance",
+            "manual-override",
+            "completion-outcome",
+            "phase-end"
+          ],
+          "description": "User-facing element kind. The bridge.kernelKind is INFERRED from this for 14 of 16 kinds; REQUIRED on `step` + `system-check` (per workflow-intent.md 'Bridge inference rules').",
+          "examples": [
+            "phase",
+            "decision",
+            "notice",
+            "appeal"
+          ],
+          "x-lm": {
+            "critical": true,
+            "intent": "Element kind drives bridge inference (kernelKind) and body shape \u2014 load-bearing for compilation routing"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "description": "Kind-specific body. Stage-3 accepts flexible body shape; Stage-4 lint rules enforce per-kind required fields.",
+          "additionalProperties": true
+        },
+        "position": {
+          "type": [
+            "string",
+            "object",
+            "null"
+          ],
+          "description": "Structural placement (phase id, sequence index, parent step ref)."
+        },
+        "policyObjectRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "object"
+            ]
+          }
+        },
+        "bridge": {
+          "$ref": "#/$defs/BridgeAssertion"
+        },
+        "effectivenessRef": {
+          "type": "string"
+        },
+        "reviewState": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "reviewed",
+            "approved"
+          ]
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      }
+    },
+    "BridgeAssertion": {
+      "type": "object",
+      "description": "Bridge from element to kernel construct. `kernelKind` is OPTIONAL \u2014 inferred from element.kind for unambiguous cases per workflow-intent.md 'Bridge inference rules' (SA-MUST-wfi-005). REQUIRED on ambiguous kinds (`step`, `system-check`). Body fields name the specific kernel construct: `stateName` (compound/atomic/terminal state), `taskRef`, `transitionId`, `timerRef`, `noticeId`, `subFlowEntry`, `agentRef`, `guardRef`. The 6 bridge construct kinds (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) are products of bridge-inference and live as projection records, not as separate authoring objects.",
+      "additionalProperties": true,
+      "patternProperties": {
+        "^(\\$|x-)": {}
+      },
+      "properties": {
+        "kernelKind": {
+          "type": "string",
+          "enum": [
+            "compound-state",
+            "atomic-state",
+            "terminal-state",
+            "transition",
+            "transition-guard",
+            "alternate-transition",
+            "task",
+            "timer",
+            "sub-flow",
+            "governance-notice",
+            "agent"
+          ],
+          "description": "Kernel construct discriminant. OPTIONAL when element.kind is unambiguous (inferred per workflow-intent.md 'Bridge inference rules'); REQUIRED on `step` (atomic-state | task) and `system-check` (task | transition-guard).",
+          "examples": [
+            "task",
+            "transition-guard"
+          ]
+        },
+        "stateName": {
+          "type": "string"
+        },
+        "taskRef": {
+          "type": "string"
+        },
+        "transitionId": {
+          "type": "string"
+        },
+        "timerRef": {
+          "type": "string"
+        },
+        "noticeId": {
+          "type": "string"
+        },
+        "subFlowEntry": {
+          "type": "string"
+        },
+        "agentRef": {
+          "type": "string"
+        },
+        "guardRef": {
+          "type": "string"
+        },
+        "guardKind": {
+          "type": "string",
+          "description": "Guard form (FEL string vs decisionTable per parent Kernel \u00a74.5.1).",
+          "examples": [
+            "fel",
+            "decisionTable",
+            "actor-authority + documented-disruption"
+          ]
+        },
+        "signatureGated": {
+          "type": "boolean"
+        },
+        "signatureRequirement": {
+          "type": "string"
+        },
+        "linkedNoticeRef": {
+          "type": "string"
+        },
+        "linkedAppealRef": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

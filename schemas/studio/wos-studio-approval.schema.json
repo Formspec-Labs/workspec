@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-approval/1.0",
+  "title": "WOS Studio (Authoring) \u2014 Approval (Decision / Package / ChangeImpactReport)",
+  "description": "Studio approval-track shapes per studio-authoring/specs/review-and-approval.md and change-impact.md. Top-level kind discriminator selects ApprovalDecision | ApprovalPackage | ChangeImpactReport. ApprovalPackage carries the terminal publication bundle: every ApprovalDecision, citationManifest, scenarioSuiteRef, validationReportRef, releaseNotes, unmappedListings, complianceAttestations[], identitySigningKeyRefs[], custodyAnchorReceipt (composes parent custodyHook). ChangeImpactReport carries triggerKind + cascade impact catalog.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; field shapes match the snap-redetermination vertical-slice approval-package.json structurally.",
+  "type": "object",
+  "required": [
+    "$wosStudioApproval",
+    "kind"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(\\$|x-)": {}
+  },
+  "properties": {
+    "$wosStudioApproval": {
+      "type": "string",
+      "const": "1.0",
+      "examples": [
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for Studio approval-track artifacts"
+      },
+      "description": "Document marker pinning this artifact to the Studio Approval 1.0 schema family."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "ApprovalDecision",
+        "ApprovalPackage",
+        "ChangeImpactReport"
+      ],
+      "description": "Approval-track artifact discriminator.",
+      "examples": [
+        "ApprovalPackage"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Approval-track artifact kind discriminator"
+      }
+    },
+    "id": {
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    },
+    "workflowIntentRef": {
+      "type": "string"
+    },
+    "workflowVersion": {
+      "type": "string"
+    },
+    "wosVersionPin": {
+      "type": "string"
+    },
+    "approvals": {
+      "type": "array",
+      "description": "ApprovalPackage form: list of constituent ApprovalDecision records.",
+      "items": {
+        "$ref": "#/$defs/ApprovalDecision"
+      }
+    },
+    "decision": {
+      "$ref": "#/$defs/ApprovalDecision",
+      "description": "Single-ApprovalDecision form."
+    },
+    "citationManifest": {
+      "type": "object",
+      "description": "Sources cited by the published artifact.",
+      "additionalProperties": true,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "anchorsCited": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "canonicalUri": {
+                "type": "string"
+              },
+              "ingestedHash": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "scenarioSuiteRef": {
+      "type": [
+        "array",
+        "string"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "validationReportRef": {
+      "type": "string"
+    },
+    "releaseNotes": {
+      "type": "string"
+    },
+    "unmappedListings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "policyObjectRef": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "waivedFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "complianceAttestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "identitySigningKeyRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          },
+          "publicKeyRef": {
+            "type": "string"
+          },
+          "algorithm": {
+            "type": "string"
+          },
+          "validFrom": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "custodyAnchorReceipt": {
+      "type": "object",
+      "description": "Parent custody append receipt (per ADR-0061 / PLN-0385).",
+      "additionalProperties": true,
+      "properties": {
+        "canonicalEventHash": {
+          "type": "string"
+        },
+        "anchoredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "trellisLedgerRef": {
+          "type": "string"
+        },
+        "appendReceiptVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "publishedBy": {
+      "type": "string"
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "triggerKind": {
+      "type": "string",
+      "description": "ChangeImpactReport: what triggered the cascade.",
+      "examples": [
+        "source-version-update",
+        "policy-object-edit",
+        "policy-object-supersession",
+        "mapping-edit",
+        "binding-edit",
+        "wos-schema-bump",
+        "scenario-failure-cluster",
+        "runtime-observation-cluster",
+        "jurisdictional-supersession",
+        "wos-version-deprecation",
+        "compliance-attestation-expiry"
+      ]
+    },
+    "affectedPolicyObjects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedMappings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedWorkflowElements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedScenarios": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedPublishedPackages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acknowledgedBy": {
+      "type": "string"
+    },
+    "closureRationale": {
+      "type": "string"
+    },
+    "wosVersionPin_$comment": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ApprovalDecision": {
+      "type": "object",
+      "required": [
+        "id",
+        "decidedBy",
+        "decision"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "decidedBy": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "subjectKind": {
+          "type": "string"
+        },
+        "subjectRef": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected",
+            "approved-with-conditions"
+          ]
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signatureRef": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "ruleId": {
+                "type": "string"
+              },
+              "deadline": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

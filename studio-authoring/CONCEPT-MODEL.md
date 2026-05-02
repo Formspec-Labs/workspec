@@ -468,15 +468,27 @@ Pointers into [`../schemas/`](../schemas/) reference the consolidated `wos-workf
 
 ## 6.1 Schema composition strategy (Stage-3 design)
 
-A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content is already defined by a parent WOS schema. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to ~10 by composition.
+A naive Stage-3 implementation would author one JSON Schema per CONCEPT-MODEL entity — ~33 schemas. That is wasteful where the entity's *structural* content can be co-located cleanly with related entities. This section defines the layered-view design that Stage-3 follows, reducing the Studio Stage-3 schema count from ~33 to ~14 by composition.
+
+### Pre-stage clarifications (2026-05-01)
+
+A Stage-3 design review identified three corrections to earlier framings in this section:
+
+1. **The "$ref to WOS $def" pattern only works for two PolicyObject kinds.** Of the 8 WOS-projecting PolicyObject kinds, only `AppealRight` (→ `AppealMechanism` $def) and `DecisionRule`/`DecisionTable` (→ `DecisionTable` $def) have clean parent $defs. The other 6 (`NoticeRequirement`, `ExplanationRequirement`, `Deadline`, `ActorMapping`, `EvidenceRequirement`, `Outcome`) have no clean $def — their shape lives flat inside larger blocks (e.g., notice fields under `AdverseDecisionPolicy`), as runtime-reference shapes at the wrong abstraction (e.g., `EvidenceReference`), or simply unpromoted. The corrected pattern: **studio body inlines the shape; envelope carries `wosTarget` (a JSONPath naming the projection target) and `wosShapeRef` (citation of the closest WOS $def or block path) for traceability.** WOS-projecting kinds use `$ref` only when an authoritative $def actually exists.
+
+2. **`wos-tooling.schema.json` has no `scenarios` $def.** Studio Scenario is therefore a standalone schema; the runtime correlate is `conformanceTrace.fixtureRef` (already in `wos-tooling.schema.json`), which cites `scenario.id` at runtime.
+
+3. **Bridge kinds belong in workflow-intent, not policy-object.** The 6 bridge kinds (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) are products of bridge-inference compilation, not author-written PolicyObjects. They co-locate with WorkflowIntent so the kernel-kind / bridge-kind referential closure is local to one schema file.
+
+The composition table below reflects these corrections.
 
 ### The pattern
 
-For every Studio entity that **projects to a WOS schema target**, the Stage-3 schema is:
+For every Studio entity, the Stage-3 schema is:
 
 ```text
 StudioEntity = {
-  studioMetadataEnvelope: {  // Studio-only
+  studioMetadataEnvelope: {  // Studio-only; defined once in wos-studio-common.schema.json
     id, workspaceId, version, parentVersion?,
     citations[], provenance, originClass,
     lifecycleState, reviewState,
@@ -485,31 +497,36 @@ StudioEntity = {
     effectivenessRef?,        // §1.25 Effectiveness
     authorityGrantsApplied[]  // §1.29 AuthorityGrant
   },
-  wosTargetContent: $ref → wos-workflow.schema.json#/$defs/<TargetType>
+  // For WOS-projecting kinds:
+  wosTarget?: "JSONPath into wos-workflow.schema.json (e.g., $.governance.notices[*])",
+  wosShapeRef?: "$ref-style citation of closest WOS $def or block path",
+  body: { ... }              // co-located shape; uses $ref to wos-workflow.schema.json#/$defs/<TargetType>
+                             // ONLY when an authoritative $def exists (today: AppealMechanism, DecisionTable).
 }
 ```
 
-The structural truth lives in `wos-workflow.schema.json` (the WOS schema's `$defs`). Studio's schema declares the *envelope* + the *reference*. When the WOS schema evolves a target shape (e.g., a new field on `governance.notices[*]`), Studio inherits automatically; no Studio schema edit needed for backward-compatible additions.
+Studio's schema declares the *envelope* + the *body* (inline or composed). For the 2 kinds where a clean WOS $def exists, the body composes via `$ref`; structural changes to the WOS shape propagate automatically. For all other kinds, the body is co-located and `wosTarget` documents the projection without forcing structural inheritance.
 
 ### Composition table
 
 | Studio entity | Composition strategy | Stage-3 schema |
 |---|---|---|
-| **PolicyObject kinds projecting to WOS** (NoticeRequirement, AppealRight, ExplanationRequirement, Deadline, ActorMapping, EvidenceRequirement, Outcome, DecisionRule) | Layered view: envelope + `$ref` to wos-workflow.schema.json `$defs` | **1 polymorphic schema:** `wos-studio-policy-object.schema.json` (oneOf discriminated by `kind`) |
-| **Bridge kinds** (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) | Layered view: envelope + `$ref` to wos-workflow.schema.json target paths | Folded into `wos-studio-policy-object.schema.json` |
-| **Bindings** (ServiceBinding, EventBinding, PolicyEngineBinding) | Layered view: envelope + `$ref` to `wos-workflow.schema.json#/integration/bindings[*]` shape | **1 schema:** `wos-studio-binding.schema.json` |
-| **Studio-only PolicyObject kinds** (PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod, Supersession, Conflict, Assumption, OpenQuestion, ProtectedCategory) | Studio-defined — no WOS counterpart | Folded into `wos-studio-policy-object.schema.json` (the `oneOf` extends to cover authoring-only kinds) |
-| **WorkflowIntent** | Genuinely different from `$wosWorkflow` (16 user-facing element kinds + bridges + authoring metadata) | **1 schema:** `wos-studio-workflow-intent.schema.json` |
-| **Scenario** | Layered view: envelope + `$ref` to `wos-tooling.schema.json` `scenarios[*]` shape | **1 schema:** `wos-studio-scenario.schema.json` |
+| **PolicyObject kinds projecting to WOS** (NoticeRequirement, AppealRight, ExplanationRequirement, Deadline, ActorMapping, EvidenceRequirement, Outcome, DecisionRule) | Envelope (with `wosTarget` JSONPath + `wosShapeRef` citation) + body co-located in studio schema. Body uses `$ref` to `wos-workflow.schema.json#/$defs/<TargetType>` ONLY for AppealRight (→ AppealMechanism) and DecisionRule (→ DecisionTable); other kinds inline body. | **1 polymorphic schema:** `wos-studio-policy-object.schema.json` (oneOf discriminated by `kind`) |
+| **Bridge kinds** (WorkflowStepMapping, LifecycleTagMapping, TransitionMapping, TimerMapping, TaskMapping, CaseFileMapping) | Co-located with WorkflowIntent; products of bridge-inference, not author-written PolicyObjects | Folded into **`wos-studio-workflow-intent.schema.json`** |
+| **Bindings** (ServiceBinding, EventBinding, PolicyEngineBinding, DMNImport) | Envelope + co-located body; `wosTarget = $.integration.bindings[*]` for the three core kinds; DMNImport carries `dmnXml` + FEEL→FEL transpilation issues[] | **1 schema:** `wos-studio-binding.schema.json` |
+| **Studio-only PolicyObject kinds** (PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod, Supersession, Conflict, Assumption, OpenQuestion, ProtectedCategory, Requirement, Obligation, Permission, Prohibition, Right, Condition, ExceptionRule, DataElement) | Studio-defined — no WOS counterpart | Folded into `wos-studio-policy-object.schema.json` (the `oneOf` extends to cover authoring-only kinds) |
+| **WorkflowIntent + 16 element kinds + 6 bridge kinds** | Genuinely different from `$wosWorkflow`; bridge.kernelKind inferred from element kind (per workflow-intent.md "Bridge inference rules"); ambiguous kinds (`step`, `system-check`) require explicit kernelKind | **1 schema:** `wos-studio-workflow-intent.schema.json` |
+| **Scenario** | Standalone (no WOS scenarios $def exists in wos-tooling.schema.json); runtime correlate is `conformanceTrace.fixtureRef` which cites `scenario.id` | **1 schema:** `wos-studio-scenario.schema.json` |
 | **AuthoringProvenanceRecord** | Studio-defined; AI-extraction subtype + audit event-type tags compose parent **PLN-0384** `wos-event-types.md` | **1 schema:** `wos-studio-provenance.schema.json` |
-| **DecisionTable** (the table form of DecisionRule) | Studio-defined authoring shape (rows + hit policy + completeness) projects 1:1 to parent kernel `decisionTables[*]` + `DecisionTableGuard` on the relevant transition (Kernel §4.5.1, landed 2026-05-01). Round-trip lossless; row ids preserved. Scenarios cite row ids directly. | Folded into `wos-studio-policy-object.schema.json` |
+| **DecisionTable** (the table form of DecisionRule) | Studio-defined authoring shape (rows + hit policy + completeness) projects 1:1 to parent kernel `decisionTables[*]` + `DecisionTableGuard` on the relevant transition (Kernel §4.5.1, landed 2026-05-01). Body composes `wos-workflow.schema.json#/$defs/DecisionTable` via `$ref`. Round-trip lossless; row ids preserved. | Folded into `wos-studio-policy-object.schema.json` |
 | **Source vault** (SourceDocument, SourceVersion, SourceSection, SourceCitation, ExtractedClaim, CanonicalSourceRef) | Studio-defined; canonical sources may carry JSON-LD `@context` + content (when source is published in JSON-LD, e.g., eCFR.gov) | **1 schema:** `wos-studio-source.schema.json` |
 | **Workspace + ReviewerRole + WorkspacePolicy + AuthorityGrant + ComplianceAttestation** | Studio-defined | **1 schema:** `wos-studio-workspace.schema.json` |
 | **ApprovalDecision + ApprovalPackage + ChangeImpactReport** | Studio-defined; approval-package composes (or attaches) Effectiveness + ComplianceAttestation | **1 schema:** `wos-studio-approval.schema.json` |
 | **ValidationFinding + readiness rule registry** | Studio-defined | **1 schema:** `wos-studio-readiness.schema.json` |
 | **Effectiveness, IdentitySubject, TerminologyMap, MigrationPath** | Studio-defined; Effectiveness is referenced by ref (one canonical home, never copied) | **1 schema each (4 small):** `wos-studio-effectiveness.schema.json`, `wos-studio-identity-subject.schema.json`, `wos-studio-terminology-map.schema.json`, `wos-studio-migration-path.schema.json` |
+| **Shared $defs library** (StudioMetadataEnvelope, OriginClass, MappingState, LifecycleState enums, AuthorityGrantApplied) | $defs-only library; no document marker; cross-referenced by every other schema via `$ref` | **1 schema:** `wos-studio-common.schema.json` |
 
-Net Stage-3 Studio schemas: **~10** (from ~33 naive). Studio inherits WOS structural truth via `$ref` everywhere a target exists.
+Net Stage-3 Studio schemas: **14** (from ~33 naive). Studio composes WOS structural truth via `$ref` only where authoritative $defs exist; documents projection target via `wosTarget` + `wosShapeRef` everywhere else.
 
 ### Slight WOS-side extension proposals (queued)
 

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-policy-object/1.0",
+  "title": "WOS Studio (Authoring) — Policy Object (polymorphic)",
+  "description": "Polymorphic Studio PolicyObject schema covering all author-time PolicyObject kinds per studio-authoring/specs/policy-object-model.md and the composition table in CONCEPT-MODEL.md §6.1. Discriminated by `kind`. Carries the StudioMetadataEnvelope inline (id, workspaceId, version, citations[], provenance, originClass, lifecycleState, mappingState, etc.). Body shape is per-kind: WOS-projecting kinds (NoticeRequirement, AppealRight, ExplanationRequirement, Deadline, ActorMapping, EvidenceRequirement, Outcome, DecisionRule, ContinuationOfServicesRequirement, CounterfactualRequirement) project to WOS via `wosTarget` JSONPath; AppealRight + DecisionRule additionally compose `wos-workflow.schema.json#/$defs/AppealMechanism` and `#/$defs/DecisionTable` via $ref where the WOS shape is authoritative. Studio-only kinds (PolicySource, AuthorityRank, ApplicabilityScope, EffectivePeriod, Supersession, Conflict, Assumption, OpenQuestion, ProtectedCategory) define body shapes inline. Deontic kinds (Requirement, Obligation, Permission, Prohibition, Right, Condition, ExceptionRule, DataElement) carry `defeasible: boolean` for OASIS LegalRuleML interop. Stage-3 enforces envelope + kind discriminator strictly; per-kind body shapes are loosely validated (flexible body with documented field expectations); deeper per-field validation lives in Stage-4 lint rules.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; envelope + kind enum are load-bearing; per-kind body shapes are illustrative-and-flexible. Per CM §6.1 corrected pattern (2026-05-01), most kinds inline body with `wosTarget`/`wosShapeRef` documenting projection rather than $ref-composing absent WOS $defs.",
+  "type": "object",
+  "required": ["$wosStudioPolicyObject", "id", "workspaceId", "kind", "lifecycleState", "originClass"],
+  "additionalProperties": false,
+  "patternProperties": { "^(\\$|x-)": {} },
+  "properties": {
+    "$wosStudioPolicyObject": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Document marker.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for the polymorphic Studio PolicyObject"
+      }
+    },
+    "id": {
+      "type": "string",
+      "examples": ["pol-notice-adverse-action", "pol-appeal-right-fair-hearing", "pol-decision-table-eligibility"]
+    },
+    "workspaceId": { "type": "string" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "NoticeRequirement", "AppealRight", "ExplanationRequirement", "ContinuationOfServicesRequirement", "CounterfactualRequirement",
+        "Deadline", "ActorMapping", "EvidenceRequirement", "Outcome", "DecisionRule",
+        "Requirement", "Obligation", "Permission", "Prohibition", "Right", "Condition", "ExceptionRule", "DataElement",
+        "PolicySource", "AuthorityRank", "ApplicabilityScope", "EffectivePeriod", "Supersession",
+        "Conflict", "Assumption", "OpenQuestion", "ProtectedCategory"
+      ],
+      "description": "Discriminator naming the PolicyObject kind. The `body` shape varies per kind (illustrative shapes documented inline; deeper validation via Stage-4 lint).",
+      "examples": ["NoticeRequirement", "AppealRight", "Deadline", "Supersession"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Polymorphism discriminator — load-bearing for routing to the right body shape and projection target"
+      }
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "version": { "type": ["string", "integer"] },
+    "parentVersion": { "type": ["string", "integer", "null"] },
+    "lifecycleState": {
+      "type": "string",
+      "enum": ["draft", "reviewed", "approved", "mapped", "validated", "published", "superseded", "deprecated", "demoted"],
+      "description": "PolicyObject lifecycle state per policy-object-model.md.",
+      "examples": ["draft", "approved"]
+    },
+    "reviewState": { "type": "string" },
+    "originClass": {
+      "type": "string",
+      "enum": ["source", "approved-interpretation", "local-practice", "assumption", "runtime-observed"],
+      "description": "Where this PolicyObject came from. Every approved PolicyObject MUST carry exactly one originClass per authoring-provenance.md.",
+      "examples": ["source", "approved-interpretation"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Origin classification — load-bearing for tier-S2 readiness and reviewer attestation requirements"
+      }
+    },
+    "citations": {
+      "type": "array",
+      "description": "SourceCitation references grounding this PolicyObject. Per source-vault.md every approved PolicyObject MUST have at least one citation OR be backed by an Assumption.",
+      "items": {
+        "type": ["string", "object"]
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "description": "AuthoringProvenanceRecord references. Append-only audit trail.",
+      "items": {
+        "type": ["string", "object"]
+      }
+    },
+    "mappingRef": { "type": "string" },
+    "mappingState": {
+      "type": "string",
+      "enum": ["mapsToWos", "authoringOnly", "requiresSpecExtension", "unmappedButApproved"],
+      "description": "How this PolicyObject relates to the WOS substrate. Required on approved objects; optional on draft.",
+      "examples": ["mapsToWos", "authoringOnly"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Mapping disposition — load-bearing for compilation routing"
+      }
+    },
+    "wosTarget": { "type": "string" },
+    "wosShapeRef": { "type": "string" },
+    "canonicalTermRef": { "type": "string" },
+    "effectivenessRef": { "type": "string" },
+    "authorityGrantsApplied": { "type": "array", "items": { "type": "object" } },
+    "body": {
+      "type": "object",
+      "description": "Kind-specific body. Stage-3 accepts flexible body shape (additionalProperties: true) per kind; Stage-4 lint rules enforce per-kind required fields. See policy-object-model.md and binding-and-integration.md for the per-kind shape conventions. For DecisionRule with body.form='table' (DecisionTable), body.rows[] / body.hitPolicy / body.completenessRequirement project to parent kernel decisionTables[*] per Kernel §4.5.1 (lossless round-trip).",
+      "additionalProperties": true,
+      "examples": [
+        {
+          "trigger": { "outcomeRef": "pol-outcome-denial" },
+          "audience": "applicant",
+          "content": ["reasonForAdverseAction", "appealRightAndDeadline"],
+          "deliveryMethod": ["mail"],
+          "language": ["en-US", "es-US"]
+        },
+        {
+          "deadline": { "calendarDaysFromNoticeDate": 90 },
+          "requestMethods": ["written", "phone", "in-person"]
+        },
+        {
+          "form": "table",
+          "inputs": [{ "name": "income", "type": "number" }, { "name": "householdSize", "type": "integer" }],
+          "outputs": [{ "name": "eligible", "type": "boolean" }],
+          "rows": [
+            { "id": "r1", "inputCells": ["income <= 1473", "householdSize == 1"], "outputCells": ["true"] }
+          ],
+          "hitPolicy": "first"
+        }
+      ]
+    },
+    "linkedPolicyObjectRefs": {
+      "type": "array",
+      "description": "Cross-references to other PolicyObjects (e.g., AppealRight.linkedNoticeRef, Deadline.linkedAppealRightRef).",
+      "items": { "type": "string" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "enum": ["Obligation", "Permission", "Prohibition", "Right"] } },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "description": "Deontic body. SHOULD carry `defeasible: boolean` for OASIS LegalRuleML interop; MAY carry `legalRuleML: {lrml:* JSON-LD terms}` for direct LegalRuleML serialization.",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  ]
+}

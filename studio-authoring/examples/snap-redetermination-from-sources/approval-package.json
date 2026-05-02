@@ -1,4 +1,6 @@
 {
+  "$wosStudioApproval": "1.0",
+  "kind": "ApprovalPackage",
   "$comment": "ApprovalPackage produced at publication per review-and-approval.md. Carries every load-bearing field for downstream verification.",
   "id": "appkg-snap-redetermination-tx-v1.0.0",
   "workflowIntentRef": "wfi-snap-redetermination-tx",

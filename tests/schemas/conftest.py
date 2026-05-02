@@ -50,7 +50,31 @@ MARKER_TO_SCHEMA: dict[str, str] = {
     "$wosCaseInstance": "wos-case-instance.schema.json",
     "$wosProvenanceLog": "wos-provenance-log.schema.json",
     "$wosTooling": "wos-tooling.schema.json",
+    # Studio (Authoring) Stage-3 schemas — see studio-authoring/CONCEPT-MODEL.md
+    # §6.1 composition strategy. wos-studio-common.schema.json carries shared
+    # $defs (StudioMetadataEnvelope etc.) and has no document marker; it's
+    # registered below via UNMARKED_STUDIO_SCHEMAS so cross-schema $refs resolve.
+    "$wosStudioPolicyObject": "studio/wos-studio-policy-object.schema.json",
+    "$wosStudioBinding": "studio/wos-studio-binding.schema.json",
+    "$wosStudioWorkflowIntent": "studio/wos-studio-workflow-intent.schema.json",
+    "$wosStudioScenario": "studio/wos-studio-scenario.schema.json",
+    "$wosStudioSource": "studio/wos-studio-source.schema.json",
+    "$wosStudioWorkspace": "studio/wos-studio-workspace.schema.json",
+    "$wosStudioApproval": "studio/wos-studio-approval.schema.json",
+    "$wosStudioReadiness": "studio/wos-studio-readiness.schema.json",
+    "$wosStudioProvenance": "studio/wos-studio-provenance.schema.json",
+    "$wosStudioEffectiveness": "studio/wos-studio-effectiveness.schema.json",
+    "$wosStudioIdentitySubject": "studio/wos-studio-identity-subject.schema.json",
+    "$wosStudioTerminologyMap": "studio/wos-studio-terminology-map.schema.json",
+    "$wosStudioMigrationPath": "studio/wos-studio-migration-path.schema.json",
 }
+
+# Studio schemas that have NO document marker (they are pure $defs libraries
+# referenced via $ref from other schemas). Registered with the resolver so
+# cross-schema $refs work, but not attached to a marker.
+UNMARKED_STUDIO_SCHEMAS: list[str] = [
+    "studio/wos-studio-common.schema.json",
+]
 
 
 def _load_schema(rel: str) -> dict[str, Any]:
@@ -75,6 +99,21 @@ def _build_registry() -> tuple[Registry, dict[str, dict[str, Any]]]:
             # (`wos-workflow.schema.json`) rather than its canonical short URL
             # (`workflow/1.0`). Register both forms when a schema declares a
             # short `$id` so the file-name form resolves too.
+            if not schema_id.endswith(".schema.json"):
+                file_alias = (
+                    "https://wos-spec.org/schemas/"
+                    + Path(rel).name
+                )
+                resources.append(
+                    (file_alias, DRAFT202012.create_resource(schema))
+                )
+    # Register Studio schemas that have no document marker but ARE referenced
+    # via $ref (notably wos-studio-common.schema.json carrying shared $defs).
+    for rel in UNMARKED_STUDIO_SCHEMAS:
+        schema = _load_schema(rel)
+        schema_id = schema.get("$id")
+        if schema_id:
+            resources.append((schema_id, DRAFT202012.create_resource(schema)))
             if not schema_id.endswith(".schema.json"):
                 file_alias = (
                     "https://wos-spec.org/schemas/"

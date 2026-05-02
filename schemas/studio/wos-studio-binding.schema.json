@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-binding/1.0",
+  "title": "WOS Studio (Authoring) — Binding (polymorphic)",
+  "description": "Polymorphic Studio Binding schema covering ServiceBinding, EventBinding, PolicyEngineBinding, and DMNImport per studio-authoring/specs/binding-and-integration.md. Discriminated by `kind`. The first three project to `$.integration.bindings[*]` of the compiled `$wosWorkflow`; DMNImport is one-way import only (transpiles DMN tables to internal Studio DecisionTable PolicyObjects via FEEL→FEL transpilation; no DMN export). Carries `exercisedByScenarios[]` so every binding declares its contract test (per binding-and-integration.md SA-MUST-bind-070-073).",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; per-kind body shape is illustrative-and-flexible.",
+  "type": "object",
+  "required": ["$wosStudioBinding", "id", "workspaceId", "kind", "lifecycleState"],
+  "additionalProperties": false,
+  "patternProperties": { "^(\\$|x-)": {} },
+  "properties": {
+    "$wosStudioBinding": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Document marker.",
+      "examples": ["1.0"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for Studio Binding objects"
+      }
+    },
+    "id": {
+      "type": "string",
+      "examples": ["bind-svc-fed-income-verify", "bind-evt-application-submitted", "bind-pe-fraud-screen", "bind-dmn-state-snap-eligibility-table"]
+    },
+    "workspaceId": { "type": "string" },
+    "kind": {
+      "type": "string",
+      "enum": ["ServiceBinding", "EventBinding", "PolicyEngineBinding", "DMNImport"],
+      "description": "Binding discriminator.",
+      "examples": ["ServiceBinding", "EventBinding", "PolicyEngineBinding", "DMNImport"],
+      "x-lm": {
+        "critical": true,
+        "intent": "Binding kind discriminator — load-bearing for projection routing"
+      }
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "version": { "type": ["string", "integer"] },
+    "lifecycleState": {
+      "type": "string",
+      "enum": ["draft", "reviewed", "approved", "published", "superseded", "deprecated"]
+    },
+    "originClass": {
+      "type": "string",
+      "enum": ["source", "approved-interpretation", "local-practice", "assumption", "runtime-observed"]
+    },
+    "citations": { "type": "array", "items": { "type": ["string", "object"] } },
+    "provenance": { "type": "array", "items": { "type": ["string", "object"] } },
+    "mappingRef": { "type": "string" },
+    "mappingState": {
+      "type": "string",
+      "enum": ["mapsToWos", "authoringOnly", "requiresSpecExtension", "unmappedButApproved"]
+    },
+    "wosTarget": { "type": "string" },
+    "wosShapeRef": { "type": "string" },
+    "exercisedByScenarios": {
+      "type": "array",
+      "description": "Scenario refs that exercise this binding as its contract test (per SA-MUST-bind-070-073). Every binding MUST declare at least one Scenario ref before it can advance to lifecycleState='approved' (lint-pending).",
+      "items": { "type": "string" }
+    },
+    "body": {
+      "type": "object",
+      "description": "Binding body. Shape varies by kind:\n- ServiceBinding: `{operationKind: 'openapi'|'arazzo'|'custom', apiSpecRef, operationRef, inputBindings[], outputBindings[]}`\n- EventBinding: `{eventName, direction: 'consume'|'emit', cloudEventsExtensions: {woscausationeventid?, woscorrelationkey?}}`\n- PolicyEngineBinding: `{engineKind: 'opa'|'cedar'|'xacml'|'custom', endpoint, decisionMapping, reasonsMapping?, obligationsMapping?}`\n- DMNImport: `{sourceDmnUri, dmnXml?, sourceDecisionId, feelToFelMapping: {transpilerVersion, transpiledAt, issues[]}, producedDecisionTableRef}`",
+      "additionalProperties": true,
+      "examples": [
+        {
+          "operationKind": "openapi",
+          "apiSpecRef": "fed-income-verify-broker-v3.yaml",
+          "operationRef": "verifyHouseholdIncome",
+          "inputBindings": [{ "caseFilePath": "household.income", "requestPath": "$.income" }],
+          "outputBindings": [{ "responsePath": "$.matchResult", "caseFilePath": "incomeVerify.result" }]
+        },
+        {
+          "eventName": "applicationSubmitted",
+          "direction": "consume",
+          "cloudEventsExtensions": { "woscausationeventid": "$event.id", "woscorrelationkey": "case.id" }
+        },
+        {
+          "engineKind": "opa",
+          "endpoint": "https://policy.dhs.tx.us/v1/data/fraud_screen/decision",
+          "decisionMapping": { "permit": "permit", "deny": "deny" },
+          "reasonsMapping": { "code-12": "Income spike anomaly", "code-17": "Document forgery flag" }
+        },
+        {
+          "sourceDmnUri": "tx-snap-eligibility-table-v3.dmn",
+          "sourceDecisionId": "Eligibility",
+          "feelToFelMapping": { "transpilerVersion": "0.4.2", "transpiledAt": "2026-04-15T09:00:00Z", "issues": [] },
+          "producedDecisionTableRef": "pol-decision-table-eligibility"
+        }
+      ]
+    }
+  }
+}

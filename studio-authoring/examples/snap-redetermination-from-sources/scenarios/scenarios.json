@@ -1,7 +1,8 @@
 {
+  "$wosStudioScenario": "1.0",
   "$wosTooling": "1.0",
   "kind": "scenarios",
-  "$comment": "Conformance scenarios produced by Studio's compiler from workspace Scenario PolicyObjects. Composes parent crates/wos-conformance/fixtures/*. Illustrative.",
+  "$comment": "Conformance scenarios produced by Studio's compiler from workspace Scenario PolicyObjects. Composes parent crates/wos-conformance/fixtures/*. Illustrative. Carries dual marker: $wosStudioScenario for Stage-3 Studio validation; $wosTooling reserved for the runtime correlate via conformanceTrace.fixtureRef per CM §6.1 corrected pattern.",
   "scenarios": [
     {
       "id": "scn-snap-redet-happy-path",
