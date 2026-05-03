@@ -31,6 +31,7 @@
     "url": {
       "type": "string",
       "format": "uri",
+      "minLength": 1,
       "description": "Canonical URI identifier for this Workflow Document. The URL names the workflow definition, not any particular instance — all versions of the same workflow SHOULD share this URL, and the pair (url, version) SHOULD be globally unique. Sidecars (`wos-delivery`, `wos-ontology-alignment`) join by this URL via `targetWorkflow`. Prefer stable, resolvable URIs under a namespace the authoring organization controls.",
       "examples": [
         "https://agency.gov/workflows/benefits-adjudication",
@@ -39,6 +40,9 @@
       "x-lm": {
         "critical": true,
         "intent": "Stable identifier of the workflow across versions; sidecars join here"
+      },
+      "x-wos": {
+        "openStringKind": "uri"
       }
     },
     "version": {
@@ -53,20 +57,28 @@
     },
     "title": {
       "type": "string",
+      "minLength": 1,
       "description": "Short human-readable name for this workflow, suitable for lists, navigation, and audit summaries. Not interpreted by the processor.",
       "examples": [
         "Purchase Order Approval",
         "Benefits Adjudication Workflow",
         "NDA Co-Signing"
-      ]
+      ],
+      "x-wos": {
+        "openStringKind": "prose"
+      }
     },
     "description": {
       "type": "string",
+      "minLength": 1,
       "description": "Free-text description of this workflow's purpose, scope, and intended audience. Consumed by documentation tooling and LLM authoring agents; not interpreted by the processor.",
       "examples": [
         "Internal workflow for approving purchase orders under $50k; routed to a manager for approval or rejection.",
         "Medicaid eligibility redetermination with appeal branch; rights-impacting, requires full due process."
-      ]
+      ],
+      "x-wos": {
+        "openStringKind": "prose"
+      }
     },
     "status": {
       "enum": [
@@ -381,10 +393,14 @@
     "$schema": {
       "type": "string",
       "format": "uri",
+      "minLength": 1,
       "description": "Standard JSON Schema annotation declaring the meta-schema URI. Not interpreted by the WOS processor; consumed by IDEs/validators for tooling integration.",
       "examples": [
         "https://json-schema.org/draft/2020-12/schema"
-      ]
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
     },
     "execution": {
       "type": "object",
@@ -396,24 +412,36 @@
       "properties": {
         "workflowTimeout": {
           "type": "string",
+          "minLength": 1,
           "description": "Maximum total workflow duration as an ISO 8601 duration. The durable runtime treats this as the outer case-level timeout.",
           "examples": [
             "P30D"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "defaultTaskTimeout": {
           "type": "string",
+          "minLength": 1,
           "description": "Default task timeout as an ISO 8601 duration when an individual task omits an explicit SLA or timeout override.",
           "examples": [
             "P5D"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "defaultServiceTimeout": {
           "type": "string",
+          "minLength": 1,
           "description": "Default service-call timeout as an ISO 8601 duration when an invocation does not declare a narrower timeout.",
           "examples": [
             "PT30S"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "compensable": {
           "type": "boolean",
@@ -878,19 +906,27 @@
         "contractRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI reference to an external contract document defining the case data shape. Recommended binding is a Formspec Definition (per the canonical `contractHook` seam, ADR 0077 §10.2); JSON Schema is the baseline binding. Mutually exclusive with inline `fields`.",
           "examples": [
             "https://agency.gov/contracts/benefits-applicant.json",
             "urn:formspec:medicaid-redetermination/1.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "contractVersion": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional version string pin for the referenced contract. When omitted, processors resolve the latest published version of `contractRef`. Pinning is RECOMMENDED for case instances that must replay against archived semantics (Kernel §9.6).",
           "examples": [
             "1.0.0",
             "2025.4-rc.1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       }
     },
@@ -922,11 +958,15 @@
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Free-text description of the field's purpose, displayed to authoring tools and rendered into LLM-readable artifacts. Not interpreted by the processor; the field's semantic meaning lives in the bound contract.",
           "examples": [
             "The applicant's full legal name as it appears on government-issued ID.",
             "Monthly gross income in USD, before taxes."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       },
       "description": "Author-time field declaration in a contract intake binding (Kernel §9.1). Pairs a field name with its primitive type and optional documentation; the bound contract carries the semantic meaning."
@@ -941,19 +981,27 @@
         "contractRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI reference to the Formspec Definition that defines the public-intake form. Validated intake responses are converted to `caseFile` via `IntakeHandoff` per ADR 0073. Required for any workflow that accepts public intake.",
           "examples": [
             "https://agency.gov/forms/benefits-application.json",
             "urn:formspec:public-intake/medicaid-application-1.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "contractVersion": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional version pin for the intake form contract. When omitted, processors resolve latest. Pinning is RECOMMENDED for SBA pilot deployments to keep production replay deterministic.",
           "examples": [
             "1.0.0",
             "2026.1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "mode": {
           "enum": [
@@ -1006,12 +1054,16 @@
         },
         "role": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional human-readable role label for documentation and notice rendering. Not interpreted by the processor; the actor identity for execution and authority decisions is `id`, not `role`.",
           "examples": [
             "Eligibility Reviewer",
             "Supervisor",
             "Document Extraction Agent"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -1079,13 +1131,17 @@
           "type": "array",
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "Semantic tag string attaching governance and policy to this state. Governance attaches via the `lifecycleHook` seam (ADR 0077 §10.4) by matching tags. Common tags: `determination`, `adverse-decision`, `hold`, `appeal`, `terminal`. Custom tags MUST use kebab-case; vendor-specific tags use `x-` prefix.",
             "examples": [
               "determination",
               "adverse-decision",
               "hold",
               "x-vendor-special-handling"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           }
         },
         "transitions": {
@@ -1170,42 +1226,58 @@
         "stateTimeout": {
           "type": "string",
           "format": "duration",
+          "minLength": 1,
           "description": "ISO 8601 duration after which the processor emits a `$timeout.state` event if the state has not been exited. The lifecycle handles the timeout like any other event (Kernel §4.10). Hold policies (Governance §12) MAY override stateTimeout with policy-specific durations.",
           "examples": [
             "P30D",
             "PT2H",
             "P14DT0H"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "collection": {
           "type": "string",
+          "minLength": 1,
           "$comment": "Foreach only. FEL expression yielding a bounded array. ADR 0078.",
           "description": "Foreach states only (`type=='foreach'`). FEL expression yielding a bounded array. The processor evaluates the expression at state entry, instantiates `body` once per item, and aggregates per `mergeStrategy`. Per ADR 0078, the array MUST be bounded — unbounded collections are rejected.",
           "examples": [
             "caseFile.attachments",
             "caseFile.applicants",
             "filter(caseFile.lineItems, fn(item) -> item.amount > 0)"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "itemVariable": {
           "type": "string",
           "default": "$item",
+          "minLength": 1,
           "description": "Foreach states only. Variable name bound to the current item within `body`. Defaults to `$item`. Referenced in body actions and guards as `$item.fieldName` or whatever name is declared.",
           "examples": [
             "$item",
             "$attachment",
             "$applicant"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "indexVariable": {
           "type": "string",
           "default": "$index",
+          "minLength": 1,
           "description": "Foreach states only. Variable name bound to the current item index (0-based) within `body`. Defaults to `$index`. Useful for ordered processing or correlation with parallel arrays.",
           "examples": [
             "$index",
             "$i",
             "$attachmentIndex"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "concurrency": {
           "type": [
@@ -1223,19 +1295,27 @@
         },
         "breakCondition": {
           "type": "string",
+          "minLength": 1,
           "description": "Foreach states only. FEL expression evaluated after each iteration; when true, terminates the foreach early. Useful for early-exit on first match or threshold reached.",
           "examples": [
             "$item.eligibility == 'denied'",
             "count($accepted) >= 3"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "outputPath": {
           "type": "string",
+          "minLength": 1,
           "description": "Foreach states only. Case-file path where iteration results are written per `mergeStrategy`. Per ADR 0078, the write goes through the governed output-commit pipeline (ADR 0080) with `mutationSource: computed`.",
           "examples": [
             "caseFile.attachmentResults",
             "caseFile.eligibilityChecks"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         },
         "mergeStrategy": {
           "enum": [
@@ -1361,6 +1441,7 @@
         },
         "guard": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression evaluated before the transition fires. When the guard returns true, the transition is selected; when it returns false, the transition is skipped. When the guard throws or evaluates to a non-boolean, the processor MUST reject per Kernel §4.6/§4.7 transition resolution. Guards are stateless — they read case state but MUST NOT mutate it. The compiled FEL AST drives lint analysis (K-012 syntax, K-017 cross-case-state reference, K-019 function-set, AI-058 boolean shape).",
           "examples": [
             "caseFile.eligibilityScore >= 0.85",
@@ -1370,19 +1451,26 @@
           "x-lm": {
             "critical": true,
             "intent": "Where every conditional logic decision lives — the highest-traffic FEL surface, lint-checked for syntax / cross-state / function-set / boolean-shape correctness"
+          },
+          "x-wos": {
+            "openStringKind": "fel"
           }
         },
         "tags": {
           "type": "array",
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "Semantic tag string attaching governance and policy to this transition. Governance attaches via the `lifecycleHook` seam (ADR 0077 §10.4) by matching tags. Common tags: `determination`, `adverse-decision`, `appeal-grant`, `correction`, `rescission`.",
             "examples": [
               "determination",
               "adverse-decision",
               "appeal-grant",
               "correction"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           },
           "$comment": "Governance attaches via tags."
         },
@@ -1473,6 +1561,7 @@
       "properties": {
         "on": {
           "type": "string",
+          "minLength": 1,
           "$comment": "Source surface: state id, transition id, capability id, signal name.",
           "description": "Source surface that triggers this binding. Identifier of a state, transition, capability, or signal whose completion projects mutations through the governed output-commit pipeline (ADR 0080). The binding fires when the source surface emits its terminal event.",
           "examples": [
@@ -1480,16 +1569,23 @@
             "transition:approve",
             "capability:extractDocument",
             "signal:applicantSubmitted"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "contractRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI of the contract that validates the projected mutation before commit. Per ADR 0080's six-surface pipeline, every binding MUST reference a contract; the validator gates the commit. Formspec contract recommended for case-data writes.",
           "examples": [
             "https://agency.gov/contracts/case-update.json",
             "urn:formspec:adverse-decision/1.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "projection": {
           "type": "object",
@@ -1505,12 +1601,16 @@
           "type": "array",
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "Field-path expression naming a case-file location this binding is permitted to mutate. The processor MUST reject mutations outside writeScope at commit time. Per ADR 0080 D-2, writeScope is the load-bearing authorization claim.",
             "examples": [
               "caseFile.applicantName",
               "caseFile.eligibilityDecision",
               "caseFile.processingNotes"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "pathExpression"
+            }
           }
         },
         "mutationSource": {
@@ -1748,25 +1848,37 @@
       "properties": {
         "id": {
           "type": "string",
+          "minLength": 1,
           "$comment": "MUST match an actor.id where actor.type=='agent'.",
           "description": "Stable agent identifier referenced by workflow actors, invoker bindings, provenance records, and governance rules.",
           "examples": [
             "eligibilityScreener"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "modelIdentifier": {
           "type": "string",
+          "minLength": 1,
           "description": "Provider or deployment model identifier used for this agent, recorded so invocations and provenance can be tied to a concrete model family.",
           "examples": [
             "claude-sonnet-4-20250514"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "modelVersion": {
           "type": "string",
+          "minLength": 1,
           "description": "Provider or deployment model version used for this agent, recorded so behavior can be audited across upgrades and recalibrations.",
           "examples": [
             "2025-05-14"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "modelVersionPolicy": {
           "enum": [
@@ -1804,10 +1916,14 @@
               },
               "expression": {
                 "type": "string",
+                "minLength": 1,
                 "description": "FEL expression evaluated against the invocation context to decide whether this deontic constraint applies to the agent output or action.",
                 "examples": [
                   "caseFile.amount <= 50000"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "fel"
+                }
               }
             }
           }
@@ -1835,10 +1951,14 @@
           "type": "array",
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "Agent identifier in the ordered fallback chain used when this agent cannot act, fails validation, or is demoted by governance policy.",
             "examples": [
               "humanReviewer"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "$comment": "Actor ids, in order. MUST terminate in a human-review actor for rights-impacting transitions."
         },
@@ -1890,17 +2010,25 @@
             },
             "model": {
               "type": "string",
+              "minLength": 1,
               "description": "Anthropic model identifier used for the invocation, recorded so behavior can be audited by model family and release.",
               "examples": [
                 "claude-sonnet-4-20250514"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "configRef": {
               "type": "string",
+              "minLength": 1,
               "description": "Optional Anthropic adapter configuration reference resolved by deployment tooling before invoking the selected model.",
               "examples": [
                 "anthropic-benefits-prod"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1918,10 +2046,14 @@
             },
             "configRef": {
               "type": "string",
+              "minLength": 1,
               "description": "Claude Agent SDK configuration reference resolved by deployment tooling before starting the agent session.",
               "examples": [
                 "claude-agent-benefits-review"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1940,17 +2072,25 @@
             },
             "server": {
               "type": "string",
+              "minLength": 1,
               "description": "MCP server identifier resolved at deployment time before dispatching the configured tool invocation.",
               "examples": [
                 "benefits-tools"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "tool": {
               "type": "string",
+              "minLength": 1,
               "description": "Tool name on the selected MCP server that the agent is allowed to call for this capability.",
               "examples": [
                 "extract_income"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1968,10 +2108,14 @@
             },
             "orchestrator": {
               "type": "string",
+              "minLength": 1,
               "description": "External orchestrator identifier resolved at deployment time before dispatching the agent capability request.",
               "examples": [
                 "benefits-agent-orchestrator"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -1990,18 +2134,26 @@
             "endpoint": {
               "type": "string",
               "format": "uri",
+              "minLength": 1,
               "description": "HTTP endpoint URI used by the invoker when dispatching the agent capability request over HTTP.",
               "examples": [
                 "https://agents.agency.gov/benefits/extract"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             },
             "schemaRef": {
               "type": "string",
               "format": "uri",
+              "minLength": 1,
               "description": "Optional URI to OpenAPI / JSON Schema describing the contract.",
               "examples": [
                 "https://agency.gov/schemas/benefits-agent-response.json"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             }
           }
         },
@@ -2029,10 +2181,14 @@
                 "properties": {
                   "capabilityId": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Capability id this response satisfies. When omitted, matches any capability.",
                     "examples": [
                       "documentExtraction"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "output": {
                     "description": "Output payload returned by the invoker."
@@ -2129,17 +2285,25 @@
         "$schema": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "Optional JSON Schema URI annotation for the embedded signature block; workflow identity remains on the enclosing envelope.",
           "examples": [
             "https://wos-spec.org/schemas/wos-workflow.schema.json#/$defs/Signature"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional human-readable note describing the embedded signature flow. Identity (url, version) is governed by the enclosing $wosWorkflow envelope per ADR 0063 §2.1; legacy `targetWorkflow` / `version` / `title` properties are retired.",
           "examples": [
             "Applicant and eligibility worker signatures for a benefits determination packet."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "roles": {
           "type": "array",
@@ -2159,24 +2323,36 @@
             "properties": {
               "id": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Stable signing-role identifier referenced by signing steps, completion rules, and audit evidence.",
                 "examples": [
                   "caseworkerSigner"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "role": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Human-readable role label shown to signers and recorded in signature audit evidence.",
                 "examples": [
                   "caseworker"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
               },
               "actorId": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Workflow actor identifier bound to this signing role when the role is assigned to a specific actor.",
                 "examples": [
                   "caseworker-1"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "required": {
                 "type": "boolean",
@@ -2187,17 +2363,25 @@
               },
               "authenticationPolicyKey": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Authentication-policy key that this signing role must satisfy before completing a signature step.",
                 "examples": [
                   "login-gov-ial2"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "description": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Human-readable description of the signing role and its responsibility in the signature flow.",
                 "examples": [
                   "Caseworker responsible for affirming the reviewed benefits determination."
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
               }
             }
           }
@@ -2221,24 +2405,36 @@
             "properties": {
               "id": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Stable signable-document identifier referenced by signing steps, evidence records, and custody bindings.",
                 "examples": [
                   "benefits-determination"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "documentRef": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Reference to the signable document artifact that the signer is affirming.",
                 "examples": [
                   "documents/benefits-determination.pdf"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
               },
               "documentHash": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Digest value for the signable document, computed with documentHashAlgorithm and bound into signature evidence.",
                 "examples": [
                   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "hash"
+                }
               },
               "documentHashAlgorithm": {
                 "description": "Hash algorithm used to compute documentHash for this signable document. Core admits sha-256; vendor algorithms must use the x-* extension namespace.",
@@ -2262,17 +2458,25 @@
               },
               "renderingRef": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Reference to the rendering artifact or template used to produce the signable document view.",
                 "examples": [
                   "renderings/benefits-determination-v1"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
               },
               "formspecResponseRef": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Reference to the Formspec response whose rendered content or data is bound into the signable document.",
                 "examples": [
                   "formspecResponses/application-review"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "pathExpression"
+                }
               }
             }
           }
@@ -2314,40 +2518,60 @@
                 "properties": {
                   "id": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Stable signing-step identifier referenced by dependencies, decline paths, expiry paths, and evidence records.",
                     "examples": [
                       "applicantSignature"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "roleId": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Signing-role identifier responsible for completing this signing step.",
                     "examples": [
                       "applicantSigner"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "documentId": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Signable-document identifier this signing step asks the signer to affirm.",
                     "examples": [
                       "benefits-determination"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   },
                   "guard": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "FEL guard expression evaluated to decide whether this routed signing step is required for the case.",
                     "examples": [
                       "caseFile.requiresApplicantSignature = true"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "fel"
+                    }
                   },
                   "dependsOn": {
                     "type": "array",
                     "items": {
                       "type": "string",
+                      "minLength": 1,
                       "description": "Signing-step identifier that must complete before this step becomes available.",
                       "examples": [
                         "applicantSignature"
-                      ]
+                      ],
+                      "x-wos": {
+                        "openStringKind": "identifier"
+                      }
                     }
                   },
                   "required": {
@@ -2392,10 +2616,14 @@
                   "type": "array",
                   "items": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Signing-role identifier that must be completed when the completion rule names explicit roles.",
                     "examples": [
                       "applicantSigner"
-                    ]
+                    ],
+                    "x-wos": {
+                      "openStringKind": "identifier"
+                    }
                   }
                 }
               }
@@ -2429,10 +2657,14 @@
               "type": "array",
               "items": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Required evidence field name that must be present before signature affirmation evidence is complete.",
                 "examples": [
                   "signerId"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             },
             "consentReference": {
@@ -2447,31 +2679,47 @@
               "properties": {
                 "consentTextRef": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "Reference to the exact consent text shown to the signer before affirmation.",
                   "examples": [
                     "notices/signature-consent-v1"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "pathExpression"
+                  }
                 },
                 "consentVersion": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "Version identifier for the consent text shown to the signer before affirmation.",
                   "examples": [
                     "2026.04"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "identifier"
+                  }
                 },
                 "acceptedAtPath": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "JSON path or case-file path where the signer acceptance timestamp is recorded for consent evidence.",
                   "examples": [
                     "caseFile.signature.acceptedAt"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "pathExpression"
+                  }
                 },
                 "affirmationPath": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "JSON path or case-file path where the signer affirmation value is recorded for consent evidence.",
                   "examples": [
                     "caseFile.signature.affirmed"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "pathExpression"
+                  }
                 }
               }
             },
@@ -2568,17 +2816,25 @@
                 },
                 "providerRef": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "Identity provider or credential service reference recorded with the signer identity binding.",
                   "examples": [
                     "login-gov"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "identifier"
+                  }
                 },
                 "externalAttestationRef": {
                   "type": "string",
+                  "minLength": 1,
                   "description": "Reference to an external identity attestation that supports the signer identity binding.",
                   "examples": [
                     "login-gov-attestation-123"
-                  ]
+                  ],
+                  "x-wos": {
+                    "openStringKind": "identifier"
+                  }
                 }
               }
             },
@@ -2605,10 +2861,14 @@
             "properties": {
               "key": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Stable authentication-policy key referenced by signature roles and signing steps.",
                 "examples": [
                   "login-gov-ial2"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "method": {
                 "description": "Canonical authentication method required by this policy, or an x-* vendor token.",
@@ -2695,10 +2955,14 @@
               },
               "providerRef": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Reference to the identity provider, notary system, or credential service used to satisfy this authentication policy.",
                 "examples": [
                   "login-gov"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "requiresInPerson": {
                 "type": "boolean",
@@ -2728,28 +2992,40 @@
           "properties": {
             "eventName": {
               "type": "string",
+              "minLength": 1,
               "description": "Runtime event name emitted when a signature reminder is due under this reminder policy.",
               "examples": [
                 "signature.reminderDue"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             },
             "schedule": {
               "type": "array",
               "items": {
                 "type": "string",
+                "minLength": 1,
                 "description": "ISO-8601 duration offset defining when a signature reminder should be sent.",
                 "examples": [
                   "P2D"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               },
               "description": "ISO 8601 durations relative to signing-flow start."
             },
             "templateKey": {
               "type": "string",
+              "minLength": 1,
               "description": "Notification template key used to render signature reminder notices.",
               "examples": [
                 "signatureReminder"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             }
           }
         },
@@ -2763,24 +3039,36 @@
           "properties": {
             "eventName": {
               "type": "string",
+              "minLength": 1,
               "description": "Runtime event name emitted when a signature request reaches its configured expiry deadline.",
               "examples": [
                 "signature.expired"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             },
             "after": {
               "type": "string",
+              "minLength": 1,
               "description": "ISO-8601 duration after which an incomplete signature request expires and follows the expiry path.",
               "examples": [
                 "P7D"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "transitionId": {
               "type": "string",
+              "minLength": 1,
               "description": "Transition identifier fired when a signature request expires and the workflow follows the expiry path.",
               "examples": [
                 "signatureExpired"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           }
         },
@@ -2793,10 +3081,14 @@
           "properties": {
             "transitionId": {
               "type": "string",
+              "minLength": 1,
               "description": "Transition identifier fired when a signer declines and the signature workflow follows the decline path.",
               "examples": [
                 "signatureDeclined"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "reasonRequired": {
               "type": "boolean",
@@ -2819,18 +3111,26 @@
               "type": "array",
               "items": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Actor identifier authorized to reassign pending signature tasks under this policy.",
                 "examples": [
                   "supervisor"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             },
             "accountability": {
               "type": "string",
+              "minLength": 1,
               "description": "Accountability mode recorded when a pending signature task is reassigned to another authorized actor.",
               "examples": [
                 "originalSignerRetained"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             },
             "reasonRequired": {
               "type": "boolean",
@@ -2848,10 +3148,14 @@
           "properties": {
             "format": {
               "type": "string",
-              "description": "Audit certificate format emitted when signature evidence is summarized for downstream verification or export.",
+              "minLength": 1,
+              "description": "Audit certificate format emitted when signature evidence is summarized for downstream verification or export. Closed vocabulary for formats remains spec-gated; this leaf records the wire token honestly as an open identifier-shaped label until the signature profile spec ratifies the allowed set.",
               "examples": [
                 "json"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "tagLabel"
+              }
             },
             "includeActorMetadata": {
               "type": "boolean",
@@ -2894,10 +3198,14 @@
               "type": "array",
               "items": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Actor identifier authorized to void an in-progress or completed signature package under this policy.",
                 "examples": [
                   "supervisor"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "identifier"
+                }
               }
             },
             "reasonRequired": {
@@ -2918,10 +3226,12 @@
         "trustProfileRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI reference to the Trellis trust profile governing custody anchors, evidence binding, and verification expectations.",
           "examples": [
             "https://trellis.example/profiles/public-benefits-trust"
-          ]
+          ],
+          "x-wos": { "openStringKind": "uri" }
         },
         "anchorRequirements": {
           "type": "array",
@@ -2936,10 +3246,12 @@
               "on": {
                 "type": "string",
                 "$comment": "Transition id, signature event id, or determination tag.",
+                "minLength": 1,
                 "description": "Lifecycle event or custody milestone that triggers anchoring of the specified workflow evidence into the named ledger.",
                 "examples": [
                   "signatureAffirmed"
-                ]
+                ],
+                "x-wos": { "openStringKind": "tagLabel" }
               },
               "anchor": {
                 "enum": [
@@ -2951,10 +3263,12 @@
               "trellisLedger": {
                 "type": "string",
                 "$comment": "Optional ledger hint.",
+                "minLength": 1,
                 "description": "Trellis ledger identifier that receives the custody anchor for this requirement when the trigger condition occurs.",
                 "examples": [
                   "benefitsEvidenceLedger"
-                ]
+                ],
+                "x-wos": { "openStringKind": "identifier" }
               }
             }
           }
@@ -2962,10 +3276,12 @@
         "exportBundleRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI reference to the export bundle profile that defines how workflow evidence is packaged for external custody transfer.",
           "examples": [
             "https://agency.gov/wos/export-bundles/benefits-evidence"
-          ]
+          ],
+          "x-wos": { "openStringKind": "uri" }
         }
       }
     },
@@ -3158,10 +3474,14 @@
         "timestamp": {
           "type": "string",
           "format": "date-time",
+          "minLength": 1,
           "description": "RFC 3339 / ISO 8601 timestamp stamped by the runtime append path before persistence.",
           "examples": [
             "2026-04-19T12:00:00Z"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "actorId": {
           "type": "string",
@@ -3170,7 +3490,10 @@
           "examples": [
             "caseworker",
             "intake-service"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "fromState": {
           "type": "string",
@@ -3178,7 +3501,10 @@
           "description": "Kernel lifecycle state label naming the configuration leaf immediately before this transition-oriented provenance record was emitted.",
           "examples": [
             "review"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "toState": {
           "type": "string",
@@ -3186,7 +3512,10 @@
           "description": "Kernel lifecycle state label naming the configuration leaf immediately after this transition-oriented provenance record was emitted.",
           "examples": [
             "decided"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "event": {
           "type": "string",
@@ -3195,7 +3524,10 @@
           "examples": [
             "decide",
             "case.intake.accepted"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "data": {
           "type": "object",
@@ -3249,7 +3581,10 @@
           "examples": [
             "review",
             "open"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "definitionVersion": {
           "type": "string",
@@ -3257,7 +3592,10 @@
           "description": "Version of the governing Kernel Document stamped at append time.",
           "examples": [
             "1.0.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "inputs": {
           "type": "array",
@@ -3268,7 +3606,10 @@
             "description": "Opaque or resolvable token naming an input entity this activity consumed, aligned with PROV-O `prov:used` semantics for downstream audit graph materialization.",
             "examples": [
               "handoff-public-2026-0001"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "examples": [
             [
@@ -3285,7 +3626,10 @@
             "description": "Opaque or resolvable token naming an output entity this activity produced so exporters can stitch forward references into case files or external systems.",
             "examples": [
               "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsc"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "examples": [
             [
@@ -3309,11 +3653,15 @@
           ],
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "One semantic transition tag copied from the Kernel transition definition, such as 'determination' for consequential decisions or 'review' for human review steps.",
             "examples": [
               "determination",
               "review"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           }
         },
         "caseFileSnapshot": {
@@ -3495,10 +3843,14 @@
         },
         "jcsCanonical": {
           "type": "string",
+          "minLength": 1,
           "description": "Canonical JSON string for value using JCS (RFC 8785) canonicalization semantics. Identical case-file state MUST produce byte-identical canonical strings.",
           "examples": [
             "{\"eligible\":true,\"income\":17500}"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "sha256": {
           "type": "string",
@@ -3541,9 +3893,9 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "capabilityInvocation",
           "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
           "examples": [
-            "capabilityInvocation",
             "capabilityInvocation"
           ]
         },
@@ -3639,7 +3991,10 @@
           "description": "Authority-basis value whose interpretation is selected by kind, either a resolvable URI or a workflow-local actor-policy reference.",
           "examples": [
             "https://agency.gov/policies/delegations/benefits-2026"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       },
       "examples": [
@@ -3661,10 +4016,14 @@
             "value": {
               "type": "string",
               "format": "uri",
+              "minLength": 1,
               "description": "Resolvable URI naming the external legal, policy, or delegation authority that justifies the governed action.",
               "examples": [
                 "https://agency.gov/policies/delegations/benefits-2026"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "uri"
+              }
             }
           },
           "required": [
@@ -3683,7 +4042,10 @@
               "description": "Workflow-internal actor-policy identifier naming the authority basis that justifies the governed action.",
               "examples": [
                 "benefitsSupervisorPolicy"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             }
           },
           "required": [
@@ -3711,7 +4073,10 @@
           "examples": [
             "1.0.0",
             "2025.3.1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "wos.$wosWorkflowVersion": {
           "type": "string",
@@ -3720,7 +4085,10 @@
           "examples": [
             "1.0",
             "1.1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "trellis.envelopeVersion": {
           "type": "string",
@@ -3729,7 +4097,10 @@
           "examples": [
             "1.0",
             "1.2"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "trellis.conformanceClass": {
           "type": "string",
@@ -3739,7 +4110,10 @@
             "core",
             "core+aead",
             "core+hpke"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         }
       },
       "examples": [
@@ -3799,6 +4173,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "correctionAuthorized",
           "description": "Discriminator for ADR-0066 mode 1 correction-authorizing acts.",
           "examples": [
             "correctionAuthorized"
@@ -3891,6 +4266,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "amendmentAuthorized",
           "description": "Discriminator for ADR-0066 mode 2 amendment-authorizing acts.",
           "examples": [
             "amendmentAuthorized"
@@ -3974,6 +4350,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "determinationAmended",
           "description": "Discriminator for the post-authorization determination-change event of an ADR-0066 mode 2 amendment.",
           "examples": [
             "determinationAmended"
@@ -4082,6 +4459,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "rescissionAuthorized",
           "description": "Discriminator for ADR-0066 mode 4 rescission-authorizing acts.",
           "examples": [
             "rescissionAuthorized"
@@ -4183,6 +4561,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "determinationRescinded",
           "description": "Discriminator for the post-authorization determination-removal event of an ADR-0066 mode 4 rescission.",
           "examples": [
             "determinationRescinded"
@@ -4250,6 +4629,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "reinstated",
           "description": "Discriminator for ADR-0066 mode 5 reinstatement (Q26 maximalist five-mode).",
           "examples": [
             "reinstated"
@@ -4340,6 +4720,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "authorizationAttestation",
           "description": "Record-kind discriminator identifying authorization attestation provenance records in runtime logs and schema views.",
           "examples": [
             "authorizationAttestation"
@@ -4458,6 +4839,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "clockStarted",
           "description": "Record-kind discriminator identifying clock started provenance records in runtime logs and schema views.",
           "examples": [
             "clockStarted"
@@ -4594,6 +4976,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "clockResolved",
           "description": "Record-kind discriminator identifying clock resolved provenance records in runtime logs and schema views.",
           "examples": [
             "clockResolved"
@@ -4740,6 +5123,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "identityAttestation",
           "description": "Record-kind discriminator identifying identity attestation provenance records in runtime logs and schema views.",
           "examples": [
             "identityAttestation"
@@ -4852,6 +5236,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "clockSkewObserved",
           "description": "Record-kind discriminator identifying clock skew observed provenance records in runtime logs and schema views.",
           "examples": [
             "clockSkewObserved"
@@ -4953,6 +5338,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "commitAttemptFailure",
           "description": "Discriminator for ADR-0070 D-2 commit-attempt failure events.",
           "examples": [
             "commitAttemptFailure"
@@ -5053,6 +5439,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "authorizationRejected",
           "description": "Discriminator for ADR-0070 D-3 authorization-rejection events.",
           "examples": [
             "authorizationRejected"
@@ -5149,6 +5536,7 @@
       "properties": {
         "recordKind": {
           "type": "string",
+          "const": "migrationPinChanged",
           "description": "Record-kind discriminator identifying migration pin changed provenance records in runtime logs and schema views.",
           "examples": [
             "migrationPinChanged"
@@ -5294,7 +5682,8 @@
           "examples": [
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
-          ]
+          ],
+          "x-wos": { "openStringKind": "fel" }
         },
         "fields": {
           "type": "array",
@@ -5306,7 +5695,8 @@
               "applicantIncome",
               "employerName",
               "filingDate"
-            ]
+            ],
+            "x-wos": { "openStringKind": "pathExpression" }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -5323,19 +5713,23 @@
         },
         "referenceStage": {
           "type": "string",
+          "minLength": 1,
           "description": "Reference to a prior pipeline stage whose output is compared for consistency checking. Used with consistency and cross-document assertion types.",
           "examples": [
             "extract",
             "normalize"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.",
           "examples": [
             "Extracted income values must appear in the source pay stub document",
             "Total income must equal the sum of wage, investment, and other income components"
-          ]
+          ],
+          "x-wos": { "openStringKind": "prose" }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -5381,7 +5775,8 @@
           "x-lm": {
             "critical": true,
             "intent": "Cross-document reference URI into a published Assertion Gate Library"
-          }
+          },
+          "x-wos": { "openStringKind": "uri" }
         }
       }
     },
@@ -5464,11 +5859,13 @@
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of what this inline assertion checks and why it is required. Appears in rejection notices and audit traces alongside the assertion result.",
           "examples": [
             "Extracted income values must appear in the source pay stub document",
             "Total income must equal the sum of wage, investment, and other income components"
-          ]
+          ],
+          "x-wos": { "openStringKind": "prose" }
         },
         "expression": {
           "type": "string",
@@ -5477,7 +5874,8 @@
           "examples": [
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
-          ]
+          ],
+          "x-wos": { "openStringKind": "fel" }
         },
         "fields": {
           "type": "array",
@@ -5488,7 +5886,8 @@
             "examples": [
               "applicantIncome",
               "employerName"
-            ]
+            ],
+            "x-wos": { "openStringKind": "pathExpression" }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -5504,11 +5903,13 @@
         },
         "referenceStage": {
           "type": "string",
+          "minLength": 1,
           "description": "Reference to a prior pipeline stage whose output is compared for consistency checking. Used with consistency and cross-document assertion types.",
           "examples": [
             "extract",
             "normalize"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -5546,11 +5947,15 @@
     "JsonSchemaUri": {
       "type": "string",
       "format": "uri",
+      "minLength": 1,
       "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
       "examples": [
         "https://wos-spec.org/schemas/wos-workflow.schema.json",
         "https://wos-spec.org/schemas/sidecars/wos-delivery.schema.json"
-      ]
+      ],
+      "x-wos": {
+        "openStringKind": "uri"
+      }
     },
     "DueProcess": {
       "type": "object",
@@ -5563,10 +5968,14 @@
       "properties": {
         "scope": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression that determines when this due process policy applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the policy applies unconditionally.",
           "examples": [
             "impactLevel = 'rights-impacting'"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "adverseDecisionPolicy": {
           "$ref": "#/$defs/AdverseDecisionPolicy",
@@ -5617,11 +6026,15 @@
         },
         "noticeTemplateKey": {
           "type": "string",
+          "minLength": 1,
           "description": "Notification Template key for deterministic adverse-decision notice formatting. Key convention: plain string key into the Notification Template sidecar's template map, not a URI. When noticeRequired is true and an adverse-decision transition fires, the processor renders the human-readable notice from this template and emits a machine-readable `adverseDecisionNotice` artifact from the same case-file snapshot, transition, policy, and appeal inputs.",
           "examples": [
             "adverseDecisionNotice",
             "benefitTerminationNotice"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "explanationLevel": {
           "type": "string",
@@ -5725,7 +6138,10 @@
               "humanAdjudicator",
               "appealAdjudicator",
               "independentReviewer"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Roles eligible to review appeals. The processor uses this list to validate reviewer assignments during appeal routing.",
           "examples": [
@@ -5758,6 +6174,9 @@
           "x-lm": {
             "critical": true,
             "intent": "Resolves continuationOfServices to a typed ContinuationPolicy by id — replaces the loose continuationScope string when present"
+          },
+          "x-wos": {
+            "openStringKind": "identifier"
           }
         },
         "continuationScope": {
@@ -5799,7 +6218,10 @@
               "review",
               "determination",
               "adverse-decision"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           },
           "minItems": 1,
           "description": "Semantic transition tags this protocol binding matches (Governance S4.3). Matches any transition or state in the kernel that carries any of these tags.",
@@ -5853,26 +6275,38 @@
         },
         "transitionOverride": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional transition identifier to target directly instead of using tag-based matching. When present, this binding applies only to the named transition, overriding the tags array for matching purposes.",
           "examples": [
             "submitDetermination",
             "escalateToDirector"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "scope": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression that determines when this protocol binding applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the binding applies to all matching tagged transitions.",
           "examples": [
             "caseFile.amount > 10000"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable explanation of why this protocol combination was chosen and what it is intended to prevent. Used in governance documentation and audit reports.",
           "examples": [
             "All determination steps use dual-blind protocol to prevent anchoring bias.",
             "Appeal reviews use independent-first plus consider-opposite to ensure genuine reconsideration."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -5896,7 +6330,10 @@
           "examples": [
             "income-verification",
             "document-extraction"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "stages": {
           "type": "array",
@@ -5908,11 +6345,15 @@
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of what this pipeline validates and when it is invoked. Used in governance documentation and audit reports.",
           "examples": [
             "Validates income data from the external verification service before eligibility determination.",
             "Extracts and verifies key fields from submitted documents using assertion-gate checks."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -5938,7 +6379,10 @@
             "validate",
             "enrich",
             "present"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "type": {
           "type": "string",
@@ -5960,10 +6404,14 @@
         },
         "contractRef": {
           "type": "string",
+          "minLength": 1,
           "description": "Reference to a contract for validation. Used with contract-validation type.",
           "examples": [
             "urn:formspec:example.gov:income-extraction:1.0.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "assertions": {
           "type": "array",
@@ -5988,11 +6436,15 @@
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of what this stage does and why it is included in the pipeline. Used in audit reports and tooling.",
           "examples": [
             "Validate income data against the income verification contract.",
             "Apply arithmetic and source-grounding assertion gates to extracted income fields."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "extensions": {
           "$ref": "#/$defs/ExtensionsMap"
@@ -6035,19 +6487,23 @@
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of what this assertion checks and why it is required. Appears in rejection notices and audit traces.",
           "examples": [
             "Extracted income values must appear in the source pay stub",
             "Total income must equal the sum of wage, investment, and other income components"
-          ]
+          ],
+          "x-wos": { "openStringKind": "prose" }
         },
         "expression": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression defining the assertion constraint. Evaluated in the pipeline's data context.",
           "examples": [
             "totalIncome = wageIncome + investmentIncome + otherIncome",
             "filingDate >= fiscalYearStart and filingDate <= fiscalYearEnd"
-          ]
+          ],
+          "x-wos": { "openStringKind": "fel" }
         },
         "fields": {
           "type": "array",
@@ -6059,7 +6515,8 @@
               "applicantIncome",
               "employerName",
               "filingDate"
-            ]
+            ],
+            "x-wos": { "openStringKind": "pathExpression" }
           },
           "description": "Field paths subject to this assertion. Used with source-grounded and consistency types to declare which data fields must be checked.",
           "examples": [
@@ -6076,10 +6533,12 @@
         },
         "referenceStage": {
           "type": "string",
+          "minLength": 1,
           "description": "Reference to a prior pipeline stage for consistency checking.",
           "examples": [
             "extract"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "rejectionPolicy": {
           "type": "string",
@@ -6134,7 +6593,10 @@
             "examples": [
               "determination",
               "adverse-decision"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           },
           "default": [
             "determination"
@@ -6170,7 +6632,10 @@
             "examples": [
               "adverse-decision",
               "determination"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "tagLabel"
+            }
           },
           "default": [
             "adverse-decision"
@@ -6295,7 +6760,10 @@
               "intakeWorker",
               "dataEntryClerk",
               "initialReviewer"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Roles excluded from reviewing their own category of work. Actors holding these roles cannot review decisions they made in the same instance (or globally, per scope).",
           "examples": [
@@ -6405,7 +6873,10 @@
               "examples": [
                 "New medical evidence submitted on 2026-03-14 invalidates prior denial.",
                 "Reviewer determined original decision applied wrong regulatory section."
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              }
             },
             "regulatoryCitations": {
               "type": "array",
@@ -6416,7 +6887,10 @@
                 "examples": [
                   "20 CFR 416.1488",
                   "POMS DI 27505.001"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
               },
               "description": "Optional citations to the regulatory authorities, statutes, or policies that support the override. Each entry is a free-form citation string.",
               "examples": [
@@ -6453,7 +6927,10 @@
               "examples": [
                 "reviewer-alice",
                 "supervisor-007"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "method": {
               "type": "string",
@@ -6472,18 +6949,26 @@
             "verifiedAt": {
               "type": "string",
               "format": "date-time",
+              "minLength": 1,
               "description": "ISO 8601 timestamp recording when authority verification completed. Surfaced in audit trails and used to establish ordering when multiple verifications occur.",
               "examples": [
                 "2026-03-14T15:42:00Z"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "timestamp"
+              }
             },
             "authoritySource": {
               "type": "string",
+              "minLength": 1,
               "description": "Identifier of the authority source consulted (e.g., role registry id, delegation document URI, attestation record id).",
               "examples": [
                 "role-registry/v2#senior-reviewer",
                 "delegations/2026-014"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              }
             },
             "extensions": {
               "$ref": "#/$defs/ExtensionsMap"
@@ -6499,17 +6984,25 @@
         },
         "overriddenDecisionRef": {
           "type": "string",
+          "minLength": 1,
           "description": "Pointer to the prior decision being overridden — typically a provenance record id or case-file path. Optional but strongly recommended so the audit trail can reconstruct the override chain.",
           "examples": [
             "provenance/2026-03-14T09:11:00Z/Determination#42"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         },
         "newDeterminationRef": {
           "type": "string",
+          "minLength": 1,
           "description": "Pointer to the new determination produced by the override — typically a provenance record id. Auditors use this together with `overriddenDecisionRef` to reconstruct the override chain.",
           "examples": [
             "provenance/2026-03-14T15:42:00Z/Determination#88"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         },
         "extensions": {
           "$ref": "#/$defs/ExtensionsMap"
@@ -6557,25 +7050,37 @@
         },
         "caseFieldPath": {
           "type": "string",
+          "minLength": 1,
           "description": "JSON pointer / dotted path into the case file (used when `kind` is `caseField`).",
           "examples": [
             "/medical/recentEvidence/2026-03-14"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         },
         "uri": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI of the external document or record (used when `kind` is `document` or `externalRecord`).",
           "examples": [
             "https://agency.gov/cases/12345/attachments/MED-007.pdf"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "summary": {
           "type": "string",
+          "minLength": 1,
           "description": "Short human-readable description of what this evidence shows. Surfaced in audit reports.",
           "examples": [
             "Updated medical assessment from treating physician dated 2026-03-14."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -6600,7 +7105,10 @@
             "fieldExtraction",
             "completenessCheck",
             "credibilityAssessment"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "verifiable": {
           "type": "string",
@@ -6617,20 +7125,28 @@
         },
         "verificationMethod": {
           "type": "string",
+          "minLength": 1,
           "description": "How verification is performed for this task pattern when verifiable is 'yes' or 'partially'. Describes the independent check that can validate the task's output.",
           "examples": [
             "source-grounding",
             "recomputation",
             "parse-check"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of this task pattern and what it involves. Used in verifiability matrix documentation and governance reports.",
           "examples": [
             "Extract field values from submitted documents using OCR and structured parsing.",
             "Verify income data against source documents and arithmetic constraints."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "slaDefinitions": {
           "type": "array",
@@ -6681,7 +7197,10 @@
           "examples": [
             "firstResponse",
             "fullResolution"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "expectedDuration": {
           "type": "string",
@@ -6708,11 +7227,15 @@
         "calendarRef": {
           "type": "string",
           "format": "uri",
+          "minLength": 1,
           "description": "URI of the Business Calendar sidecar used to resolve business-day arithmetic. Ref convention: URI into the Business Calendar sidecar itself (not a key into a map), because a governance document may point at any calendar artifact addressable from its runtime environment; contrast with `templateKey` / `escalationStepId` / `notificationTemplateKey` which are plain string keys or sibling ids. REQUIRED in practice when `calendarType` = `business`; lint G-023 enforces presence/resolution.",
           "examples": [
             "https://agency.gov/sidecars/business-calendar-fy2026",
             "urn:wos:sidecar:business-calendar:fy2026-federal"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "startAt": {
           "type": "string",
@@ -6780,11 +7303,15 @@
         },
         "templateKey": {
           "type": "string",
+          "minLength": 1,
           "description": "Notification template key to render when this threshold fires. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. MUST resolve into a Notification Template sidecar via lint G-063. The referenced template SHOULD carry the `sla-warning` category.",
           "examples": [
             "slaWarning4Hour",
             "firstResponseImminentBreach"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "notify": {
           "type": "array",
@@ -6796,7 +7323,10 @@
             "examples": [
               "taskOwner",
               "caseSupervisor"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Actor identifiers (roles or individuals) that receive the rendered warning. Actor resolution follows the same rules as Delegation and task assignment (Governance §11, §10.2).",
           "examples": [
@@ -6843,19 +7373,27 @@
         },
         "templateKey": {
           "type": "string",
+          "minLength": 1,
           "description": "Notification template key rendered on breach when `action` = `notify`, or alongside escalation/reassignment. Key convention: plain string key into the Notification Template sidecar's template map (same precedent as `HoldPolicy.notificationTemplateKey`), not a URI. Resolution via lint G-063. The referenced template SHOULD carry a breach-appropriate category (e.g. `sla-warning`).",
           "examples": [
             "slaBreachNotice",
             "caseworkerReassignmentNotice"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "escalationStepId": {
           "type": "string",
+          "minLength": 1,
           "description": "Identifier resolving to a step in the same task pattern's `escalationChain`. Id convention: plain string targeting a sibling `EscalationStep` by its numeric `level` token (e.g. `level-1`) or optional stable `id` (e.g. `supervisor`), not a URI. Only meaningful when `action` = `escalate`. Cross-reference integrity is enforced by lint G-066.",
           "examples": [
             "level-1",
             "supervisor"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "timeoutPolicy": {
           "type": "object",
@@ -6923,7 +7461,10 @@
           "examples": [
             "teamLead",
             "divisionDirector"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "gracePeriod": {
           "type": "string",
@@ -6978,7 +7519,8 @@
           "examples": [
             "directorToCaseworker",
             "commissionerToDirector"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "delegator": {
           "type": "string",
@@ -6987,7 +7529,8 @@
           "examples": [
             "divisionDirector",
             "commissioner"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "delegate": {
           "type": "string",
@@ -6996,7 +7539,8 @@
           "examples": [
             "seniorCaseworker",
             "divisionDirector"
-          ]
+          ],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "scope": {
           "$ref": "#/$defs/DelegationScope",
@@ -7022,29 +7566,35 @@
         },
         "legalInstrument": {
           "type": "string",
+          "minLength": 1,
           "description": "Reference to the legal delegation order, memorandum, or statutory citation.",
           "examples": [
             "Delegation Order 2026-003",
             "42 USC 1396a(a)(5)"
-          ]
+          ],
+          "x-wos": { "openStringKind": "prose" }
         },
         "effectiveDate": {
           "type": "string",
           "format": "date",
+          "minLength": 1,
           "description": "ISO 8601 date on which this delegation becomes active. Before this date, the processor MUST NOT honor this delegation.",
           "examples": [
             "2026-01-01",
             "2025-07-01"
-          ]
+          ],
+          "x-wos": { "openStringKind": "timestamp" }
         },
         "expirationDate": {
           "type": "string",
           "format": "date",
+          "minLength": 1,
           "description": "ISO 8601 date on which this delegation expires. After this date, the processor MUST NOT honor this delegation.",
           "examples": [
             "2026-12-31",
             "2027-06-30"
-          ]
+          ],
+          "x-wos": { "openStringKind": "timestamp" }
         },
         "revocable": {
           "type": "boolean",
@@ -7058,11 +7608,13 @@
         "revokedDate": {
           "type": "string",
           "format": "date",
+          "minLength": 1,
           "description": "ISO 8601 date on which this delegation was revoked. When set, the processor MUST treat the delegation as expired from this date forward.",
           "examples": [
             "2026-03-15",
             "2025-11-01"
-          ]
+          ],
+          "x-wos": { "openStringKind": "timestamp" }
         },
         "allowsSubDelegation": {
           "type": "boolean",
@@ -7086,12 +7638,14 @@
           "type": "array",
           "items": {
             "type": "string",
+            "minLength": 1,
             "description": "Principal ID of an authority eligible to contribute to the quorum.",
             "examples": [
               "commissioner",
               "deputyCommissioner",
               "chiefCounsel"
-            ]
+            ],
+            "x-wos": { "openStringKind": "identifier" }
           },
           "description": "Eligible authority principal IDs forming the quorum pool (S4.9). Required when quorumCount is set.",
           "examples": [
@@ -7155,7 +7709,8 @@
               "standard-application",
               "renewal",
               "emergency-request"
-            ]
+            ],
+            "x-wos": { "openStringKind": "identifier" }
           },
           "description": "Case types this delegation covers. The delegate may only exercise authority for cases of these types.",
           "examples": [
@@ -7179,10 +7734,12 @@
         },
         "conditions": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression (Runtime Companion §8.2) that further narrows when the delegation applies. Evaluated against the evaluation context; the delegation is active only when this expression evaluates to true. Same FEL evaluation contract as `DueProcess.scope`, `ReviewProtocolBinding.scope`, and `HoldPolicy.scope`.",
           "examples": [
             "caseFile.programType = 'supplemental'"
-          ]
+          ],
+          "x-wos": { "openStringKind": "fel" }
         }
       }
     },
@@ -7271,6 +7828,9 @@
           "x-lm": {
             "critical": true,
             "intent": "The event that unblocks the case -- event-driven, not polling-based"
+          },
+          "x-wos": {
+            "openStringKind": "tagLabel"
           }
         },
         "timeoutAction": {
@@ -7288,26 +7848,38 @@
         },
         "notificationTemplateKey": {
           "type": "string",
+          "minLength": 1,
           "description": "Notification template key for hold notifications. When present, the processor sends a notification using this template when the hold begins.",
           "examples": [
             "holdNotificationTemplate",
             "pendingApplicantResponseNotice"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "scope": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL expression that determines when this hold policy applies (Runtime Companion S8.2). Evaluated against the evaluation context. When absent, the policy applies to all holds of the declared holdType.",
           "examples": [
             "caseFile.holdReason = 'pending-legislation'"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable description of this hold policy and its regulatory or procedural basis. Used in tooling and audit documentation.",
           "examples": [
             "Hold pending applicant response to information request — 30-day window per APA 5 USC 554.",
             "Legal hold — no event-based resume; survives terminal workflow states and blocks data retention expiry."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -7330,15 +7902,22 @@
           "examples": [
             "42-cfr-435-916",
             "snap-eligibility-rule-3.2"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "description": {
           "type": "string",
+          "minLength": 1,
           "description": "Human-readable summary of what this rule requires or prohibits. Used in explanation assembly and audit documentation.",
           "examples": [
             "Annual renewal of eligibility required for continued benefit receipt.",
             "Adverse decisions require individualized written notice at least 30 days before effective date."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "sourceAuthority": {
           "type": "string",
@@ -7361,11 +7940,15 @@
         },
         "citation": {
           "type": "string",
+          "minLength": 1,
           "description": "Formal citation to the authoritative source document for this rule, in standard legal citation format.",
           "examples": [
             "42 CFR § 435.916",
             "OMB M-24-10 §3.1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -7384,12 +7967,16 @@
         },
         "timerId": {
           "type": "string",
+          "minLength": 1,
           "description": "Timer correlation identifier within the workflow instance (Kernel §9.2, §9.7). Paired with startTimer and cancelTimer actions. Together with source and optional firesAs it determines which process_event string the runtime delivers when the timer elapses; authors SHOULD reuse the same timerId on the matching startTimer action.",
           "examples": [
             "resubmitDeadline",
             "review-deadline",
             "appealWindow"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "source": {
           "type": "string",
@@ -7411,30 +7998,42 @@
         "duration": {
           "type": "string",
           "format": "duration",
+          "minLength": 1,
           "description": "Optional relative ISO 8601 duration carried on timer-kind transition events for authoring parity with embedded timer shapes (Kernel §9.2). Mirrors startTimer duration when authors document the intended expiry window on the transition itself.",
           "examples": [
             "P30D",
             "PT4H",
             "P7D"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "expiresAt": {
           "type": "string",
           "format": "date-time",
+          "minLength": 1,
           "description": "Optional absolute deadline as RFC 3339 date-time for timer-kind transition events when modeling fixed clock firing instead of relative duration semantics alone (Kernel §9.2).",
           "examples": [
             "2026-12-31T23:59:59Z",
             "2027-01-15T12:00:00-05:00"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "firesAs": {
           "type": "string",
+          "minLength": 1,
           "description": "Exact process_event string emitted when this timer elapses, overriding default $timeout.* synthesis from timerId and source (Kernel §4.9.10). Use for dotted author timer names such as resubmitExpired instead of the synthesized prefix form.",
           "examples": [
             "resubmitExpired",
             "deadline.exceeded",
             "custom.fire"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         }
       }
     },
@@ -7463,12 +8062,16 @@
         },
         "correlationKey": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional correlation key for matching async external callbacks to the originating workflow transition (Kernel §4.5, §9.4). Integration profiles surface this through CloudEvents attributes such as woscorrelationkey for callback routing and deduplication.",
           "examples": [
             "caseId",
             "submissionId",
             "request-abc-123"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "data": {
           "type": "object",
@@ -7499,12 +8102,16 @@
         },
         "name": {
           "type": "string",
+          "minLength": 1,
           "description": "Signal name for lifecycle delivery, including kernel sentinels `$join` (Kernel §4.8) and `$compensation.complete` (LCD §5.9), plus author-defined identifiers. Unlike messages, leading `$` is permitted for kernel-reserved signal identifiers.",
           "examples": [
             "$join",
             "approvalReceived",
             "$compensation.complete"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "scope": {
           "type": "string",
@@ -7536,11 +8143,15 @@
         },
         "expression": {
           "type": "string",
+          "minLength": 1,
           "description": "FEL predicate evaluated during continuous evaluation after case-file mutation so the transition competes in guard re-scan ordering without matching an external event name (Kernel §12.3).",
           "examples": [
             "caseFile.application.isComplete = true",
             "caseFile.holdActive = false"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         }
       }
     },
@@ -7570,11 +8181,15 @@
         },
         "actionPath": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional JSON Pointer to the failing action when the runtime attaches structural context for diagnostics and recovery UX on error-kind transition events (Kernel §4.5). Omit when the error code alone suffices for routing and operator playbooks.",
           "examples": [
             "/lifecycle/states/intake/transitions/0/actions/0",
             "/onEntry/1"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          }
         }
       }
     }

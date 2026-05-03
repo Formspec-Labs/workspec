@@ -41,7 +41,8 @@
         "state 'approved' has no outbound transition and is not terminal",
         "actor 'reviewer' declares permission 'approve' but no transition requires that permission"
       ],
-      "x-lm": { "critical": true }
+      "x-lm": { "critical": true },
+      "x-wos": { "openStringKind": "prose" }
     },
     "suggestedFix": {
       "type": "object",
@@ -67,12 +68,14 @@
         "from": {
           "type": "string",
           "description": "Current identifier name for rename fixes. The rename kind changes a key or value from this name to the value in the 'to' field.",
-          "examples": ["submited", "approvall"]
+          "examples": ["submited", "approvall"],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "to": {
           "type": "string",
           "description": "Target identifier name for rename fixes. Replaces the current name identified in the 'from' field after the rename is applied.",
-          "examples": ["submitted", "approval"]
+          "examples": ["submitted", "approval"],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "hint": {
           "type": "string",
@@ -80,7 +83,8 @@
           "examples": [
             "Add at least one terminal state to the lifecycle before declaring transitions.",
             "Declare the actor in the top-level 'actors' map before referencing it in a transition."
-          ]
+          ],
+          "x-wos": { "openStringKind": "prose" }
         }
       },
       "additionalProperties": false
@@ -95,7 +99,8 @@
           "specs/kernel/spec.md#S4.2",
           "LINT-MATRIX.md#K-023",
           "thoughts/adr/0042-terminal-state-invariant.md"
-        ]
+        ],
+        "x-wos": { "openStringKind": "pathExpression" }
       },
       "examples": [
         ["specs/kernel/spec.md#S4.2", "LINT-MATRIX.md#K-023"],
@@ -110,7 +115,8 @@
         "document": {
           "type": "string",
           "description": "Path or URL of the source document being linted. May be a relative path from the project root, an absolute path, or a remote URL depending on how the linter was invoked.",
-          "examples": ["workflow.json", "projects/acme/kernel.json", "https://example.com/wos/v1/kernel"]
+          "examples": ["workflow.json", "projects/acme/kernel.json", "https://example.com/wos/v1/kernel"],
+          "x-wos": { "openStringKind": "identifier" }
         },
         "line": {
           "type": "integer",

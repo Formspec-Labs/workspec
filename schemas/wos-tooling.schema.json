@@ -46,7 +46,7 @@
   },
   "patternProperties": {
     "^x-": {
-      "$comment": "Vendor extensions per Kernel spec \u00a710.6 (the canonical `extensions` seam \u2014 one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
+      "$comment": "Vendor extensions per Kernel spec §10.6 (the canonical `extensions` seam — one of the six per ADR 0077). The prefix `x-wos-` is RESERVED for future normative WOS use (lint K-EXT-002 warns)."
     }
   },
   "allOf": [
@@ -187,7 +187,11 @@
           ],
           "x-lm": {
             "critical": true
-          }
+          },
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "severity": {
           "type": "string",
@@ -233,7 +237,11 @@
           ],
           "x-lm": {
             "critical": true
-          }
+          },
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          },
+          "minLength": 1
         },
         "message": {
           "type": "string",
@@ -244,7 +252,11 @@
           ],
           "x-lm": {
             "critical": true
-          }
+          },
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "suggestedFix": {
           "type": "object",
@@ -277,7 +289,11 @@
               "examples": [
                 "$.states.approved.type",
                 "$.lifecycle.transitions[0].guard"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "pathExpression"
+              },
+              "minLength": 1
             },
             "value": {
               "description": "Replacement or new value to write at the indicated path. Required for add-property and replace-value kinds. The type matches the expected JSON type of the target field.",
@@ -293,7 +309,11 @@
               "examples": [
                 "submited",
                 "approvall"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              },
+              "minLength": 1
             },
             "to": {
               "type": "string",
@@ -301,7 +321,11 @@
               "examples": [
                 "submitted",
                 "approval"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "identifier"
+              },
+              "minLength": 1
             },
             "hint": {
               "type": "string",
@@ -309,7 +333,11 @@
               "examples": [
                 "Add at least one terminal state to the lifecycle before declaring transitions.",
                 "Declare the actor in the top-level 'actors' map before referencing it in a transition."
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "minLength": 1
             }
           },
           "additionalProperties": false
@@ -324,7 +352,11 @@
               "specs/kernel/spec.md#S4.2",
               "LINT-MATRIX.md#K-023",
               "thoughts/adr/0042-terminal-state-invariant.md"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            },
+            "minLength": 1
           },
           "examples": [
             [
@@ -350,7 +382,11 @@
                 "workflow.json",
                 "projects/acme/kernel.json",
                 "https://example.com/wos/v1/kernel"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "prose"
+              },
+              "minLength": 1
             },
             "line": {
               "type": "integer",
@@ -435,7 +471,11 @@
           "examples": [
             "intake",
             "submitted"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "stateAfter": {
           "type": "string",
@@ -443,7 +483,11 @@
           "examples": [
             "eligibilityReview",
             "approved"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "expectedStateAfter": {
           "type": "string",
@@ -451,7 +495,11 @@
           "examples": [
             "eligibilityReview",
             "approved"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "guardsEvaluated": {
           "type": "array",
@@ -492,7 +540,11 @@
           "examples": [
             "applicationComplete",
             "$timeout.state"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "sourceActor": {
           "type": "string",
@@ -500,7 +552,11 @@
           "examples": [
             "caseworker",
             "verificationSystem"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "payload": {
           "description": "Arbitrary JSON payload carried by the event, merged into the case file before guard evaluation. The payload shape is kernel-document-specific. Absent or null when the event carries no data.",
@@ -531,11 +587,15 @@
       "properties": {
         "guardId": {
           "type": "string",
-          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple \u2014 use the expression field to disambiguate. The id is stable across runs of the same `$wosWorkflow` envelope version.",
+          "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple — use the expression field to disambiguate. The id is stable across runs of the same `$wosWorkflow` envelope version.",
           "examples": [
             "intake->eligibilityReview:applicationComplete",
             "submitted->approved:approve"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "sourceState": {
           "type": "string",
@@ -543,7 +603,11 @@
           "examples": [
             "intake",
             "submitted"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "targetState": {
           "type": "string",
@@ -551,7 +615,11 @@
           "examples": [
             "eligibilityReview",
             "approved"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "event": {
           "type": "string",
@@ -559,7 +627,11 @@
           "examples": [
             "applicationComplete",
             "approve"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "expression": {
           "type": "string",
@@ -570,8 +642,12 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "FEL expression text \u2014 primary teaching signal for LLM repair when a guard blocks an expected transition"
-          }
+            "intent": "FEL expression text — primary teaching signal for LLM repair when a guard blocks an expected transition"
+          },
+          "x-wos": {
+            "openStringKind": "fel"
+          },
+          "minLength": 1
         },
         "result": {
           "type": "boolean",
@@ -615,7 +691,11 @@
           "examples": [
             "P-01",
             "P-11"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "parameterBindings": {
           "description": "JSON object containing the resolved parameter bindings passed to the policy at evaluation time. Shape is policy-specific.",
@@ -672,33 +752,45 @@
         },
         "expected": {
           "type": "string",
+          "minLength": 1,
           "description": "The state label the fixture declared as the expected post-step state.",
           "examples": [
             "approved",
             "eligibilityReview"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "actual": {
           "type": "string",
+          "minLength": 1,
           "description": "The state label the kernel evaluator actually transitioned into.",
           "examples": [
             "rejected",
             "intake"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "cause": {
           "type": "string",
+          "minLength": 1,
           "description": "Optional human-readable explanation of why the mismatch occurred. Populated by the runner when it can diagnose the root cause (e.g. 'guard false on all outgoing transitions').",
           "examples": [
             "guard false",
             "no matching transition for event"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
     "conformanceTrace__DeltaGuardFalse": {
       "type": "object",
-      "description": "Delta variant: a guard expression evaluated false when the fixture expected it to fire. This is the primary teaching signal for LLM-assisted repair \u2014 the expression and inputs fields together give the repair agent everything it needs to identify and fix the FEL expression that blocked the expected transition.",
+      "description": "Delta variant: a guard expression evaluated false when the fixture expected it to fire. This is the primary teaching signal for LLM-assisted repair — the expression and inputs fields together give the repair agent everything it needs to identify and fix the FEL expression that blocked the expected transition.",
       "required": [
         "kind",
         "guardId",
@@ -717,26 +809,34 @@
         },
         "guardId": {
           "type": "string",
+          "minLength": 1,
           "description": "Synthesized guard identifier in the form '{sourceState}->{targetState}:{event}' that identifies the transition whose guard evaluated false. See GuardEvaluation.guardId for disambiguation notes.",
           "examples": [
             "reviewed->approved:decide",
             "submitted->approved:approve"
           ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
           "x-lm": {
             "critical": true,
-            "intent": "Identifies the blocked transition \u2014 primary key for LLM repair targeting"
+            "intent": "Identifies the blocked transition — primary key for LLM repair targeting"
           }
         },
         "expression": {
           "type": "string",
+          "minLength": 1,
           "description": "The raw FEL expression text that evaluated false. Together with inputs, this is the complete teaching signal: the repair agent can read the expression, see what inputs it received, and determine what change to the kernel document will make it evaluate true.",
           "examples": [
             "caseFile.benefit_amount <= caseFile.income_limit",
             "caseFile.amount <= 50000"
           ],
+          "x-wos": {
+            "openStringKind": "fel"
+          },
           "x-lm": {
             "critical": true,
-            "intent": "FEL expression that evaluated false \u2014 repair agents use this to identify the specific guard to fix"
+            "intent": "FEL expression that evaluated false — repair agents use this to identify the specific guard to fix"
           }
         },
         "inputs": {
@@ -778,27 +878,39 @@
         },
         "policyId": {
           "type": "string",
+          "minLength": 1,
           "description": "Identifier of the governance policy that changed the outcome. Matches PolicyApplication.policyId in the same step's policiesApplied array.",
           "examples": [
             "P-11",
             "P-01"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "expectedWithoutPolicy": {
           "type": "string",
+          "minLength": 1,
           "description": "The state the kernel evaluator would have transitioned into if the named policy had not been applied.",
           "examples": [
             "approved",
             "active"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "actualWithPolicy": {
           "type": "string",
+          "minLength": 1,
           "description": "The state the kernel evaluator actually transitioned into after the policy was applied.",
           "examples": [
             "rejected",
             "suspended"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         }
       }
     },
@@ -819,7 +931,11 @@
           "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
           "examples": [
             "https://wos-spec.org/schemas/conformance/conformance-trace.schema.json"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          },
+          "minLength": 1
         },
         "fixtureId": {
           "type": "string",
@@ -831,7 +947,11 @@
           "x-lm": {
             "critical": true,
             "intent": "Fixture identity key that links the trace to its fixture definition"
-          }
+          },
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "kernelVersion": {
           "type": "string",
@@ -843,7 +963,11 @@
           "x-lm": {
             "critical": true,
             "intent": "Pins the trace to the `$wosWorkflow` envelope version used for evaluation"
-          }
+          },
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          },
+          "minLength": 1
         },
         "steps": {
           "type": "array",
@@ -862,7 +986,7 @@
             "fail",
             "error"
           ],
-          "description": "Final result of the conformance run: 'pass' means every step matched expectations; 'fail' means at least one step produced a state mismatch or unexpected guard result; 'error' means the runner itself encountered an unhandled exception (e.g. invalid fixture JSON, kernel panic). LLM repair prompts MUST treat 'fail' and 'error' differently \u2014 'fail' points to kernel logic bugs; 'error' points to fixture or tooling issues.",
+          "description": "Final result of the conformance run: 'pass' means every step matched expectations; 'fail' means at least one step produced a state mismatch or unexpected guard result; 'error' means the runner itself encountered an unhandled exception (e.g. invalid fixture JSON, kernel panic). LLM repair prompts MUST treat 'fail' and 'error' differently — 'fail' points to kernel logic bugs; 'error' points to fixture or tooling issues.",
           "examples": [
             "pass",
             "fail"
@@ -894,7 +1018,7 @@
     },
     "synthTrace__SynthTrace": {
       "type": "object",
-      "description": "Full record of a synthesis loop run \u2014 the iteration list plus per-run cost totals. Mirrors `wos-synth-core::trace::SynthTrace`.",
+      "description": "Full record of a synthesis loop run — the iteration list plus per-run cost totals. Mirrors `wos-synth-core::trace::SynthTrace`.",
       "required": [
         "iterations",
         "total_input_tokens",
@@ -908,7 +1032,11 @@
           "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
           "examples": [
             "https://wos-spec.org/schemas/synth/wos-synth-trace.schema.json"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          },
+          "minLength": 1
         },
         "iterations": {
           "type": "array",
@@ -984,15 +1112,19 @@
         },
         "attempt": {
           "type": "string",
-          "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations \u2014 the trace must preserve exactly what the model produced so failures can be reproduced.",
+          "description": "Raw text the LLM returned for this iteration, after the loop's fence-stripping pass (i.e. with any surrounding ```json``` markdown fences removed). Stored as a string rather than a parsed JSON object because the model's output may itself be malformed JSON on early iterations — the trace must preserve exactly what the model produced so failures can be reproduced.",
           "examples": [
             "{\"$wosWorkflow\":\"1.0\"}",
             "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{}}}"
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Verbatim model output \u2014 the load-bearing teaching signal for diagnosing why the loop did not converge"
-          }
+            "intent": "Verbatim model output — the load-bearing teaching signal for diagnosing why the loop did not converge"
+          },
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "lint_findings": {
           "type": "array",
@@ -1053,7 +1185,11 @@
             "K-001",
             "G-027",
             "AI-024"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          },
+          "minLength": 1
         },
         "severity": {
           "$ref": "#/$defs/synthTrace__Severity"
@@ -1064,7 +1200,11 @@
           "examples": [
             "state 'approved' has no outbound transition and is not terminal",
             "actor 'reviewer' references undefined permission 'approve'"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "path": {
           "type": "string",
@@ -1072,7 +1212,11 @@
           "examples": [
             "/states/approved",
             "/lifecycle/transitions/2"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "pathExpression"
+          },
+          "minLength": 1
         },
         "suggested_fix": {
           "type": "string",
@@ -1080,7 +1224,11 @@
           "examples": [
             "add property at /states/approved/type with value 'terminal'",
             "rename actor 'reviewr' to 'reviewer'"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "related_docs": {
           "type": "array",
@@ -1091,7 +1239,11 @@
             "examples": [
               "specs/kernel/spec.md#S4.2",
               "LINT-MATRIX.md#K-023"
-            ]
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            },
+            "minLength": 1
           },
           "examples": [
             [
@@ -1118,12 +1270,12 @@
       ],
       "x-lm": {
         "critical": true,
-        "intent": "Drives loop convergence \u2014 only `error` severities trigger repair iterations"
+        "intent": "Drives loop convergence — only `error` severities trigger repair iterations"
       }
     },
     "synthTrace__ConformanceVerdict": {
       "type": "object",
-      "description": "Optional conformance result attached to an iteration when the caller supplied a fixture. Absent (the iteration record's `conformance` field is omitted) when no fixture was supplied \u2014 the loop then converges on lint cleanliness alone.",
+      "description": "Optional conformance result attached to an iteration when the caller supplied a fixture. Absent (the iteration record's `conformance` field is omitted) when no fixture was supplied — the loop then converges on lint cleanliness alone.",
       "required": [
         "passed",
         "summary"
@@ -1144,7 +1296,11 @@
           "examples": [
             "fixture passed all 7 steps",
             "step 3: expected state 'approved', got 'rejected' (guard 'reviewed->approved:decide' evaluated false)"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         }
       }
     },
@@ -1191,20 +1347,24 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Tagged-union discriminant \u2014 consumers must read this before any other field to determine the outcome shape"
+            "intent": "Tagged-union discriminant — consumers must read this before any other field to determine the outcome shape"
           }
         },
         "document": {
           "type": "string",
-          "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved \u2014 this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
+          "description": "Final document the loop produced as raw JSON text. Stored as a string (not a parsed object) so the byte-for-byte serialization the model produced is preserved — this matters for downstream signing, hashing, and reproducibility. Callers that need a parsed object should run their own JSON parse on this field.",
           "examples": [
             "{\"$wosWorkflow\":\"1.0\"}",
             "{\"$wosWorkflow\":\"1.0\",\"states\":{\"intake\":{\"type\":\"initial\"}}}"
           ],
           "x-lm": {
             "critical": true,
-            "intent": "The synthesis output \u2014 the actual artifact the caller asked the loop to produce"
-          }
+            "intent": "The synthesis output — the actual artifact the caller asked the loop to produce"
+          },
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "trace": {
           "$ref": "#/$defs/synthTrace__SynthTrace"
@@ -1232,7 +1392,7 @@
           ],
           "x-lm": {
             "critical": true,
-            "intent": "Tagged-union discriminant \u2014 consumers must read this before any other field to determine the outcome shape"
+            "intent": "Tagged-union discriminant — consumers must read this before any other field to determine the outcome shape"
           }
         },
         "last_attempt": {
@@ -1241,7 +1401,11 @@
           "examples": [
             "{\"$wosWorkflow\":\"1.0\",\"broken\":true}",
             "{\"$wosWorkflow\":\"1.0\",\"states\":{}}"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "last_findings": {
           "type": "array",
@@ -1289,7 +1453,11 @@
                 "examples": [
                   "wos_ping",
                   "wos_add_state"
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "tagLabel"
+                },
+                "minLength": 1
               },
               "description": {
                 "type": "string",
@@ -1297,7 +1465,11 @@
                 "examples": [
                   "Health-check tool. Returns {\"pong\": true}.",
                   "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}."
-                ]
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                },
+                "minLength": 1
               },
               "inputSchema": {
                 "type": "object",
@@ -1834,7 +2006,7 @@
           },
           {
             "name": "wos_set_impact_level",
-            "description": "Set the document-level impact classification (kernel \u00a7S6).",
+            "description": "Set the document-level impact classification (kernel §S6).",
             "inputSchema": {
               "type": "object",
               "required": [
@@ -2216,11 +2388,15 @@
       "examples": [
         "https://wos-spec.org/schemas/extension-registry/1.0",
         "https://wos-spec.org/schemas/extension-registry/1.0"
-      ]
+      ],
+      "x-wos": {
+        "openStringKind": "identifier"
+      },
+      "minLength": 1
     },
     "extensionRegistry__ExtensionsMap": {
       "type": "object",
-      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel \u00a710.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix. At the registry root, WOS-owned `x-wos-*` keys MAY publish custody-append identifier metadata such as `x-wos-custody-event-types`, `x-wos-typeid-family-prefixes`, and `x-wos-owning-spec-version`. Processors MUST ignore unknown extension keys to preserve forward compatibility.",
+      "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix. At the registry root, WOS-owned `x-wos-*` keys MAY publish custody-append identifier metadata such as `x-wos-custody-event-types`, `x-wos-typeid-family-prefixes`, and `x-wos-owning-spec-version`. Processors MUST ignore unknown extension keys to preserve forward compatibility.",
       "examples": [
         {
           "x-acme-internal-id": "REG-001"
@@ -2253,7 +2429,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Per-entry vendor extensions per Kernel \u00a710.6"
+          "$comment": "Per-entry vendor extensions per Kernel §10.6"
         }
       },
       "additionalProperties": false,
@@ -2261,7 +2437,7 @@
         "seam": {
           "type": "string",
           "minLength": 1,
-          "description": "Stable identifier for the seam this entry catalogs. Conventionally dotted with a layer prefix: `kernel.<seamName>` for the six kernel seams (Kernel \u00a710.1-\u00a710.6), `governance.<hookName>` for Layer 1 attachments, `ai.<hookName>` for Layer 2 attachments, or a vendor-namespaced identifier like `x-trellis.custody.distributed`. Identifiers are case-sensitive and SHOULD be treated as opaque tokens by tooling.",
+          "description": "Stable identifier for the seam this entry catalogs. Conventionally dotted with a layer prefix: `kernel.<seamName>` for the six kernel seams (Kernel §10.1-§10.6), `governance.<hookName>` for Layer 1 attachments, `ai.<hookName>` for Layer 2 attachments, or a vendor-namespaced identifier like `x-trellis.custody.distributed`. Identifiers are case-sensitive and SHOULD be treated as opaque tokens by tooling.",
           "examples": [
             "kernel.actorExtension",
             "kernel.lifecycleHook",
@@ -2270,6 +2446,9 @@
           "x-lm": {
             "critical": true,
             "intent": "Primary key used by processors to look up an entry"
+          },
+          "x-wos": {
+            "openStringKind": "identifier"
           }
         },
         "kind": {
@@ -2282,7 +2461,7 @@
             "custody-hook",
             "vendor-extension"
           ],
-          "description": "Classification of the extension point. The first five values correspond to the named kernel seams in Kernel \u00a710.1 through \u00a710.5: `actor-extension` (Kernel \u00a710.1), `contract-hook` (Kernel \u00a710.2), `provenance-layer` (Kernel \u00a710.3), `lifecycle-hook` (Kernel \u00a710.4), `custody-hook` (Kernel \u00a710.5). The sixth value, `vendor-extension`, catalogs `extensions` / `x-`-prefixed bindings (Kernel \u00a710.6). Tooling uses `kind` to decide which validation profile applies (e.g., a `lifecycle-hook` entry is expected to declare a transition tag schema).",
+          "description": "Classification of the extension point. The first five values correspond to the named kernel seams in Kernel §10.1 through §10.5: `actor-extension` (Kernel §10.1), `contract-hook` (Kernel §10.2), `provenance-layer` (Kernel §10.3), `lifecycle-hook` (Kernel §10.4), `custody-hook` (Kernel §10.5). The sixth value, `vendor-extension`, catalogs `extensions` / `x-`-prefixed bindings (Kernel §10.6). Tooling uses `kind` to decide which validation profile applies (e.g., a `lifecycle-hook` entry is expected to declare a transition tag schema).",
           "examples": [
             "lifecycle-hook",
             "custody-hook",
@@ -2301,7 +2480,7 @@
             "deprecated",
             "retired"
           ],
-          "description": "Lifecycle stage of this entry. `draft` MAY change shape without notice and MUST NOT be relied upon in production; `stable` SHALL preserve its declared shape across minor registry versions and is safe to bind against; `deprecated` continues to resolve but SHOULD NOT be authored against \u2014 adopters migrate to the entry named in `replacedBy`; `retired` MUST be rejected by processors that load this registry version. Lifecycle transitions follow the rules in Registry \u00a73.2.",
+          "description": "Lifecycle stage of this entry. `draft` MAY change shape without notice and MUST NOT be relied upon in production; `stable` SHALL preserve its declared shape across minor registry versions and is safe to bind against; `deprecated` continues to resolve but SHOULD NOT be authored against — adopters migrate to the entry named in `replacedBy`; `retired` MUST be rejected by processors that load this registry version. Lifecycle transitions follow the rules in Registry §3.2.",
           "examples": [
             "stable",
             "deprecated"
@@ -2316,17 +2495,24 @@
           "minLength": 1,
           "description": "Human-readable description of what this seam binding does, what shape it accepts, and why it exists. Authors SHOULD include a one-sentence summary of the seam's purpose plus a pointer (in prose) to the spec section that defines its behavior.",
           "examples": [
-            "Higher layers register additional actor types beyond `human` and `system` (Kernel \u00a710.1). The kernel treats actor `type` strings as opaque; this entry catalogs the `agent` actor type added by the AI Integration layer."
-          ]
+            "Higher layers register additional actor types beyond `human` and `system` (Kernel §10.1). The kernel treats actor `type` strings as opaque; this entry catalogs the `agent` actor type added by the AI Integration layer."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "specRef": {
           "type": "string",
           "format": "uri",
-          "description": "URI to the spec section that defines this seam's behavior. RECOMMENDED to use a fragment identifier so deep-linking lands the reader on the exact normative text (e.g., the kernel spec \u00a710.1 actorExtension definition).",
+          "description": "URI to the spec section that defines this seam's behavior. RECOMMENDED to use a fragment identifier so deep-linking lands the reader on the exact normative text (e.g., the kernel spec §10.1 actorExtension definition).",
           "examples": [
             "https://wos-spec.org/specs/kernel#10.1-actorextension",
             "https://wos-spec.org/specs/ai-integration#3-agent-actor"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          },
+          "minLength": 1
         },
         "schemaRef": {
           "type": "string",
@@ -2334,7 +2520,11 @@
           "description": "URI to a JSON Schema fragment that constrains the shape of values bound to this seam. When absent, the seam's shape is implementation-defined or opaque (as with the kernel `custodyHook`, which the kernel treats as opaque content).",
           "examples": [
             "https://wos-spec.org/schemas/ai-integration/1.0#/$defs/AgentActorDeclaration"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          },
+          "minLength": 1
         },
         "composition": {
           "type": "string",
@@ -2343,7 +2533,7 @@
             "replace",
             "augment"
           ],
-          "description": "How multiple registrations at the same seam combine. `merge` performs key-wise object merge \u2014 later registrations override earlier keys field-by-field; `replace` means the latest registration wholly supersedes prior bindings \u2014 earlier values are discarded; `augment` means each registration adds to a list \u2014 order is preserved and entries do not collide. When absent, the default is `merge` for object-shaped seams and `augment` for list-shaped seams (see Registry \u00a74.2).",
+          "description": "How multiple registrations at the same seam combine. `merge` performs key-wise object merge — later registrations override earlier keys field-by-field; `replace` means the latest registration wholly supersedes prior bindings — earlier values are discarded; `augment` means each registration adds to a list — order is preserved and entries do not collide. When absent, the default is `merge` for object-shaped seams and `augment` for list-shaped seams (see Registry §4.2).",
           "examples": [
             "merge",
             "augment"
@@ -2360,30 +2550,39 @@
           "examples": [
             "1.0.0",
             "2026-04-18"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "deprecatedSince": {
           "type": "string",
           "minLength": 1,
-          "description": "Version or date at which this entry transitioned to `deprecated`. MUST be present when `lifecycle` is `deprecated` or `retired` so adopters can compute migration windows. Use SemVer or ISO 8601 date \u2014 the format MUST match the format used in `since` for this registry.",
+          "description": "Version or date at which this entry transitioned to `deprecated`. MUST be present when `lifecycle` is `deprecated` or `retired` so adopters can compute migration windows. Use SemVer or ISO 8601 date — the format MUST match the format used in `since` for this registry.",
           "examples": [
             "1.2.0",
             "2026-09-30"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "tagLabel"
+          }
         },
         "replacedBy": {
           "type": "string",
           "minLength": 1,
-          "description": "When this entry is `deprecated` or `retired`, the `seam` identifier of the entry that supersedes it. Processors MAY follow `replacedBy` chains during resolution (Registry \u00a75.3); chains MUST be acyclic and MUST terminate at a non-deprecated entry.",
+          "description": "When this entry is `deprecated` or `retired`, the `seam` identifier of the entry that supersedes it. Processors MAY follow `replacedBy` chains during resolution (Registry §5.3); chains MUST be acyclic and MUST terminate at a non-deprecated entry.",
           "examples": [
             "kernel.contractHook.v2",
             "x-trellis.custody.distributed.v2"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "examples": {
           "type": "array",
           "items": {
-            "description": "Opaque example payload illustrating a value bound at this seam. The registry imposes no shape constraint here \u2014 values are reproduced verbatim in documentation.",
+            "description": "Opaque example payload illustrating a value bound at this seam. The registry imposes no shape constraint here — values are reproduced verbatim in documentation.",
             "examples": [
               {
                 "actorType": "agent",
@@ -2392,7 +2591,7 @@
             ]
           },
           "minItems": 1,
-          "description": "Sample payloads for documentation. Each entry SHOULD be a complete, valid example of the value that would appear at this seam in a real document. Examples are reference material, not normative \u2014 they MUST NOT be treated as conformance fixtures.",
+          "description": "Sample payloads for documentation. Each entry SHOULD be a complete, valid example of the value that would appear at this seam in a real document. Examples are reference material, not normative — they MUST NOT be treated as conformance fixtures.",
           "examples": [
             [
               {
@@ -2410,7 +2609,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^x-[a-z0-9]+(?:-[a-z0-9]+)*-$",
-          "description": "Required vendor namespace prefix for `vendor-extension` kinds. SHOULD match the prefix shape `^x-[a-z0-9]+(?:-[a-z0-9]+)*-$` per Kernel \u00a710.6 naming rules. Lint tooling enforces that any `x-` key whose prefix matches this pattern conforms to the entry's `schemaRef` (when one is declared).",
+          "description": "Required vendor namespace prefix for `vendor-extension` kinds. SHOULD match the prefix shape `^x-[a-z0-9]+(?:-[a-z0-9]+)*-$` per Kernel §10.6 naming rules. Lint tooling enforces that any `x-` key whose prefix matches this pattern conforms to the entry's `schemaRef` (when one is declared).",
           "examples": [
             "x-trellis-",
             "x-acme-tenant-"
@@ -2427,7 +2626,7 @@
     },
     "extensionRegistry__Root": {
       "title": "WOS Extension Registry",
-      "description": "A WOS Extension Registry document. Catalogs the named extension seams that the WOS Kernel exposes (Kernel \u00a710) plus higher-layer or vendor-supplied entries that bind to those seams. Adopters scan a registry to discover which seams exist, which lifecycle stage they have reached (draft, stable, deprecated, retired), how multiple registrations compose at a single seam, and which vendor namespaces are claimed. Registries are descriptive \u2014 they catalog seams; they do not enforce behavior. Lint tooling and documentation generators consume registries to validate extension keys and to render seam catalogs. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-extension-registry.schema.json.)",
+      "description": "A WOS Extension Registry document. Catalogs the named extension seams that the WOS Kernel exposes (Kernel §10) plus higher-layer or vendor-supplied entries that bind to those seams. Adopters scan a registry to discover which seams exist, which lifecycle stage they have reached (draft, stable, deprecated, retired), how multiple registrations compose at a single seam, and which vendor namespaces are claimed. Registries are descriptive — they catalog seams; they do not enforce behavior. Lint tooling and documentation generators consume registries to validate extension keys and to render seam catalogs. (Absorbed into wos-tooling.schema.json per ADR 0076 D-5; was wos-extension-registry.schema.json.)",
       "type": "object",
       "required": [
         "version",
@@ -2435,7 +2634,7 @@
       ],
       "patternProperties": {
         "^x-": {
-          "$comment": "Vendor extensions per Kernel spec \u00a710.6 (extensions escape hatch)"
+          "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)"
         }
       },
       "additionalProperties": false,
@@ -2450,21 +2649,32 @@
           "examples": [
             "1.0.0",
             "2026.04.0"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "title": {
           "type": "string",
           "description": "Human-readable name for this registry. Surfaces in documentation and discovery UIs that list available registries (e.g., 'WOS Core Extension Registry', 'Trellis Custody Catalog').",
           "examples": [
             "WOS Core Extension Registry"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "description": {
           "type": "string",
           "description": "Human-readable description of what this registry catalogs and the audience it serves. A registry SHOULD describe whether it covers kernel seams, vendor extensions, deployment-specific overrides, or some combination, so adopters can decide which registries to load. For the WOS-Trellis `custodyHook` binding, the root `extensions` object MAY also carry reserved `x-wos-*` keys publishing WOS-owned `wos.*` event types and TypeID family prefixes.",
           "examples": [
             "Catalog of the six kernel seams plus reference Trellis custody profile entries published by the WOS Working Group."
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          },
+          "minLength": 1
         },
         "entries": {
           "type": "array",
@@ -2472,20 +2682,20 @@
             "$ref": "#/$defs/extensionRegistry__RegistryEntry"
           },
           "minItems": 1,
-          "description": "Ordered list of registry entries. Each entry catalogs one seam binding: a named extension point exposed by the kernel or a higher layer, plus the lifecycle status, composition rules, and discovery metadata for that binding. Order is significant only for human reading; processors MUST resolve entries by `seam` identifier (Registry \u00a75.2).",
+          "description": "Ordered list of registry entries. Each entry catalogs one seam binding: a named extension point exposed by the kernel or a higher layer, plus the lifecycle status, composition rules, and discovery metadata for that binding. Order is significant only for human reading; processors MUST resolve entries by `seam` identifier (Registry §5.2).",
           "examples": [
             [
               {
                 "seam": "kernel.actorExtension",
                 "kind": "actor-extension",
                 "lifecycle": "stable",
-                "description": "Higher layers register additional actor types beyond the kernel-defined `human` and `system` (Kernel \u00a710.1)."
+                "description": "Higher layers register additional actor types beyond the kernel-defined `human` and `system` (Kernel §10.1)."
               }
             ]
           ],
           "x-lm": {
             "critical": true,
-            "intent": "The catalog itself \u2014 the load-bearing payload of an Extension Registry document"
+            "intent": "The catalog itself — the load-bearing payload of an Extension Registry document"
           }
         },
         "extensions": {

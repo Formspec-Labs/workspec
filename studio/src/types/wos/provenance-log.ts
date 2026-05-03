@@ -162,7 +162,7 @@ export type CapabilityInvocationRecord = {
   /**
    * Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).
    */
-  recordKind?: string;
+  recordKind?: 'capabilityInvocation';
   /**
    * Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).
    */
@@ -184,7 +184,7 @@ export type CorrectionAuthorizedRecord = {
   /**
    * Discriminator for ADR-0066 mode 1 correction-authorizing acts.
    */
-  recordKind?: string;
+  recordKind?: 'correctionAuthorized';
   [k: string]: unknown;
 };
 /**
@@ -196,7 +196,7 @@ export type AmendmentAuthorizedRecord = {
   /**
    * Discriminator for ADR-0066 mode 2 amendment-authorizing acts.
    */
-  recordKind?: string;
+  recordKind?: 'amendmentAuthorized';
   [k: string]: unknown;
 };
 /**
@@ -208,7 +208,7 @@ export type DeterminationAmendedRecord = {
   /**
    * Discriminator for the post-authorization determination-change event of an ADR-0066 mode 2 amendment.
    */
-  recordKind?: string;
+  recordKind?: 'determinationAmended';
   [k: string]: unknown;
 };
 /**
@@ -220,7 +220,7 @@ export type RescissionAuthorizedRecord = {
   /**
    * Discriminator for ADR-0066 mode 4 rescission-authorizing acts.
    */
-  recordKind?: string;
+  recordKind?: 'rescissionAuthorized';
   [k: string]: unknown;
 };
 /**
@@ -232,7 +232,7 @@ export type DeterminationRescindedRecord = {
   /**
    * Discriminator for the post-authorization determination-removal event of an ADR-0066 mode 4 rescission.
    */
-  recordKind?: string;
+  recordKind?: 'determinationRescinded';
   [k: string]: unknown;
 };
 /**
@@ -244,7 +244,7 @@ export type ReinstatedRecord = {
   /**
    * Discriminator for ADR-0066 mode 5 reinstatement (Q26 maximalist five-mode).
    */
-  recordKind?: string;
+  recordKind?: 'reinstated';
   [k: string]: unknown;
 };
 /**
@@ -256,7 +256,7 @@ export type AuthorizationAttestationRecord = {
   /**
    * Record-kind discriminator identifying authorization attestation provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'authorizationAttestation';
   [k: string]: unknown;
 };
 /**
@@ -268,7 +268,7 @@ export type ClockStartedRecord = {
   /**
    * Record-kind discriminator identifying clock started provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'clockStarted';
   [k: string]: unknown;
 };
 /**
@@ -280,7 +280,7 @@ export type ClockResolvedRecord = {
   /**
    * Record-kind discriminator identifying clock resolved provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'clockResolved';
   [k: string]: unknown;
 };
 /**
@@ -292,7 +292,7 @@ export type IdentityAttestationRecord = {
   /**
    * Record-kind discriminator identifying identity attestation provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'identityAttestation';
   [k: string]: unknown;
 };
 /**
@@ -304,7 +304,7 @@ export type ClockSkewObservedRecord = {
   /**
    * Record-kind discriminator identifying clock skew observed provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'clockSkewObserved';
   [k: string]: unknown;
 };
 /**
@@ -316,7 +316,7 @@ export type CommitAttemptFailureRecord = {
   /**
    * Discriminator for ADR-0070 D-2 commit-attempt failure events.
    */
-  recordKind?: string;
+  recordKind?: 'commitAttemptFailure';
   [k: string]: unknown;
 };
 /**
@@ -328,7 +328,7 @@ export type AuthorizationRejectedRecord = {
   /**
    * Discriminator for ADR-0070 D-3 authorization-rejection events.
    */
-  recordKind?: string;
+  recordKind?: 'authorizationRejected';
   [k: string]: unknown;
 };
 /**
@@ -340,7 +340,7 @@ export type MigrationPinChangedRecord = {
   /**
    * Record-kind discriminator identifying migration pin changed provenance records in runtime logs and schema views.
    */
-  recordKind?: string;
+  recordKind?: 'migrationPinChanged';
   [k: string]: unknown;
 };
 /**

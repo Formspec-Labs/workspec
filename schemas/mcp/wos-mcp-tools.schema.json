@@ -26,11 +26,13 @@
           },
           "description": {
             "type": "string",
+            "minLength": 1,
             "description": "Human-readable explanation of what the tool does and what it returns, shown to LLM clients in the tools/list response.",
             "examples": [
               "Health-check tool. Returns {\"pong\": true}.",
               "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}."
-            ]
+            ],
+            "x-wos": { "openStringKind": "prose" }
           },
           "inputSchema": {
             "type": "object",

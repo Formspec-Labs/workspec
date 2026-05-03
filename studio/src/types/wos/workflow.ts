@@ -1063,7 +1063,7 @@ export interface Signature {
    */
   auditCertificate?: {
     /**
-     * Audit certificate format emitted when signature evidence is summarized for downstream verification or export.
+     * Audit certificate format emitted when signature evidence is summarized for downstream verification or export. Closed vocabulary for formats remains spec-gated; this leaf records the wire token honestly as an open identifier-shaped label until the signature profile spec ratifies the allowed set.
      */
     format?: string;
     /**
