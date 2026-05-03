@@ -49,7 +49,7 @@ impl DocumentResolver for BundleServiceResolver {
         let wanted = version.to_string();
         self.handle.block_on(async move {
             let kernel_json = bundle
-                .resolve_kernel_bundle(&url)
+                .resolve_kernel_bundle(&url, &wanted)
                 .await
                 .map_err(|_| ResolverError::KernelNotFound { url: url.clone() })?;
             let parsed = serde_json::from_value::<KernelDocument>(kernel_json).map_err(|e| {
@@ -58,14 +58,6 @@ impl DocumentResolver for BundleServiceResolver {
                     message: e.to_string(),
                 }
             })?;
-            let found_version = parsed.version.clone().unwrap_or_default();
-            if !wanted.is_empty() && found_version != wanted {
-                return Err(ResolverError::KernelVersionMismatch {
-                    url,
-                    found: found_version,
-                    wanted,
-                });
-            }
             Ok(parsed)
         })
     }

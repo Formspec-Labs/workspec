@@ -333,8 +333,8 @@ impl WosRuntime {
     ///
     /// **Idempotency:** When `target_definition_version` already matches the
     /// instance's current version, this returns [`MigrationOutcome`] immediately
-    /// with no store write and no new provenance. There is no HTTP idempotency
-    /// key for migrate yet; duplicate version-bump requests are not deduped.
+    /// with no store write and no new provenance. HTTP `Idempotency-Key` replay
+    /// for successful version bumps is handled in `wos-server` (ADR 0083 D5).
     ///
     /// # Errors
     /// Returns [`RuntimeError::MigrationRejected`] when validation or map

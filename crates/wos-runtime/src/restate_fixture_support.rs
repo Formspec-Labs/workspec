@@ -22,6 +22,12 @@ use wos_core::traits::{DocumentResolver, ExternalService};
 #[derive(Clone)]
 pub struct SharedInMemoryStore(pub Arc<Mutex<InMemoryStore>>);
 
+impl Default for SharedInMemoryStore {
+    fn default() -> Self {
+        Self(Arc::new(Mutex::new(InMemoryStore::new())))
+    }
+}
+
 impl RuntimeStore for SharedInMemoryStore {
     fn create_record(&mut self, record: RuntimeRecord) -> Result<(), StoreError> {
         self.0.lock().expect("store mutex poisoned").create_record(record)

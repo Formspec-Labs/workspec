@@ -43,17 +43,128 @@ fn se(e: postgres::Error) -> StorageError {
     StorageError::Backend(e.to_string())
 }
 
+/// Older `wos-server-postgres` builds created `kernels` with `PRIMARY KEY (url)` only.
+/// `CREATE TABLE IF NOT EXISTS` does not alter an existing table, so upgrade in place when we
+/// detect a single-column primary key on `url` and `version` is present.
+fn ensure_kernels_composite_primary_key(client: &mut Client) -> StorageResult<()> {
+    let exists: bool = client
+        .query_one(
+            "SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'kernels'
+            )",
+            &[],
+        )
+        .map_err(se)?
+        .get(0);
+    if !exists {
+        return Ok(());
+    }
+
+    let col_count: i64 = client
+        .query_one(
+            "SELECT COUNT(*)::bigint
+             FROM information_schema.key_column_usage kcu
+             JOIN information_schema.table_constraints tc
+               ON kcu.constraint_name = tc.constraint_name
+              AND kcu.table_schema = tc.table_schema
+             WHERE kcu.table_schema = 'public'
+               AND kcu.table_name = 'kernels'
+               AND tc.constraint_type = 'PRIMARY KEY'",
+            &[],
+        )
+        .map_err(se)?
+        .get(0);
+
+    if col_count != 1 {
+        return Ok(());
+    }
+
+    let only_col: String = client
+        .query_one(
+            "SELECT kcu.column_name::text
+             FROM information_schema.key_column_usage kcu
+             JOIN information_schema.table_constraints tc
+               ON kcu.constraint_name = tc.constraint_name
+              AND kcu.table_schema = tc.table_schema
+             WHERE kcu.table_schema = 'public'
+               AND kcu.table_name = 'kernels'
+               AND tc.constraint_type = 'PRIMARY KEY'",
+            &[],
+        )
+        .map_err(se)?
+        .get(0);
+
+    if only_col != "url" {
+        return Ok(());
+    }
+
+    let dup_groups: i64 = client
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM (
+                 SELECT url, version
+                 FROM kernels
+                 GROUP BY url, version
+                 HAVING COUNT(*) > 1
+             ) d",
+            &[],
+        )
+        .map_err(se)?
+        .get(0);
+    if dup_groups > 0 {
+        return Err(StorageError::Backend(
+            "kernels: duplicate (url, version) rows prevent migrating primary key to (url, version)"
+                .into(),
+        ));
+    }
+
+    let conname: String = client
+        .query_one(
+            "SELECT tc.constraint_name::text
+             FROM information_schema.table_constraints tc
+             WHERE tc.table_schema = 'public'
+               AND tc.table_name = 'kernels'
+               AND tc.constraint_type = 'PRIMARY KEY'",
+            &[],
+        )
+        .map_err(se)?
+        .get(0);
+
+    if !conname
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(StorageError::Backend(format!(
+            "kernels: refusing to migrate primary key using unexpected constraint name {conname:?}"
+        )));
+    }
+
+    let mut tx = client.transaction().map_err(se)?;
+    tx.batch_execute(&format!(
+        "ALTER TABLE kernels DROP CONSTRAINT \"{conname}\""
+    ))
+    .map_err(se)?;
+    tx.execute(
+        "ALTER TABLE kernels ADD CONSTRAINT kernels_pkey PRIMARY KEY (url, version)",
+        &[],
+    )
+    .map_err(se)?;
+    tx.commit().map_err(se)?;
+    Ok(())
+}
+
 fn migrate(client: &mut Client) -> StorageResult<()> {
     client
         .batch_execute(
             "CREATE TABLE IF NOT EXISTS kernels (
-            url TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
+            url TEXT NOT NULL,
             version TEXT NOT NULL,
+            title TEXT NOT NULL,
             status TEXT NOT NULL,
             impact_level TEXT NOT NULL,
             document JSONB NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL
+            updated_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (url, version)
         );
         CREATE TABLE IF NOT EXISTS instances (
             instance_id TEXT PRIMARY KEY,
@@ -148,6 +259,7 @@ fn migrate(client: &mut Client) -> StorageResult<()> {
         );",
         )
         .map_err(se)?;
+    ensure_kernels_composite_primary_key(client)?;
     Ok(())
 }
 
@@ -198,7 +310,7 @@ impl Storage for PostgresStorage {
             .lock()
             .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let rows = c
-            .query("SELECT * FROM kernels ORDER BY url", &[])
+            .query("SELECT * FROM kernels ORDER BY url, version", &[])
             .map_err(se)?;
         Ok(rows.iter().map(map_kernel).collect())
     }
@@ -208,10 +320,32 @@ impl Storage for PostgresStorage {
             .lock()
             .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let row = c
-            .query_opt("SELECT * FROM kernels WHERE url = $1", &[&url])
+            .query_opt(
+                "SELECT * FROM kernels WHERE url = $1 ORDER BY updated_at DESC LIMIT 1",
+                &[&url],
+            )
             .map_err(se)?;
         Ok(row.as_ref().map(map_kernel))
     }
+
+    async fn get_kernel_by_url_and_version(
+        &self,
+        url: &str,
+        version: &str,
+    ) -> StorageResult<Option<KernelRow>> {
+        let mut c = self
+            .client
+            .lock()
+            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c
+            .query_opt(
+                "SELECT * FROM kernels WHERE url = $1 AND version = $2",
+                &[&url, &version],
+            )
+            .map_err(se)?;
+        Ok(row.as_ref().map(map_kernel))
+    }
+
     async fn upsert_kernel(&self, row: &KernelRow) -> StorageResult<()> {
         let mut c = self
             .client
@@ -220,8 +354,8 @@ impl Storage for PostgresStorage {
         c.execute(
             "INSERT INTO kernels (url,title,version,status,impact_level,document,updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7)
-             ON CONFLICT(url) DO UPDATE SET
-               title=excluded.title,version=excluded.version,status=excluded.status,
+             ON CONFLICT(url, version) DO UPDATE SET
+               title=excluded.title,status=excluded.status,
                impact_level=excluded.impact_level,document=excluded.document,updated_at=excluded.updated_at",
             &[&row.url,&row.title,&row.version,&row.status,&row.impact_level,&row.document,&row.updated_at],
         ).map_err(se)?;

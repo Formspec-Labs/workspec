@@ -192,7 +192,7 @@ fn map_delegation(r: &SqliteRow) -> StorageResult<DelegationRow> {
 #[async_trait]
 impl Storage for SqliteStorage {
     async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>> {
-        let rows = sqlx::query("SELECT * FROM kernels ORDER BY url")
+        let rows = sqlx::query("SELECT * FROM kernels ORDER BY url, version")
             .fetch_all(&self.pool)
             .await
             .map_err(se)?;
@@ -200,8 +200,24 @@ impl Storage for SqliteStorage {
     }
 
     async fn get_kernel(&self, url: &str) -> StorageResult<Option<KernelRow>> {
-        let row = sqlx::query("SELECT * FROM kernels WHERE url = ?")
+        let row = sqlx::query(
+            "SELECT * FROM kernels WHERE url = ? ORDER BY updated_at DESC LIMIT 1",
+        )
             .bind(url)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(se)?;
+        row.as_ref().map(map_kernel).transpose()
+    }
+
+    async fn get_kernel_by_url_and_version(
+        &self,
+        url: &str,
+        version: &str,
+    ) -> StorageResult<Option<KernelRow>> {
+        let row = sqlx::query("SELECT * FROM kernels WHERE url = ? AND version = ?")
+            .bind(url)
+            .bind(version)
             .fetch_optional(&self.pool)
             .await
             .map_err(se)?;
@@ -213,9 +229,8 @@ impl Storage for SqliteStorage {
         sqlx::query(
             "INSERT INTO kernels (url, title, version, status, impact_level, document, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(url) DO UPDATE SET
+             ON CONFLICT(url, version) DO UPDATE SET
                title = excluded.title,
-               version = excluded.version,
                status = excluded.status,
                impact_level = excluded.impact_level,
                document = excluded.document,

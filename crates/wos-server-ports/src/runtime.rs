@@ -79,7 +79,14 @@ pub trait TimerCoord: Send + Sync + 'static {
 
 #[async_trait]
 pub trait BundleResolverPort: Send + Sync + 'static {
-    async fn resolve_kernel_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
+    /// Resolve the kernel JSON for `workflow_url`. When `definition_version` is
+    /// empty, returns the newest row for that URL (by `updated_at`). Otherwise
+    /// selects the row whose `version` column matches exactly.
+    async fn resolve_kernel_bundle(
+        &self,
+        workflow_url: &str,
+        definition_version: &str,
+    ) -> RuntimeResult<serde_json::Value>;
     async fn resolve_governance_bundle(
         &self,
         workflow_url: &str,

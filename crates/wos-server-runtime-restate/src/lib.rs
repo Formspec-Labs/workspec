@@ -22,7 +22,6 @@ use std::sync::{Arc, Mutex};
 use wos_core::instance::CaseInstance;
 use wos_core::instance::PendingEvent;
 use wos_core::provenance::ProvenanceRecord;
-use wos_core::typeid;
 use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, MigrationMap, MigrationOutcome};
 use wos_runtime::{InMemoryStore, PersistDraftResult, RuntimeStore, TaskSubmissionResult};
 use wos_runtime::{restate_signature_fixture_runtime, SharedInMemoryStore};
@@ -43,9 +42,64 @@ enum RestateRuntimeBackend {
     Ingress(RestateIngressClient),
 }
 
+/// Placeholder signer until WS-094 wires a Trellis-backed signing substrate for the Restate worker.
+///
+/// **Production:** do not ship a deployment that relies on this implementation for integrity.
+/// It is acceptable for unit tests, conformance slices, and ignored ingress smoke paths while
+/// `WOS_RUNTIME=restate` remains blocked at the Axum root until **WS-104** (`wos-server/TODO.md`).
+#[derive(Debug, Default)]
+struct RestateSeamSigner;
+
+impl wos_core::traits::ProvenanceSigner for RestateSeamSigner {
+    type Error = std::convert::Infallible;
+
+    fn sign(
+        &self,
+        _record: &ProvenanceRecord,
+    ) -> Result<Vec<u8>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    fn verify(
+        &self,
+        _record: &ProvenanceRecord,
+        _signature: &[u8],
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+}
+
+/// JSON renderer matching the reference `wos-server-runtime-local` seam behavior.
+#[derive(Debug, Default)]
+struct RestateSeamRenderer;
+
+impl wos_core::traits::ReportRenderer for RestateSeamRenderer {
+    type Error = std::convert::Infallible;
+
+    fn render_explanation(
+        &self,
+        explanation: &serde_json::Value,
+        _template: &str,
+    ) -> Result<String, Self::Error> {
+        Ok(serde_json::to_string_pretty(explanation)
+            .unwrap_or_else(|_| explanation.to_string()))
+    }
+
+    fn render_audit(
+        &self,
+        provenance_log: &[ProvenanceRecord],
+        _format: &str,
+    ) -> Result<String, Self::Error> {
+        Ok(serde_json::to_string_pretty(provenance_log)
+            .unwrap_or_else(|_| format!("{provenance_log:?}")))
+    }
+}
+
 /// [`RuntimeOps`] implementation: in-memory by default, or Restate ingress when configured.
 pub struct RestateRuntimeAdapter {
     backend: RestateRuntimeBackend,
+    seam_signer: RestateSeamSigner,
+    seam_renderer: RestateSeamRenderer,
 }
 
 impl RestateRuntimeAdapter {
@@ -55,6 +109,8 @@ impl RestateRuntimeAdapter {
             backend: RestateRuntimeBackend::Memory(Arc::new(Mutex::new(
                 RestateMemoryState::default(),
             ))),
+            seam_signer: RestateSeamSigner,
+            seam_renderer: RestateSeamRenderer,
         }
     }
 
@@ -65,6 +121,8 @@ impl RestateRuntimeAdapter {
                 client,
                 base_url: base_url.into(),
             }),
+            seam_signer: RestateSeamSigner,
+            seam_renderer: RestateSeamRenderer,
         }
     }
 
@@ -209,16 +267,19 @@ impl RuntimeOps for RestateRuntimeAdapter {
     }
 
     async fn drain_until_idle(&self, instance_id: &str) -> RuntimeResult<Vec<DrainOnceResult>> {
+        const MAX_STEPS: usize = 10_000;
         let mut out = Vec::new();
-        loop {
+        for _ in 0..MAX_STEPS {
             let step = self.drain_once(instance_id).await?;
             let idle = step.processed_event.is_none();
             out.push(step);
             if idle {
-                break;
+                return Ok(out);
             }
         }
-        Ok(out)
+        Err(RuntimeAdapterError::Message(format!(
+            "drain_until_idle exceeded {MAX_STEPS} non-terminal steps for `{instance_id}`; aborting to avoid an unbounded loop"
+        )))
     }
 
     async fn persist_task_draft(
@@ -272,13 +333,13 @@ impl SeamAccess for RestateRuntimeAdapter {
     fn signer(
         &self,
     ) -> &(dyn wos_core::traits::ProvenanceSigner<Error = Self::SignerError> + Send + Sync) {
-        panic!("WS-094: signer seam not wired for restate adapter")
+        &self.seam_signer
     }
 
     fn renderer(
         &self,
     ) -> &(dyn wos_core::traits::ReportRenderer<Error = Self::RendererError> + Send + Sync) {
-        panic!("WS-094: renderer seam not wired for restate adapter")
+        &self.seam_renderer
     }
 }
 
@@ -292,6 +353,20 @@ impl TimerCoord for RestateRuntimeAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wos_core::typeid;
+    use wos_server_ports::runtime::SeamAccess;
+
+    #[test]
+    fn seam_access_signer_and_renderer_are_non_panicking() {
+        let adapter = RestateRuntimeAdapter::new();
+        let rec = ProvenanceRecord::on_entry("draft", "noop");
+        assert!(adapter.signer().sign(&rec).unwrap().is_empty());
+        assert!(adapter
+            .renderer()
+            .render_explanation(&serde_json::json!({"k": 1}), "default")
+            .unwrap()
+            .contains("k"));
+    }
 
     fn request(instance_id: &str) -> CreateInstanceRequest {
         CreateInstanceRequest {
@@ -400,8 +475,6 @@ mod tests {
         let probe_url = crate::restate_virtual::ingress_invoke_url(&base, &id, "probe");
         let probe: String = client
             .post(probe_url)
-            .header("content-type", "application/json")
-            .json(&serde_json::json!({}))
             .send()
             .await
             .expect("probe send")
@@ -409,5 +482,269 @@ mod tests {
             .await
             .expect("probe json");
         assert_eq!(probe, id);
+    }
+
+    /// **B.1** — multi-step drain against a running Restate cluster.
+    ///
+    /// create → enqueue `start` → `drain_until_idle` → load; assert the same
+    /// observable fields that C.1 will cross-check (DrainOnceResult shape,
+    /// CaseInstance configuration / active_tasks / pending queue).
+    #[tokio::test]
+    #[ignore = "requires a running Restate cluster and registered WosInstance worker (PLN-0333 B.1)"]
+    async fn ingress_drain_lifecycle_smoke() {
+        let base =
+            std::env::var("WOS_RESTATE_IT_URL").expect("set WOS_RESTATE_IT_URL for this test");
+        let adapter =
+            RestateRuntimeAdapter::with_restate_ingress(reqwest::Client::new(), &base);
+        let id = typeid::mint_case_id();
+
+        let created = adapter
+            .create_instance(CreateInstanceRequest {
+                definition_url: "urn:test:signature-runtime".into(),
+                definition_version: "1.0.0".into(),
+                instance_id: id.clone(),
+                tenant: None,
+                initial_case_state: None,
+            })
+            .await
+            .expect("ingress create");
+        assert_eq!(created.instance_id, id);
+        assert_eq!(created.configuration, vec!["draft"]);
+
+        adapter
+            .enqueue_event(
+                &id,
+                serde_json::json!({
+                    "event": "start",
+                    "actorId": "system:b1-smoke",
+                    "data": {},
+                    "timestamp": "2026-01-01T00:00:00Z"
+                }),
+            )
+            .await
+            .expect("enqueue start");
+
+        let steps = adapter
+            .drain_until_idle(&id)
+            .await
+            .expect("drain_until_idle");
+
+        assert!(
+            steps.len() >= 2,
+            "expected ≥2 steps (start + idle sentinel), got {}",
+            steps.len()
+        );
+
+        let start_step = &steps[0];
+        assert_eq!(
+            start_step.processed_event.as_deref(),
+            Some("start"),
+            "first step should have processed the 'start' event"
+        );
+        assert!(
+            !start_step.transitions.is_empty(),
+            "start event must produce ≥1 transition"
+        );
+        assert!(
+            start_step
+                .transitions
+                .iter()
+                .any(|t| t.from == "draft" && t.to == "signing"),
+            "expected draft→signing transition"
+        );
+        assert!(
+            !start_step.created_task_ids.is_empty(),
+            "signing entry should create tasks"
+        );
+        assert!(
+            !start_step.provenance.is_empty(),
+            "start event must produce provenance records"
+        );
+
+        let tail = steps.last().expect("tail step");
+        assert!(
+            tail.processed_event.is_none(),
+            "final step must be the idle sentinel (processed_event == None)"
+        );
+
+        let loaded = adapter
+            .load_instance(&id)
+            .await
+            .expect("load after drain");
+        assert_eq!(loaded.instance_id, id);
+        assert!(
+            loaded.configuration.contains(&"signing".to_string()),
+            "configuration should contain 'signing' after start+drain, got {:?}",
+            loaded.configuration
+        );
+        assert!(
+            !loaded.active_tasks.is_empty(),
+            "signing state should have active tasks"
+        );
+        assert!(
+            loaded.pending_events.is_empty(),
+            "pending_events must be empty after drain_until_idle"
+        );
+    }
+
+    // ── D.1: Terminal failure classification (ADR 0070) ──────────────
+
+    #[tokio::test]
+    async fn duplicate_create_returns_terminal_error() {
+        let case_id = typeid::mint_case_id();
+        let adapter = RestateRuntimeAdapter::new();
+        adapter
+            .create_instance(request(&case_id))
+            .await
+            .expect("first create should succeed");
+        let err = adapter
+            .create_instance(request(&case_id))
+            .await
+            .expect_err("duplicate create must fail");
+        assert!(
+            err.to_string().contains("already exists"),
+            "expected 'already exists' in error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_event_returns_terminal_error() {
+        let case_id = typeid::mint_case_id();
+        let adapter = RestateRuntimeAdapter::new();
+        adapter
+            .create_instance(request(&case_id))
+            .await
+            .expect("create should succeed");
+        let err = adapter
+            .enqueue_event(
+                &case_id,
+                serde_json::json!({ "garbage": true }),
+            )
+            .await
+            .expect_err("malformed event must fail");
+        assert!(
+            err.to_string().contains("invalid event payload"),
+            "expected 'invalid event payload' in error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_definition_url_returns_terminal_error() {
+        let case_id = typeid::mint_case_id();
+        let adapter = RestateRuntimeAdapter::new();
+        let err = adapter
+            .create_instance(CreateInstanceRequest {
+                definition_url: "urn:test:nonexistent-definition".into(),
+                definition_version: "1.0.0".into(),
+                instance_id: case_id,
+                tenant: None,
+                initial_case_state: None,
+            })
+            .await
+            .expect_err("unknown definition must fail");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("no kernel") || msg.contains("not found") || msg.contains("resolver"),
+            "expected resolver/kernel error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_nonexistent_returns_terminal_error() {
+        let adapter = RestateRuntimeAdapter::new();
+        let err = adapter
+            .load_instance("test_no-such-instance-00000000000000")
+            .await
+            .expect_err("loading a nonexistent instance must fail");
+        assert!(
+            err.to_string().contains("not found"),
+            "expected 'not found' in error, got: {err}"
+        );
+    }
+
+    /// **D.1 ingress** — duplicate create against Restate is terminal.
+    #[tokio::test]
+    #[ignore = "requires a running Restate cluster and registered WosInstance worker (PLN-0333 D.1)"]
+    async fn ingress_duplicate_create_is_terminal() {
+        let base =
+            std::env::var("WOS_RESTATE_IT_URL").expect("set WOS_RESTATE_IT_URL for this test");
+        let adapter =
+            RestateRuntimeAdapter::with_restate_ingress(reqwest::Client::new(), &base);
+        let id = typeid::mint_case_id();
+        adapter
+            .create_instance(CreateInstanceRequest {
+                definition_url: "urn:test:signature-runtime".into(),
+                definition_version: "1.0.0".into(),
+                instance_id: id.clone(),
+                tenant: None,
+                initial_case_state: None,
+            })
+            .await
+            .expect("first ingress create");
+        let err = adapter
+            .create_instance(CreateInstanceRequest {
+                definition_url: "urn:test:signature-runtime".into(),
+                definition_version: "1.0.0".into(),
+                instance_id: id,
+                tenant: None,
+                initial_case_state: None,
+            })
+            .await
+            .expect_err("duplicate ingress create must fail");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("already exists"),
+            "expected 'already exists' from Restate terminal error, got: {err}"
+        );
+    }
+
+    /// **D.1 ingress** — malformed event against Restate is terminal.
+    #[tokio::test]
+    #[ignore = "requires a running Restate cluster and registered WosInstance worker (PLN-0333 D.1)"]
+    async fn ingress_malformed_event_is_terminal() {
+        let base =
+            std::env::var("WOS_RESTATE_IT_URL").expect("set WOS_RESTATE_IT_URL for this test");
+        let adapter =
+            RestateRuntimeAdapter::with_restate_ingress(reqwest::Client::new(), &base);
+        let id = typeid::mint_case_id();
+        adapter
+            .create_instance(CreateInstanceRequest {
+                definition_url: "urn:test:signature-runtime".into(),
+                definition_version: "1.0.0".into(),
+                instance_id: id.clone(),
+                tenant: None,
+                initial_case_state: None,
+            })
+            .await
+            .expect("ingress create");
+        let err = adapter
+            .enqueue_event(&id, serde_json::json!({ "garbage": true }))
+            .await
+            .expect_err("malformed event must fail");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("invalid event payload"),
+            "expected 'invalid event payload' from Restate terminal error, got: {err}"
+        );
+    }
+
+    /// **D.1 ingress** — load nonexistent instance against Restate is terminal (404).
+    #[tokio::test]
+    #[ignore = "requires a running Restate cluster and registered WosInstance worker (PLN-0333 D.1)"]
+    async fn ingress_load_nonexistent_is_terminal() {
+        let base =
+            std::env::var("WOS_RESTATE_IT_URL").expect("set WOS_RESTATE_IT_URL for this test");
+        let adapter =
+            RestateRuntimeAdapter::with_restate_ingress(reqwest::Client::new(), &base);
+        let id = typeid::mint_case_id();
+        let err = adapter
+            .load_instance(&id)
+            .await
+            .expect_err("loading nonexistent instance must fail");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("not found"),
+            "expected 'not found' from Restate terminal error, got: {err}"
+        );
     }
 }

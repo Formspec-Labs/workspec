@@ -230,6 +230,12 @@ pub type InstanceMutator<'a> =
 pub trait Storage: Send + Sync + 'static {
     async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>>;
     async fn get_kernel(&self, url: &str) -> StorageResult<Option<KernelRow>>;
+    /// Latest row for `url` when multiple `definitionVersion` rows exist.
+    async fn get_kernel_by_url_and_version(
+        &self,
+        url: &str,
+        version: &str,
+    ) -> StorageResult<Option<KernelRow>>;
     async fn upsert_kernel(&self, row: &KernelRow) -> StorageResult<()>;
 
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()>;
