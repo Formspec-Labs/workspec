@@ -5,6 +5,29 @@ edition.workspace = true
 description = "Dynamic conformance test runner for WOS workflows"
 license.workspace = true
 repository.workspace = true
+autotests = false
+
+[features]
+default = []
+# Restate adapter parity (`tests/r6_restate_conformance_slice.rs`); keeps default `cargo test -p wos-conformance` free of `wos-server-runtime-restate`.
+restate-tests = [
+  "dep:tokio",
+  "dep:wos-server-ports",
+  "dep:wos-server-runtime-restate",
+]
+
+[[test]]
+name = "migration_conformance"
+path = "tests/migration_conformance.rs"
+
+[[test]]
+name = "signature_profile"
+path = "tests/signature_profile.rs"
+
+[[test]]
+name = "r6_restate_conformance_slice"
+path = "tests/r6_restate_conformance_slice.rs"
+required-features = ["restate-tests"]
 
 [[bin]]
 name = "wos-conformance-explain"
@@ -31,10 +54,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
 wos-core = { path = "../wos-core" }
 wos-formspec-binding = { path = "../wos-formspec-binding" }
 wos-lint = { path = "../wos-lint" }
 wos-runtime = { path = "../wos-runtime" }
+wos-server-ports = { path = "../wos-server-ports", optional = true }
+wos-server-runtime-restate = { path = "../wos-server-runtime-restate", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2"
