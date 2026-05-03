@@ -1,7 +1,8 @@
 // Rust guideline compliant 2026-04-18
 
 //! CI gate: every production schema in `schemas/**/*.schema.json` MUST have
-//! zero `SCHEMA-DOC-001` violations.
+//! zero `SCHEMA-DOC-001` **and** `SCHEMA-OPEN-001` violations (both run via
+//! [`wos_lint::lint_schema`]).
 //!
 //! The gate has no schema-level exemptions. New schema leaves must land with
 //! descriptions and examples instead of raising a debt ceiling.
@@ -47,7 +48,7 @@ fn all_production_schemas_have_zero_schema_doc_violations() {
 
     assert!(
         violations_by_file.is_empty(),
-        "SCHEMA-DOC-001 regressions detected — {} schema(s) have violations:\n{}\n\
+        "SCHEMA-DOC-001 / SCHEMA-OPEN-001 regressions detected — {} schema(s) have violations:\n{}\n\
          Run `cargo run -p wos-lint --example count_schema_violations -- <path> --list` \
          to see per-property details.",
         violations_by_file.len(),

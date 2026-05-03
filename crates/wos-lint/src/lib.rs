@@ -47,6 +47,9 @@ pub fn lint_document(json: &str) -> Result<Vec<LintDiagnostic>, LintError> {
 
 /// Lint a single JSON Schema file for documentation coverage, returning structured diagnostics.
 ///
+/// Runs **SCHEMA-DOC-001** (`check_schema`) and **SCHEMA-OPEN-001** (`check_open_string_kinds`) so
+/// CI and editors get the same surface as `schema_doc_zero_regression` + `schema_open_string_kind` tests.
+///
 /// # Errors
 ///
 /// Returns [`LintError::Parse`] if `schema_json` is not valid JSON.
@@ -55,6 +58,7 @@ pub fn lint_schema(schema_json: &str) -> Result<Vec<LintDiagnostic>, LintError> 
         .map_err(|e| LintError::Parse(format!("invalid JSON schema: {e}")))?;
     let mut diagnostics = Vec::new();
     rules::schema_doc::check_schema(&root, &mut diagnostics);
+    rules::schema_doc::check_open_string_kinds(&root, &mut diagnostics);
     diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
     Ok(diagnostics)
 }

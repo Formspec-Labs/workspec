@@ -16,9 +16,11 @@
 //! To diagnose:
 //!   cargo run -p wos-lint --example schema_string_leaf_report -- <path> [--csv]
 //!
-//! When you tighten a leaf to `enum`/`const`/`pattern`, lower the matching row
-//! in `EXPECTED_OPEN_STRING_LEAVES` by the number of leaves you closed. When
-//! you add or remove a schema file, update the table to match.
+//! When you tighten a leaf to `enum`/`const`/`pattern`, or add a **listed**
+//! `x-wos.openStringKind` (see `CONVENTIONS.md`; counted as constrained in
+//! `inventory_string_leaves`), lower the matching row in
+//! `EXPECTED_OPEN_STRING_LEAVES` by the number of leaves you closed. When you
+//! add or remove a schema file, update the table to match.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,16 +29,16 @@ use std::path::{Path, PathBuf};
 /// paths with forward slashes. **Lower these when leaves are tightened; never
 /// raise.**
 const EXPECTED_OPEN_STRING_LEAVES: &[(&str, usize)] = &[
-    ("schemas/conformance/conformance-trace.schema.json", 22),
-    ("schemas/lint/wos-lint-diagnostic.schema.json", 6),
-    ("schemas/mcp/wos-mcp-tools.schema.json", 1),
-    ("schemas/sidecars/wos-delivery.schema.json", 29),
-    ("schemas/sidecars/wos-ontology-alignment.schema.json", 20),
+    ("schemas/conformance/conformance-trace.schema.json", 0),
+    ("schemas/lint/wos-lint-diagnostic.schema.json", 0),
+    ("schemas/mcp/wos-mcp-tools.schema.json", 0),
+    ("schemas/sidecars/wos-delivery.schema.json", 0),
+    ("schemas/sidecars/wos-ontology-alignment.schema.json", 0),
     ("schemas/synth/wos-synth-trace.schema.json", 0),
-    ("schemas/wos-case-instance.schema.json", 49),
-    ("schemas/wos-provenance-log.schema.json", 20),
-    ("schemas/wos-tooling.schema.json", 54),
-    ("schemas/wos-workflow.schema.json", 189),
+    ("schemas/wos-case-instance.schema.json", 0),
+    ("schemas/wos-provenance-log.schema.json", 0),
+    ("schemas/wos-tooling.schema.json", 0),
+    ("schemas/wos-workflow.schema.json", 0),
 ];
 
 #[test]

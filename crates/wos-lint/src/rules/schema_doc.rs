@@ -124,7 +124,7 @@ pub fn count_leaves(root: &Value) -> usize {
 pub struct StringLeafInventory {
     /// `type` includes `string` at a leaf node.
     pub string_leaves: usize,
-    /// Subset of [`Self::string_leaves`] with `enum`, `const`, or `pattern`.
+    /// Subset of [`Self::string_leaves`] with `enum`, `const`, `pattern`, or a listed `x-wos.openStringKind`.
     pub constrained_string_leaves: usize,
 }
 
@@ -158,7 +158,7 @@ pub struct OpenStringLeafRow {
     pub has_max_length: bool,
 }
 
-/// Collect every string leaf without `enum`/`const`/`pattern` at that node.
+/// Collect every string leaf without `enum`/`const`/`pattern` or listed `openStringKind` at that node.
 #[must_use]
 pub fn collect_open_string_leaves(root: &Value) -> Vec<OpenStringLeafRow> {
     let mut rows = Vec::new();
@@ -474,13 +474,23 @@ fn walk_string_inventory(node: &Value, inv: &mut StringLeafInventory) {
     }
 }
 
-/// Value constraints meaningful for a string leaf (`enum` / `const` / `pattern`).
+/// Value constraints meaningful for a string leaf (`enum` / `const` / `pattern`),
+/// plus an honest-open declaration audited by SCHEMA-OPEN-001.
 ///
-/// Keep in sync with [`has_explicit_value_constraint`]: that helper also treats
-/// `oneOf` / `anyOf` as closed-vocabulary shapes for SCHEMA-DOC-001 prose checks;
-/// this inventory helper intentionally counts only direct leaf keywords.
+/// [`has_explicit_value_constraint`] covers the same listed `x-wos.openStringKind`
+/// case for SCHEMA-DOC-001 closed-vocabulary prose checks. That helper also treats
+/// `oneOf` / `anyOf` at the leaf (this inventory helper does not — those shapes are
+/// structural, not string leaves).
 fn leaf_string_has_value_constraint(obj: &serde_json::Map<String, Value>) -> bool {
-    obj.contains_key("enum") || obj.contains_key("const") || obj.contains_key("pattern")
+    if obj.contains_key("enum") || obj.contains_key("const") || obj.contains_key("pattern") {
+        return true;
+    }
+    has_listed_open_string_kind(obj)
+}
+
+/// True when the leaf carries a listed `x-wos.openStringKind` (honest-open marker).
+fn has_listed_open_string_kind(obj: &serde_json::Map<String, Value>) -> bool {
+    open_string_kind(obj).is_some_and(|kind| OPEN_STRING_KIND_VALUES.contains(&kind))
 }
 
 /// Rule identifier for `SCHEMA-OPEN-001`.
@@ -625,6 +635,8 @@ fn check_leaf(
         ));
     }
 
+    // Listed `x-wos.openStringKind` counts as an explicit vocabulary declaration for
+    // this guard (aligned with [`leaf_string_has_value_constraint`] / open-string ratchet).
     if is_string_schema(obj)
         && has_closed_vocab_prose(description)
         && !has_explicit_value_constraint(obj)
@@ -632,7 +644,7 @@ fn check_leaf(
         diagnostics.push(LintDiagnostic::t1_error(
             RULE_ID,
             pointer.to_string(),
-            "`description` implies a closed vocabulary; add enum/const/oneOf/anyOf/pattern",
+            "`description` implies a closed vocabulary; add enum/const/oneOf/anyOf/pattern or a listed x-wos.openStringKind",
         ));
     }
 
@@ -675,15 +687,19 @@ fn has_closed_vocab_prose(description: &str) -> bool {
         .any(|marker| description.contains(marker))
 }
 
-/// Return true when the schema has an explicit value constraint keyword.
+/// Return true when the schema has an explicit value constraint keyword, or a listed
+/// `x-wos.openStringKind` (same rule as [`leaf_string_has_value_constraint`] for
+/// honest-open leaves).
 ///
-/// Broader than [`leaf_string_has_value_constraint`] (includes `oneOf` / `anyOf`).
+/// Broader than [`leaf_string_has_value_constraint`] at the leaf node: includes
+/// `oneOf` / `anyOf` (inventory excludes those because such nodes are not leaves).
 fn has_explicit_value_constraint(obj: &serde_json::Map<String, Value>) -> bool {
     obj.contains_key("enum")
         || obj.contains_key("const")
         || obj.contains_key("oneOf")
         || obj.contains_key("anyOf")
         || obj.contains_key("pattern")
+        || has_listed_open_string_kind(obj)
 }
 
 /// Escape a property name for inclusion in a JSON Pointer (RFC 6901).
@@ -926,6 +942,63 @@ mod tests {
         assert_eq!(inv.string_leaves, 2);
         assert_eq!(inv.constrained_string_leaves, 1);
         assert_eq!(inv.open_string_leaves(), 1);
+    }
+
+    #[test]
+    fn open_string_kind_is_inventory_constraint_when_value_is_allowed() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "description": description_60(),
+                    "examples": ["hello"],
+                    "x-wos": { "openStringKind": "prose" }
+                }
+            }
+        });
+        let inv = inventory_string_leaves(&schema);
+        assert_eq!(inv.string_leaves, 1);
+        assert_eq!(inv.constrained_string_leaves, 1);
+        assert_eq!(inv.open_string_leaves(), 0);
+    }
+
+    #[test]
+    fn open_string_kind_unknown_value_does_not_close_inventory_leaf() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "description": description_60(),
+                    "examples": ["hello"],
+                    "x-wos": { "openStringKind": "not-a-listed-kind" }
+                }
+            }
+        });
+        let inv = inventory_string_leaves(&schema);
+        assert_eq!(inv.open_string_leaves(), 1);
+    }
+
+    #[test]
+    fn listed_open_string_kind_satisfies_closed_vocab_prose_guard() {
+        let prefix = "a".repeat(40);
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "description": format!("{prefix} must be one of alpha beta gamma for prose guard test."),
+                    "examples": ["alpha"],
+                    "x-wos": { "openStringKind": "prose" }
+                }
+            }
+        });
+        let diagnostics = lint(schema);
+        assert!(
+            !diagnostics.iter().any(|d| d.message.contains("closed vocabulary")),
+            "unexpected SCHEMA-DOC closed-vocab diagnostic: {diagnostics:?}"
+        );
     }
 
     #[test]
