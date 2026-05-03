@@ -5324,11 +5324,14 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "time",
+ "tokio",
  "wos-core",
  "wos-export",
  "wos-formspec-binding",
  "wos-lint",
  "wos-runtime",
+ "wos-server-ports",
+ "wos-server-runtime-restate",
 ]
 
 [[package]]
