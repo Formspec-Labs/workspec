@@ -171,6 +171,7 @@ async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
         services: svc,
         runtime: rt,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
+        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 

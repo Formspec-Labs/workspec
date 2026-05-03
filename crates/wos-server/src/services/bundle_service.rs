@@ -9,25 +9,41 @@ use crate::config::ServerConfig;
 use crate::domain::{BundleView, KernelSummaryView, ValidationIssueView, ValidationResultView};
 use crate::storage::{KernelRow, StorageError, StorageHandle};
 
-/// Known sidecars: `(fixture subdirectory, BundleView field name)`.
-const SIDECARS: &[(&str, &str)] = &[
-    ("governance", "governance"),
-    ("due-process", "dueProcess"),
-    ("assertion-gate", "assertionGates"),
-    ("ai", "ai"),
-    ("policy-parameters", "policyParameters"),
-    ("notification-template", "notificationTemplates"),
-    ("business-calendar", "businessCalendar"),
-    ("advanced", "advanced"),
-    ("equity", "equity"),
-    ("drift-monitor", "driftMonitor"),
-    ("agent-config", "agentConfigs"),
-    ("verification-report", "verificationReport"),
-    ("correspondence-metadata", "correspondenceMetadata"),
-    ("semantic-profile", "semanticProfile"),
-    ("integration-profile", "integrationProfile"),
-    ("lifecycle-detail", "lifecycleDetail"),
-    ("case-instance", "caseInstances"),
+/// Fixture subdirectory on disk, JSON wire key on [`BundleView`], and struct field setter.
+macro_rules! kernel_sidecars {
+    (
+        $(($subdir:literal, $wire:literal, $field:ident)),* $(,)?
+    ) => {
+        /// Known sidecars: `(fixture subdirectory, BundleView JSON field name)`.
+        const SIDECARS: &[(&str, &str)] = &[$(($subdir, $wire),)*];
+
+        fn assign_sidecar(bundle: &mut BundleView, field: &str, v: serde_json::Value) {
+            match field {
+                $($wire => bundle.$field = Some(v),)*
+                _ => {}
+            }
+        }
+    };
+}
+
+kernel_sidecars![
+    ("governance", "governance", governance),
+    ("due-process", "dueProcess", due_process),
+    ("assertion-gate", "assertionGates", assertion_gates),
+    ("ai", "ai", ai),
+    ("policy-parameters", "policyParameters", policy_parameters),
+    ("notification-template", "notificationTemplates", notification_templates),
+    ("business-calendar", "businessCalendar", business_calendar),
+    ("advanced", "advanced", advanced),
+    ("equity", "equity", equity),
+    ("drift-monitor", "driftMonitor", drift_monitor),
+    ("agent-config", "agentConfigs", agent_configs),
+    ("verification-report", "verificationReport", verification_report),
+    ("correspondence-metadata", "correspondenceMetadata", correspondence_metadata),
+    ("semantic-profile", "semanticProfile", semantic_profile),
+    ("integration-profile", "integrationProfile", integration_profile),
+    ("lifecycle-detail", "lifecycleDetail", lifecycle_detail),
+    ("case-instance", "caseInstances", case_instances),
 ];
 
 /// Kernel registry + bundle projection. [`Self::full_bundle`] joins the
@@ -38,7 +54,8 @@ const SIDECARS: &[(&str, &str)] = &[
 pub struct BundleService {
     cfg: Arc<ServerConfig>,
     storage: StorageHandle,
-    cache: RwLock<std::collections::HashMap<String, KernelRow>>,
+    /// `(workflow_url, definition_version)` → kernel row.
+    cache: RwLock<std::collections::HashMap<(String, String), KernelRow>>,
     primary_url: RwLock<Option<String>>,
 }
 
@@ -77,7 +94,7 @@ impl BundleService {
             if primary.is_none() {
                 *primary = Some(r.url.clone());
             }
-            cache.insert(r.url.clone(), r);
+            cache.insert((r.url.clone(), r.version.clone()), r);
         }
         Ok(())
     }
@@ -102,17 +119,17 @@ impl BundleService {
                 impact_level: r.impact_level.clone(),
             })
             .collect();
-        v.sort_by(|a, b| a.url.cmp(&b.url));
+        v.sort_by(|a, b| a.url.cmp(&b.url).then_with(|| a.version.cmp(&b.version)));
         v
     }
 
     pub async fn primary_kernel(&self) -> Option<KernelRow> {
         let url = self.primary_url.read().await.clone()?;
-        self.cache.read().await.get(&url).cloned()
+        self.get(&url).await
     }
 
     pub async fn get(&self, url: &str) -> Option<KernelRow> {
-        self.cache.read().await.get(url).cloned()
+        self.storage.get_kernel(url).await.ok().flatten()
     }
 
     pub async fn replace(
@@ -139,10 +156,10 @@ impl BundleService {
             row.version = existing.version;
         }
         self.storage.upsert_kernel(&row).await?;
-        self.cache
-            .write()
-            .await
-            .insert(url.to_string(), row.clone());
+        self.cache.write().await.insert(
+            (row.url.clone(), row.version.clone()),
+            row.clone(),
+        );
         Ok(row)
     }
 
@@ -192,13 +209,27 @@ impl BundleResolverPort for BundleService {
     async fn resolve_kernel_bundle(
         &self,
         workflow_url: &str,
+        definition_version: &str,
     ) -> Result<serde_json::Value, RuntimeAdapterError> {
-        self.get(workflow_url)
-            .await
-            .map(|row| row.document)
-            .ok_or_else(|| {
-                RuntimeAdapterError::Message(format!("kernel `{workflow_url}` not found"))
-            })
+        let ver = definition_version.trim();
+        let row = if ver.is_empty() {
+            self.storage
+                .get_kernel(workflow_url)
+                .await
+                .map_err(|e| RuntimeAdapterError::Message(e.to_string()))?
+        } else {
+            self.storage
+                .get_kernel_by_url_and_version(workflow_url, ver)
+                .await
+                .map_err(|e| RuntimeAdapterError::Message(e.to_string()))?
+        }
+        .ok_or_else(|| {
+            RuntimeAdapterError::Message(format!(
+                "kernel `{workflow_url}` version `{}` not found",
+                if ver.is_empty() { "(latest)" } else { ver }
+            ))
+        })?;
+        Ok(row.document)
     }
 
     async fn resolve_governance_bundle(
@@ -227,29 +258,6 @@ impl BundleResolverPort for BundleService {
                 "failed to serialise sidecar bundle for `{workflow_url}`: {e}"
             ))
         })
-    }
-}
-
-fn assign_sidecar(bundle: &mut BundleView, field: &str, v: serde_json::Value) {
-    match field {
-        "governance" => bundle.governance = Some(v),
-        "dueProcess" => bundle.due_process = Some(v),
-        "assertionGates" => bundle.assertion_gates = Some(v),
-        "ai" => bundle.ai = Some(v),
-        "policyParameters" => bundle.policy_parameters = Some(v),
-        "notificationTemplates" => bundle.notification_templates = Some(v),
-        "businessCalendar" => bundle.business_calendar = Some(v),
-        "advanced" => bundle.advanced = Some(v),
-        "equity" => bundle.equity = Some(v),
-        "driftMonitor" => bundle.drift_monitor = Some(v),
-        "agentConfigs" => bundle.agent_configs = Some(v),
-        "verificationReport" => bundle.verification_report = Some(v),
-        "correspondenceMetadata" => bundle.correspondence_metadata = Some(v),
-        "semanticProfile" => bundle.semantic_profile = Some(v),
-        "integrationProfile" => bundle.integration_profile = Some(v),
-        "lifecycleDetail" => bundle.lifecycle_detail = Some(v),
-        "caseInstances" => bundle.case_instances = Some(v),
-        _ => {}
     }
 }
 
@@ -357,9 +365,12 @@ fn rule_id_to_category(rule_id: &str) -> &'static str {
     }
 }
 
-/// Slug for fixture filenames: second segment from the right when split by
-/// `:`, otherwise the last `/` path segment (trimming `.json`). Example:
-/// `urn:wos:workflow:demo:1.0.0` → `demo` → `fixtures/governance/demo.json`.
+/// Slug for fixture filenames on disk under `fixtures_dir`.
+///
+/// **Expected inputs:** WOS workflow URNs such as `urn:wos:workflow:{name}:{semver}` — the slug
+/// is the segment immediately left of the trailing `:version` (here, `{name}`). **HTTPS or
+/// opaque URLs** fall back to the last `/` path segment with a `.json` suffix stripped; that
+/// path is best-effort and may not match how kernel fixtures were authored.
 fn url_slug(url: &str) -> String {
     url.rsplit(':')
         .nth(1)
@@ -371,4 +382,67 @@ fn url_slug(url: &str) -> String {
                 .trim_end_matches(".json")
                 .to_string()
         })
+}
+
+#[cfg(test)]
+mod kernel_sidecar_tests {
+    use super::{assign_sidecar, url_slug, BundleView, SIDECARS};
+    use std::collections::HashSet;
+
+    #[test]
+    fn sidcars_fixture_tokens_are_unique() {
+        let mut seen = HashSet::new();
+        for (dir, wire) in SIDECARS {
+            assert!(
+                seen.insert(*wire),
+                "duplicate JSON wire key {wire} (dir {dir})"
+            );
+        }
+        assert_eq!(SIDECARS.len(), 17);
+    }
+
+    #[test]
+    fn assign_sidecar_sets_each_sidcars_wire_key() {
+        for (_, wire) in SIDECARS {
+            let mut bundle = BundleView {
+                kernel: serde_json::json!({}),
+                governance: None,
+                due_process: None,
+                assertion_gates: None,
+                ai: None,
+                policy_parameters: None,
+                notification_templates: None,
+                business_calendar: None,
+                advanced: None,
+                equity: None,
+                drift_monitor: None,
+                agent_configs: None,
+                verification_report: None,
+                correspondence_metadata: None,
+                semantic_profile: None,
+                integration_profile: None,
+                lifecycle_detail: None,
+                case_instances: None,
+            };
+            assign_sidecar(
+                &mut bundle,
+                wire,
+                serde_json::json!({ "from": "kernel_sidecar_tests" }),
+            );
+            let envelope = serde_json::to_value(&bundle).expect("bundle serializes");
+            assert!(
+                envelope.get(wire).is_some_and(|v| !v.is_null()),
+                "assign_sidecar must populate wire key {wire}"
+            );
+        }
+    }
+
+    #[test]
+    fn url_slug_extracts_name_from_urn_workflow() {
+        assert_eq!(
+            url_slug("urn:wos:workflow:demo:1.0.0"),
+            "demo",
+            "second-from-right colon segment"
+        );
+    }
 }

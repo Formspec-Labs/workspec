@@ -362,8 +362,14 @@ async fn submit_event(
 ///
 /// **Idempotency:** When `targetDefinitionVersion` equals the instance's
 /// current version, the runtime returns [`MigrationOutcome`] without a store
-/// write or new provenance. This route does not yet accept an HTTP idempotency
-/// key.
+/// write or new provenance. When the client sends `Idempotency-Key`, a
+/// duplicate successful migrate with the same instance id, target version,
+/// and key returns the cached [`MigrationOutcome`] (ADR 0083 D5).
+///
+/// The replay key does **not** include `migration_map`. If two requests share
+/// the same idempotency token but differ in `migration_map`, the first
+/// successful response is replayed; use a distinct `Idempotency-Key` when the
+/// migration map must be honored as part of the idempotent unit of work.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrateInstanceRequest {
@@ -372,10 +378,28 @@ pub struct MigrateInstanceRequest {
     pub migration_map: MigrationMap,
 }
 
+fn migrate_idempotency_cache_key(
+    instance_id: &str,
+    target_definition_version: &str,
+    token: &str,
+) -> String {
+    format!("{instance_id}\0{target_definition_version}\0{token}")
+}
+
+fn migrate_idempotency_header(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(std::string::ToString::to_string)
+}
+
 async fn migrate_instance(
     State(s): State<AppState>,
     auth: RequireRole<Supervisor>,
     Path(id): Path<String>,
+    headers: HeaderMap,
     Json(req): Json<MigrateInstanceRequest>,
 ) -> ApiResult<Json<MigrationOutcome>> {
     if req.target_definition_version.trim().is_empty() {
@@ -383,12 +407,32 @@ async fn migrate_instance(
             "target_definition_version must be non-empty".into(),
         ));
     }
+    let idem_token = migrate_idempotency_header(&headers);
+    if let Some(ref token) = idem_token {
+        let cache_key = migrate_idempotency_cache_key(&id, &req.target_definition_version, token);
+        let mut guard = s.migrate_idempotency.lock().await;
+        if let Some(hit) = guard.get(cache_key.as_str()) {
+            return Ok(Json(hit));
+        }
+        let out = s
+            .runtime
+            .migrate_instance(
+                &id,
+                &req.target_definition_version,
+                req.migration_map.clone(),
+                Some(auth.0.user.id.as_str()),
+            )
+            .await?;
+        guard.insert(cache_key, out.clone());
+        return Ok(Json(out));
+    }
+
     let out = s
         .runtime
         .migrate_instance(
             &id,
             &req.target_definition_version,
-            req.migration_map,
+            req.migration_map.clone(),
             Some(auth.0.user.id.as_str()),
         )
         .await?;
@@ -430,7 +474,8 @@ pub struct DrainStepSummary {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateHoldRequest {
-    pub hold_type: String,
+    /// Unknown `holdType` values fail JSON deserialization with 400 before handler logic runs.
+    pub hold_type: wos_core::HoldType,
     pub resume_trigger: String,
     #[serde(default)]
     pub expected_end: Option<String>,

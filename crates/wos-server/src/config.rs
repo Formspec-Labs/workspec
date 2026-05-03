@@ -220,9 +220,14 @@ pub enum SignerKind {
     Noop,
 }
 
+/// Durable workflow runtime backing the Axum reference server.
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeKind {
+    /// In-process `wos-server-runtime-local` `AppRuntime` over storage-backed state (default).
     Local,
+    /// Reserved for **WS-104**: Restate-backed runtime as the server composition root.
+    ///
+    /// Selecting this value still fails fast at startup today; see `crates/wos-server/TODO.md`.
     Restate,
 }
 
