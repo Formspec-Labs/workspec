@@ -1,6 +1,6 @@
 # ADR 0083 — WOS instance migration (runtime, provenance, HTTP)
 
-**Status:** Accepted — D1/D2/D3 (provenance kind) ratified 2026-05-01; runtime + HTTP primitive shipped same date; D4–D7 remain open.
+**Status:** Accepted — D1/D2/D3 (provenance kind) ratified 2026-05-01; runtime + HTTP primitive shipped same date; **D5 minimal HTTP idempotency** (successful `Idempotency-Key` replay) + **version-indexed bundle resolution** landed 2026-05-01; D4/D6/D7 remain open where noted below.
 
 **Date:** 2026-05-01
 
@@ -53,19 +53,20 @@ Landed in-tree:
 - `wos-server`: `POST /api/instances/:id/migrate` (Supervisor), `RuntimeOps::migrate_instance` on local + Restate adapters. Restate returns the same explicit **unsupported** error pattern as other unimplemented ops on that adapter (`migrate_instance` is test-covered; full Restate durability remains **WS-094**). Request body: empty or whitespace-only `target_definition_version` rejected with **400**. Stub path when `runtime-local` is off: `FeatureDisabled` → **400** (not generic **503**).
 - `wos-server-runtime-local`: `RuntimeKernelResolver` wraps bundle resolution so kernel-not-found / definition-version mismatch surface as typed `RuntimeError` variants (**404** / **400**) instead of a blanket resolver **503**.
 - Schema: `instanceMigrated` added to `FactsTierRecord.recordKind` enum; `TransitionEventError.code` carries a `$comment` documenting the trigger gate for the future finite set.
+- **2026-05-01 — bundle + HTTP completion:** operational `kernels` rows are keyed by `(url, version)`; `BundleService` / `BundleResolverPort::resolve_kernel_bundle` resolve by `(workflow_url, definition_version)`; integration tests cover HTTP `1.0.0 → 1.1.0` and **`Idempotency-Key`** replay of a successful migrate (`runtime_lifecycle.rs`).
 
-**Reference-server limitation (documented in WS-042):** `BundleService` caches one kernel row per workflow URL; cross-version migration through HTTP needs version-indexed resolution (or multi-row merge) before an Axum fixture can prove `1.0.0 → 1.1.0` end-to-end. Same-version migrate is idempotent at the runtime layer and is covered by an integration test (`migrate_instance_via_http_same_version_is_idempotent`); HTTP **Idempotency-Key** for duplicate POSTs remains open under **D5**.
+**Resolved vs earlier snapshot:** reference-server `BundleService` is no longer URL-only; cross-version HTTP migrate is proven in-tree. Same-version migrate remains a runtime no-op (`migrate_instance_via_http_same_version_is_idempotent`).
 
 ## Open decisions
 
 - **D4: Preconditions for `migrate`** — requires posture-floor table from Posture Declaration registry; gated on PLN-0384. **Related (vendor assurance):** Signature Profile `x-*` assurance tokens remain **fail-open** in `identity_binding_meets_policy` until Posture Declaration + spec §2.13 land — tracked in [`../../T4-TODO.md`](../../T4-TODO.md) § *Vendor `x-*` assurance floor enforcement*.
-- **D5: Idempotency model** — `(instance_id, target_definition_version)` key is the natural idempotency pair but full idempotency semantics (duplicate POST with same body) are gated on D4's posture framework and on HTTP-layer policy.
+- **D5: Idempotency model** — **Minimal reference-server slice closed 2026-05-01:** HTTP `Idempotency-Key` replays the cached successful [`MigrationOutcome`](../../crates/wos-runtime/src/runtime.rs) for the same `(instance_id, target_definition_version, key)` triple (in-memory cache on `AppState`). **Still open (full D5 posture):** dedupe across process restarts, failure semantics for conflicting bodies with the same key, and alignment with D4 preconditions when the posture floor lands.
 - **D6: Error model** — `MigrationOutcome` extensions and additional `RuntimeError` variants for topology mismatch beyond `stateNotFound`, missing migration map fields, and rollback posture are gated on D4.
 - **D7: Provenance ordering vs facts-tier** — whether `instanceMigrated` precedes or follows the target-version `stateEntered` record is gated on D4 and D5.
 
 ## Consequences
 
-- Implementation may reference this ADR for the runtime primitive; HTTP cross-version prove-out remains coupled to bundle/version resolution work (WS-042 checklist).
+- Implementation may reference this ADR for the runtime primitive; HTTP cross-version prove-out and reference-server idempotency cache are **landed** (WS-042 ✓); richer D5/D6/D7 items remain advisory until closed.
 - D1/D2/D3/D3b are stable for planning; D4–D7 remain advisory until closed.
 
 ## References

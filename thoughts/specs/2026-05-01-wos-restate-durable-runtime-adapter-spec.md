@@ -62,6 +62,8 @@ This document states **processor-observable obligations** for the `wos-server-ru
 
 **R-6.2** Conformance targets MUST remain [`wos-server-runtime-local`](../../crates/wos-server-runtime-local) until VISION three-way agreement explicitly adds Restate-backed fixtures.
 
+**Implementation snapshot (2026-05-01, non-normative):** Root CI **`wos-restate-ingress-smoke`** + [`scripts/restate_ingress_smoke.sh`](../../scripts/restate_ingress_smoke.sh) satisfy **R-6.1** for the current ingress + VO wiring. [`wos-conformance/tests/r6_restate_conformance_slice.rs`](../../crates/wos-conformance/tests/r6_restate_conformance_slice.rs) adds a **supplementary** in-memory parity slice (reference `WosRuntime` vs `RestateRuntimeAdapter::new`); it does **not** replace the **R-6.2** canonical target above or PLN-0333 three-way sign-off.
+
 ---
 
 ## Traceability matrix

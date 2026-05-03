@@ -8,6 +8,10 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 - [x] **`assurance_rank` IAL/AAL recognition** — `assurance_rank` now recognizes NIST SP 800-63 IAL/AAL labels (`ial1`/`aal1`=1, `ial2`/`aal2`=2, `ial3`/`aal3`=3); previously these returned 0 (unknown). Aligns runtime with Signature Profile §2.7 ("Identity binding is provider-neutral … records authentication method, provider reference, assurance strength"). Behavior change for any prior fixture that relied on IAL labels being unrecognized; SIG-008 (notary, very-high) and SIG-013 (email-otp, low vs standard) cover the new path.
 
+- [x] **WS-042 / ADR 0083 reference-server migration slice** — `kernels` table keyed by `(url, version)`; bundle resolution returns the requested definition version; `POST /api/instances/:id/migrate` honors `Idempotency-Key` for successful replays; integration test `migrate_instance_via_http_cross_version_idempotency_key_replays_outcome` covers `1.0.0 → 1.1.0`.
+
+- [x] **Delivery sidecar rename (`actorType` → `correspondenceRole`) — release-note hook** — Normative closure lives in `specs/sidecars/delivery.md` §4 / schema; consumers migrating from pre-rename payloads should search `correspondenceRole` in `wos-delivery.schema.json` and the parity plan **D1** checklist.
+
 ---
 
 ## Specs and schemas
