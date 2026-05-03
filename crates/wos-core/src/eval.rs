@@ -128,7 +128,7 @@ pub struct Evaluator {
 const CONTINUOUS_RESCAN_EVENT: &str = "$postMutationRescan";
 
 /// An observed state transition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ObservedTransition {
     /// Source state.
     pub from: String,
@@ -865,7 +865,7 @@ impl Evaluator {
                     //     visible in case state, then `body.onExit` actions.
                     //   - Compound / parallel body (transitions inside the
                     //     body subtree, nested state machines): tracked as
-                    //     Sub-PR D-4. The body's `kind` field is read but
+                    //     Sub-PR D-5. The body's `kind` field is read but
                     //     non-atomic kinds are accepted-and-ignored at the
                     //     transition level for now; their `onEntry` and
                     //     `onExit` actions still run.

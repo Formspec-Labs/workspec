@@ -49,7 +49,7 @@ pub use eval::{
 };
 pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
-pub use model::governance::GovernanceDocument;
+pub use model::governance::{GovernanceDocument, HoldType};
 pub use model::kernel::{
     Action, ActionKind, KernelDocument, KernelView, SignalScope, State, StateKind,
     TimerEventSource, Transition, TransitionEvent, WorkflowDocument,

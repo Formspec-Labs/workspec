@@ -676,9 +676,9 @@ pub struct State {
 ///
 /// `ForEach` is a compound-shaped state with iteration semantics: the body
 /// subtree (rooted at `State::initial_state` and stored in `State::states`)
-/// runs once per element of the FEL-evaluated `State::iterator`. Per-iteration
+/// runs once per element of the FEL-evaluated `State::collection`. Per-iteration
 /// case-state bindings expose the current item and index under
-/// `State::iterator_var` / `State::index_var` (defaults `$current` / `$index`).
+/// `State::item_variable` / `State::index_variable` (defaults `$item` / `$index`).
 /// Sequential execution is the canonical semantics; parallel iteration capped
 /// by `State::max_concurrency` is a future extension whose runtime
 /// implementation is tracked separately. Authoring + schema validity ship in

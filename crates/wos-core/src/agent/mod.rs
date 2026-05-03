@@ -187,9 +187,11 @@ pub struct AgentContext<'a> {
     /// Workflow instance id (case TypeID).
     pub instance_id: &'a str,
 
-    /// Per-`(agent_id, capability_id)` invocation index, starting at 0. Used
-    /// by the stub adapter to look up canned responses; production adapters
-    /// MAY use it for retry-aware logging or telemetry.
+    /// Per-invocation index supplied by the runtime (often 0 until the runtime
+    /// threads a counter). The canonical stub adapter (`wos-agent-stub`) keeps
+    /// its own per-`(agent_id, capability_id)` counter via `next_index()` and
+    /// does not read this field; other adapters MAY use it for canned routing,
+    /// retry-aware logging, or telemetry.
     pub invocation_index: u32,
 
     /// Snapshot of the case state at invocation time, in canonical JSON form.

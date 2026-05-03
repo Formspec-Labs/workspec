@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::model::governance::HoldType;
 use crate::typeid;
 
 fn default_tenant() -> String {
@@ -424,8 +425,8 @@ pub struct ActiveDelegation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveHold {
-    /// Hold type.
-    pub hold_type: String,
+    /// Hold type (same vocabulary as governance [`HoldPolicy`](crate::model::governance::HoldPolicy)).
+    pub hold_type: HoldType,
     /// Start timestamp (ISO 8601).
     pub started_at: String,
     /// Expected end timestamp.

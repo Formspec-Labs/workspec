@@ -125,7 +125,45 @@ fn governance_new_phase2_fields() {
     // Hold policies with scope
     assert_eq!(doc.hold_policies.len(), 1);
     assert_eq!(
+        doc.hold_policies[0].hold_type,
+        wos_core::model::governance::HoldType::PendingApplicantResponse
+    );
+    assert_eq!(
         doc.hold_policies[0].scope.as_deref(),
         Some("caseFile.holdReason = 'docs-needed'")
     );
+}
+
+#[test]
+fn hold_type_vendor_round_trips() {
+    let json = r#"{
+        "targetWorkflow": "https://example.gov/test",
+        "holdPolicies": [{
+            "holdType": "x-acme-pending-tribal-review",
+            "expectedDuration": "P30D",
+            "resumeTrigger": "tribalDecision",
+            "timeoutAction": "escalate"
+        }]
+    }"#;
+    let doc: GovernanceDocument = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        doc.hold_policies[0].hold_type,
+        wos_core::model::governance::HoldType::Vendor("x-acme-pending-tribal-review".into())
+    );
+    let back = serde_json::to_string(&doc).unwrap();
+    assert!(back.contains("x-acme-pending-tribal-review"));
+}
+
+#[test]
+fn hold_type_rejects_invalid_vendor_shape() {
+    let json = r#"{
+        "targetWorkflow": "https://example.gov/test",
+        "holdPolicies": [{
+            "holdType": "x-UpperCase",
+            "expectedDuration": "P30D",
+            "resumeTrigger": "e",
+            "timeoutAction": "escalate"
+        }]
+    }"#;
+    assert!(serde_json::from_str::<GovernanceDocument>(json).is_err());
 }
