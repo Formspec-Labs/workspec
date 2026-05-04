@@ -1,0 +1,19 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {"id": "step-1", "kind": "step",
+       "policyObjectRefs": ["po-x"]}
+    ]
+  }],
+  ["m.json", {
+    "$wosStudioMapping": "1.0",
+    "mappings": [{
+      "id": "m-x",
+      "policyObjectRef": "po-x",
+      "mappingState": "requiresSpecExtension",
+      "extensionRecord": {"lifecycleState": "open"}
+    }]
+  }]
+]

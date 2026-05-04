@@ -226,7 +226,7 @@ No production SaaS infrastructure exists. These gaps are about production-grade 
 | Rate limiting and abuse protection | Medium | Required for any public-facing SaaS |
 | CDN / edge caching for form delivery | Medium | Performance at scale |
 | SCIM (automated user provisioning) | Medium | In product roadmap; not implemented |
-| Environment separation (sandbox / production) | High | Preview exists in studio; no real environment management |
+| Environment separation (sandbox / production) | High | Preview exists in case portal (formerly studio); no real environment management |
 
 ---
 
@@ -236,7 +236,7 @@ Multi-party form completion and inter-org sharing are in the product roadmap but
 
 | Gap | Severity | Notes |
 |---|---|---|
-| Real-time collaborative editing (studio) | Low | Nice-to-have, not critical |
+| Real-time collaborative editing (case portal) | Low | Nice-to-have, not critical |
 | Comments and annotations on form definitions | Medium | Admin collaboration on form design |
 | Review task assignment and tracking | High | Part of the case management gap |
 

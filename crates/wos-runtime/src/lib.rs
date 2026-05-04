@@ -19,6 +19,7 @@ pub mod policy_decision;
 pub mod runtime;
 pub mod restate_fixture_support;
 pub mod store;
+pub mod studio_api;
 
 pub use binding::{
     BindingError, BindingRegistry, CaseMutationBundle, ContractBindingAdapter, PreparedTask,

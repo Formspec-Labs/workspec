@@ -1,0 +1,11 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-deadline-a", "kind": "Deadline", "lifecycleState": "approved", "originClass": "source",
+       "body": {"trigger": "noticeOfAdverseAction.issuedAt", "calendarDaysFromTrigger": 90}},
+      {"id": "pol-deadline-b", "kind": "Deadline", "lifecycleState": "approved", "originClass": "source",
+       "body": {"trigger": "noticeOfAdverseAction.issuedAt", "calendarDaysFromTrigger": 60}}
+    ]
+  }]
+]

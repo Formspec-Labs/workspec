@@ -1,0 +1,15 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {
+        "id": "el-decide",
+        "kind": "decision",
+        "body": {
+          "inputs": ["incomeTotal"]
+        }
+      }
+    ]
+  }]
+]

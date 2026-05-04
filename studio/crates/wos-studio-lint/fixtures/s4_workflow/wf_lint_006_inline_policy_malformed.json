@@ -1,0 +1,11 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "data-ssn", "kind": "DataElement", "lifecycleState": "approved", "originClass": "source", "sensitivity": "dpv:SpecialCategoryData"},
+      {"id": "evid-1", "kind": "EvidenceRequirement", "lifecycleState": "approved", "originClass": "source",
+       "collectsDataElements": ["data-ssn"],
+       "retentionPolicy": {"mode": "indefinite", "duration": "P7Y", "disposalAction": "purge"}}
+    ]
+  }]
+]

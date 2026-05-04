@@ -34,6 +34,7 @@ pub mod model;
 pub mod project;
 pub mod provenance;
 pub mod proxy;
+pub mod studio_api;
 pub mod timer;
 pub mod traits;
 pub mod typeid;

@@ -28,6 +28,10 @@
         "intent": "Document type marker and version pin for WOS Workflow documents per ADR 0076"
       }
     },
+    "wosVersionPin": {
+      "$ref": "#/$defs/WosVersionPin",
+      "description": "Optional typed claims-map pinning this workflow to a specific WOS envelope version + the set of embedded blocks the authors intend to exercise. The compiler refuses to emit when the pinned envelopeVersion does not match its compiled-in SCHEMA_VERSION (per Studio compiler-contract SA-MUST-cmp-052). Replaces the previous free-form claims sentence in RELEASE-STREAMS.md with a typed shape that tooling can reason about."
+    },
     "url": {
       "type": "string",
       "format": "uri",
@@ -372,6 +376,37 @@
     },
     "assurance": {
       "$ref": "#/$defs/Assurance"
+    },
+    "decisionTables": {
+      "type": "array",
+      "description": "Top-level decision-table catalog per Kernel \u00a74.5.1. Each entry is a structured table referenceable by a transition `guard` of form `{kind: \"decisionTable\", ref, outputColumn, inputBindings}`. Tables compose with the kernel's lifecycle (\u00a74.7) and FEL evaluator: input bindings evaluate in the transition's full context; row input/output cells evaluate in a row scope where declared inputs are bound. Hit policies (`unique`/`first`/`priority`/`collect`) determine row selection. `collect` is reserved for non-guard consumers; transition-guard tables MUST select a boolean output column. Authoring round-trip is structurally lossless \u2014 a Studio DecisionTable PolicyObject projects to one entry here without flattening to chained-FEL.",
+      "items": {
+        "$ref": "#/$defs/DecisionTable"
+      },
+      "examples": [
+        [
+          {
+            "id": "eligibilityTable",
+            "inputs": [
+              { "name": "income", "type": "number" },
+              { "name": "householdSize", "type": "integer" }
+            ],
+            "outputs": [
+              { "name": "eligible", "type": "boolean" }
+            ],
+            "rows": [
+              { "id": "r1", "inputCells": ["income <= 1473", "householdSize == 1"], "outputCells": ["true"], "rationale": "1-person household, monthly gross under federal SNAP threshold." },
+              { "id": "r2", "inputCells": ["income <= 1984", "householdSize == 2"], "outputCells": ["true"], "rationale": "2-person household threshold." },
+              { "id": "rDefault", "inputCells": [], "outputCells": ["false"], "rationale": "Catch-all; income exceeds threshold or household-size unhandled." }
+            ],
+            "hitPolicy": "first"
+          }
+        ]
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Tabular decision logic as a first-class kernel construct; FEL-native (not DMN); referenced from transition guards via DecisionTableGuard"
+      }
     },
     "extensions": {
       "type": "object",
@@ -866,6 +901,25 @@
           }
         }
       ]
+    },
+    {
+      "title": "Rights-impacting and safety-impacting workflows MUST embed custody (ADR 0076).",
+      "$comment": "Mirrors the governance and signature conditionals: any workflow whose impactLevel triggers full due process MUST also bind a custody surface (Trellis trust-profile + per-transition or per-signature-event anchor requirements + export-bundle reference). Previously delegated to lint; promoted to schema 2026-05-02 so violations halt at JSON-Schema validation rather than waiting for downstream lint passes.",
+      "if": {
+        "properties": {
+          "impactLevel": {
+            "enum": [
+              "rights-impacting",
+              "safety-impacting"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "custody"
+        ]
+      }
     }
   ],
   "$defs": {
@@ -967,9 +1021,29 @@
           "x-wos": {
             "openStringKind": "prose"
           }
+        },
+        "canonicalTermRef": {
+          "type": "string",
+          "format": "iri-reference",
+          "description": "IRI reference to a canonical-vocabulary term that defines this field's semantic meaning across workflows (Studio terminology-and-canonical-vocabulary spec). Lets governance reviewers compare like-shaped fields across programs without ambiguity. Optional but RECOMMENDED for fields that re-occur across workflows (e.g. monthlyIncome, householdSize, applicantSSN).",
+          "examples": [
+            "urn:wos:vocab:income:monthly",
+            "https://vocab.dol.gov/terms/wagesQ4"
+          ]
+        },
+        "dpvSensitivity": {
+          "type": "string",
+          "format": "iri-reference",
+          "description": "Data Privacy Vocabulary (DPV) classification for the field's sensitivity. Drives downstream lint POM-LINT-DPV-001: when set to a special-category value (e.g. dpv:HealthData, dpv:BiometricData, dpv:SpecialCategoryData), the collecting EvidenceRequirement MUST carry a retentionPolicy. The kernel does not interpret the value beyond its presence; consuming tools and lint rules act on the IRI. Optional; absent means \"no special handling required\".",
+          "examples": [
+            "dpv:SpecialCategoryData",
+            "dpv:HealthData",
+            "dpv:BiometricData",
+            "dpv:FinancialData"
+          ]
         }
       },
-      "description": "Author-time field declaration in a contract intake binding (Kernel §9.1). Pairs a field name with its primitive type and optional documentation; the bound contract carries the semantic meaning."
+      "description": "Author-time field declaration in a contract intake binding (Kernel \u00a79.1). Pairs a field name with its primitive type and optional documentation; the bound contract carries the semantic meaning. Optional canonicalTermRef + dpvSensitivity surfaces are extension seams for terminology alignment and privacy classification (added 2026-05-02 per Studio policy-object-model + terminology specs)."
     },
     "IntakeReference": {
       "type": "object",
@@ -1429,6 +1503,196 @@
         }
       ]
     },
+    "DecisionTable": {
+      "type": "object",
+      "description": "A first-class decision table per Kernel §4.5.1. Inputs and outputs are typed; rows carry FEL boolean predicates per input cell and FEL value expressions per output cell. Document order is significant for `first` and `priority` hit policies. A row matches when every input cell evaluates to `true`; the hit policy resolves multi-match. Cell expressions evaluate in a row-only scope (the declared inputs, bound to the values the referencing DecisionTableGuard's `inputBindings` produced) — they MUST NOT reference `caseFile`, `$event`, or any outer namespace. Transition-guard tables MUST select a `boolean`-typed output column.",
+      "examples": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [{ "name": "income", "type": "number" }, { "name": "householdSize", "type": "integer" }],
+          "outputs": [{ "name": "eligible", "type": "boolean" }],
+          "rows": [
+            { "id": "r1", "inputCells": ["income <= 1473", "householdSize == 1"], "outputCells": ["true"] },
+            { "id": "rDefault", "inputCells": [], "outputCells": ["false"] }
+          ],
+          "hitPolicy": "first"
+        }
+      ],
+      "required": ["id", "inputs", "rows", "outputs", "hitPolicy"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier within the document. Referenced by DecisionTableGuard.ref. SHOULD be stable across versions so projection-source provenance (e.g., a Studio DecisionTable PolicyObject) remains traceable."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the table's purpose. Not interpreted by the processor; consumed by authoring UIs and audit reports."
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Typed input parameters of the table. Each input is bound by the referencing DecisionTableGuard's `inputBindings` and exposed inside row cell expressions under its declared `name`.",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                "description": "Input identifier; in-scope inside row cell FEL expressions."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
+                "description": "FEL type of the input value. Cell expressions reading this input MUST be type-compatible."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable description of the input."
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Typed output columns. A DecisionTableGuard selects exactly one column by name (`outputColumn`); for transition-guard tables that column MUST be `boolean`-typed.",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                "description": "Output column identifier; referenced by DecisionTableGuard.outputColumn."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
+                "description": "FEL type of the produced output value. Output cell expressions MUST evaluate to this type."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable description of the output."
+              }
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Decision rows in document order. Each row carries one FEL boolean predicate per declared input and one FEL value expression per declared output.",
+          "items": {
+            "$ref": "#/$defs/DecisionTableRow"
+          }
+        },
+        "hitPolicy": {
+          "type": "string",
+          "enum": ["unique", "first", "priority", "collect"],
+          "description": "Row-selection rule when zero, one, or many rows match. `unique`: at most one match (>1 → K-052); `first`: first match in document order wins; `priority`: lowest `priority` integer among matches wins (ties → K-052); `collect`: all matches returned to the caller (transition guards reject `collect` per K-053). Authoring SHOULD pick the most restrictive policy that fits — `unique` proves disjointness; `first` documents intentional ordering."
+        }
+      },
+      "x-lm": {
+        "critical": true,
+        "intent": "First-class kernel decision table; FEL-native (no DMN); referenced by DecisionTableGuard from transition guards"
+      }
+    },
+    "DecisionTableRow": {
+      "type": "object",
+      "description": "One row of a DecisionTable. Matches when every entry of `inputCells` evaluates to `true` against the row scope (the DecisionTable's declared inputs bound to the referencing guard's `inputBindings`).",
+      "required": ["id", "inputCells", "outputCells"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable row identifier (unique within the table). Preserved through projection so provenance, scenario coverage, and reviewer comments remain row-anchored across edits."
+        },
+        "inputCells": {
+          "type": "array",
+          "description": "FEL boolean predicates, one per declared input in declaration order. Each evaluates in row scope (inputs bound to guard `inputBindings`-resolved values). MUST evaluate to a boolean (K-053). An empty array means 'matches always' — the conventional default-row pattern.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputCells": {
+          "type": "array",
+          "description": "FEL value expressions, one per declared output in declaration order. Each evaluates in row scope (same bindings as input cells) and produces a value of the type declared in the corresponding `outputs[*].type`.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Used only when the enclosing DecisionTable's `hitPolicy = priority`. Lower number = higher priority. Ties among matched rows are a K-052 violation."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Reviewer-facing rationale for this row, preserved as authoring provenance. Not interpreted by the processor."
+        }
+      }
+    },
+    "DecisionTableGuard": {
+      "type": "object",
+      "description": "Structured guard form referencing a top-level `decisionTables[*]` entry. Composes with `Transition.guard` (Kernel §4.5.1). Evaluates by binding the table's declared inputs to the values produced by `inputBindings[*]` (FEL expressions in the full transition context), running the table per its hit policy, and returning the selected row's `outputColumn` value (which MUST be boolean for transition-guard usage).",
+      "examples": [
+        {
+          "kind": "decisionTable",
+          "ref": "eligibilityTable",
+          "outputColumn": "eligible",
+          "inputBindings": {
+            "income": "caseFile.household.income.monthlyGross",
+            "householdSize": "caseFile.household.size"
+          },
+          "onNoMatch": "false"
+        }
+      ],
+      "required": ["kind", "ref", "outputColumn", "inputBindings"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      },
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "decisionTable",
+          "description": "Discriminant. Always the literal `decisionTable`."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Identifier of an entry in the document's top-level `decisionTables[]`. MUST resolve (K-051)."
+        },
+        "outputColumn": {
+          "type": "string",
+          "description": "Name of the output column to read for the guard's boolean result. MUST exist on the referenced table; for transition-guard usage MUST be `boolean`-typed (K-053)."
+        },
+        "inputBindings": {
+          "type": "object",
+          "description": "Map from each table input name to a FEL expression evaluated in the full transition context. The result is bound into the row scope under the input's name. Every declared input of the referenced table MUST have a binding (K-051).",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "onNoMatch": {
+          "type": "string",
+          "enum": ["false", "fail"],
+          "default": "false",
+          "description": "Behavior when zero rows match (and after `unique`/`first`/`priority` short-circuits). `false` (default) treats the guard as `false` — the transition is skipped per §4.6. `fail` rejects per Kernel §4.6/§4.7 transition resolution. Use `fail` when the table is intended to be exhaustive and a no-match represents an authoring error worth halting."
+        }
+      },
+      "x-lm": {
+        "critical": true,
+        "intent": "Structured (table-form) guard that preserves DecisionTable authoring fidelity through the substrate — alternative to FEL-string guard"
+      }
+    },
     "Transition": {
       "type": "object",
       "required": [
@@ -1440,20 +1704,24 @@
           "description": "Trigger event for this transition. When omitted, the transition is anonymous: it does not match an external event but still participates in continuous-mode guard re-scan (Runtime Companion §10.3)."
         },
         "guard": {
-          "type": "string",
-          "minLength": 1,
-          "description": "FEL expression evaluated before the transition fires. When the guard returns true, the transition is selected; when it returns false, the transition is skipped. When the guard throws or evaluates to a non-boolean, the processor MUST reject per Kernel §4.6/§4.7 transition resolution. Guards are stateless — they read case state but MUST NOT mutate it. The compiled FEL AST drives lint analysis (K-012 syntax, K-017 cross-case-state reference, K-019 function-set, AI-058 boolean shape).",
-          "examples": [
-            "caseFile.eligibilityScore >= 0.85",
-            "caseFile.documentsComplete && !caseFile.holdActive",
-            "$event.payload.priority == 'expedited'"
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "FEL expression evaluated before the transition fires. When the guard returns true, the transition is selected; when it returns false, the transition is skipped. When the guard throws or evaluates to a non-boolean, the processor MUST reject per Kernel \u00a74.6/\u00a74.7 transition resolution. Guards are stateless \u2014 they read case state but MUST NOT mutate it. The compiled FEL AST drives lint analysis (K-012 syntax, K-017 cross-case-state reference, K-019 function-set, AI-058 boolean shape).",
+              "examples": [
+                "caseFile.eligibilityScore >= 0.85",
+                "caseFile.documentsComplete && !caseFile.holdActive",
+                "$event.payload.priority == 'expedited'"
+              ]
+            },
+            {
+              "$ref": "#/$defs/DecisionTableGuard"
+            }
           ],
+          "description": "Either a FEL expression (string form) or a structured decision-table reference (object form) per Kernel \u00a74.5.1. The object form lets authors keep table-shaped decision logic as a first-class structure through the substrate without flattening to chained FEL. Round-tripping is lossless. Both forms produce a boolean used by \u00a74.6 transition resolution; both are stateless.",
           "x-lm": {
             "critical": true,
-            "intent": "Where every conditional logic decision lives — the highest-traffic FEL surface, lint-checked for syntax / cross-state / function-set / boolean-shape correctness"
-          },
-          "x-wos": {
-            "openStringKind": "fel"
+            "intent": "Where every conditional logic decision lives \u2014 accepts FEL-string (highest-traffic FEL surface) or DecisionTableGuard (structured table form per \u00a74.5.1), lint-checked for syntax / cross-state / function-set / boolean-shape / table-row-coverage / hit-policy correctness"
           }
         },
         "tags": {
@@ -1899,34 +2167,9 @@
         "deonticConstraints": {
           "type": "array",
           "items": {
-            "type": "object",
-            "required": [
-              "kind",
-              "expression"
-            ],
-            "properties": {
-              "kind": {
-                "enum": [
-                  "permission",
-                  "prohibition",
-                  "obligation",
-                  "right"
-                ],
-                "$comment": "OASIS LegalRuleML."
-              },
-              "expression": {
-                "type": "string",
-                "minLength": 1,
-                "description": "FEL expression evaluated against the invocation context to decide whether this deontic constraint applies to the agent output or action.",
-                "examples": [
-                  "caseFile.amount <= 50000"
-                ],
-                "x-wos": {
-                  "openStringKind": "fel"
-                }
-              }
-            }
-          }
+            "$ref": "#/$defs/DeonticConstraint"
+          },
+          "description": "Per-agent deontic constraints. Each constraint binds the agent (or a specified sub-actor) to a permission, prohibition, obligation, or right per OASIS LegalRuleML §3. The kernel checks `kind` and `expression` (a FEL string); the optional `actor`, `condition`, `defeasible`, `citationRefs`, and `x-legalruleml-iri` surfaces let governance reviewers carry the legal grounding without re-encoding it elsewhere."
         },
         "confidenceFloor": {
           "type": "number",
@@ -8192,6 +8435,240 @@
           }
         }
       }
+    },
+    "ApplicabilityScope": {
+      "type": "object",
+      "description": "Author-time declaration of where a rule, contract, or policy parameter applies. Pairs program identifiers with jurisdictional codes, time windows, and an optional FEL caseFilters expression so governance reviewers can reason about overlap without scanning prose. Promoted to a kernel $defs 2026-05-02 from the Studio policy-object body shape so governance, effectiveness evaluators, and scope-matching guards can $ref a single typed shape (Studio effectiveness-and-applicability spec).",
+      "properties": {
+        "programs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Program identifiers this scope binds to. Free strings; agencies pick a stable convention (e.g. `SNAP`, `MEDICAID-AGED-BLIND-DISABLED`, `UI-PUA`)."
+        },
+        "jurisdictions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Jurisdictional codes. Recommended: ISO 3166-2 (country-region), e.g. `US-CA`, `US-NY`. National-tier rules use bare ISO 3166-1 alpha-2 (`US`)."
+        },
+        "dateRanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "start"
+            ],
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Inclusive time windows. `end` is open-ended when omitted (still in force). Multiple windows admit interrupted-effectiveness shapes."
+        },
+        "caseFilters": {
+          "type": "string",
+          "description": "FEL expression that returns true when this scope applies to a given caseFile. Optional refinement on top of the categorical programs/jurisdictions/dateRanges filters."
+        },
+        "effectivenessRef": {
+          "type": "string",
+          "format": "iri-reference",
+          "description": "Optional IRI reference to an Effectiveness PolicyObject that elaborates the temporal/jurisdictional grounding. When present, downstream tools resolve the reference to its full shape; the inline fields above remain authoritative for the local applicability decision."
+        }
+      },
+      "additionalProperties": false,
+      "examples": [
+        {
+          "programs": [
+            "SNAP"
+          ],
+          "jurisdictions": [
+            "US-CA"
+          ],
+          "dateRanges": [
+            {
+              "start": "2024-10-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    "EffectivePeriod": {
+      "type": "object",
+      "description": "Author-time declaration of when a rule, policy, or change is in force. Pairs a name with one or more intervals plus optional retroactive and sunset markers so governance reviewers can compare overlapping periods without scanning prose. Promoted to a kernel $defs 2026-05-02 from the Studio policy-object body shape (Studio effectiveness-and-applicability spec).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Short human-readable name for this effective period (e.g. `Public Health Emergency Extension`, `2025 Annual Adjustment`)."
+        },
+        "intervals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "start"
+            ],
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "One or more inclusive time windows during which the bound rule is in force."
+        },
+        "retroactiveFrom": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When set, the rule applies retroactively to cases dated on or after this instant, even when the case predates the rule's enactment."
+        },
+        "sunsetAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When set, the rule lapses at this instant regardless of any open-ended interval. Use to encode legislative sunset clauses."
+        }
+      },
+      "additionalProperties": false,
+      "examples": [
+        {
+          "name": "PHE Continuous Coverage",
+          "intervals": [
+            {
+              "start": "2020-03-18T00:00:00Z",
+              "end": "2023-04-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    "DeonticConstraint": {
+      "type": "object",
+      "description": "Single deontic constraint (permission, prohibition, obligation, right) per OASIS LegalRuleML \u00a73. Used by `agents[].deonticConstraints` and `governance.deonticConstraints` (where present). The kernel evaluates `kind` and `expression` (a FEL string); the optional surfaces (`actor`, `condition`, `defeasible`, `citationRefs`, `x-legalruleml-iri`) carry legal grounding without re-encoding it elsewhere.",
+      "required": [
+        "kind",
+        "expression"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this constraint within the workflow. Optional; lets reviewers cite a specific clause when documenting waivers or amendments."
+        },
+        "kind": {
+          "enum": [
+            "permission",
+            "prohibition",
+            "obligation",
+            "right"
+          ],
+          "description": "Deontic mode per OASIS LegalRuleML \u00a73.",
+          "$comment": "OASIS LegalRuleML."
+        },
+        "actor": {
+          "type": "string",
+          "description": "Optional actor id (or role) the constraint binds. Defaults to the embedding context (e.g. an agents[] entry's id)."
+        },
+        "expression": {
+          "type": "string",
+          "description": "FEL expression that the kernel evaluates per the constraint's kind. For permission: TRUE allows; for prohibition: TRUE blocks; for obligation: TRUE is the action that MUST be taken; for right: TRUE is the action that MAY be invoked by the rights-holder."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Optional FEL expression that gates when this constraint applies. When present and FALSE, the constraint is dormant; when TRUE or absent, the kernel evaluates `expression`."
+        },
+        "defeasible": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, this constraint MAY be overridden by a higher-priority constraint or an explicit waiver. When false (default), the constraint binds absolutely."
+        },
+        "citationRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "iri-reference"
+          },
+          "description": "Optional IRIs to authoritative source documents (regulations, statutes, agency memos) that ground this constraint. Lets governance reviewers walk a specific deontic clause back to its legal source."
+        },
+        "x-legalruleml-iri": {
+          "type": "string",
+          "format": "iri-reference",
+          "description": "Optional IRI mapping this constraint into an external OASIS LegalRuleML document. Integration seam; the kernel does not interpret the value."
+        }
+      },
+      "patternProperties": {
+        "^x-": true
+      },
+      "additionalProperties": false,
+      "examples": [
+        {
+          "id": "no-deny-without-notice",
+          "kind": "prohibition",
+          "expression": "outcome == 'denied' && notice == null",
+          "citationRefs": [
+            "42 CFR \u00a7 431.211"
+          ]
+        },
+        {
+          "id": "right-to-appeal",
+          "kind": "right",
+          "actor": "respondent",
+          "expression": "outcome.adverse == true",
+          "defeasible": false
+        }
+      ]
+    },
+    "WosVersionPin": {
+      "type": "object",
+      "description": "Typed encoding of a workflow's compliance claim against a specific WOS envelope version + the set of embedded blocks it intends to exercise. Replaces the free-form claims sentence in RELEASE-STREAMS.md with a structured shape that tooling can reason about. Compiler enforces match against its compiled-in SCHEMA_VERSION (Studio SA-MUST-cmp-052).",
+      "required": [
+        "envelopeVersion"
+      ],
+      "properties": {
+        "envelopeVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "WOS envelope version this workflow claims compliance against. MUST match the `$wosWorkflow` const at the corresponding $wosWorkflow.X.Y line. Major.minor only; patch versions are not pinned at the envelope level."
+        },
+        "includedBlocks": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "governance",
+              "agents",
+              "aiOversight",
+              "signature",
+              "custody",
+              "advanced",
+              "assurance"
+            ]
+          },
+          "description": "Optional explicit enumeration of embedded blocks the authors intend to exercise. When present, downstream tools can audit that the claimed surface matches the document's actual shape (e.g. claiming `governance` when no governance block is embedded is a SA-MUST-cmp-052 finding)."
+        }
+      },
+      "additionalProperties": false,
+      "examples": [
+        {
+          "envelopeVersion": "1.0",
+          "includedBlocks": [
+            "governance",
+            "signature",
+            "custody"
+          ]
+        }
+      ]
     }
   }
 }

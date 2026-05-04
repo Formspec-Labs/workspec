@@ -1,6 +1,18 @@
 # WOS Verification Matrix
 
-> **Updated 2026-05-01** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8). **2026-05-01:** Tier 1 adds `K-031` (`transition.actor` pattern + declared `actors[].id`), `K-032` (root and compound `initialState` resolution), and `SCHEMA-OPEN-001` (`x-wos.openStringKind` for honest-open string leaves). **122** rules across **39** T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, 15 Tested, 106 Draft).
+> **Studio-tier rules** (S1–S6, ~65 readiness rules) live in [`studio/STUDIO-LINT-MATRIX.md`](studio/STUDIO-LINT-MATRIX.md). This matrix covers the kernel-envelope tiers (T1 / T2 / T3) only. Studio's lint engine is implemented in `studio/crates/wos-studio-lint/`.
+
+> **Updated 2026-05-03 (rebase reconcile)** — WS-094 graduations (`WOS-VER-LEVEL-001` → `tested`, `K-031`/`K-032` typed walks under `tier1.rs::transition_actor_and_initial_state_tests`) merged on top of the Studio Stages 3-7 base. K-051/K-053 stay `tested`, K-052 stays `draft`. T1 covers both K-016 (root + compound + region key resolution) and K-032 (root resolution; matrix description carries the broader compound coverage even though the typed function is root-only — gap tracked).
+>
+> **Updated 2026-05-02 (Stage-4 Rust impl)** — `K-051`/`K-052`/`K-053` Rust impl landed via the corrected Stage-4 plan at `thoughts/plans/2026-05-01-stage-4-decision-table-lint-rules.md`. **Wave 0** ships `wos_core::model::decision_table::{DecisionTable, DecisionTableGuard, HitPolicy, Guard}` plus the `Transition.guard` polymorphism refactor + `KernelDocument.decision_tables` field. **Wave 1'** ships `crates/wos-lint/tests/decision_table_fixtures.rs` loading the 10 K-05X conformance fixtures. **Wave 2'** ships `crates/wos-lint/src/rules/decision_table.rs` with K-051/K-052/K-053 implementations + per-rule unit tests. JSONPath shape standardized at `crates/wos-lint/src/diagnostic.rs:104` (slash format, RFC-6901-shaped). All three rules graduated to `tested`. Cargo build + tests SHOULD pass locally where parent `fel-core` is mounted; sandbox cannot verify.
+>
+> **Updated 2026-05-02 (Wave-4 review remediation)** — `K-051`/`K-052`/`K-053` fixtures landed at `crates/wos-conformance/fixtures/K-05[123]-*.json` (10 files: 4+3+3 across the three rules). Status remains `draft` because the Rust impl is not yet shipped; graduation to `tested` requires the corrected Stage-4 plan at `thoughts/plans/2026-05-01-stage-4-decision-table-lint-rules.md` to land its three waves (wos-core typed surface area, new lint-test target, lint-rule impl).
+>
+> **Updated 2026-05-01** — three decision-table rules registered (`K-051`/`K-052`/`K-053` per Kernel §4.5.1) backing the `decisionTable` first-class kernel construct that lands `requiresSpecExtension` queue item from Studio's mapping spec (Studio→`mapsToWos`). Tier 1 also adds `K-031` (`transition.actor` pattern + declared `actors[].id`), `K-032` (root and compound `initialState` resolution), and `SCHEMA-OPEN-001` (`x-wos.openStringKind` for honest-open string leaves).
+>
+> **Updated 2026-04-28** for ADR 0076 step 12 — three new rules registered (`WOS-AGENT-XREF-001`, `WOS-SIG-COVER-001`, `WOS-VER-LEVEL-001`); I-001 reanchored to kernel/spec.md §9.2 (was Integration Profile §3.3.1, absorbed per ADR 0076 D-8).
+>
+> **Aggregate (post-rebase 2026-05-03):** **122** rules across **39** T1 / 74 T2 / 9 T3 (1 LoadBearing, 0 Stable, ≥4 Tested, balance Draft). Per-rule counts derive from the table below.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -8,7 +20,7 @@
 │  Single-document structural checks. Pattern matching and graph  │
 │  walks over the JSON document tree. No parsing, no cross-doc.   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tier 2: wos-lint --project (cross)   74 rules                  │
+│  Tier 2: wos-lint --project (cross)   75 rules                  │
 │  Multi-document resolution + FEL AST analysis. Loads a project  │
 │  directory, resolves cross-references, parses FEL expressions.  │
 ├─────────────────────────────────────────────────────────────────┤
@@ -68,6 +80,8 @@
 | `K-031` | K | draft | `transition.actor` when present MUST use the `actors[].id` lexical pattern and MUST name a declared kernel `actors[].id` (membership, not pattern alone). | inline (`tier1.rs::transition_actor_and_initial_state_tests`) |
 | `K-032` | K | draft | Root `lifecycle.initialState` MUST be a key of `lifecycle.states`; compound `initialState` MUST be a key of that compound's `states` map (same rule id — diagnostic `path` distinguishes root vs compound). | inline (`tier1.rs::transition_actor_and_initial_state_tests`) |
 | `K-048` | K | draft | Non-standard case relationship `type` values MUST use `x-` prefix. | — |
+| `K-051` | K | tested | DecisionTableGuard `ref` MUST resolve to a top-level `decisionTables[]` entry; `outputColumn` MUST exist on the referenced table; every declared input MUST have an `inputBindings` entry (Kernel §4.5.1). | K-051-resolved-decision-table-guard.json, K-051-negative-unresolved-table-ref.json, K-051-negative-unresolved-output-column.json, K-051-negative-missing-input-binding.json (`crates/wos-lint/tests/decision_table_fixtures.rs`) |
+| `K-053` | K | tested | DecisionTable input cells MUST evaluate to boolean; transition-guard `outputColumn` MUST be `boolean`-typed; `collect` hit policy is rejected for transition-guard usage (Kernel §4.5.1.4). | K-053-boolean-output-column.json, K-053-negative-non-boolean-output.json, K-053-negative-collect-hit-policy-on-guard.json (`crates/wos-lint/tests/decision_table_fixtures.rs`) |
 | `SCHEMA-DOC-001` | SCHEMA-DOC | draft | Schema leaf properties MUST carry sufficient `description` and `examples`. | — |
 | `SCHEMA-OPEN-001` | SCHEMA-OPEN | tested | Open string leaves MUST declare `x-wos.openStringKind` unless `enum`/`const`/`pattern` already close the leaf. | inline (`tests/schema_open_string_kind.rs`) |
 | `WOS-VER-LEVEL-001` | WOS | tested | Agents declaring `fallbackChain` SHOULD have at least one `verificationLevel` declared on output bindings (ADR 0076 step 12, Q6). | inline (`tier1.rs::ver_level_tests`) |
@@ -150,12 +164,13 @@
 | `K-019` | K | draft | FEL functions MUST be declared built-ins or registered extensions. | — |
 | `K-037` | K | draft | Fail-fast `$join` fires only on an error final state. | — |
 | `K-049` | K | load_bearing | Continuous-mode kernels MUST NOT contain `setData` → guard dependency cycles. | k-049-load-bearing-self-loop.json, k-049-load-bearing-two-node-cycle.json |
+| `K-052` | K | tested | DecisionTable rows for `hitPolicy = unique` MUST be pairwise disjoint over the declared input domain; `hitPolicy = priority` rows MUST have unique `priority` values among rows that overlap (Kernel §4.5.1.4). Cross-document because resolution depends on the table's declared input types and FEL AST analysis. | K-052-disjoint-unique-rows.json, K-052-negative-overlapping-unique-rows.json, K-052-negative-priority-tie.json (`crates/wos-lint/tests/decision_table_fixtures.rs`) |
 | `K-EXT-002` | K-EXT | tested | `x-wos-*` namespace is reserved for future normative WOS use. | x-wos-reserved-warn.json, x-vendor-custom-ok.json |
 | `VR-003` | VR | draft | `counterexample` MUST be present when result is `proven-unsafe`. | — |
 | `WOS-AGENT-XREF-001` | WOS | tested | Every actor with `type=='agent'` MUST have a matching `agents[].id` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_agent_xref_001_*`) |
 | `WOS-SIG-COVER-001` | WOS | tested | Signature-gated transitions MUST be covered by `signature.signers[]` (ADR 0076 D-2 cross-reference). | inline (`tier2.rs::tests::wos_sig_cover_001_*`) |
 
-**T2 total: 74** (1 LoadBearing, 0 Stable, 4 Tested, 69 Draft)
+**T2 total: 75** (1 LoadBearing, 0 Stable, 4 Tested, 70 Draft)
 
 ---
 

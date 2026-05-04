@@ -1,6 +1,26 @@
 // Rust guideline compliant 2026-02-21
 
 //! Lint diagnostics with rule IDs, severity, and JSON paths.
+//!
+//! ## JSONPath shape (rule-author convention, ratified 2026-05-02)
+//!
+//! Every [`LintDiagnostic::path`] is **slash-separated, leading-slash-
+//! prefixed, parallel to RFC 6901 JSON Pointer** — e.g.,
+//! `"/lifecycle/states/approved/transitions/0"`. New rules MUST follow
+//! this convention so:
+//!
+//! - All conformance fixtures' `expected_errors` substrings match
+//!   against a single canonical path shape (the K-049 / K-051..053
+//!   fixtures established this; older `$.`-prefixed JSONPath drafts are
+//!   rejected).
+//! - Path strings round-trip through [`serde_json::Value::pointer`] for
+//!   zero-copy traversal of in-memory trees.
+//! - Tooling (case-portal, studio compiler at
+//!   `studio/crates/wos-studio-compiler`) can consume
+//!   diagnostic streams without parsing two competing path syntaxes.
+//!
+//! Implementation reference: `rules/continuous_mode.rs:206-209,274`
+//! (K-049). Stage 4 Wave 4 review locked the decision.
 
 use std::fmt;
 
@@ -22,15 +42,27 @@ pub enum Tier {
 }
 
 /// Severity of a [`LintDiagnostic`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Ordered low → high: `Info < Warning < Error < Block`. The `Block`
+/// rung was added 2026-05-02 to express "publication-blocker" findings
+/// per Studio readiness-validation §6 — diagnostics that MUST halt a
+/// publication advance even when authors waive lower-severity issues.
+/// Wire form is kebab-case (e.g., `"block"`); JSON-strict consumers
+/// that previously matched only `error|warning|info` need updating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LintSeverity {
-    /// Structural error that makes the document non-conformant.
-    Error,
-    /// Likely mistake that should be reviewed.
-    Warning,
     /// Informational suggestion for improvement.
     Info,
+    /// Likely mistake that should be reviewed.
+    Warning,
+    /// Structural error that makes the document non-conformant.
+    Error,
+    /// Publication-blocker: a finding that MUST halt advancement to a
+    /// gated lifecycle state (e.g., approved → published) regardless
+    /// of waivers applied to lower severities. Used by Studio S6
+    /// publication gate rules (`PUB-LINT-001/003/004/005/007`).
+    Block,
 }
 
 /// A machine-readable remediation proposal attached to a [`LintDiagnostic`].
@@ -101,7 +133,16 @@ pub struct LintDiagnostic {
     /// Verification tier the rule belongs to.
     pub tier: Tier,
 
-    /// JSONPath to the offending location (e.g., `"$.states.approved"`).
+    /// JSON-pointer-shaped path to the offending location (e.g.,
+    /// `"/lifecycle/states/approved/transitions/0"`).
+    ///
+    /// **Format decision (2026-05-02, Stage 4 Wave 4 review remediation):**
+    /// Slash-separated, leading-slash-prefixed, parallel to RFC-6901 JSON
+    /// Pointer. This matches the K-049 implementation in
+    /// `rules/continuous_mode.rs:206-209,274` and is what the K-051/K-052/K-053
+    /// fixtures' `expected_errors` substrings will match against. Earlier
+    /// drafts of this doc said `$.`-prefixed JSONPath; that form is
+    /// **rejected** to avoid the three-way conflict surfaced in code review.
     pub path: String,
 
     /// Human-readable description of the problem.
@@ -234,6 +275,7 @@ impl LintDiagnostic {
 impl fmt::Display for LintDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let severity_label = match self.severity {
+            LintSeverity::Block => "block",
             LintSeverity::Error => "error",
             LintSeverity::Warning => "warning",
             LintSeverity::Info => "info",

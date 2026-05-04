@@ -1,0 +1,12 @@
+[
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-svc-6",
+    "kind": "ServiceBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "operation": "POST /lookup"
+    }
+  }]
+]

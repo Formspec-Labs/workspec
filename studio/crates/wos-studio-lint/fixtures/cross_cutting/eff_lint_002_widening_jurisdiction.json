@@ -1,0 +1,17 @@
+[
+  ["eff.json", {
+    "$wosStudioEffectiveness": "1.0",
+    "id": "eff-fed",
+    "jurisdictions": ["US-TX"]
+  }],
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [{
+      "id": "pol-x",
+      "effectivenessRef": "eff-fed",
+      "effectiveness": {
+        "jurisdictions": ["US-CA", "US-NY"]
+      }
+    }]
+  }]
+]

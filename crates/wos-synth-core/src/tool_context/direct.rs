@@ -80,6 +80,10 @@ fn render_suggested_fix(fix: &wos_lint::SuggestedFix) -> String {
 
 fn map_severity(severity: wos_lint::LintSeverity) -> Severity {
     match severity {
+        // Synth's Severity enum has no Block; collapse to Error for
+        // synth purposes (Block's publication-blocker semantics aren't
+        // observable from the synth tool harness).
+        wos_lint::LintSeverity::Block => Severity::Error,
         wos_lint::LintSeverity::Error => Severity::Error,
         wos_lint::LintSeverity::Warning => Severity::Warning,
         wos_lint::LintSeverity::Info => Severity::Info,

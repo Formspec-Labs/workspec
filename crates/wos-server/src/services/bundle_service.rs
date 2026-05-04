@@ -346,6 +346,7 @@ pub fn validate_kernel(doc: &serde_json::Value) -> ValidationResultView {
 
 fn severity_to_str(s: wos_lint::LintSeverity) -> &'static str {
     match s {
+        wos_lint::LintSeverity::Block => "block",
         wos_lint::LintSeverity::Error => "error",
         wos_lint::LintSeverity::Warning => "warning",
         wos_lint::LintSeverity::Info => "info",

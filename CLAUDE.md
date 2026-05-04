@@ -11,6 +11,8 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Stack vision + WOS section | [`../VISION.md`](../VISION.md) |
 | Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
 | **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md) |
+| **Studio (Authoring) layer** — separate workspace under `studio/`, repo-extractable | [`studio/CLAUDE.md`](studio/CLAUDE.md) |
+| Case Portal (the runtime case-management UI; renamed 2026-05-02 from `studio/`) | [`case-portal/README.md`](case-portal/README.md) |
 | Parent repo guide | [`../CLAUDE.md`](../CLAUDE.md) |
 | Current tactical work | [`TODO.md`](TODO.md) |
 | Signature Profile active track | [`T4-TODO.md`](T4-TODO.md) |

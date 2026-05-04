@@ -50,6 +50,10 @@ MARKER_TO_SCHEMA: dict[str, str] = {
     "$wosCaseInstance": "wos-case-instance.schema.json",
     "$wosProvenanceLog": "wos-provenance-log.schema.json",
     "$wosTooling": "wos-tooling.schema.json",
+    # Studio (Authoring) markers live under `studio/tests/schemas/conftest.py`.
+    # The parent ratchet stops at the WOS-spec boundary (Wave 0.1 of the
+    # Studio decoupling, 2026-05-02). Run Studio tests via:
+    #   python3 -m pytest studio/tests/schemas -q
 }
 
 

@@ -70,8 +70,8 @@ fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
             );
         }
 
-        check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics);
-
+        check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics); // K-032
+        check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
         check_set_data_paths_typed(&kernel, diagnostics);
         check_milestone_uniqueness_typed(&kernel, diagnostics);
         check_timer_exclusivity_typed(&kernel, diagnostics);
@@ -665,6 +665,89 @@ fn check_state_type_semantics_typed(
                 diagnostics,
             );
         }
+    }
+}
+
+/// K-016: `lifecycle.initialState` MUST key into `lifecycle.states`, and any
+/// compound state that declares `initialState` MUST point at a key in its own
+/// substate map. The schema cannot express this cross-property binding under
+/// pure Draft 2020-12 (JSON Schema has no native value-references-key
+/// keyword); lint covers the gap. Closes STUDIO-DEFER-003 Tranche B.
+fn check_initial_state_keys_into_states_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let init = &kernel.lifecycle.initial_state;
+    if !kernel.lifecycle.states.contains_key(init) {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "K-016",
+            "/lifecycle/initialState",
+            format!(
+                "initialState '{init}' does not exist in lifecycle.states (keys: {})",
+                kernel
+                    .lifecycle
+                    .states
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    for (name, state) in &kernel.lifecycle.states {
+        check_compound_initial_state_typed(state, &format!("/lifecycle/states/{name}"), diagnostics);
+    }
+}
+
+fn check_compound_initial_state_typed(
+    state: &State,
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if let Some(init) = &state.initial_state {
+        if !state.states.contains_key(init) {
+            diagnostics.push(LintDiagnostic::t1_error(
+                "K-016",
+                &format!("{path}/initialState"),
+                format!(
+                    "compound initialState '{init}' does not exist in this state's substates (keys: {})",
+                    state.states.keys().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            ));
+        }
+    }
+    for (name, sub) in &state.states {
+        check_compound_initial_state_typed(sub, &format!("{path}/states/{name}"), diagnostics);
+    }
+    for (rname, region) in &state.regions {
+        // Region carries its own value-references-key obligation:
+        // `region.initialState` MUST key into `region.states`. Schema
+        // is silent for the same reason it's silent for the compound
+        // case, so K-016 covers it here.
+        if !region.states.contains_key(&region.initial_state) {
+            let init = &region.initial_state;
+            let keys = region.states.keys().cloned().collect::<Vec<_>>().join(", ");
+            diagnostics.push(LintDiagnostic::t1_error(
+                "K-016",
+                &format!("{path}/regions/{rname}/initialState"),
+                format!(
+                    "region initialState '{init}' does not exist in this region's states (keys: {keys})"
+                ),
+            ));
+        }
+        for (sname, sstate) in &region.states {
+            check_compound_initial_state_typed(
+                sstate,
+                &format!("{path}/regions/{rname}/states/{sname}"),
+                diagnostics,
+            );
+        }
+    }
+    // ForEach-body recursion: `state.body` is itself a `State` that
+    // may be Compound / Parallel with further nesting, including its
+    // own `initialState`. Walk it like any other sub-state.
+    if let Some(body) = &state.body {
+        check_compound_initial_state_typed(body, &format!("{path}/body"), diagnostics);
     }
 }
 

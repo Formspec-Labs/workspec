@@ -1,0 +1,14 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "actors": [
+      {"id": "lone-actor", "type": "human"}
+    ]
+  }],
+  ["ws.json", {
+    "$wosStudioWorkspace": "1.0",
+    "id": "ws-1",
+    "authorityGrants": []
+  }]
+]

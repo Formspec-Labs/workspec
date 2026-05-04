@@ -319,7 +319,8 @@ fn build_node(
 ) -> TransitionNode {
     let reads = transition
         .guard
-        .as_deref()
+        .as_ref()
+        .and_then(wos_core::model::decision_table::Guard::as_fel_str)
         .map(extract_read_paths)
         .unwrap_or_default();
 

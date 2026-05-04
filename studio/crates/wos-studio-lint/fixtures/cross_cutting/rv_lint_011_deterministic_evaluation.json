@@ -1,0 +1,37 @@
+[
+  ["ws.json", {
+    "$wosStudioWorkspace": "1.0",
+    "id": "ws-rv-011",
+    "complianceBaselines": [{
+      "name": "FedRAMP-Moderate",
+      "requiredControls": ["AC-2", "AU-3"]
+    }]
+  }],
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-rv-011",
+    "satisfiesControls": ["AC-2"],
+    "actors": [
+      {"id": "agent-rv", "type": "agent", "name": "Drift agent"}
+    ]
+  }],
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {
+        "id": "pol-rv-1",
+        "workspaceId": "ws-rv-011",
+        "kind": "DecisionRule",
+        "lifecycleState": "approved",
+        "originClass": "approved-interpretation"
+      },
+      {
+        "id": "pol-rv-2",
+        "workspaceId": "ws-rv-011",
+        "kind": "NoticeRequirement",
+        "lifecycleState": "approved",
+        "originClass": "source"
+      }
+    ]
+  }]
+]

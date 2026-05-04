@@ -1,0 +1,24 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-known", "kind": "Outcome", "lifecycleState": "approved",
+       "originClass": "source", "body": {"polarity": "favorable"}}
+    ]
+  }],
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-svc-4",
+    "kind": "ServiceBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "operation": "POST /score",
+      "errorHandling": {"onError": "alert"},
+      "outputBindings": [
+        {"target": "pol-known"},
+        {"target": "pol-ghost"}
+      ]
+    }
+  }]
+]

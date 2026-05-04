@@ -20,6 +20,7 @@ impl From<LintDiagnostic> for DiagnosticView {
             path: d.path,
             message: d.message,
             severity: match d.severity {
+                LintSeverity::Block => "block",
                 LintSeverity::Error => "error",
                 LintSeverity::Warning => "warning",
                 LintSeverity::Info => "info",
@@ -40,7 +41,7 @@ pub fn lint_document(body: &serde_json::Value) -> LintResult {
     let json = serde_json::to_string(body).unwrap_or_default();
     match wos_lint::lint_document(&json) {
         Ok(diags) => LintResult {
-            is_valid: !diags.iter().any(|d| d.severity == LintSeverity::Error),
+            is_valid: !diags.iter().any(|d| d.severity >= LintSeverity::Error),
             diagnostics: diags.into_iter().map(Into::into).collect(),
         },
         Err(e) => LintResult {
@@ -60,7 +61,7 @@ pub fn lint_schema(body: &serde_json::Value) -> LintResult {
     let json = serde_json::to_string(body).unwrap_or_default();
     match wos_lint::lint_schema(&json) {
         Ok(diags) => LintResult {
-            is_valid: !diags.iter().any(|d| d.severity == LintSeverity::Error),
+            is_valid: !diags.iter().any(|d| d.severity >= LintSeverity::Error),
             diagnostics: diags.into_iter().map(Into::into).collect(),
         },
         Err(e) => LintResult {
@@ -102,6 +103,7 @@ pub fn list_rules() -> Vec<RuleMetadataView> {
                 wos_lint::rules::Tier::T3 => "T3",
             },
             severity: match r.severity {
+                LintSeverity::Block => "block",
                 LintSeverity::Error => "error",
                 LintSeverity::Warning => "warning",
                 LintSeverity::Info => "info",

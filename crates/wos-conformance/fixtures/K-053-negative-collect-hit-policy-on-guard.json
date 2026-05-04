@@ -1,0 +1,104 @@
+{
+  "id": "K-053-negative-collect-hit-policy-on-guard",
+  "rule": "K-053",
+  "description": "Negative case: a transition guard references a DecisionTable with hitPolicy='collect'. Per Kernel \u00a74.5.1.4, `collect` is reserved for non-guard consumers (it returns a list of matching rows; meaningless for a single boolean guard outcome). Lint MUST emit K-053.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-053-collect-on-guard",
+      "version": "1.0.0",
+      "title": "K-053 Negative \u2014 collect hit policy on transition guard",
+      "description": "Guard references a `collect` table. K-053 fires.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Caseworker"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "riskBandTable",
+                  "outputColumn": "riskFlag",
+                  "inputBindings": {
+                    "income": "caseFile.income"
+                  }
+                }
+              }
+            ]
+          },
+          "approved": {
+            "type": "final"
+          }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "riskBandTable",
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "riskFlag",
+              "type": "boolean"
+            }
+          ],
+          "rows": [
+            {
+              "id": "rIncomeBand1",
+              "inputCells": [
+                "income <= 1000"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            },
+            {
+              "id": "rIncomeBand2",
+              "inputCells": [
+                "income <= 2000"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            }
+          ],
+          "hitPolicy": "collect"
+        }
+      ],
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "K-053: DecisionTable 'riskBandTable' has hitPolicy='collect' but is referenced by a transition guard at /lifecycle/states/intake/transitions/0/guard; collect is reserved for non-guard consumers"
+  ]
+}

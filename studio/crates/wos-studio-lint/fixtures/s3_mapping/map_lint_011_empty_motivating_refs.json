@@ -1,0 +1,14 @@
+[
+  ["map.json", {
+    "$wosStudioMapping": "1.0",
+    "mappings": [
+      {"id": "m-empty", "policyObjectRef": "pol-x", "subjectPolicyObjectRef": "pol-x",
+       "mappingState": "requiresSpecExtension",
+       "extensionRecord": {
+         "id": "er-empty",
+         "lifecycleState": "open",
+         "motivatingPolicyObjectRefs": []
+       }}
+    ]
+  }]
+]

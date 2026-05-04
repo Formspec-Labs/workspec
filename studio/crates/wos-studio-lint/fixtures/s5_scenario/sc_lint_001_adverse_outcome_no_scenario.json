@@ -1,0 +1,16 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "out-deny", "kind": "Outcome",
+       "triggersDueProcess": true,
+       "lifecycleState": "approved",
+       "originClass": "source",
+       "citations": [{"sourceCitationRef": "c"}]}
+    ]
+  }],
+  ["sc.json", {
+    "$wosStudioScenario": "1.0",
+    "scenarios": []
+  }]
+]

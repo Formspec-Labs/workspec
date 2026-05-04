@@ -214,12 +214,149 @@ For `parallel` states, the `cancellationPolicy` governs behavior when any region
 |----------|------|----------|-------------|
 | `event` | TransitionEvent | OPTIONAL | Typed trigger for explicit **event delivery** (see below). When omitted, the transition does not match any external event **name**; in `evaluationMode: continuous` it still participates in the post-mutation guard re-scan when `event` is omitted or `event.kind` is `condition`, per Runtime Companion §10.3. |
 | `target` | string | REQUIRED | Target state identifier. |
-| `guard` | string (FEL) | OPTIONAL | FEL expression that must evaluate to `true` for the transition to fire. |
+| `guard` | Guard | OPTIONAL | Either a FEL expression (string form) or a structured decision-table reference (object form). See §4.5.1. |
 | `actions` | array of Action | OPTIONAL | Actions executed during the transition. |
 | `tags` | array of string | OPTIONAL | Semantic tags for governance attachment via `lifecycleHook` (S10.4). |
 | `description` | string | OPTIONAL | Human-readable explanation of this transition. |
 
 **`TransitionEvent`.** Normative authored shape is a JSON object with required discriminant `kind`: `timer` \| `message` \| `signal` \| `condition` \| `error`, plus kind-specific fields. The Kernel JSON Schema defines the full shape as `$defs/TransitionEvent`, a `oneOf` over `$defs/TransitionEventTimer`, `TransitionEventMessage`, `TransitionEventSignal`, `TransitionEventCondition`, and `TransitionEventError` (`schemas/wos-workflow.schema.json`). At the **runtime boundary**, events are still identified by a string **name** (for example the value passed to `process_event`). A transition matches when that string equals the transition's typed `event` resolved to the same name (for `message` and `signal`, the `name` field; for `timer`, the synthesized expiry name from `timerId`, `source`, and optional `firesAs` per §9.2 and §4.9.10; for `error`, the runtime dispatch name is the literal `$error` while the typed `code` (and optional `actionPath`) carry the error discriminant; for `condition`, continuous-mode rescan rules in the Runtime Companion). Authoring and integration surfaces SHOULD preserve the full typed `event` JSON where they expose transitions (for example search and graph tools), and SHOULD use a separate derived dispatch string only for matching against `process_event` names—not as a substitute for the authored object. Authoring tools MUST emit typed `event` objects; stored documents MAY still carry bare-string `event` values where a reference deserializer coerces them (Kernel §4.5). Unknown `$`-prefixed tokens MUST NOT be silently rewritten to a different message `name` (static rules such as K-007).
+
+### 4.5.1 Decision-Table Guards
+
+A transition `guard` MAY be either a FEL string or a **decision-table reference** — a structured object that points at a top-level `decisionTables[]` entry and selects one of its boolean output columns. The decision-table form preserves table-shaped authoring fidelity through the substrate (round-tripping is structurally lossless) while keeping FEL as the only expression language: every input cell, output cell, and cell predicate is itself FEL.
+
+This subsection is normative.
+
+#### 4.5.1.1 Authored shape
+
+The polymorphic `Guard` shape:
+
+```text
+Guard = string | DecisionTableGuard
+
+DecisionTableGuard {
+  kind: "decisionTable",            // discriminant; literal
+  ref: string,                      // id of an entry in top-level decisionTables[]
+  outputColumn: string,             // name of one output declared in the referenced table
+  inputBindings: { [inputName]: string (FEL) },  // expression bound to each declared input
+  onNoMatch?: "false" | "fail"      // default "false"
+}
+```
+
+Top-level decision tables live in a new optional document property `decisionTables[]`:
+
+```text
+DecisionTable {
+  id: string,                       // unique within the document
+  inputs: [{ name, type }],         // typed inputs the table is parameterised over
+  rows: [Row],                      // ordered; document-order is significant
+  outputs: [{ name, type }],        // typed outputs (≥1)
+  hitPolicy: HitPolicy              // see §4.5.1.4
+}
+
+Row {
+  id: string,                       // unique within the table; preserved through projection
+  inputCells: [string (FEL)],       // one expression per declared input, in declared order
+  outputCells: [string (FEL)],      // one expression per declared output, in declared order
+  priority?: integer,               // used only when hitPolicy = "priority"; lower number = higher priority
+  rationale?: string                // human-readable note; preserved as authoring provenance
+}
+
+HitPolicy = "unique" | "first" | "priority" | "collect"
+```
+
+Cell semantics:
+
+- Each entry in `inputCells` is a **FEL boolean predicate** evaluated in a row scope where the table's declared `inputs[*].name` are bound to the values produced by the transition's `inputBindings`. A row's input cell expression typically reads the input variable directly (e.g., `>= 1500` shorthand is **not** supported — author the full boolean: `income >= 1500`).
+- Each entry in `outputCells` is a **FEL value expression** producing a value of the type declared in the corresponding `outputs[*].type`.
+- A row **matches** when every input cell evaluates to `true`. An empty `inputCells` array (or all entries that evaluate to `true`) is the conventional "default row" pattern.
+
+#### 4.5.1.2 Evaluation algorithm
+
+When a Transition's `guard` is a `DecisionTableGuard`, the kernel evaluates it instead of `evaluateFEL`. The result is a boolean (`true` ⇒ guard satisfied, transition fires; `false` ⇒ guard not satisfied, transition skipped per §4.6).
+
+```
+function evaluateDecisionTableGuard(guard, configuration, event, document):
+    table = lookupDecisionTable(document, guard.ref)
+    if table is None:
+        reject("K-051: decisionTable ref does not resolve")
+
+    rowScope = {}
+    for inputDecl in table.inputs:
+        bindingExpr = guard.inputBindings[inputDecl.name]
+        rowScope[inputDecl.name] = evaluateFEL(bindingExpr, buildContext(configuration, event))
+
+    matches = []
+    for row in table.rows (in document order):
+        allInputCellsTrue = true
+        for (cellExpr, inputDecl) in zip(row.inputCells, table.inputs):
+            cellResult = evaluateFEL(cellExpr, rowScope)
+            if cellResult is not boolean:
+                reject("K-053: decisionTable input cell did not evaluate to boolean")
+            if cellResult == false:
+                allInputCellsTrue = false
+                break
+        if allInputCellsTrue:
+            matches.append(row)
+
+    selected = applyHitPolicy(table.hitPolicy, matches)  # see §4.5.1.4
+
+    if selected is None:
+        if guard.onNoMatch == "fail":
+            reject("decisionTable produced no match and onNoMatch = fail")
+        return false                                      # default: treat as guard-false
+
+    outputDecl = findOutputByName(table.outputs, guard.outputColumn)
+    if outputDecl is None:
+        reject("K-051: decisionTable outputColumn does not resolve")
+    if outputDecl.type != "boolean":
+        reject("K-053: decisionTable guard outputColumn must be boolean")
+
+    cellExpr = selected.outputCells[indexOf(table.outputs, outputDecl)]
+    result = evaluateFEL(cellExpr, rowScope)
+    if result is not boolean:
+        reject("K-053: decisionTable output cell did not evaluate to boolean")
+    return result
+```
+
+The evaluator is **deterministic** under the same conditions as FEL guard evaluation (§4.7): identical document, identical case state, identical event ⇒ identical result.
+
+#### 4.5.1.3 Constraints on cell expressions
+
+Decision-table cell FEL expressions inherit every kernel-wide FEL constraint (K-012 syntax, K-017 cross-case-state reference prohibition, K-019 function-set, AI-058 boolean shape where applicable). In addition:
+
+- Input-cell scope is **the row scope only** — the cell expression sees the table inputs and nothing else. It MUST NOT reference `caseFile`, `$event`, or any other namespace. Coupling between table inputs and outer state is strictly via `inputBindings` (which IS evaluated in the full transition context).
+- Output-cell scope matches input-cell scope.
+- Row scope is read-only — cell expressions MUST NOT mutate state (no `setData`, no `actions`).
+
+#### 4.5.1.4 Hit policy
+
+| Policy | Selection rule | Allowed `outputs[].type` shapes |
+|--------|---------------|----------------------------------|
+| `unique` | At most one row may match. Multiple matches ⇒ K-052 (overlap). Zero matches ⇒ `onNoMatch` behavior. | Any |
+| `first` | First matching row in document order wins. Subsequent matches are ignored. | Any |
+| `priority` | Among matching rows, the one with the lowest `priority` integer wins. Ties ⇒ K-052 (priority tie). | Any |
+| `collect` | Returns all matching rows. The composing layer (caller) MUST aggregate. **Disallowed for transition-guard usage** (`outputs[*]` of a table referenced as a transition guard MUST be `boolean`-typed, and `collect` produces a list-of-boolean — meaningless for a guard). | Any except `boolean` for guard-purpose tables |
+
+For decision tables consumed as transition guards, the only useful hit policies are `unique`, `first`, and `priority`. `collect` is reserved for non-guard consumers (e.g., advanced policy attachments via `lifecycleHook` that aggregate row outputs to compute a score). A lint rule (K-053) MUST reject `collect` when the referencing site is a transition guard.
+
+#### 4.5.1.5 Why decision tables and not DMN
+
+The kernel adopts decision tables natively rather than embedding DMN (Decision Model and Notation) as a substrate. Reasons:
+
+- **FEL is the kernel's only expression language** (Kernel S14, S2). Adopting DMN at the substrate would introduce FEEL alongside FEL — two expression languages with subtly different evaluation semantics (date/time coercion, list operations, table-internal context). FEL boundaries already cover what guards need.
+- **DMN hit policies expand kernel scope.** DMN's full hit-policy set (`UNIQUE`, `FIRST`, `ANY`, `PRIORITY`, `COLLECT` with multiple aggregation modes, `RULE ORDER`, `OUTPUT ORDER`) introduces table-internal evaluation modes the kernel guard model does not need. The kernel adopts a strict subset (`unique` / `first` / `priority` / `collect`) sufficient for all guard-purpose and policy-attachment use cases.
+- **Tooling lock-in.** Adopting DMN at the substrate would tie conformance to a specific DMN engine's semantics. The native form is FEL-evaluated end-to-end, requiring no additional evaluator.
+- **One-way DMN import remains supported** as a *source format* via FEEL→FEL transpilation (parent CLAUDE.md Decision Heuristics; CONVENTIONS.md), targeting `decisionTables[*]` as the canonical substrate shape. Authors holding existing DMN tables can ingest them; the kernel's substrate stays single-language.
+
+#### 4.5.1.6 Composition with existing layers
+
+- **Lifecycle (K).** Decision-table guards compose with `Transition.event`, `target`, and `actions` exactly as FEL-string guards do. §4.6 transition resolution (document-order, first-true-wins) operates on the boolean returned by the table evaluator; tables are not transitions.
+- **Provenance (K §8).** The provenance record for a transition fired through a decision-table guard MUST include `guardKind: "decisionTable"`, `decisionTableRef`, and the `selectedRowId` (when a row matched). When `onNoMatch` short-circuits to `false`, `selectedRowId` is omitted and `guardOutcome: "no-match"` is recorded.
+- **Governance (G).** Governance attaches to transitions via `tags` regardless of guard form (string or table). No governance-spec change is required by this addition.
+- **AI (AI).** `aiOversight` and `agents[]` blocks remain orthogonal to guard form. A decision table that captures agent-recommended thresholds (e.g., risk-band rows) MUST still satisfy the AI block's deontic constraints — the guard form does not bypass AI oversight.
+- **Advanced (advanced).** Constraint zones, equity guardrails, and SMT verifiable constraints continue to operate on the *resulting* transition, not on the table's internal cells. SMT verification of a decision-table guard is future-track; a `requiresSpecExtension` candidate.
+- **Studio.** Studio's `DecisionTable` PolicyObject (per `studio/specs/binding-and-integration.md`) projects to a `decisionTables[]` entry and a `DecisionTableGuard` on the relevant transition; this replaces the prior chained-FEL-guard workaround.
 
 ### 4.6 Transition Resolution
 
@@ -270,7 +407,11 @@ function processEvent(configuration, event, document):
         if transition.guard is None:
             fire(configuration, state, transition, event, document)
             return
-        result = evaluateFEL(transition.guard, buildContext(configuration, event))
+        # Guard form is polymorphic per §4.5.1: FEL string, or DecisionTableGuard.
+        if isString(transition.guard):
+            result = evaluateFEL(transition.guard, buildContext(configuration, event))
+        else:
+            result = evaluateDecisionTableGuard(transition.guard, configuration, event, document)
         if result == true:
             fire(configuration, state, transition, event, document)
             return

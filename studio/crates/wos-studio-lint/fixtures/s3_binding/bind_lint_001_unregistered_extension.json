@@ -1,0 +1,22 @@
+[
+  ["ws.json", {
+    "$wosStudioWorkspace": "1.0",
+    "id": "ws-1",
+    "title": "T",
+    "reviewerRoles": [
+      {"id": "r1", "name": "R1", "hasOverrideAuthority": true, "requiredForPublication": true}
+    ]
+  }],
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-svc-1",
+    "kind": "ServiceBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "operation": "POST /verify",
+      "errorHandling": {"onError": "retry"},
+      "x-vendor-tracing": {"region": "us-east"}
+    }
+  }]
+]

@@ -1,0 +1,12 @@
+[
+  ["find.json", {
+    "$wosStudioReadiness": "1.0",
+    "id": "vf-1",
+    "kind": "ValidationFinding",
+    "body": {
+      "severity": "error",
+      "lifecycleState": "waived",
+      "ruleRef": "POM-LINT-001"
+    }
+  }]
+]

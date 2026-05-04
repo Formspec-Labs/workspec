@@ -1,0 +1,17 @@
+[
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-evt-3",
+    "kind": "EventBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "direction": "emitted",
+      "recipient": "audit-stream",
+      "payloadShape": {
+        "subjectName": {"sensitivity": "pii"},
+        "city": {"sensitivity": "public"}
+      }
+    }
+  }]
+]

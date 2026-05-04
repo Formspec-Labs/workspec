@@ -1,0 +1,18 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-x", "kind": "Outcome", "lifecycleState": "approved", "originClass": "source",
+       "mappingState": "unmappedButApproved", "unmappedRationale": "x"}
+    ]
+  }],
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "lifecycleState": "validationReady",
+    "elements": [
+      {"id": "el-1", "kind": "outcome", "name": "O",
+       "body": {"outcomeRef": "pol-x"}}
+    ]
+  }]
+]

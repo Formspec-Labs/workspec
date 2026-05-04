@@ -1,0 +1,8 @@
+[
+  ["ws.json", {
+    "$wosStudioWorkspace": "1.0",
+    "id": "ws-1",
+    "auditAnchorCadenceDays": 7,
+    "lastAuditAnchoredAt": "2024-01-01"
+  }]
+]

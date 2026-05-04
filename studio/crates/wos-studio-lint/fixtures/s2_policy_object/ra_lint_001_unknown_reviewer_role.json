@@ -1,0 +1,24 @@
+[
+  ["ws.json", {
+    "$wosStudioWorkspace": "1.0",
+    "id": "ws-1",
+    "title": "T",
+    "reviewerRoles": [
+      {"id": "compliance-reviewer", "name": "CR", "hasOverrideAuthority": true, "requiredForPublication": true}
+    ]
+  }],
+  ["ad.json", {
+    "$wosStudioApproval": "1.0",
+    "kind": "ApprovalDecision",
+    "decision": {
+      "id": "ad-1",
+      "subjectKind": "PolicyObject",
+      "subjectRef": "pol-x",
+      "decision": "approved",
+      "approvedBy": "subj-x",
+      "approvedAt": "2026-04-22T00:00:00Z",
+      "approverRole": "ghost-role",
+      "rationale": "x"
+    }
+  }]
+]

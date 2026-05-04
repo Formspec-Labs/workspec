@@ -4,6 +4,7 @@
 
 pub mod ai;
 pub mod business_calendar;
+pub mod decision_table;
 pub mod governance;
 pub mod kernel;
 pub mod notification_template;

@@ -247,28 +247,28 @@ Each file below has a paired `.llm.md` (auto-generated, identical content struct
 **Relates to:** wos-synth-core, wos-bench, tests, MCP clients, runtime helpers.
 **Status:** 🟡 Partial — scaffold + transport + ping tool exist; ProjectRegistry marked stub.
 
-### `studio/README.md`
+### `case-portal/README.md`
 
-**Summary:** Browser-based case management studio for WOS state — inbox, form workspace, case viewer, process dashboard, workflow designer, admin console, audit trail, applicant portal, report builder. React 19 + Express + Socket.IO. Hexagonal architecture (port/adapter); auto-generated TS types from JSON schemas.
+**Summary:** Browser-based case management portal for WOS state — inbox, form workspace, case viewer, process dashboard, workflow designer, admin console, audit trail, applicant portal, report builder. React 19 + Express + Socket.IO. Hexagonal architecture (port/adapter); auto-generated TS types from JSON schemas. Renamed 2026-05-02 from `studio/` (was `@formspec-org/wos-studio`); the `/studio` path now hosts the WOS Studio (Authoring) layer.
 **Relates to:** WOS schemas, fixtures, Formspec contract refs, WosDocumentBundle contract.
 **Status:** 🟡 Implemented (PoC) — transitioning from fixture-backed to reference backend.
 
-### `studio/HANDOFF.md`
+### `case-portal/HANDOFF.md`
 
-**Summary:** Architecture review + 55-task remediation plan transitioning Studio from fixture-backed PoC to reference backend. 2 blockers (designer round-trip data loss, hard-coded E2E IDs), 16 warnings, 11 nits. 7 phases with review gates.
-**Relates to:** Studio codebase (WosPorts, hexagonal, FixtureAdapter, HttpWosBackend target), E2E framework, schema-driven type generation.
+**Summary:** Architecture review + 55-task remediation plan transitioning Case Portal (formerly Studio) from fixture-backed PoC to reference backend. 2 blockers (designer round-trip data loss, hard-coded E2E IDs), 16 warnings, 11 nits. 7 phases with review gates.
+**Relates to:** Case Portal codebase (WosPorts, hexagonal, FixtureAdapter, HttpWosBackend target), E2E framework, schema-driven type generation.
 **Status:** 🔴 Planning — review complete 2026-04-16, implementation pending.
 
-### `studio/e2e/README.md`
+### `case-portal/e2e/README.md`
 
 **Summary:** Playwright E2E framework with Human-Driven Design philosophy — behavior-driven scenarios (Given/When/Then) rather than implementation details. Three journeys: Efficient Triage, Workflow Evolution, Transparency & Trust.
-**Relates to:** Studio UI, fixtures, Playwright config.
+**Relates to:** Case Portal UI, fixtures, Playwright config.
 **Status:** 🟡 Partial — framework present; HANDOFF.md flags broken E2E tests as Phase 2 blocker.
 
-### `studio/src/types/wos/README.md`
+### `case-portal/src/types/wos/README.md`
 
 **Summary:** Auto-generated TS types from WOS JSON Schema (json-schema-to-typescript). Corresponds to spec; planned extraction to shared `@wos/types` package.
-**Relates to:** WOS schemas, studio frontend/server, generate-wos-types.ts script.
+**Relates to:** WOS schemas, Case Portal frontend/server, generate-wos-types.ts script.
 **Status:** ✅ Implemented — shared-package extraction pending.
 
 ### `tests/README.md`

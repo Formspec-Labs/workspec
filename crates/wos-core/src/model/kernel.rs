@@ -23,6 +23,8 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
+use crate::model::decision_table::{DecisionTable, Guard};
+
 // `GovernanceDocument` (in `crate::model::governance`) provides the typed view
 // over the `governance` embedded block; consumers deserialize on demand. The
 // embedded field on this document is carried as raw `serde_json::Value` to
@@ -178,6 +180,13 @@ pub struct KernelDocument {
     /// Output bindings (governed-output pipeline projections per ADR 0080).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bindings: Vec<serde_json::Value>,
+
+    /// First-class decision tables per Kernel §4.5.1 (landed 2026-05-01).
+    /// Each entry is referenced from a transition guard of the
+    /// [`Guard::DecisionTable`] form. Empty when the workflow uses only
+    /// FEL-string guards.
+    #[serde(default)]
+    pub decision_tables: Vec<DecisionTable>,
 
     /// Extension data. Keys MUST start with `x-`.
     #[serde(default)]
@@ -1006,9 +1015,20 @@ pub struct Transition {
     /// Target state identifier.
     pub target: String,
 
-    /// Guard expression (FEL). Evaluated in document order.
+    /// Transition guard per Kernel §4.5/§4.6 — evaluated in document order.
+    ///
+    /// Polymorphic per Kernel §4.5.1.1 (landed 2026-05-01): may be a FEL
+    /// expression (string form) or a structured
+    /// [`crate::model::decision_table::DecisionTableGuard`] (object form).
+    /// `serde_json` deserializes either via the untagged
+    /// [`Guard`] enum.
+    ///
+    /// Most existing wos-runtime / wos-lint paths walk only the FEL
+    /// variant; use [`Guard::as_fel_str`] to preserve the legacy
+    /// `Option<&str>` shape those call sites previously got from
+    /// `transition.guard.as_deref()`.
     #[serde(default)]
-    pub guard: Option<String>,
+    pub guard: Option<Guard>,
 
     /// Actions executed during this transition.
     #[serde(default)]

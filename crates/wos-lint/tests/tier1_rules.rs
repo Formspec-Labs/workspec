@@ -741,6 +741,248 @@ fn k015_set_data_declared_field_clean() {
 }
 
 // ========================================================================
+// K-016: lifecycle.initialState MUST key into lifecycle.states; compound
+// initialState MUST key into its substates. (DEFER-003 Tranche B closeout.)
+// ========================================================================
+
+#[test]
+fn k016_top_level_unknown_initial_state_flagged() {
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "nonexistent",
+            "states": { "open": { "type": "atomic" } }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for unknown top-level initialState: {diags:?}"
+    );
+    assert_eq!(severity_of(&diags, "K-016"), Some(LintSeverity::Error));
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/initialState".to_string())
+    );
+}
+
+#[test]
+fn k016_top_level_known_initial_state_clean() {
+    let doc = minimal_kernel();
+    let diags = lint(doc);
+    assert!(
+        !has_rule(&diags, "K-016"),
+        "unexpected K-016 on valid top-level initialState: {diags:?}"
+    );
+}
+
+#[test]
+fn k016_compound_unknown_initial_state_flagged() {
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "review",
+            "states": {
+                "review": {
+                    "type": "compound",
+                    "initialState": "ghost",
+                    "states": {
+                        "sub1": { "type": "atomic" }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for unknown compound initialState: {diags:?}"
+    );
+    assert_eq!(severity_of(&diags, "K-016"), Some(LintSeverity::Error));
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/states/review/initialState".to_string())
+    );
+}
+
+#[test]
+fn k016_compound_known_initial_state_clean() {
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "review",
+            "states": {
+                "review": {
+                    "type": "compound",
+                    "initialState": "sub1",
+                    "states": {
+                        "sub1": { "type": "atomic" }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        !has_rule(&diags, "K-016"),
+        "unexpected K-016 on valid compound initialState: {diags:?}"
+    );
+}
+
+#[test]
+fn k016_deeply_nested_compound_unknown_initial_state_flagged() {
+    // Three-level nesting: top → compound("outer") → compound("inner")
+    // with bad initialState on the deepest compound. Verifies the
+    // recursion in check_compound_initial_state_typed walks all the way
+    // down (not just one level).
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "outer",
+            "states": {
+                "outer": {
+                    "type": "compound",
+                    "initialState": "inner",
+                    "states": {
+                        "inner": {
+                            "type": "compound",
+                            "initialState": "ghost",
+                            "states": {
+                                "leaf": { "type": "atomic" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for deep-nested unknown initialState: {diags:?}"
+    );
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/states/outer/states/inner/initialState".to_string())
+    );
+}
+
+#[test]
+fn k016_parallel_region_compound_unknown_initial_state_flagged() {
+    // Compound state inside a parallel state's region with bad
+    // initialState. Verifies the recursion through `regions`
+    // (not just `states`) per the typed-model walker.
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "fanout",
+            "states": {
+                "fanout": {
+                    "type": "parallel",
+                    "regions": {
+                        "regionA": {
+                            "initialState": "subroot",
+                            "states": {
+                                "subroot": {
+                                    "type": "compound",
+                                    "initialState": "ghost",
+                                    "states": {
+                                        "leaf": { "type": "atomic" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for unknown initialState inside parallel region: {diags:?}"
+    );
+    assert_eq!(severity_of(&diags, "K-016"), Some(LintSeverity::Error));
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/states/fanout/regions/regionA/states/subroot/initialState".to_string())
+    );
+}
+
+#[test]
+fn k016_parallel_region_unknown_initial_state_flagged() {
+    // The Region itself carries a value-references-key obligation:
+    // `region.initialState` MUST key into `region.states`. Schema
+    // can't express it; lint must.
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "fanout",
+            "states": {
+                "fanout": {
+                    "type": "parallel",
+                    "regions": {
+                        "regionA": {
+                            "initialState": "ghost-region-initial",
+                            "states": {
+                                "leaf": { "type": "atomic" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for unknown region.initialState: {diags:?}"
+    );
+    assert_eq!(severity_of(&diags, "K-016"), Some(LintSeverity::Error));
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/states/fanout/regions/regionA/initialState".to_string())
+    );
+}
+
+#[test]
+fn k016_foreach_body_compound_unknown_initial_state_flagged() {
+    // ForEach body is itself a State; if it's compound, its own
+    // initialState MUST key into its substates. Walker recurses
+    // into `state.body`.
+    let doc = json!({
+        "$wosWorkflow": "1.0",
+        "lifecycle": {
+            "initialState": "iter",
+            "states": {
+                "iter": {
+                    "type": "forEach",
+                    "iterator": "$.items",
+                    "states": {},
+                    "body": {
+                        "type": "compound",
+                        "initialState": "ghost-in-body",
+                        "states": {
+                            "step": { "type": "atomic" }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    let diags = lint(doc);
+    assert!(
+        has_rule(&diags, "K-016"),
+        "expected K-016 for unknown initialState inside forEach body: {diags:?}"
+    );
+    assert_eq!(severity_of(&diags, "K-016"), Some(LintSeverity::Error));
+    assert_eq!(
+        path_of(&diags, "K-016"),
+        Some("/lifecycle/states/iter/body/initialState".to_string())
+    );
+}
+
+// ========================================================================
 // K-022: Digest present implies algorithm in extensions.
 // ========================================================================
 

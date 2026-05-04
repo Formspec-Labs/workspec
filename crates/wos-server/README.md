@@ -1,6 +1,6 @@
 # wos-server
 
-Reference HTTP + Socket.IO backend for **WOS** (Workflow Orchestration Standard). Wraps `wos-runtime`'s evaluator and exposes the REST + realtime contract the `studio/` React app consumes.
+Reference HTTP + Socket.IO backend for **WOS** (Workflow Orchestration Standard). Wraps `wos-runtime`'s evaluator and exposes the REST + realtime contract the `case-portal/` React app consumes (renamed 2026-05-02 from `studio/`).
 
 **Status:** 0.1 reference implementation. Spec-correct response shapes across every endpoint; several seams ship with no-op defaults pending real implementations. Not production-hardened — see [`PARITY.md`](PARITY.md) for the per-feature status table.
 
@@ -15,7 +15,7 @@ cargo run -p wos-server
 # Seed from fixtures/ on first boot.
 WOS_SEED=true cargo run -p wos-server
 
-# Persistent SQLite + mock auth for local studio dev.
+# Persistent SQLite + mock auth for local case-portal dev.
 WOS_DATABASE_URL=sqlite://wos.db \
 WOS_AUTH=mock \
 cargo run -p wos-server
@@ -31,7 +31,7 @@ The server listens on `http://0.0.0.0:$PORT` (default `4000`). Health probe is `
 ## Architecture
 
 ```text
-        studio/ (React)                     external clients
+        case-portal/ (React)                external clients
               │                                     │
               └──────── HTTP + Socket.IO ───────────┘
                               │
@@ -84,7 +84,7 @@ Everything mounted under `/api/*`. Route groups:
 
 **Realtime**: Socket.IO at `/socket.io/`. Namespaces registered in `realtime/`. Task events, cursor presence, governance updates.
 
-**Reference wire contract**: `studio/src/services/WosBackend.ts` + `WosPorts.ts`. Handler response shapes match these contracts.
+**Reference wire contract**: `case-portal/src/services/WosBackend.ts` + `WosPorts.ts`. Handler response shapes match these contracts.
 
 ### Pagination semantics
 
@@ -97,7 +97,7 @@ The two categories share the same SQLite read path; the difference is who drives
 
 ### Realtime auth model
 
-Under `WOS_AUTH=jwt`, each `kernel:update` socket event re-runs `AuthProvider::verify` against the connect-time access token (the same revocation model as HTTP — see [`tests/auth_jwt.rs`](tests/auth_jwt.rs)). A token revoked or epoch-bumped after the socket connects is rejected on the **next** event, not retroactively. Studio clients **must reconnect** to attach a fresh access token after logout, role change, or password reset; otherwise the existing socket continues to fail every event until the connection is dropped. Mock auth ignores the token and is permissive for local studio.
+Under `WOS_AUTH=jwt`, each `kernel:update` socket event re-runs `AuthProvider::verify` against the connect-time access token (the same revocation model as HTTP — see [`tests/auth_jwt.rs`](tests/auth_jwt.rs)). A token revoked or epoch-bumped after the socket connects is rejected on the **next** event, not retroactively. Case Portal clients **must reconnect** to attach a fresh access token after logout, role change, or password reset; otherwise the existing socket continues to fail every event until the connection is dropped. Mock auth ignores the token and is permissive for local case-portal dev.
 
 ---
 
@@ -166,7 +166,7 @@ Planned: `TaskStore` trait extraction (plan G8), drift-report storage (plan B8).
 Two providers ship today:
 
 - **`jwt`** — HS256 tokens, local user table, argon2 passwords. Default.
-- **`mock`** — anonymous reads work; send `Authorization: Bearer <any>` to attach the fixed Jane Doe supervisor context (required for mutating routes such as `PUT /api/bundles/{url}/kernel`). For studio dev only.
+- **`mock`** — anonymous reads work; send `Authorization: Bearer <any>` to attach the fixed Jane Doe supervisor context (required for mutating routes such as `PUT /api/bundles/{url}/kernel`). For case-portal dev only.
 
 **JWT logout (`POST /api/auth/logout` with Bearer access token)** is a **global sign-out** for that user: it increments `users.auth_epoch`, revokes every `sessions` row for that user, and embeds `auth_epoch` in new tokens so in-flight refresh cannot mint a valid pair after logout (refresh and verify compare the claim to the row).
 
@@ -203,17 +203,17 @@ Test harness:
 
 ## Development
 
-Runs alongside the studio:
+Runs alongside the case portal:
 
 ```bash
 # terminal 1
 cargo run -p wos-server
 
 # terminal 2
-cd studio && npm run dev
+cd case-portal && npm run dev
 ```
 
-Studio defaults to `http://localhost:4000` as the API base (configurable via studio's env).
+The Case Portal defaults to `http://localhost:4000` as the API base (configurable via case-portal's env).
 
 ---
 
@@ -225,9 +225,9 @@ Studio defaults to `http://localhost:4000` as the API base (configurable via stu
 - Reference engine-adapter target: [`thoughts/examples/temporal-reference-implementation.md`](../../thoughts/examples/temporal-reference-implementation.md).
 - Spec (what the runtime implements): [`specs/kernel/spec.md`](../../specs/kernel/spec.md) — §1-§16 (post-ADR-0076 merged kernel; runtime companion content absorbed into §11 Runtime Serialization, §12 Evaluation Modes, §13 Formspec Coprocessor, §16 Host Interfaces, plus §4.x / §5.5 / §9.x within-section expansions). [`specs/companions/runtime.md`](../../specs/companions/runtime.md) retained as a redirect-stub home for external citations during the citation sweep.
 
-## Studio wire contract
+## Case Portal wire contract
 
-Response shapes match [`studio/src/services/WosPorts.ts`](../../studio/src/services/WosPorts.ts). When adding an endpoint, keep the shape there first — the TypeScript contract is the single source of truth the studio builds against.
+Response shapes match [`case-portal/src/services/WosPorts.ts`](../../case-portal/src/services/WosPorts.ts). When adding an endpoint, keep the shape there first — the TypeScript contract is the single source of truth the Case Portal builds against. (Renamed 2026-05-02 from `studio/`; the `/studio` path now hosts the WOS Studio (Authoring) layer.)
 
 ## License
 

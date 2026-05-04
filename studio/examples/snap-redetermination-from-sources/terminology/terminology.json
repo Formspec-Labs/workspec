@@ -1,0 +1,66 @@
+{
+  "$wosStudioTerminologyMap": "1.0",
+  "id": "term-ws-snap-redetermination-tx-2026",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "canonicalTerms": [
+    {
+      "iri": "usda-snap:HouseholdIncome",
+      "displayName": "Household Income",
+      "definition": "Total monthly gross income across all household members per 7 CFR §273.10(d).",
+      "domain": "snap",
+      "authoritativeSource": "7-CFR-273.10",
+      "dataType": "number",
+      "unit": "USD/month",
+      "status": "canonical",
+      "studioPlainEnglishProjection": "How much money the household earns each month before taxes",
+      "dpvSensitivity": "dpv:FinancialPreference"
+    },
+    {
+      "iri": "usda-snap:HouseholdSize",
+      "displayName": "Household Size",
+      "definition": "Number of persons in the household per 7 CFR §273.1(a).",
+      "domain": "snap",
+      "authoritativeSource": "7-CFR-273.1",
+      "dataType": "integer",
+      "status": "canonical",
+      "studioPlainEnglishProjection": "How many people live together as one household"
+    },
+    {
+      "iri": "usda-snap:PrimaryLanguage",
+      "displayName": "Primary spoken language",
+      "definition": "Language spoken in the household most often. Drives notice-translation requirements per state §8.7.",
+      "domain": "snap",
+      "authoritativeSource": "TX-SNAP-Manual-Ch8-§8.7",
+      "dataType": "string",
+      "status": "canonical",
+      "dpvSensitivity": "dpv:Demographic"
+    },
+    {
+      "iri": "studio-meta:NoticeRequirement",
+      "displayName": "Notice Requirement",
+      "definition": "Studio PolicyObject kind for due-process notice obligations.",
+      "domain": "studio-meta",
+      "status": "canonical",
+      "studioPlainEnglishProjection": "What the agency MUST tell the applicant"
+    }
+  ],
+  "entries": [
+    {
+      "localName": "monthlyIncome",
+      "canonicalIri": "usda-snap:HouseholdIncome",
+      "synonyms": ["incomeMonthly", "householdIncomeGross"],
+      "confidence": 1.0,
+      "mappedBy": "subj-sarah-chen",
+      "rationale": "Workspace adopts the federal canonical term verbatim.",
+      "plainEnglishProjection": "Monthly household income"
+    },
+    {
+      "localName": "size",
+      "canonicalIri": "usda-snap:HouseholdSize",
+      "synonyms": ["householdSize", "members"],
+      "confidence": 1.0,
+      "mappedBy": "subj-sarah-chen",
+      "plainEnglishProjection": "Household size"
+    }
+  ]
+}

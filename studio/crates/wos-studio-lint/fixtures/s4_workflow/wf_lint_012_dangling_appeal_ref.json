@@ -1,0 +1,10 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {"id": "el-a", "kind": "appeal", "name": "A",
+       "body": {"appealRightRef": "pol-appeal-ghost"}}
+    ]
+  }]
+]

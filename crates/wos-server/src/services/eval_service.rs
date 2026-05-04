@@ -67,6 +67,16 @@ fn walk_states(
     for (id, state) in states {
         if active.contains(id) {
             for t in &state.transitions {
+                // Project polymorphic Guard to the wire shape's
+                // optional FEL string. DecisionTable guards lack a
+                // textual rendering; surface them as None until a
+                // shaped wire-form lands (separate field). Authoring
+                // consumers see the FEL form unchanged.
+                use wos_core::model::decision_table::Guard;
+                let guard_str: Option<String> = t.guard.as_ref().and_then(|g| match g {
+                    Guard::Fel(s) => Some(s.clone()),
+                    Guard::DecisionTable(_) => None,
+                });
                 out.push(AvailableTransitionView {
                     event: t
                         .event
@@ -74,7 +84,7 @@ fn walk_states(
                         .map(|e| e.runtime_dispatch_label())
                         .unwrap_or_default(),
                     target: t.target.clone(),
-                    guard: t.guard.clone(),
+                    guard: guard_str,
                     // Unguarded transitions are reported satisfied; guarded
                     // transitions leave evaluation to the runtime on event
                     // submission (authoritative).

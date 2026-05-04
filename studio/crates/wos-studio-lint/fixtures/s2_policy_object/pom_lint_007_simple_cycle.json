@@ -1,0 +1,9 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "a", "supersedes": ["b"]},
+      {"id": "b", "supersedes": ["a"]}
+    ]
+  }]
+]

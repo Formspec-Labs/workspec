@@ -1,0 +1,12 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-notice", "kind": "NoticeRequirement", "lifecycleState": "approved", "originClass": "source",
+       "body": {"audience": "applicant", "content": ["x"], "outcomeRef": "pol-outcome-denial"}},
+      {"id": "pol-appeal", "kind": "AppealRight", "lifecycleState": "approved", "originClass": "source",
+       "body": {"deadline": {"calendarDaysFromNoticeDate": 90}, "requestMethods": ["written"],
+                "linkedNoticeRef": "pol-notice", "outcomeRef": "pol-outcome-denial"}}
+    ]
+  }]
+]

@@ -23,6 +23,7 @@ mod diagnostic;
 mod document;
 pub mod output;
 pub mod rules;
+pub mod studio_api;
 
 pub use diagnostic::{LintDiagnostic, LintSeverity, SourceLocation, SuggestedFix, Tier};
 pub use document::{DocumentKind, WosDocument, WosProject};
@@ -59,6 +60,36 @@ pub fn lint_schema(schema_json: &str) -> Result<Vec<LintDiagnostic>, LintError> 
     let mut diagnostics = Vec::new();
     rules::schema_doc::check_schema(&root, &mut diagnostics);
     rules::schema_doc::check_open_string_kinds(&root, &mut diagnostics);
+    diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
+    Ok(diagnostics)
+}
+
+/// Lint a single workflow JSON with both Tier 1 (single-document) and
+/// Tier 2 (cross-document) rules applied. The workflow becomes the
+/// only document in an in-memory `WosProject`; any T2 rule that
+/// requires sibling documents (e.g., FEL AST resolution against a
+/// referenced contract) will see the project as the workflow alone.
+///
+/// This is the entrypoint the Studio compiler's `lint-pass` external
+/// gate uses (per F4.2). The legacy [`lint_workflow`](studio_api::lint_workflow)
+/// remains T1-only for backward compatibility; new callers SHOULD
+/// prefer this function.
+///
+/// # Errors
+///
+/// Returns `LintError::Parse` if the input is not valid JSON or lacks
+/// a recognized `$wos*` document type marker.
+pub fn lint_workflow_with_project(
+    workflow_json: &str,
+) -> Result<Vec<LintDiagnostic>, LintError> {
+    let doc = document::parse(workflow_json)?;
+    let mut project = document::WosProject::default();
+    project.push(doc);
+    let mut diagnostics = Vec::new();
+    for d in project.documents() {
+        rules::tier1::check(d, &mut diagnostics);
+    }
+    rules::tier2::check(&project, &mut diagnostics);
     diagnostics.sort_by(|a, b| a.path.cmp(&b.path).then(a.rule_id.cmp(&b.rule_id)));
     Ok(diagnostics)
 }

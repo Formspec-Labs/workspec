@@ -1,0 +1,23 @@
+[package]
+name = "wos-studio-compiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Stage-5 Studio→WOS compiler (8 phases, 31 SA-MUST-cmp rules, 3 external gates)"
+
+[[bin]]
+name = "wos-studio-compile"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_json_canonicalizer = { workspace = true }
+sha2 = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+boon = "=0.6.1" # pre-1.0; pin exact, bump deliberately after re-checking validator wrapper.
+wos-lint = { workspace = true }
+wos-studio-lint = { path = "../wos-studio-lint" }
+wos-studio-model = { path = "../wos-studio-model" }

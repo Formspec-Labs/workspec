@@ -51,6 +51,7 @@ pub fn format_text(diagnostics: &[LintDiagnostic]) -> String {
         .iter()
         .map(|d| {
             let sev = match d.severity {
+                LintSeverity::Block => "block",
                 LintSeverity::Error => "error",
                 LintSeverity::Warning => "warning",
                 LintSeverity::Info => "info",
@@ -154,6 +155,10 @@ pub fn format_sarif(diagnostics: &[LintDiagnostic]) -> String {
         .iter()
         .map(|d| {
             let level = match d.severity {
+                // SARIF level enum is none|note|warning|error; Block
+                // collapses to error here (its publication-blocker
+                // semantics aren't part of the SARIF data model).
+                LintSeverity::Block => "error",
                 LintSeverity::Error => "error",
                 LintSeverity::Warning => "warning",
                 LintSeverity::Info => "note",

@@ -1,0 +1,10 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [{
+      "id": "pol-1",
+      "kind": "NoticeRequirement",
+      "originClass": "approved-interpretation"
+    }]
+  }]
+]
