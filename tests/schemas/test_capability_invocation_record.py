@@ -154,3 +154,18 @@ def test_non_capability_record_kind_with_blocked_flag_not_required_outcome(cap_v
         f"validate without `outcome` even when its data reuses the "
         f"invocationBlocked field: {errors}"
     )
+
+
+def test_standalone_def_rejects_vacuous_empty_object(cap_validator):
+    """The $def carries an explicit `not` guard so standalone validation
+    cannot accept the vacuous empty object `{}` (SCHEMA review: fragments
+    must not trivially validate with no asserted shape)."""
+    validator = cap_validator
+    errors = list(validator.iter_errors({}))
+    assert errors, (
+        "CapabilityInvocationRecord MUST reject an empty object at the "
+        f"$def root: {errors}"
+    )
+    assert any("maxProperties" in e.message for e in errors), (
+        f"expected vacuity rejection via `not`+maxProperties, got: {errors}"
+    )

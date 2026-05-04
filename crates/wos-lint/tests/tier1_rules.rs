@@ -956,8 +956,8 @@ fn k016_foreach_body_compound_unknown_initial_state_flagged() {
             "initialState": "iter",
             "states": {
                 "iter": {
-                    "type": "forEach",
-                    "iterator": "$.items",
+                    "type": "foreach",
+                    "collection": "$.items",
                     "states": {},
                     "body": {
                         "type": "compound",

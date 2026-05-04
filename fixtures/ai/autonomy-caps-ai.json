@@ -30,6 +30,9 @@
   "governance": {
     "dueProcess": {}
   },
+  "custody": {
+    "trustProfileRef": "urn:trellis:trust-profile/dev"
+  },
   "agents": [
     {
       "id": "triageAgent",

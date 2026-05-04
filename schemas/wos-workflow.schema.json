@@ -1029,7 +1029,10 @@
           "examples": [
             "urn:wos:vocab:income:monthly",
             "https://vocab.dol.gov/terms/wagesQ4"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         },
         "dpvSensitivity": {
           "type": "string",
@@ -1040,7 +1043,10 @@
             "dpv:HealthData",
             "dpv:BiometricData",
             "dpv:FinancialData"
-          ]
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
       },
       "description": "Author-time field declaration in a contract intake binding (Kernel \u00a79.1). Pairs a field name with its primitive type and optional documentation; the bound contract carries the semantic meaning. Optional canonicalTermRef + dpvSensitivity surfaces are extension seams for terminology alignment and privacy classification (added 2026-05-02 per Studio policy-object-model + terminology specs)."
@@ -1526,11 +1532,23 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier within the document. Referenced by DecisionTableGuard.ref. SHOULD be stable across versions so projection-source provenance (e.g., a Studio DecisionTable PolicyObject) remains traceable."
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_-]*$",
+          "description": "Unique identifier within the document. Referenced by DecisionTableGuard.ref. SHOULD be stable across versions so projection-source provenance (e.g., a Studio DecisionTable PolicyObject) remains traceable.",
+          "examples": [
+            "eligibilityTable",
+            "snap-income-brackets-ffy26"
+          ]
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of the table's purpose. Not interpreted by the processor; consumed by authoring UIs and audit reports."
+          "description": "Human-readable prose explaining why this table exists, what jurisdiction or program it serves, and how reviewers should interpret its rows. Consumed by authoring UIs and audit bundles; not evaluated by the runtime.",
+          "examples": [
+            "SNAP gross-income test for household size brackets (FFY26).",
+            "Medicaid MAGI household composition gate before financial tests."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "inputs": {
           "type": "array",
@@ -1544,16 +1562,31 @@
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
-                "description": "Input identifier; in-scope inside row cell FEL expressions."
+                "description": "Input identifier token bound into the row evaluation scope; MUST match `^[a-zA-Z_][a-zA-Z0-9_]*$` and appear identically inside row cell FEL expressions.",
+                "examples": [
+                  "income",
+                  "householdSize"
+                ]
               },
               "type": {
                 "type": "string",
                 "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
-                "description": "FEL type of the input value. Cell expressions reading this input MUST be type-compatible."
+                "description": "FEL type of the input value. Cell expressions reading this input MUST be type-compatible.",
+                "examples": [
+                  "number",
+                  "integer"
+                ]
               },
               "description": {
                 "type": "string",
-                "description": "Human-readable description of the input."
+                "description": "Optional prose for reviewers and LLM authors describing how this input is sourced, normalized, or constrained before row evaluation.",
+                "examples": [
+                  "Monthly gross income in USD before taxes, aligned to contract field monthlyIncome.",
+                  "Countable household members excluding roomers who do not purchase and prepare food together."
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
               }
             }
           }
@@ -1570,16 +1603,31 @@
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
-                "description": "Output column identifier; referenced by DecisionTableGuard.outputColumn."
+                "description": "Output column identifier; referenced by DecisionTableGuard.outputColumn.",
+                "examples": [
+                  "eligible",
+                  "copayTier"
+                ]
               },
               "type": {
                 "type": "string",
                 "enum": ["string", "number", "integer", "boolean", "date", "datetime", "duration"],
-                "description": "FEL type of the produced output value. Output cell expressions MUST evaluate to this type."
+                "description": "FEL type of the produced output value. Output cell expressions MUST evaluate to this type.",
+                "examples": [
+                  "boolean",
+                  "number"
+                ]
               },
               "description": {
                 "type": "string",
-                "description": "Human-readable description of the output."
+                "description": "Optional prose describing how downstream consumers should interpret this output column, including units and rounding expectations where relevant.",
+                "examples": [
+                  "Boolean guard result consumed by transition resolution.",
+                  "Numeric copay tier index where 0 means exempt."
+                ],
+                "x-wos": {
+                  "openStringKind": "prose"
+                }
               }
             }
           }
@@ -1595,7 +1643,12 @@
         "hitPolicy": {
           "type": "string",
           "enum": ["unique", "first", "priority", "collect"],
-          "description": "Row-selection rule when zero, one, or many rows match. `unique`: at most one match (>1 → K-052); `first`: first match in document order wins; `priority`: lowest `priority` integer among matches wins (ties → K-052); `collect`: all matches returned to the caller (transition guards reject `collect` per K-053). Authoring SHOULD pick the most restrictive policy that fits — `unique` proves disjointness; `first` documents intentional ordering."
+          "description": "Row-selection rule when zero, one, or many rows match. `unique`: at most one match (>1 → K-052); `first`: first match in document order wins; `priority`: lowest `priority` integer among matches wins (ties → K-052); `collect`: all matches returned to the caller (transition guards reject `collect` per K-053). Authoring SHOULD pick the most restrictive policy that fits — `unique` proves disjointness; `first` documents intentional ordering.",
+          "examples": [
+            "first",
+            "unique",
+            "priority"
+          ]
         }
       },
       "x-lm": {
@@ -1614,29 +1667,61 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Stable row identifier (unique within the table). Preserved through projection so provenance, scenario coverage, and reviewer comments remain row-anchored across edits."
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_-]*$",
+          "description": "Stable row identifier (unique within the table). Preserved through projection so provenance, scenario coverage, and reviewer comments remain row-anchored across edits.",
+          "examples": [
+            "r-1or2-person",
+            "r-default"
+          ]
         },
         "inputCells": {
           "type": "array",
           "description": "FEL boolean predicates, one per declared input in declaration order. Each evaluates in row scope (inputs bound to guard `inputBindings`-resolved values). MUST evaluate to a boolean (K-053). An empty array means 'matches always' — the conventional default-row pattern.",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Single FEL boolean predicate evaluated in the row scope for the corresponding declared input column; empty string is invalid—use an empty inputCells array on the row for unconditional match.",
+            "examples": [
+              "income <= 2500",
+              "householdSize >= 3 && householdSize <= 4"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
           }
         },
         "outputCells": {
           "type": "array",
           "description": "FEL value expressions, one per declared output in declaration order. Each evaluates in row scope (same bindings as input cells) and produces a value of the type declared in the corresponding `outputs[*].type`.",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Single FEL expression producing the output column's value for this row when the row matches; MUST type-check against the declared output column type.",
+            "examples": [
+              "true",
+              "tier == 1 ? 25 : 0"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
           }
         },
         "priority": {
           "type": "integer",
-          "description": "Used only when the enclosing DecisionTable's `hitPolicy = priority`. Lower number = higher priority. Ties among matched rows are a K-052 violation."
+          "description": "Used only when the enclosing DecisionTable's `hitPolicy = priority`. Lower number = higher priority. Ties among matched rows are a K-052 violation.",
+          "examples": [
+            1,
+            10
+          ]
         },
         "rationale": {
           "type": "string",
-          "description": "Reviewer-facing rationale for this row, preserved as authoring provenance. Not interpreted by the processor."
+          "description": "Reviewer-facing rationale for this row, preserved as authoring provenance alongside the table so policy staff can explain why a row exists without reverse-engineering FEL cells.",
+          "examples": [
+            "FFY26 SNAP gross income test for one- to two-person households per agency handbook §4.2.",
+            "Default deny row when no higher-priority bracket matches."
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         }
       }
     },
@@ -1664,28 +1749,63 @@
         "kind": {
           "type": "string",
           "const": "decisionTable",
-          "description": "Discriminant. Always the literal `decisionTable`."
+          "description": "Discriminant for the structured guard object form; MUST remain the literal token `decisionTable` so processors can branch without heuristics.",
+          "examples": [
+            "decisionTable"
+          ]
         },
         "ref": {
           "type": "string",
-          "description": "Identifier of an entry in the document's top-level `decisionTables[]`. MUST resolve (K-051)."
+          "description": "Identifier of an entry in the document's top-level `decisionTables[]`. MUST resolve (K-051) to a table id; mismatch is a hard authoring error surfaced by lint and runtime.",
+          "examples": [
+            "eligibilityTable",
+            "snap-income-brackets-ffy26"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "outputColumn": {
           "type": "string",
-          "description": "Name of the output column to read for the guard's boolean result. MUST exist on the referenced table; for transition-guard usage MUST be `boolean`-typed (K-053)."
+          "description": "Name of the output column to read for the guard's boolean result. MUST exist on the referenced table; for transition-guard usage MUST be `boolean`-typed (K-053).",
+          "examples": [
+            "eligible",
+            "approved"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "inputBindings": {
           "type": "object",
           "description": "Map from each table input name to a FEL expression evaluated in the full transition context. The result is bound into the row scope under the input's name. Every declared input of the referenced table MUST have a binding (K-051).",
+          "examples": [
+            {
+              "income": "caseFile.household.income.monthlyGross",
+              "householdSize": "caseFile.household.size"
+            }
+          ],
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "FEL expression evaluated in the transition's outer context; its value is bound to the named table input inside each row's evaluation scope.",
+            "examples": [
+              "caseFile.monthlyIncome",
+              "caseFile.householdSize"
+            ],
+            "x-wos": {
+              "openStringKind": "fel"
+            }
           }
         },
         "onNoMatch": {
           "type": "string",
           "enum": ["false", "fail"],
           "default": "false",
-          "description": "Behavior when zero rows match (and after `unique`/`first`/`priority` short-circuits). `false` (default) treats the guard as `false` — the transition is skipped per §4.6. `fail` rejects per Kernel §4.6/§4.7 transition resolution. Use `fail` when the table is intended to be exhaustive and a no-match represents an authoring error worth halting."
+          "description": "Behavior when zero rows match (and after `unique`/`first`/`priority` short-circuits). `false` (default) treats the guard as `false` — the transition is skipped per §4.6. `fail` rejects per Kernel §4.6/§4.7 transition resolution. Use `fail` when the table is intended to be exhaustive and a no-match represents an authoring error worth halting.",
+          "examples": [
+            "false",
+            "fail"
+          ]
         }
       },
       "x-lm": {
@@ -1712,7 +1832,10 @@
                 "caseFile.eligibilityScore >= 0.85",
                 "caseFile.documentsComplete && !caseFile.holdActive",
                 "$event.payload.priority == 'expedited'"
-              ]
+              ],
+              "x-wos": {
+                "openStringKind": "fel"
+              }
             },
             {
               "$ref": "#/$defs/DecisionTableGuard"
@@ -3952,49 +4075,229 @@
           }
         },
         {
-          "$ref": "#/$defs/CapabilityInvocationRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "capabilityInvocation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/CapabilityInvocationRecord"
+          }
         },
         {
-          "$ref": "#/$defs/CorrectionAuthorizedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "correctionAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/CorrectionAuthorizedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/AmendmentAuthorizedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "amendmentAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/AmendmentAuthorizedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/DeterminationAmendedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "determinationAmended"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/DeterminationAmendedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/RescissionAuthorizedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "rescissionAuthorized"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/RescissionAuthorizedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/DeterminationRescindedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "determinationRescinded"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/DeterminationRescindedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/ReinstatedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "reinstated"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/ReinstatedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/AuthorizationAttestationRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationAttestation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/AuthorizationAttestationRecord"
+          }
         },
         {
-          "$ref": "#/$defs/ClockStartedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockStarted"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/ClockStartedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/ClockResolvedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockResolved"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/ClockResolvedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/IdentityAttestationRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "identityAttestation"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/IdentityAttestationRecord"
+          }
         },
         {
-          "$ref": "#/$defs/ClockSkewObservedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "clockSkewObserved"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/ClockSkewObservedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/CommitAttemptFailureRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "commitAttemptFailure"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/CommitAttemptFailureRecord"
+          }
         },
         {
-          "$ref": "#/$defs/AuthorizationRejectedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "authorizationRejected"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/AuthorizationRejectedRecord"
+          }
         },
         {
-          "$ref": "#/$defs/MigrationPinChangedRecord"
+          "if": {
+            "properties": {
+              "recordKind": {
+                "const": "migrationPinChanged"
+              }
+            },
+            "required": [
+              "recordKind"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/MigrationPinChangedRecord"
+          }
         }
       ]
     },
@@ -4107,7 +4410,12 @@
     },
     "CapabilityInvocationRecord": {
       "type": "object",
+      "$comment": "`not` rejects the vacuous empty object `{}` for standalone `validator_for_def(\"CapabilityInvocationRecord\")` use. Full provenance envelopes require FactsTierRecord core keys (`id`, `recordKind`, `timestamp`, `auditLayer`, `definitionVersion`) at the log item layer; `data` remains optional unless the blocked-invocation if/then arm applies.",
       "description": "Shape constraint layered on Facts-tier provenance records emitted by the AI §3.3.1 capability-invocation path. A record representing a precondition-blocked invocation (`recordKind == \"capabilityInvocation\"` AND `data.invocationBlocked == true`) MUST carry `outcome: \"preconditionNotSatisfied\"` so audit tooling can distinguish a declarative precondition gate from an agent failure. This `$def` is composed into `FactsTierRecord.allOf` below; runtime provenance logs that `$ref` this schema's `FactsTierRecord` (for example `wos-provenance-log.schema.json`) inherit the same MUST. Records with other `recordKind` values or absent `data.invocationBlocked` fall outside the guard and are unaffected.",
+      "not": {
+        "type": "object",
+        "maxProperties": 0
+      },
       "examples": [
         {
           "id": "sba-poc_prov_01hw7rm71vfay8vvw14d2pf2db",
@@ -4134,14 +4442,6 @@
         }
       ],
       "properties": {
-        "recordKind": {
-          "type": "string",
-          "const": "capabilityInvocation",
-          "description": "Provenance record discriminator. `capabilityInvocation` selects records emitted by the AI §3.3.1 capability-invocation path (whether the invocation proceeded, was blocked by a precondition, or failed post-invocation).",
-          "examples": [
-            "capabilityInvocation"
-          ]
-        },
         "data": {
           "type": "object",
           "description": "Record payload for a capability-invocation provenance entry. Carries the AI §3.3.1 `invocationBlocked` flag plus any additional context the processor chooses to record (capability id, resolved precondition value, expression source, etc.).",
@@ -8443,14 +8743,32 @@
         "programs": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Agency-chosen program identifier token used for applicability matching and cross-walk to benefits systems. MUST stay stable across workflow versions so effectiveness records remain joinable.",
+            "examples": [
+              "SNAP",
+              "MEDICAID-AGED-BLIND-DISABLED",
+              "UI-PUA"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Program identifiers this scope binds to. Free strings; agencies pick a stable convention (e.g. `SNAP`, `MEDICAID-AGED-BLIND-DISABLED`, `UI-PUA`)."
         },
         "jurisdictions": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "Jurisdiction code string for applicability matching; prefer ISO 3166-2 region codes or ISO 3166-1 alpha-2 country codes so automation can normalize and compare scopes.",
+            "examples": [
+              "US-CA",
+              "US-NY",
+              "US"
+            ],
+            "x-wos": {
+              "openStringKind": "identifier"
+            }
           },
           "description": "Jurisdictional codes. Recommended: ISO 3166-2 (country-region), e.g. `US-CA`, `US-NY`. National-tier rules use bare ISO 3166-1 alpha-2 (`US`)."
         },
@@ -8464,11 +8782,25 @@
             "properties": {
               "start": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "description": "RFC 3339 / ISO 8601 timestamp marking when this applicability interval begins; inclusive boundary for governance and effectiveness comparisons.",
+                "examples": [
+                  "2024-10-01T00:00:00Z"
+                ],
+                "x-wos": {
+                  "openStringKind": "timestamp"
+                }
               },
               "end": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "description": "RFC 3339 / ISO 8601 timestamp marking when this applicability interval ends; inclusive boundary. Omit for an open-ended window that remains in force until superseded.",
+                "examples": [
+                  "2025-09-30T23:59:59Z"
+                ],
+                "x-wos": {
+                  "openStringKind": "timestamp"
+                }
               }
             },
             "additionalProperties": false
@@ -8477,12 +8809,26 @@
         },
         "caseFilters": {
           "type": "string",
-          "description": "FEL expression that returns true when this scope applies to a given caseFile. Optional refinement on top of the categorical programs/jurisdictions/dateRanges filters."
+          "description": "FEL predicate evaluated in full case context; when it returns true this applicability scope matches the case beyond categorical program/jurisdiction/date filters. Omit when categorical filters suffice.",
+          "examples": [
+            "caseFile.program == 'SNAP' && caseFile.household.size >= 1",
+            "caseFile.flags.contains('expedited')"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "effectivenessRef": {
           "type": "string",
           "format": "iri-reference",
-          "description": "Optional IRI reference to an Effectiveness PolicyObject that elaborates the temporal/jurisdictional grounding. When present, downstream tools resolve the reference to its full shape; the inline fields above remain authoritative for the local applicability decision."
+          "description": "Optional IRI reference to an Effectiveness PolicyObject that elaborates the temporal/jurisdictional grounding. When present, downstream tools resolve the reference to its full shape; the inline fields above remain authoritative for the local applicability decision.",
+          "examples": [
+            "urn:wos:effectiveness:policy:ffy26-snap-brackets",
+            "https://agency.example/policy-objects/phe-extension"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
       },
       "additionalProperties": false,
@@ -8508,7 +8854,14 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Short human-readable name for this effective period (e.g. `Public Health Emergency Extension`, `2025 Annual Adjustment`)."
+          "description": "Short human-readable label for this effective period so reviewers can cite it in diffs, audits, and UI timelines without parsing interval math (e.g. `Public Health Emergency Extension`, `2025 Annual Adjustment`).",
+          "examples": [
+            "PHE Continuous Coverage",
+            "FFY26 SNAP income brackets"
+          ],
+          "x-wos": {
+            "openStringKind": "prose"
+          }
         },
         "intervals": {
           "type": "array",
@@ -8520,11 +8873,25 @@
             "properties": {
               "start": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "description": "RFC 3339 / ISO 8601 instant when this effective interval begins; inclusive boundary used by effectiveness evaluators and overlap checks.",
+                "examples": [
+                  "2020-03-18T00:00:00Z"
+                ],
+                "x-wos": {
+                  "openStringKind": "timestamp"
+                }
               },
               "end": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "description": "RFC 3339 / ISO 8601 instant when this effective interval ends; inclusive boundary. Omit for an open-ended rule still in force until superseded or sunset.",
+                "examples": [
+                  "2023-04-01T00:00:00Z"
+                ],
+                "x-wos": {
+                  "openStringKind": "timestamp"
+                }
               }
             },
             "additionalProperties": false
@@ -8534,12 +8901,24 @@
         "retroactiveFrom": {
           "type": "string",
           "format": "date-time",
-          "description": "When set, the rule applies retroactively to cases dated on or after this instant, even when the case predates the rule's enactment."
+          "description": "When set, the rule applies retroactively to cases dated on or after this instant, even when the case predates the rule's enactment; used for legislative retroactivity clauses.",
+          "examples": [
+            "2024-01-01T00:00:00Z"
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         },
         "sunsetAt": {
           "type": "string",
           "format": "date-time",
-          "description": "When set, the rule lapses at this instant regardless of any open-ended interval. Use to encode legislative sunset clauses."
+          "description": "When set, the rule lapses at this instant regardless of any open-ended interval; encodes hard legislative sunsets independent of interval tables.",
+          "examples": [
+            "2026-12-31T23:59:59Z"
+          ],
+          "x-wos": {
+            "openStringKind": "timestamp"
+          }
         }
       },
       "additionalProperties": false,
@@ -8565,7 +8944,14 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Stable identifier for this constraint within the workflow. Optional; lets reviewers cite a specific clause when documenting waivers or amendments."
+          "description": "Stable identifier for this constraint within the workflow document so reviewers, waivers, and amendments can cite a specific clause without fragile positional references.",
+          "examples": [
+            "no-deny-without-notice",
+            "right-to-appeal"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "kind": {
           "enum": [
@@ -8574,38 +8960,85 @@
             "obligation",
             "right"
           ],
-          "description": "Deontic mode per OASIS LegalRuleML \u00a73.",
-          "$comment": "OASIS LegalRuleML."
+          "description": "Deontic mode per OASIS LegalRuleML \u00a73; determines how the processor interprets a satisfied `expression` (allow, block, obligate, or grant a right).",
+          "$comment": "OASIS LegalRuleML.",
+          "examples": [
+            "prohibition",
+            "obligation",
+            "permission",
+            "right"
+          ]
         },
         "actor": {
           "type": "string",
-          "description": "Optional actor id (or role) the constraint binds. Defaults to the embedding context (e.g. an agents[] entry's id)."
+          "description": "Optional actor id or role id the constraint binds when it is not implied by the embedding context (for example the surrounding `agents[]` entry); MUST match declared actor identifiers when present.",
+          "examples": [
+            "respondent",
+            "agency-adjudicator"
+          ],
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
         },
         "expression": {
           "type": "string",
-          "description": "FEL expression that the kernel evaluates per the constraint's kind. For permission: TRUE allows; for prohibition: TRUE blocks; for obligation: TRUE is the action that MUST be taken; for right: TRUE is the action that MAY be invoked by the rights-holder."
+          "description": "FEL expression that the kernel evaluates per the constraint's kind. For permission: TRUE allows; for prohibition: TRUE blocks; for obligation: TRUE is the action that MUST be taken; for right: TRUE is the action that MAY be invoked by the rights-holder.",
+          "examples": [
+            "outcome == 'denied' && notice == null",
+            "outcome.adverse == true"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "condition": {
           "type": "string",
-          "description": "Optional FEL expression that gates when this constraint applies. When present and FALSE, the constraint is dormant; when TRUE or absent, the kernel evaluates `expression`."
+          "description": "Optional FEL expression that gates when this constraint applies. When present and FALSE, the constraint is dormant; when TRUE or absent, the kernel evaluates `expression`.",
+          "examples": [
+            "caseFile.jurisdiction == 'US-CA'",
+            "caseFile.appealWindowOpen == true"
+          ],
+          "x-wos": {
+            "openStringKind": "fel"
+          }
         },
         "defeasible": {
           "type": "boolean",
           "default": false,
-          "description": "When true, this constraint MAY be overridden by a higher-priority constraint or an explicit waiver. When false (default), the constraint binds absolutely."
+          "description": "When true, this constraint MAY be overridden by a higher-priority constraint or an explicit waiver. When false (default), the constraint binds absolutely.",
+          "examples": [
+            false,
+            true
+          ]
         },
         "citationRefs": {
           "type": "array",
           "items": {
             "type": "string",
-            "format": "iri-reference"
+            "minLength": 1,
+            "description": "Authoritative legal or policy reference that grounds this deontic constraint: resolvable IRI (regulation URL, URN) or conventional legal citation text (for example '42 CFR § 431.211') for reviewer traceability.",
+            "examples": [
+              "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-C/part-431",
+              "urn:agency:memo:phe-extension-2023",
+              "42 CFR § 431.211"
+            ],
+            "x-wos": {
+              "openStringKind": "prose"
+            }
           },
-          "description": "Optional IRIs to authoritative source documents (regulations, statutes, agency memos) that ground this constraint. Lets governance reviewers walk a specific deontic clause back to its legal source."
+          "description": "Optional citations to authoritative sources (resolvable IRIs/URNs, agency memo references, or conventional legal citation text) that ground this constraint. Lets governance reviewers walk a specific deontic clause back to its legal source."
         },
         "x-legalruleml-iri": {
           "type": "string",
           "format": "iri-reference",
-          "description": "Optional IRI mapping this constraint into an external OASIS LegalRuleML document. Integration seam; the kernel does not interpret the value."
+          "description": "Optional IRI mapping this constraint into an external OASIS LegalRuleML document. Integration seam; the kernel does not interpret the value beyond passing it to legal tooling.",
+          "examples": [
+            "https://legal.example/oasis/lrml/deontic/constraint-42",
+            "urn:oasis:names:tc:legalruleml:constraint:appeal-right"
+          ],
+          "x-wos": {
+            "openStringKind": "uri"
+          }
         }
       },
       "patternProperties": {
@@ -8640,7 +9073,11 @@
         "envelopeVersion": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+$",
-          "description": "WOS envelope version this workflow claims compliance against. MUST match the `$wosWorkflow` const at the corresponding $wosWorkflow.X.Y line. Major.minor only; patch versions are not pinned at the envelope level."
+          "description": "WOS envelope version this workflow claims compliance against. MUST match the `$wosWorkflow` const at the corresponding $wosWorkflow.X.Y line. Major.minor only; patch versions are not pinned at the envelope level.",
+          "examples": [
+            "1.0",
+            "2.0"
+          ]
         },
         "includedBlocks": {
           "type": "array",

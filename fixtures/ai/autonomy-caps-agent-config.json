@@ -60,5 +60,8 @@
   ],
   "governance": {
     "dueProcess": {}
+  },
+  "custody": {
+    "trustProfileRef": "urn:trellis:trust-profile/dev"
   }
 }
