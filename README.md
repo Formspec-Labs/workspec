@@ -203,9 +203,9 @@ Five Rust crates in this repository:
 
 ### Running the tests
 
-This tree is normally checked out as `formspec/wos-spec` inside the [Formspec](https://github.com/Formspec-org/formspec) repository. The workspace depends on `fel-core` at `../crates/fel-core`.
+This tree is checked out as `formspec-stack/wos-spec/`, a sibling of `formspec-stack/formspec/` and `formspec-stack/trellis/` under the [formspec-stack](https://github.com/Formspec-org/formspec-stack) umbrella. The workspace depends on `fel-core` at `../formspec/crates/fel-core`. Standalone clones do not build until hosted published packages exist.
 
-From `formspec/wos-spec`:
+From `formspec-stack/wos-spec/`:
 
 ```bash
 cargo nextest run -p wos-core

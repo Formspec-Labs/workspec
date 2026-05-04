@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fel-core = { path = "../../formspec/crates/fel-core" }
+fel-core = { path = "../../../formspec/crates/fel-core" }
 indexmap = "2"
 wos-core = { path = "../wos-core" }
 serde = { version = "1", features = ["derive"] }

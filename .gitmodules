@@ -1,6 +1,0 @@
-[submodule "formspec"]
-	path = formspec
-	url = https://github.com/Formspec-org/formspec.git
-[submodule "trellis"]
-	path = trellis
-	url = https://github.com/Formspec-org/trellis.git
