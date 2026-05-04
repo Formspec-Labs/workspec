@@ -2822,6 +2822,7 @@ mod tests {
                     target: "end".into(),
                     guard: Some(Guard::DecisionTable(guard)),
                     actions: vec![],
+                    actor: None,
                     description: None,
                     tags: vec![],
                 }]),

@@ -1997,7 +1997,9 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                 Transition {
                     event: None,
                     target: "rejected".to_string(),
-                    guard: Some("false".to_string()),
+                    guard: Some(wos_core::model::decision_table::Guard::Fel(
+                        "false".to_string(),
+                    )),
                     actions: vec![],
                     actor: None,
                     description: None,
@@ -2006,7 +2008,9 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                 Transition {
                     event: None,
                     target: "accepted".to_string(),
-                    guard: Some("true".to_string()),
+                    guard: Some(wos_core::model::decision_table::Guard::Fel(
+                        "true".to_string(),
+                    )),
                     actions: vec![set_data_action(
                         "caseFile.outcome",
                         serde_json::json!("accepted"),
@@ -2296,6 +2300,7 @@ fn decision_table_guard_routes_to_table_evaluator() {
             target: "approved".into(),
             guard: Some(Guard::DecisionTable(guard)),
             actions: vec![],
+            actor: None,
             description: None,
             tags: vec![],
         }]),
@@ -2388,6 +2393,7 @@ fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
                 target: "end".into(),
                 guard: Some(guard),
                 actions: vec![],
+                actor: None,
                 description: None,
                 tags: vec![],
             }]),
