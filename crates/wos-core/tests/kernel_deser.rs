@@ -220,10 +220,7 @@ fn workflow_document_alias_resolves_to_kernel_document() {
         serde_json::from_value(json).expect("KernelDocument alias deserializes the same JSON");
     assert_eq!(workflow.url, kernel.url);
     assert_eq!(workflow.version, kernel.version);
-    assert_eq!(
-        workflow.lifecycle.initial_state,
-        kernel.lifecycle.initial_state
-    );
+    assert_eq!(workflow.lifecycle.initial_state, kernel.lifecycle.initial_state);
 }
 
 #[test]
@@ -324,15 +321,9 @@ fn kernel_view_borrows_kernel_relevant_slice() {
     let view = doc.kernel_view();
 
     // The kernel view exposes the kernel-relevant slice directly.
-    assert_eq!(
-        view.url(),
-        Some("https://test.wos-spec.org/workflows/kernel-view")
-    );
+    assert_eq!(view.url(), Some("https://test.wos-spec.org/workflows/kernel-view"));
     assert_eq!(view.version(), Some("2.0.0"));
-    assert_eq!(
-        view.impact_level(),
-        Some(wos_core::ImpactLevel::Operational)
-    );
+    assert_eq!(view.impact_level(), Some(wos_core::ImpactLevel::Operational));
     assert_eq!(view.actors().len(), 2);
     assert_eq!(view.lifecycle().initial_state, "start");
     assert_eq!(
@@ -391,7 +382,10 @@ fn foreach_state_round_trips_with_required_fields() {
     });
     let doc: KernelDocument = serde_json::from_value(json).expect("foreach state deserializes");
     let iter_state = &doc.lifecycle.states["iter"];
-    assert_eq!(iter_state.kind, wos_core::model::kernel::StateKind::ForEach);
+    assert_eq!(
+        iter_state.kind,
+        wos_core::model::kernel::StateKind::ForEach
+    );
     assert_eq!(iter_state.collection.as_deref(), Some("caseFile.items"));
     assert!(iter_state.body.is_some(), "body MUST round-trip");
     assert!(
@@ -467,22 +461,13 @@ fn agent_actor_kind_round_trips() {
             }
         }
     });
-    let doc: KernelDocument =
-        serde_json::from_value(json).expect("agent-typed actor MUST deserialize per ADR 0064");
+    let doc: KernelDocument = serde_json::from_value(json)
+        .expect("agent-typed actor MUST deserialize per ADR 0064");
     assert_eq!(doc.actors.len(), 3);
     assert_eq!(doc.actors[0].id, "extractor");
-    assert_eq!(
-        doc.actors[0].kind,
-        wos_core::model::kernel::ActorKind::Agent
-    );
-    assert_eq!(
-        doc.actors[1].kind,
-        wos_core::model::kernel::ActorKind::Human
-    );
-    assert_eq!(
-        doc.actors[2].kind,
-        wos_core::model::kernel::ActorKind::System
-    );
+    assert_eq!(doc.actors[0].kind, wos_core::model::kernel::ActorKind::Agent);
+    assert_eq!(doc.actors[1].kind, wos_core::model::kernel::ActorKind::Human);
+    assert_eq!(doc.actors[2].kind, wos_core::model::kernel::ActorKind::System);
 }
 
 // ── caseFile.contractRef + FieldDefinition.required ─────────────────────────
@@ -508,8 +493,8 @@ fn case_file_contract_ref_round_trips() {
             "contractVersion": "1.0.0"
         }
     });
-    let doc: KernelDocument =
-        serde_json::from_value(json).expect("caseFile.contractRef MUST deserialize");
+    let doc: KernelDocument = serde_json::from_value(json)
+        .expect("caseFile.contractRef MUST deserialize");
     let case_file = doc.case_file.expect("caseFile present");
     assert_eq!(
         case_file.contract_ref.as_deref(),
@@ -545,8 +530,7 @@ fn case_file_field_required_round_trips() {
             }
         }
     });
-    let doc: KernelDocument =
-        serde_json::from_value(json).expect("fields with required MUST deserialize");
+    let doc: KernelDocument = serde_json::from_value(json).expect("fields with required MUST deserialize");
     let case_file = doc.case_file.expect("caseFile present");
     assert!(
         case_file.fields["applicantName"].required,

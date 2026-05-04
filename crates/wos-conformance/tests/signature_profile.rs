@@ -104,20 +104,6 @@ fn sig012_void_path() {
 }
 
 #[test]
-fn sig013_policy_assurance_below_floor_blocks_affirmation() {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let error = run_fixture(
-        &fixture_json("SIG-013-policy-assurance-below-floor.json"),
-        base_dir.to_str().expect("utf-8 fixture path"),
-    )
-    .expect_err("identity binding below the policy assurance floor must reject");
-    assert!(
-        error.to_string().contains("is below policy 'emailOtp'"),
-        "unexpected policy-floor rejection error: {error}"
-    );
-}
-
-#[test]
 fn sig012_void_cancels_pending_signature_tasks() {
     let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let mut fixture: serde_json::Value =

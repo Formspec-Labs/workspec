@@ -17,14 +17,14 @@ use wos_core::provenance::{ProvenanceKind, ProvenanceRecord};
 
 use crate::integration::IntegrationBinding;
 use crate::integration_handlers::{
-    dispatch_integration_binding, load_or_invoke_service_result, InvocationContext,
+    InvocationContext, dispatch_integration_binding, load_or_invoke_service_result,
 };
 use crate::store::RuntimeRecord;
 
 use super::{
+    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY, RuntimeError, WosRuntime,
     impact_level_label, make_task_id, normalize_semver_range_expression,
-    signature::append_signature_task_extensions, RuntimeError, WosRuntime,
-    COMPLETION_EVENT_EXTENSION_KEY, FAILURE_EVENT_EXTENSION_KEY,
+    signature::append_signature_task_extensions,
 };
 
 impl WosRuntime {
@@ -353,7 +353,7 @@ impl WosRuntime {
             prefill_mapping_ref: action.prefill_mapping_ref.clone(),
             response_mapping_ref: action.response_mapping_ref.clone(),
             deadline: None,
-            impact_level: kernel.impact_level,
+            impact_level: kernel.impact_level.map(impact_level_label),
             context: None,
             last_validation_outcome: None,
             created_at: now_iso.to_string(),
@@ -416,7 +416,7 @@ impl WosRuntime {
                     prefill_mapping_ref: task.prefill_mapping_ref.clone(),
                     response_mapping_ref: task.response_mapping_ref.clone(),
                     deadline: task.deadline.clone(),
-                    impact_level: task.impact_level.map(impact_level_label),
+                    impact_level: task.impact_level.clone(),
                     extensions: task.extensions.clone(),
                 });
             } else {

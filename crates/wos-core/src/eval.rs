@@ -128,7 +128,7 @@ pub struct Evaluator {
 const CONTINUOUS_RESCAN_EVENT: &str = "$postMutationRescan";
 
 /// An observed state transition.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ObservedTransition {
     /// Source state.
     pub from: String,
@@ -510,8 +510,8 @@ impl Evaluator {
                 if !event_matches {
                     continue;
                 }
-                if !self.evaluate_guard(
-                    transition.guard.as_deref(),
+                if !self.evaluate_transition_guard(
+                    transition.guard.as_ref(),
                     event_data,
                     active_state,
                     &transition.target,
@@ -590,8 +590,8 @@ impl Evaluator {
                 if !event_matches {
                     continue;
                 }
-                if !self.evaluate_guard(
-                    transition.guard.as_deref(),
+                if !self.evaluate_transition_guard(
+                    transition.guard.as_ref(),
                     event_data,
                     &active,
                     &transition.target,
@@ -789,8 +789,12 @@ impl Evaluator {
                 //      - bind item under `itemVariable` (default `$item`),
                 //        index under `indexVariable` (default `$index`).
                 //      - emit ForEachIterationStarted provenance.
-                //      - run the `body` subtree (atomic onEntry/onExit; compound
-                //        walk to Final; output_path merge after body).
+                //      - body execution is a no-op in this PR's MVP scope:
+                //        the spec admits atomic / compound / parallel bodies,
+                //        but the `body` field is treated as authoring shape
+                //        only here. Full body execution (onEntry actions per
+                //        iteration, nested transitions, output_path / merge
+                //        strategy writes) is tracked as Sub-PR D-3.
                 //      - check `breakCondition` (FEL predicate); set
                 //        break_triggered if true.
                 //      - emit ForEachIterationCompleted provenance.
@@ -807,15 +811,12 @@ impl Evaluator {
                     .push(ProvenanceRecord::state_entered(state_id));
                 self.execute_on_entry_actions(state_id, actor, event_data)?;
 
-                let collection_expr =
-                    indexed
-                        .state
-                        .collection
-                        .clone()
-                        .ok_or_else(|| EvalError::ForEach {
-                            state: state_id.to_string(),
-                            message: "missing required `collection` FEL expression".to_string(),
-                        })?;
+                let collection_expr = indexed.state.collection.clone().ok_or_else(|| {
+                    EvalError::ForEach {
+                        state: state_id.to_string(),
+                        message: "missing required `collection` FEL expression".to_string(),
+                    }
+                })?;
 
                 let item_var = indexed
                     .state
@@ -829,8 +830,11 @@ impl Evaluator {
                     .unwrap_or_else(|| "$index".to_string());
                 let break_expr = indexed.state.break_condition.clone();
 
-                let items =
-                    self.evaluate_foreach_collection(state_id, &collection_expr, event_data)?;
+                let items = self.evaluate_foreach_collection(
+                    state_id,
+                    &collection_expr,
+                    event_data,
+                )?;
 
                 // Save prior bindings so foreach is transparent w.r.t. case
                 // state — per spec, per-iteration bindings do NOT persist into
@@ -848,8 +852,10 @@ impl Evaluator {
                     })?;
 
                     self.case_state.insert(item_var.clone(), item.clone());
-                    self.case_state
-                        .insert(index_var.clone(), serde_json::Value::Number(i_u32.into()));
+                    self.case_state.insert(
+                        index_var.clone(),
+                        serde_json::Value::Number(i_u32.into()),
+                    );
 
                     self.provenance
                         .push(ProvenanceRecord::foreach_iteration_started(
@@ -865,7 +871,7 @@ impl Evaluator {
                     //     visible in case state, then `body.onExit` actions.
                     //   - Compound / parallel body (transitions inside the
                     //     body subtree, nested state machines): tracked as
-                    //     Sub-PR D-5. The body's `kind` field is read but
+                    //     Sub-PR D-4. The body's `kind` field is read but
                     //     non-atomic kinds are accepted-and-ignored at the
                     //     transition level for now; their `onEntry` and
                     //     `onExit` actions still run.
@@ -926,8 +932,8 @@ impl Evaluator {
                             // yet implemented at runtime. The schema admits
                             // parallel bodies; nested foreach is permitted
                             // but discouraged per spec §4.3.1. Reject so
-                            // authors get a clear signal rather than silently
-                            // skipping unsupported body kinds.
+                            // authors get a clear signal rather than silent
+                            // no-op.
                             other => {
                                 return Err(EvalError::ForEach {
                                     state: state_id.to_string(),
@@ -1007,9 +1013,10 @@ impl Evaluator {
                     }
                 }
 
-                self.provenance.push(ProvenanceRecord::foreach_completed(
-                    state_id, iterations, broke,
-                ));
+                self.provenance
+                    .push(ProvenanceRecord::foreach_completed(
+                        state_id, iterations, broke,
+                    ));
 
                 self.fire_foreach_outgoing(state_id, actor, event_data)?;
 
@@ -1242,6 +1249,40 @@ impl Evaluator {
 
     // ── Guard evaluation ─────────────────────────────────────────
 
+    /// Dispatch a transition guard per Kernel §4.5.1.1.
+    ///
+    /// The polymorphic [`crate::model::decision_table::Guard`] form admits a
+    /// FEL string or a structured `DecisionTableGuard`; routes accordingly.
+    /// `None` means "no guard" — always fires, no [`GuardEvaluation`]
+    /// recorded.
+    fn evaluate_transition_guard(
+        &mut self,
+        guard: Option<&crate::model::decision_table::Guard>,
+        event_data: Option<&serde_json::Value>,
+        source_state: &str,
+        target_state: &str,
+        event: &str,
+    ) -> Result<bool, EvalError> {
+        match guard {
+            None => Ok(true),
+            Some(crate::model::decision_table::Guard::Fel(expr)) => self.evaluate_guard(
+                Some(expr.as_str()),
+                event_data,
+                source_state,
+                target_state,
+                event,
+            ),
+            Some(crate::model::decision_table::Guard::DecisionTable(dt_guard)) => self
+                .evaluate_decision_table_guard(
+                    dt_guard,
+                    event_data,
+                    source_state,
+                    target_state,
+                    event,
+                ),
+        }
+    }
+
     /// Evaluate a FEL guard expression. Missing guard = always true.
     ///
     /// Records a [`GuardEvaluation`] on every call that actually tests a
@@ -1380,13 +1421,10 @@ impl Evaluator {
         const MAX_BODY_STEPS: u32 = 100;
         const SYNTHETIC_EVENT: &str = "$bodyAuto";
 
-        let initial_id = body
-            .initial_state
-            .as_deref()
-            .ok_or_else(|| EvalError::ForEach {
-                state: foreach_state_id.to_string(),
-                message: "compound body MUST declare `initialState`".to_string(),
-            })?;
+        let initial_id = body.initial_state.as_deref().ok_or_else(|| EvalError::ForEach {
+            state: foreach_state_id.to_string(),
+            message: "compound body MUST declare `initialState`".to_string(),
+        })?;
         if body.states.is_empty() {
             return Err(EvalError::ForEach {
                 state: foreach_state_id.to_string(),
@@ -1397,21 +1435,20 @@ impl Evaluator {
         let mut current_id = initial_id.to_string();
 
         for _step in 0..MAX_BODY_STEPS {
-            let substate = body
-                .states
-                .get(&current_id)
-                .ok_or_else(|| EvalError::ForEach {
-                    state: foreach_state_id.to_string(),
-                    message: format!("compound body references missing substate '{current_id}'"),
-                })?;
+            let substate = body.states.get(&current_id).ok_or_else(|| EvalError::ForEach {
+                state: foreach_state_id.to_string(),
+                message: format!(
+                    "compound body references missing substate '{current_id}'"
+                ),
+            })?;
 
             let substate_label = format!("{foreach_state_id}:body:{current_id}");
 
             // Substate onEntry — atomic and final substates emit them; we
             // intentionally don't recurse for nested compound substates in
-            // this evaluator path (parallel / foreach / nested compound inside a body
+            // this PR (parallel / foreach / nested compound inside a body
             // are deferred). Only Atomic and Final substate kinds are
-            // supported here.
+            // supported in MVP.
             match substate.kind {
                 StateKind::Atomic | StateKind::Final => {}
                 other => {
@@ -1430,9 +1467,16 @@ impl Evaluator {
             let entry_actions = substate.on_entry.clone();
             for action in &entry_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance
-                    .push(ProvenanceRecord::on_entry(&substate_label, action_name));
-                self.execute_action_in_state(action, actor, &substate_label, event_data)?;
+                self.provenance.push(ProvenanceRecord::on_entry(
+                    &substate_label,
+                    action_name,
+                ));
+                self.execute_action_in_state(
+                    action,
+                    actor,
+                    &substate_label,
+                    event_data,
+                )?;
             }
 
             // Final substate ⇒ body has completed.
@@ -1451,8 +1495,8 @@ impl Evaluator {
                     // execution does not accommodate.
                     continue;
                 }
-                let passes = self.evaluate_guard(
-                    transition.guard.as_deref(),
+                let passes = self.evaluate_transition_guard(
+                    transition.guard.as_ref(),
                     event_data,
                     &current_id,
                     &transition.target,
@@ -1464,7 +1508,12 @@ impl Evaluator {
                 // Run transition actions — attributed to the source substate
                 // for provenance — before walking the source's onExit.
                 for action in &transition.actions {
-                    self.execute_action_in_state(action, actor, &substate_label, event_data)?;
+                    self.execute_action_in_state(
+                        action,
+                        actor,
+                        &substate_label,
+                        event_data,
+                    )?;
                 }
                 next_id = Some(transition.target.clone());
                 break;
@@ -1489,9 +1538,16 @@ impl Evaluator {
             let exit_actions = substate.on_exit.clone();
             for action in &exit_actions {
                 let action_name = action_kind_camel(action.action);
-                self.provenance
-                    .push(ProvenanceRecord::on_exit(&substate_label, action_name));
-                self.execute_action_in_state(action, actor, &substate_label, event_data)?;
+                self.provenance.push(ProvenanceRecord::on_exit(
+                    &substate_label,
+                    action_name,
+                ));
+                self.execute_action_in_state(
+                    action,
+                    actor,
+                    &substate_label,
+                    event_data,
+                )?;
             }
 
             current_id = next;
@@ -1665,8 +1721,8 @@ impl Evaluator {
             if transition.event.is_some() {
                 continue;
             }
-            let guard_passes = self.evaluate_guard(
-                transition.guard.as_deref(),
+            let guard_passes = self.evaluate_transition_guard(
+                transition.guard.as_ref(),
                 event_data,
                 state_id,
                 &transition.target,
@@ -1687,6 +1743,275 @@ impl Evaluator {
             return Ok(());
         }
         Ok(())
+    }
+
+    /// Evaluate a structured `DecisionTableGuard` per Kernel §4.5.1.2.
+    ///
+    /// Algorithm:
+    /// 1. Look up the referenced `DecisionTable`. Missing → `Err`
+    ///    (`K-051`-shape; lint normally catches this earlier).
+    /// 2. For each declared input, evaluate its `inputBindings[name]`
+    ///    expression in the full transition context (caseFile + event
+    ///    namespaces) and bind the result into the row scope under the
+    ///    input name.
+    /// 3. For each row in document order: evaluate every input cell
+    ///    against the row scope. Non-boolean → `Err` (K-053). All true
+    ///    ⇒ row matches.
+    /// 4. Apply the table's hit policy (`unique`/`first`/`priority`).
+    ///    `collect` is rejected for guard usage (K-053). `unique` with
+    ///    multiple matches → `Err` (K-052 at runtime). `priority` ties
+    ///    → `Err`.
+    /// 5. Zero matches: `OnNoMatch::Fail` → `Err`; otherwise → `false`.
+    /// 6. Resolve the output column. Non-boolean output type → `Err`
+    ///    (K-053). Evaluate the selected row's matching output cell in
+    ///    the row scope. Non-boolean result → `Err` (K-053).
+    ///
+    /// Records a single [`GuardEvaluation`] capturing the synthesized
+    /// "expression" `decisionTable(<tableId>).<outputColumn>` and the
+    /// resolved row scope as the inputs payload (so the teaching-signal
+    /// trace shows what the table actually saw).
+    fn evaluate_decision_table_guard(
+        &mut self,
+        guard: &crate::model::decision_table::DecisionTableGuard,
+        event_data: Option<&serde_json::Value>,
+        source_state: &str,
+        target_state: &str,
+        event: &str,
+    ) -> Result<bool, EvalError> {
+        use crate::model::decision_table::{FelType, HitPolicy, OnNoMatch};
+
+        let table_ref = guard.table_ref.as_str();
+        let table = self
+            .kernel
+            .decision_tables
+            .iter()
+            .find(|t| t.id == table_ref)
+            .ok_or_else(|| {
+                EvalError::Guard(format!(
+                    "K-051: decisionTable ref '{table_ref}' does not resolve"
+                ))
+            })?
+            .clone();
+
+        // ── Step 2: build the row scope from input bindings.
+        // Each binding expression is evaluated in the full transition
+        // context (caseFile + event); the result is bound under the input's
+        // declared name in a fresh, namespace-free MapEnvironment used for
+        // every row's cell evaluation.
+        let outer_ctx = EvalContext::from_case_state(&self.case_state, event_data);
+        let outer_env = outer_ctx.to_fel_environment();
+
+        let mut row_scope_fields: HashMap<String, FelValue> = HashMap::new();
+        for input_decl in &table.inputs {
+            let binding_expr = guard.input_bindings.get(&input_decl.name).ok_or_else(|| {
+                EvalError::Guard(format!(
+                    "K-051: decisionTable guard for table '{table_ref}' is missing inputBindings entry for declared input '{}'",
+                    input_decl.name
+                ))
+            })?;
+            let parsed = parse(binding_expr).map_err(|e| {
+                EvalError::Guard(format!(
+                    "decisionTable inputBinding for '{}' on table '{table_ref}' failed to parse: {e}",
+                    input_decl.name
+                ))
+            })?;
+            let bound = evaluate(&parsed, &outer_env);
+            row_scope_fields.insert(input_decl.name.clone(), bound.value);
+        }
+
+        let row_env = fel_core::MapEnvironment::with_fields(row_scope_fields.clone());
+
+        // ── Step 3: collect matching rows in document order.
+        let mut matches: Vec<usize> = Vec::new();
+        for (row_idx, row) in table.rows.iter().enumerate() {
+            let mut all_true = true;
+            // Spec: zip(row.inputCells, table.inputs) — extra/missing input
+            // cells are an authoring error caught by lint K-053. At runtime
+            // we evaluate however many cells the row has against the
+            // declared inputs in declaration order.
+            for cell_expr in &row.input_cells {
+                let parsed = parse(cell_expr).map_err(|e| {
+                    EvalError::Guard(format!(
+                        "decisionTable input cell on row '{}' (table '{table_ref}') failed to parse: {e}",
+                        row.id
+                    ))
+                })?;
+                let result = evaluate(&parsed, &row_env);
+                match result.value {
+                    FelValue::Boolean(true) => {}
+                    FelValue::Boolean(false) => {
+                        all_true = false;
+                        break;
+                    }
+                    other => {
+                        return Err(EvalError::Guard(format!(
+                            "K-053: decisionTable input cell on row '{}' (table '{table_ref}') did not evaluate to boolean (got {})",
+                            row.id,
+                            other.type_name()
+                        )));
+                    }
+                }
+            }
+            if all_true {
+                matches.push(row_idx);
+            }
+        }
+
+        // ── Step 4: hit-policy selection.
+        let selected: Option<usize> = match table.hit_policy {
+            HitPolicy::Unique => match matches.as_slice() {
+                [] => None,
+                [only] => Some(*only),
+                more => {
+                    let ids: Vec<&str> =
+                        more.iter().map(|i| table.rows[*i].id.as_str()).collect();
+                    return Err(EvalError::Guard(format!(
+                        "K-052: decisionTable '{table_ref}' has hitPolicy=unique but {} rows matched: [{}]",
+                        more.len(),
+                        ids.join(", ")
+                    )));
+                }
+            },
+            HitPolicy::First => matches.first().copied(),
+            HitPolicy::Priority => {
+                if matches.is_empty() {
+                    None
+                } else {
+                    // Among matched rows, pick the one with the lowest
+                    // priority integer. Rows missing `priority` sort after
+                    // every numbered row (treated as +∞). Ties are K-052.
+                    let mut best: Option<(usize, Option<i64>)> = None;
+                    let mut tied_with_best: Vec<usize> = Vec::new();
+                    for &idx in &matches {
+                        let prio = table.rows[idx].priority;
+                        match best {
+                            None => {
+                                best = Some((idx, prio));
+                                tied_with_best.clear();
+                            }
+                            Some((_, current_prio)) => match (prio, current_prio) {
+                                (Some(p), Some(c)) if p < c => {
+                                    best = Some((idx, Some(p)));
+                                    tied_with_best.clear();
+                                }
+                                (Some(p), Some(c)) if p == c => {
+                                    tied_with_best.push(idx);
+                                }
+                                (Some(_), None) => {
+                                    best = Some((idx, prio));
+                                    tied_with_best.clear();
+                                }
+                                _ => {}
+                            },
+                        }
+                    }
+                    let (best_idx, _) = best.expect("matches non-empty checked above");
+                    if !tied_with_best.is_empty() {
+                        let mut ids: Vec<&str> = vec![table.rows[best_idx].id.as_str()];
+                        ids.extend(tied_with_best.iter().map(|i| table.rows[*i].id.as_str()));
+                        return Err(EvalError::Guard(format!(
+                            "K-052: decisionTable '{table_ref}' priority-tie among matched rows: [{}]",
+                            ids.join(", ")
+                        )));
+                    }
+                    Some(best_idx)
+                }
+            }
+            HitPolicy::Collect => {
+                // K-053: lint MUST reject `collect` for transition-guard
+                // tables; runtime defends in case lint was bypassed.
+                return Err(EvalError::Guard(format!(
+                    "K-053: decisionTable '{table_ref}' has hitPolicy=collect but is referenced as a transition guard; collect is reserved for non-guard consumers"
+                )));
+            }
+        };
+
+        // Synthesize a teaching-signal expression and a row-scope inputs
+        // snapshot used by GuardEvaluation regardless of which branch fires.
+        let synthesized_expr = format!("decisionTable({table_ref}).{}", guard.output_column);
+        let row_scope_inputs = row_scope_to_json(&row_scope_fields);
+
+        let selected_idx = match selected {
+            Some(i) => i,
+            None => {
+                // No row matched.
+                let on_no_match = guard.on_no_match.unwrap_or(OnNoMatch::False);
+                let result_value = match on_no_match {
+                    OnNoMatch::False => false,
+                    OnNoMatch::Fail => {
+                        return Err(EvalError::Guard(format!(
+                            "decisionTable '{table_ref}' produced no match and onNoMatch = fail"
+                        )));
+                    }
+                };
+                self.guard_evaluations.push(GuardEvaluation {
+                    guard_id: format!("{source_state}->{target_state}:{event}"),
+                    source_state: source_state.to_string(),
+                    target_state: target_state.to_string(),
+                    event: event.to_string(),
+                    expression: synthesized_expr,
+                    result: result_value,
+                    inputs: row_scope_inputs,
+                });
+                return Ok(result_value);
+            }
+        };
+
+        // ── Step 6: resolve output column and evaluate the matching cell.
+        let output_idx = table
+            .outputs
+            .iter()
+            .position(|o| o.name == guard.output_column)
+            .ok_or_else(|| {
+                EvalError::Guard(format!(
+                    "K-051: decisionTable '{table_ref}' outputColumn '{}' does not resolve",
+                    guard.output_column
+                ))
+            })?;
+        let output_decl = &table.outputs[output_idx];
+        if output_decl.kind != FelType::Boolean {
+            return Err(EvalError::Guard(format!(
+                "K-053: decisionTable '{table_ref}' guard outputColumn '{}' must be boolean (declared {:?})",
+                guard.output_column, output_decl.kind
+            )));
+        }
+
+        let selected_row = &table.rows[selected_idx];
+        let cell_expr = selected_row.output_cells.get(output_idx).ok_or_else(|| {
+            EvalError::Guard(format!(
+                "decisionTable '{table_ref}' row '{}' missing outputCells[{output_idx}] for outputColumn '{}'",
+                selected_row.id, guard.output_column
+            ))
+        })?;
+        let parsed_out = parse(cell_expr).map_err(|e| {
+            EvalError::Guard(format!(
+                "decisionTable output cell on row '{}' (table '{table_ref}') failed to parse: {e}",
+                selected_row.id
+            ))
+        })?;
+        let result = evaluate(&parsed_out, &row_env);
+        let passed = match result.value {
+            FelValue::Boolean(b) => b,
+            other => {
+                return Err(EvalError::Guard(format!(
+                    "K-053: decisionTable output cell on row '{}' (table '{table_ref}') did not evaluate to boolean (got {})",
+                    selected_row.id,
+                    other.type_name()
+                )));
+            }
+        };
+
+        self.guard_evaluations.push(GuardEvaluation {
+            guard_id: format!("{source_state}->{target_state}:{event}"),
+            source_state: source_state.to_string(),
+            target_state: target_state.to_string(),
+            event: event.to_string(),
+            expression: synthesized_expr,
+            result: passed,
+            inputs: row_scope_inputs,
+        });
+
+        Ok(passed)
     }
 
     // ── Timer management ─────────────────────────────────────────
@@ -2014,23 +2339,6 @@ fn build_state_index(kernel: &KernelDocument) -> HashMap<String, IndexedState> {
     index
 }
 
-/// Validates that every active configuration leaf exists in `kernel`.
-///
-/// Used by instance migration (Kernel S11.2 step 1). When any active state
-/// id is absent from the target definition, returns [`EvalError::StateNotFound`].
-pub fn validate_migration_configuration(
-    kernel: &KernelDocument,
-    configuration: &[String],
-) -> Result<(), EvalError> {
-    let index = build_state_index(kernel);
-    for id in configuration {
-        if !index.contains_key(id) {
-            return Err(EvalError::StateNotFound(id.clone()));
-        }
-    }
-    Ok(())
-}
-
 /// Recursively index states from a states map.
 fn index_states_recursive(
     states: &indexmap::IndexMap<String, State>,
@@ -2292,6 +2600,22 @@ fn build_guard_inputs(
     serde_json::Value::Object(inputs)
 }
 
+/// Snapshot a decision-table row scope as a JSON object for the
+/// [`GuardEvaluation::inputs`] teaching-signal payload.
+///
+/// Each declared input name maps to its bound FEL value rendered to JSON.
+/// Unlike [`build_guard_inputs`] (which infers dependencies from a parsed
+/// expression and groups by namespace), the row scope is the complete
+/// per-row evaluation context for the table — namespace-free by spec
+/// (Kernel §4.5.1.3) — so the snapshot mirrors it directly.
+fn row_scope_to_json(scope: &HashMap<String, FelValue>) -> serde_json::Value {
+    let mut out = serde_json::Map::new();
+    for (name, value) in scope {
+        out.insert(name.clone(), fel_to_json(value));
+    }
+    serde_json::Value::Object(out)
+}
+
 /// Navigate dotted tail segments into a JSON value; returns the value itself
 /// if the tail is empty and `None` on any missing segment.
 fn walk_json_path<'a>(value: &'a serde_json::Value, tail: &str) -> Option<&'a serde_json::Value> {
@@ -2418,5 +2742,738 @@ mod tests {
         // `invalid_duration` provenance record instead of booking a 0ms timer.
         assert!(parse_iso_duration_to_ms("P20BD").is_err());
         assert!(parse_iso_duration_to_ms("PT5Q").is_err());
+    }
+
+    // ── Decision-table guard evaluator (Kernel §4.5.1.2) ─────────
+
+    mod decision_table_guard {
+        //! Unit tests for [`Evaluator::evaluate_decision_table_guard`] driven
+        //! through the public `process_event` surface. Each test constructs
+        //! a minimal kernel document with a single guarded transition whose
+        //! guard is a `DecisionTableGuard` and asserts the transition fires
+        //! (or doesn't) per the algorithm in Kernel §4.5.1.2.
+
+        use super::*;
+        use crate::model::decision_table::{
+            DecisionTable, DecisionTableGuard, DecisionTableGuardKind, DecisionTableInput,
+            DecisionTableOutput, DecisionTableRow, FelType, Guard, HitPolicy, OnNoMatch,
+        };
+        use crate::model::kernel::*;
+        use indexmap::IndexMap;
+
+        fn atomic(transitions: Vec<Transition>) -> State {
+            State {
+                kind: StateKind::Atomic,
+                description: None,
+                transitions,
+                tags: vec![],
+                on_entry: vec![],
+                on_exit: vec![],
+                initial_state: None,
+                states: IndexMap::new(),
+                regions: IndexMap::new(),
+                cancellation_policy: None,
+                history_state: None,
+                outcome_code: None,
+                collection: None,
+                item_variable: None,
+                index_variable: None,
+                concurrency: None,
+                break_condition: None,
+                output_path: None,
+                merge_strategy: None,
+                body: None,
+                extensions: HashMap::new(),
+            }
+        }
+
+        fn final_state() -> State {
+            State {
+                kind: StateKind::Final,
+                description: None,
+                transitions: vec![],
+                tags: vec![],
+                on_entry: vec![],
+                on_exit: vec![],
+                initial_state: None,
+                states: IndexMap::new(),
+                regions: IndexMap::new(),
+                cancellation_policy: None,
+                history_state: None,
+                outcome_code: None,
+                collection: None,
+                item_variable: None,
+                index_variable: None,
+                concurrency: None,
+                break_condition: None,
+                output_path: None,
+                merge_strategy: None,
+                body: None,
+                extensions: HashMap::new(),
+            }
+        }
+
+        /// Build a kernel doc with a single guarded transition `start --> end`
+        /// triggered by event `decide`, plus the supplied decision-table list.
+        fn doc_with_guard(
+            tables: Vec<DecisionTable>,
+            guard: DecisionTableGuard,
+        ) -> KernelDocument {
+            let mut states = IndexMap::new();
+            states.insert(
+                "start".into(),
+                atomic(vec![Transition {
+                    event: Some(TransitionEvent::from_authoring_trigger("decide")),
+                    target: "end".into(),
+                    guard: Some(Guard::DecisionTable(guard)),
+                    actions: vec![],
+                    description: None,
+                    tags: vec![],
+                }]),
+            );
+            states.insert("end".into(), final_state());
+
+            KernelDocument {
+                wos_workflow: "1.0".to_string(),
+                schema: None,
+                url: None,
+                version: None,
+                title: None,
+                description: None,
+                status: None,
+                impact_level: None,
+                actors: vec![],
+                lifecycle: Lifecycle {
+                    initial_state: "start".to_string(),
+                    states,
+                    milestones: HashMap::new(),
+                },
+                case_file: None,
+                contracts: HashMap::new(),
+                provenance: None,
+                execution: None,
+                evaluation_mode: None,
+                max_relationship_event_depth: None,
+                governance: None,
+                agents: Vec::new(),
+                ai_oversight: None,
+                signature: None,
+                custody: None,
+                advanced: None,
+                assurance: None,
+                intake: None,
+                bindings: Vec::new(),
+                decision_tables: tables,
+                extensions: HashMap::new(),
+            }
+        }
+
+        /// Income-bracket eligibility table — 2 rows, returns boolean
+        /// `eligible`. Inputs: `income` (number), `householdSize` (integer).
+        fn income_eligibility_table(hit_policy: HitPolicy) -> DecisionTable {
+            DecisionTable {
+                id: "incomeElig".to_string(),
+                description: None,
+                inputs: vec![
+                    DecisionTableInput {
+                        name: "income".to_string(),
+                        kind: FelType::Number,
+                        description: None,
+                    },
+                    DecisionTableInput {
+                        name: "householdSize".to_string(),
+                        kind: FelType::Integer,
+                        description: None,
+                    },
+                ],
+                outputs: vec![DecisionTableOutput {
+                    name: "eligible".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![
+                    DecisionTableRow {
+                        id: "r-low-income-small-household".to_string(),
+                        input_cells: vec![
+                            "income <= 1473".to_string(),
+                            "householdSize <= 2".to_string(),
+                        ],
+                        output_cells: vec!["true".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                    DecisionTableRow {
+                        id: "r-low-income-large-household".to_string(),
+                        input_cells: vec![
+                            "income <= 2500".to_string(),
+                            "householdSize >= 3".to_string(),
+                        ],
+                        output_cells: vec!["true".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                ],
+                hit_policy,
+            }
+        }
+
+        fn income_guard() -> DecisionTableGuard {
+            let mut bindings = IndexMap::new();
+            bindings.insert("income".to_string(), "caseFile.income".to_string());
+            bindings.insert(
+                "householdSize".to_string(),
+                "caseFile.householdSize".to_string(),
+            );
+            DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "incomeElig".to_string(),
+                output_column: "eligible".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            }
+        }
+
+        #[test]
+        fn happy_path_low_income_small_household_fires() {
+            let doc = doc_with_guard(
+                vec![income_eligibility_table(HitPolicy::First)],
+                income_guard(),
+            );
+            let case = serde_json::json!({"income": 1200, "householdSize": 2});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            assert!(eval.process_event("decide", None, None).unwrap());
+            assert!(eval.configuration().contains("end"));
+            // Trace was recorded.
+            let traces = eval.guard_evaluations();
+            assert_eq!(traces.len(), 1);
+            assert!(traces[0].expression.starts_with("decisionTable("));
+            assert!(traces[0].result);
+        }
+
+        #[test]
+        fn no_match_with_default_returns_false() {
+            // income too high to match either row.
+            let doc = doc_with_guard(
+                vec![income_eligibility_table(HitPolicy::First)],
+                income_guard(),
+            );
+            let case = serde_json::json!({"income": 9999, "householdSize": 2});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            assert!(!eval.process_event("decide", None, None).unwrap());
+            assert!(eval.configuration().contains("start"));
+            let traces = eval.guard_evaluations();
+            assert_eq!(traces.len(), 1);
+            assert!(!traces[0].result);
+        }
+
+        #[test]
+        fn no_match_with_fail_returns_err() {
+            let mut g = income_guard();
+            g.on_no_match = Some(OnNoMatch::Fail);
+            let doc = doc_with_guard(vec![income_eligibility_table(HitPolicy::First)], g);
+            let case = serde_json::json!({"income": 9999, "householdSize": 2});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected onNoMatch=fail to surface as Err");
+            match err {
+                EvalError::Guard(msg) => assert!(msg.contains("onNoMatch")),
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn first_hit_policy_picks_first_match_in_document_order() {
+            // Build a table where two rows BOTH match — first declared row
+            // returns true, second returns false. `first` MUST pick the first.
+            let table = DecisionTable {
+                id: "ordered".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![
+                    DecisionTableRow {
+                        id: "r-first".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["true".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                    DecisionTableRow {
+                        id: "r-second".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["false".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                ],
+                hit_policy: HitPolicy::First,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "ordered".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            assert!(eval.process_event("decide", None, None).unwrap());
+        }
+
+        #[test]
+        fn unique_with_multiple_matches_returns_err() {
+            // Sanity probe: a case that matches exactly one row succeeds
+            // under hitPolicy=unique (no K-052 raised).
+            let case_one = serde_json::json!({"income": 1200, "householdSize": 2});
+            let mut eval = Evaluator::with_time_and_case_state(
+                doc_with_guard(
+                    vec![income_eligibility_table(HitPolicy::Unique)],
+                    income_guard(),
+                ),
+                0,
+                Some(&case_one),
+            )
+            .unwrap();
+            assert!(eval.process_event("decide", None, None).unwrap());
+
+            // Now build a case that matches BOTH rows: a custom table with
+            // two overlapping rows under hitPolicy=unique MUST raise K-052.
+            let overlap_table = DecisionTable {
+                id: "overlap".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![
+                    DecisionTableRow {
+                        id: "r-a".to_string(),
+                        input_cells: vec!["x > 0".to_string()],
+                        output_cells: vec!["true".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                    DecisionTableRow {
+                        id: "r-b".to_string(),
+                        input_cells: vec!["x > 0".to_string()],
+                        output_cells: vec!["true".to_string()],
+                        priority: None,
+                        rationale: None,
+                    },
+                ],
+                hit_policy: HitPolicy::Unique,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let overlap_guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "overlap".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![overlap_table], overlap_guard);
+            let case_overlap = serde_json::json!({"x": 5});
+            let mut eval =
+                Evaluator::with_time_and_case_state(doc, 0, Some(&case_overlap)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-052 violation at runtime");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-052"), "expected K-052 in: {msg}");
+                    assert!(msg.contains("unique"), "expected 'unique' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn priority_picks_lowest_priority_among_matches() {
+            let table = DecisionTable {
+                id: "prio".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![
+                    DecisionTableRow {
+                        id: "r-low-prio".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["false".to_string()],
+                        priority: Some(10),
+                        rationale: None,
+                    },
+                    DecisionTableRow {
+                        id: "r-high-prio".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["true".to_string()],
+                        priority: Some(1),
+                        rationale: None,
+                    },
+                ],
+                hit_policy: HitPolicy::Priority,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "prio".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            // Lowest priority integer wins → r-high-prio (priority=1, output=true).
+            assert!(eval.process_event("decide", None, None).unwrap());
+        }
+
+        #[test]
+        fn priority_tie_among_matches_is_err() {
+            let table = DecisionTable {
+                id: "tie".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![
+                    DecisionTableRow {
+                        id: "r-a".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["true".to_string()],
+                        priority: Some(5),
+                        rationale: None,
+                    },
+                    DecisionTableRow {
+                        id: "r-b".to_string(),
+                        input_cells: vec!["x >= 0".to_string()],
+                        output_cells: vec!["false".to_string()],
+                        priority: Some(5),
+                        rationale: None,
+                    },
+                ],
+                hit_policy: HitPolicy::Priority,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "tie".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-052 priority tie");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-052"), "expected K-052 in: {msg}");
+                    assert!(msg.contains("priority"), "expected 'priority' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn missing_table_ref_returns_err() {
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "nonexistent".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            // No tables declared on the document.
+            let doc = doc_with_guard(vec![], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-051 missing table ref");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-051"), "expected K-051 in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn non_boolean_output_cell_is_err() {
+            let table = DecisionTable {
+                id: "stringy".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![DecisionTableRow {
+                    id: "r-bad".to_string(),
+                    input_cells: vec!["x >= 0".to_string()],
+                    // Output cell evaluates to a STRING, not a boolean —
+                    // even though the output column declares boolean.
+                    output_cells: vec!["\"yes\"".to_string()],
+                    priority: None,
+                    rationale: None,
+                }],
+                hit_policy: HitPolicy::First,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "stringy".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-053 non-boolean output cell");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-053"), "expected K-053 in: {msg}");
+                    assert!(msg.contains("output cell"), "expected 'output cell' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn non_boolean_input_cell_is_err() {
+            let table = DecisionTable {
+                id: "bad-in".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![DecisionTableRow {
+                    id: "r-bad".to_string(),
+                    // Input cell evaluates to a NUMBER (not boolean).
+                    input_cells: vec!["x + 1".to_string()],
+                    output_cells: vec!["true".to_string()],
+                    priority: None,
+                    rationale: None,
+                }],
+                hit_policy: HitPolicy::First,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "bad-in".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-053 non-boolean input cell");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-053"), "expected K-053 in: {msg}");
+                    assert!(msg.contains("input cell"), "expected 'input cell' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn collect_hit_policy_is_err_for_guard_usage() {
+            let table = DecisionTable {
+                id: "collect-bad".to_string(),
+                description: None,
+                inputs: vec![DecisionTableInput {
+                    name: "x".to_string(),
+                    kind: FelType::Number,
+                    description: None,
+                }],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![DecisionTableRow {
+                    id: "r1".to_string(),
+                    input_cells: vec!["x >= 0".to_string()],
+                    output_cells: vec!["true".to_string()],
+                    priority: None,
+                    rationale: None,
+                }],
+                hit_policy: HitPolicy::Collect,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "collect-bad".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-053 collect on guard");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-053"), "expected K-053 in: {msg}");
+                    assert!(msg.contains("collect"), "expected 'collect' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn missing_input_binding_is_err() {
+            // Guard binds `x` but table also declares `y`.
+            let table = DecisionTable {
+                id: "two-inputs".to_string(),
+                description: None,
+                inputs: vec![
+                    DecisionTableInput {
+                        name: "x".to_string(),
+                        kind: FelType::Number,
+                        description: None,
+                    },
+                    DecisionTableInput {
+                        name: "y".to_string(),
+                        kind: FelType::Number,
+                        description: None,
+                    },
+                ],
+                outputs: vec![DecisionTableOutput {
+                    name: "ok".to_string(),
+                    kind: FelType::Boolean,
+                    description: None,
+                }],
+                rows: vec![DecisionTableRow {
+                    id: "r1".to_string(),
+                    input_cells: vec!["x >= 0".to_string(), "y >= 0".to_string()],
+                    output_cells: vec!["true".to_string()],
+                    priority: None,
+                    rationale: None,
+                }],
+                hit_policy: HitPolicy::First,
+            };
+            let mut bindings = IndexMap::new();
+            bindings.insert("x".to_string(), "caseFile.x".to_string());
+            // intentionally NOT binding `y`
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "two-inputs".to_string(),
+                output_column: "ok".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"x": 5, "y": 5});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-051 missing inputBindings entry");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-051"), "expected K-051 in: {msg}");
+                    assert!(msg.contains("inputBindings"), "expected 'inputBindings' in: {msg}");
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn output_column_does_not_resolve_is_err() {
+            let table = income_eligibility_table(HitPolicy::First);
+            let mut bindings = IndexMap::new();
+            bindings.insert("income".to_string(), "caseFile.income".to_string());
+            bindings.insert(
+                "householdSize".to_string(),
+                "caseFile.householdSize".to_string(),
+            );
+            let guard = DecisionTableGuard {
+                kind: DecisionTableGuardKind::DecisionTable,
+                table_ref: "incomeElig".to_string(),
+                output_column: "doesNotExist".to_string(),
+                input_bindings: bindings,
+                on_no_match: None,
+            };
+            let doc = doc_with_guard(vec![table], guard);
+            let case = serde_json::json!({"income": 1200, "householdSize": 2});
+            let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+            let err = eval
+                .process_event("decide", None, None)
+                .expect_err("expected K-051 outputColumn does not resolve");
+            match err {
+                EvalError::Guard(msg) => {
+                    assert!(msg.contains("K-051"), "expected K-051 in: {msg}");
+                    assert!(
+                        msg.contains("outputColumn"),
+                        "expected 'outputColumn' in: {msg}"
+                    );
+                }
+                other => panic!("expected EvalError::Guard, got {other:?}"),
+            }
+        }
     }
 }

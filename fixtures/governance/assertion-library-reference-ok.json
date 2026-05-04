@@ -28,6 +28,7 @@
     }
   },
   "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
     "assertions": [
       {
         "id": "totalIncomeArithmetic",

@@ -57,21 +57,12 @@ fn check_workflow(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     // --- Lifecycle / kernel-surface checks ---
     if let Ok(kernel) = serde_json::from_value::<KernelDocument>(root.clone()) {
         let all_state_ids = collect_all_state_ids_typed(&kernel.lifecycle.states);
-        let declared_actor_ids: std::collections::HashSet<String> =
-            kernel.actors.iter().map(|a| a.id.clone()).collect();
         for (name, state) in &kernel.lifecycle.states {
             let path = format!("/lifecycle/states/{name}");
-            check_state_type_semantics_typed(
-                state,
-                &path,
-                &all_state_ids,
-                &declared_actor_ids,
-                diagnostics,
-            );
+            check_state_type_semantics_typed(state, &path, &all_state_ids, diagnostics);
         }
 
-        check_lifecycle_initial_state_resolves_typed(&kernel, diagnostics);
-
+        check_initial_state_keys_into_states_typed(&kernel, diagnostics); // K-016
         check_set_data_paths_typed(&kernel, diagnostics);
         check_milestone_uniqueness_typed(&kernel, diagnostics);
         check_timer_exclusivity_typed(&kernel, diagnostics);
@@ -178,11 +169,7 @@ fn check_ai_integration_block(root: &Value, diagnostics: &mut Vec<LintDiagnostic
     }
     if let Some(ai_oversight) = root.get("aiOversight") {
         if let Some(np) = ai_oversight.get("narrativeProvenance") {
-            check_narrative_tier_authoritative_in(
-                np,
-                "/aiOversight/narrativeProvenance",
-                diagnostics,
-            );
+            check_narrative_tier_authoritative_in(np, "/aiOversight/narrativeProvenance", diagnostics);
         }
     }
 
@@ -354,7 +341,10 @@ fn check_ver_level_for_fallback_chain(root: &Value, diagnostics: &mut Vec<LintDi
     let has_verification_level = root
         .get("bindings")
         .and_then(Value::as_array)
-        .map(|arr| arr.iter().any(|b| b.get("verificationLevel").is_some()))
+        .map(|arr| {
+            arr.iter()
+                .any(|b| b.get("verificationLevel").is_some())
+        })
         .unwrap_or(false)
         || root
             .get("advanced")
@@ -383,50 +373,11 @@ fn check_ver_level_for_fallback_chain(root: &Value, diagnostics: &mut Vec<LintDi
 // Typed kernel checks
 // ---------------------------------------------------------------------------
 
-/// K-032: lifecycle initialState MUST resolve to a key in the relevant
-/// `states` map. ONE rule id covers TWO sites:
-///   - Root: `/lifecycle/initialState` → key in `lifecycle.states`
-///   - Compound: `<state-path>/initialState` → key in that state's `states`
-/// Consumers suppressing K-032 suppress both. Diagnostic `path` distinguishes
-/// the call site. Splitting into K-032 (root) + K-033 (compound) was
-/// considered and deferred — same normative invariant, two scope sites.
-fn check_lifecycle_initial_state_resolves_typed(
-    kernel: &KernelDocument,
-    diagnostics: &mut Vec<LintDiagnostic>,
-) {
-    let init = kernel.lifecycle.initial_state.as_str();
-    if !kernel.lifecycle.states.contains_key(init) {
-        diagnostics.push(LintDiagnostic::t1_error(
-            "K-032",
-            "/lifecycle/initialState",
-            format!(
-                "lifecycle initialState '{init}' is not a key in lifecycle.states (Kernel S4.1)"
-            ),
-        ));
-    }
-}
-
-/// Transition `actor` MUST use the same lexical pattern as `actors[].id`
-/// (ASCII letter first; then letters, digits, `.`, `_`, `-`).
-fn transition_actor_id_syntax_valid(id: &str) -> bool {
-    let mut chars = id.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !first.is_ascii_alphabetic() {
-        return false;
-    }
-    chars.all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')
-    })
-}
-
 /// K-001 through K-008: State type semantics (typed model).
 fn check_state_type_semantics_typed(
     state: &State,
     path: &str,
     all_state_ids: &std::collections::HashSet<String>,
-    declared_actor_ids: &std::collections::HashSet<String>,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
     match state.kind {
@@ -455,20 +406,6 @@ fn check_state_type_semantics_typed(
                     path,
                     "compound state must declare substates in states map",
                 ));
-            }
-            // K-032 (same rule id as root lifecycle check): compound `initialState`
-            // MUST resolve within this state's `states` map. Diagnostic `path`
-            // distinguishes root `/lifecycle/initialState` vs compound state path.
-            if let Some(init) = state.initial_state.as_deref() {
-                if !state.states.contains_key(init) {
-                    diagnostics.push(LintDiagnostic::t1_error(
-                        "K-032",
-                        path,
-                        format!(
-                            "compound initialState '{init}' is not a key in this state's `states` map"
-                        ),
-                    ));
-                }
             }
         }
         StateKind::Parallel => {
@@ -617,54 +554,103 @@ fn check_state_type_semantics_typed(
                 ),
             ));
         }
-
-        // K-031: transition.actor MUST use actors[].id lexical pattern and MUST
-        // name a declared kernel `actors[].id` (schema + Kernel S4.5).
-        if let Some(actor) = transition.actor.as_deref() {
-            if !transition_actor_id_syntax_valid(actor) {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-031",
-                    &t_path,
-                    format!(
-                        "transition.actor '{actor}' MUST match actors[].id pattern (ASCII letter first, then alphanumeric / . / _ / -)"
-                    ),
-                ));
-            } else if !declared_actor_ids.contains(actor) {
-                diagnostics.push(LintDiagnostic::t1_error(
-                    "K-031",
-                    &t_path,
-                    format!(
-                        "transition.actor '{actor}' MUST name a declared kernel actors[].id entry"
-                    ),
-                ));
-            }
-        }
     }
 
     // Recurse into compound substates
     for (name, substate) in &state.states {
         let sub_path = format!("{path}/states/{name}");
-        check_state_type_semantics_typed(
-            substate,
-            &sub_path,
-            all_state_ids,
-            declared_actor_ids,
-            diagnostics,
-        );
+        check_state_type_semantics_typed(substate, &sub_path, all_state_ids, diagnostics);
     }
 
     // Recurse into parallel regions
     for (region_name, region) in &state.regions {
         for (name, region_state) in &region.states {
             let r_path = format!("{path}/regions/{region_name}/states/{name}");
-            check_state_type_semantics_typed(
-                region_state,
-                &r_path,
-                all_state_ids,
-                declared_actor_ids,
+            check_state_type_semantics_typed(region_state, &r_path, all_state_ids, diagnostics);
+        }
+    }
+}
+
+/// K-016: `lifecycle.initialState` MUST key into `lifecycle.states`, and any
+/// compound state that declares `initialState` MUST point at a key in its own
+/// substate map. The schema cannot express this cross-property binding under
+/// pure Draft 2020-12 (JSON Schema has no native value-references-key
+/// keyword); lint covers the gap. Closes STUDIO-DEFER-003 Tranche B.
+fn check_initial_state_keys_into_states_typed(
+    kernel: &KernelDocument,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    let init = &kernel.lifecycle.initial_state;
+    if !kernel.lifecycle.states.contains_key(init) {
+        diagnostics.push(LintDiagnostic::t1_error(
+            "K-016",
+            "/lifecycle/initialState",
+            format!(
+                "initialState '{init}' does not exist in lifecycle.states (keys: {})",
+                kernel
+                    .lifecycle
+                    .states
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    for (name, state) in &kernel.lifecycle.states {
+        check_compound_initial_state_typed(state, &format!("/lifecycle/states/{name}"), diagnostics);
+    }
+}
+
+fn check_compound_initial_state_typed(
+    state: &State,
+    path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
+    if let Some(init) = &state.initial_state {
+        if !state.states.contains_key(init) {
+            diagnostics.push(LintDiagnostic::t1_error(
+                "K-016",
+                &format!("{path}/initialState"),
+                format!(
+                    "compound initialState '{init}' does not exist in this state's substates (keys: {})",
+                    state.states.keys().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            ));
+        }
+    }
+    for (name, sub) in &state.states {
+        check_compound_initial_state_typed(sub, &format!("{path}/states/{name}"), diagnostics);
+    }
+    for (rname, region) in &state.regions {
+        // Region carries its own value-references-key obligation:
+        // `region.initialState` MUST key into `region.states`. Schema
+        // is silent for the same reason it's silent for the compound
+        // case, so K-016 covers it here.
+        if !region.states.contains_key(&region.initial_state) {
+            let init = &region.initial_state;
+            let keys = region.states.keys().cloned().collect::<Vec<_>>().join(", ");
+            diagnostics.push(LintDiagnostic::t1_error(
+                "K-016",
+                &format!("{path}/regions/{rname}/initialState"),
+                format!(
+                    "region initialState '{init}' does not exist in this region's states (keys: {keys})"
+                ),
+            ));
+        }
+        for (sname, sstate) in &region.states {
+            check_compound_initial_state_typed(
+                sstate,
+                &format!("{path}/regions/{rname}/states/{sname}"),
                 diagnostics,
             );
         }
+    }
+    // ForEach-body recursion: `state.body` is itself a `State` that
+    // may be Compound / Parallel with further nesting, including its
+    // own `initialState`. Walk it like any other sub-state.
+    if let Some(body) = &state.body {
+        check_compound_initial_state_typed(body, &format!("{path}/body"), diagnostics);
     }
 }
 
@@ -942,7 +928,11 @@ fn check_hold_expected_duration_raw(
 }
 
 /// I-001: outputBinding JSONPath checks on the `bindings` embedded block.
-fn check_bindings_block(bindings: &Value, base_path: &str, diagnostics: &mut Vec<LintDiagnostic>) {
+fn check_bindings_block(
+    bindings: &Value,
+    base_path: &str,
+    diagnostics: &mut Vec<LintDiagnostic>,
+) {
     let Some(bindings_obj) = bindings.as_object() else {
         return;
     };
@@ -1610,11 +1600,7 @@ mod ver_level_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-VER-LEVEL-001")
             .collect();
-        assert_eq!(
-            matches.len(),
-            1,
-            "expected exactly one diagnostic: {diags:?}"
-        );
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
         assert!(matches[0].message.contains("extractor"));
     }
 
@@ -1700,11 +1686,7 @@ mod adr0063_identity_boundary_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-EMBED-TARGET-001")
             .collect();
-        assert_eq!(
-            matches.len(),
-            1,
-            "expected exactly one diagnostic: {diags:?}"
-        );
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
         assert_eq!(matches[0].path, "/governance/targetWorkflow");
     }
 
@@ -1718,9 +1700,7 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_target(doc);
         assert!(
-            diags.iter().any(
-                |d| d.rule_id == "WOS-EMBED-TARGET-001" && d.path == "/agents/0/targetWorkflow"
-            ),
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-TARGET-001" && d.path == "/agents/0/targetWorkflow"),
             "expected diagnostic on /agents/0/targetWorkflow: {diags:?}"
         );
     }
@@ -1749,9 +1729,7 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_identity(doc);
         assert!(
-            diags
-                .iter()
-                .any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/governance/url"),
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/governance/url"),
             "expected diagnostic on /governance/url: {diags:?}"
         );
     }
@@ -1764,9 +1742,7 @@ mod adr0063_identity_boundary_tests {
         });
         let diags = run_identity(doc);
         assert!(
-            diags
-                .iter()
-                .any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/advanced/version"),
+            diags.iter().any(|d| d.rule_id == "WOS-EMBED-IDENTITY-001" && d.path == "/advanced/version"),
             "expected diagnostic on /advanced/version: {diags:?}"
         );
     }
@@ -1783,11 +1759,7 @@ mod adr0063_identity_boundary_tests {
             .iter()
             .filter(|d| d.rule_id == "WOS-SIDECAR-TARGET-001")
             .collect();
-        assert_eq!(
-            matches.len(),
-            1,
-            "expected exactly one diagnostic: {diags:?}"
-        );
+        assert_eq!(matches.len(), 1, "expected exactly one diagnostic: {diags:?}");
     }
 
     #[test]
@@ -1825,143 +1797,6 @@ mod adr0063_identity_boundary_tests {
         assert!(
             diags.iter().any(|d| d.rule_id == "WOS-SIDECAR-TARGET-001"),
             "expected diagnostic on missing targetWorkflow: {diags:?}"
-        );
-    }
-}
-
-#[cfg(test)]
-mod transition_actor_and_initial_state_tests {
-    use super::check_workflow;
-    use crate::document::{DocumentKind, WosDocument};
-    use serde_json::json;
-
-    fn run_workflow(value: serde_json::Value) -> Vec<crate::LintDiagnostic> {
-        let mut diags = Vec::new();
-        let doc = WosDocument {
-            kind: DocumentKind::Workflow,
-            value,
-            source: None,
-        };
-        check_workflow(&doc, &mut diags);
-        diags
-    }
-
-    #[test]
-    fn k_031_bad_transition_actor_flagged() {
-        let doc = json!({
-            "$wosWorkflow": "1.0",
-            "actors": [{"id": "human", "type": "human"}],
-            "lifecycle": {
-                "initialState": "s",
-                "states": {
-                    "s": {
-                        "type": "atomic",
-                        "transitions": [{"event": "go", "target": "t", "actor": "_bad"}]
-                    },
-                    "t": {"type": "final"}
-                }
-            }
-        });
-        let diags = run_workflow(doc);
-        assert!(
-            diags.iter().any(|d| d.rule_id == "K-031"),
-            "expected K-031 for invalid transition.actor: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn k_031_valid_transition_actor_silent() {
-        let doc = json!({
-            "$wosWorkflow": "1.0",
-            "actors": [{"id": "human", "type": "human"}],
-            "lifecycle": {
-                "initialState": "s",
-                "states": {
-                    "s": {
-                        "type": "atomic",
-                        "transitions": [{"event": "go", "target": "t", "actor": "human"}]
-                    },
-                    "t": {"type": "final"}
-                }
-            }
-        });
-        let diags = run_workflow(doc);
-        assert!(
-            diags.iter().all(|d| d.rule_id != "K-031"),
-            "expected no K-031: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn k_031_undeclared_actor_lexically_valid_flagged() {
-        let doc = json!({
-            "$wosWorkflow": "1.0",
-            "actors": [{"id": "human", "type": "human"}],
-            "lifecycle": {
-                "initialState": "s",
-                "states": {
-                    "s": {
-                        "type": "atomic",
-                        "transitions": [{"event": "go", "target": "t", "actor": "ghost"}]
-                    },
-                    "t": {"type": "final"}
-                }
-            }
-        });
-        let diags = run_workflow(doc);
-        assert!(
-            diags.iter().any(|d| {
-                d.rule_id == "K-031"
-                    && d.path == "/lifecycle/states/s/transitions/0"
-                    && d.message.contains("declared kernel actors")
-            }),
-            "expected K-031 for undeclared transition.actor: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn k_032_root_initial_state_not_in_states_flagged() {
-        let doc = json!({
-            "$wosWorkflow": "1.0",
-            "actors": [{"id": "human", "type": "human"}],
-            "lifecycle": {
-                "initialState": "missing",
-                "states": {
-                    "s": {"type": "atomic", "transitions": [{"event": "go", "target": "t"}]},
-                    "t": {"type": "final"}
-                }
-            }
-        });
-        let diags = run_workflow(doc);
-        assert!(
-            diags.iter().any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/initialState"),
-            "expected K-032 on lifecycle.initialState: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn k_032_compound_initial_state_not_in_substates_flagged() {
-        let doc = json!({
-            "$wosWorkflow": "1.0",
-            "actors": [{"id": "human", "type": "human"}],
-            "lifecycle": {
-                "initialState": "c",
-                "states": {
-                    "c": {
-                        "type": "compound",
-                        "initialState": "wrong",
-                        "states": {
-                            "inner": {"type": "atomic", "transitions": [{"event": "go", "target": "t"}]}
-                        }
-                    },
-                    "t": {"type": "final"}
-                }
-            }
-        });
-        let diags = run_workflow(doc);
-        assert!(
-            diags.iter().any(|d| d.rule_id == "K-032" && d.path == "/lifecycle/states/c"),
-            "expected K-032 on compound state path: {diags:?}"
         );
     }
 }

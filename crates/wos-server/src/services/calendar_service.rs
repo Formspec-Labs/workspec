@@ -54,9 +54,11 @@ impl CalendarService {
             .full_bundle(calendar_url)
             .await
             .ok_or(ApiError::NotFound)?;
-        let calendar_json = bundle.business_calendar.ok_or_else(|| {
-            ApiError::BadRequest("no business calendar sidecar attached to this workflow".into())
-        })?;
+        let calendar_json = bundle
+            .business_calendar
+            .ok_or_else(|| ApiError::BadRequest(
+                "no business calendar sidecar attached to this workflow".into(),
+            ))?;
         let calendar: BusinessCalendarDocument = serde_json::from_value(calendar_json)
             .map_err(|e| ApiError::ServiceUnavailable(format!("parse calendar: {e}")))?;
         let duration_ms = parse_iso_duration_to_ms(&req.duration)

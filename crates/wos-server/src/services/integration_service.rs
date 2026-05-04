@@ -33,11 +33,7 @@ pub struct WosInboundEvent {
     #[serde(flatten)]
     pub envelope: CloudEvent,
     /// WOS extension: which instance should receive the event.
-    #[serde(
-        default,
-        rename = "instanceId",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, rename = "instanceId", skip_serializing_if = "Option::is_none")]
     pub instance_id: Option<String>,
 }
 
@@ -57,10 +53,7 @@ impl IntegrationService {
         state: &AppState,
         inbound: WosInboundEvent,
     ) -> ApiResult<InboundAck> {
-        let WosInboundEvent {
-            envelope,
-            instance_id,
-        } = inbound;
+        let WosInboundEvent { envelope, instance_id } = inbound;
         envelope
             .validate_ingress()
             .map_err(|e| ApiError::BadRequest(format!("invalid CloudEvent: {e}")))?;
@@ -114,7 +107,9 @@ impl IntegrationService {
             .full_bundle(workflow_url)
             .await
             .ok_or(ApiError::NotFound)?;
-        bundle.integration_profile.ok_or_else(|| ApiError::NotFound)
+        bundle
+            .integration_profile
+            .ok_or_else(|| ApiError::NotFound)
     }
 
     pub async fn invoke_binding(
@@ -173,3 +168,5 @@ impl IntegrationService {
         }))
     }
 }
+
+

@@ -29,6 +29,7 @@
   "agents": [
     {
       "id": "agent",
+      "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
       "monitors": [
         {
           "agentRef": "documentExtractor",

@@ -7,8 +7,7 @@
 //! validation pipelines, audit tiers, quality controls, delegation,
 //! and hold policies.
 
-use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Governance content — the embedded `governance` block of a $wosWorkflow
@@ -549,100 +548,12 @@ pub struct DelegationScope {
     pub conditions: Option<String>,
 }
 
-/// Hold-type token for [`HoldPolicy`] and [`crate::instance::ActiveHold`].
-///
-/// Mirrors `HoldPolicy.holdType` in `wos-workflow.schema.json`: seven standard
-/// values or a vendor token matching `^x-[a-z][a-z0-9-]*$`.
-///
-/// Standard-token parity with the schema enum arm is enforced by
-/// `tests/hold_type_schema_enum.rs`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum HoldType {
-    PendingApplicantResponse,
-    PendingExternalVerification,
-    PendingLegalReview,
-    PendingLegislation,
-    PendingRelatedCase,
-    VoluntaryHold,
-    LegalHold,
-    /// Vendor extension matching `^x-[a-z][a-z0-9-]*$`.
-    Vendor(String),
-}
-
-impl HoldType {
-    /// Canonical wire token for this hold type.
-    #[must_use]
-    pub const fn as_str(&self) -> &str {
-        match self {
-            Self::PendingApplicantResponse => "pending-applicant-response",
-            Self::PendingExternalVerification => "pending-external-verification",
-            Self::PendingLegalReview => "pending-legal-review",
-            Self::PendingLegislation => "pending-legislation",
-            Self::PendingRelatedCase => "pending-related-case",
-            Self::VoluntaryHold => "voluntary-hold",
-            Self::LegalHold => "legal-hold",
-            Self::Vendor(value) => value.as_str(),
-        }
-    }
-
-    fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "pending-applicant-response" => Some(Self::PendingApplicantResponse),
-            "pending-external-verification" => Some(Self::PendingExternalVerification),
-            "pending-legal-review" => Some(Self::PendingLegalReview),
-            "pending-legislation" => Some(Self::PendingLegislation),
-            "pending-related-case" => Some(Self::PendingRelatedCase),
-            "voluntary-hold" => Some(Self::VoluntaryHold),
-            "legal-hold" => Some(Self::LegalHold),
-            s if is_vendor_hold_type(s) => Some(Self::Vendor(s.to_string())),
-            _ => None,
-        }
-    }
-}
-
-fn is_vendor_hold_type(s: &str) -> bool {
-    let Some(rest) = s.strip_prefix("x-") else {
-        return false;
-    };
-    let mut chars = rest.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !first.is_ascii_lowercase() {
-        return false;
-    }
-    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-}
-
-impl Serialize for HoldType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for HoldType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::from_wire(value.as_str()).ok_or_else(|| {
-            D::Error::custom(format!(
-                "invalid holdType {value:?}; expected a standard HoldPolicy literal or x-* vendor token"
-            ))
-        })
-    }
-}
-
 /// Hold policy (Governance S12).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoldPolicy {
     /// Hold type identifier.
-    pub hold_type: HoldType,
+    pub hold_type: String,
 
     /// Expected duration (ISO 8601 or `"indefinite"`).
     pub expected_duration: String,

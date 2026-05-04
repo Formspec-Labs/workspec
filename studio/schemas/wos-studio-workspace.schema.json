@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wos-spec.org/schemas/studio-workspace/1.0",
+  "title": "WOS Studio (Authoring) \u2014 Workspace",
+  "description": "Studio Workspace per studio/specs/workspace.md. Carries Workspace identity, ReviewerRole registry, WorkspacePolicy (multi-role gating, retention policies keyed by DPV sensitivity, etc.), AuthorityGrant (fine-grained per-action authorization), ComplianceAttestation (workspace-level baselines for SOC 2 / FedRAMP / StateRAMP / NIST 800-53). Federation reservation slot (`x-federation`) per CM \u00a71.34 \u2014 content not consumed today.",
+  "$comment": "Promotion status (Stage-3, 2026-05-01): MVP shape; AuthorityGrant + ComplianceAttestation shapes are illustrative.",
+  "type": "object",
+  "required": [
+    "$wosStudioWorkspace",
+    "id",
+    "title",
+    "reviewerRoles"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(\\$|x-)": {}
+  },
+  "properties": {
+    "$wosStudioWorkspace": {
+      "type": "string",
+      "const": "1.0",
+      "examples": [
+        "1.0"
+      ],
+      "x-lm": {
+        "critical": true,
+        "intent": "Document type marker for the Studio Workspace"
+      },
+      "description": "Document marker pinning this artifact to the Studio Workspace 1.0 schema."
+    },
+    "id": {
+      "type": "string",
+      "examples": [
+        "ws-snap-redetermination-tx-2026"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "owners": {
+      "type": "array",
+      "description": "IdentitySubject ids of workspace owners.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "programs": {
+      "type": "array",
+      "description": "Programs this workspace covers (e.g., 'SNAP', 'TANF').",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewerRoles": {
+      "type": "array",
+      "description": "Workspace-scoped reviewer role registry. Per SA-MUST-ws-002, MUST contain at least one role with hasOverrideAuthority=true AND at least one role with requiredForPublication=true (encoded as paired `contains` constraints).",
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "hasOverrideAuthority": {
+                "const": true
+              }
+            },
+            "required": ["hasOverrideAuthority"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "requiredForPublication": {
+                "const": true
+              }
+            },
+            "required": ["requiredForPublication"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "responsibilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hasOverrideAuthority": {
+            "type": "boolean"
+          },
+          "requiredForPublication": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "description": "WorkspacePolicy bag.",
+      "additionalProperties": true,
+      "properties": {
+        "selfApprovalProhibition": {
+          "type": "boolean"
+        },
+        "multiRoleGating": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required reviewer roles for publication."
+        },
+        "defaultWaiverScope": {
+          "type": "string"
+        },
+        "unmappedButApprovedAuthority": {
+          "type": "string"
+        },
+        "conflictWaiverAuthority": {
+          "type": "string"
+        },
+        "retentionPolicies": {
+          "type": "object",
+          "description": "Workspace-default RetentionPolicy values keyed by DPV sensitivity IRI (e.g., dpv:HealthData). Per ADR-0083 r2, EvidenceRequirements that collect a DataElement of that sensitivity inherit the default unless they declare their own retentionPolicy. additionalProperties: false on the value-side (each value is a typed RetentionPolicy); ^(\\$|x-) patternProperties are preserved so vendor extensions and $comment survive.",
+          "additionalProperties": {
+            "$ref": "https://wos-spec.org/schemas/studio-policy-object/1.0#/$defs/RetentionPolicy"
+          },
+          "patternProperties": {
+            "^(\\$|x-)": {}
+          }
+        }
+      }
+    },
+    "authorityGrants": {
+      "type": "array",
+      "description": "Fine-grained per-action authorization records (per CM \u00a71.29 AuthorityGrant).",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "subjectRef",
+          "action",
+          "scope"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subjectRef": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "examples": [
+              "waive-tier-S6",
+              "approve-unmappedButApproved",
+              "attest-local-practice",
+              "override-block-finding"
+            ]
+          },
+          "scope": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "grantedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "complianceBaselines": {
+      "type": "array",
+      "description": "Workspace-level ComplianceAttestation baselines (per CM \u00a71.28). ApprovalPackage carries per-workflow derivations.",
+      "items": {
+        "$ref": "#/$defs/ComplianceAttestation"
+      }
+    },
+    "x-federation": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Federation reservation slot. Content not consumed today; reserved for cross-tenant SourceDocument or PolicyObject sharing when PLN-0387 / federation track lands.",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "ComplianceAttestation": {
+      "type": "object",
+      "required": [
+        "regime"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "regime": {
+          "type": "string",
+          "examples": [
+            "SOC2",
+            "FedRAMP-Moderate",
+            "StateRAMP-Moderate",
+            "NIST-800-53-Rev5",
+            "HIPAA",
+            "GDPR"
+          ]
+        },
+        "regimeVersion": {
+          "type": "string"
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "controlId": {
+                "type": "string"
+              },
+              "controlName": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "met",
+                  "partial",
+                  "gap",
+                  "not-applicable"
+                ]
+              },
+              "evidenceRef": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "attestor": {
+          "type": "string"
+        },
+        "attestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -8,8 +8,7 @@
   "properties": {
     "ruleId": {
       "type": "string",
-      "pattern": "^[A-Z][A-Z0-9-]*-[0-9]{3,}$",
-      "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN: an uppercase family code (single token like `K`, `G`, `AI`, or hyphenated like `SCHEMA-DOC`) followed by a 3+ digit suffix. Callers switch on this field to suppress, escalate, or route diagnostics.",
+      "description": "Stable rule identifier from LINT-MATRIX.md that produced this diagnostic. Format is FAMILY-NNN (e.g. K-001, G-037, AI-024). Callers switch on this field to suppress, escalate, or route diagnostics.",
       "examples": ["K-001", "G-037", "AI-024", "SCHEMA-DOC-001"],
       "x-lm": { "critical": true }
     },
@@ -29,8 +28,7 @@
     },
     "path": {
       "type": "string",
-      "pattern": "^\\$($|[.\\[].*)$",
-      "description": "JSONPath expression pointing to the offending node in the source document. Starts with `$` (document root) optionally followed by `.member` or `[index]` access chains. Used by consumers to highlight the exact location in an editor or diff view.",
+      "description": "JSONPath expression pointing to the offending node in the source document. Always starts with '$.' for document-scoped diagnostics. Used by consumers to highlight the exact location in an editor or diff view.",
       "examples": ["$.states.approved", "$.lifecycle.transitions[2]", "$.actors.reviewer.permissions"],
       "x-lm": { "critical": true }
     },
@@ -41,8 +39,7 @@
         "state 'approved' has no outbound transition and is not terminal",
         "actor 'reviewer' declares permission 'approve' but no transition requires that permission"
       ],
-      "x-lm": { "critical": true },
-      "x-wos": { "openStringKind": "prose" }
+      "x-lm": { "critical": true }
     },
     "suggestedFix": {
       "type": "object",
@@ -57,8 +54,7 @@
         },
         "path": {
           "type": "string",
-          "pattern": "^\\$($|[.\\[].*)$",
-          "description": "JSONPath to the node that should be added, removed, or replaced. Same shape as the top-level diagnostic `path`: starts with `$` then optional `.member` / `[index]` chain. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
+          "description": "JSONPath to the node that should be added, removed, or replaced. Required for add-property, remove-property, and replace-value kinds. Absent for rename and custom.",
           "examples": ["$.states.approved.type", "$.lifecycle.transitions[0].guard"]
         },
         "value": {
@@ -68,14 +64,12 @@
         "from": {
           "type": "string",
           "description": "Current identifier name for rename fixes. The rename kind changes a key or value from this name to the value in the 'to' field.",
-          "examples": ["submited", "approvall"],
-          "x-wos": { "openStringKind": "identifier" }
+          "examples": ["submited", "approvall"]
         },
         "to": {
           "type": "string",
           "description": "Target identifier name for rename fixes. Replaces the current name identified in the 'from' field after the rename is applied.",
-          "examples": ["submitted", "approval"],
-          "x-wos": { "openStringKind": "identifier" }
+          "examples": ["submitted", "approval"]
         },
         "hint": {
           "type": "string",
@@ -83,8 +77,7 @@
           "examples": [
             "Add at least one terminal state to the lifecycle before declaring transitions.",
             "Declare the actor in the top-level 'actors' map before referencing it in a transition."
-          ],
-          "x-wos": { "openStringKind": "prose" }
+          ]
         }
       },
       "additionalProperties": false
@@ -99,8 +92,7 @@
           "specs/kernel/spec.md#S4.2",
           "LINT-MATRIX.md#K-023",
           "thoughts/adr/0042-terminal-state-invariant.md"
-        ],
-        "x-wos": { "openStringKind": "pathExpression" }
+        ]
       },
       "examples": [
         ["specs/kernel/spec.md#S4.2", "LINT-MATRIX.md#K-023"],
@@ -115,8 +107,7 @@
         "document": {
           "type": "string",
           "description": "Path or URL of the source document being linted. May be a relative path from the project root, an absolute path, or a remote URL depending on how the linter was invoked.",
-          "examples": ["workflow.json", "projects/acme/kernel.json", "https://example.com/wos/v1/kernel"],
-          "x-wos": { "openStringKind": "identifier" }
+          "examples": ["workflow.json", "projects/acme/kernel.json", "https://example.com/wos/v1/kernel"]
         },
         "line": {
           "type": "integer",

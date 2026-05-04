@@ -28,6 +28,7 @@
     }
   },
   "governance": {
+    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
     "taskCatalog": [
       {
         "pattern": "incomeVerification",

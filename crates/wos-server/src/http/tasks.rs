@@ -1,7 +1,7 @@
 use axum::Json;
-use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
+use axum::Router;
 use serde::{Deserialize, Serialize};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
 
@@ -33,8 +33,12 @@ async fn list(
         page: 1,
         page_size: LIST_INSTANCES_PAGE_SIZE_MAX,
     };
-    let rows =
-        storage::list_instances_all_pages(&s.storage, filter, LIST_INSTANCES_PAGE_SIZE_MAX).await?;
+    let rows = storage::list_instances_all_pages(
+        &s.storage,
+        filter,
+        LIST_INSTANCES_PAGE_SIZE_MAX,
+    )
+    .await?;
     let mut all_tasks: Vec<TaskListItem> = Vec::new();
     for row in rows {
         all_tasks.extend(s.services.instance.tasks_for(&row).await?);
@@ -130,7 +134,9 @@ pub enum TaskSubmissionView {
         emitted_event: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
-    Rejected { code: String },
+    Rejected {
+        code: String,
+    },
 }
 
 impl From<TaskSubmissionResult> for TaskSubmissionView {
@@ -171,7 +177,8 @@ async fn persist_draft(
             &req.actor_id,
             req.idempotency_token.as_deref(),
         )
-        .await?;
+        .await
+        ?;
     Ok(Json(out.into()))
 }
 
@@ -189,7 +196,8 @@ async fn submit_response(
             &req.actor_id,
             req.idempotency_token.as_deref(),
         )
-        .await?;
+        .await
+        ?;
     Ok(Json(out.into()))
 }
 
@@ -199,6 +207,9 @@ async fn dismiss(
     Path(task_id): Path<String>,
     Json(req): Json<TaskDismissRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    s.runtime.dismiss_task(&task_id, &req.reason).await?;
+    s.runtime
+        .dismiss_task(&task_id, &req.reason)
+        .await
+        ?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }

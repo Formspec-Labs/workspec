@@ -48,12 +48,13 @@ impl NotificationsService {
             .full_bundle(workflow_url)
             .await
             .ok_or(ApiError::NotFound)?;
-        let templates = bundle.notification_templates.ok_or_else(|| {
-            ApiError::BadRequest(
+        let templates = bundle
+            .notification_templates
+            .ok_or_else(|| ApiError::BadRequest(
                 "no notification-template sidecar attached to this workflow".into(),
-            )
-        })?;
-        let tmpl = find_template(&templates, &req.template_id).ok_or(ApiError::NotFound)?;
+            ))?;
+        let tmpl = find_template(&templates, &req.template_id)
+            .ok_or(ApiError::NotFound)?;
         let subject = tmpl
             .get("subject")
             .and_then(|v| v.as_str())
@@ -61,7 +62,9 @@ impl NotificationsService {
         let body_template = tmpl
             .get("body")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ApiError::BadRequest("template has no `body` field".into()))?;
+            .ok_or_else(|| ApiError::BadRequest(
+                "template has no `body` field".into(),
+            ))?;
         let body = interpolate(body_template, &req.context);
         let channels = tmpl
             .get("channels")
@@ -83,10 +86,7 @@ impl NotificationsService {
     }
 }
 
-pub(crate) fn find_template<'a>(
-    sidecar: &'a serde_json::Value,
-    id: &str,
-) -> Option<&'a serde_json::Value> {
+pub(crate) fn find_template<'a>(sidecar: &'a serde_json::Value, id: &str) -> Option<&'a serde_json::Value> {
     sidecar
         .get("templates")
         .and_then(|t| t.as_array())

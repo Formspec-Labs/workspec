@@ -5,10 +5,8 @@ use tokio::runtime::Handle;
 use wos_core::GovernanceDocument;
 use wos_core::KernelDocument;
 use wos_core::traits::DocumentResolver;
-use wos_runtime::RuntimeError;
 use wos_server_ports::runtime::BundleResolverPort;
 
-#[derive(Clone)]
 pub struct BundleServiceResolver {
     bundle: Arc<dyn BundleResolverPort>,
     handle: Handle,
@@ -49,7 +47,7 @@ impl DocumentResolver for BundleServiceResolver {
         let wanted = version.to_string();
         self.handle.block_on(async move {
             let kernel_json = bundle
-                .resolve_kernel_bundle(&url, &wanted)
+                .resolve_kernel_bundle(&url)
                 .await
                 .map_err(|_| ResolverError::KernelNotFound { url: url.clone() })?;
             let parsed = serde_json::from_value::<KernelDocument>(kernel_json).map_err(|e| {
@@ -58,6 +56,14 @@ impl DocumentResolver for BundleServiceResolver {
                     message: e.to_string(),
                 }
             })?;
+            let found_version = parsed.version.clone().unwrap_or_default();
+            if !wanted.is_empty() && found_version != wanted {
+                return Err(ResolverError::KernelVersionMismatch {
+                    url,
+                    found: found_version,
+                    wanted,
+                });
+            }
             Ok(parsed)
         })
     }
@@ -96,63 +102,5 @@ impl DocumentResolver for BundleServiceResolver {
                 .await
                 .map_err(|_| ResolverError::SidecarNotFound { url: url.clone() })
         })
-    }
-}
-
-/// Wraps [`BundleServiceResolver`] so [`DocumentResolver::Error`] is
-/// [`RuntimeError`], preserving typed kernel URL / version mismatch signals for
-/// HTTP mapping (see `wos-server` `From<RuntimeError> for ApiError`).
-#[derive(Clone)]
-pub struct RuntimeKernelResolver(pub BundleServiceResolver);
-
-impl RuntimeKernelResolver {
-    pub fn new(bundle: Arc<dyn BundleResolverPort>, handle: Handle) -> Self {
-        Self(BundleServiceResolver::new(bundle, handle))
-    }
-}
-
-fn map_bundle_resolver_error(e: ResolverError) -> RuntimeError {
-    match e {
-        ResolverError::KernelNotFound { url } => RuntimeError::KernelWorkflowNotFound { url },
-        ResolverError::KernelVersionMismatch {
-            url,
-            found,
-            wanted,
-        } => RuntimeError::KernelDefinitionVersionMismatch {
-            url,
-            loaded_version: found,
-            requested_version: wanted,
-        },
-        other => RuntimeError::Resolver(other.to_string()),
-    }
-}
-
-impl DocumentResolver for RuntimeKernelResolver {
-    type Error = RuntimeError;
-
-    fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, Self::Error> {
-        self.0
-            .resolve_kernel(url, version)
-            .map_err(map_bundle_resolver_error)
-    }
-
-    fn resolve_governance(
-        &self,
-        url: &str,
-        version: &str,
-    ) -> Result<GovernanceDocument, Self::Error> {
-        self.0
-            .resolve_governance(url, version)
-            .map_err(map_bundle_resolver_error)
-    }
-
-    fn resolve_sidecar(
-        &self,
-        url: &str,
-        anchor_date: Option<&str>,
-    ) -> Result<serde_json::Value, Self::Error> {
-        self.0
-            .resolve_sidecar(url, anchor_date)
-            .map_err(map_bundle_resolver_error)
     }
 }

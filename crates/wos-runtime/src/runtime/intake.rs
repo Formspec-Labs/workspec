@@ -108,10 +108,7 @@ impl WosRuntime {
         decision: IntakeAcceptanceDecision,
     ) -> Result<IntakeRecord, RuntimeError> {
         let now_iso = format_timestamp(self.clock.now_ms())?;
-        let IntakeAcceptanceDecision {
-            outcome,
-            provenance,
-        } = decision;
+        let IntakeAcceptanceDecision { outcome, provenance } = decision;
         let record = IntakeRecord {
             binding: binding.to_string(),
             intake_id: interpretation.intake_id.clone(),
@@ -157,7 +154,9 @@ impl WosRuntime {
             interpretation,
             &final_outcome,
         ));
-        provenance.extend(adapter.finalize_intake_acceptance(request, &finalize_outcome)?);
+        provenance.extend(
+            adapter.finalize_intake_acceptance(request, &finalize_outcome)?,
+        );
 
         record.outcome = final_outcome;
         record.provenance_log = provenance;

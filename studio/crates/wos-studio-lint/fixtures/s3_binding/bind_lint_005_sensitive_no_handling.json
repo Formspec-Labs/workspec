@@ -1,0 +1,24 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "data-ssn", "kind": "DataElement", "lifecycleState": "approved",
+       "originClass": "source", "sensitivity": "dpv:SpecialCategoryData",
+       "caseFilePath": "$.applicant.ssn"}
+    ]
+  }],
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-svc-5",
+    "kind": "ServiceBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "operation": "POST /verify-identity",
+      "errorHandling": {"onError": "fail-workflow"},
+      "inputBindings": [
+        {"caseFilePath": "$.applicant.ssn", "dataElementRef": "data-ssn"}
+      ]
+    }
+  }]
+]

@@ -28,6 +28,8 @@
     }
   },
   "aiOversight": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+    "targetWorkflow": "https://agency.gov/workflows/benefits-adjudication",
     "defaultAutonomy": "assistive",
     "agents": [
       {

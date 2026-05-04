@@ -1,0 +1,136 @@
+{
+  "id": "K-051-resolved-decision-table-guard",
+  "rule": "K-051",
+  "description": "Positive case: a transition guard of form DecisionTableGuard whose `ref` resolves to a top-level `decisionTables[]` entry, whose `outputColumn` exists on the referenced table (and is boolean-typed for guard usage), and whose `inputBindings` cover every declared input. The lint MUST NOT emit K-051; the document is structurally sound under Kernel \u00a74.5.1.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-051-positive",
+      "version": "1.0.0",
+      "title": "K-051 Positive \u2014 Resolved DecisionTableGuard",
+      "description": "Eligibility transition gated by a structured DecisionTableGuard whose ref/outputColumn/inputBindings all resolve cleanly.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "applicant",
+          "type": "human",
+          "description": "SNAP applicant"
+        },
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Eligibility caseworker"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "eligibilityTable",
+                  "outputColumn": "eligible",
+                  "inputBindings": {
+                    "income": "caseFile.household.income.monthlyGross",
+                    "householdSize": "caseFile.household.size"
+                  }
+                }
+              },
+              {
+                "event": "submit",
+                "target": "denied"
+              }
+            ]
+          },
+          "approved": {
+            "type": "final"
+          },
+          "denied": {
+            "type": "final"
+          }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            },
+            {
+              "name": "householdSize",
+              "type": "integer"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "eligible",
+              "type": "boolean"
+            }
+          ],
+          "rows": [
+            {
+              "id": "r1",
+              "inputCells": [
+                "income <= 1473",
+                "householdSize == 1"
+              ],
+              "outputCells": [
+                "true"
+              ],
+              "rationale": "1-person household at federal threshold."
+            },
+            {
+              "id": "r2",
+              "inputCells": [
+                "income <= 1984",
+                "householdSize == 2"
+              ],
+              "outputCells": [
+                "true"
+              ],
+              "rationale": "2-person household threshold."
+            },
+            {
+              "id": "rDefault",
+              "inputCells": [],
+              "outputCells": [
+                "false"
+              ],
+              "rationale": "Catch-all."
+            }
+          ],
+          "hitPolicy": "first"
+        }
+      ],
+      "caseFile": {
+        "fields": {
+          "household": {
+            "type": "object",
+            "description": "Household composition + income for eligibility determination."
+          }
+        }
+      },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": []
+}

@@ -23,18 +23,10 @@ fn load_fixture(name: &str) -> AIIntegrationDocument {
         Some("1.0"),
         "fixture {name} must carry $wosWorkflow envelope per ADR 0076 D-1"
     );
-    let mut block = envelope
+    let block = envelope
         .get("aiOversight")
         .cloned()
         .unwrap_or_else(|| panic!("fixture {name} missing aiOversight embedded block"));
-    if let Some(map) = block.as_object_mut() {
-        if let Some(target) = envelope.get("url").cloned() {
-            map.entry("targetWorkflow".to_string()).or_insert(target);
-        }
-        if let Some(agents) = map.get("x-transportAgentDetails").cloned() {
-            map.entry("agents".to_string()).or_insert(agents);
-        }
-    }
     serde_json::from_value(block)
         .unwrap_or_else(|e| panic!("failed to deserialize aiOversight from {name}: {e}"))
 }

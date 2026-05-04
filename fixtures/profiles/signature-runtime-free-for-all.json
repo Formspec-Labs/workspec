@@ -4,6 +4,10 @@
   "title": "signature-runtime-free-for-all",
   "url": "https://example.test/fixtures/signature-runtime-free-for-all",
   "signature": {
+    "$wosSignatureProfile": "1.0",
+    "targetWorkflow": {
+      "url": "urn:test:signature-runtime"
+    },
     "roles": [
       {
         "id": "applicantSigner",
@@ -75,29 +79,6 @@
         "assuranceLevel": "high"
       },
       "custodyHookEligible": true
-    }
-  },
-  "impactLevel": "operational",
-  "actors": [
-    {
-      "id": "applicant",
-      "type": "human"
-    }
-  ],
-  "lifecycle": {
-    "initialState": "_s",
-    "states": {
-      "_s": {
-        "type": "atomic",
-        "transitions": [
-          {
-            "target": "_f"
-          }
-        ]
-      },
-      "_f": {
-        "type": "final"
-      }
     }
   }
 }

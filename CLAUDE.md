@@ -11,6 +11,8 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Stack vision + WOS section | [`../VISION.md`](../VISION.md) |
 | Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
 | **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md) |
+| **Studio (Authoring) layer** — separate workspace under `studio/`, repo-extractable | [`studio/CLAUDE.md`](studio/CLAUDE.md) |
+| Case Portal (the runtime case-management UI; renamed 2026-05-02 from `studio/`) | [`case-portal/README.md`](case-portal/README.md) |
 | Parent repo guide | [`../CLAUDE.md`](../CLAUDE.md) |
 | Current tactical work | [`TODO.md`](TODO.md) |
 | Signature Profile active track | [`T4-TODO.md`](T4-TODO.md) |
@@ -137,7 +139,7 @@ Workspace depends on `fel-core` at `../crates/fel-core`. Normally checked out as
 
 ## Submodule awareness
 
-Checked out as `formspec/wos-spec/` inside parent repo. Commits here are separate; bump parent submodule pointer when landing meaningful work. **Code review:** when the parent repo only shows a dirty `wos-spec` submodule pointer, inspect the real diff with `git -C wos-spec status` and `git -C wos-spec diff` (or `git diff wos-spec` after `cd wos-spec`). Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
+Checked out as `formspec/wos-spec/` inside parent repo. Commits here are separate; bump parent submodule pointer when landing meaningful work. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
 
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>

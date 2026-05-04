@@ -1,0 +1,14 @@
+[
+  ["src.json", {
+    "$wosStudioSource": "1.0",
+    "id": "src-empty",
+    "title": "Empty SourceDocument with no versions"
+  }],
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-bad", "kind": "Outcome", "lifecycleState": "approved", "originClass": "source",
+       "citations": [{"sourceDocumentRef": "src-empty", "excerpt": "x"}]}
+    ]
+  }]
+]

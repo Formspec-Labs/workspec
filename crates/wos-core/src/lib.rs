@@ -34,13 +34,14 @@ pub mod model;
 pub mod project;
 pub mod provenance;
 pub mod proxy;
+pub mod studio_api;
 pub mod timer;
 pub mod traits;
 pub mod typeid;
 
 pub use agent::{
-    AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult, AgentTask,
-    InvokerKind, InvokerSpec, StubResponse,
+    AgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry, AgentResult,
+    AgentTask, InvokerKind, InvokerSpec, StubResponse,
 };
 pub use context::EvalContext;
 pub use eval::{
@@ -49,7 +50,7 @@ pub use eval::{
 };
 pub use model::ai::AIIntegrationDocument;
 pub use model::business_calendar::BusinessCalendarDocument;
-pub use model::governance::{GovernanceDocument, HoldType};
+pub use model::governance::GovernanceDocument;
 pub use model::kernel::{
     Action, ActionKind, KernelDocument, KernelView, SignalScope, State, StateKind,
     TimerEventSource, Transition, TransitionEvent, WorkflowDocument,

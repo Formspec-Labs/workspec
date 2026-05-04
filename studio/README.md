@@ -1,62 +1,49 @@
-# WOS Studio
+# WOS Studio (Authoring)
 
-A browser-based case management studio for WOS (Workflow Orchestration Standard). Provides an inbox, form workspace, case viewer, process dashboard, workflow designer, admin console, audit trail, applicant portal, and report builder — all backed by live kernel state synchronized over WebSockets.
+**Status:** Stage 0–2 complete (v4) — 16 specs landed, docs-only, vertical slice in [`examples/`](examples/), no code yet.
+**Sibling product to:** [`../case-portal/`](../case-portal/README.md) (the runtime case-management UI; renamed 2026-05-02 from `/studio/`).
 
-The studio is a **reference implementation** that consumes `wos-spec` JSON Schemas and fixtures. It is not a Formspec renderer — the `@formspec-org/` npm scope is shared with the Formspec ecosystem, but this package has no runtime dependency on any `formspec-*` package. The `contractRef` / `binding` markers on tasks are surfaced as UI metadata; actual Formspec-backed forms are out of scope for this project at this time.
+## What this is
 
-## Architecture
+WOS Studio (Authoring) is a source-backed workflow intelligence platform for WOS. It transforms institutional policy and operational knowledge into validated, explainable, reviewable, WOS-aligned workflows. Most users work with sources, requirements, notices, deadlines, appeals, decisions, evidence, roles, assumptions, and scenarios — not WOS JSON.
 
-- **Hexagonal ports** (`src/services/WosPorts.ts`): UI components depend on typed port interfaces. Two adapter families implement them:
-  - `FixtureAdapter.ts` — in-memory bundle loaded from `../fixtures/**/*.json` at compile time. Default.
-  - `HttpWosBackend.ts` — REST + Socket.IO client against this project's own Express server.
-- **Server** (`server.ts`): Express + Socket.IO. Loads every kernel under `../fixtures/kernel/*.json` into a URL-keyed registry, builds companion bundles on demand, and routes `PUT /api/bundles/:url/kernel` through an Ajv-backed JSON Schema validator (`src/services/wos-kernel-validator.ts`) before persisting.
-- **Client**: React 19 + Tailwind CSS 4 + Vite. Sonner handles toasts.
-- **Kernel round-trip** (`src/services/KernelToDesigner.ts`): structure-preserving. Compound `initialState` and parallel `regions` survive designer edits; the round-tripped kernel is verified against `wos-kernel.schema.json` in `KernelToDesigner.test.ts`.
+## Disambiguation: Studio vs Case Portal
 
-## Setup
+This repo has two related products with similar identities:
 
-```bash
-npm install
-npm run dev
-```
+- [`../case-portal/`](../case-portal/) — **runtime case-management UI** (formerly `/studio/`, renamed 2026-05-02). React 19 / Vite / Express. Consumes published `$wosWorkflow` documents and fixtures. Surfaces inbox, designer, audit trail, applicant portal, reports.
+- `studio/` (this folder, formerly `studio-authoring/`) — **authoring / review / change-management layer**. Different audience (program managers, policy/legal/compliance), different problem (sources → reviewed objects → WOS).
 
-The server starts on `http://localhost:3000` (or `$PORT`).
+The two products share a name family but have **no runtime dependency on each other**. The Studio (Authoring) tier is structured as a separate workspace that the WOS spec consumes via published `studio_api` surfaces; both products depend on `wos-spec` schemas (Studio Authoring schemas now at `studio/schemas/`).
 
-## Environment Variables
+## What's in this folder right now
 
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | No | Enables AI chat features (proxied server-side) |
-| `API_TOKEN` | No | Bearer token for `/api/` routes. Unset = no auth (dev only) |
-| `CORS_ORIGIN` | No | CORS origin header. Defaults to `*` |
-| `PORT` | No | Server port. Defaults to `3000` |
-| `VITE_WOS_BACKEND` | No | `fixture` (default) or `http`. Selects which adapter set the client uses |
+- [`VISION.md`](VISION.md) — durable product vision (the PRD as authored, with a short framing preface). 19 numbered sections; cite as `VISION §N`.
+- [`CONCEPT-MODEL.md`](CONCEPT-MODEL.md) — entity catalog (34 entities), lifecycles, state boundaries, mapping states, **§5 WOS as canonical substrate** (load-bearing principle), **§6.1 Schema composition strategy** (reduces Stage-3 schemas from ~33 to ~10 by composition with parent WOS schemas), WOS cross-reference. Bridge between VISION and specs.
+- [`specs/`](specs/) — 16 internal W3C-style specs across seven families (pipeline core, foundation seams, bridge, trust, workspace+tooling, lifecycle, integration). Each follows the three-section rubric (Normative Contract / Composition / Conformance) per [`../CONVENTIONS.md`](../CONVENTIONS.md). See [`specs/README.md`](specs/README.md) for the index.
+- [`examples/`](examples/) — vertical slices producing concrete `wos-spec` artifacts via the Studio authoring path. Started in v4.
 
-Hardening rules applied to `/api/ai/chat`:
+## What's NOT in this folder yet (and why)
 
-- If `NODE_ENV=production` **or** `CORS_ORIGIN=*` and `API_TOKEN` is unset, the endpoint returns `503 Endpoint requires API_TOKEN to be configured`.
-- Request body is capped at 64 kB and must be shaped `{ contents: [...] }`.
+By design, this folder is **docs-only** at this stage. The following are deliberately deferred:
 
-## Scripts
+- No `package.json`, no `Cargo.toml` entry, no `Makefile` targets — tech posture is deferred until specs stabilize.
+- No JSON Schemas under `schemas/` — Stage 3 of the Implementation Roadmap (see [`VISION §17`](VISION.md#17-implementation-roadmap)).
+- No readiness/lint engine — Stage 4.
+- No Studio→WOS compiler — Stage 5.
+- No scenario engine — Stage 6.
+- No reference architecture docs — Stage 7.
+- No vertical slice (e.g., FAFSA ISIR) — Stage 8.
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start dev server with HMR |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview production build |
-| `npm run lint` | TypeScript type-check (`tsc --noEmit`) |
-| `npm test` | Run unit and integration tests (Vitest) |
-| `npm run test:e2e` | Run E2E tests (Playwright) |
-| `npm run types:gen` | Regenerate `src/types/wos/*.ts` from `../schemas/**/*.schema.json` |
-| `npm run types:check` | Verify committed types match the schemas (fails if stale) |
-| `npm run clean` | Remove `dist/` |
+This mirrors how `../specs/kernel/`, `../specs/governance/`, `../specs/ai/`, and `../specs/advanced/` were built: prose-first, schemas next, tooling last.
 
-## Testing
+## Pointers
 
-- **Unit tests**: Vitest with jsdom. Colocated `*.test.ts(x)` files or `src/__tests__/`.
-- **Integration tests** (`tests/integration/`): boot the real Express app via `startServer({ port: 0, attachVite: false })` on an ephemeral port and exercise the HTTP surface with `fetch`. No handler duplication.
-- **E2E tests** (`e2e/`): Playwright. Selectors use `data-stage-id` on designer nodes and `data-testid="task-item"` on the inbox. Fixtures in `tests/e2e/fixtures/`, specs in `e2e/`.
+- Product vision: [`VISION.md`](VISION.md).
+- Decision record: [`../thoughts/plans/2026-04-30-studio-authoring-product-pointer.md`](../thoughts/plans/2026-04-30-studio-authoring-product-pointer.md).
+- Repo conventions for spec structure: [`../CONVENTIONS.md`](../CONVENTIONS.md).
+- WOS schemas this product compiles to: [`../schemas/wos-workflow.schema.json`](../schemas/wos-workflow.schema.json), [`../schemas/wos-tooling.schema.json`](../schemas/wos-tooling.schema.json).
 
 ## License
 
-BSL-1.1
+This folder inherits the parent repo's licensing. Authoring tooling components fall under BSL-1.1 per the repo-root [`LICENSING.md`](../LICENSING.md), converting to Apache-2.0 in April 2030.

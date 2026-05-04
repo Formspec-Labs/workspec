@@ -15,9 +15,8 @@
       "event": "$migrate",
       "actor": "system",
       "data": {
-        "targetDefinitionVersion": "1.1.0",
-        "migrationMap": {},
-        "operatorActorId": "system"
+        "fromVersion": "1.0.0",
+        "toVersion": "1.1.0"
       }
     }
   ],

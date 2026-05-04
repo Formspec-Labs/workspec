@@ -20,19 +20,16 @@
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9_]*$",
-            "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly. Lowercase snake_case: leading letter, then letters/digits/underscores.",
+            "description": "Unique tool identifier used as the `name` field in tools/call requests. Must match a registered dispatch handler exactly.",
             "examples": ["wos_ping", "wos_add_state"]
           },
           "description": {
             "type": "string",
-            "minLength": 1,
             "description": "Human-readable explanation of what the tool does and what it returns, shown to LLM clients in the tools/list response.",
             "examples": [
               "Health-check tool. Returns {\"pong\": true}.",
               "Add a top-level state to a registered project. Returns {\"state_id\": \"<id>\"}."
-            ],
-            "x-wos": { "openStringKind": "prose" }
+            ]
           },
           "inputSchema": {
             "type": "object",

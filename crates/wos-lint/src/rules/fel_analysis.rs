@@ -100,10 +100,25 @@ fn check_kernel_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
 }
 
 /// Check FEL in a WorkflowGovernance document (G-043).
+///
+/// Post-ADR-0076 the governance block lives at `$wosWorkflow.governance`.
+/// We accept either the embedded path or, for legacy single-document fixtures
+/// that pre-date the merge, the top-level placement.
 fn check_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    if let Some(delegations) = doc.value.get("delegations").and_then(Value::as_array) {
+    let (delegations, base_prefix) = if let Some(arr) = doc
+        .value
+        .pointer("/governance/delegations")
+        .and_then(Value::as_array)
+    {
+        (Some(arr), "/governance/delegations")
+    } else if let Some(arr) = doc.value.get("delegations").and_then(Value::as_array) {
+        (Some(arr), "/delegations")
+    } else {
+        (None, "/delegations")
+    };
+    if let Some(delegations) = delegations {
         for (i, delegation) in delegations.iter().enumerate() {
-            let base_path = format!("/delegations/{i}");
+            let base_path = format!("{base_prefix}/{i}");
             check_delegation_conditions(delegation, &base_path, diagnostics);
         }
     }
@@ -245,15 +260,28 @@ fn is_boolean_returning_builtin(name: &str) -> bool {
 }
 
 /// Check FEL in an Advanced Governance document (AG-010 through AG-014).
+///
+/// Post-ADR-0076 advanced lives at `$wosWorkflow.advanced`. Accept either the
+/// embedded path or, for legacy single-document fixtures, the top-level form.
 fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
-    if let Some(constraints) = doc
+    let (constraints, prefix) = if let Some(arr) = doc
         .value
         .pointer("/advanced/verifiableConstraints")
-        .or_else(|| doc.value.get("verifiableConstraints"))
         .and_then(Value::as_array)
     {
+        (Some(arr), "/advanced/verifiableConstraints")
+    } else if let Some(arr) = doc
+        .value
+        .get("verifiableConstraints")
+        .and_then(Value::as_array)
+    {
+        (Some(arr), "/verifiableConstraints")
+    } else {
+        (None, "/verifiableConstraints")
+    };
+    if let Some(constraints) = constraints {
         for (i, constraint) in constraints.iter().enumerate() {
-            let path = format!("/verifiableConstraints/{i}");
+            let path = format!("{prefix}/{i}");
             if let Some(expr_str) = constraint.get("expression").and_then(Value::as_str) {
                 let decls =
                     parse_finite_domain_declarations(constraint.get("finiteDomainDeclarations"));
@@ -262,6 +290,7 @@ fn check_advanced_governance_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDi
         }
     }
 }
+
 /// Check FEL in an Assertion Library document (G-042).
 fn check_assertion_library_fel(doc: &WosDocument, diagnostics: &mut Vec<LintDiagnostic>) {
     if let Some(assertions) = doc.value.get("assertions").and_then(Value::as_array) {

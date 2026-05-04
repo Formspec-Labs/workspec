@@ -11,7 +11,7 @@
 
 ## What this fixture does NOT prove
 
-A real benefits-adjudication workflow at production scale exercises ~15 pipeline stages, ~12 deontic constraints, ~3-4 signers (intake clerk, reviewer, supervisor, regional director), ~10 verifiable constraints. This fixture has 3 toy stages, 4 toy deontic items, 1 signer, 2 toy SMT predicates. **The schema accepts it because inner-block *content* is abbreviated: every embedded block is present for seam coverage, but field-level narrative and examples are thinner than a production workflow would carry. CI enforces zero `SCHEMA-DOC-001` violations on all `*.schema.json` files (`crates/wos-lint/tests/schema_doc_zero_regression.rs`); PLN-0176..0207 remains the spec-to-schema absorption pass for deeper normative alignment, not a violation ceiling.**
+A real benefits-adjudication workflow at production scale exercises ~15 pipeline stages, ~12 deontic constraints, ~3-4 signers (intake clerk, reviewer, supervisor, regional director), ~10 verifiable constraints. This fixture has 3 toy stages, 4 toy deontic items, 1 signer, 2 toy SMT predicates. **The schema accepts it because inner-block leaves are sketch (160 SCHEMA-DOC-001 violations under the `EXCLUDED_SCHEMAS_CEILINGS` ratchet pending the spec absorption pass PLN-0176..0207).**
 
 An LLM authoring against this fixture **WILL ship workflows that schema-validate and are wrong-by-omission** — too few pipeline stages, too few deontic constraints, single signer where multi-signer is the norm. The agency reviewer would catch it; the SBA pilot operator running on a real PoC would not, because nothing in the conformance harness asserts "your benefits workflow has fewer than 5 deontic constraints, are you sure?"
 
@@ -25,7 +25,7 @@ If you are forking this fixture as a starting point for an SBA pilot or producti
 
 1. Use the structural shape only — every block, every seam.
 2. Do NOT take the inner-block content as a complete model. The 3-stage pipeline is structural illustration, not a real adjudication pipeline.
-3. Re-run `cargo run -p wos-lint --example schema_string_leaf_report -- schemas/wos-workflow.schema.json` when you change inner blocks — open string-leaf triage is the practical signal for where to tighten `enum`/`oneOf`/`pattern` next. The minimum-viable companion lands after PLN-0176..0207 spec absorption stabilizes real field shapes, not after a removed schema-doc ceiling.
+3. Watch the `EXCLUDED_SCHEMAS_CEILINGS` ratchet (`crates/wos-lint/tests/schema_doc_zero_regression.rs`) — when the count drops, inner-block leaves have gained canonical descriptions and the absorption pass is filling in. The minimum-viable companion lands when the ratchet hits zero.
 
 ## See also
 

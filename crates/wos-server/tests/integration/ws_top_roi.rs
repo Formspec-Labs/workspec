@@ -13,8 +13,8 @@ use rand::rngs::OsRng;
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
-use wos_server::storage::{SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
+use wos_server::storage::{SqliteStorage, Storage, UserRow};
 
 async fn jwt_app_state() -> AppState {
     let store = Arc::new(
@@ -101,7 +101,6 @@ async fn jwt_app_state() -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 
@@ -121,7 +120,9 @@ async fn login_as(app: &axum::Router, email: &str) -> String {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(res.into_body(), 8192).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 8192)
+        .await
+        .unwrap();
     let pair: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     pair.get("accessToken")
         .and_then(|v| v.as_str())
@@ -205,7 +206,9 @@ async fn provenance_verify_returns_valid_on_empty() {
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(res.into_body(), 4096).await.unwrap();
+    let body = axum::body::to_bytes(res.into_body(), 4096)
+        .await
+        .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["valid"], true);
     assert!(json["brokenAt"].is_null());

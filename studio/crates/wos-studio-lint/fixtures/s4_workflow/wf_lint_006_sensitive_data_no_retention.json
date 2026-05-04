@@ -1,0 +1,17 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {
+        "id": "data-ssn",
+        "kind": "DataElement",
+        "sensitivity": "dpv:SpecialCategoryData"
+      },
+      {
+        "id": "evid-1",
+        "kind": "EvidenceRequirement",
+        "collectsDataElements": ["data-ssn"]
+      }
+    ]
+  }]
+]

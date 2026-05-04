@@ -18,12 +18,7 @@ impl AccessControl for PermissiveAccessControl {
         true
     }
 
-    fn can_delegate(
-        &self,
-        _delegator_id: &str,
-        _delegate_id: &str,
-        _scope: &DelegationScope,
-    ) -> bool {
+    fn can_delegate(&self, _delegator_id: &str, _delegate_id: &str, _scope: &DelegationScope) -> bool {
         true
     }
 }
@@ -87,12 +82,7 @@ impl AccessControl for RoleBasedAccessControl {
         true
     }
 
-    fn can_delegate(
-        &self,
-        delegator_id: &str,
-        delegate_id: &str,
-        _scope: &DelegationScope,
-    ) -> bool {
+    fn can_delegate(&self, delegator_id: &str, delegate_id: &str, _scope: &DelegationScope) -> bool {
         delegator_id != delegate_id
     }
 }

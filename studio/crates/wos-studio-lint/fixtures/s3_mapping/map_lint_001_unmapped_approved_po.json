@@ -1,0 +1,15 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "po-1", "kind": "Outcome",
+       "lifecycleState": "approved",
+       "originClass": "source",
+       "citations": [{"sourceCitationRef": "c"}]}
+    ]
+  }],
+  ["map.json", {
+    "$wosStudioMapping": "1.0",
+    "mappings": []
+  }]
+]

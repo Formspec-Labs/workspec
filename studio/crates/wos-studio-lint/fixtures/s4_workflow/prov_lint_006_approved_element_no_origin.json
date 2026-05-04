@@ -1,0 +1,9 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {"id": "el-1", "kind": "phase", "name": "P", "reviewState": "approved"}
+    ]
+  }]
+]

@@ -4,15 +4,15 @@
 //! and adds concrete JWT + mock adapters + build helper.
 
 pub mod middleware;
-pub use middleware::{Adjudicator, Applicant, AuthCtx, RequireAuth, RequireRole, Role, Supervisor};
 #[cfg(feature = "auth-jwt")]
 pub use wos_server_auth_jwt::JwtAuth;
+pub use middleware::{
+    Adjudicator, Applicant, AuthCtx, RequireAuth, RequireRole, Role, Supervisor,
+};
 #[cfg(feature = "auth-mock")]
 pub use wos_server_auth_mock::MockAuth;
 
-pub use wos_server_ports::auth::{
-    AuthContext, AuthError, AuthHandle, AuthProvider, AuthResult, AuthUser, TokenPair,
-};
+pub use wos_server_ports::auth::{AuthContext, AuthError, AuthHandle, AuthProvider, AuthResult, AuthUser, TokenPair};
 
 use crate::config::{AuthKind, ServerConfig};
 use crate::storage::StorageHandle;

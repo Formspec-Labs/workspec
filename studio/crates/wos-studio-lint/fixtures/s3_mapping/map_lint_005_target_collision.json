@@ -1,0 +1,11 @@
+[
+  ["map.json", {
+    "$wosStudioMapping": "1.0",
+    "mappings": [
+      {"id": "m1", "policyObjectRef": "p1",
+       "targets": [{"wosJsonPath": "$.governance.policyObjects[0]"}]},
+      {"id": "m2", "policyObjectRef": "p2",
+       "targets": [{"wosJsonPath": "$.governance.policyObjects[0]"}]}
+    ]
+  }]
+]

@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use postgres::{Client, NoTls, Row};
 use std::sync::{Arc, Mutex};
 use wos_server_ports::storage::{
-    AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator, InstanceQuery,
-    InstanceRow, IntakeRecordRow, KernelRow, LIST_INSTANCES_PAGE_SIZE_MAX, Page, ProvenanceRow,
-    SessionRow, Storage, StorageError, StorageResult, UserRow,
+    AgentRow, DelegationRow, IdentityFactRow, InboundCloudEventRow, InstanceMutator,
+    InstanceQuery, InstanceRow, IntakeRecordRow, KernelRow, Page, ProvenanceRow, SessionRow,
+    Storage, StorageError, StorageResult, UserRow, LIST_INSTANCES_PAGE_SIZE_MAX,
 };
 
 /// Thin composition adapter over Trellis Postgres storage.
@@ -43,128 +43,16 @@ fn se(e: postgres::Error) -> StorageError {
     StorageError::Backend(e.to_string())
 }
 
-/// Older `wos-server-postgres` builds created `kernels` with `PRIMARY KEY (url)` only.
-/// `CREATE TABLE IF NOT EXISTS` does not alter an existing table, so upgrade in place when we
-/// detect a single-column primary key on `url` and `version` is present.
-fn ensure_kernels_composite_primary_key(client: &mut Client) -> StorageResult<()> {
-    let exists: bool = client
-        .query_one(
-            "SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'kernels'
-            )",
-            &[],
-        )
-        .map_err(se)?
-        .get(0);
-    if !exists {
-        return Ok(());
-    }
-
-    let col_count: i64 = client
-        .query_one(
-            "SELECT COUNT(*)::bigint
-             FROM information_schema.key_column_usage kcu
-             JOIN information_schema.table_constraints tc
-               ON kcu.constraint_name = tc.constraint_name
-              AND kcu.table_schema = tc.table_schema
-             WHERE kcu.table_schema = 'public'
-               AND kcu.table_name = 'kernels'
-               AND tc.constraint_type = 'PRIMARY KEY'",
-            &[],
-        )
-        .map_err(se)?
-        .get(0);
-
-    if col_count != 1 {
-        return Ok(());
-    }
-
-    let only_col: String = client
-        .query_one(
-            "SELECT kcu.column_name::text
-             FROM information_schema.key_column_usage kcu
-             JOIN information_schema.table_constraints tc
-               ON kcu.constraint_name = tc.constraint_name
-              AND kcu.table_schema = tc.table_schema
-             WHERE kcu.table_schema = 'public'
-               AND kcu.table_name = 'kernels'
-               AND tc.constraint_type = 'PRIMARY KEY'",
-            &[],
-        )
-        .map_err(se)?
-        .get(0);
-
-    if only_col != "url" {
-        return Ok(());
-    }
-
-    let dup_groups: i64 = client
-        .query_one(
-            "SELECT COUNT(*)::bigint FROM (
-                 SELECT url, version
-                 FROM kernels
-                 GROUP BY url, version
-                 HAVING COUNT(*) > 1
-             ) d",
-            &[],
-        )
-        .map_err(se)?
-        .get(0);
-    if dup_groups > 0 {
-        return Err(StorageError::Backend(
-            "kernels: duplicate (url, version) rows prevent migrating primary key to (url, version)"
-                .into(),
-        ));
-    }
-
-    let conname: String = client
-        .query_one(
-            "SELECT tc.constraint_name::text
-             FROM information_schema.table_constraints tc
-             WHERE tc.table_schema = 'public'
-               AND tc.table_name = 'kernels'
-               AND tc.constraint_type = 'PRIMARY KEY'",
-            &[],
-        )
-        .map_err(se)?
-        .get(0);
-
-    if !conname
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    {
-        return Err(StorageError::Backend(format!(
-            "kernels: refusing to migrate primary key using unexpected constraint name {conname:?}"
-        )));
-    }
-
-    let mut tx = client.transaction().map_err(se)?;
-    tx.batch_execute(&format!(
-        "ALTER TABLE kernels DROP CONSTRAINT \"{conname}\""
-    ))
-    .map_err(se)?;
-    tx.execute(
-        "ALTER TABLE kernels ADD CONSTRAINT kernels_pkey PRIMARY KEY (url, version)",
-        &[],
-    )
-    .map_err(se)?;
-    tx.commit().map_err(se)?;
-    Ok(())
-}
-
 fn migrate(client: &mut Client) -> StorageResult<()> {
-    client
-        .batch_execute(
-            "CREATE TABLE IF NOT EXISTS kernels (
-            url TEXT NOT NULL,
-            version TEXT NOT NULL,
+    client.batch_execute(
+        "CREATE TABLE IF NOT EXISTS kernels (
+            url TEXT PRIMARY KEY,
             title TEXT NOT NULL,
+            version TEXT NOT NULL,
             status TEXT NOT NULL,
             impact_level TEXT NOT NULL,
             document JSONB NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL,
-            PRIMARY KEY (url, version)
+            updated_at TIMESTAMPTZ NOT NULL
         );
         CREATE TABLE IF NOT EXISTS instances (
             instance_id TEXT PRIMARY KEY,
@@ -257,9 +145,8 @@ fn migrate(client: &mut Client) -> StorageResult<()> {
             updated_at TIMESTAMPTZ NOT NULL,
             PRIMARY KEY(binding, intake_id)
         );",
-        )
-        .map_err(se)?;
-    ensure_kernels_composite_primary_key(client)?;
+    )
+    .map_err(se)?;
     Ok(())
 }
 
@@ -305,67 +192,29 @@ fn map_provenance(r: &Row) -> ProvenanceRow {
 #[async_trait]
 impl Storage for PostgresStorage {
     async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query("SELECT * FROM kernels ORDER BY url, version", &[])
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM kernels ORDER BY url", &[]).map_err(se)?;
         Ok(rows.iter().map(map_kernel).collect())
     }
     async fn get_kernel(&self, url: &str) -> StorageResult<Option<KernelRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM kernels WHERE url = $1 ORDER BY updated_at DESC LIMIT 1",
-                &[&url],
-            )
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM kernels WHERE url = $1", &[&url]).map_err(se)?;
         Ok(row.as_ref().map(map_kernel))
     }
-
-    async fn get_kernel_by_url_and_version(
-        &self,
-        url: &str,
-        version: &str,
-    ) -> StorageResult<Option<KernelRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM kernels WHERE url = $1 AND version = $2",
-                &[&url, &version],
-            )
-            .map_err(se)?;
-        Ok(row.as_ref().map(map_kernel))
-    }
-
     async fn upsert_kernel(&self, row: &KernelRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute(
             "INSERT INTO kernels (url,title,version,status,impact_level,document,updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7)
-             ON CONFLICT(url, version) DO UPDATE SET
-               title=excluded.title,status=excluded.status,
+             ON CONFLICT(url) DO UPDATE SET
+               title=excluded.title,version=excluded.version,status=excluded.status,
                impact_level=excluded.impact_level,document=excluded.document,updated_at=excluded.updated_at",
             &[&row.url,&row.title,&row.version,&row.status,&row.impact_level,&row.document,&row.updated_at],
         ).map_err(se)?;
         Ok(())
     }
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute(
             "INSERT INTO instances (instance_id,definition_url,definition_version,status,impact_level,instance_json,runtime_aux_json,created_at,updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
@@ -374,13 +223,8 @@ impl Storage for PostgresStorage {
         Ok(())
     }
     async fn get_instance(&self, id: &str) -> StorageResult<Option<InstanceRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt("SELECT * FROM instances WHERE instance_id = $1", &[&id])
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM instances WHERE instance_id = $1", &[&id]).map_err(se)?;
         Ok(row.as_ref().map(map_instance))
     }
     async fn list_instances(&self, q: InstanceQuery) -> StorageResult<Page<InstanceRow>> {
@@ -388,57 +232,36 @@ impl Storage for PostgresStorage {
         let page_size = q.page_size.clamp(1, LIST_INSTANCES_PAGE_SIZE_MAX);
         let offset = ((page - 1) * page_size) as i64;
         let limit = page_size as i64;
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let status = q.status.unwrap_or_default();
         let impact = q.impact_level.unwrap_or_default();
         let defs = q.definition_url.unwrap_or_default();
-        let rows = c
-            .query(
-                "SELECT * FROM instances
+        let rows = c.query(
+            "SELECT * FROM instances
              WHERE ($1::text[] = '{}'::text[] OR status = ANY($1))
                AND ($2::text[] = '{}'::text[] OR impact_level = ANY($2))
                AND ($3::text[] = '{}'::text[] OR definition_url = ANY($3))
              ORDER BY created_at DESC LIMIT $4 OFFSET $5",
-                &[&status, &impact, &defs, &limit, &offset],
-            )
-            .map_err(se)?;
-        let total_row = c
-            .query_one(
-                "SELECT COUNT(*) AS total FROM instances
+            &[&status, &impact, &defs, &limit, &offset],
+        ).map_err(se)?;
+        let total_row = c.query_one(
+            "SELECT COUNT(*) AS total FROM instances
              WHERE ($1::text[] = '{}'::text[] OR status = ANY($1))
                AND ($2::text[] = '{}'::text[] OR impact_level = ANY($2))
                AND ($3::text[] = '{}'::text[] OR definition_url = ANY($3))",
-                &[&status, &impact, &defs],
-            )
-            .map_err(se)?;
+            &[&status, &impact, &defs],
+        ).map_err(se)?;
         let total: i64 = total_row.get("total");
-        Ok(Page {
-            items: rows.iter().map(map_instance).collect(),
-            total: total as u64,
-            page,
-            page_size,
-        })
+        Ok(Page { items: rows.iter().map(map_instance).collect(), total: total as u64, page, page_size })
     }
     async fn update_instance_atomic(
         &self,
         id: &str,
         mutator: InstanceMutator<'_>,
     ) -> StorageResult<InstanceRow> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let mut tx = c.transaction().map_err(se)?;
-        let row = tx
-            .query_opt(
-                "SELECT * FROM instances WHERE instance_id = $1 FOR UPDATE",
-                &[&id],
-            )
-            .map_err(se)?
-            .ok_or(StorageError::NotFound)?;
+        let row = tx.query_opt("SELECT * FROM instances WHERE instance_id = $1 FOR UPDATE", &[&id]).map_err(se)?.ok_or(StorageError::NotFound)?;
         let mut current = map_instance(&row);
         let appended = mutator(&mut current)?;
         current.updated_at = chrono::Utc::now();
@@ -456,63 +279,22 @@ impl Storage for PostgresStorage {
         Ok(current)
     }
     async fn list_provenance(&self, instance_id: &str) -> StorageResult<Vec<ProvenanceRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query(
-                "SELECT * FROM provenance WHERE instance_id=$1 ORDER BY seq ASC",
-                &[&instance_id],
-            )
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM provenance WHERE instance_id=$1 ORDER BY seq ASC", &[&instance_id]).map_err(se)?;
         Ok(rows.iter().map(map_provenance).collect())
     }
     async fn last_provenance(&self, instance_id: &str) -> StorageResult<Option<ProvenanceRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM provenance WHERE instance_id=$1 ORDER BY seq DESC LIMIT 1",
-                &[&instance_id],
-            )
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM provenance WHERE instance_id=$1 ORDER BY seq DESC LIMIT 1", &[&instance_id]).map_err(se)?;
         Ok(row.as_ref().map(map_provenance))
     }
     async fn list_delegations(&self, workflow_url: &str) -> StorageResult<Vec<DelegationRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query(
-                "SELECT * FROM delegations WHERE workflow_url=$1 ORDER BY start_date DESC",
-                &[&workflow_url],
-            )
-            .map_err(se)?;
-        Ok(rows
-            .iter()
-            .map(|r| DelegationRow {
-                id: r.get("id"),
-                workflow_url: r.get("workflow_url"),
-                delegator: r.get("delegator"),
-                delegate: r.get("delegate"),
-                scope: r.get("scope"),
-                authority: r.get("authority"),
-                legal_instrument: r.get("legal_instrument"),
-                start_date: r.get("start_date"),
-                end_date: r.get("end_date"),
-                status: r.get("status"),
-            })
-            .collect())
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM delegations WHERE workflow_url=$1 ORDER BY start_date DESC", &[&workflow_url]).map_err(se)?;
+        Ok(rows.iter().map(|r| DelegationRow { id:r.get("id"), workflow_url:r.get("workflow_url"), delegator:r.get("delegator"), delegate:r.get("delegate"), scope:r.get("scope"), authority:r.get("authority"), legal_instrument:r.get("legal_instrument"), start_date:r.get("start_date"), end_date:r.get("end_date"), status:r.get("status") }).collect())
     }
     async fn upsert_delegation(&self, row: &DelegationRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute("INSERT INTO delegations (id,workflow_url,delegator,delegate,scope,authority,legal_instrument,start_date,end_date,status)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                    ON CONFLICT(id) DO UPDATE SET workflow_url=excluded.workflow_url,delegator=excluded.delegator,delegate=excluded.delegate,scope=excluded.scope,authority=excluded.authority,legal_instrument=excluded.legal_instrument,start_date=excluded.start_date,end_date=excluded.end_date,status=excluded.status",
@@ -520,22 +302,12 @@ impl Storage for PostgresStorage {
         Ok(())
     }
     async fn revoke_delegation(&self, workflow_url: &str, id: &str) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        c.execute(
-            "UPDATE delegations SET status='revoked' WHERE workflow_url=$1 AND id=$2",
-            &[&workflow_url, &id],
-        )
-        .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        c.execute("UPDATE delegations SET status='revoked' WHERE workflow_url=$1 AND id=$2", &[&workflow_url,&id]).map_err(se)?;
         Ok(())
     }
     async fn upsert_agent(&self, row: &AgentRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute("INSERT INTO agents (id,workflow_url,name,kind,version,status,autonomy,confidence_floor,config_json,deployment_state,created_at,updated_at)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
                    ON CONFLICT(id) DO UPDATE SET workflow_url=excluded.workflow_url,name=excluded.name,kind=excluded.kind,version=excluded.version,status=excluded.status,autonomy=excluded.autonomy,confidence_floor=excluded.confidence_floor,config_json=excluded.config_json,deployment_state=excluded.deployment_state,updated_at=excluded.updated_at",
@@ -543,254 +315,72 @@ impl Storage for PostgresStorage {
         Ok(())
     }
     async fn get_agent(&self, id: &str) -> StorageResult<Option<AgentRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt("SELECT * FROM agents WHERE id=$1", &[&id])
-            .map_err(se)?;
-        Ok(row.map(|r| AgentRow {
-            id: r.get("id"),
-            workflow_url: r.get("workflow_url"),
-            name: r.get("name"),
-            kind: r.get("kind"),
-            version: r.get("version"),
-            status: r.get("status"),
-            autonomy: r.get("autonomy"),
-            confidence_floor: r.get("confidence_floor"),
-            config_json: r.get("config_json"),
-            deployment_state: r.get("deployment_state"),
-            created_at: r.get("created_at"),
-            updated_at: r.get("updated_at"),
-        }))
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM agents WHERE id=$1", &[&id]).map_err(se)?;
+        Ok(row.map(|r| AgentRow { id:r.get("id"), workflow_url:r.get("workflow_url"), name:r.get("name"), kind:r.get("kind"), version:r.get("version"), status:r.get("status"), autonomy:r.get("autonomy"), confidence_floor:r.get("confidence_floor"), config_json:r.get("config_json"), deployment_state:r.get("deployment_state"), created_at:r.get("created_at"), updated_at:r.get("updated_at") }))
     }
     async fn list_agents(&self, workflow_url: &str) -> StorageResult<Vec<AgentRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query(
-                "SELECT * FROM agents WHERE workflow_url=$1 ORDER BY name ASC",
-                &[&workflow_url],
-            )
-            .map_err(se)?;
-        Ok(rows
-            .iter()
-            .map(|r| AgentRow {
-                id: r.get("id"),
-                workflow_url: r.get("workflow_url"),
-                name: r.get("name"),
-                kind: r.get("kind"),
-                version: r.get("version"),
-                status: r.get("status"),
-                autonomy: r.get("autonomy"),
-                confidence_floor: r.get("confidence_floor"),
-                config_json: r.get("config_json"),
-                deployment_state: r.get("deployment_state"),
-                created_at: r.get("created_at"),
-                updated_at: r.get("updated_at"),
-            })
-            .collect())
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM agents WHERE workflow_url=$1 ORDER BY name ASC", &[&workflow_url]).map_err(se)?;
+        Ok(rows.iter().map(|r| AgentRow { id:r.get("id"), workflow_url:r.get("workflow_url"), name:r.get("name"), kind:r.get("kind"), version:r.get("version"), status:r.get("status"), autonomy:r.get("autonomy"), confidence_floor:r.get("confidence_floor"), config_json:r.get("config_json"), deployment_state:r.get("deployment_state"), created_at:r.get("created_at"), updated_at:r.get("updated_at") }).collect())
     }
     async fn insert_identity_fact(&self, row: &IdentityFactRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute("INSERT INTO identity_facts (id,instance_id,subject_ref,assurance_level,disclosure_posture,fact_json,upgraded_from,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", &[&row.id,&row.instance_id,&row.subject_ref,&row.assurance_level,&row.disclosure_posture,&row.fact_json,&row.upgraded_from,&row.created_at]).map_err(se)?;
         Ok(())
     }
     async fn get_identity_fact(&self, id: &str) -> StorageResult<Option<IdentityFactRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt("SELECT * FROM identity_facts WHERE id=$1", &[&id])
-            .map_err(se)?;
-        Ok(row.map(|r| IdentityFactRow {
-            id: r.get("id"),
-            instance_id: r.get("instance_id"),
-            subject_ref: r.get("subject_ref"),
-            assurance_level: r.get("assurance_level"),
-            disclosure_posture: r.get("disclosure_posture"),
-            fact_json: r.get("fact_json"),
-            upgraded_from: r.get("upgraded_from"),
-            created_at: r.get("created_at"),
-        }))
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM identity_facts WHERE id=$1", &[&id]).map_err(se)?;
+        Ok(row.map(|r| IdentityFactRow { id:r.get("id"), instance_id:r.get("instance_id"), subject_ref:r.get("subject_ref"), assurance_level:r.get("assurance_level"), disclosure_posture:r.get("disclosure_posture"), fact_json:r.get("fact_json"), upgraded_from:r.get("upgraded_from"), created_at:r.get("created_at") }))
     }
     async fn list_identity_facts(&self, instance_id: &str) -> StorageResult<Vec<IdentityFactRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query(
-                "SELECT * FROM identity_facts WHERE instance_id=$1 ORDER BY created_at ASC",
-                &[&instance_id],
-            )
-            .map_err(se)?;
-        Ok(rows
-            .iter()
-            .map(|r| IdentityFactRow {
-                id: r.get("id"),
-                instance_id: r.get("instance_id"),
-                subject_ref: r.get("subject_ref"),
-                assurance_level: r.get("assurance_level"),
-                disclosure_posture: r.get("disclosure_posture"),
-                fact_json: r.get("fact_json"),
-                upgraded_from: r.get("upgraded_from"),
-                created_at: r.get("created_at"),
-            })
-            .collect())
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM identity_facts WHERE instance_id=$1 ORDER BY created_at ASC", &[&instance_id]).map_err(se)?;
+        Ok(rows.iter().map(|r| IdentityFactRow { id:r.get("id"), instance_id:r.get("instance_id"), subject_ref:r.get("subject_ref"), assurance_level:r.get("assurance_level"), disclosure_posture:r.get("disclosure_posture"), fact_json:r.get("fact_json"), upgraded_from:r.get("upgraded_from"), created_at:r.get("created_at") }).collect())
     }
     async fn list_assurance_chain(&self, subject_ref: &str) -> StorageResult<Vec<IdentityFactRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let rows = c
-            .query(
-                "SELECT * FROM identity_facts WHERE subject_ref=$1 ORDER BY created_at ASC",
-                &[&subject_ref],
-            )
-            .map_err(se)?;
-        Ok(rows
-            .iter()
-            .map(|r| IdentityFactRow {
-                id: r.get("id"),
-                instance_id: r.get("instance_id"),
-                subject_ref: r.get("subject_ref"),
-                assurance_level: r.get("assurance_level"),
-                disclosure_posture: r.get("disclosure_posture"),
-                fact_json: r.get("fact_json"),
-                upgraded_from: r.get("upgraded_from"),
-                created_at: r.get("created_at"),
-            })
-            .collect())
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let rows = c.query("SELECT * FROM identity_facts WHERE subject_ref=$1 ORDER BY created_at ASC", &[&subject_ref]).map_err(se)?;
+        Ok(rows.iter().map(|r| IdentityFactRow { id:r.get("id"), instance_id:r.get("instance_id"), subject_ref:r.get("subject_ref"), assurance_level:r.get("assurance_level"), disclosure_posture:r.get("disclosure_posture"), fact_json:r.get("fact_json"), upgraded_from:r.get("upgraded_from"), created_at:r.get("created_at") }).collect())
     }
-    async fn get_inbound_cloud_event(
-        &self,
-        cloud_event_id: &str,
-    ) -> StorageResult<Option<InboundCloudEventRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM integration_inbound WHERE cloud_event_id=$1",
-                &[&cloud_event_id],
-            )
-            .map_err(se)?;
-        Ok(row.map(|r| InboundCloudEventRow {
-            cloud_event_id: r.get("cloud_event_id"),
-            instance_id: r.get("instance_id"),
-            binding: r.get("binding"),
-            received_at: r.get("received_at"),
-            payload_json: r.get("payload_json"),
-        }))
+    async fn get_inbound_cloud_event(&self, cloud_event_id: &str) -> StorageResult<Option<InboundCloudEventRow>> {
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM integration_inbound WHERE cloud_event_id=$1", &[&cloud_event_id]).map_err(se)?;
+        Ok(row.map(|r| InboundCloudEventRow { cloud_event_id:r.get("cloud_event_id"), instance_id:r.get("instance_id"), binding:r.get("binding"), received_at:r.get("received_at"), payload_json:r.get("payload_json") }))
     }
     async fn insert_inbound_cloud_event(&self, row: &InboundCloudEventRow) -> StorageResult<bool> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let n = c.execute("INSERT INTO integration_inbound (cloud_event_id,instance_id,binding,received_at,payload_json) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", &[&row.cloud_event_id,&row.instance_id,&row.binding,&row.received_at,&row.payload_json]).map_err(se)?;
         Ok(n > 0)
     }
-    async fn get_intake_record(
-        &self,
-        binding: &str,
-        intake_id: &str,
-    ) -> StorageResult<Option<IntakeRecordRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM intake_records WHERE binding=$1 AND intake_id=$2",
-                &[&binding, &intake_id],
-            )
-            .map_err(se)?;
-        Ok(row.map(|r| IntakeRecordRow {
-            binding: r.get("binding"),
-            intake_id: r.get("intake_id"),
-            status: r.get("status"),
-            record_json: r.get("record_json"),
-            created_at: r.get("created_at"),
-            updated_at: r.get("updated_at"),
-        }))
+    async fn get_intake_record(&self, binding: &str, intake_id: &str) -> StorageResult<Option<IntakeRecordRow>> {
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM intake_records WHERE binding=$1 AND intake_id=$2", &[&binding,&intake_id]).map_err(se)?;
+        Ok(row.map(|r| IntakeRecordRow { binding:r.get("binding"), intake_id:r.get("intake_id"), status:r.get("status"), record_json:r.get("record_json"), created_at:r.get("created_at"), updated_at:r.get("updated_at") }))
     }
     async fn insert_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute("INSERT INTO intake_records (binding,intake_id,status,record_json,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6)", &[&row.binding,&row.intake_id,&row.status,&row.record_json,&row.created_at,&row.updated_at]).map_err(se)?;
         Ok(())
     }
     async fn update_intake_record(&self, row: &IntakeRecordRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let n = c.execute("UPDATE intake_records SET status=$1,record_json=$2,updated_at=$3 WHERE binding=$4 AND intake_id=$5", &[&row.status,&row.record_json,&row.updated_at,&row.binding,&row.intake_id]).map_err(se)?;
-        if n == 0 {
-            Err(StorageError::NotFound)
-        } else {
-            Ok(())
-        }
+        if n == 0 { Err(StorageError::NotFound) } else { Ok(()) }
     }
     async fn get_user_by_email(&self, email: &str) -> StorageResult<Option<UserRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT * FROM users WHERE lower(email)=lower($1)",
-                &[&email],
-            )
-            .map_err(se)?;
-        Ok(row.map(|r| UserRow {
-            id: r.get("id"),
-            email: r.get("email"),
-            name: r.get("name"),
-            role: r.get("role"),
-            password_hash: r.get("password_hash"),
-            avatar: r.get("avatar"),
-            auth_epoch: r.get("auth_epoch"),
-            created_at: r.get("created_at"),
-        }))
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM users WHERE lower(email)=lower($1)", &[&email]).map_err(se)?;
+        Ok(row.map(|r| UserRow { id:r.get("id"), email:r.get("email"), name:r.get("name"), role:r.get("role"), password_hash:r.get("password_hash"), avatar:r.get("avatar"), auth_epoch:r.get("auth_epoch"), created_at:r.get("created_at") }))
     }
     async fn get_user(&self, id: &str) -> StorageResult<Option<UserRow>> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt("SELECT * FROM users WHERE id=$1", &[&id])
-            .map_err(se)?;
-        Ok(row.map(|r| UserRow {
-            id: r.get("id"),
-            email: r.get("email"),
-            name: r.get("name"),
-            role: r.get("role"),
-            password_hash: r.get("password_hash"),
-            avatar: r.get("avatar"),
-            auth_epoch: r.get("auth_epoch"),
-            created_at: r.get("created_at"),
-        }))
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT * FROM users WHERE id=$1", &[&id]).map_err(se)?;
+        Ok(row.map(|r| UserRow { id:r.get("id"), email:r.get("email"), name:r.get("name"), role:r.get("role"), password_hash:r.get("password_hash"), avatar:r.get("avatar"), auth_epoch:r.get("auth_epoch"), created_at:r.get("created_at") }))
     }
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         // AUTH-CONTRACT INVARIANT: the ON CONFLICT DO UPDATE clause intentionally
         // omits `password_hash` and `auth_epoch`. These two fields belong to the
         // auth contract and are set ONLY at initial user creation (the INSERT
@@ -812,78 +402,35 @@ impl Storage for PostgresStorage {
         Ok(())
     }
     async fn bump_user_auth_epoch(&self, user_id: &str) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        c.execute(
-            "UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id=$1",
-            &[&user_id],
-        )
-        .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        c.execute("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id=$1", &[&user_id]).map_err(se)?;
         Ok(())
     }
-    async fn set_user_password_hash(
-        &self,
-        user_id: &str,
-        password_hash: &str,
-    ) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+    async fn set_user_password_hash(&self, user_id: &str, password_hash: &str) -> StorageResult<()> {
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let mut tx = c.transaction().map_err(se)?;
-        let n = tx
-            .execute(
-                "UPDATE users SET password_hash=$1 WHERE id=$2",
-                &[&password_hash, &user_id],
-            )
-            .map_err(se)?;
-        if n == 0 {
-            return Err(StorageError::NotFound);
-        }
-        tx.execute(
-            "UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id=$1",
-            &[&user_id],
-        )
-        .map_err(se)?;
-        tx.execute(
-            "UPDATE sessions SET revoked = TRUE WHERE user_id=$1",
-            &[&user_id],
-        )
-        .map_err(se)?;
+        let n = tx.execute("UPDATE users SET password_hash=$1 WHERE id=$2", &[&password_hash,&user_id]).map_err(se)?;
+        if n == 0 { return Err(StorageError::NotFound); }
+        tx.execute("UPDATE users SET auth_epoch = auth_epoch + 1 WHERE id=$1", &[&user_id]).map_err(se)?;
+        tx.execute("UPDATE sessions SET revoked = TRUE WHERE user_id=$1", &[&user_id]).map_err(se)?;
         tx.commit().map_err(se)?;
         Ok(())
     }
     async fn upsert_session(&self, row: &SessionRow) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         c.execute("INSERT INTO sessions (jti,user_id,expires_at,revoked) VALUES ($1,$2,$3,$4)
                    ON CONFLICT(jti) DO UPDATE SET user_id=excluded.user_id,expires_at=excluded.expires_at,revoked=excluded.revoked",
             &[&row.jti,&row.user_id,&row.expires_at,&row.revoked]).map_err(se)?;
         Ok(())
     }
     async fn revoke_session(&self, jti: &str) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        c.execute("UPDATE sessions SET revoked = TRUE WHERE jti=$1", &[&jti])
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        c.execute("UPDATE sessions SET revoked = TRUE WHERE jti=$1", &[&jti]).map_err(se)?;
         Ok(())
     }
     async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        c.execute(
-            "UPDATE sessions SET revoked = TRUE WHERE user_id=$1",
-            &[&user_id],
-        )
-        .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        c.execute("UPDATE sessions SET revoked = TRUE WHERE user_id=$1", &[&user_id]).map_err(se)?;
         Ok(())
     }
     async fn sweep_expired_sessions(
@@ -892,10 +439,7 @@ impl Storage for PostgresStorage {
     ) -> StorageResult<u64> {
         let cutoff_unrevoked = now - chrono::Duration::days(7);
         let cutoff_revoked = now - chrono::Duration::days(30);
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
         let n = c.execute(
             "DELETE FROM sessions WHERE expires_at < $1 OR (revoked = TRUE AND expires_at < $2)",
             &[&cutoff_unrevoked, &cutoff_revoked],
@@ -904,16 +448,8 @@ impl Storage for PostgresStorage {
     }
 
     async fn session_is_valid(&self, jti: &str) -> StorageResult<bool> {
-        let mut c = self
-            .client
-            .lock()
-            .map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
-        let row = c
-            .query_opt(
-                "SELECT revoked, expires_at FROM sessions WHERE jti=$1",
-                &[&jti],
-            )
-            .map_err(se)?;
+        let mut c = self.client.lock().map_err(|_| StorageError::Backend("postgres client mutex poisoned".into()))?;
+        let row = c.query_opt("SELECT revoked, expires_at FROM sessions WHERE jti=$1", &[&jti]).map_err(se)?;
         Ok(match row {
             Some(r) => {
                 let revoked: bool = r.get("revoked");
@@ -969,10 +505,6 @@ mod tests {
     use std::process::{Command, Stdio};
     use std::thread;
     use std::time::{Duration, Instant};
-    use std::{
-        future::Future,
-        task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
-    };
     use wos_server_ports::storage::Storage;
     use wos_server_sqlite::SqliteStorage;
 
@@ -1020,31 +552,18 @@ mod tests {
             if !wait_for_postgres(port) {
                 return None;
             }
-            Some(Self {
-                temp_dir,
-                port,
-                pg_ctl,
-            })
+            Some(Self { temp_dir, port, pg_ctl })
         }
 
         fn dsn(&self) -> String {
-            format!(
-                "host=127.0.0.1 port={} user=postgres dbname=postgres",
-                self.port
-            )
+            format!("host=127.0.0.1 port={} user=postgres dbname=postgres", self.port)
         }
     }
 
     impl Drop for TestCluster {
         fn drop(&mut self) {
             let data_dir = self.temp_dir.path().join("data");
-            let _ = Command::new(&self.pg_ctl)
-                .arg("-D")
-                .arg(&data_dir)
-                .arg("-m")
-                .arg("immediate")
-                .arg("stop")
-                .status();
+            let _ = Command::new(&self.pg_ctl).arg("-D").arg(&data_dir).arg("-m").arg("immediate").arg("stop").status();
         }
     }
 
@@ -1081,9 +600,12 @@ mod tests {
             );
             return;
         };
-        let sqlite = SqliteStorage::connect("sqlite::memory:")
-            .await
-            .expect("sqlite connect");
+        let pg = PostgresStorage::connect(&dsn).expect("pg connect");
+        assert!(
+            pg.trellis_store_ready(),
+            "trellis canonical store guardrail should be initialized"
+        );
+        let sqlite = SqliteStorage::connect("sqlite::memory:").await.expect("sqlite connect");
         sqlite.migrate().await.expect("sqlite migrate");
 
         let row = KernelRow {
@@ -1097,52 +619,12 @@ mod tests {
         };
 
         sqlite.upsert_kernel(&row).await.expect("sqlite upsert");
+        pg.upsert_kernel(&row).await.expect("pg upsert");
 
-        let got_sqlite = sqlite
-            .get_kernel(&row.url)
-            .await
-            .expect("sqlite get")
-            .expect("sqlite row");
-        let pg_row = row.clone();
-        let got_pg = thread::spawn(move || {
-            let pg = PostgresStorage::connect(&dsn).expect("pg connect");
-            assert!(
-                pg.trellis_store_ready(),
-                "trellis canonical store guardrail should be initialized"
-            );
-            block_on_ready(pg.upsert_kernel(&pg_row)).expect("pg upsert");
-            let got_pg = block_on_ready(pg.get_kernel(&pg_row.url))
-                .expect("pg get")
-                .expect("pg row");
-            drop(pg);
-            got_pg
-        })
-        .join()
-        .expect("pg thread");
+        let got_sqlite = sqlite.get_kernel(&row.url).await.expect("sqlite get").expect("sqlite row");
+        let got_pg = pg.get_kernel(&row.url).await.expect("pg get").expect("pg row");
         assert_eq!(got_sqlite.url, got_pg.url);
         assert_eq!(got_sqlite.document, got_pg.document);
-    }
-
-    fn block_on_ready<F: Future>(future: F) -> F::Output {
-        let waker = noop_waker();
-        let mut cx = Context::from_waker(&waker);
-        let mut future = std::pin::pin!(future);
-        match future.as_mut().poll(&mut cx) {
-            Poll::Ready(output) => output,
-            Poll::Pending => panic!("postgres storage future unexpectedly pending"),
-        }
-    }
-
-    fn noop_waker() -> Waker {
-        unsafe fn clone(_: *const ()) -> RawWaker {
-            RawWaker::new(std::ptr::null(), &VTABLE)
-        }
-        unsafe fn wake(_: *const ()) {}
-        unsafe fn wake_by_ref(_: *const ()) {}
-        unsafe fn drop(_: *const ()) {}
-        static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
-        let raw = RawWaker::new(std::ptr::null(), &VTABLE);
-        unsafe { Waker::from_raw(raw) }
     }
 
     fn reserve_port() -> u16 {

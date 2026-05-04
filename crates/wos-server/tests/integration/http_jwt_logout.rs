@@ -12,8 +12,8 @@ use rand::rngs::OsRng;
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
-use wos_server::storage::{SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, http, realtime, services::AppServices};
+use wos_server::storage::{SqliteStorage, Storage, UserRow};
 
 async fn jwt_app_state() -> AppState {
     jwt_app_state_with(false).await
@@ -104,7 +104,6 @@ async fn jwt_app_state_with(bearer_strict: bool) -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 

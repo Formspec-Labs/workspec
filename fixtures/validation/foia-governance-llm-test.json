@@ -28,6 +28,8 @@
     }
   },
   "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+    "targetWorkflow": "https://agency.gov/workflows/foia-request-processing",
     "dueProcess": {
       "adverseDecisionPolicy": {
         "noticeRequired": true,

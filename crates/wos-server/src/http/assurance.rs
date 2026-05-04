@@ -1,13 +1,13 @@
 use axum::Json;
-use axum::Router;
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
+use axum::Router;
 
 use crate::AppState;
 use crate::auth::{Adjudicator, RequireRole, Supervisor};
 use crate::error::ApiResult;
 use crate::services::assurance_service::{
-    AssuranceChainResponse, AssuranceService, IdentityFactView, RecordFactRequest, UpgradeRequest,
+    AssuranceService, AssuranceChainResponse, IdentityFactView, RecordFactRequest, UpgradeRequest,
 };
 
 pub fn routes() -> Router<AppState> {

@@ -90,12 +90,10 @@ impl AgentInvoker for StubInvoker {
         // omitted). Within each filter, take the response at `invocation_index`
         // (zero-based) so successive invocations of the same capability stream
         // through the declarations in document order.
-        let response =
-            pick_response(responses, &task.capability_id, invocation_index).ok_or_else(|| {
-                AgentInvocationError::StubExhausted {
-                    capability_id: task.capability_id.clone(),
-                    invocation_index,
-                }
+        let response = pick_response(responses, &task.capability_id, invocation_index)
+            .ok_or_else(|| AgentInvocationError::StubExhausted {
+                capability_id: task.capability_id.clone(),
+                invocation_index,
             })?;
 
         Ok(AgentResult {
@@ -181,9 +179,7 @@ mod tests {
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
-        let result = invoker
-            .invoke(&agent, &task("triage"), &ctx(&case_state))
-            .unwrap();
+        let result = invoker.invoke(&agent, &task("triage"), &ctx(&case_state)).unwrap();
         assert_eq!(result.output["category"], "benefits");
         assert_eq!(result.confidence, 0.92);
     }
@@ -208,12 +204,8 @@ mod tests {
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
-        let first = invoker
-            .invoke(&agent, &task("triage"), &ctx(&case_state))
-            .unwrap();
-        let second = invoker
-            .invoke(&agent, &task("triage"), &ctx(&case_state))
-            .unwrap();
+        let first = invoker.invoke(&agent, &task("triage"), &ctx(&case_state)).unwrap();
+        let second = invoker.invoke(&agent, &task("triage"), &ctx(&case_state)).unwrap();
         assert_eq!(first.output["category"], "benefits");
         assert_eq!(second.output["category"], "appeals");
     }
@@ -252,9 +244,7 @@ mod tests {
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
-        invoker
-            .invoke(&agent, &task("triage"), &ctx(&case_state))
-            .unwrap();
+        invoker.invoke(&agent, &task("triage"), &ctx(&case_state)).unwrap();
         let err = invoker
             .invoke(&agent, &task("triage"), &ctx(&case_state))
             .expect_err("second invocation MUST exhaust the stub");
@@ -316,9 +306,7 @@ mod tests {
         });
         let invoker = StubInvoker::new();
         let case_state = serde_json::json!({});
-        let triage = invoker
-            .invoke(&agent, &task("triage"), &ctx(&case_state))
-            .unwrap();
+        let triage = invoker.invoke(&agent, &task("triage"), &ctx(&case_state)).unwrap();
         let classify = invoker
             .invoke(&agent, &task("classify"), &ctx(&case_state))
             .unwrap();

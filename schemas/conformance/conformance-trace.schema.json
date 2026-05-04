@@ -14,38 +14,25 @@
   "properties": {
     "$schema": {
       "type": "string",
-      "format": "uri",
-      "minLength": 1,
       "description": "JSON Schema URI that self-identifies this document's schema. Optional but recommended so tooling can resolve the schema without out-of-band configuration.",
-      "examples": ["https://wos-spec.org/schemas/conformance/conformance-trace.schema.json"],
-      "x-wos": {
-        "openStringKind": "uri"
-      }
+      "examples": ["https://wos-spec.org/schemas/conformance/conformance-trace.schema.json"]
     },
     "fixtureId": {
       "type": "string",
-      "minLength": 1,
       "description": "Unique identifier for the conformance fixture that produced this trace. Matches the fixture filename stem (e.g. 'K-011-determinism'). Used by explain/diff tooling to correlate traces across runs and by LLM repair agents to select the fixture definition when diagnosing a failure.",
       "examples": ["K-011-determinism", "G-030-hold-resume"],
       "x-lm": {
         "critical": true,
         "intent": "Fixture identity key that links the trace to its fixture definition"
-      },
-      "x-wos": {
-        "openStringKind": "identifier"
       }
     },
     "kernelVersion": {
       "type": "string",
-      "minLength": 1,
       "description": "WOS workflow envelope version the runner evaluated the fixture against. Matches the '$wosWorkflow' marker in the workflow document under test (e.g. '1.0'). Needed so consumers can detect schema or semantics drift between runs.",
       "examples": ["1.0", "1.1"],
       "x-lm": {
         "critical": true,
         "intent": "Pins the trace to the `$wosWorkflow` envelope version used for evaluation"
-      },
-      "x-wos": {
-        "openStringKind": "identifier"
       }
     },
     "steps": {
@@ -83,30 +70,18 @@
         },
         "stateBefore": {
           "type": "string",
-          "minLength": 1,
           "description": "Active state label(s) before the event was dispatched. For a simple linear machine this is a single state name (e.g. 'intake'). Recorded as a string serialization of the kernel's active configuration at the start of the step.",
-          "examples": ["intake", "submitted"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["intake", "submitted"]
         },
         "stateAfter": {
           "type": "string",
-          "minLength": 1,
           "description": "Active state label(s) after the event was fully processed and all entry/exit actions have run. The runner records the actual observed state, which is compared against expectedStateAfter when present to determine pass/fail.",
-          "examples": ["eligibilityReview", "approved"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["eligibilityReview", "approved"]
         },
         "expectedStateAfter": {
           "type": "string",
-          "minLength": 1,
           "description": "State label(s) the fixture author declared as the expected outcome for this step. Present only when the fixture explicitly asserts a post-step state. When absent the runner records the transition but does not assert correctness for this step.",
-          "examples": ["eligibilityReview", "approved"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["eligibilityReview", "approved"]
         },
         "guardsEvaluated": {
           "type": "array",
@@ -133,21 +108,13 @@
       "properties": {
         "name": {
           "type": "string",
-          "minLength": 1,
-          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose `event` field (string or TransitionEvent object) matches this name (Kernel S4.5).",
-          "examples": ["applicationComplete", "$timeout.state"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "description": "Event name as declared in the kernel lifecycle document (e.g. 'applicationComplete', '$timeout.state', '$join'). The kernel's guard evaluation selects transitions whose 'on' value matches this name.",
+          "examples": ["applicationComplete", "$timeout.state"]
         },
         "sourceActor": {
           "type": "string",
-          "minLength": 1,
           "description": "Identifier of the actor or system that sent this event (e.g. 'caseworker', 'verificationSystem'). Optional; absent when the event is a synthetic lifecycle signal such as '$join' that has no external origin.",
-          "examples": ["caseworker", "verificationSystem"],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["caseworker", "verificationSystem"]
         },
         "payload": {
           "description": "Arbitrary JSON payload carried by the event, merged into the case file before guard evaluation. The payload shape is kernel-document-specific. Absent or null when the event carries no data.",
@@ -163,46 +130,29 @@
       "properties": {
         "guardId": {
           "type": "string",
-          "minLength": 1,
           "description": "Synthesized identifier for the guard in the form '{sourceState}->{targetState}:{event}'. Not globally unique when two transitions share the same triple — use the expression field to disambiguate. The id is stable across runs of the same `$wosWorkflow` envelope version.",
           "examples": [
             "intake->eligibilityReview:applicationComplete",
             "submitted->approved:approve"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          ]
         },
         "sourceState": {
           "type": "string",
-          "minLength": 1,
           "description": "Source state of the transition whose guard was evaluated. Matches the 'from' state in the kernel lifecycle topology.",
-          "examples": ["intake", "submitted"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["intake", "submitted"]
         },
         "targetState": {
           "type": "string",
-          "minLength": 1,
           "description": "Target state of the transition whose guard was evaluated. Matches the 'to' state in the kernel lifecycle topology.",
-          "examples": ["eligibilityReview", "approved"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["eligibilityReview", "approved"]
         },
         "event": {
           "type": "string",
-          "minLength": 1,
           "description": "Event name that triggered this guard test. Matches the event.name of the enclosing TraceStep.",
-          "examples": ["applicationComplete", "approve"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["applicationComplete", "approve"]
         },
         "expression": {
           "type": "string",
-          "minLength": 1,
           "description": "Raw FEL expression text declared in the kernel document for this transition. The load-bearing teaching signal: when guardId is ambiguous (two transitions sharing the same source/target/event triple), expression uniquely identifies which guard blocked the expected path.",
           "examples": [
             "caseFile.application.isComplete = true",
@@ -211,9 +161,6 @@
           "x-lm": {
             "critical": true,
             "intent": "FEL expression text — primary teaching signal for LLM repair when a guard blocks an expected transition"
-          },
-          "x-wos": {
-            "openStringKind": "fel"
           }
         },
         "result": {
@@ -235,12 +182,8 @@
       "properties": {
         "policyId": {
           "type": "string",
-          "minLength": 1,
           "description": "Identifier of the governance policy applied (e.g. 'P-01'). Matches the 'id' of a policy entry in the kernel document's governance layer. Used by diff tooling to correlate policy effects across runs.",
-          "examples": ["P-01", "P-11"],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["P-01", "P-11"]
         },
         "parameterBindings": {
           "description": "JSON object containing the resolved parameter bindings passed to the policy at evaluation time. Shape is policy-specific.",
@@ -273,30 +216,18 @@
         },
         "expected": {
           "type": "string",
-          "minLength": 1,
           "description": "The state label the fixture declared as the expected post-step state.",
-          "examples": ["approved", "eligibilityReview"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["approved", "eligibilityReview"]
         },
         "actual": {
           "type": "string",
-          "minLength": 1,
           "description": "The state label the kernel evaluator actually transitioned into.",
-          "examples": ["rejected", "intake"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["rejected", "intake"]
         },
         "cause": {
           "type": "string",
-          "minLength": 1,
           "description": "Optional human-readable explanation of why the mismatch occurred. Populated by the runner when it can diagnose the root cause (e.g. 'guard false on all outgoing transitions').",
-          "examples": ["guard false", "no matching transition for event"],
-          "x-wos": {
-            "openStringKind": "prose"
-          }
+          "examples": ["guard false", "no matching transition for event"]
         }
       }
     },
@@ -314,7 +245,6 @@
         },
         "guardId": {
           "type": "string",
-          "minLength": 1,
           "description": "Synthesized guard identifier in the form '{sourceState}->{targetState}:{event}' that identifies the transition whose guard evaluated false. See GuardEvaluation.guardId for disambiguation notes.",
           "examples": [
             "reviewed->approved:decide",
@@ -323,14 +253,10 @@
           "x-lm": {
             "critical": true,
             "intent": "Identifies the blocked transition — primary key for LLM repair targeting"
-          },
-          "x-wos": {
-            "openStringKind": "identifier"
           }
         },
         "expression": {
           "type": "string",
-          "minLength": 1,
           "description": "The raw FEL expression text that evaluated false. Together with inputs, this is the complete teaching signal: the repair agent can read the expression, see what inputs it received, and determine what change to the kernel document will make it evaluate true.",
           "examples": [
             "caseFile.benefit_amount <= caseFile.income_limit",
@@ -339,9 +265,6 @@
           "x-lm": {
             "critical": true,
             "intent": "FEL expression that evaluated false — repair agents use this to identify the specific guard to fix"
-          },
-          "x-wos": {
-            "openStringKind": "fel"
           }
         },
         "inputs": {
@@ -367,30 +290,18 @@
         },
         "policyId": {
           "type": "string",
-          "minLength": 1,
           "description": "Identifier of the governance policy that changed the outcome. Matches PolicyApplication.policyId in the same step's policiesApplied array.",
-          "examples": ["P-11", "P-01"],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["P-11", "P-01"]
         },
         "expectedWithoutPolicy": {
           "type": "string",
-          "minLength": 1,
           "description": "The state the kernel evaluator would have transitioned into if the named policy had not been applied.",
-          "examples": ["approved", "active"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["approved", "active"]
         },
         "actualWithPolicy": {
           "type": "string",
-          "minLength": 1,
           "description": "The state the kernel evaluator actually transitioned into after the policy was applied.",
-          "examples": ["rejected", "suspended"],
-          "x-wos": {
-            "openStringKind": "tagLabel"
-          }
+          "examples": ["rejected", "suspended"]
         }
       }
     }

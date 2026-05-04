@@ -1,0 +1,10 @@
+[
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-evt-2",
+    "kind": "EventBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {"direction": "emitted"}
+  }]
+]

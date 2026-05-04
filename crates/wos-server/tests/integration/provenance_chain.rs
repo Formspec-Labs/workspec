@@ -27,43 +27,20 @@ fn row(seq: i64, previous: &str, tier: &str, payload: serde_json::Value) -> Prov
 
 #[test]
 fn chain_of_three_verifies() {
-    const ZERO: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-    let a = row(
-        1,
-        ZERO,
-        "facts",
-        serde_json::json!({ "event": "submitted" }),
-    );
-    let b = row(
-        2,
-        &a.hash,
-        "facts",
-        serde_json::json!({ "event": "approved" }),
-    );
-    let c = row(
-        3,
-        &b.hash,
-        "facts",
-        serde_json::json!({ "event": "issued" }),
-    );
+    const ZERO: &str =
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+    let a = row(1, ZERO, "facts", serde_json::json!({ "event": "submitted" }));
+    let b = row(2, &a.hash, "facts", serde_json::json!({ "event": "approved" }));
+    let c = row(3, &b.hash, "facts", serde_json::json!({ "event": "issued" }));
     assert!(verify_chain(&[a, b, c]).is_ok());
 }
 
 #[test]
 fn tampering_breaks_the_chain() {
-    const ZERO: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-    let a = row(
-        1,
-        ZERO,
-        "facts",
-        serde_json::json!({ "event": "submitted" }),
-    );
-    let mut b = row(
-        2,
-        &a.hash,
-        "facts",
-        serde_json::json!({ "event": "approved" }),
-    );
+    const ZERO: &str =
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+    let a = row(1, ZERO, "facts", serde_json::json!({ "event": "submitted" }));
+    let mut b = row(2, &a.hash, "facts", serde_json::json!({ "event": "approved" }));
     // Mutate the payload without recomputing the hash — should fail.
     b.payload = serde_json::json!({ "event": "denied" });
     match verify_chain(&[a, b]) {
@@ -74,20 +51,11 @@ fn tampering_breaks_the_chain() {
 
 #[test]
 fn broken_previous_hash_is_detected() {
-    const ZERO: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-    let a = row(
-        1,
-        ZERO,
-        "facts",
-        serde_json::json!({ "event": "submitted" }),
-    );
+    const ZERO: &str =
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+    let a = row(1, ZERO, "facts", serde_json::json!({ "event": "submitted" }));
     // Point `previous_hash` at an unrelated value.
-    let mut b = row(
-        2,
-        &a.hash,
-        "facts",
-        serde_json::json!({ "event": "approved" }),
-    );
+    let mut b = row(2, &a.hash, "facts", serde_json::json!({ "event": "approved" }));
     b.previous_hash = "sha256:deadbeef".into();
     assert!(verify_chain(&[a, b]).is_err());
 }

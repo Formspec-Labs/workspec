@@ -1,6 +1,6 @@
 use axum::Json;
-use axum::Router;
 use axum::routing::get;
+use axum::Router;
 
 use crate::AppState;
 

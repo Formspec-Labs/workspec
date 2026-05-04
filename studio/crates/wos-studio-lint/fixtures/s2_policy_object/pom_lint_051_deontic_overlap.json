@@ -1,0 +1,11 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-perm-a", "kind": "Permission", "lifecycleState": "approved", "originClass": "source",
+       "body": {"subject": "applicant", "action": "request-hearing"}},
+      {"id": "pol-prohib-b", "kind": "Prohibition", "lifecycleState": "approved", "originClass": "source",
+       "body": {"subject": "applicant", "action": "request-hearing"}}
+    ]
+  }]
+]

@@ -1,0 +1,14 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "ar-fair", "kind": "AppealRight"}
+    ]
+  }],
+  ["sc.json", {
+    "$wosStudioScenario": "1.0",
+    "scenarios": [
+      {"id": "sc-1", "scenarioType": "happy-path"}
+    ]
+  }]
+]

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use wos_core::{
     ActorKind, ImpactLevel, KernelDocument, Lifecycle, StateKind,
+    model::decision_table::Guard,
     model::kernel::{Actor, ContractReference, Milestone, State, Transition, TransitionEvent},
 };
 
@@ -109,6 +110,7 @@ fn minimal_document(impact_level: ImpactLevel, title: String) -> KernelDocument 
         assurance: None,
         intake: None,
         bindings: Vec::new(),
+        decision_tables: vec![],
         extensions: HashMap::new(),
     }
 }
@@ -366,12 +368,15 @@ impl RawWosProject {
                 .filter(|e| !e.is_empty())
                 .map(|e| TransitionEvent::from_authoring_trigger(e))
         };
+        // Wrap String guards into the polymorphic Guard enum (FEL form).
+        // Authoring's command surface accepts Option<String> for ergonomics;
+        // wos-core's Transition.guard is Option<Guard> as of the
+        // decisionTable refactor. Authoring only emits FEL guards today.
         let transition = Transition {
             event: ev_typed,
             target: to_state.clone(),
-            guard,
+            guard: guard.map(Guard::Fel),
             actions: Vec::new(),
-            actor: None,
             description: None,
             tags: Vec::new(),
         };
@@ -1225,7 +1230,7 @@ mod tests {
             Some("approve")
         );
         assert_eq!(
-            transitions[0].guard.as_deref(),
+            transitions[0].guard.as_ref().and_then(Guard::as_fel_str),
             Some("caseFile.amount <= 50000")
         );
     }

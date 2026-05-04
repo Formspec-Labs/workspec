@@ -61,11 +61,7 @@ impl ApplicantService {
         let evidence_considered: Vec<String> = case_state
             .get("evidence")
             .and_then(|v| v.as_array())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_default();
 
         // Provenance-derived rules/milestones pull from the spec-shaped
@@ -158,33 +154,46 @@ impl ApplicantService {
             "actor": "applicant",
             "data": { "reason": reason },
         });
-        runtime.enqueue_event(instance_id, envelope).await?;
-        runtime.drain_once(instance_id).await?;
+        runtime
+            .enqueue_event(instance_id, envelope)
+            .await
+            ?;
+        runtime
+            .drain_once(instance_id)
+            .await
+            ?;
 
         // Mirror the appeal status into case_state so the applicant view
         // renders even without a dedicated appeal workflow in the kernel.
         let reason_s = reason.to_string();
         self.storage
-            .update_instance_atomic(instance_id, &move |row| {
-                let inst = row.instance_json.as_object_mut().ok_or_else(|| {
-                    crate::storage::StorageError::Other("instance_json is not an object".into())
-                })?;
-                let case_state = inst
-                    .entry("caseState".to_string())
-                    .or_insert_with(|| serde_json::json!({}));
-                let obj = case_state.as_object_mut().ok_or_else(|| {
-                    crate::storage::StorageError::Other("caseState is not an object".into())
-                })?;
-                obj.insert(
-                    "appealStatus".into(),
-                    serde_json::Value::String("filed".into()),
-                );
-                obj.insert(
-                    "appealReason".into(),
-                    serde_json::Value::String(reason_s.clone()),
-                );
-                Ok(Vec::new())
-            })
+            .update_instance_atomic(
+                instance_id,
+                &move |row| {
+                    let inst = row.instance_json.as_object_mut().ok_or_else(|| {
+                        crate::storage::StorageError::Other(
+                            "instance_json is not an object".into(),
+                        )
+                    })?;
+                    let case_state = inst
+                        .entry("caseState".to_string())
+                        .or_insert_with(|| serde_json::json!({}));
+                    let obj = case_state.as_object_mut().ok_or_else(|| {
+                        crate::storage::StorageError::Other(
+                            "caseState is not an object".into(),
+                        )
+                    })?;
+                    obj.insert(
+                        "appealStatus".into(),
+                        serde_json::Value::String("filed".into()),
+                    );
+                    obj.insert(
+                        "appealReason".into(),
+                        serde_json::Value::String(reason_s.clone()),
+                    );
+                    Ok(Vec::new())
+                },
+            )
             .await
             .map_err(ApiError::Storage)?;
         Ok(())

@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::kernel::{ActorKind, AuditLayer, MutationSource, VerificationLevel};
 use crate::typeid;
 
 use super::kind::ProvenanceKind;
@@ -85,7 +84,9 @@ pub enum ClockResolvedResolution<'a> {
         resolving_event_hash: Option<&'a str>,
     },
     /// Paused — the pause event itself is the resolving event (hash required).
-    Paused { resolving_event_hash: &'a str },
+    Paused {
+        resolving_event_hash: &'a str,
+    },
 }
 
 /// Closed failure-kind discriminant for
@@ -297,21 +298,6 @@ pub struct IdentityAttestationInput<'a> {
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
-/// Instance-migrated provenance input (Kernel S11.2, ADR 0083).
-pub struct InstanceMigratedInput<'a> {
-    /// Definition version before migration.
-    pub from_version: &'a str,
-    /// Definition version after migration.
-    pub to_version: &'a str,
-    /// JSON object matching Kernel S11.2 migration-map shape
-    /// (`fieldRenames`, `fieldRemovals`, `fieldDefaults`, `fieldCoercions`).
-    pub migration_map: serde_json::Value,
-    /// Operator or system actor when known.
-    pub actor_id: Option<&'a str>,
-    /// Optional extra `data` fields; keys colliding with required fields drop.
-    pub context: Option<serde_json::Map<String, serde_json::Value>>,
-}
-
 /// Migration-pin-changed provenance input (ADR 0071 §3).
 pub struct MigrationPinChangedInput<'a> {
     /// Prior 4-field pin tree (per maximalist Q33: `formspec.definitionVersion`,
@@ -456,16 +442,12 @@ pub struct ProvenanceRecord {
     /// Provenance tier: `"facts"`, `"reasoning"`, `"counterfactual"`, or
     /// `"narrative"` (SP §5.4, §6.5). Defaults to `"facts"` at construction;
     /// populated by the runtime tier classifier before persistence.
-    /// Compatibility string surface; use [`ProvenanceRecord::audit_layer_kind`]
-    /// and [`ProvenanceRecord::set_audit_layer_kind`] for typed access.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit_layer: Option<String>,
 
     /// Actor type: `"human"`, `"system"`, or `"agent"` (SP §5.3, §5.5, §6.3).
     /// Populated at construction from the kernel `ActorKind` registry lookup
     /// (or from the AI Integration agent registry for `"agent"`).
-    /// Compatibility string surface; use [`ProvenanceRecord::actor_kind`]
-    /// and [`ProvenanceRecord::set_actor_kind`] for typed access.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor_type: Option<String>,
 
@@ -553,48 +535,6 @@ impl ProvenanceRecord {
         }
     }
 
-    /// Returns the typed actor kind, if the stored string is canonical.
-    #[must_use]
-    pub fn actor_kind(&self) -> Option<ActorKind> {
-        match self.actor_type.as_deref() {
-            Some("human") => Some(ActorKind::Human),
-            Some("system") => Some(ActorKind::System),
-            Some("agent") => Some(ActorKind::Agent),
-            _ => None,
-        }
-    }
-
-    /// Stores the canonical actor kind string.
-    pub fn set_actor_kind(&mut self, actor_kind: ActorKind) {
-        self.actor_type = Some(match actor_kind {
-            ActorKind::Human => "human".to_string(),
-            ActorKind::System => "system".to_string(),
-            ActorKind::Agent => "agent".to_string(),
-        });
-    }
-
-    /// Returns the typed audit layer, if the stored string is canonical.
-    #[must_use]
-    pub fn audit_layer_kind(&self) -> Option<AuditLayer> {
-        match self.audit_layer.as_deref() {
-            Some("facts") => Some(AuditLayer::Facts),
-            Some("reasoning") => Some(AuditLayer::Reasoning),
-            Some("counterfactual") => Some(AuditLayer::Counterfactual),
-            Some("narrative") => Some(AuditLayer::Narrative),
-            _ => None,
-        }
-    }
-
-    /// Stores the canonical audit layer string.
-    pub fn set_audit_layer_kind(&mut self, audit_layer: AuditLayer) {
-        self.audit_layer = Some(match audit_layer {
-            AuditLayer::Facts => "facts".to_string(),
-            AuditLayer::Reasoning => "reasoning".to_string(),
-            AuditLayer::Counterfactual => "counterfactual".to_string(),
-            AuditLayer::Narrative => "narrative".to_string(),
-        });
-    }
-
     /// Create a state transition record.
     pub fn state_transition(from: &str, to: &str, event: &str, actor_id: Option<&str>) -> Self {
         let mut record = Self::blank(ProvenanceKind::StateTransition);
@@ -636,24 +576,16 @@ impl ProvenanceRecord {
         actor_id: Option<&str>,
         lifecycle_state: &str,
     ) -> Self {
-        Self::case_state_mutation_with_source(
-            path,
-            new_value,
-            actor_id,
-            lifecycle_state,
-            None,
-            None,
-        )
+        Self::case_state_mutation_with_source(path, new_value, actor_id, lifecycle_state, None, None)
     }
 
-    /// Create a case state mutation with typed provenance vocab.
     pub fn case_state_mutation_with_source(
         path: &str,
         new_value: &serde_json::Value,
         actor_id: Option<&str>,
         lifecycle_state: &str,
-        mutation_source: Option<MutationSource>,
-        verification_level: Option<VerificationLevel>,
+        mutation_source: Option<&str>,
+        verification_level: Option<&str>,
     ) -> Self {
         let mut record = Self::blank(ProvenanceKind::CaseStateMutation);
         record.actor_id = actor_id.map(String::from);
@@ -664,16 +596,12 @@ impl ProvenanceRecord {
             "viaExplicitAction": true,
         });
         if let Some(src) = mutation_source {
-            data["mutationSource"] = serde_json::to_value(src)
-                .expect("mutationSource serializes to canonical JSON string");
+            data["mutationSource"] = serde_json::Value::String(src.to_string());
         }
         if let Some(vl) = verification_level {
-            data["verificationLevel"] = serde_json::to_value(vl)
-                .expect("verificationLevel serializes to canonical JSON string");
+            data["verificationLevel"] = serde_json::Value::String(vl.to_string());
         }
         record.data = Some(data);
-        record.to_state = Some(lifecycle_state.to_string());
-        record.lifecycle_state = Some(lifecycle_state.to_string());
         record
     }
 
@@ -1161,7 +1089,10 @@ impl ProvenanceRecord {
     /// Create a determination-rescinded record (ADR 0066 §3).
     #[must_use]
     pub fn determination_rescinded(input: DeterminationRescindedInput<'_>) -> Self {
-        const REQUIRED: &[&str] = &["priorDeterminationHash", "rescissionAuthorizationEventHash"];
+        const REQUIRED: &[&str] = &[
+            "priorDeterminationHash",
+            "rescissionAuthorizationEventHash",
+        ];
         let mut data = merge_context(input.context, REQUIRED);
         data.insert(
             "priorDeterminationHash".to_string(),
@@ -1308,20 +1239,21 @@ impl ProvenanceRecord {
             "originClockHash".to_string(),
             serde_json::Value::String(input.origin_clock_hash.to_string()),
         );
-        let (resolution_str, resolving_event_hash): (&str, Option<&str>) = match &input.resolution {
-            ClockResolvedResolution::Satisfied {
-                resolving_event_hash,
-            } => ("satisfied", *resolving_event_hash),
-            ClockResolvedResolution::Elapsed {
-                resolving_event_hash,
-            } => ("elapsed", *resolving_event_hash),
-            ClockResolvedResolution::Cancelled {
-                resolving_event_hash,
-            } => ("cancelled", *resolving_event_hash),
-            ClockResolvedResolution::Paused {
-                resolving_event_hash,
-            } => ("paused", Some(*resolving_event_hash)),
-        };
+        let (resolution_str, resolving_event_hash): (&str, Option<&str>) =
+            match &input.resolution {
+                ClockResolvedResolution::Satisfied {
+                    resolving_event_hash,
+                } => ("satisfied", *resolving_event_hash),
+                ClockResolvedResolution::Elapsed {
+                    resolving_event_hash,
+                } => ("elapsed", *resolving_event_hash),
+                ClockResolvedResolution::Cancelled {
+                    resolving_event_hash,
+                } => ("cancelled", *resolving_event_hash),
+                ClockResolvedResolution::Paused {
+                    resolving_event_hash,
+                } => ("paused", Some(*resolving_event_hash)),
+            };
         data.insert(
             "resolution".to_string(),
             serde_json::Value::String(resolution_str.to_string()),
@@ -1517,32 +1449,6 @@ impl ProvenanceRecord {
     }
 
     // ── Migration & version pins (ADR 0071) ──────────────────────
-
-    /// Create an instance-migrated record (Kernel S11.2, ADR 0083).
-    ///
-    /// `data` carries `fromVersion`, `toVersion`, and `migrationMap` per
-    /// Kernel S11.2 steps 2–3.
-    #[must_use]
-    pub fn instance_migrated(input: InstanceMigratedInput<'_>) -> Self {
-        const REQUIRED: &[&str] = &["fromVersion", "toVersion", "migrationMap"];
-        let mut data = merge_context(input.context, REQUIRED);
-        data.insert(
-            "fromVersion".to_string(),
-            serde_json::Value::String(input.from_version.to_string()),
-        );
-        data.insert(
-            "toVersion".to_string(),
-            serde_json::Value::String(input.to_version.to_string()),
-        );
-        data.insert("migrationMap".to_string(), input.migration_map);
-
-        let mut record = Self::blank(ProvenanceKind::InstanceMigrated);
-        if let Some(actor) = input.actor_id {
-            record.actor_id = Some(actor.to_string());
-        }
-        record.data = Some(serde_json::Value::Object(data));
-        record
-    }
 
     /// Create a migration-pin-changed record (ADR 0071 §3).
     #[must_use]

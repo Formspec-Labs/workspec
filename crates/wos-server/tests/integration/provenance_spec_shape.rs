@@ -78,14 +78,14 @@ fn response_serialises_as_flattened_record_plus_integrity() {
         Some("stateTransition")
     );
     assert_eq!(serialised.get("event").and_then(|v| v.as_str()), Some("ev"));
-    assert_eq!(
-        serialised.get("fromState").and_then(|v| v.as_str()),
-        Some("a")
-    );
+    assert_eq!(serialised.get("fromState").and_then(|v| v.as_str()), Some("a"));
     // Server integrity metadata at the same level.
     assert_eq!(
         serialised.get("hash").and_then(|v| v.as_str()),
         Some("sha256:cafe")
     );
-    assert_eq!(serialised.get("seq").and_then(|v| v.as_i64()), Some(7));
+    assert_eq!(
+        serialised.get("seq").and_then(|v| v.as_i64()),
+        Some(7)
+    );
 }

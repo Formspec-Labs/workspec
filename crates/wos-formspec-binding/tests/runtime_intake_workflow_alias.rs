@@ -30,8 +30,8 @@ use wos_formspec_binding::{FormspecBinding, FormspecProcessor};
 use wos_runtime::binding::{BindingError, BindingRegistry, CaseMutationBundle};
 use wos_runtime::{
     AutoCreatePublicIntakePolicy, Clock, CreateInstanceRequest, InMemoryStore,
-    IntakeAcceptanceOutcome, IntakeAcceptanceRegistry, IntakeAcceptanceRequest,
-    IntakeCaseDefinition, IntakeCaseDisposition, WosRuntime,
+    IntakeAcceptanceRegistry, IntakeAcceptanceRequest, IntakeAcceptanceOutcome, IntakeCaseDefinition,
+    IntakeCaseDisposition, WosRuntime,
 };
 
 #[derive(Debug, Clone)]
@@ -167,11 +167,7 @@ impl FormspecProcessor for IntakeRuntimeProcessor {
     }
 }
 
-fn public_intake_handoff(
-    handoff_id: &str,
-    definition_url: &str,
-    definition_version: &str,
-) -> serde_json::Value {
+fn public_intake_handoff(handoff_id: &str, definition_url: &str, definition_version: &str) -> serde_json::Value {
     json!({
         "$formspecIntakeHandoff": "1.0",
         "handoffId": handoff_id,
@@ -365,9 +361,7 @@ fn runtime_formspec_intake_public_create_survives_legacy_governed_case_ref() {
         "expected IntakeAccepted on new case"
     );
     assert!(
-        window
-            .iter()
-            .any(|r| r.record_kind == ProvenanceKind::CaseCreated),
+        window.iter().any(|r| r.record_kind == ProvenanceKind::CaseCreated),
         "expected CaseCreated from FormspecBinding finalizer"
     );
 }

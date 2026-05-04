@@ -35,15 +35,10 @@ async fn storage_scaffolds_reject_unwired_backends() {
 async fn auth_scaffolds_follow_feature_matrix() {
     let mut cfg = minimal_cfg();
     cfg.auth = AuthKind::Jwt;
-    let storage = storage::build(&cfg)
-        .await
-        .expect("sqlite storage should build");
+    let storage = storage::build(&cfg).await.expect("sqlite storage should build");
     let jwt_result = auth::build(&cfg, storage.clone());
     #[cfg(feature = "auth-jwt")]
-    assert!(
-        jwt_result.is_ok(),
-        "jwt auth should build when feature is enabled"
-    );
+    assert!(jwt_result.is_ok(), "jwt auth should build when feature is enabled");
     #[cfg(not(feature = "auth-jwt"))]
     {
         let err = match jwt_result {
@@ -56,10 +51,7 @@ async fn auth_scaffolds_follow_feature_matrix() {
     cfg.auth = AuthKind::Mock;
     let mock_result = auth::build(&cfg, storage);
     #[cfg(feature = "auth-mock")]
-    assert!(
-        mock_result.is_ok(),
-        "mock auth should build when feature is enabled"
-    );
+    assert!(mock_result.is_ok(), "mock auth should build when feature is enabled");
     #[cfg(not(feature = "auth-mock"))]
     {
         let err = match mock_result {
@@ -105,7 +97,8 @@ async fn default_feature_matrix_builds_cleanly() {
     let storage = storage::build(&cfg)
         .await
         .expect("sqlite storage should build under defaults");
-    let _auth = auth::build(&cfg, storage).expect("jwt auth should build under defaults");
+    let _auth = auth::build(&cfg, storage)
+        .expect("jwt auth should build under defaults");
 }
 
 /// Audit-sink=Postgres without the `audit-postgres` feature flag must surface

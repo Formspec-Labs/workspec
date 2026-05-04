@@ -1,0 +1,10 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [{
+      "id": "out-deny",
+      "kind": "Outcome",
+      "triggersDueProcess": true
+    }]
+  }]
+]

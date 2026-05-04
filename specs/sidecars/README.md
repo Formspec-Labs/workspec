@@ -12,7 +12,6 @@ Sidecars are exempt from the [`CONVENTIONS.md`](../../CONVENTIONS.md) three-sect
 **Purpose:** Deployment-environment delivery configuration. One sidecar carries calendar (business days, holidays, operating hours for SLA evaluation), notifications (template library for due-process notices, hold notifications, SLA warnings), and correspondence (document tracking metadata). Replaces the prior `wos-business-calendar`, `wos-notification-template`, and `wos-correspondence-metadata` sidecars per ADR 0076 D-3.
 **Joins by:** `targetWorkflow` URI matching the workflow's `url`.
 **Conformance:** schema validation. Calendar resolves SLAs (Governance §10.3); templates resolve notice rendering (Governance §3.x); correspondence supplies document-tracking metadata for audit reports. None of these surfaces alter determinations.
-**Prose home:** [`delivery.md`](delivery.md) — normative contract for calendar, notification templates, and correspondence vocabularies. The absorbed docs below remain detail references.
 **Required block:** at least one of `calendar` / `notifications` / `correspondence` per the schema's `anyOf`. **Cold-read gate for an LLM authoring a delivery sidecar:** an empty `wos-delivery` document (just `$wosDelivery` + `targetWorkflow`) is REJECTED by the schema. The author MUST include at least one block; when adding only `calendar`, the document is well-formed even with empty `notifications`/`correspondence`, but a truly-empty document is a configuration error caught at validation. This gate prevents accidental no-op sidecars that imply deployment-environment configuration without supplying any.
 
 ### `wos-ontology-alignment` (renamed from `wos-semantic-profile`, ADR 0076 D-3)
@@ -27,8 +26,8 @@ Sidecars are exempt from the [`CONVENTIONS.md`](../../CONVENTIONS.md) three-sect
 
 The following legacy spec docs predate the ADR 0076 consolidation and target the now-replaced standalone sidecars. They remain in the tree as historical references; each carries an absorption notice at its head pointing at the merged-schema `$def`:
 
-- [`business-calendar.md`](business-calendar.md) — absorbed calendar detail; prose home is [`delivery.md`](delivery.md).
-- [`notification-template.md`](notification-template.md) — absorbed notification detail; prose home is [`delivery.md`](delivery.md).
-- [`../kernel/correspondence-metadata.md`](../kernel/correspondence-metadata.md) — absorbed correspondence detail; prose home is [`delivery.md`](delivery.md).
+- [`business-calendar.md`](business-calendar.md) — content absorbed into `wos-delivery.schema.json`'s `calendar` block.
+- [`notification-template.md`](notification-template.md) — content absorbed into `wos-delivery.schema.json`'s `notifications` block.
+- [`../kernel/correspondence-metadata.md`](../kernel/correspondence-metadata.md) — content absorbed into `wos-delivery.schema.json`'s `correspondence` block.
 
 These legacy docs do not need rewrites; the absorbed schema descriptions are the canonical surface.

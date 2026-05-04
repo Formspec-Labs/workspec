@@ -33,7 +33,8 @@ impl SemanticService {
         if responses.is_empty() {
             return Err(ApiError::NotFound);
         }
-        let records: Vec<ProvenanceRecord> = responses.into_iter().map(|r| r.record).collect();
+        let records: Vec<ProvenanceRecord> =
+            responses.into_iter().map(|r| r.record).collect();
         let mut log = ProvenanceLog::default();
         for r in records {
             log.push(r);
@@ -59,8 +60,9 @@ impl SemanticService {
             },
             Format::Ocel => ExportPayload::Json {
                 content_type: "application/json".into(),
-                body: serde_json::to_string_pretty(&ocel::export(&log, &cfg))
-                    .map_err(|e| ApiError::ServiceUnavailable(format!("ocel serialise: {e}")))?,
+                body: serde_json::to_string_pretty(&ocel::export(&log, &cfg)).map_err(|e| {
+                    ApiError::ServiceUnavailable(format!("ocel serialise: {e}"))
+                })?,
             },
         };
         Ok(payload)

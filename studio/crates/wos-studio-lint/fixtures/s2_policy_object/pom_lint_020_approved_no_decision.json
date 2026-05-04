@@ -1,0 +1,9 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-x", "kind": "Outcome", "lifecycleState": "published", "originClass": "source",
+       "body": {"polarity": "adverse"}}
+    ]
+  }]
+]

@@ -64,9 +64,6 @@ pub async fn bring_up_with_cfg(cfg: Arc<ServerConfig>) -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(
-            wos_server::MigrateIdempotencyCache::default(),
-        )),
     }
 }
 
@@ -94,7 +91,10 @@ pub fn make_instance_row(id: &str) -> InstanceRow {
     }
 }
 
-pub async fn seed_instance_with_one_provenance(store: &storage::StorageHandle, instance_id: &str) {
+pub async fn seed_instance_with_one_provenance(
+    store: &storage::StorageHandle,
+    instance_id: &str,
+) {
     store
         .create_instance(&make_instance_row(instance_id))
         .await

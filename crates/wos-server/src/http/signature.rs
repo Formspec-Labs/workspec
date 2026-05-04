@@ -1,11 +1,11 @@
 use axum::Json;
-use axum::Router;
 use axum::extract::{Path, State};
 use axum::routing::get;
+use axum::Router;
 
 use crate::AppState;
-use crate::domain::provenance::ProvenanceResponse;
 use crate::error::ApiResult;
+use crate::domain::provenance::ProvenanceResponse;
 use crate::services::signature_service::SignatureService;
 
 pub fn routes() -> Router<AppState> {

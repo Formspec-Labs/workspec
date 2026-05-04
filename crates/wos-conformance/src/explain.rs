@@ -74,6 +74,11 @@ fn render_step(step: &TraceStep) -> String {
         .map(|a| format!(" actor:{a}"))
         .unwrap_or_default();
 
+    let tick_suffix = if has_delta {
+        String::new()
+    } else {
+        format!(" {tick}")
+    };
     out.push_str(&format!(
         "  step {}: {} → {} (event: {}{}){}\n",
         step_num,
@@ -81,7 +86,7 @@ fn render_step(step: &TraceStep) -> String {
         step.state_after,
         step.event.name,
         actor_part,
-        if has_delta { "" } else { &format!(" {tick}") }
+        tick_suffix,
     ));
 
     // Guards evaluated

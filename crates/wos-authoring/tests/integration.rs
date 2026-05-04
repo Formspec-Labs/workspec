@@ -11,6 +11,7 @@
 
 use wos_authoring::{ActorKind, ImpactLevel, StateKind, TransitionEvent, WosProject};
 use wos_core::KernelDocument;
+use wos_core::model::decision_table::Guard;
 
 /// One long integration scenario. Mirrors the shape of
 /// `fixtures/kernel/purchase-order-approval.json` at a high level
@@ -211,12 +212,14 @@ fn authoring_session_round_trip_with_undo_redo() {
     assert!(
         approve_transitions
             .iter()
-            .any(|t| t.guard.as_deref() == Some("caseFile.amount <= 50000")),
+            .any(|t| t.guard.as_ref().and_then(Guard::as_fel_str)
+                == Some("caseFile.amount <= 50000")),
     );
     assert!(
         approve_transitions
             .iter()
-            .any(|t| t.guard.as_deref() == Some("caseFile.amount > 50000")),
+            .any(|t| t.guard.as_ref().and_then(Guard::as_fel_str)
+                == Some("caseFile.amount > 50000")),
     );
 
     // Governance surface.

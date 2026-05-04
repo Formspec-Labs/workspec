@@ -1,0 +1,10 @@
+[
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {"id": "el-phase", "kind": "phase", "name": "P", "body": {"contains": ["el-step", "el-ghost"]}},
+      {"id": "el-step", "kind": "step", "name": "S"}
+    ]
+  }]
+]

@@ -136,7 +136,10 @@ async fn set_user_password_hash_invalidates_tokens_and_updates_login() {
         .hash_password(b"new-secret", &salt)
         .unwrap()
         .to_string();
-    store.set_user_password_hash("u1", &new_hash).await.unwrap();
+    store
+        .set_user_password_hash("u1", &new_hash)
+        .await
+        .unwrap();
 
     assert!(matches!(
         auth.verify(&pair.access_token).await.unwrap_err(),

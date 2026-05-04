@@ -81,10 +81,7 @@ async fn sweep_deletes_expired_and_old_revoked_rows() {
     assert_eq!(count_sessions(&store).await, 4);
 
     let deleted = store.sweep_expired_sessions(now).await.unwrap();
-    assert_eq!(
-        deleted, 2,
-        "expected expired-8d + revoked-31d to be deleted"
-    );
+    assert_eq!(deleted, 2, "expected expired-8d + revoked-31d to be deleted");
 
     let remaining = count_sessions(&store).await;
     assert_eq!(remaining, 2);

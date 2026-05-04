@@ -147,23 +147,6 @@ Bookkeeping:
 
 ---
 
-## Vendor `x-*` assurance floor enforcement (deferred-strict-mode)
-
-`crates/wos-runtime/src/runtime/signature.rs::identity_binding_meets_policy` currently fail-opens when either `identityBinding.assuranceLevel` or `policy.assuranceLevel` is an `x-*` token: the runtime cannot ordinal-compare vendor tokens against IAL/AAL/ranked tiers, so it admits the binding. Spec [`profiles/signature.md` §2.13](specs/profiles/signature.md) declares posture × intent-URI floors as normative; admission of `x-*` assurance MUST be gated on a Posture Declaration registry that names the vendor token and its floor mapping. **Cross-link:** ADR 0083 D4 (migrate preconditions) shares the same Posture Declaration / PLN-0384 seam — posture floors are one registry-shaped dependency for both vendor assurance and migration gates.
-
-**Why:** zero-trust runtime posture (root [`VISION.md`](../VISION.md)) — fail-open on unknown vendor tokens lets unverified deployments admit `SignatureAffirmation` without a declared floor. Today there are no users, so the gap is cheap to fix; it gets expensive the moment a deployment ships an `x-acme-tier-2` policy with no floor table behind it.
-
-**Gating:** parent **PLN-0384** (`wos-event-types.md` ratification) closes the namespace seam; the Posture Declaration registry shape lands alongside §2.13 floor tables. New ADR slot: "Vendor `x-*` assurance floor: fail-closed default + Posture Declaration registry binding."
-
-**Done when:**
-
-- [ ] ADR authored proposing fail-closed default with explicit Posture Declaration opt-in.
-- [ ] Spec §2.13 amends with the vendor-floor declaration shape.
-- [ ] Runtime flips `identity_binding_meets_policy` to reject `x-*` tokens absent a Posture Declaration entry; existing pass-through tests (`identity_binding_meets_policy_vendor_*_skips_ordinal_*`) retire or invert.
-- [ ] SIG-* conformance fixture exercises a declared `x-*` floor and a missing-declaration rejection.
-
----
-
 ## Proposed Execution Order
 
 1. ~~T4-10 Trellis alignment~~ — machine-verifiable slice done; finish COC presentation + optional fixture re-seeding.

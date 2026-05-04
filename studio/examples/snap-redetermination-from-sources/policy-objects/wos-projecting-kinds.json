@@ -1,0 +1,178 @@
+{
+  "$comment": "Studio PolicyObjects that project to $wosWorkflow body content (mapsToWos). Illustrative — Stage-3 schemas not yet authored.",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "policyObjects": [
+    {
+      "id": "pol-notice-adverse-action",
+      "kind": "NoticeRequirement",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "effectivenessRef": "eff-state-tx-snap-current",
+      "body": {
+        "trigger": { "outcomeRef": "pol-outcome-denial" },
+        "audience": "applicant",
+        "content": [
+          "reasonForAdverseAction",
+          "regulatoryCitation",
+          "effectiveDate",
+          "appealRightAndDeadline",
+          "continuationOfServicesElection",
+          "contactForAssistance"
+        ],
+        "deliveryMethod": ["mail", "case-management-system-portal"],
+        "timing": { "noLaterThanCalendarDaysBefore": 10, "trigger": "adverseAction.effectiveDate" },
+        "language": ["en-US", "es-US"]
+      },
+      "citations": [
+        { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§273.10(g)(2)", "excerpt": "The Notice of Adverse Action MUST be in plain language and MUST include: ...continuation-of-services election...", "relation": "supports" },
+        { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.7", "excerpt": "Texas SNAP notices MUST be issued in Spanish for all households where Spanish is the primary spoken language", "relation": "supports" },
+        { "sourceVersion": "src-fns-corrective-action-2024-q3", "sectionAnchor": "Finding 2", "excerpt": "Every Notice of Adverse Action MUST include explicit language describing the household's right to elect continuation of services", "relation": "supersedes" }
+      ],
+      "mappingRef": "map-pol-notice-adverse-action",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.governance.notices[?(@.id=='notice-adverse-action')]",
+      "provenance": [
+        { "id": "prov-pol-notice-001", "eventKind": "extracted", "eventSubtype": "ai-assisted",
+          "subjectRef": "pol-notice-adverse-action", "subjectKind": "PolicyObject",
+          "recordedAt": "2026-04-22T14:33:00Z",
+          "recordedBy": "subj-ai-claim-extractor", "role": "agent",
+          "aiLineage": { "modelId": "claude-opus-4-7", "modelVersion": "20260301", "modelVersionPolicy": "pinned", "promptTemplateRef": "tmpl-extract-notice-requirement-v2", "promptTemplateVersion": "2.1.0", "inputContextHash": "sha256:9e4a2b1c8d7f3e5a6b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a", "temperature": 0.2, "confidence": 0.94, "humanApprover": "subj-marcus-williams", "humanApprovedAt": "2026-04-22T14:33:00Z", "humanRationale": "Extraction matches both 7 CFR §273.10(g)(2) and the corrective letter's Finding 2; cross-doc supersession of office memo §4(a) is correctly noted." },
+          "originClass": "source",
+          "hashChain": { "prevRecordHash": "sha256:0a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789", "selfHash": "sha256:1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789ab" } }
+      ]
+    },
+    {
+      "id": "pol-appeal-right-fair-hearing",
+      "kind": "AppealRight",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "effectivenessRef": "eff-fed-cfr-273-current",
+      "body": {
+        "deadline": { "calendarDaysFromNoticeDate": 90 },
+        "requestMethods": ["written", "phone", "in-person"],
+        "$comment": "requestMethods includes phone and in-person per 2024 corrective letter Finding 1 (supersedes office memo §4(a) written-only restriction)",
+        "hearingTimingDeadline": { "calendarDaysFromRequest": 60, "extensibleByMutualAgreement": true },
+        "continuationOfServicesElection": true,
+        "linkedNoticeRef": "pol-notice-adverse-action"
+      },
+      "citations": [
+        { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§273.15(a)", "excerpt": "right to request a fair hearing within 90 calendar days", "relation": "supports" },
+        { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§273.15(b)", "excerpt": "benefits MUST continue at the prior level pending the hearing decision UNLESS the household specifically requests termination", "relation": "supports" },
+        { "sourceVersion": "src-fns-corrective-action-2024-q3", "sectionAnchor": "Finding 1", "excerpt": "Phone, in-person, AND in writing MUST be equivalently acceptable channels", "relation": "supersedes" }
+      ],
+      "mappingRef": "map-pol-appeal-right-fair-hearing",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.governance.appeals[?(@.id=='appeal-fair-hearing')]"
+    },
+    {
+      "id": "pol-deadline-appeal-90-day",
+      "kind": "Deadline",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "effectivenessRef": "eff-fed-cfr-273-current",
+      "body": {
+        "name": "Appeal request window",
+        "calendarDaysFromTrigger": 90,
+        "trigger": "noticeOfAdverseAction.issuedAt",
+        "expiryAction": "terminate",
+        "linkedAppealRightRef": "pol-appeal-right-fair-hearing"
+      },
+      "citations": [
+        { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§273.15(a)", "excerpt": "within 90 calendar days", "relation": "supports" }
+      ],
+      "mappingRef": "map-pol-deadline-appeal-90-day",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.lifecycle.timers.appealWindow"
+    },
+    {
+      "id": "pol-actor-caseworker",
+      "kind": "ActorMapping",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "body": {
+        "actorRole": "caseworker",
+        "actorKind": "human",
+        "actorAuthority": [
+          { "action": "submit-redetermination-recommendation", "deontic": "permission" },
+          { "action": "issue-notice-of-adverse-action", "deontic": "obligation", "scope": "after-supervisor-co-signature" },
+          { "action": "extend-pre-notice-window-up-to-5-calendar-days", "deontic": "permission", "scope": "documented-disruption-only" }
+        ]
+      },
+      "citations": [
+        { "sourceVersion": "src-office-memo-recert-v3.2", "sectionAnchor": "§3(a)", "excerpt": "supervisor reviews and signs the determination before the Notice of Adverse Action is issued", "relation": "supports" },
+        { "sourceVersion": "src-office-memo-recert-v3.2", "sectionAnchor": "§5(a)", "excerpt": "Caseworkers may extend the 30-day pre-notice window by up to 5 calendar days when documentation indicates the household experienced a verifiable disruption", "relation": "supports" }
+      ],
+      "mappingRef": "map-pol-actor-caseworker",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.actors[?(@.id=='caseworker')]"
+    },
+    {
+      "id": "pol-protected-category-language",
+      "kind": "ProtectedCategory",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "body": {
+        "categoryId": "language-spoken-spanish",
+        "dimensionName": "language-spoken",
+        "legalBasis": [
+          { "sourceVersion": "src-cfr-7-273", "sectionAnchor": "§273.10(g)(3)", "excerpt": "The Notice MUST be provided in the household's primary language" },
+          { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.7", "excerpt": "Texas SNAP notices MUST be issued in Spanish" }
+        ],
+        "monitoringMethod": "statistical-disparity-test",
+        "disparityThreshold": "approval rates differ by ≥5pp between Spanish-primary and English-primary households",
+        "remediationTriggerRef": "pol-deadline-equity-remediation-30d",
+        "dpvSensitivity": "dpv:Demographic"
+      },
+      "mappingRef": "map-pol-protected-category-language",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.advanced.equity.protectedCategories[?(@.categoryId=='language-spoken-spanish')]"
+    },
+    {
+      "id": "pol-decision-table-eligibility",
+      "kind": "DecisionRule",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "body": {
+        "form": "table",
+        "inputs": [
+          { "name": "householdSize", "dataElementRef": "pol-data-household-size", "dataType": "integer" },
+          { "name": "monthlyGrossIncome", "dataElementRef": "pol-data-household-income", "dataType": "money" }
+        ],
+        "outputs": [
+          { "name": "eligibility", "target": "pol-outcome-eligibility-determination", "targetKind": "decision-output" }
+        ],
+        "rows": [
+          { "id": 1, "when": { "householdSize": "== 1", "monthlyGrossIncome": "<= 1473" }, "then": { "eligibility": "eligible" }, "sourceCitation": { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.4 row 1" } },
+          { "id": 2, "when": { "householdSize": "== 2", "monthlyGrossIncome": "<= 1984" }, "then": { "eligibility": "eligible" }, "sourceCitation": { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.4 row 2" } },
+          { "id": 3, "when": { "householdSize": "== 3", "monthlyGrossIncome": "<= 2495" }, "then": { "eligibility": "eligible" }, "sourceCitation": { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.4 row 3" } },
+          { "id": 4, "when": { "householdSize": ">= 4", "monthlyGrossIncome": "<= computed: 2495 + (householdSize - 3) * 511" }, "then": { "eligibility": "eligible" }, "sourceCitation": { "sourceVersion": "src-state-tx-snap-manual-ch8", "sectionAnchor": "§8.4 row 4+" } },
+          { "id": 5, "when": { "householdSize": "*", "monthlyGrossIncome": "*" }, "then": { "eligibility": "not-eligible" } }
+        ],
+        "hitPolicy": "first-match",
+        "completenessRequirement": "all-inputs-covered",
+        "fallback": { "eligibility": "manual-review" }
+      },
+      "mappingRef": "map-pol-decision-table-eligibility",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.lifecycle.transitions[?(@.id=='intake-to-determination')].guard"
+    },
+    {
+      "id": "pol-data-household-income",
+      "kind": "DataElement",
+      "lifecycleState": "approved",
+      "originClass": "source",
+      "body": {
+        "name": "household_monthly_gross_income",
+        "canonicalTermRef": "usda-snap:HouseholdIncome",
+        "dataType": "money",
+        "unit": "USD/month",
+        "sensitivity": "dpv:FinancialPreference",
+        "$comment": "DPV IRI is the canonical truth; legacy alias 'pii' MAY be displayed for backward continuity",
+        "definition": "The applicant household's gross monthly income from all sources, per 7 CFR §273.10(c)"
+      },
+      "mappingRef": "map-pol-data-household-income",
+      "mappingState": "mapsToWos",
+      "wosTarget": "$.caseFile.fields.household.income.monthlyGross"
+    }
+  ]
+}

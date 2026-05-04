@@ -131,10 +131,9 @@ impl HoldService {
             .update_instance_atomic(instance_id, &move |row| {
                 let mut instance: CaseInstance = serde_json::from_value(row.instance_json.clone())
                     .map_err(|e| StorageError::Other(format!("instance_json invalid: {e}")))?;
-                let gov = instance
-                    .governance_state
-                    .as_mut()
-                    .ok_or_else(|| StorageError::Other(HOLD_NOT_FOUND_SENTINEL.into()))?;
+                let gov = instance.governance_state.as_mut().ok_or_else(|| {
+                    StorageError::Other(HOLD_NOT_FOUND_SENTINEL.into())
+                })?;
                 if hold_idx >= gov.active_holds.len() {
                     return Err(StorageError::Other(HOLD_NOT_FOUND_SENTINEL.into()));
                 }

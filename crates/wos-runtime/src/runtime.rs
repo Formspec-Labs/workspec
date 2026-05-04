@@ -13,11 +13,8 @@ mod support;
 mod tasks;
 mod timers;
 
-use std::any::Any;
-use std::collections::HashMap;
 use std::error::Error as StdError;
 
-use serde::{Deserialize, Serialize};
 use wos_core::business_calendar::BusinessCalendarDocument;
 #[cfg(test)]
 use wos_core::eval::Evaluator;
@@ -43,8 +40,8 @@ pub use provenance::{
 };
 use provenance::{compensation_provenance, contract_validation_record};
 pub use signature::{
-    CompletionRequirementKind, SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION,
-    SIGNATURE_STEP_ID_EXTENSION, SignatureProfileDocument,
+    SIGNATURE_PROFILE_KEY_EXTENSION, SIGNATURE_PROFILE_REF_EXTENSION, SIGNATURE_STEP_ID_EXTENSION,
+    SignatureProfileDocument,
 };
 use support::{
     format_timestamp, impact_level_label, make_task_id, merge_case_state,
@@ -71,34 +68,6 @@ pub struct CreateInstanceRequest {
     pub definition_version: String,
     /// Initial case-state overrides.
     pub initial_case_state: Option<serde_json::Value>,
-}
-
-/// Case-state migration map (Kernel S11.2 step 2).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MigrationMap {
-    #[serde(default)]
-    pub field_renames: HashMap<String, String>,
-    #[serde(default)]
-    pub field_removals: Vec<String>,
-    #[serde(default)]
-    pub field_defaults: HashMap<String, serde_json::Value>,
-    #[serde(default)]
-    pub field_coercions: HashMap<String, String>,
-}
-
-/// Successful [`WosRuntime::migrate`] result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MigrationOutcome {
-    /// Instance that was migrated.
-    pub instance_id: String,
-    /// Prior `definitionVersion`.
-    pub previous_definition_version: String,
-    /// New `definitionVersion`.
-    pub new_definition_version: String,
-    /// Map applied on this call (echo for idempotency and audit correlation).
-    pub migration_map: MigrationMap,
 }
 
 /// Single-step drain result.
@@ -233,7 +202,7 @@ impl Clock for SystemClock {
 }
 
 /// Errors returned by runtime commands.
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
     /// Runtime store failed.
     #[error(transparent)]
@@ -242,20 +211,6 @@ pub enum RuntimeError {
     /// Document resolution failed.
     #[error("document resolution failed: {0}")]
     Resolver(String),
-
-    /// No kernel bundle is registered for the workflow URL (caller configuration).
-    #[error("kernel workflow bundle not found for url `{url}`")]
-    KernelWorkflowNotFound { url: String },
-
-    /// Requested kernel `definitionVersion` does not match the registered bundle.
-    #[error(
-        "kernel `{url}` is registered with definition version `{loaded_version}`; `{requested_version}` was requested"
-    )]
-    KernelDefinitionVersionMismatch {
-        url: String,
-        loaded_version: String,
-        requested_version: String,
-    },
 
     /// Task presentation failed.
     #[error("task presentation failed: {0}")]
@@ -329,10 +284,6 @@ pub enum RuntimeError {
     #[error("timestamp conversion failed: {0}")]
     Clock(String),
 
-    /// Instance migration aborted (Kernel S11.2 — no partial persistence).
-    #[error("migration rejected: {0}")]
-    MigrationRejected(String),
-
     /// The referenced provenance record was not found.
     #[error("provenance record not found: {0}")]
     ProvenanceRecordNotFound(String),
@@ -353,10 +304,6 @@ pub enum RuntimeError {
         explicit: String,
         type_id_prefix: String,
     },
-
-    /// Requested capability is not enabled in this server build.
-    #[error("{0}")]
-    FeatureDisabled(&'static str),
 }
 
 impl From<provenance::CustodyReceiptStampError> for RuntimeError {
@@ -377,20 +324,14 @@ trait ResolveDocumentsDyn {
     fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, RuntimeError>;
 }
 
-fn map_document_resolver_error<E: StdError + Any + Send + Sync>(error: E) -> RuntimeError {
-    if let Some(rt) = (&error as &dyn Any).downcast_ref::<RuntimeError>() {
-        return rt.clone();
-    }
-    RuntimeError::Resolver(error.to_string())
-}
-
 impl<T> ResolveDocumentsDyn for T
 where
     T: DocumentResolver,
-    T::Error: StdError + Any + Send + Sync,
+    T::Error: StdError + Send + Sync + 'static,
 {
     fn resolve_kernel(&self, url: &str, version: &str) -> Result<KernelDocument, RuntimeError> {
-        DocumentResolver::resolve_kernel(self, url, version).map_err(map_document_resolver_error)
+        DocumentResolver::resolve_kernel(self, url, version)
+            .map_err(|error| RuntimeError::Resolver(error.to_string()))
     }
 }
 
@@ -614,8 +555,6 @@ mod tests {
     use super::*;
 
     use std::collections::HashMap;
-    use std::fs;
-    use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
@@ -1290,16 +1229,6 @@ mod tests {
             kernels.insert((url, version), kernel);
             Self { kernels }
         }
-
-        fn with_kernels(iter: impl IntoIterator<Item = KernelDocument>) -> Self {
-            let mut kernels = HashMap::new();
-            for kernel in iter {
-                let url = kernel.url.clone().unwrap();
-                let version = kernel.version.clone().unwrap();
-                kernels.insert((url, version), kernel);
-            }
-            Self { kernels }
-        }
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -1520,88 +1449,6 @@ mod tests {
                     pin_match,
                     definition_valid: valid,
                     errors: if valid && pin_match {
-                        Vec::new()
-                    } else {
-                        vec![serde_json::json!({ "code": "invalid" })]
-                    },
-                    validation_results: None,
-                },
-            })
-        }
-
-        fn compute_case_mutation(
-            &self,
-            task: &ActiveTask,
-            response: &serde_json::Value,
-        ) -> Result<Option<CaseMutationBundle>, BindingError> {
-            if task.response_mapping_ref.is_none() {
-                return Ok(None);
-            }
-            let mut field_updates = serde_json::Map::new();
-            field_updates.insert("decision".to_string(), response["data"]["approved"].clone());
-            Ok(Some(CaseMutationBundle { field_updates }))
-        }
-    }
-
-    /// Same binding name as `TestAdapter`, but treats completed signature task
-    /// payloads (affirmed ceremony) as binding-valid so `submit_task_response`
-    /// reaches signature affirmation (SIG-013 policy floor). The stock
-    /// `TestAdapter` only gates on `data.approved`, which would surface as
-    /// generic `validationFailed` before policy checks run.
-    #[derive(Debug, Default)]
-    struct Sig013HarnessFormspecAdapter;
-
-    impl crate::binding::ContractBindingAdapter for Sig013HarnessFormspecAdapter {
-        fn binding(&self) -> &'static str {
-            "formspec"
-        }
-
-        fn prepare_task(
-            &self,
-            _task: &ActiveTask,
-            case_state: &serde_json::Value,
-        ) -> Result<PreparedTask, BindingError> {
-            Ok(PreparedTask {
-                prefill_data: Some(serde_json::json!({
-                    "approved": case_state
-                        .get("approved")
-                        .cloned()
-                        .unwrap_or(serde_json::Value::Null)
-                })),
-            })
-        }
-
-        fn validate_submission(
-            &self,
-            task: &ActiveTask,
-            response: &serde_json::Value,
-        ) -> Result<SubmissionValidation, BindingError> {
-            let pin_match = response
-                .get("definitionUrl")
-                .and_then(serde_json::Value::as_str)
-                == task.definition_url.as_deref()
-                && response
-                    .get("definitionVersion")
-                    .and_then(serde_json::Value::as_str)
-                    == task.definition_version.as_deref();
-            let approved = response
-                .get("data")
-                .and_then(|data| data.get("approved"))
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            let signature_completed = response
-                .get("data")
-                .and_then(|data| data.get("signature"))
-                .and_then(|signature| signature.get("affirmed"))
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            let definition_valid = approved || signature_completed;
-            Ok(SubmissionValidation {
-                validation_outcome: ValidationOutcome {
-                    envelope_valid: true,
-                    pin_match,
-                    definition_valid,
-                    errors: if definition_valid && pin_match {
                         Vec::new()
                     } else {
                         vec![serde_json::json!({ "code": "invalid" })]
@@ -1944,12 +1791,6 @@ mod tests {
         bindings
     }
 
-    fn formspec_bindings_sig013_harness() -> BindingRegistry {
-        let mut bindings = BindingRegistry::new();
-        bindings.register(Sig013HarnessFormspecAdapter);
-        bindings
-    }
-
     fn unavailable_bindings() -> BindingRegistry {
         let mut bindings = BindingRegistry::new();
         bindings.register(UnavailableAdapter);
@@ -1981,54 +1822,8 @@ mod tests {
         .with_intake_acceptors(intake_acceptors())
     }
 
-    fn runtime_with_store_kernels<S>(store: S, kernels: Vec<KernelDocument>) -> WosRuntime
-    where
-        S: RuntimeStore + Send + Sync + 'static,
-    {
-        WosRuntime::new(
-            store,
-            TestResolver::with_kernels(kernels),
-            RecordingPresenter::default(),
-            wos_core::traits::DefaultRuntime::new(),
-            RecordingService::with_response(serde_json::Value::Null),
-            wos_core::traits::DefaultRuntime::new(),
-            FixedClock {
-                now_ms: 1_710_000_000_000,
-            },
-            formspec_bindings(),
-        )
-        .with_intake_acceptors(intake_acceptors())
-    }
-
-    fn runtime_with_store_sig013_harness<S>(store: S, kernel: KernelDocument) -> WosRuntime
-    where
-        S: RuntimeStore + Send + Sync + 'static,
-    {
-        WosRuntime::new(
-            store,
-            TestResolver::with_kernel(kernel),
-            RecordingPresenter::default(),
-            wos_core::traits::DefaultRuntime::new(),
-            RecordingService::with_response(serde_json::Value::Null),
-            wos_core::traits::DefaultRuntime::new(),
-            FixedClock {
-                now_ms: 1_710_000_000_000,
-            },
-            formspec_bindings_sig013_harness(),
-        )
-        .with_intake_acceptors(intake_acceptors())
-    }
-
     fn runtime_with_kernel(kernel: KernelDocument) -> WosRuntime {
         runtime_with_store(InMemoryStore::new(), kernel)
-    }
-
-    fn runtime_with_kernels(kernels: Vec<KernelDocument>) -> WosRuntime {
-        runtime_with_store_kernels(InMemoryStore::new(), kernels)
-    }
-
-    fn runtime_with_kernel_sig013_harness(kernel: KernelDocument) -> WosRuntime {
-        runtime_with_store_sig013_harness(InMemoryStore::new(), kernel)
     }
 
     fn workflow_intake_request(handoff_id: &str, case_ref: &str) -> IntakeAcceptanceRequest {
@@ -3152,30 +2947,6 @@ mod tests {
         assert_eq!(loaded.instance_id, created.instance_id);
     }
 
-    /// Kernel + Signature Profile documents shared with conformance `SIG-013`
-    /// (`fixtures/kernel/signature-runtime.json` +
-    /// `fixtures/profiles/signature-runtime-sequential.json`).
-    fn sig013_harness_documents() -> (KernelDocument, SignatureProfileDocument) {
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let kernel_path = manifest.join("../../fixtures/kernel/signature-runtime.json");
-        let profile_path = manifest.join("../../fixtures/profiles/signature-runtime-sequential.json");
-        let kernel_json = fs::read_to_string(&kernel_path)
-            .unwrap_or_else(|e| panic!("read {}: {e}", kernel_path.display()));
-        let kernel: KernelDocument =
-            serde_json::from_str(&kernel_json).expect("signature-runtime kernel parses");
-        let profile_json = fs::read_to_string(&profile_path)
-            .unwrap_or_else(|e| panic!("read {}: {e}", profile_path.display()));
-        let profile_root: serde_json::Value =
-            serde_json::from_str(&profile_json).expect("signature profile JSON parses");
-        let sig_block = profile_root
-            .get("signature")
-            .cloned()
-            .expect("profile fixture has top-level signature block");
-        let profile: SignatureProfileDocument = serde_json::from_value(sig_block)
-            .expect("signature block parses as SignatureProfileDocument");
-        (kernel, profile)
-    }
-
     fn manual_formspec_task(
         instance_id: &str,
         ordinal: usize,
@@ -3588,103 +3359,6 @@ mod tests {
     }
 
     #[test]
-    fn migrate_bumps_definition_version_and_appends_provenance() {
-        let mk = |ver: &str| -> KernelDocument {
-            serde_json::from_value(serde_json::json!({
-                "$wosWorkflow": "1.0",
-                "url": "urn:test:migrate-kernel",
-                "version": ver,
-                "lifecycle": {
-                    "initialState": "open",
-                    "states": { "open": { "type": "atomic" } }
-                },
-                "actors": [{"id": "a", "type": "human"}],
-                "contracts": {},
-            }))
-            .unwrap()
-        };
-        let mut runtime = runtime_with_kernels(vec![mk("1.0.0"), mk("1.1.0")]);
-        runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: "m-case-1".into(),
-                tenant: None,
-                definition_url: "urn:test:migrate-kernel".into(),
-                definition_version: "1.0.0".into(),
-                initial_case_state: Some(serde_json::json!({ "x": 1 })),
-            })
-            .unwrap();
-        let out = runtime
-            .migrate(
-                "m-case-1",
-                "1.1.0",
-                MigrationMap::default(),
-                Some("supervisor-op-1"),
-            )
-            .unwrap();
-        assert_eq!(out.new_definition_version, "1.1.0");
-        let inst = runtime.load_instance("m-case-1").unwrap();
-        assert_eq!(inst.definition_version, "1.1.0");
-        let window = runtime.load_provenance_window("m-case-1", 0, 50).unwrap();
-        let last = window.last().expect("provenance");
-        assert_eq!(last.record_kind, ProvenanceKind::InstanceMigrated);
-        assert_eq!(last.actor_id.as_deref(), Some("supervisor-op-1"));
-    }
-
-    #[test]
-    fn migrate_rejects_when_target_kernel_missing_active_state() {
-        let k1: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosWorkflow": "1.0",
-            "url": "urn:test:migrate-mismatch",
-            "version": "1.0.0",
-            "lifecycle": {
-                "initialState": "open",
-                "states": { "open": { "type": "atomic" } }
-            },
-            "actors": [{"id": "a", "type": "human"}],
-            "contracts": {},
-        }))
-        .unwrap();
-        let k2: KernelDocument = serde_json::from_value(serde_json::json!({
-            "$wosWorkflow": "1.0",
-            "url": "urn:test:migrate-mismatch",
-            "version": "1.1.0",
-            "lifecycle": {
-                "initialState": "done",
-                "states": { "done": { "type": "final" } }
-            },
-            "actors": [{"id": "a", "type": "human"}],
-            "contracts": {},
-        }))
-        .unwrap();
-        let mut runtime = runtime_with_kernels(vec![k1, k2]);
-        runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: "m-case-2".into(),
-                tenant: None,
-                definition_url: "urn:test:migrate-mismatch".into(),
-                definition_version: "1.0.0".into(),
-                initial_case_state: None,
-            })
-            .unwrap();
-        let err = runtime
-            .migrate("m-case-2", "1.1.0", MigrationMap::default(), None)
-            .expect_err("open missing in target");
-        match err {
-            RuntimeError::MigrationRejected(msg) => {
-                assert!(
-                    msg.contains("state not found"),
-                    "unexpected message: {msg}"
-                );
-            }
-            other => panic!("expected MigrationRejected, got {other:?}"),
-        }
-        assert_eq!(
-            runtime.load_instance("m-case-2").unwrap().definition_version,
-            "1.0.0"
-        );
-    }
-
-    #[test]
     fn submit_task_response_completes_and_emits_event() {
         let kernel: KernelDocument = serde_json::from_value(serde_json::json!({
             "$wosWorkflow": "1.0",
@@ -3753,82 +3427,6 @@ mod tests {
         assert_eq!(instance.case_state["decision"], serde_json::json!(true));
         assert_eq!(instance.pending_events.len(), 1);
         assert_eq!(instance.pending_events[0].event, "review.completed");
-    }
-
-    /// Narrow integration harness: same policy floor as conformance SIG-013,
-    /// but calls `WosRuntime::submit_task_response` directly (not only the
-    /// `wos_conformance::run_fixture` harness).
-    #[test]
-    fn submit_task_response_sig013_policy_assurance_below_floor_blocks_affirmation() {
-        let (kernel, profile) = sig013_harness_documents();
-        let mut runtime = runtime_with_kernel_sig013_harness(kernel.clone())
-            .with_signature_profile("signatureProfile", profile);
-        let instance_id = "case-sig013-submit-harness";
-        runtime
-            .create_instance(CreateInstanceRequest {
-                instance_id: instance_id.to_string(),
-                tenant: None,
-                definition_url: kernel.url.clone().unwrap(),
-                definition_version: kernel.version.clone().unwrap(),
-                initial_case_state: None,
-            })
-            .expect("create_instance");
-
-        runtime
-            .enqueue_event(
-                instance_id,
-                PendingEvent {
-                    event: "start".to_string(),
-                    actor_id: Some("applicant".to_string()),
-                    data: None,
-                    timestamp: String::new(),
-                    idempotency_token: Some("sig013-harness-start".to_string()),
-                },
-            )
-            .expect("enqueue start");
-        runtime
-            .drain_until_idle(instance_id)
-            .expect("drain after start");
-
-        let instance = runtime.load_instance(instance_id).expect("load instance");
-        let task = instance
-            .active_tasks
-            .iter()
-            .find(|t| t.task_ref == "applicantTask")
-            .expect("applicantTask from signature onEntry");
-
-        let err = runtime
-            .submit_task_response(
-                &task.task_id,
-                serde_json::json!({
-                    "status": "completed",
-                    "definitionUrl": "urn:test:formspec:signature",
-                    "definitionVersion": "1.0.0",
-                    "data": {
-                        "signerId": "applicant",
-                        "signatureProvider": "formspec",
-                        "ceremonyId": "ceremony-sequential",
-                        "identityBinding": {
-                            "method": "email-otp",
-                            "assuranceLevel": "low"
-                        },
-                        "signature": {
-                            "acceptedAt": "2026-04-22T12:00:00Z",
-                            "affirmed": true,
-                            "documentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                        }
-                    }
-                }),
-                "applicant",
-                Some("sig013-harness-submit"),
-            )
-            .expect_err("below-floor assurance must fail signature affirmation");
-
-        let msg = err.to_string();
-        assert!(
-            msg.contains("is below policy 'emailOtp'"),
-            "unexpected error (expected policy-floor rejection like SIG-013 conformance): {msg}"
-        );
     }
 
     #[test]
@@ -5178,8 +4776,8 @@ mod tests {
     // actors lands in Sub-PR D-3 alongside foreach iteration semantics.
 
     use wos_core::{
-        AgentContext as CoreAgentContext, AgentInvocationError, AgentInvoker, AgentInvokerRegistry,
-        AgentResult, AgentTask, InvokerKind, InvokerSpec,
+        AgentContext as CoreAgentContext, AgentInvocationError, AgentInvoker,
+        AgentInvokerRegistry, AgentResult, AgentTask, InvokerKind, InvokerSpec,
     };
 
     /// Inline test invoker that records what it was asked to do. Independent
@@ -5260,13 +4858,12 @@ mod tests {
     #[test]
     fn runtime_with_agent_invokers_replaces_registry_wholesale() {
         let registry = AgentInvokerRegistry::new()
-            .with(
-                InvokerKind::Stub,
-                Box::new(CountingInvoker { label: "stub" }),
-            )
+            .with(InvokerKind::Stub, Box::new(CountingInvoker { label: "stub" }))
             .with(
                 InvokerKind::Anthropic,
-                Box::new(CountingInvoker { label: "anthropic" }),
+                Box::new(CountingInvoker {
+                    label: "anthropic",
+                }),
             );
         let runtime = runtime_with_kernel(empty_kernel()).with_agent_invokers(registry);
 
@@ -5288,7 +4885,9 @@ mod tests {
             )
             .with_agent_invoker(
                 InvokerKind::Anthropic,
-                Box::new(CountingInvoker { label: "anthropic" }),
+                Box::new(CountingInvoker {
+                    label: "anthropic",
+                }),
             );
 
         // Build an agent declaration with an Anthropic invoker spec.

@@ -133,6 +133,9 @@ The `governance.policyParameters` block embedded in a `$wosWorkflow` document:
       "done": { "type": "final" }
     }
   },
+  "custody": {
+    "trustProfileRef": "urn:trellis:trust-profile/dev"
+  },
   "governance": {
     "policyParameters": {
       "parameters": {

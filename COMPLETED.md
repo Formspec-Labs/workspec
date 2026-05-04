@@ -4,16 +4,6 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 ---
 
-## Session 2026-05-01 — Closed-vocabulary hardening review follow-ups
-
-- [x] **`assurance_rank` IAL/AAL recognition** — `assurance_rank` now recognizes NIST SP 800-63 IAL/AAL labels (`ial1`/`aal1`=1, `ial2`/`aal2`=2, `ial3`/`aal3`=3); previously these returned 0 (unknown). Aligns runtime with Signature Profile §2.7 ("Identity binding is provider-neutral … records authentication method, provider reference, assurance strength"). Behavior change for any prior fixture that relied on IAL labels being unrecognized; SIG-008 (notary, very-high) and SIG-013 (email-otp, low vs standard) cover the new path.
-
-- [x] **WS-042 / ADR 0083 reference-server migration slice** — `kernels` table keyed by `(url, version)`; bundle resolution returns the requested definition version; `POST /api/instances/:id/migrate` honors `Idempotency-Key` for successful replays; integration test `migrate_instance_via_http_cross_version_idempotency_key_replays_outcome` covers `1.0.0 → 1.1.0`.
-
-- [x] **Delivery sidecar rename (`actorType` → `correspondenceRole`) — release-note hook** — Normative closure lives in `specs/sidecars/delivery.md` §4 / schema; consumers migrating from pre-rename payloads should search `correspondenceRole` in `wos-delivery.schema.json` and the parity plan **D1** checklist.
-
----
-
 ## Specs and schemas
 
 - [x] Kernel spec (S4.2, S4.10, S9.2) — concurrency, cascade depth, async actions.
@@ -248,7 +238,7 @@ WOS-side completion contract archived from the earlier `T4-TODO.md` execution fi
 - [x] `cargo test -p wos-runtime --lib`
 - [x] `cargo test -p wos-conformance --test signature_profile -- --nocapture`
 - [x] `../.venv/bin/pytest tests/schemas -q`
-- [x] `npm run types:check` in `studio/`
+- [x] `npm run types:check` in `studio/` *(now `case-portal/`; renamed 2026-05-02)*
 - [x] `git diff --check`
 
 ## Session 16 (2026-04-28) — Low-hanging cluster execution
@@ -440,3 +430,531 @@ All §4.3b review follow-ups closed in a single 4-agent parallel dispatch. Disjo
 ### Validation at close
 
 `cargo test --workspace`: **1012 passed / 0 failed**. SCHEMA-DOC-001 zero-regression gate green. `pytest tests/schemas/ -q`: **188 passed / 11 skipped / 1 xfailed** (+17 vs session 8). `npm run docs:check`: exit 0. `git status`: clean.
+
+---
+
+## Session — D-wave + E-wave (Studio production polish, 2026-05-03)
+
+Two consecutive waves on the Studio (Authoring) layer reducing
+deferred-work surface from 343 → 268 markers (22% burndown) and
+closing 4 of 5 pre-D-wave open IDs.
+
+### D-wave (16 commits including ADR-0083 + parallel-burndown sub-commits D8-A/B/C/D9)
+
+- [x] **STUDIO-DEFER-001 closed** — `.raw` access ratchet 47 → 8
+  residual (`crates/wos-studio-lint/tests/raw_access_ratchet.rs`).
+  Added `WorkspaceDocument` typed accessors + `StudioDocument::body()`
+  dispatch; migrated 47 of 47 lint-rule sites.
+- [x] **STUDIO-DEFER-002 closed** — Lint fixture suite externalization;
+  37 of 43 fixtures externalized to `crates/wos-studio-lint/fixtures/{s1..s6,cross_cutting}/`;
+  inventory ratchet at `tests/fixture_inventory_ratchet.rs`; 6 date-arithmetic
+  / sentinel tests intentionally inline.
+- [x] **STUDIO-DEFER-003 Tranches A/B/C closed** — boon format-assertion mode
+  enabled; parent lint K-016 added (`initialState ∈ states`); actor-id
+  uniqueness lint-covered via K-009 with no schema reshape.
+- [x] **STUDIO-DEFER-004 split** — single 343-marker entry split into 6
+  per-kind sub-IDs (RUNTIME / LINT / SCHEMA / FIXTURE / COORDINATION /
+  WORKFLOW) with per-kind ratchet baselines.
+- [x] **DEFER-004 D-wave burndown** — 343 → 273 markers (20%) across
+  SCHEMA / LINT / FIXTURE; 4 parallel agents (A:SCHEMA, B:LINT, C:FIXTURE,
+  D:investigation).
+- [x] **ADR-0083 (Proposed)** — `thoughts/adr/0083-studio-retention-policy-shape.md`
+  pins the typed `RetentionPolicy` shape that would unblock STUDIO-DEFER-005.
+  Awaiting Studio team review.
+- [x] **K-016 lint rule (parent)** — added to `crates/wos-lint/src/rules/tier1.rs`
+  + registry; 4 sentinel tests in `tier1_rules.rs`; Studio cross-pass
+  test in `lint_pass_xref.rs`.
+
+### E-wave (10 commits, 273 → 268; renumbered as E0-E10 with E5 + E11 skipped, plus E3 split into E3.1/E3.2)
+
+- [x] **E0** — bookkeeping accuracy (CLAUDE.md totals, DEFERRED.md narrative
+  fixes, DEFER-005 ADR back-link, retention_policy() line anchor).
+- [x] **E1** — placeholder `specs/kernel/spec.llm.md` (force-add) unblocks
+  parent `cargo check --workspace`. The synth crates' include_str! resolves;
+  prompts are empty until authored.
+- [x] **E2** — README false-positive fix; ratchet `count_pending` now skips
+  `README.md` (convention prose with literal marker tokens). Drops 4 markers
+  from baselines.
+- [x] **E3** — schema burndown 20 → 10: encoded 4 markers via `if/then` +
+  `contains` (ws-002, rv-030, bind-040, id-010); fixture migration in
+  snap-redetermination examples; reclassified 6 cross-doc markers
+  (prov-010, pom-021, scn-002, scn-006) to lint, plus bind-031 enum
+  encode + ra-001 sweep.
+- [x] **E10** — RUNTIME re-triage: 4 mis-categorized markers reclassified
+  to lint (prov-005, ra-012, pom-035, cmp-052 — all readiness-tier
+  checks, not Phase-4 runtime).
+- [x] **E4** — re-evidence 9 promoted parent K-/WOS-* rules; added
+  per-rule inline-evidence comments to `crates/wos-lint/src/rules/registry.rs`
+  (K-FOREACH-001..004, WOS-EMBED-IDENTITY-001, WOS-EMBED-TARGET-001,
+  WOS-SIDECAR-TARGET-001, WOS-SIG-COVER-001, WOS-VER-LEVEL-001).
+  `cargo test -p wos-lint --test rule_registry` now 5 passed / 0 failed.
+- [x] **E5 skipped** — STUDIO-LINT-MATRIX already explicit on parent vs
+  Studio rule split; audit agent had conflated separate registries.
+- [x] **E6** — Companion-PRD reconciliation: 3 net-new items landed
+  (VISION.md "Capabilities-first product rule"; binding-and-integration.md
+  "Binding Inspector" surface; source-vault.md "Akoma Ntoso ingest path");
+  8 of 9 capability modules from the addendum rejected as redundant
+  with existing specs (documented in studio/specs/README.md).
+- [x] **E7** — DEFER-004-WORKFLOW closed: pinned 0.5 ExtractedClaim
+  confidence threshold as default-with-override per parent
+  ai-integration.md §S7. Marker reclassified to schema-pending +
+  runtime-pending.
+- [x] **E11 skipped** — 4 new POM-LINT rules deferred (closer to feature
+  work than tightening; new BIND-LINT family also deferred for spec-side
+  design).
+- [x] **E9** — removed unused_import warning in phase8_package.rs;
+  appended this entry to COMPLETED.md.
+
+### Open after E-wave
+
+- **STUDIO-DEFER-004-{RUNTIME (183), LINT (71), SCHEMA (11), FIXTURE (1),
+  COORDINATION (2)}** — 268 markers across 5 sub-IDs.
+- **STUDIO-DEFER-005** — ADR-0083 Proposed; 4-step implementation queued
+  pending Studio team acceptance.
+
+### Validation at close
+
+`python3 studio/tests/pending_ratchet.py`: total 268, all kinds within
+baseline. `cd studio && cargo test --workspace`: green (210+ tests).
+`cargo check --workspace` from repo root: clean. `python3 -m pytest
+studio/tests/schemas`: 39 passed, 1 skipped. `cargo test -p wos-lint
+--test rule_registry`: 5 passed. Schema regressions: zero. New parent
+warnings: zero.
+
+### F-wave (review-driven fixups, 2026-05-03 same-day)
+
+After D+E-wave shipped, ran a swarm of 5 semi-formal code-review
+agents (3 sonnet: Rust / schemas / bookkeeping; 2 opus: spec
+authoring / ADR-0083). Aggregate findings: 2 Critical (both
+ADR-0083), 12 Major (4 schemas, 4 specs, 4 bookkeeping), ~10 Minor.
+F-wave addresses all of them.
+
+- [x] **F1** — ADR-0083 r2: revised in place (Status still Proposed)
+  per opus deep-review: `disposalAction` default removed (force
+  explicit pick — government-benefits substrate where defaults
+  matter); §2.4 clock-resume promise dropped (workflow-governance
+  §7.15 doesn't actually back it); renamed `legalHoldOverride` →
+  `respectsLegalHold` (prior name read backwards); dropped
+  `transfer` from v1 enum (footgun without destination shape);
+  pinned regulatoryBasis[] merge semantics; acknowledged
+  workspace-bag breaking change + preserved `^x-` patternProperties;
+  added 4 open questions (versioning at republish, disposal audit
+  sink, pseudonymization-vs-deletion, DSAR×legal-hold).
+- [x] **F2** — Schema correctness: bind-040 enums fixed
+  (`hitPolicy: first-match|priority|unique|output-merge`,
+  `completenessRequirement: all-inputs-covered|partial-allowed-with-default`
+  — schema had used wrong values vs spec); id-010 `"indefinite"`
+  sentinel made explicit via oneOf; prov-071 aiLineage required
+  fields now conditional on `eventSubtype = "ai-assisted"` via
+  outer if/then.
+- [x] **F3** — Spec internal contradictions: source-vault.md
+  ingestFormat enum gains `akoma-ntoso` (E6.3 had claimed it did
+  but didn't); VISION's "five binding kinds" → "four binding
+  kinds" with explicit list; VISION MUST NOT → SHOULD NOT (no
+  enforcement seam yet); VISION PROV-O reclassified as
+  user-visible export (not backing profile); Binding Inspector
+  drops DecisionRule (not a binding kind) + loosens
+  projection-target column (per-kind not hardcoded);
+  SOURCE-LINT-008 reference dropped (rule-id minted when
+  registry implements); pom-035 restored runtime-pending half
+  (re-validation cascade is genuinely runtime).
+- [x] **F4** — Bookkeeping accuracy round 2: DEFERRED.md RUNTIME
+  header/anchor 182 → 184; SCHEMA header/anchor 10 → 11; SCHEMA
+  rationale "remaining 20" → "remaining 11"; LINT narrative
+  extended to document 63 → 71 path (E2/E3.2/E6.3/E10/F3 deltas);
+  FIXTURE narrative cleanup post-E2 SKIP_FILES; COMPLETED.md
+  D-wave commit count 10 → 16 + E-wave 8 → 10.
+- [x] **F5** — Rust polish: K-016 graduation Draft → Tested + 4
+  inline tests promoted with severity/path assertions + 2 new
+  deep-nested tests; E4 evidence comment paths disambiguated
+  (src/rules/tier2.rs vs tests/tier2_rules.rs); schema_validator.rs
+  stripped-pattern count comment clarified; phase8_package.rs raw
+  accesses migrated to typed accessors where possible (id,
+  wos_version_pin) with the rest documented as legitimate
+  compiler-tier `.raw` use.
+
+### Final state at F-wave close
+
+- **Commits:** 31 total over D+E+F waves on the branch
+  (16 D + 10 E + 5 F), plus this COMPLETED entry = 32.
+- **Markers:** 343 → 269 (22% burndown), distributed:
+  runtime 184 / lint 71 / schema 11 / fixture 1 / coordination 2.
+- **DEFER status:** DEFER-001/002/003 all closed (incl. all
+  three Tranches A/B/C); DEFER-004 split + per-kind ratcheted
+  + WORKFLOW closed; DEFER-005 awaiting Studio team review of
+  ADR-0083 r2.
+- **Pre-existing parent failures:** all addressed
+  (rule_registry now 5 passed; synth crates compile via
+  placeholder spec.llm.md).
+
+## G-wave (2026-05-03) — production polish, multi-agent review fixups
+
+7 commits closing every finding from the 5-agent semi-formal code
+review of the post-F state:
+
+- **G1** — K-016 lint rule covers two reachable subtrees A1's
+  review identified as gaps: `Region.initial_state` vs
+  `Region.states` (parallel-state regions) and `State.body` (forEach
+  iteration body). Both let a workflow pass schema-pass + lint-pass
+  and blow up at runtime; one-line additions to the recursion plus
+  two sentinel tests with severity + path assertions. Tightened the
+  parallel-region test to gold-standard asserts (NIT-1). Fixed
+  dangling `spec_ref` (NIT-3): pointed at non-existent
+  `studio/specs/lifecycle.md`; now references `specs/kernel/spec.md
+  §4.1/§4.3/§4.8`. Documented empty-string `initialState` handling
+  in registry comment (NIT-2).
+- **G2** — Three schema-conditional bypasses A3's review surfaced:
+  workspace `reviewerRoles` not top-level required (paired
+  `contains` only fired when present, silently bypassed
+  SA-MUST-ws-002 on omission); collection-form PolicyObject didn't
+  validate per-kind body if/then (`$defs.PolicyObjectKindRules`
+  extracted; both single-form and collection-form items reference
+  it via `$ref`); embedded `provenance[]` arrays didn't `$ref`
+  AuthoringProvenanceRecord (PolicyObject + Binding +
+  WorkflowIntent now use `oneOf [string-ref, $ref]`). Migrated 3
+  snap fixtures to satisfy the tightened embedded-provenance shape
+  (`subjectRef` + `recordedAt` + `inputContextHash` added).
+- **G3** — 11 negative tests in `test_studio_negative.py` covering
+  the E3.1 / E3.2 / F2 / G2 conditionals (A3 F5):
+  ws-002, rv-030 waiver shape, bind-040 enums (single + collection
+  form), id-010 sentinel, prov-071 outer if/then, ra-022 empty
+  conditions. Total Studio-tier negative tests: 32 (was 21).
+- **G4-G6** — Bookkeeping accuracy: studio/CLAUDE.md totals
+  corrected from `183/71/11/1/2 post-E-wave` to `184/71/11/1/2 at
+  HEAD` (A5 F-MAJOR-1); COMPLETED.md commit count corrected from
+  35 to 31+1=32 (A5 F-MAJOR-2); four `.raw` accesses in
+  phase8_package.rs migrated to typed accessors (workspaceId,
+  version → `.body().get(...)`; sourceVersions → `.source_versions()`;
+  id → `.id()`; policyObjects → `.body().get(...)`) — A2 F4.
+- **G7-G9** — ADR-0083 §2.2 worked-example (b) prose clarified
+  to foreclose a bug-class where the implementer might strip
+  workspace `regulatoryBasis[]` on `respectsLegalHold=true` upgrade
+  (A5 F-MAJOR-3); STUDIO-DEFER-006 added for the kernel-spec
+  amendment surfaced by ADR-0083 §2.4 as "blocking E8.4 lint
+  promotion" — first cross-repo DEFER (A5 F-MAJOR-5);
+  studio/VISION.md SHOULD-NOT→MUST-NOT trigger sharpened with two
+  named anchors (A5 F-MAJOR-6).
+- **G10-G12** — Minor follow-ups: `body()` 14-arm dispatch test
+  added in `wos-studio-model::docs::tests` (A2 F5); raw_access_ratchet
+  doc-comment rewritten to remove stale STUDIO-DEFER-001 reference
+  and clarify scope (A2 F6); fixture_inventory_ratchet now walks
+  both `src/` and `tests/` trees and enforces a `FOUND_FLOOR=36`
+  to surface partial reverts (A4 F3 + F6).
+
+### Final state at G-wave close
+
+- **Commits:** 38 total (16 D + 10 E + 5 F + 7 G), plus this
+  COMPLETED entry.
+- **Markers:** 269 unchanged (G-wave is correctness-tightening,
+  no marker burndown).
+- **Negative tests:** 32 (was 21).
+- **K-016 sentinel tests:** 8 (was 6); covers top-level, compound
+  (1-level + 3-level), parallel-region (compound substate +
+  bare region.initialState), forEach body.
+- **DEFER status:** unchanged from F-wave close +
+  STUDIO-DEFER-006 added (kernel-spec amendment for legal-hold
+  clock-resume semantics).
+- **Verified:** Studio tests green; Python schema regression
+  green (51 passed, 1 skipped); pending-annotation ratchet
+  green (184/71/11/1/2 = 269); raw_access_ratchet green
+  (≤8); fixture_inventory_ratchet green (≥36); rule_registry
+  green; api_surface boundary guard green; determinism green.
+  Pre-existing schema_doc_zero_regression failure on
+  `wos-workflow.schema.json` (parent kernel surface, not Studio)
+  remains for parent-team work.
+
+## H-wave (2026-05-03) — E8 (DEFER-005 close) + E11 (4 POM-LINT rules)
+
+8 commits completing the user-gated E8 implementation per ADR-0083 r2
+plus the optional E11 rule-authoring chip from the original E-plan:
+
+### E8 — DEFER-005 implementation (RetentionPolicy typed promotion)
+
+- **E8.0** — ADR-0083 Status: Proposed → Accepted (2026-05-03).
+  G7 had clarified the §2.2 worked-example (b) prose; design
+  production-ready per A5's review.
+- **E8.1** — `studio/specs/policy-object-model.md`:
+  EvidenceRequirement.body.retentionPeriod? → retentionPolicy?:
+  RetentionPolicy. Added full § "RetentionPolicy" data-model block
+  (6-row field table + composition note on workspace defaults +
+  override resolution semantics + migration narrative). Sharpened
+  SA-MUST-pom-037 to enumerate the closed-shape requirements.
+- **E8.2** — schema:
+  `wos-studio-policy-object.schema.json::$defs.RetentionPolicy`
+  added (closed shape, additionalProperties: false, three if/then
+  guards in allOf for mode/duration/respectsLegalHold);
+  EvidenceRequirement body declares `retentionPolicy` as `$ref`;
+  `wos-studio-workspace.schema.json::retentionPolicies` value-side
+  tightened to `additionalProperties: $ref →
+  studio-policy-object/1.0#/$defs/RetentionPolicy`. Snap workspace
+  fixture migrated from singular ISO-duration strings to typed
+  policies (HIPAA carries cited regulatoryBasis).
+- **E8.3** — Rust:
+  New `studio/crates/wos-studio-model/src/policy.rs` with
+  `RetentionPolicy` struct + `DisposalAction` /
+  `RetentionMode` / `TriggerEvent` enums + `effective_mode()` /
+  `effective_respects_legal_hold()` defaulters +
+  `shape_violations()` validator + 6 unit tests covering
+  minimal-bounded, indefinite, each violation kind, and round-trip
+  with x- extension. `retention_policy()` accessor promoted from
+  `Option<&Value>` to `Option<Result<RetentionPolicy,
+  serde_json::Error>>`; companion `retention_policy_raw()` and
+  `legacy_retention_period()` accessors added.
+- **E8.4** — WF-LINT-006 promoted from presence-only to
+  shape-aware: resolves per-EvidenceRequirement override OR
+  workspace default keyed by DPV sensitivity, parses via
+  RetentionPolicy, runs shape_violations(). New
+  `Workspace::workspace_document()` accessor. New
+  `SA-WARN-pom-MIGRATE-RETENTION` advisory rule fires when the
+  legacy `retentionPeriod` field is present (independent of
+  WF-LINT-006). 3 new fixtures + 3 new tests (workspace-default
+  resolves, inline-policy malformed, legacy-field advisory).
+  Registry count 70 → 71.
+- **E8.5** — STUDIO-DEFER-005 moved from Open to Closed in
+  DEFERRED.md with full resolution narrative; CLAUDE.md preamble
+  updated; STUDIO-DEFER-006 narrative updated to clarify it is no
+  longer blocking E8.4 (lint shipped without needing the kernel
+  amendment, which becomes a forward-looking improvement).
+
+### E11 — 4 new POM-LINT rules (the optional E-plan chip)
+
+- **E11.1** — Implementations + fixtures + tests:
+  * `POM-LINT-020` (S2, Error) — PolicyObject *past* approved
+    (mapped/validated/published/superseded/deprecated/demoted)
+    requires matching ApprovalDecision (SA-MUST-pom-020). The
+    `approved` state itself is the gate being crossed (snap-shorthand
+    pattern accommodated). Reads both
+    body.decision.subjectRef and body.subjectRef serialization
+    shapes.
+  * `POM-LINT-033` (S4, Error) — AppealRight.outcomeRef MUST equal
+    linked Notice's outcomeRef on explicit mismatch
+    (SA-MUST-pom-033). Implicit inheritance (no AppealRight
+    outcomeRef) permitted as authoring shorthand. Waiver path:
+    body.waiverScope='separate-procedure' + body.waivedAt silences.
+  * `POM-LINT-040` (S2, Error) — two approved Deadlines on the
+    same body.trigger with different body.calendarDaysFromTrigger
+    require a Conflict naming both subjects to be filed
+    (SA-MUST-pom-040). Tractable lint-time slice; the general
+    non-Deadline algorithm stays runtime-pending.
+  * `POM-LINT-051` (S2, Warning) — two deontic constraints
+    (Permission/Prohibition/Obligation) sharing (subject, action)
+    flagged as composition candidates unless one carries
+    body.compositionAttestation='reviewed' (SA-MUST-pom-051).
+    Warning severity per spec wording. Effectiveness intersection
+    not modeled at lint time.
+  * 8 fixtures (one firing + one silent per rule) + 8 tests.
+    Registry count 71 → 75. `BTreeSet` import added to
+    workspace_rules.rs.
+- **E11.2** — Marker sweep:
+  4 lint-pending markers closed in policy-object-model.md (each
+  cited the corresponding new rule); pom-040 sharpening preserved
+  one runtime-pending for the general non-Deadline algorithm.
+  STUDIO-LINT-MATRIX.md authoritative count 70 → 75 with 4 new
+  rows. Ratchet baselines: lint 71 → 67 (-4); runtime 184 → 185
+  (+1); net total 269 → 266 (-3). DEFERRED.md anchors updated;
+  CLAUDE.md preamble totals 184/71/11/1/2 → 185/67/11/1/2.
+
+### Final state at H-wave close
+
+- **Commits:** 46 total (16 D + 10 E + 5 F + 7 G + 8 H), plus this
+  COMPLETED entry.
+- **Markers:** 343 → 266 (22% → 22.5% burndown), distributed:
+  runtime 185 / lint 67 / schema 11 / fixture 1 / coordination 2.
+- **Open Studio DEFERs:**
+  STUDIO-DEFER-004-{RUNTIME 185, LINT 67, SCHEMA 11, FIXTURE 1,
+  COORDINATION 2} per-kind pending-annotation burndown;
+  STUDIO-DEFER-006 (kernel-spec amendment for legal-hold
+  clock-resume; forward-looking, not blocking).
+
+## I-wave (2026-05-03) — finish DEFER-004 in parallel (closure + reclassify)
+
+Per the user's "tractable + reclassify residual" directive: close
+every closable DEFER-004 marker, then reclassify the irreducible
+residual to a new STUDIO-DEFER-007 (Stage-7/8 substrate dependency
+taxonomy) so DEFER-004's RUNTIME / FIXTURE / COORDINATION sub-IDs
+all drain to 0.
+
+8 commits across four phases (A: parallel lint authoring;
+B: schema sweep; C: skipped — Phase D5 reclassify supplants;
+D: ADRs + reclassify + bookkeeping):
+
+### Phase A — Lint cluster authoring (4 commits, 35 new rules, 36 markers)
+
+- **I-A1** — SV-LINT-007..014 (8 new rules, 9 markers).
+  Source-vault extension family: workspace-tier sv_lint_007
+  (versionless source cited) + 7 doc-local rules covering temporal
+  progression slice (sv-008), parsingResult.status enforcement
+  (sv-009), at-most-one-current per SourceDocument (sv-010),
+  pageable→pageRange (sv-011), JSON-LD context drift (sv-012),
+  akoma-ntoso FRBRdate (sv-013), multilingual authoritative locale
+  (sv-014).
+- **I-A2** — BIND-LINT-001..006 (6 new rules, 6 markers).
+  Brand-new BIND-LINT family: extension registry lookup
+  (bind-001), closed seam set per ADR-0077 (bind-002),
+  caseFilePath resolution (bind-003), output target resolution
+  with ignoredRationale escape (bind-004), sensitive-input
+  handling (bind-005), errorHandling.onError enum (bind-006).
+  Two private helpers (`binding_kind_of` / `binding_body`) route
+  through StudioDocument body() typed dispatch.
+- **I-A3+I-A4+I-A5** — BIND-LINT-010..072 (8 new rules, 8 markers).
+  EventBinding (consumed-source / emitted-recipient / sensitive-
+  payload-redaction); PolicyEngineBinding (caseFilePaths
+  declaration / engineReasonCodes mapping); binding-scenario
+  coverage (≥1 happy-path scenario / ≥2 error-path scenarios for
+  retry / both permit+deny for PolicyEngine).
+- **I-A6+I-A7+I-A8** — WFI/MAP/RA/PROV cross-ref (13 rules, 13 markers).
+  WF-LINT-009..013 (element id uniqueness, position references,
+  notice/appeal/system-check refs); MAP-LINT-009..011 (workflow
+  advancement gates with mappingState; ExtensionRecord motivation);
+  RA-LINT-001..002 (reviewerRole + comment subject resolution);
+  PROV-LINT-005..007 (parentRecordIds resolve, originClass on
+  approved elements, approved-interpretation evidence chain).
+
+### Phase B — Schema sweep (1 commit, 4 markers encoded, 7 residual)
+
+- **I-B1** — pom-001 retire (already encoded), pom-010 add
+  ExtractedClaim.body.confidenceFloor optional field, map-003
+  retire (already encoded via mapping schema's four-way if/then),
+  source-051 add canonicalSourceRef.referencedUri via if/then on
+  ingestFormat=json-ld + snap fixture migration. 7 schema markers
+  remain residual (need fixture migration deferred to follow-up).
+
+### Phase D — ADRs + reclassify + bookkeeping (3 commits)
+
+- **I-D1+I-D2** — ADR-0084 (PLN-0381 identity attestation primitive
+  Studio anchor) + ADR-0085 (PLN-0384 event-types taxonomy Studio
+  anchor). Both at Status: Proposed. Each pins a Studio-side
+  placeholder shape that is a strict subset of the parent's
+  expected primitive — so parent ratification is a `$ref` swap
+  with no breaking change. Coordination markers id-004 + prov-082
+  retire to point at these ADRs.
+- **I-D4** — cmp-051 (compiler version-bump semantic equality)
+  sharpened from `(fixture-pending)` to `(substrate-pending)`:
+  the cross-version comparison harness lands when v2 compiler
+  exists. Single FIXTURE marker rolls into DEFER-007.
+- **I-D5** — Reclassify all 190 remaining `(runtime-pending)`
+  markers to `(substrate-pending)` via mass sed across
+  `studio/specs/*.md` (excluding README.md). The reclassification
+  reflects that these markers need actual Stage-7/8 substrate
+  work (audit log, change-detection engine, scenario simulator
+  emission, runtime-observation adapter, Trellis identity seam,
+  kernel clock-resume amendment) that Studio cannot unblock alone.
+- **I-D6-8** — pending_ratchet.py BASELINES updated: runtime/
+  fixture/coordination = 0; substrate = 191 (new kind);
+  lint = 31, schema = 7 (residual). DEFERRED.md restructured:
+  DEFER-004-RUNTIME / DEFER-004-FIXTURE / DEFER-004-COORDINATION
+  moved to Closed; DEFER-007 added under Open with substrate-
+  dependency taxonomy. CLAUDE.md preamble updated.
+
+### Final state at I-wave close
+
+- **Commits:** 54 total (16 D + 10 E + 5 F + 7 G + 8 H + 8 I),
+  plus this COMPLETED entry.
+- **Markers:** 266 → 229 (22.5% → 33% burndown via tractable
+  closure; the substrate residual stays 191 but moves to a
+  separate sub-ID with sharpened narrative). Distribution:
+  substrate 191 / lint 31 / schema 7 / fixture 0 / coordination 0
+  / runtime 0.
+- **Open Studio DEFERs:**
+  - STUDIO-DEFER-004-LINT (31 markers — spec-side blockers + fixture
+    migration debt).
+  - STUDIO-DEFER-004-SCHEMA (7 markers — pom-032 / ra-021 / rtos-001 /
+    scn-001 / scn-043 / wfi-010 / wfi-040; need fixture vetting +
+    Phase-4 RuntimeObservation schema artifact).
+  - STUDIO-DEFER-006 (kernel-spec amendment; forward-looking).
+  - STUDIO-DEFER-007 (191 substrate markers; Stage-7/8 dependency).
+- **Closed in I-wave:** STUDIO-DEFER-004-RUNTIME (CLOSED via
+  reclassify); STUDIO-DEFER-004-FIXTURE (CLOSED via cmp-051
+  sharpen); STUDIO-DEFER-004-COORDINATION (CLOSED via ADR-0084 +
+  ADR-0085).
+- **Rules in registry:** 110 (was 75 pre-I-wave; +35 across Phase A).
+- **New ADRs:** 0084 (PLN-0381 identity attestation), 0085
+  (PLN-0384 event-types taxonomy). Both Status: Proposed.
+- **Verified at I-wave close:**
+  * cd studio && cargo test --workspace: 0 failures.
+  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  * python3 studio/tests/pending_ratchet.py: substrate 191 /
+    lint 31 / schema 7 / fixture 0 / coordination 0 = 229.
+  * raw_access_ratchet, fixture_inventory_ratchet, rule_registry,
+    api_surface boundary, determinism: all green.
+- **Rules in registry:** 75 (was 70 pre-E8.4).
+- **Verified at H-wave close:**
+  * Studio cargo test --workspace: clean (lib 121, was 113;
+    +8 from E11.1 + 4 from E8.4 + 6 from E8.3 - 2 dup counts).
+  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  * python3 studio/tests/pending_ratchet.py: 185/67/11/1/2 = 266.
+  * cargo test -p wos-lint --test rule_registry: 5 passed.
+  * cargo test -p wos-lint --test tier1_rules: 105 passed
+    (includes the 8 K-016 tests from G1).
+  * raw_access_ratchet, fixture_inventory_ratchet, api_surface
+    boundary, determinism: all green.
+  * Pre-existing schema_doc_zero_regression on
+    wos-workflow.schema.json (parent kernel surface) remains for
+    parent-team work.
+
+## J-wave (2026-05-03) — multi-agent review fixups, all 12 I-wave findings addressed
+
+Single commit closing every finding from the 5-agent semi-formal code
+review of the I-wave (3 BLOCKER/CRITICAL + 3 HIGH + 4 MEDIUM + 2 MINOR).
+All 3 critical claims verified against the source before fixing.
+
+### Critical / blocker fixes (3)
+
+- **J1** — `Scenario.expectedDecision` schema field added (was reading
+  a field BIND-LINT-072 invented by convention; fixture passed for
+  the wrong reason).
+- **J2** — MAP-LINT-010 + MAP-LINT-011 rewritten to query Mapping
+  documents instead of `kind=ExtensionRecord` PolicyObjects (which
+  isn't a kind in the enum). Both rules previously dead code.
+- **J3** — ID-LINT-004 added (cardinality + temporal-validity check
+  per ADR-0084 §2.2). ID-LINT-003 was already taken by an
+  attestationLevel-sufficiency check; minted new id to avoid
+  collision; ADR-0084 §2.2 + §6 updated.
+
+### Major fixes (3)
+
+- **J4** — 13 cross-ref fixtures + 13 firing-case tests authored.
+  I-A6+A7+A8 had landed 13 rules with no test coverage; J4 closes
+  the gap.
+- **J5** — SV-LINT-012 lifecycle-aware comparison: only compare
+  `current|superseded` json-ld versions; non-json-ld breaks chain.
+  2 regression tests added.
+- **J6/J10** — ADR-0084 §4 contingency narrative replaces
+  "analogous to ADR-0083" (which understated the cost given
+  ADR-0084 references ~12 spec locations).
+
+### Moderate fixes (3)
+
+- **J7** — BIND-LINT-070 doc-comment names the structural limit
+  (no Scenario.scenarioType discriminator → can only enforce
+  existence; sharpen when discriminator lands).
+- **J8** — MAP-LINT-009 ref field list extended with `deadlineRef`
+  + `serviceBindingRef`; comment names policy.
+- **J9** — ADR-0085 demoted-vs-deprecated resolution: distinct
+  events at distinct lifecycle phases; cluster grouping
+  downgraded to ADVISORY-ONLY.
+
+### Minor fixes (2)
+
+- **J11** — SV-LINT-010 message id-list fidelity: uses "?"
+  placeholder for missing ids, never silently truncates.
+- **J12** — DEFERRED.md:75 title fix ("11 markers" → "7 markers
+  residual").
+
+### Final state at J-wave close
+
+- **Commits:** 55 total (16 D + 10 E + 5 F + 7 G + 8 H + 8 I + 1 J),
+  plus this COMPLETED entry.
+- **Rules in registry:** 111 (was 110 pre-J3; +1 ID-LINT-004).
+- **Tests added:** 13 cross-ref firing tests + 4 ID-LINT-004 +
+  2 SV-LINT-012 regression = 19 new tests.
+- **Findings closed:** 12 / 12.
+- **Marker baselines unchanged:** substrate 191 / lint 31 /
+  schema 7 / fixture 0 / coordination 0 = 229 markers.
+- **Verified at J-wave close:**
+  * cd studio && cargo test --workspace: 0 failures.
+  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  * python3 studio/tests/pending_ratchet.py: substrate 191 /
+    lint 31 / schema 7 / fixture 0 / coordination 0 = 229.
+  * cargo test -p wos-lint --test rule_registry: 5 passed.
+  * cargo test -p wos-lint --test tier1_rules: 105 passed.

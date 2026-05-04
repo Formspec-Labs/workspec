@@ -184,5 +184,8 @@
         "independentReviewRequired": true
       }
     }
+  },
+  "custody": {
+    "trustProfileRef": "urn:trellis:trust-profile/dev"
   }
 }

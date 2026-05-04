@@ -1,7 +1,7 @@
 use axum::Json;
-use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
+use axum::Router;
 use serde::Deserialize;
 
 use crate::AppState;
@@ -16,10 +16,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/agents", get(list).post(register))
         .route("/agents/{id}", get(get_one))
-        .route(
-            "/agents/{id}/lifecycle-transition",
-            post(lifecycle_transition),
-        )
+        .route("/agents/{id}/lifecycle-transition", post(lifecycle_transition))
         .route("/agents/{id}/canary", post(canary))
         .route("/agents/{id}/shadow", post(shadow))
         .route("/agents/{id}/drift", get(drift))
@@ -53,7 +50,10 @@ async fn register(
     Ok(Json(AgentService::register(&s.storage, req).await?))
 }
 
-async fn get_one(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<AgentView>> {
+async fn get_one(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<AgentView>> {
     Ok(Json(AgentService::get(&s.storage, &id).await?))
 }
 
@@ -88,7 +88,10 @@ async fn shadow(
     ))
 }
 
-async fn drift(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<DriftReport>> {
+async fn drift(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<DriftReport>> {
     Ok(Json(AgentService::drift_report(&s.storage, &id).await?))
 }
 

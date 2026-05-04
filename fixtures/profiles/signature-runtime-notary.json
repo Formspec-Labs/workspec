@@ -4,6 +4,10 @@
   "title": "signature-runtime-notary",
   "url": "https://example.test/fixtures/signature-runtime-notary",
   "signature": {
+    "$wosSignatureProfile": "1.0",
+    "targetWorkflow": {
+      "url": "urn:test:signature-runtime"
+    },
     "roles": [
       {
         "id": "notaryRole",
@@ -62,29 +66,6 @@
         "externalAttestationRef": "urn:test:notary:attestation"
       },
       "custodyHookEligible": true
-    }
-  },
-  "impactLevel": "operational",
-  "actors": [
-    {
-      "id": "applicant",
-      "type": "human"
-    }
-  ],
-  "lifecycle": {
-    "initialState": "_s",
-    "states": {
-      "_s": {
-        "type": "atomic",
-        "transitions": [
-          {
-            "target": "_f"
-          }
-        ]
-      },
-      "_f": {
-        "type": "final"
-      }
     }
   }
 }

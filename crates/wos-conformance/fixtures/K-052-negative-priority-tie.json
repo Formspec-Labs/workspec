@@ -1,0 +1,66 @@
+{
+  "id": "K-052-negative-priority-tie",
+  "rule": "K-052",
+  "description": "Negative case: a DecisionTable with hitPolicy='priority' has two rows whose input domains overlap AND share the same `priority` integer. Per Kernel §4.5.1.4, ties among matched rows under priority hit policy are a K-052 violation (no deterministic winner).",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-052-priority-tie",
+      "version": "1.0.0",
+      "title": "K-052 Negative — Priority tie",
+      "description": "Two priority-1 rows with overlapping inputs cannot resolve deterministically. K-052 fires.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [{ "id": "caseworker", "type": "human", "description": "Caseworker" }],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "eligibilityTable",
+                  "outputColumn": "eligible",
+                  "inputBindings": { "income": "caseFile.income" }
+                }
+              }
+            ]
+          },
+          "approved": { "type": "final" }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [{ "name": "income", "type": "number" }],
+          "outputs": [{ "name": "eligible", "type": "boolean" }],
+          "rows": [
+            { "id": "rA", "inputCells": ["income <= 1500"], "outputCells": ["true"], "priority": 1 },
+            { "id": "rB", "inputCells": ["income <= 2000"], "outputCells": ["false"], "priority": 1 }
+          ],
+          "hitPolicy": "priority"
+        }
+      ],
+      "caseFile": { "fields": {} },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "K-052: DecisionTable 'eligibilityTable' hitPolicy='priority' rows 'rA' and 'rB' have overlapping input domains and identical priority"
+  ]
+}

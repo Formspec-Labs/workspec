@@ -9,3 +9,6 @@ specs/**/*.llm.md
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Claude Code agent infrastructure (worktrees, session metadata)
+.claude/

@@ -70,9 +70,7 @@ impl InstanceRow {
     }
 
     pub fn governance_state(&self) -> Option<&serde_json::Value> {
-        self.instance_json
-            .get("governanceState")
-            .filter(|v| !v.is_null())
+        self.instance_json.get("governanceState").filter(|v| !v.is_null())
     }
 }
 
@@ -230,12 +228,6 @@ pub type InstanceMutator<'a> =
 pub trait Storage: Send + Sync + 'static {
     async fn list_kernels(&self) -> StorageResult<Vec<KernelRow>>;
     async fn get_kernel(&self, url: &str) -> StorageResult<Option<KernelRow>>;
-    /// Latest row for `url` when multiple `definitionVersion` rows exist.
-    async fn get_kernel_by_url_and_version(
-        &self,
-        url: &str,
-        version: &str,
-    ) -> StorageResult<Option<KernelRow>>;
     async fn upsert_kernel(&self, row: &KernelRow) -> StorageResult<()>;
 
     async fn create_instance(&self, row: &InstanceRow) -> StorageResult<()>;
@@ -281,8 +273,7 @@ pub trait Storage: Send + Sync + 'static {
     async fn get_user(&self, id: &str) -> StorageResult<Option<UserRow>>;
     async fn upsert_user(&self, row: &UserRow) -> StorageResult<()>;
     async fn bump_user_auth_epoch(&self, user_id: &str) -> StorageResult<()>;
-    async fn set_user_password_hash(&self, user_id: &str, password_hash: &str)
-    -> StorageResult<()>;
+    async fn set_user_password_hash(&self, user_id: &str, password_hash: &str) -> StorageResult<()>;
     async fn upsert_session(&self, row: &SessionRow) -> StorageResult<()>;
     async fn revoke_session(&self, jti: &str) -> StorageResult<()>;
     async fn revoke_sessions_for_user(&self, user_id: &str) -> StorageResult<()>;

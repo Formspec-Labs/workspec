@@ -107,7 +107,6 @@ async fn bring_up() -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 
@@ -144,21 +143,24 @@ async fn tick_once_fires_expired_timer_and_advances_instance() {
     let expired_deadline = (Utc::now() - Duration::minutes(5)).to_rfc3339();
     state
         .storage
-        .update_instance_atomic(&instance_id, &|row| {
-            let timers = row
-                .instance_json
-                .get_mut("timers")
-                .ok_or_else(|| StorageError::Conflict("timers field missing".into()))?;
-            *timers = serde_json::json!([
-                {
-                    "timerId": "t-1",
-                    "deadline": expired_deadline,
-                    "event": "timer.fire",
-                    "scopeState": "intake"
-                }
-            ]);
-            Ok(Vec::new())
-        })
+        .update_instance_atomic(
+            &instance_id,
+            &|row| {
+                let timers = row
+                    .instance_json
+                    .get_mut("timers")
+                    .ok_or_else(|| StorageError::Conflict("timers field missing".into()))?;
+                *timers = serde_json::json!([
+                    {
+                        "timerId": "t-1",
+                        "deadline": expired_deadline,
+                        "event": "timer.fire",
+                        "scopeState": "intake"
+                    }
+                ]);
+                Ok(Vec::new())
+            },
+        )
         .await
         .expect("inject timer");
 

@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use crate::domain::{
     AlertView, DashboardMetricsView, DriftDataPointView, PipelineDataPointView, StageMetricView,
 };
-use crate::storage::{self, InstanceQuery, LIST_INSTANCES_PAGE_SIZE_MAX, StorageHandle};
+use crate::storage::{self, InstanceQuery, StorageHandle, LIST_INSTANCES_PAGE_SIZE_MAX};
 
 pub struct DashboardService {
     storage: StorageHandle,

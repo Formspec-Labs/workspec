@@ -33,9 +33,7 @@
         "1.0"
       ]
     },
-    "$schema": {
-      "$ref": "#/$defs/JsonSchemaUri"
-    },
+    "$schema": { "$ref": "#/$defs/JsonSchemaUri" },
     "instanceId": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*_case_[0-9a-hjkmnp-tv-z]{26}$",
@@ -50,20 +48,6 @@
         "intent": "Unique instance identity for routing, persistence, and cross-case references"
       }
     },
-    "tenant": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{0,62}$",
-      "description": "Deployment tenant for this governed case (ADR 0068 D-1.1, PLN-0004). Grammar matches a single DNS label: lowercase ASCII letter first, then lowercase letters, digits, or hyphen, length 1 to 63. When instanceId is a WOS case TypeID, this value MUST equal the tenant prefix before the `_case_` segment. Processors set it from an explicit create-instance tenant when provided and valid, else from that TypeID prefix, else the deployment default (for example `default`). Omitted keys deserialize to the default tenant in Rust bindings.",
-      "examples": [
-        "sba-poc",
-        "default",
-        "acme-corp"
-      ],
-      "x-lm": {
-        "critical": true,
-        "intent": "Tenant boundary for routing, storage partitioning, and cross-tenant audit"
-      }
-    },
     "definitionUrl": {
       "type": "string",
       "format": "uri",
@@ -75,26 +59,16 @@
       "x-lm": {
         "critical": true,
         "intent": "Link from running instance to its governing Workflow Document"
-      },
-      "x-wos": {
-        "openStringKind": "identifier"
-      },
-      "minLength": 1
+      }
     },
     "definitionVersion": {
       "type": "string",
       "minLength": 1,
       "description": "Version of the Workflow Document, pinned at instance creation (Kernel S9.6). Running instances remain on their creation-time version unless explicitly migrated (Runtime Companion S11).",
-      "examples": [
-        "1.0.0",
-        "2025.3.0"
-      ],
+      "examples": ["1.0.0", "2025.3.0"],
       "x-lm": {
         "critical": true,
         "intent": "Version pin ensuring instance behavior does not change on definition update"
-      },
-      "x-wos": {
-        "openStringKind": "identifier"
       }
     },
     "configuration": {
@@ -103,28 +77,14 @@
         "type": "string",
         "minLength": 1,
         "description": "A single active leaf state identifier. This is the fully-qualified dot-separated path of the leaf state within the kernel lifecycle hierarchy (e.g., 'review.initial', 'eligibility.income-check').",
-        "examples": [
-          "intake",
-          "review.initial",
-          "eligibility.income-check"
-        ],
-        "x-wos": {
-          "openStringKind": "identifier"
-        }
+        "examples": ["intake", "review.initial", "eligibility.income-check"]
       },
       "minItems": 0,
       "description": "Active leaf states as an ordered array. The order is deterministic: document order of state declarations within the kernel, depth-first. In a workflow without parallel states, this array contains exactly one element. In a workflow with parallel states, it contains one element per active region. Empty array only for completed or terminated instances.",
       "examples": [
-        [
-          "intake"
-        ],
-        [
-          "review.initial"
-        ],
-        [
-          "eligibility.income-check",
-          "eligibility.identity-check"
-        ]
+        ["intake"],
+        ["review.initial"],
+        ["eligibility.income-check", "eligibility.identity-check"]
       ],
       "x-lm": {
         "critical": true,
@@ -157,11 +117,7 @@
       "type": "integer",
       "minimum": 0,
       "description": "Index into the append-only provenance log. Indicates how many provenance records have been durably persisted for this instance. Used for crash recovery: on restart, the processor knows which provenance records are already durable.",
-      "examples": [
-        0,
-        47,
-        1283
-      ],
+      "examples": [0, 47, 1283],
       "x-lm": {
         "critical": true,
         "intent": "Provenance log cursor for crash recovery and audit synchronization"
@@ -225,23 +181,14 @@
         "items": {
           "type": "string",
           "description": "A single saved leaf state identifier within the compound state's configuration at last exit. When a history transition re-enters this compound state, the processor restores to this exact configuration.",
-          "examples": [
-            "review.detailed",
-            "eligibility.income-check"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["review.detailed", "eligibility.income-check"]
         },
         "description": "Saved configuration for this compound state -- the states that were active when the compound state was last exited."
       },
       "description": "Saved history state configurations, keyed by compound state identifier. Present only when the Kernel Document uses history states (Kernel S4.14, Lifecycle Detail S3). Each entry is the saved leaf-state configuration within that compound state.",
       "examples": [
         {
-          "review": [
-            "review.detailed"
-          ]
+          "review": ["review.detailed"]
         }
       ]
     },
@@ -259,10 +206,7 @@
               {
                 "actionId": "verify-income-action",
                 "actionType": "invokeService",
-                "compensatingAction": {
-                  "type": "invokeService",
-                  "serviceRef": "cancelIncomeVerification"
-                },
+                "compensatingAction": { "type": "invokeService", "serviceRef": "cancelIncomeVerification" },
                 "completedAt": "2026-04-09T14:35:00Z"
               }
             ]
@@ -272,20 +216,9 @@
     },
     "status": {
       "type": "string",
-      "enum": [
-        "active",
-        "suspended",
-        "migrating",
-        "completed",
-        "terminated",
-        "stalled"
-      ],
+      "enum": ["active", "suspended", "migrating", "completed", "terminated", "stalled"],
       "description": "Instance status. 'active': processing events normally. 'suspended': paused, no events processed until resumed. 'migrating': definition version change in progress. 'completed': lifecycle reached a top-level final state. 'terminated': explicitly terminated. 'stalled': commit retry budget exhausted -- instance has emitted commitAttemptFailure records and cannot make further progress until operator intervention (ADR 0070 D-5; reframed per maximalist Q18 as a reserved `InstanceStatus` variant, not a kernel statechart node type). Completed and terminated are irreversible terminal states; stalled is recoverable.",
-      "examples": [
-        "active",
-        "completed",
-        "stalled"
-      ],
+      "examples": ["active", "completed", "stalled"],
       "x-lm": {
         "critical": true,
         "intent": "Instance lifecycle position -- whether this instance accepts events"
@@ -295,37 +228,19 @@
       "type": "string",
       "format": "date-time",
       "description": "RFC 3339 timestamp recording when the instance entered `stalled` status (ADR 0070 D-5). REQUIRED when status is `stalled`; absent otherwise. Operators consume this for stuck-instance dashboards and retry-budget reset decisions. The `if/then` guard at the document level enforces the conditional requirement.",
-      "examples": [
-        "2026-04-28T12:01:00Z"
-      ],
-      "x-wos": {
-        "openStringKind": "timestamp"
-      },
-      "minLength": 1
+      "examples": ["2026-04-28T12:01:00Z"]
     },
     "createdAt": {
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp when this instance was created by the processor (Runtime Companion S3.1). Immutable after creation — never updated on transitions or state changes.",
-      "examples": [
-        "2026-04-09T14:30:00Z"
-      ],
-      "x-wos": {
-        "openStringKind": "timestamp"
-      },
-      "minLength": 1
+      "examples": ["2026-04-09T14:30:00Z"]
     },
     "updatedAt": {
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp of last state change (transition fired, case state mutated, status changed).",
-      "examples": [
-        "2026-04-09T15:45:00Z"
-      ],
-      "x-wos": {
-        "openStringKind": "timestamp"
-      },
-      "minLength": 1
+      "examples": ["2026-04-09T15:45:00Z"]
     },
     "pendingEvents": {
       "type": "array",
@@ -339,9 +254,7 @@
           {
             "event": "documentSubmitted",
             "actorId": "applicant-123",
-            "data": {
-              "documentType": "income-verification"
-            },
+            "data": { "documentType": "income-verification" },
             "timestamp": "2026-04-09T16:00:00Z"
           }
         ]
@@ -355,37 +268,25 @@
       "$ref": "#/$defs/VolumeCounters",
       "description": "Counters for AI Integration volume constraints (AI Integration S11). Present only when an AI Integration Document is attached. Tracks autonomous actions per hour/day for autonomy cap enforcement."
     },
-    "extensions": {
-      "$ref": "#/$defs/ExtensionsMap"
-    }
+    "extensions": { "$ref": "#/$defs/ExtensionsMap" }
   },
   "allOf": [
     {
       "if": {
         "properties": {
-          "status": {
-            "const": "stalled"
-          }
+          "status": { "const": "stalled" }
         },
-        "required": [
-          "status"
-        ]
+        "required": ["status"]
       },
       "then": {
-        "required": [
-          "stalledSince"
-        ]
+        "required": ["stalledSince"]
       }
     }
   ],
   "$defs": {
     "TimerState": {
       "type": "object",
-      "required": [
-        "timerId",
-        "deadline",
-        "event"
-      ],
+      "required": ["timerId", "deadline", "event"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -397,62 +298,31 @@
           "type": "string",
           "minLength": 1,
           "description": "Timer identifier, as declared in the startTimer action (Kernel S9.2).",
-          "examples": [
-            "review-deadline",
-            "sla-warning"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["review-deadline", "sla-warning"]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
           "description": "Absolute deadline when this timer fires (ISO 8601). If the original startTimer action used a relative duration, the processor converts it to an absolute deadline at creation time.",
-          "examples": [
-            "2026-04-20T00:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-20T00:00:00Z"]
         },
         "event": {
           "type": "string",
           "minLength": 1,
           "description": "Event to emit when the timer fires. Typically a $timeout.* kernel-generated event (Kernel S4.10).",
-          "examples": [
-            "$timeout.task",
-            "$timeout.state"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["$timeout.task", "$timeout.state"]
         },
         "scopeState": {
           "type": "string",
           "description": "The state or region that scoped this timer. Used for cancellation on region exit (Lifecycle Detail S6.5) and timer reset on state reentry (Lifecycle Detail S6.4).",
-          "examples": [
-            "review",
-            "eligibility.income-check"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["review", "eligibility.income-check"]
         }
       },
       "description": "Captures the state of a pending durable timer."
     },
     "ActiveTask": {
       "type": "object",
-      "required": [
-        "taskId",
-        "taskRef",
-        "status",
-        "createdAt",
-        "updatedAt"
-      ],
+      "required": ["taskId", "taskRef", "status", "createdAt", "updatedAt"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -464,104 +334,46 @@
           "type": "string",
           "minLength": 1,
           "description": "Stable processor-assigned identifier for this task. Used for idempotent event routing, provenance correlation, and delegation references.",
-          "examples": [
-            "task-1",
-            "task-intake-2026-04-09"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["task-1", "task-intake-2026-04-09"]
         },
         "taskRef": {
           "type": "string",
           "minLength": 1,
           "description": "Reference to the task definition, task pattern, or human-readable label identifying this task's type within the workflow.",
-          "examples": [
-            "complete-intake",
-            "technical-review",
-            "eligibility-determination"
-          ],
-          "x-wos": {
-            "openStringKind": "prose"
-          }
+          "examples": ["complete-intake", "technical-review", "eligibility-determination"]
         },
         "status": {
           "type": "string",
-          "enum": [
-            "created",
-            "assigned",
-            "claimed",
-            "delegated",
-            "escalated"
-          ],
+          "enum": ["created", "assigned", "claimed", "delegated", "escalated"],
           "description": "Current nonterminal task status. Completed, failed, and skipped tasks leave activeTasks and remain in provenance.",
-          "examples": [
-            "created",
-            "claimed"
-          ]
+          "examples": ["created", "claimed"]
         },
         "assignedActor": {
           "type": "string",
           "description": "Identifier of the actor assigned to complete this task. Set by createTask; may change on delegation or escalation.",
-          "examples": [
-            "applicant-123",
-            "reviewer-agency-456",
-            "supervisor-789"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["applicant-123", "reviewer-agency-456", "supervisor-789"]
         },
         "contractRef": {
           "type": "string",
           "description": "Key into the Kernel Document's contracts map identifying which contract governs this task (Kernel S7.2).",
-          "examples": [
-            "intakeApplication",
-            "technicalReview",
-            "eligibilityDetermination"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["intakeApplication", "technicalReview", "eligibilityDetermination"]
         },
         "binding": {
           "type": "string",
-          "enum": [
-            "formspec",
-            "jsonSchema"
-          ],
+          "enum": ["formspec", "jsonSchema"],
           "description": "Contract binding type for this task when backed by a contract. Drives which renderer the task delivery layer invokes.",
-          "examples": [
-            "formspec",
-            "jsonSchema"
-          ]
+          "examples": ["formspec", "jsonSchema"]
         },
         "definitionUrl": {
           "type": "string",
           "format": "uri",
           "description": "Formspec Definition URL for Formspec-backed tasks. Pinned at task creation; must match response.definitionUrl on submission.",
-          "examples": [
-            "https://agency.gov/forms/intake",
-            "urn:formspec:benefits-intake:2.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["https://agency.gov/forms/intake", "urn:formspec:benefits-intake:2.0"]
         },
         "definitionVersion": {
           "type": "string",
           "description": "Pinned Formspec Definition version for Formspec-backed tasks. Must match response.definitionVersion on submission.",
-          "examples": [
-            "1.0.0",
-            "2025.3.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["1.0.0", "2025.3.0"]
         },
         "prefillMappingRef": {
           "type": "string",
@@ -570,11 +382,7 @@
           "examples": [
             "https://agency.gov/mappings/intake-prefill",
             "urn:wos:mapping:benefits-intake-prefill:1.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          ]
         },
         "responseMappingRef": {
           "type": "string",
@@ -583,38 +391,19 @@
           "examples": [
             "https://agency.gov/mappings/intake-response",
             "urn:wos:mapping:benefits-intake-response:1.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          ]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
           "description": "Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.",
-          "examples": [
-            "2026-04-20T17:00:00Z",
-            "2026-05-01T00:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-20T17:00:00Z", "2026-05-01T00:00:00Z"]
         },
         "impactLevel": {
           "type": "string",
-          "enum": [
-            "rights-impacting",
-            "safety-impacting",
-            "operational",
-            "informational"
-          ],
+          "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
           "description": "Effective task impact level. Defaults to the Kernel impactLevel when absent.",
-          "examples": [
-            "rights-impacting",
-            "operational"
-          ]
+          "examples": ["rights-impacting", "operational"]
         },
         "context": {
           "$ref": "#/$defs/FormspecTaskContext",
@@ -628,45 +417,21 @@
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when this task was created by the processor's createTask action.",
-          "examples": [
-            "2026-04-09T14:00:00Z",
-            "2026-04-11T08:30:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T14:00:00Z", "2026-04-11T08:30:00Z"]
         },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when this task's state last changed (assignment, claim, escalation, or partial save).",
-          "examples": [
-            "2026-04-09T14:05:00Z",
-            "2026-04-11T09:15:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T14:05:00Z", "2026-04-11T09:15:00Z"]
         },
-        "extensions": {
-          "$ref": "#/$defs/ExtensionsMap"
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
       "description": "Durable nonterminal task state for an active task."
     },
     "FormspecTaskContext": {
       "type": "object",
-      "required": [
-        "taskId",
-        "instanceId",
-        "contractRef",
-        "definitionUrl",
-        "definitionVersion",
-        "binding",
-        "assignedActor"
-      ],
+      "required": ["taskId", "instanceId", "contractRef", "definitionUrl", "definitionVersion", "binding", "assignedActor"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -678,13 +443,7 @@
           "type": "string",
           "minLength": 1,
           "description": "Processor-assigned task identifier. Stable for idempotency, provenance, and delegation lookups throughout the task lifecycle.",
-          "examples": [
-            "task-1",
-            "task-intake-2026-04-09"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["task-1", "task-intake-2026-04-09"]
         },
         "instanceId": {
           "type": "string",
@@ -700,72 +459,38 @@
           "type": "string",
           "minLength": 1,
           "description": "Key into the Kernel Document's contracts map governing this task's form definition and response schema.",
-          "examples": [
-            "intakeApplication",
-            "technicalReview",
-            "eligibilityDetermination"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["intakeApplication", "technicalReview", "eligibilityDetermination"]
         },
         "definitionUrl": {
           "type": "string",
           "format": "uri",
           "description": "Formspec Definition URL. Pinned at task creation time; must match response.definitionUrl to pass envelope validation.",
-          "examples": [
-            "https://agency.gov/forms/intake",
-            "urn:formspec:benefits-intake:2.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["https://agency.gov/forms/intake", "urn:formspec:benefits-intake:2.0"]
         },
         "definitionVersion": {
           "type": "string",
           "minLength": 1,
           "description": "Pinned Formspec Definition version. Must match response.definitionVersion to pass envelope validation.",
-          "examples": [
-            "1.0.0",
-            "2025.3.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["1.0.0", "2025.3.0"]
         },
         "binding": {
           "type": "string",
           "const": "formspec",
           "description": "Task binding discriminator. Always 'formspec' in FormspecTaskContext — identifies this context shape as requiring Formspec rendering.",
-          "examples": [
-            "formspec"
-          ]
+          "examples": ["formspec"]
         },
         "assignedActor": {
           "type": "string",
           "minLength": 1,
           "description": "Actor assigned to complete this task, as set by the createTask action. The form renderer uses this to authorize task access.",
-          "examples": [
-            "applicant-123",
-            "reviewer-agency-456"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["applicant-123", "reviewer-agency-456"]
         },
         "prefillData": {
           "type": "object",
           "description": "Host-provided initial field values pre-populated into the form before the actor sees it. Applied after prefillMappingRef if both are present.",
           "examples": [
-            {
-              "applicantName": "Jane Doe",
-              "income": 42000
-            },
-            {
-              "vendorId": "V-8821",
-              "contractAmount": 150000
-            }
+            { "applicantName": "Jane Doe", "income": 42000 },
+            { "vendorId": "V-8821", "contractAmount": 150000 }
           ]
         },
         "prefillMappingRef": {
@@ -775,11 +500,7 @@
           "examples": [
             "https://agency.gov/mappings/intake-prefill",
             "urn:wos:mapping:benefits-intake-prefill:1.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          ]
         },
         "responseMappingRef": {
           "type": "string",
@@ -788,42 +509,21 @@
           "examples": [
             "https://agency.gov/mappings/intake-response",
             "urn:wos:mapping:benefits-intake-response:1.0"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          ]
         },
         "deadline": {
           "type": "string",
           "format": "date-time",
           "description": "Absolute ISO 8601 deadline by which this task must be completed before SLA timers fire or escalation occurs.",
-          "examples": [
-            "2026-04-20T17:00:00Z",
-            "2026-05-01T00:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-20T17:00:00Z", "2026-05-01T00:00:00Z"]
         },
         "impactLevel": {
           "type": "string",
-          "enum": [
-            "rights-impacting",
-            "safety-impacting",
-            "operational",
-            "informational"
-          ],
+          "enum": ["rights-impacting", "safety-impacting", "operational", "informational"],
           "description": "Effective task impact level. Drives UI warnings and access-control enforcement in the Formspec renderer.",
-          "examples": [
-            "rights-impacting",
-            "operational"
-          ]
+          "examples": ["rights-impacting", "operational"]
         },
-        "extensions": {
-          "$ref": "#/$defs/ExtensionsMap"
-        }
+        "extensions": { "$ref": "#/$defs/ExtensionsMap" }
       },
       "description": "Presentation context for a Formspec-backed task.",
       "examples": [
@@ -844,12 +544,7 @@
     },
     "ValidationOutcome": {
       "type": "object",
-      "required": [
-        "envelopeValid",
-        "pinMatch",
-        "definitionValid",
-        "errors"
-      ],
+      "required": ["envelopeValid", "pinMatch", "definitionValid", "errors"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -860,26 +555,17 @@
         "envelopeValid": {
           "type": "boolean",
           "description": "Whether the Response envelope validated against Formspec response.schema.json.",
-          "examples": [
-            true,
-            false
-          ]
+          "examples": [true, false]
         },
         "pinMatch": {
           "type": "boolean",
           "description": "Whether response.definitionUrl and response.definitionVersion matched the task pin.",
-          "examples": [
-            true,
-            false
-          ]
+          "examples": [true, false]
         },
         "definitionValid": {
           "type": "boolean",
           "description": "Whether Formspec Definition validation over response.data passed.",
-          "examples": [
-            true,
-            false
-          ]
+          "examples": [true, false]
         },
         "errors": {
           "type": "array",
@@ -887,10 +573,7 @@
             "type": "object",
             "description": "A single WOS-level validation error object with at least a 'message' field. May include 'code' and 'path' for machine-readable diagnosis.",
             "examples": [
-              {
-                "message": "response.definitionUrl does not match task pin",
-                "code": "PIN_MISMATCH"
-              }
+              { "message": "response.definitionUrl does not match task pin", "code": "PIN_MISMATCH" }
             ]
           },
           "description": "WOS-level validation errors, including envelope and pin errors."
@@ -901,11 +584,7 @@
             "type": "object",
             "description": "A single Formspec-shaped ValidationResult entry from Definition validation, with at minimum a 'severity' and 'message' field (Formspec ValidationResult spec).",
             "examples": [
-              {
-                "severity": "error",
-                "message": "income is required",
-                "path": "income"
-              }
+              { "severity": "error", "message": "income is required", "path": "income" }
             ]
           },
           "description": "Formspec-shaped ValidationResult entries from Definition validation."
@@ -918,9 +597,7 @@
           "pinMatch": true,
           "definitionValid": false,
           "errors": [
-            {
-              "message": "Definition validation failed"
-            }
+            { "message": "Definition validation failed" }
           ]
         }
       ],
@@ -931,10 +608,7 @@
     },
     "CompensationLog": {
       "type": "object",
-      "required": [
-        "scopeId",
-        "entries"
-      ],
+      "required": ["scopeId", "entries"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -946,14 +620,7 @@
           "type": "string",
           "minLength": 1,
           "description": "Identifier of the compensable scope this log belongs to. Matches a compensableScope state identifier in the Kernel Document (Lifecycle Detail S5).",
-          "examples": [
-            "incomeVerification",
-            "eligibilityReview",
-            "disbursement"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["incomeVerification", "eligibilityReview", "disbursement"]
         },
         "entries": {
           "type": "array",
@@ -967,12 +634,7 @@
     },
     "CompensationEntry": {
       "type": "object",
-      "required": [
-        "actionId",
-        "actionType",
-        "compensatingAction",
-        "completedAt"
-      ],
+      "required": ["actionId", "actionType", "compensatingAction", "completedAt"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -984,62 +646,26 @@
           "type": "string",
           "minLength": 1,
           "description": "Identifier of the original Kernel action that completed and was recorded for potential compensation.",
-          "examples": [
-            "verify-income-action",
-            "notify-vendor-action",
-            "create-disbursement-action"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["verify-income-action", "notify-vendor-action", "create-disbursement-action"]
         },
         "actionType": {
           "type": "string",
-          "enum": [
-            "createTask",
-            "invokeService",
-            "setData",
-            "emitEvent",
-            "startTimer",
-            "cancelTimer",
-            "log"
-          ],
           "description": "Type of the original action that completed (e.g., invokeService, setData, createTask). Matches a Kernel action type (Kernel S9.2).",
-          "examples": [
-            "invokeService",
-            "setData",
-            "createTask"
-          ]
+          "examples": ["invokeService", "setData", "createTask"]
         },
         "compensatingAction": {
           "type": "object",
           "description": "The compensating action to execute during backward recovery in reverse entry order. Structure matches a Kernel Action (Kernel S9.2).",
           "examples": [
-            {
-              "type": "invokeService",
-              "serviceRef": "cancelIncomeVerification"
-            },
-            {
-              "type": "invokeService",
-              "serviceRef": "reversePayment",
-              "params": {
-                "transactionId": "TXN-001"
-              }
-            }
+            { "type": "invokeService", "serviceRef": "cancelIncomeVerification" },
+            { "type": "invokeService", "serviceRef": "reversePayment", "params": { "transactionId": "TXN-001" } }
           ]
         },
         "completedAt": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when the original action completed and was logged for compensation purposes.",
-          "examples": [
-            "2026-04-09T14:35:00Z",
-            "2026-04-10T10:22:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T14:35:00Z", "2026-04-10T10:22:00Z"]
         },
         "output": {
           "description": "Persisted output of the original action, available to the compensating action."
@@ -1049,10 +675,7 @@
     },
     "PendingEvent": {
       "type": "object",
-      "required": [
-        "event",
-        "timestamp"
-      ],
+      "required": ["event", "timestamp"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -1064,65 +687,31 @@
           "type": "string",
           "minLength": 1,
           "description": "Event name matching a transition's event property in the Kernel Document. May also be a kernel-generated event like '$timeout.task' (Kernel S9.1).",
-          "examples": [
-            "documentSubmitted",
-            "approve",
-            "reject"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["documentSubmitted", "approve", "reject"]
         },
         "actorId": {
           "type": "string",
           "description": "Identifier of the actor who submitted this event. Used for audit trails and role-based transition guards.",
-          "examples": [
-            "applicant-123",
-            "reviewer-agency-456",
-            "system-scheduler"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["applicant-123", "reviewer-agency-456", "system-scheduler"]
         },
         "data": {
           "type": "object",
           "description": "Arbitrary event payload, available in guard expression evaluation context as 'event' (Kernel S7.2). Structure is workflow-specific.",
           "examples": [
-            {
-              "documentType": "income-verification"
-            },
-            {
-              "outcome": "approved",
-              "comments": "All criteria met"
-            }
+            { "documentType": "income-verification" },
+            { "outcome": "approved", "comments": "All criteria met" }
           ]
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when this event was enqueued by the actor or system component.",
-          "examples": [
-            "2026-04-09T16:00:00Z",
-            "2026-04-10T09:15:30Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T16:00:00Z", "2026-04-10T09:15:30Z"]
         },
         "idempotencyToken": {
           "type": "string",
           "description": "Opaque token for exactly-once delivery deduplication (Runtime Companion S4.3). The processor rejects duplicate events with the same token.",
-          "examples": [
-            "evt-a1b2c3d4",
-            "req-2026-04-09-0042"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["evt-a1b2c3d4", "req-2026-04-09-0042"]
         }
       },
       "description": "An event enqueued for processing but not yet consumed by the evaluation engine."
@@ -1155,15 +744,7 @@
           "additionalProperties": true,
           "description": "Runtime state for review protocols (Governance S4). Keyed by review protocol binding identifier. Tracks which reviews are pending, completed, and their outcomes.",
           "examples": [
-            {
-              "dualBlindReview": {
-                "status": "pending",
-                "reviewers": [
-                  "reviewer-a",
-                  "reviewer-b"
-                ]
-              }
-            }
+            { "dualBlindReview": { "status": "pending", "reviewers": ["reviewer-a", "reviewer-b"] } }
           ]
         }
       },
@@ -1171,12 +752,7 @@
     },
     "ActiveDelegation": {
       "type": "object",
-      "required": [
-        "delegatorId",
-        "delegateId",
-        "scope",
-        "grantedAt"
-      ],
+      "required": ["delegatorId", "delegateId", "scope", "grantedAt"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -1188,89 +764,43 @@
           "type": "string",
           "minLength": 1,
           "description": "Identifier of the actor who granted this delegation. Must be an actor with the relevant authority at the time of granting.",
-          "examples": [
-            "supervisor-789",
-            "program-director-001"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["supervisor-789", "program-director-001"]
         },
         "delegateId": {
           "type": "string",
           "minLength": 1,
           "description": "Identifier of the actor who received the delegated authority. This actor may act on behalf of the delegator within the declared scope.",
-          "examples": [
-            "reviewer-agency-456",
-            "deputy-director-002"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["reviewer-agency-456", "deputy-director-002"]
         },
         "scope": {
           "type": "string",
           "description": "Scope of the delegation (Governance S11.3). May be a transition tag, state identifier, or FEL expression.",
-          "examples": [
-            "eligibility.income-check",
-            "review",
-            "tag:sla-critical"
-          ],
-          "x-wos": {
-            "openStringKind": "fel"
-          },
-          "minLength": 1
+          "examples": ["eligibility.income-check", "review", "tag:sla-critical"]
         },
         "authority": {
           "type": "string",
-          "enum": [
-            "signing",
-            "determination",
-            "review",
-            "override"
-          ],
+          "enum": ["signing", "determination", "review", "override"],
           "description": "Type of authority delegated (Governance S11.2). Determines which governed transitions the delegate may trigger.",
-          "examples": [
-            "signing",
-            "determination"
-          ]
+          "examples": ["signing", "determination"]
         },
         "grantedAt": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when this delegation was recorded by the governance system.",
-          "examples": [
-            "2026-04-09T08:00:00Z",
-            "2026-04-10T14:30:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T08:00:00Z", "2026-04-10T14:30:00Z"]
         },
         "expiresAt": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when the delegation expires. Absent if the delegation has no expiry.",
-          "examples": [
-            "2026-04-30T23:59:59Z",
-            "2026-05-15T00:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-30T23:59:59Z", "2026-05-15T00:00:00Z"]
         }
       },
       "description": "A currently active delegation of authority from one actor to another."
     },
     "ActiveHold": {
       "type": "object",
-      "required": [
-        "holdType",
-        "startedAt",
-        "resumeTrigger"
-      ],
+      "required": ["holdType", "startedAt", "resumeTrigger"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -1281,64 +811,30 @@
         "holdType": {
           "type": "string",
           "description": "Type of hold, matching a HoldPolicy's holdType (Governance S12).",
-          "examples": [
-            "pending-applicant-response",
-            "pending-external-verification"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["pending-applicant-response", "pending-external-verification"]
         },
         "startedAt": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when this hold was placed on the instance by the governance system.",
-          "examples": [
-            "2026-04-09T09:00:00Z",
-            "2026-04-11T14:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T09:00:00Z", "2026-04-11T14:00:00Z"]
         },
         "expectedEnd": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp when the hold is expected to end (startedAt + expectedDuration). Absent for indefinite holds.",
-          "examples": [
-            "2026-04-16T09:00:00Z",
-            "2026-04-25T17:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-16T09:00:00Z", "2026-04-25T17:00:00Z"]
         },
         "resumeTrigger": {
           "type": "string",
           "minLength": 1,
           "description": "Event name that, when received, will lift this hold and allow the instance to resume normal processing.",
-          "examples": [
-            "applicantDocumentsReceived",
-            "externalVerificationComplete"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          }
+          "examples": ["applicantDocumentsReceived", "externalVerificationComplete"]
         },
         "holdState": {
           "type": "string",
           "description": "The lifecycle state the instance was in when the hold started. Stored to verify state has not changed on hold removal.",
-          "examples": [
-            "review.initial",
-            "eligibility.income-check"
-          ],
-          "x-wos": {
-            "openStringKind": "identifier"
-          },
-          "minLength": 1
+          "examples": ["review.initial", "eligibility.income-check"]
         }
       },
       "description": "A currently active hold on the workflow instance."
@@ -1359,12 +855,7 @@
           },
           "description": "Per-agent hourly autonomous action counters. Keyed by agent actor ID.",
           "examples": [
-            {
-              "agent-triage-001": {
-                "count": 12,
-                "windowStart": "2026-04-09T14:00:00Z"
-              }
-            }
+            { "agent-triage-001": { "count": 12, "windowStart": "2026-04-09T14:00:00Z" } }
           ]
         },
         "daily": {
@@ -1374,12 +865,7 @@
           },
           "description": "Per-agent daily autonomous action counters. Keyed by agent actor ID.",
           "examples": [
-            {
-              "agent-triage-001": {
-                "count": 47,
-                "windowStart": "2026-04-09T00:00:00Z"
-              }
-            }
+            { "agent-triage-001": { "count": 47, "windowStart": "2026-04-09T00:00:00Z" } }
           ]
         }
       },
@@ -1387,10 +873,7 @@
     },
     "VolumeCounter": {
       "type": "object",
-      "required": [
-        "count",
-        "windowStart"
-      ],
+      "required": ["count", "windowStart"],
       "patternProperties": {
         "^x-": {
           "$comment": "Vendor extensions per Kernel spec §10.6"
@@ -1402,43 +885,26 @@
           "type": "integer",
           "minimum": 0,
           "description": "Number of autonomous actions taken by this agent in the current counting window. Compared to the cap declared in the AI Integration Document.",
-          "examples": [
-            0,
-            12,
-            47
-          ]
+          "examples": [0, 12, 47]
         },
         "windowStart": {
           "type": "string",
           "format": "date-time",
           "description": "ISO 8601 timestamp marking the start of the current counting window. Resets each hour (hourly) or each UTC midnight (daily).",
-          "examples": [
-            "2026-04-09T14:00:00Z",
-            "2026-04-09T00:00:00Z"
-          ],
-          "x-wos": {
-            "openStringKind": "timestamp"
-          },
-          "minLength": 1
+          "examples": ["2026-04-09T14:00:00Z", "2026-04-09T00:00:00Z"]
         }
       },
       "description": "A single volume counter tracking autonomous actions within a time window."
-    },
+    }
+  ,
     "ExtensionsMap": {
       "type": "object",
       "description": "Vendor extension data attached to this node. All keys MUST start with 'x-' (see Kernel §10.6). The reserved namespace 'x-wos-*' is for WOS Working Group use only; third-party extensions MUST use a unique vendor prefix (e.g., 'x-acme-', 'x-vendor-'). Processors MUST ignore unknown extension keys to preserve forward compatibility. Extension values are unconstrained — any JSON value is valid, but authors are encouraged to document the shape in their vendor spec.",
       "examples": [
-        {
-          "x-acme-audit-ref": "AUD-2026-001"
-        },
-        {
-          "x-vendor-tier": "gold",
-          "x-vendor-region": "us-east"
-        }
+        { "x-acme-audit-ref": "AUD-2026-001" },
+        { "x-vendor-tier": "gold", "x-vendor-region": "us-east" }
       ],
-      "propertyNames": {
-        "pattern": "^x-"
-      },
+      "propertyNames": { "pattern": "^x-" },
       "additionalProperties": {}
     },
     "JsonSchemaUri": {
@@ -1447,11 +913,7 @@
       "description": "Optional JSON Schema URI enabling editor validation and autocompletion. When present, editors (VS Code, IntelliJ, etc.) validate the document against this schema. Omit in production documents; the authoritative schema URI is derived from the document type marker (e.g., '$wosWorkflow': '1.0'). Used for author-time tooling only — runtime processors MUST ignore this field.",
       "examples": [
         "https://wos-spec.org/schemas/wos-workflow.schema.json"
-      ],
-      "x-wos": {
-        "openStringKind": "uri"
-      },
-      "minLength": 1
+      ]
     }
   }
 }

@@ -55,6 +55,38 @@ fn suggested_fix_custom_round_trips() {
 }
 
 #[test]
+fn block_severity_serializes_as_block() {
+    let diag = LintDiagnostic {
+        rule_id: "PUB-LINT-001",
+        severity: LintSeverity::Block,
+        tier: Tier::T2,
+        path: "/findings/0".to_string(),
+        message: "publication-blocker: unresolved error finding".to_string(),
+        suggested_fix: None,
+        related_docs: vec![],
+        source: None,
+    };
+    let json = serde_json::to_value(&diag).unwrap();
+    assert_eq!(json["severity"], "block");
+
+    // Round-trip the severity in isolation (LintDiagnostic carries
+    // `rule_id: &'static str` so it can't be deserialized from owned
+    // values — the wire-form severity is what matters here).
+    let parsed: LintSeverity =
+        serde_json::from_str("\"block\"").expect("severity round-trip");
+    assert_eq!(parsed, LintSeverity::Block);
+}
+
+#[test]
+fn severity_ordering_block_strictly_above_error() {
+    // Info < Warning < Error < Block. The is_valid checks across the
+    // codebase use `>= LintSeverity::Error` which MUST include Block.
+    assert!(LintSeverity::Block > LintSeverity::Error);
+    assert!(LintSeverity::Error > LintSeverity::Warning);
+    assert!(LintSeverity::Warning > LintSeverity::Info);
+}
+
+#[test]
 fn optional_fields_are_omitted_when_empty() {
     let diag = LintDiagnostic {
         rule_id: "K-023",

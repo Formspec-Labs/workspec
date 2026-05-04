@@ -1,0 +1,23 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-x", "kind": "Outcome", "lifecycleState": "published", "originClass": "source",
+       "body": {"polarity": "adverse"}}
+    ]
+  }],
+  ["ad.json", {
+    "$wosStudioApproval": "1.0",
+    "kind": "ApprovalDecision",
+    "decision": {
+      "id": "ad-1",
+      "subjectKind": "PolicyObject",
+      "subjectRef": "pol-x",
+      "decision": "approved",
+      "approvedBy": "subj-x",
+      "approvedAt": "2026-04-22T00:00:00Z",
+      "approverRole": "compliance-reviewer",
+      "rationale": "ok"
+    }
+  }]
+]

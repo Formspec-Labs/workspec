@@ -28,6 +28,8 @@
     }
   },
   "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+    "targetWorkflow": "https://test.wos-spec.org/workflows/pipeline-execution",
     "pipelines": [
       {
         "id": "dataValidation",

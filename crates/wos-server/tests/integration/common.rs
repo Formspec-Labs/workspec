@@ -76,9 +76,6 @@ pub async fn bring_up_with_cfg(cfg: Arc<ServerConfig>) -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(
-            wos_server::MigrateIdempotencyCache::default(),
-        )),
     }
 }
 
@@ -148,16 +145,14 @@ pub fn slice_b_tempdir() -> TempDir {
     });
     std::fs::create_dir_all(root.join("notification-template")).unwrap();
     std::fs::write(
-        root.join("notification-template")
-            .join(format!("{slug}.json")),
+        root.join("notification-template").join(format!("{slug}.json")),
         serde_json::to_vec_pretty(&tmpl).unwrap(),
     )
     .unwrap();
 
     std::fs::create_dir_all(root.join("integration-profile")).unwrap();
     std::fs::write(
-        root.join("integration-profile")
-            .join(format!("{slug}.json")),
+        root.join("integration-profile").join(format!("{slug}.json")),
         br#"{"bindings":[]}"#,
     )
     .unwrap();
@@ -185,7 +180,10 @@ pub fn make_instance_row(id: &str) -> InstanceRow {
     }
 }
 
-pub async fn seed_instance_with_one_provenance(store: &storage::StorageHandle, instance_id: &str) {
+pub async fn seed_instance_with_one_provenance(
+    store: &storage::StorageHandle,
+    instance_id: &str,
+) {
     store
         .create_instance(&make_instance_row(instance_id))
         .await
@@ -302,11 +300,7 @@ pub async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
 
     let st: storage::StorageHandle = store.clone();
     let au = auth::build(&cfg, st.clone()).expect("auth build");
-    let svc = Arc::new(
-        AppServices::new(cfg.clone(), st.clone())
-            .await
-            .expect("services"),
-    );
+    let svc = Arc::new(AppServices::new(cfg.clone(), st.clone()).await.expect("services"));
     let (_layer, io) = realtime::build_io_only();
     let rt = wos_server::runtime::AppRuntime::build(
         st.clone(),
@@ -321,9 +315,6 @@ pub async fn jwt_state(fixtures_dir: PathBuf) -> AppState {
         services: svc,
         runtime: rt,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(
-            wos_server::MigrateIdempotencyCache::default(),
-        )),
     }
 }
 

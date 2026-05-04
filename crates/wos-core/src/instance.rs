@@ -9,7 +9,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::model::governance::HoldType;
 use crate::typeid;
 
 fn default_tenant() -> String {
@@ -25,10 +24,8 @@ pub struct CaseInstance {
 
     /// Tenant this instance belongs to (ADR 0068 D-1 / PLN-0004).
     ///
-    /// MUST match the TypeID prefix when `instance_id` is a WOS case TypeID.
-    /// At creation, processors resolve this from `CreateInstanceRequest.tenant`
-    /// when set (and consistent with the TypeID prefix when both are present),
-    /// else from the `instance_id` prefix, else [`crate::typeid::DEFAULT_TENANT`].
+    /// MUST match the TypeID prefix when `instance_id` is a WOS TypeID.
+    /// Sourced from `payload.tenant` (the authoritative field per ADR 0068 D-1.2).
     #[serde(default = "default_tenant")]
     pub tenant: String,
 
@@ -264,7 +261,7 @@ pub struct ActiveTask {
 
     /// Task impact level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub impact_level: Option<crate::model::kernel::ImpactLevel>,
+    pub impact_level: Option<String>,
 
     /// Presentation context for a Formspec-backed task.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -425,8 +422,8 @@ pub struct ActiveDelegation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveHold {
-    /// Hold type (same vocabulary as governance [`HoldPolicy`](crate::model::governance::HoldPolicy)).
-    pub hold_type: HoldType,
+    /// Hold type.
+    pub hold_type: String,
     /// Start timestamp (ISO 8601).
     pub started_at: String,
     /// Expected end timestamp.

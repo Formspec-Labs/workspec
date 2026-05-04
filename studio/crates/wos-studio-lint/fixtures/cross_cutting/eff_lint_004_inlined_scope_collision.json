@@ -1,0 +1,11 @@
+[
+  ["m.json", {
+    "$wosStudioMapping": "1.0",
+    "mappings": [
+      {"id": "m-tx", "policyObjectRef": "po-1",
+       "effectiveness": {"jurisdictions": ["TX"]}},
+      {"id": "m-ca", "policyObjectRef": "po-1",
+       "effectiveness": {"jurisdictions": ["CA"]}}
+    ]
+  }]
+]

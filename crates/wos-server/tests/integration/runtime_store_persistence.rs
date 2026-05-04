@@ -15,8 +15,8 @@ use wos_runtime::intake::{
 use wos_runtime::store::{
     IntakeRecord, ReplayKey, ReplayOperation, ReplayValue, RuntimeRecord, RuntimeStore, StoreError,
 };
-use wos_server::runtime::runtime_store::StorageBackedRuntimeStore;
 use wos_server::services::provenance_service::ProvenanceService;
+use wos_server::runtime::runtime_store::StorageBackedRuntimeStore;
 use wos_server::storage::{SqliteStorage, StorageHandle};
 use wos_server_ports::audit::NoopAuditSink;
 
@@ -195,9 +195,7 @@ async fn intake_records_persist_across_store_handles() {
     let original_c = original.clone();
     tokio::task::spawn_blocking(move || {
         let mut store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
-        store
-            .create_intake_record(original_c)
-            .expect("create intake");
+        store.create_intake_record(original_c).expect("create intake");
     })
     .await
     .unwrap();
@@ -228,9 +226,7 @@ async fn intake_records_persist_across_store_handles() {
     let updated_clone = updated.clone();
     tokio::task::spawn_blocking(move || {
         let mut store = StorageBackedRuntimeStore::new(storage_c, provenance_c, audit_c, handle_c);
-        store
-            .save_intake_record(updated_clone)
-            .expect("save intake");
+        store.save_intake_record(updated_clone).expect("save intake");
     })
     .await
     .unwrap();
@@ -262,9 +258,7 @@ async fn not_found_error_preserves_resource_id() {
 
     let err = tokio::task::spawn_blocking(move || {
         let store = StorageBackedRuntimeStore::new(storage, provenance, audit, handle);
-        store
-            .load_intake_record("formspecIntake", "missing-77")
-            .unwrap_err()
+        store.load_intake_record("formspecIntake", "missing-77").unwrap_err()
     })
     .await
     .unwrap();

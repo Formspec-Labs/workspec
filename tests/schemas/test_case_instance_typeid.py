@@ -23,7 +23,6 @@ def _minimal_instance() -> dict:
     return {
         "$wosCaseInstance": "1.0",
         "instanceId": "sba-poc_case_01jqrpd32jf8xtx9qxkkv3rqsd",
-        "tenant": "sba-poc",
         "definitionUrl": "https://agency.gov/workflows/benefits-adjudication",
         "definitionVersion": "1.0.0",
         "configuration": ["intake"],
@@ -51,32 +50,3 @@ def test_case_instance_rejects_non_case_typeid():
     doc["instanceId"] = "sba-poc_prov_01jqrpd32jf8xtx9qxkkv3rqsd"
     errors = list(validator.iter_errors(doc))
     assert errors, "CaseInstance.instanceId must use the reserved `case` family prefix"
-
-
-def test_case_instance_omitted_tenant_still_validates():
-    """Older persisted rows and minimal hand-authored fixtures may omit tenant."""
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
-    validator = Draft202012Validator(schema)
-    doc = _minimal_instance()
-    del doc["tenant"]
-    errors = list(validator.iter_errors(doc))
-    assert errors == [], f"CaseInstance without tenant rejected: {errors}"
-
-
-def test_case_instance_rejects_invalid_tenant_pattern():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
-    validator = Draft202012Validator(schema)
-    doc = _minimal_instance()
-    doc["tenant"] = "INVALID"
-    errors = list(validator.iter_errors(doc))
-    assert errors, "tenant must match ADR 0068 D-1.1 DNS-label grammar"
-
-
-def test_case_instance_accepts_default_tenant_literal():
-    schema = json.loads(CASE_INSTANCE_SCHEMA.read_text())
-    validator = Draft202012Validator(schema)
-    doc = _minimal_instance()
-    doc["instanceId"] = "default_case_01hw7rm71vfay8vvw14d2pf2db"
-    doc["tenant"] = "default"
-    errors = list(validator.iter_errors(doc))
-    assert errors == [], f"valid default-tenant CaseInstance rejected: {errors}"

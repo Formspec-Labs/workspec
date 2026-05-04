@@ -15,11 +15,7 @@ pub struct SocketIoTaskPresenter {
 
 impl SocketIoTaskPresenter {
     pub fn new(storage: StorageHandle, io: SocketIo, handle: Handle) -> Self {
-        Self {
-            storage,
-            io,
-            handle,
-        }
+        Self { storage, io, handle }
     }
 }
 

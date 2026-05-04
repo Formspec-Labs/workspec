@@ -1,13 +1,13 @@
 //! Runtime adapter traits shared across runtime backends.
 // Rust guideline compliant 2026-02-21
 
-use crate::storage::ProvenanceRow;
 use async_trait::async_trait;
 use wos_core::instance::CaseInstance;
 use wos_core::provenance::ProvenanceRecord;
 use wos_core::traits::{ProvenanceSigner, ReportRenderer};
-use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult, MigrationMap, MigrationOutcome};
+use wos_runtime::runtime::{CreateInstanceRequest, DrainOnceResult};
 use wos_runtime::{PersistDraftResult, TaskSubmissionResult};
+use crate::storage::ProvenanceRow;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RuntimeAdapterError {
@@ -21,8 +21,7 @@ pub type RuntimeResult<T> = Result<T, RuntimeAdapterError>;
 pub trait RuntimeOps: Send + Sync + 'static {
     async fn create_instance(&self, request: CreateInstanceRequest) -> RuntimeResult<CaseInstance>;
     async fn load_instance(&self, instance_id: &str) -> RuntimeResult<CaseInstance>;
-    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value)
-    -> RuntimeResult<()>;
+    async fn enqueue_event(&self, instance_id: &str, event: serde_json::Value) -> RuntimeResult<()>;
     async fn drain_once(&self, instance_id: &str) -> RuntimeResult<DrainOnceResult>;
     async fn drain_until_idle(&self, instance_id: &str) -> RuntimeResult<Vec<DrainOnceResult>>;
     async fn persist_task_draft(
@@ -46,14 +45,6 @@ pub trait RuntimeOps: Send + Sync + 'static {
         offset: u64,
         limit: usize,
     ) -> RuntimeResult<Vec<ProvenanceRecord>>;
-
-    async fn migrate_instance(
-        &self,
-        instance_id: &str,
-        target_definition_version: &str,
-        migration_map: MigrationMap,
-        operator_actor_id: Option<&str>,
-    ) -> RuntimeResult<MigrationOutcome>;
 }
 
 pub trait SeamAccess: Send + Sync + 'static {
@@ -79,18 +70,8 @@ pub trait TimerCoord: Send + Sync + 'static {
 
 #[async_trait]
 pub trait BundleResolverPort: Send + Sync + 'static {
-    /// Resolve the kernel JSON for `workflow_url`. When `definition_version` is
-    /// empty, returns the newest row for that URL (by `updated_at`). Otherwise
-    /// selects the row whose `version` column matches exactly.
-    async fn resolve_kernel_bundle(
-        &self,
-        workflow_url: &str,
-        definition_version: &str,
-    ) -> RuntimeResult<serde_json::Value>;
-    async fn resolve_governance_bundle(
-        &self,
-        workflow_url: &str,
-    ) -> RuntimeResult<serde_json::Value>;
+    async fn resolve_kernel_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
+    async fn resolve_governance_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
     async fn resolve_sidecar_bundle(&self, workflow_url: &str) -> RuntimeResult<serde_json::Value>;
 }
 

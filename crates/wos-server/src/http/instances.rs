@@ -1,12 +1,11 @@
 use axum::Json;
-use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
+use axum::Router;
 use serde::Deserialize;
 use wos_runtime::runtime::CreateInstanceRequest;
-use wos_runtime::{MigrationMap, MigrationOutcome};
 
 use crate::AppState;
 use crate::auth::{Adjudicator, RequireRole, Supervisor};
@@ -32,7 +31,6 @@ pub fn routes() -> Router<AppState> {
         .route("/instances/{id}/transitions", get(transitions))
         .route("/instances/{id}/events", post(submit_event))
         .route("/instances/{id}/drain", post(drain))
-        .route("/instances/{id}/migrate", post(migrate_instance))
         .route("/instances/{id}/holds", get(list_holds).post(create_hold))
         .route("/instances/{id}/holds/{hold_idx}", delete(release_hold))
 }
@@ -59,11 +57,7 @@ async fn explain(
     Path(id): Path<String>,
     Query(q): Query<ExplainQuery>,
 ) -> ApiResult<Json<ExplainResponse>> {
-    let _instance = s
-        .storage
-        .get_instance(&id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    let _instance = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
 
     let prov_responses = s.services.provenance.list(&id).await?;
     let records: Vec<wos_core::provenance::ProvenanceRecord> =
@@ -82,8 +76,12 @@ async fn explain(
         .unwrap_or_else(|| vec!["adverse-decision".into()]);
 
     let assembled_at = chrono::Utc::now().to_rfc3339();
-    let explanation =
-        wos_core::explain::assemble_explanation(&records, &q.transition_id, &tags, &assembled_at);
+    let explanation = wos_core::explain::assemble_explanation(
+        &records,
+        &q.transition_id,
+        &tags,
+        &assembled_at,
+    );
 
     let explanation_value = serde_json::to_value(&explanation)
         .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -139,7 +137,7 @@ async fn get_one(
 }
 
 /// `POST /api/instances` — create a fresh case instance from a
-/// `{ definitionUrl, definitionVersion?, instanceId?, tenant?, initialCaseState? }`
+/// `{ definitionUrl, definitionVersion?, instanceId?, initialCaseState? }`
 /// body. Wos-runtime assigns and enters the initial state, writes any
 /// onEntry provenance, and returns the canonical `CaseInstance`.
 #[derive(Debug, Clone, Deserialize)]
@@ -148,10 +146,6 @@ pub struct CreateInstanceBody {
     pub definition_url: String,
     pub definition_version: Option<String>,
     pub instance_id: Option<String>,
-    /// When set, must satisfy ADR 0068 D-1.1 and match the case TypeID tenant
-    /// prefix when `instance_id` is a WOS case TypeID (see `WosRuntime::create_instance`).
-    #[serde(default)]
-    pub tenant: Option<String>,
     #[serde(default)]
     pub initial_case_state: Option<serde_json::Value>,
 }
@@ -176,7 +170,7 @@ async fn create(
 
     let req = CreateInstanceRequest {
         instance_id,
-        tenant: body.tenant,
+        tenant: None,
         definition_url: body.definition_url,
         definition_version: version,
         initial_case_state: body.initial_case_state,
@@ -251,7 +245,8 @@ async fn export_provenance(
     Query(q): Query<ExportQuery>,
 ) -> ApiResult<impl IntoResponse> {
     let format = q.format.unwrap_or(ExportFormat::ProvO);
-    let payload = SemanticService::export(&s.services.provenance, &id, format, q.namespace).await?;
+    let payload =
+        SemanticService::export(&s.services.provenance, &id, format, q.namespace).await?;
     let ct = payload.content_type().to_string();
     let body = payload.body();
     let mut headers = HeaderMap::new();
@@ -293,11 +288,7 @@ async fn submit_event(
     }
 
     // Capture previous configuration before we touch the runtime.
-    let before = s
-        .storage
-        .get_instance(&id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    let before = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
     let before_instance: wos_core::instance::CaseInstance =
         serde_json::from_value(before.instance_json.clone())
             .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -311,14 +302,17 @@ async fn submit_event(
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "idempotencyToken": req.idempotency_token,
     });
-    s.runtime.enqueue_event(&id, envelope).await?;
-    let drain = s.runtime.drain_once(&id).await?;
+    s.runtime
+        .enqueue_event(&id, envelope)
+        .await
+        ?;
+    let drain = s
+        .runtime
+        .drain_once(&id)
+        .await
+        ?;
 
-    let after = s
-        .storage
-        .get_instance(&id)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    let after = s.storage.get_instance(&id).await?.ok_or(ApiError::NotFound)?;
     let after_instance: wos_core::instance::CaseInstance =
         serde_json::from_value(after.instance_json.clone())
             .map_err(|e| ApiError::ServiceUnavailable(e.to_string()))?;
@@ -341,7 +335,11 @@ async fn submit_event(
     let result = EvaluationResultView {
         previous_configuration,
         new_configuration,
-        events_fired: drain.transitions.iter().map(|t| t.event.clone()).collect(),
+        events_fired: drain
+            .transitions
+            .iter()
+            .map(|t| t.event.clone())
+            .collect(),
         head_record,
         case_state_mutations: mutations,
     };
@@ -356,89 +354,6 @@ async fn submit_event(
     Ok(Json(result))
 }
 
-/// `POST /api/instances/:id/migrate` — operator migration to a new kernel
-/// `definitionVersion` for the same workflow URL (Kernel S11.2, ADR 0083,
-/// WS-042). Supervisor-gated; delegates to `wos_runtime::WosRuntime::migrate`.
-///
-/// **Idempotency:** When `targetDefinitionVersion` equals the instance's
-/// current version, the runtime returns [`MigrationOutcome`] without a store
-/// write or new provenance. When the client sends `Idempotency-Key`, a
-/// duplicate successful migrate with the same instance id, target version,
-/// and key returns the cached [`MigrationOutcome`] (ADR 0083 D5).
-///
-/// The replay key does **not** include `migration_map`. If two requests share
-/// the same idempotency token but differ in `migration_map`, the first
-/// successful response is replayed; use a distinct `Idempotency-Key` when the
-/// migration map must be honored as part of the idempotent unit of work.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MigrateInstanceRequest {
-    pub target_definition_version: String,
-    #[serde(default)]
-    pub migration_map: MigrationMap,
-}
-
-fn migrate_idempotency_cache_key(
-    instance_id: &str,
-    target_definition_version: &str,
-    token: &str,
-) -> String {
-    format!("{instance_id}\0{target_definition_version}\0{token}")
-}
-
-fn migrate_idempotency_header(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("idempotency-key")
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(std::string::ToString::to_string)
-}
-
-async fn migrate_instance(
-    State(s): State<AppState>,
-    auth: RequireRole<Supervisor>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-    Json(req): Json<MigrateInstanceRequest>,
-) -> ApiResult<Json<MigrationOutcome>> {
-    if req.target_definition_version.trim().is_empty() {
-        return Err(ApiError::BadRequest(
-            "target_definition_version must be non-empty".into(),
-        ));
-    }
-    let idem_token = migrate_idempotency_header(&headers);
-    if let Some(ref token) = idem_token {
-        let cache_key = migrate_idempotency_cache_key(&id, &req.target_definition_version, token);
-        let mut guard = s.migrate_idempotency.lock().await;
-        if let Some(hit) = guard.get(cache_key.as_str()) {
-            return Ok(Json(hit));
-        }
-        let out = s
-            .runtime
-            .migrate_instance(
-                &id,
-                &req.target_definition_version,
-                req.migration_map.clone(),
-                Some(auth.0.user.id.as_str()),
-            )
-            .await?;
-        guard.insert(cache_key, out.clone());
-        return Ok(Json(out));
-    }
-
-    let out = s
-        .runtime
-        .migrate_instance(
-            &id,
-            &req.target_definition_version,
-            req.migration_map.clone(),
-            Some(auth.0.user.id.as_str()),
-        )
-        .await?;
-    Ok(Json(out))
-}
-
 /// `POST /api/instances/:id/drain` — drain every queued event for this
 /// instance, returning a summary per step.
 async fn drain(
@@ -446,7 +361,11 @@ async fn drain(
     _: RequireRole<Supervisor>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<DrainStepSummary>>> {
-    let results = s.runtime.drain_until_idle(&id).await?;
+    let results = s
+        .runtime
+        .drain_until_idle(&id)
+        .await
+        ?;
     Ok(Json(
         results
             .into_iter()
@@ -474,8 +393,7 @@ pub struct DrainStepSummary {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateHoldRequest {
-    /// Unknown `holdType` values fail JSON deserialization with 400 before handler logic runs.
-    pub hold_type: wos_core::HoldType,
+    pub hold_type: String,
     pub resume_trigger: String,
     #[serde(default)]
     pub expected_end: Option<String>,
@@ -521,7 +439,9 @@ async fn create_hold(
         hold_state: req.hold_state.or(default_state),
     };
     let idx = HoldService::append(&s.storage, &id, hold).await?;
-    Ok(Json(serde_json::json!({ "ok": true, "holdIndex": idx })))
+    Ok(Json(
+        serde_json::json!({ "ok": true, "holdIndex": idx }),
+    ))
 }
 
 async fn release_hold(

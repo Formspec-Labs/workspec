@@ -5,7 +5,7 @@ date: 2026-04-09
 status: draft
 ---
 
-> **Absorbed (ADR 0076 D-3).** Correspondence metadata content lives in the merged delivery sidecar at [`schemas/sidecars/wos-delivery.schema.json#/$defs/CorrespondenceBlock`](../../schemas/sidecars/wos-delivery.schema.json) — `correspondence` block of a `$wosDelivery` envelope. Active prose home: [`specs/sidecars/delivery.md`](../sidecars/delivery.md). Standalone `wos-correspondence-metadata` schema and `$wosCorrespondenceMetadata` marker are retired. See [`specs/sidecars/README.md`](../sidecars/README.md) for the active sidecar index. Prose below remains as historical reference for case-state correspondence-entry semantics.
+> **Absorbed (ADR 0076 D-3).** Correspondence metadata content lives in the merged delivery sidecar at [`schemas/sidecars/wos-delivery.schema.json#/$defs/CorrespondenceBlock`](../../schemas/sidecars/wos-delivery.schema.json) — `correspondence` block of a `$wosDelivery` envelope. Standalone `wos-correspondence-metadata` schema and `$wosCorrespondenceMetadata` marker are retired. See [`specs/sidecars/README.md`](../sidecars/README.md) for the active sidecar index. Prose below remains as normative reference for case-state correspondence-entry semantics.
 
 # WOS Correspondence Metadata Config v1.0
 
@@ -54,7 +54,7 @@ Each entry template defines the metadata carried by a category of correspondence
 | `description` | string | OPTIONAL | Human-readable description of when this template applies. |
 | `channel` | enum | REQUIRED | Communication channel: `in-person`, `phone`, `mail`, `email`, `portal`, `fax`. Extensible via `x-` prefixed values. |
 | `direction` | enum | REQUIRED | Direction of the correspondence: `inbound`, `outbound`. |
-| `correspondenceRole` | enum | REQUIRED | Who sent or received the correspondence: `applicant`, `representative`, `third-party`, `system`, `agency`. |
+| `actorType` | enum | REQUIRED | Who sent or received the correspondence: `applicant`, `representative`, `third-party`, `system`, `agency`. |
 | `requiredFields` | array of string | OPTIONAL | Fields that MUST be present in a correspondence entry using this template (beyond the base metadata). |
 | `extensions` | object | OPTIONAL | Extension data. Keys MUST be prefixed with `x-`. |
 
@@ -67,7 +67,7 @@ Each correspondence entry stored in case state carries the following base metada
 | `templateRef` | string | REQUIRED | The `id` of the entry template this entry follows. |
 | `channel` | enum | REQUIRED | Communication channel (from the template's allowed values). |
 | `direction` | enum | REQUIRED | `inbound` or `outbound`. |
-| `correspondenceRole` | enum | REQUIRED | Correspondence role for this entry. |
+| `actorType` | enum | REQUIRED | Actor type for this correspondence. |
 | `contentRef` | string | REQUIRED | Claim check reference -- a URI or storage reference for the actual content. The content itself is not stored in case state; this is a pointer to it. |
 | `summary` | string | REQUIRED | Human-readable summary of the correspondence. |
 | `relatedTaskRef` | string | OPTIONAL | Reference to a task this correspondence relates to. |
@@ -98,7 +98,7 @@ The `correspondence` block embedded in a `$wosDelivery` sidecar:
         "description": "Physical mail received from applicant or representative",
         "channel": "mail",
         "direction": "inbound",
-        "correspondenceRole": "applicant",
+        "actorType": "applicant",
         "requiredFields": ["contentRef"]
       },
       {
@@ -106,7 +106,7 @@ The `correspondence` block embedded in a `$wosDelivery` sidecar:
         "description": "Official notice sent to applicant",
         "channel": "mail",
         "direction": "outbound",
-        "correspondenceRole": "agency",
+        "actorType": "agency",
         "requiredFields": ["contentRef", "relatedTaskRef"]
       },
       {
@@ -114,7 +114,7 @@ The `correspondence` block embedded in a `$wosDelivery` sidecar:
         "description": "Phone call with applicant or representative",
         "channel": "phone",
         "direction": "inbound",
-        "correspondenceRole": "applicant"
+        "actorType": "applicant"
       }
     ]
   }

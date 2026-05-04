@@ -1,0 +1,19 @@
+[
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-pol-coverage",
+    "kind": "PolicyEngineBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "exercisedByScenarios": ["scn-permit"],
+    "body": {
+      "engineKind": "opa",
+      "inputContract": {"caseFilePaths": ["$.x"]}
+    }
+  }],
+  ["scn.json", {
+    "$wosStudioScenario": "1.0",
+    "id": "scn-permit",
+    "expectedDecision": "permit"
+  }]
+]

@@ -78,11 +78,14 @@ impl GovernanceService {
                 .get("separationOfDuties")
                 .map(|v| SeparationOfDutiesView {
                     scope: s(v, "scope").unwrap_or_default(),
-                    exclude_roles: v.get("excludeRoles").and_then(|a| a.as_array()).map(|a| {
-                        a.iter()
-                            .filter_map(|x| x.as_str().map(String::from))
-                            .collect()
-                    }),
+                    exclude_roles: v
+                        .get("excludeRoles")
+                        .and_then(|a| a.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(String::from))
+                                .collect()
+                        }),
                 }),
             override_authority: qc.get("overrideAuthority").map(|v| OverrideAuthorityView {
                 require_structured_rationale: v
@@ -102,9 +105,7 @@ impl GovernanceService {
         let Some(bundle) = self.bundle.full_bundle(workflow_url).await else {
             return Vec::new();
         };
-        let Some(gov) = &bundle.governance else {
-            return Vec::new();
-        };
+        let Some(gov) = &bundle.governance else { return Vec::new() };
         gov.get("pipelines")
             .and_then(|a| a.as_array())
             .map(|a| a.iter().map(map_pipeline).collect())
@@ -162,11 +163,10 @@ impl GovernanceService {
                 .get("reportingSchedule")
                 .map(|v| EquityReportingScheduleView {
                     frequency: s(v, "frequency"),
-                    recipient_roles: v.get("recipientRoles").and_then(|a| a.as_array()).map(|a| {
-                        a.iter()
-                            .filter_map(|x| x.as_str().map(String::from))
-                            .collect()
-                    }),
+                    recipient_roles: v
+                        .get("recipientRoles")
+                        .and_then(|a| a.as_array())
+                        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()),
                 }),
             remediation_triggers: eq
                 .get("remediationTriggers")
@@ -238,16 +238,23 @@ impl GovernanceService {
             authority: entry.authority.clone(),
             legal_instrument: entry.legal_instrument.clone(),
             start_date: chrono::DateTime::parse_from_rfc3339(&entry.start_date)
-                .map_err(|e| crate::error::ApiError::BadRequest(format!("invalid startDate: {e}")))?
+                .map_err(|e| {
+                    crate::error::ApiError::BadRequest(format!(
+                        "invalid startDate: {e}"
+                    ))
+                })?
                 .with_timezone(&chrono::Utc),
             end_date: entry
                 .end_date
                 .as_deref()
                 .map(|s| {
-                    chrono::DateTime::parse_from_rfc3339(s).map(|t| t.with_timezone(&chrono::Utc))
+                    chrono::DateTime::parse_from_rfc3339(s)
+                        .map(|t| t.with_timezone(&chrono::Utc))
                 })
                 .transpose()
-                .map_err(|e| crate::error::ApiError::BadRequest(format!("invalid endDate: {e}")))?,
+                .map_err(|e| {
+                    crate::error::ApiError::BadRequest(format!("invalid endDate: {e}"))
+                })?,
             status: entry.status.clone(),
         };
         self.storage.upsert_delegation(&row).await?;
@@ -465,10 +472,7 @@ impl GovernanceService {
                 obj.insert("appealWindow".into(), serde_json::Value::String(aw.clone()));
             }
             if let Some(rtc) = &right_to_contest {
-                obj.insert(
-                    "rightToContest".into(),
-                    serde_json::Value::String(rtc.clone()),
-                );
+                obj.insert("rightToContest".into(), serde_json::Value::String(rtc.clone()));
             }
         }
 
@@ -504,11 +508,7 @@ fn classify_version(
     expiry: Option<&str>,
     now: &chrono::DateTime<chrono::Utc>,
 ) -> String {
-    let parse = |s: &str| {
-        chrono::DateTime::parse_from_rfc3339(s)
-            .ok()
-            .map(|x| x.with_timezone(&chrono::Utc))
-    };
+    let parse = |s: &str| chrono::DateTime::parse_from_rfc3339(s).ok().map(|x| x.with_timezone(&chrono::Utc));
     let eff = parse(effective);
     let exp = expiry.and_then(parse);
     match (eff, exp) {
@@ -583,11 +583,10 @@ fn map_assertion(v: &serde_json::Value) -> PipelineAssertionView {
     PipelineAssertionView {
         assertion_type: s(v, "type").unwrap_or_default(),
         expression: s(v, "expression"),
-        fields: v.get("fields").and_then(|a| a.as_array()).map(|a| {
-            a.iter()
-                .filter_map(|x| x.as_str().map(String::from))
-                .collect()
-        }),
+        fields: v
+            .get("fields")
+            .and_then(|a| a.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()),
         description: s(v, "description"),
         rejection_policy: s(v, "rejectionPolicy"),
     }
@@ -599,12 +598,10 @@ fn map_verification_result(v: &serde_json::Value) -> VerificationResultView {
         result: s(v, "result").unwrap_or_else(|| "inconclusive".into()),
         solver_time_ms: v.get("solverTimeMs").and_then(|x| x.as_u64()),
         notes: s(v, "notes"),
-        counterexample: v
-            .get("counterexample")
-            .map(|c| VerificationCounterexampleView {
-                inputs: c.get("inputs").cloned(),
-                explanation: s(c, "explanation"),
-            }),
+        counterexample: v.get("counterexample").map(|c| VerificationCounterexampleView {
+            inputs: c.get("inputs").cloned(),
+            explanation: s(c, "explanation"),
+        }),
     }
 }
 
@@ -616,11 +613,7 @@ fn map_equity_category(v: &serde_json::Value) -> EquityCategoryView {
         groups: v
             .get("groups")
             .and_then(|a| a.as_array())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|x| x.as_str().map(String::from))
-                    .collect()
-            })
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
             .unwrap_or_default(),
     }
 }

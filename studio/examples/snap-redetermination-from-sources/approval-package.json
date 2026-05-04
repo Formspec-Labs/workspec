@@ -1,0 +1,74 @@
+{
+  "$wosStudioApproval": "1.0",
+  "kind": "ApprovalPackage",
+  "$comment": "ApprovalPackage produced at publication per review-and-approval.md. Carries every load-bearing field for downstream verification.",
+  "id": "appkg-snap-redetermination-tx-v1.0.0",
+  "workflowIntentRef": "wfi-snap-redetermination-tx",
+  "workflowVersion": "1.0.0",
+  "wosVersionPin": "kernel@1.0, governance@1.0, ai@0.5, signature@1.0, custody@1.0, advanced@0.3, assurance@1.0",
+  "approvals": [
+    { "id": "appr-001", "decidedBy": "subj-sarah-chen", "role": "workflow-owner", "subjectKind": "WorkflowIntent", "subjectRef": "wfi-snap-redetermination-tx", "decision": "approved", "decidedAt": "2026-04-25T10:00:00Z", "signatureRef": "sig-sarah-chen-2026-04-25" },
+    { "id": "appr-002", "decidedBy": "subj-marcus-williams", "role": "compliance-reviewer", "subjectKind": "WorkflowIntent", "subjectRef": "wfi-snap-redetermination-tx", "decision": "approved-with-conditions", "decidedAt": "2026-04-25T11:30:00Z", "signatureRef": "sig-marcus-williams-2026-04-25", "conditions": [{ "ruleId": "EQ-LINT-003", "deadline": "2026-Q3", "rationale": "Equity-probe scenario covers language-spoken; race-ethnicity equity-probe MUST be added by 2026-Q3 next quarterly review." }] },
+    { "id": "appr-003", "decidedBy": "subj-legal-reviewer-001", "role": "legal-reviewer", "subjectKind": "WorkflowIntent", "subjectRef": "wfi-snap-redetermination-tx", "decision": "approved", "decidedAt": "2026-04-25T13:00:00Z", "signatureRef": "sig-legal-reviewer-001-2026-04-25", "rationale": "Cross-document supersession (corrective-letter vs office-memo) properly modeled. Spanish-language notice substantive-equivalence requirement reflected." },
+    { "id": "appr-004", "decidedBy": "subj-priya-krishnan", "role": "technical-reviewer", "subjectKind": "WorkflowIntent", "subjectRef": "wfi-snap-redetermination-tx", "decision": "approved", "decidedAt": "2026-04-25T14:15:00Z", "signatureRef": "sig-priya-krishnan-2026-04-25", "rationale": "Bridge kinds map cleanly to kernel constructs. ServiceBindings declare scenario coverage. Effectiveness referenced by ref (no god-object drift). DMNImport not used here but verified the path is clean." },
+    { "id": "appr-005", "decidedBy": "subj-ops-reviewer-001", "role": "operations-reviewer", "subjectKind": "WorkflowIntent", "subjectRef": "wfi-snap-redetermination-tx", "decision": "approved", "decidedAt": "2026-04-25T15:00:00Z", "signatureRef": "sig-ops-reviewer-001-2026-04-25", "rationale": "Holiday-period flex (assumption-holiday-period-flex) appropriately marked unmappedButApproved with high-assurance attestation by compliance-reviewer." }
+  ],
+  "citationManifest": {
+    "sources": [
+      { "version": "src-cfr-7-273", "anchorsCited": ["§273.10(a)(1)", "§273.10(a)(2)", "§273.10(g)(1)", "§273.10(g)(2)", "§273.10(g)(3)", "§273.15(a)", "§273.15(b)", "§273.15(c)"], "canonicalUri": "https://www.ecfr.gov/api/renderer/v1/title-7/section-273.10", "ingestedHash": "sha256:f3d2a1..." },
+      { "version": "src-state-tx-snap-manual-ch8", "anchorsCited": ["§8.4", "§8.5", "§8.7", "§8.9"], "ingestedHash": "sha256:a2b3c4..." },
+      { "version": "src-office-memo-recert-v3.2", "anchorsCited": ["§2(b)", "§3(a)", "§5(a)", "§5(b)"], "ingestedHash": "sha256:c4d5e6..." },
+      { "version": "src-fns-corrective-action-2024-q3", "anchorsCited": ["Finding 1", "Finding 2"], "ingestedHash": "sha256:e6f7a8..." }
+    ]
+  },
+  "scenarioSuiteRef": ["scenarios/scenarios.json"],
+  "validationReportRef": "report-snap-redetermination-tx-v1.0.0",
+  "releaseNotes": "Initial publication of SNAP Redetermination — Texas. Composes 7 CFR §273 + State SNAP Manual Ch. 8 + Office Procedure Memo v3.2 (partially superseded). Reflects 2024 federal corrective action (Findings 1+2). Spanish-language notice substantive-equivalence per State §8.7 verified. Equity monitoring covers language-spoken; quarterly race-ethnicity addition queued.",
+  "unmappedListings": [
+    { "policyObjectRef": "pol-assumption-holiday-period-flex", "rationale": "Workspace-specific operational practice (single county, December 22 - January 5 holiday-period). NOT generalized to a WOS extension. MAP-LINT-004 fires perpetual-warn per SA-MUST-map-041." }
+  ],
+  "waivedFindings": [],
+  "complianceAttestations": [
+    {
+      "regime": "StateRAMP-Moderate",
+      "regimeVersion": "v3.0",
+      "controls": [
+        { "controlId": "AU-2", "controlName": "Audit Events", "status": "met", "evidenceRef": "authoring-provenance audit event catalog + custody anchoring" },
+        { "controlId": "AU-3", "controlName": "Content of Audit Records", "status": "met", "evidenceRef": "AuthoringProvenanceRecord shape per authoring-provenance.md" },
+        { "controlId": "AU-9", "controlName": "Protection of Audit Information", "status": "met", "evidenceRef": "Cryptographic chain integrity + custody anchoring per authoring-provenance.md SA-MUST-prov-080/081" },
+        { "controlId": "AC-3", "controlName": "Access Enforcement", "status": "met", "evidenceRef": "AuthorityGrant resolution per workspace.md + identity-and-attestation.md" },
+        { "controlId": "AC-6", "controlName": "Least Privilege", "status": "met", "evidenceRef": "AuthorityGrant scoped per-action; self-grants disallowed per SA-MUST-id-042" }
+      ],
+      "attestor": "subj-marcus-williams",
+      "attestedAt": "2026-04-25T11:30:00Z",
+      "expiresAt": "2027-04-25T11:30:00Z"
+    },
+    {
+      "regime": "NIST-800-53-Rev5",
+      "regimeVersion": "Rev5",
+      "controls": [
+        { "controlId": "AU-2 / AU-3 / AU-9", "controlName": "Audit family", "status": "met", "evidenceRef": "Same as StateRAMP" },
+        { "controlId": "PT-2 (Authority to Process PII)", "controlName": "Privacy authority", "status": "met", "evidenceRef": "DPV sensitivity classification per terminology-and-canonical-vocabulary.md + DPV-derived retention policies" }
+      ],
+      "attestor": "subj-marcus-williams",
+      "attestedAt": "2026-04-25T11:30:00Z"
+    }
+  ],
+  "identitySigningKeyRefs": [
+    { "subjectId": "subj-sarah-chen", "publicKeyRef": "did:web:dhs.state.tx.us#sarah-chen-key-2026-04", "algorithm": "Ed25519", "validFrom": "2026-04-01" },
+    { "subjectId": "subj-marcus-williams", "publicKeyRef": "did:web:oig.state.tx.us#marcus-williams-key-2026-04", "algorithm": "Ed25519", "validFrom": "2026-04-01" },
+    { "subjectId": "subj-legal-reviewer-001", "publicKeyRef": "did:web:dhs.state.tx.us#legal-reviewer-001-key-2026-04", "algorithm": "Ed25519" },
+    { "subjectId": "subj-priya-krishnan", "publicKeyRef": "did:web:dhs.state.tx.us#priya-krishnan-key-2026-04", "algorithm": "Ed25519" },
+    { "subjectId": "subj-ops-reviewer-001", "publicKeyRef": "did:web:dhs.state.tx.us#ops-reviewer-001-key-2026-04", "algorithm": "Ed25519" }
+  ],
+  "custodyAnchorReceipt": {
+    "$comment": "CustodyAppendReceipt per parent ADR-0061. The receipt's canonical_event_hash anchors this entire ApprovalPackage to Trellis. Downstream verifiers can validate the package's authenticity via the receipt + Trellis verifier without workspace access.",
+    "canonicalEventHash": "sha256:e3d4c5f6a7b8...",
+    "anchoredAt": "2026-04-25T15:30:00Z",
+    "trellisLedgerRef": "trellis://dhs-tx-snap/case-ledger/approval-events/12345",
+    "appendReceiptVersion": "1.0"
+  },
+  "publishedBy": "subj-sarah-chen",
+  "publishedAt": "2026-04-25T15:30:00Z",
+  "workspaceId": "ws-snap-redetermination-tx-2026"
+}

@@ -1,0 +1,95 @@
+{
+  "id": "K-051-negative-unresolved-output-column",
+  "rule": "K-051",
+  "description": "Negative case: DecisionTableGuard.outputColumn names a column that does not exist on the referenced table. Per Kernel \u00a74.5.1, the lint MUST emit K-051.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-051-bad-output",
+      "version": "1.0.0",
+      "title": "K-051 Negative \u2014 Unresolved outputColumn",
+      "description": "Guard requests `approved` output column; table only declares `eligible`. K-051 fires.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Caseworker"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "eligibilityTable",
+                  "outputColumn": "approved",
+                  "inputBindings": {
+                    "income": "caseFile.income"
+                  }
+                }
+              }
+            ]
+          },
+          "approved": {
+            "type": "final"
+          }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "eligible",
+              "type": "boolean"
+            }
+          ],
+          "rows": [
+            {
+              "id": "r1",
+              "inputCells": [
+                "income <= 1473"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            }
+          ],
+          "hitPolicy": "first"
+        }
+      ],
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": [
+    "K-051: DecisionTableGuard at /lifecycle/states/intake/transitions/0/guard references unknown outputColumn 'approved' on table 'eligibilityTable' (declared outputs: eligible)"
+  ]
+}

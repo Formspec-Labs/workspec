@@ -14,7 +14,7 @@ use wos_server::config::{
 };
 use wos_server::runtime::AppRuntime;
 use wos_server::storage::KernelRow;
-use wos_server::{auth, http, realtime, services::AppServices, storage, AppState};
+use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
 
 fn stub_kernel_document(url: &str, version: &str) -> serde_json::Value {
     serde_json::json!({
@@ -75,19 +75,6 @@ async fn bring_up() -> AppState {
         .await
         .unwrap();
 
-    storage
-        .upsert_kernel(&KernelRow {
-            url: "urn:wos:workflow:test:1.0.0".into(),
-            title: "Test Kernel".into(),
-            version: "1.1.0".into(),
-            status: "active".into(),
-            impact_level: "operational".into(),
-            document: stub_kernel_document("urn:wos:workflow:test:1.0.0", "1.1.0"),
-            updated_at: Utc::now(),
-        })
-        .await
-        .unwrap();
-
     let auth = auth::build(&cfg, storage.clone()).expect("auth build");
     let services = Arc::new(
         AppServices::new(cfg.clone(), storage.clone())
@@ -108,7 +95,6 @@ async fn bring_up() -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 
@@ -136,14 +122,8 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
         )
         .await
         .unwrap();
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "POST /api/instances should succeed"
-    );
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK, "POST /api/instances should succeed");
+    let post_bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
     let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
 
     let actual_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
@@ -154,11 +134,7 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let alias = post_val
         .pointer("/extensions/x-wos-legacy-instance-alias")
         .and_then(|x| x.as_str());
-    assert_eq!(
-        alias,
-        Some(requested_id),
-        "legacy alias should match requested ID"
-    );
+    assert_eq!(alias, Some(requested_id), "legacy alias should match requested ID");
 
     let encoded_id = actual_id.replace(':', "%3A");
     let response = app
@@ -171,9 +147,7 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 8192).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
         v.get("instanceId").and_then(|x| x.as_str()),
@@ -183,247 +157,4 @@ async fn create_instance_via_http_roundtrips_through_runtime() {
     let config = v.get("configuration").and_then(|x| x.as_array()).unwrap();
     assert_eq!(config.len(), 1);
     assert_eq!(config[0].as_str(), Some("intake"));
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn migrate_instance_via_http_same_version_is_idempotent() {
-    let state = bring_up().await;
-    let app = http::router(state.clone());
-
-    let body = serde_json::json!({
-        "definitionUrl": "urn:wos:workflow:test:1.0.0",
-        "definitionVersion": "1.0.0",
-    });
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/instances")
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
-    let instance_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
-    let encoded_id = instance_id.replace(':', "%3A");
-
-    // Same-version migrate is a no-op (runtime idempotency); exercises WS-042 wiring.
-    let mig_body = serde_json::json!({
-        "targetDefinitionVersion": "1.0.0",
-        "migrationMap": {}
-    });
-    let mig_response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/instances/{encoded_id}/migrate"))
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .body(Body::from(mig_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        mig_response.status(),
-        StatusCode::OK,
-        "POST /api/instances/:id/migrate should succeed for Supervisor"
-    );
-    let mig_bytes = axum::body::to_bytes(mig_response.into_body(), 8192)
-        .await
-        .unwrap();
-    let mig_val: serde_json::Value = serde_json::from_slice(&mig_bytes).unwrap();
-    assert_eq!(
-        mig_val.get("newDefinitionVersion").and_then(|x| x.as_str()),
-        Some("1.0.0")
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn migrate_instance_via_http_duplicate_same_version_idempotency_key_replays_cached() {
-    let state = bring_up().await;
-    let app = http::router(state.clone());
-
-    let body = serde_json::json!({
-        "definitionUrl": "urn:wos:workflow:test:1.0.0",
-        "definitionVersion": "1.0.0",
-    });
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/instances")
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
-    let instance_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
-    let encoded_id = instance_id.replace(':', "%3A");
-
-    // ADR 0083 D5: duplicate migrate with same `Idempotency-Key` returns the cached outcome.
-    let mig_body = serde_json::json!({
-        "targetDefinitionVersion": "1.0.0",
-        "migrationMap": {}
-    });
-    let first = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/instances/{encoded_id}/migrate"))
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .header("Idempotency-Key", "mig-dup-1")
-                .body(Body::from(mig_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(first.status(), StatusCode::OK);
-    let first_bytes = axum::body::to_bytes(first.into_body(), 8192).await.unwrap();
-    let first_val: serde_json::Value = serde_json::from_slice(&first_bytes).unwrap();
-
-    let second = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/instances/{encoded_id}/migrate"))
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .header("Idempotency-Key", "mig-dup-1")
-                .body(Body::from(mig_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(second.status(), StatusCode::OK);
-    let second_bytes = axum::body::to_bytes(second.into_body(), 8192)
-        .await
-        .unwrap();
-    let second_val: serde_json::Value = serde_json::from_slice(&second_bytes).unwrap();
-
-    assert_eq!(first_val, second_val);
-    assert_eq!(
-        first_val
-            .get("newDefinitionVersion")
-            .and_then(|x| x.as_str()),
-        Some("1.0.0")
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn migrate_instance_via_http_cross_version_idempotency_key_replays_outcome() {
-    let state = bring_up().await;
-    let app = http::router(state.clone());
-
-    let body = serde_json::json!({
-        "definitionUrl": "urn:wos:workflow:test:1.0.0",
-        "definitionVersion": "1.0.0",
-    });
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/instances")
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let post_bytes = axum::body::to_bytes(response.into_body(), 8192)
-        .await
-        .unwrap();
-    let post_val: serde_json::Value = serde_json::from_slice(&post_bytes).unwrap();
-    let instance_id = post_val.get("instanceId").and_then(|x| x.as_str()).unwrap();
-    let encoded_id = instance_id.replace(':', "%3A");
-
-    let mig_body = serde_json::json!({
-        "targetDefinitionVersion": "1.1.0",
-        "migrationMap": {}
-    });
-    let first = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/instances/{encoded_id}/migrate"))
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .header("Idempotency-Key", "mig-bump-1")
-                .body(Body::from(mig_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(first.status(), StatusCode::OK);
-    let first_bytes = axum::body::to_bytes(first.into_body(), 8192).await.unwrap();
-    let first_val: serde_json::Value = serde_json::from_slice(&first_bytes).unwrap();
-    assert_eq!(
-        first_val.get("previousDefinitionVersion").and_then(|x| x.as_str()),
-        Some("1.0.0")
-    );
-    assert_eq!(
-        first_val.get("newDefinitionVersion").and_then(|x| x.as_str()),
-        Some("1.1.0")
-    );
-
-    let second = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/instances/{encoded_id}/migrate"))
-                .header("content-type", "application/json")
-                .header("authorization", "Bearer mock-access")
-                .header("Idempotency-Key", "mig-bump-1")
-                .body(Body::from(mig_body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(second.status(), StatusCode::OK);
-    let second_bytes = axum::body::to_bytes(second.into_body(), 8192)
-        .await
-        .unwrap();
-    let second_val: serde_json::Value = serde_json::from_slice(&second_bytes).unwrap();
-    assert_eq!(first_val, second_val);
-
-    let get = app
-        .oneshot(
-            Request::builder()
-                .uri(format!("/api/instances/{encoded_id}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(get.status(), StatusCode::OK);
-    let get_bytes = axum::body::to_bytes(get.into_body(), 8192).await.unwrap();
-    let get_val: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
-    assert_eq!(
-        get_val.get("definitionVersion").and_then(|x| x.as_str()),
-        Some("1.1.0")
-    );
 }

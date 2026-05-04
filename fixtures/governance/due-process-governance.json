@@ -27,6 +27,8 @@
     }
   },
   "governance": {
+    "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+    "targetWorkflow": "https://test.wos-spec.org/workflows/due-process",
     "dueProcess": {
       "adverseDecisionPolicy": {
         "noticeRequired": true,

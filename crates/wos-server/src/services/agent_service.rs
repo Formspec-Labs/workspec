@@ -165,7 +165,10 @@ impl AgentService {
             .ok_or(ApiError::NotFound)
     }
 
-    pub async fn list(storage: &StorageHandle, workflow_url: &str) -> ApiResult<Vec<AgentView>> {
+    pub async fn list(
+        storage: &StorageHandle,
+        workflow_url: &str,
+    ) -> ApiResult<Vec<AgentView>> {
         Ok(storage
             .list_agents(workflow_url)
             .await?
@@ -237,7 +240,10 @@ impl AgentService {
 
     /// `GET /api/agents/:id/drift` — stub drift report.
     pub async fn drift_report(storage: &StorageHandle, id: &str) -> ApiResult<DriftReport> {
-        let agent = storage.get_agent(id).await?.ok_or(ApiError::NotFound)?;
+        let agent = storage
+            .get_agent(id)
+            .await?
+            .ok_or(ApiError::NotFound)?;
         Ok(DriftReport {
             agent_id: agent.id,
             window_days: 30,
@@ -258,7 +264,10 @@ impl AgentService {
         storage: &StorageHandle,
         id: &str,
     ) -> ApiResult<ToolInvocationCheck> {
-        let agent = storage.get_agent(id).await?.ok_or(ApiError::NotFound)?;
+        let agent = storage
+            .get_agent(id)
+            .await?
+            .ok_or(ApiError::NotFound)?;
 
         // WS-038: calibration check overrides everything else.
         if let Some(expiry) = agent
@@ -270,7 +279,9 @@ impl AgentService {
                 if parsed.with_timezone(&Utc) <= Utc::now() {
                     return Ok(ToolInvocationCheck {
                         allowed: false,
-                        reason: format!("agent blocked: calibration expired at {expiry} (AI §5.3)"),
+                        reason: format!(
+                            "agent blocked: calibration expired at {expiry} (AI §5.3)"
+                        ),
                     });
                 }
             }
@@ -290,3 +301,4 @@ impl AgentService {
         })
     }
 }
+

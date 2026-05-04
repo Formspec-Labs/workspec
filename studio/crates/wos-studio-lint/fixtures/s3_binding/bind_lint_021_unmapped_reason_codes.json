@@ -1,0 +1,17 @@
+[
+  ["bind.json", {
+    "$wosStudioBinding": "1.0",
+    "id": "bind-pol-2",
+    "kind": "PolicyEngineBinding",
+    "lifecycleState": "approved",
+    "originClass": "interpretation",
+    "body": {
+      "engineKind": "opa",
+      "inputContract": {"caseFilePaths": ["$.x"]},
+      "engineReasonCodes": ["E_INELIGIBLE", "E_OVER_INCOME"],
+      "outputNormalization": {
+        "reasonsMapping": {"E_INELIGIBLE": "Application does not meet criteria"}
+      }
+    }
+  }]
+]

@@ -801,9 +801,7 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         summary: "`outputBinding` JSONPath MUST NOT use filter expressions or recursive descent.",
         fixtures: &[],
         graduation: Graduation::Draft,
-        spec_ref: Some(
-            "kernel/spec.md §9.2 (per ADR 0076 step 12 — Integration Profile §3.3.1 absorbed)",
-        ),
+        spec_ref: Some("kernel/spec.md §9.2 (per ADR 0076 step 12 — Integration Profile §3.3.1 absorbed)"),
         suggested_fix: None,
     },
     // --- K (Kernel + Lifecycle Detail + Correspondence Metadata) -----
@@ -947,6 +945,31 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
+    // K-016: Tested via inline JSON in the `k016_*` unit tests in
+    // `crates/wos-lint/tests/tier1_rules.rs` — six cases covering
+    // top-level known/unknown initialState, compound known/unknown,
+    // deeply-nested compound (3 levels), parallel-region compound,
+    // bare-region initialState (G1), and forEach body (G1).
+    // Each "flagged" test asserts severity=Error AND the exact path
+    // string. Inline-evidence annotation per K-EXT-002 precedent.
+    // An empty-string `initialState` is treated like any other key
+    // and emits K-016 because empty is never a valid map key (a state
+    // map cannot legitimately carry the empty key).
+    RuleMetadata {
+        id: "K-016",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "`lifecycle.initialState` MUST key into `lifecycle.states`; \
+                  compound `initialState` MUST key into its substates; \
+                  `region.initialState` MUST key into `region.states`; \
+                  forEach `body` is walked recursively.",
+        fixtures: &[],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md §4.1 (lifecycle.initialState) + §4.3 (compound state semantics) + §4.8 (parallel-state region semantics)"),
+        suggested_fix: Some(
+            "Set `lifecycle.initialState` to a key that exists in `lifecycle.states`, OR (for compound states) set the state's `initialState` to a key that exists in its own `states` substate map, OR (for parallel-state regions) set `region.initialState` to a key that exists in `region.states`.",
+        ),
+    },
     RuleMetadata {
         id: "K-017",
         tier: Tier::T2,
@@ -1008,26 +1031,6 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         suggested_fix: None,
     },
     RuleMetadata {
-        id: "K-031",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "`transition.actor` MUST match `actors[].id` pattern and name a declared `actors[].id`.",
-        fixtures: &[],
-        graduation: Graduation::Draft,
-        spec_ref: None,
-        suggested_fix: None,
-    },
-    RuleMetadata {
-        id: "K-032",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "`lifecycle.initialState` (root) and compound `initialState` MUST name a key in the relevant `states` map; diagnostic `path` distinguishes cases.",
-        fixtures: &[],
-        graduation: Graduation::Draft,
-        spec_ref: None,
-        suggested_fix: None,
-    },
-    RuleMetadata {
         id: "K-037",
         tier: Tier::T2,
         severity: LintSeverity::Error,
@@ -1073,8 +1076,59 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         fixtures: &[],
         graduation: Graduation::Draft,
         spec_ref: Some("Kernel S4.3"),
+        suggested_fix: Some("Remove the duplicate from `tags` or choose a different `outcomeCode` value."),
+    },
+    // K-051 / K-052 / K-053 — DecisionTable lint rules per Kernel §4.5.1.
+    // Unit tests in `crates/wos-lint/src/rules/decision_table.rs`; executable
+    // fixtures in `crates/wos-conformance/fixtures/K-05[123]-*.json` wired
+    // from `crates/wos-lint/tests/decision_table_fixtures.rs`.
+    RuleMetadata {
+        id: "K-051",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "DecisionTableGuard ref/outputColumn/inputBindings MUST resolve.",
+        fixtures: &[
+            "K-051-resolved-decision-table-guard.json",
+            "K-051-negative-unresolved-table-ref.json",
+            "K-051-negative-unresolved-output-column.json",
+            "K-051-negative-missing-input-binding.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1"),
         suggested_fix: Some(
-            "Remove the duplicate from `tags` or choose a different `outcomeCode` value.",
+            "Ensure DecisionTableGuard.ref names a top-level decisionTables[] entry, outputColumn names a declared output, and inputBindings covers every declared input.",
+        ),
+    },
+    RuleMetadata {
+        id: "K-052",
+        tier: Tier::T2,
+        severity: LintSeverity::Error,
+        summary: "DecisionTable rows for hitPolicy=unique/priority MUST be pairwise disjoint (or have distinct priorities under priority).",
+        fixtures: &[
+            "K-052-disjoint-unique-rows.json",
+            "K-052-negative-overlapping-unique-rows.json",
+            "K-052-negative-priority-tie.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1.4"),
+        suggested_fix: Some(
+            "Make rows pairwise disjoint, switch to hitPolicy=first, or assign distinct priority integers.",
+        ),
+    },
+    RuleMetadata {
+        id: "K-053",
+        tier: Tier::T1,
+        severity: LintSeverity::Error,
+        summary: "DecisionTable cell-shape: input cells boolean; transition-guard outputColumn boolean-typed; no collect hit policy on guards.",
+        fixtures: &[
+            "K-053-boolean-output-column.json",
+            "K-053-negative-non-boolean-output.json",
+            "K-053-negative-collect-hit-policy-on-guard.json",
+        ],
+        graduation: Graduation::Tested,
+        spec_ref: Some("specs/kernel/spec.md#§4.5.1.4"),
+        suggested_fix: Some(
+            "Select a boolean-typed output column for transition-guard usage; avoid collect hit policy on tables referenced by guards.",
         ),
     },
     // K-EXT-002: Tested via inline JSON in the `k_ext_002_*` unit tests in
@@ -1094,7 +1148,16 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         spec_ref: None,
         suggested_fix: None,
     },
-    // K-FOREACH-001: inline-evidence in tier1.rs foreach-state unit coverage.
+    // ── K-FOREACH-* (foreach state semantics; ADR 0076 / Sub-PR D) ─────────
+    // K-FOREACH-001..004: Lint emit is exercised via the kernel-typed
+    // `check_state_type_semantics_typed` walker in `tier1.rs`; runtime
+    // conformance fixtures at `crates/wos-conformance/fixtures/K-FOREACH-{001,
+    // 002,003,BODY-001,OUTPUT-001}-*.json` cover the end-to-end behavior
+    // (foreach iteration / bounded concurrency / empty collection / body
+    // actions / collect-strategy outputs). Inline-evidence annotation per
+    // the K-EXT-002 precedent — the lint emit is the ratchet-relevant
+    // surface; runtime fixtures exercise the same shape. (See 2026-04-18
+    // review for the K-EXT-002 precedent.)
     RuleMetadata {
         id: "K-FOREACH-001",
         tier: Tier::T1,
@@ -1107,7 +1170,10 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Declare an FEL expression in `collection` that evaluates to a bounded array against case state (e.g., `caseFile.attachments`).",
         ),
     },
-    // K-FOREACH-002: inline-evidence in tier1.rs foreach-state unit coverage.
+    // K-FOREACH-002: same evidence as K-FOREACH-001 above (lint emit in
+    // tier1.rs walker; runtime conformance in `crates/wos-conformance/
+    // fixtures/K-FOREACH-BODY-001-iteration-body-actions.json`). Inline
+    // annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "K-FOREACH-002",
         tier: Tier::T1,
@@ -1120,7 +1186,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Declare an inline `body: State` describing the work performed per iteration. The body MAY be atomic, compound, or parallel.",
         ),
     },
-    // K-FOREACH-003: inline-evidence in tier1.rs foreach-state unit coverage.
+    // K-FOREACH-003: same evidence pattern as K-FOREACH-001/002 (lint
+    // emit + runtime conformance). Inline annotation per K-EXT-002
+    // precedent.
     RuleMetadata {
         id: "K-FOREACH-003",
         tier: Tier::T1,
@@ -1133,7 +1201,9 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Set `concurrency` to a positive integer or omit it (sequential iteration is the canonical default).",
         ),
     },
-    // K-FOREACH-004: inline-evidence in tier1.rs foreach-state unit coverage.
+    // K-FOREACH-004: iteration-field-isolation check; emit in tier1.rs
+    // walker tested via the inline tests `k_foreach_004_*` (sentinel
+    // patterns in tier1_rules.rs). Inline annotation per K-EXT-002.
     RuleMetadata {
         id: "K-FOREACH-004",
         tier: Tier::T1,
@@ -1154,17 +1224,6 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         summary: "Schema leaf properties MUST carry sufficient `description` and `examples`.",
         fixtures: &[],
         graduation: Graduation::Draft,
-        spec_ref: None,
-        suggested_fix: None,
-    },
-    // SCHEMA-OPEN-001: inline-evidence in tests/schema_open_string_kind.rs.
-    RuleMetadata {
-        id: "SCHEMA-OPEN-001",
-        tier: Tier::T1,
-        severity: LintSeverity::Error,
-        summary: "Open string leaves MUST declare `x-wos.openStringKind` unless `enum`/`const`/`pattern` already close the leaf.",
-        fixtures: &[],
-        graduation: Graduation::Tested,
         spec_ref: None,
         suggested_fix: None,
     },
@@ -1303,7 +1362,12 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
         suggested_fix: None,
     },
     // --- WOS-* (cross-reference rules per ADR 0076 D-2 / step 12) -----
-    // WOS-AGENT-XREF-001: inline-evidence in `wos_agent_xref_001_*` tests.
+    // WOS-AGENT-XREF-001 / WOS-SIG-COVER-001 / WOS-VER-LEVEL-001:
+    // Tested via inline JSON in the `wos_agent_xref_001_*`,
+    // `wos_sig_cover_001_*`, and `ver_level_001_*` unit tests in
+    // `tier1.rs::ver_level_tests` and `tier2.rs::tests`. Inline fixtures are
+    // sufficient evidence per the K-EXT-002 precedent (see registry comment
+    // above). Fixture file paths are intentionally empty until promotion.
     RuleMetadata {
         id: "WOS-AGENT-XREF-001",
         tier: Tier::T2,
@@ -1316,7 +1380,12 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Add an `agents[]` entry whose `id` matches the agent-typed actor, or change the actor `type` to `human`/`system`.",
         ),
     },
-    // WOS-EMBED-IDENTITY-001: inline-evidence in `embed_identity_001_*` tests.
+    // --- WOS-EMBED-* / WOS-SIDECAR-* (identity-boundary rules per ADR 0063) ---
+    // WOS-EMBED-IDENTITY-001: Tested via inline JSON in
+    // `embed_identity_001_governance_with_url_flagged` and
+    // `embed_identity_001_advanced_with_version_flagged` unit tests in
+    // `tier1.rs` (the lint emit fires on embedded blocks declaring
+    // `url`/`version`). Inline annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "WOS-EMBED-IDENTITY-001",
         tier: Tier::T1,
@@ -1329,7 +1398,11 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Remove `url` and `version` from the embedded block. The merged envelope's identity (url, version) governs every embedded block.",
         ),
     },
-    // WOS-EMBED-TARGET-001: inline-evidence in `embed_target_001_*` tests.
+    // WOS-EMBED-TARGET-001: Tested via inline JSON in
+    // `embed_target_001_governance_with_target_workflow_flagged`,
+    // `embed_target_001_agents_array_entry_with_target_workflow_flagged`,
+    // and `embed_target_001_clean_envelope_silent` unit tests in
+    // `tier1.rs`. Inline annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "WOS-EMBED-TARGET-001",
         tier: Tier::T1,
@@ -1342,7 +1415,12 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Remove `targetWorkflow` from the embedded block. Embedded blocks govern the enclosing $wosWorkflow envelope; only sidecars target workflows by URI.",
         ),
     },
-    // WOS-SIDECAR-TARGET-001: inline-evidence in `sidecar_target_001_*` tests.
+    // WOS-SIDECAR-TARGET-001: Tested via inline JSON in
+    // `sidecar_target_001_delivery_without_target_workflow_flagged`,
+    // `sidecar_target_001_delivery_with_empty_target_workflow_flagged`,
+    // `sidecar_target_001_delivery_with_valid_target_workflow_silent`,
+    // and `sidecar_target_001_ontology_alignment_without_target_workflow_flagged`
+    // unit tests in `tier1.rs`. Inline annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "WOS-SIDECAR-TARGET-001",
         tier: Tier::T1,
@@ -1355,7 +1433,13 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Declare `targetWorkflow` on the sidecar root pointing at the $wosWorkflow envelope's `url`.",
         ),
     },
-    // WOS-SIG-COVER-001: inline-evidence in `wos_sig_cover_001_*` tests.
+    // WOS-SIG-COVER-001: Tested via inline JSON in
+    // `wos_sig_cover_001_signature_transition_without_signature_block_flagged`,
+    // `wos_sig_cover_001_covered_signer_clean`, and
+    // `wos_sig_cover_001_signers_missing_actor_flagged` unit tests in
+    // `crates/wos-lint/src/rules/tier2.rs::tests` (the inline test
+    // module, NOT `crates/wos-lint/tests/tier2_rules.rs`). Inline
+    // annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "WOS-SIG-COVER-001",
         tier: Tier::T2,
@@ -1368,7 +1452,11 @@ static ALL_LINT_RULES: &[RuleMetadata] = &[
             "Declare a `signature` block at the document root with `signers[]` covering the actor that signs the gating transition.",
         ),
     },
-    // WOS-VER-LEVEL-001: inline-evidence in `ver_level_001_*` tests.
+    // WOS-VER-LEVEL-001: Tested via inline JSON in
+    // `ver_level_001_fallback_without_verification_level_warns`,
+    // `ver_level_001_fallback_with_binding_verification_level_clean`, and
+    // `ver_level_001_no_fallback_chain_silent` unit tests in `tier1.rs`.
+    // Inline annotation per K-EXT-002 precedent.
     RuleMetadata {
         id: "WOS-VER-LEVEL-001",
         tier: Tier::T1,

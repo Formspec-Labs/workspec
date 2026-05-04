@@ -11,8 +11,8 @@ use chrono::Utc;
 use tower::ServiceExt;
 use wos_server::config::{AuthKind, ServerConfig, StorageKind};
 use wos_server::runtime::AppRuntime;
-use wos_server::storage::{IdentityFactRow, InstanceRow, SqliteStorage, Storage, UserRow};
 use wos_server::{AppState, auth, http, realtime, services::AppServices, storage};
+use wos_server::storage::{IdentityFactRow, InstanceRow, SqliteStorage, Storage, UserRow};
 
 async fn test_app_state() -> AppState {
     let store = Arc::new(
@@ -90,7 +90,6 @@ async fn test_app_state() -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 
@@ -99,7 +98,9 @@ fn app(state: AppState) -> axum::Router {
 }
 
 async fn body_str(res: axum::response::Response) -> String {
-    let bytes = axum::body::to_bytes(res.into_body(), 16384).await.unwrap();
+    let bytes = axum::body::to_bytes(res.into_body(), 16384)
+        .await
+        .unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
@@ -494,7 +495,10 @@ async fn lifecycle_activation_blocked_when_calibration_expired() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let body = body_str(res).await;
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(json["message"].as_str().unwrap().contains("calibration"));
+    assert!(json["message"]
+        .as_str()
+        .unwrap()
+        .contains("calibration"));
 }
 
 // ── WS-013: EvalService parse-failure surface ─────────────────────────
@@ -656,7 +660,7 @@ async fn create_hold_requires_auth() {
     seed_instance_with_state(&state, "urn:wos:instance:hold-auth", vec!["review"]).await;
 
     let body = serde_json::json!({
-        "holdType": "pending-applicant-response",
+        "holdType": "evidence-pending",
         "resumeTrigger": "documentReceived",
     });
     let res = app(state)
@@ -682,7 +686,7 @@ async fn hold_lifecycle_create_list_release_round_trips() {
 
     // Create hold #0
     let create_body = serde_json::json!({
-        "holdType": "pending-applicant-response",
+        "holdType": "evidence-pending",
         "resumeTrigger": "documentReceived",
     });
     let res = app(state.clone())
@@ -705,7 +709,7 @@ async fn hold_lifecycle_create_list_release_round_trips() {
 
     // Create a second hold to confirm append + indexing
     let create_body2 = serde_json::json!({
-        "holdType": "pending-external-verification",
+        "holdType": "supervisor-review",
         "resumeTrigger": "supervisorApproved",
         "expectedEnd": "2026-05-01T00:00:00Z",
         "holdState": "review",
@@ -742,9 +746,9 @@ async fn hold_lifecycle_create_list_release_round_trips() {
     let holds: serde_json::Value = serde_json::from_str(&body).unwrap();
     let arr = holds.as_array().unwrap();
     assert_eq!(arr.len(), 2);
-    assert_eq!(arr[0]["holdType"], "pending-applicant-response");
+    assert_eq!(arr[0]["holdType"], "evidence-pending");
     assert_eq!(arr[0]["holdState"], "evidence-review"); // defaulted from configuration[0]
-    assert_eq!(arr[1]["holdType"], "pending-external-verification");
+    assert_eq!(arr[1]["holdType"], "supervisor-review");
     assert_eq!(arr[1]["holdState"], "review"); // explicitly provided
 
     // Release hold at index 0
@@ -763,7 +767,7 @@ async fn hold_lifecycle_create_list_release_round_trips() {
     let body = body_str(res).await;
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(json["ok"], true);
-    assert_eq!(json["released"]["holdType"], "pending-applicant-response");
+    assert_eq!(json["released"]["holdType"], "evidence-pending");
 
     // List again: expect 1 remaining
     let res = app(state)
@@ -780,7 +784,7 @@ async fn hold_lifecycle_create_list_release_round_trips() {
     let holds: serde_json::Value = serde_json::from_str(&body).unwrap();
     let arr = holds.as_array().unwrap();
     assert_eq!(arr.len(), 1);
-    assert_eq!(arr[0]["holdType"], "pending-external-verification");
+    assert_eq!(arr[0]["holdType"], "supervisor-review");
 }
 
 #[tokio::test]

@@ -1,0 +1,102 @@
+{
+  "id": "K-052-disjoint-unique-rows",
+  "rule": "K-052",
+  "description": "Positive case: a DecisionTable with hitPolicy='unique' whose rows are pairwise disjoint over the declared input domain (income partition cleanly splits at 1473 vs >1473). The lint MUST NOT emit K-052; the unique-hit invariant is satisfiable.",
+  "documents": {
+    "kernel": "inline"
+  },
+  "inline_documents": {
+    "kernel": {
+      "$wosWorkflow": "1.0",
+      "$schema": "https://wos-spec.org/schemas/workflow/1.0",
+      "url": "https://test.example/workflows/k-052-positive",
+      "version": "1.0.0",
+      "title": "K-052 Positive \u2014 Disjoint unique rows",
+      "description": "Two-row unique table; income predicates partition the input domain.",
+      "status": "active",
+      "impactLevel": "operational",
+      "actors": [
+        {
+          "id": "caseworker",
+          "type": "human",
+          "description": "Caseworker"
+        }
+      ],
+      "lifecycle": {
+        "initialState": "intake",
+        "states": {
+          "intake": {
+            "type": "atomic",
+            "transitions": [
+              {
+                "event": "submit",
+                "target": "approved",
+                "guard": {
+                  "kind": "decisionTable",
+                  "ref": "eligibilityTable",
+                  "outputColumn": "eligible",
+                  "inputBindings": {
+                    "income": "caseFile.income"
+                  }
+                }
+              }
+            ]
+          },
+          "approved": {
+            "type": "final"
+          }
+        }
+      },
+      "decisionTables": [
+        {
+          "id": "eligibilityTable",
+          "inputs": [
+            {
+              "name": "income",
+              "type": "number"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "eligible",
+              "type": "boolean"
+            }
+          ],
+          "rows": [
+            {
+              "id": "rEligible",
+              "inputCells": [
+                "income <= 1473"
+              ],
+              "outputCells": [
+                "true"
+              ]
+            },
+            {
+              "id": "rIneligible",
+              "inputCells": [
+                "income > 1473"
+              ],
+              "outputCells": [
+                "false"
+              ]
+            }
+          ],
+          "hitPolicy": "unique"
+        }
+      ],
+      "caseFile": {
+        "fields": {}
+      },
+      "execution": {
+        "workflowTimeout": "P30D",
+        "defaultTaskTimeout": "P7D",
+        "instanceVersioning": "pinned"
+      }
+    }
+  },
+  "event_sequence": [],
+  "expected_transitions": [],
+  "expected_provenance": [],
+  "expected_errors": []
+}

@@ -8,6 +8,3 @@ repository.workspace = true
 
 [dependencies]
 wos-core = { path = "../wos-core" }
-
-[dev-dependencies]
-serde_json = "1"

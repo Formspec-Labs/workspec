@@ -1,0 +1,17 @@
+[
+  ["po.json", {
+    "$wosStudioPolicyObject": "1.0",
+    "policyObjects": [
+      {"id": "pol-notice-x", "kind": "NoticeRequirement", "lifecycleState": "draft", "originClass": "source",
+       "body": {"audience": "applicant", "content": ["x"]}}
+    ]
+  }],
+  ["wfi.json", {
+    "$wosStudioWorkflowIntent": "1.0",
+    "id": "wfi-1",
+    "elements": [
+      {"id": "el-n", "kind": "notice", "name": "N",
+       "body": {"noticeRequirementRef": "pol-notice-x"}}
+    ]
+  }]
+]

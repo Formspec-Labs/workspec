@@ -20,8 +20,10 @@
 
 use indexmap::IndexMap;
 use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+
+use crate::model::decision_table::{DecisionTable, Guard};
 
 // `GovernanceDocument` (in `crate::model::governance`) provides the typed view
 // over the `governance` embedded block; consumers deserialize on demand. The
@@ -73,7 +75,7 @@ pub struct KernelDocument {
 
     /// Document status.
     #[serde(default)]
-    pub status: Option<PublicationStatus>,
+    pub status: Option<String>,
 
     /// Impact level classification (Kernel S6).
     #[serde(default)]
@@ -116,6 +118,7 @@ pub struct KernelDocument {
     // MUST NOT declare targetWorkflow — that is a sidecar concept. Lint rule
     // WOS-EMBED-TARGET-001 catches violations at the JSON layer; this Rust
     // surface assumes well-formed envelopes.
+
     /// Embedded due-process / review-protocol / pipeline / task-catalog
     /// governance (Governance spec). Required for `rights-impacting` and
     /// `safety-impacting` workflows; the schema's `allOf` enforces this
@@ -178,6 +181,13 @@ pub struct KernelDocument {
     /// Output bindings (governed-output pipeline projections per ADR 0080).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bindings: Vec<serde_json::Value>,
+
+    /// First-class decision tables per Kernel §4.5.1 (landed 2026-05-01).
+    /// Each entry is referenced from a transition guard of the
+    /// [`Guard::DecisionTable`] form. Empty when the workflow uses only
+    /// FEL-string guards.
+    #[serde(default)]
+    pub decision_tables: Vec<DecisionTable>,
 
     /// Extension data. Keys MUST start with `x-`.
     #[serde(default)]
@@ -351,15 +361,6 @@ pub enum EvaluationMode {
     Continuous,
 }
 
-/// Publication status for a workflow document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PublicationStatus {
-    Draft,
-    Active,
-    Deprecated,
-}
-
 /// Impact level classification (Kernel S6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -410,140 +411,6 @@ pub enum ActorKind {
     Human,
     System,
     Agent,
-}
-
-/// Provenance audit layer for facts-tier records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AuditLayer {
-    Facts,
-    Reasoning,
-    Counterfactual,
-    Narrative,
-}
-
-/// Origin of a case-state mutation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MutationSource {
-    HumanEntered,
-    HumanCorrected,
-    AgentExtracted,
-    SystemFetched,
-    Computed,
-    SelfAttested,
-    /// Vendor-namespaced source token. SHOULD carry an `x-` prefix.
-    Vendor(String),
-}
-
-impl MutationSource {
-    /// Canonical wire token for this mutation source.
-    #[must_use]
-    pub const fn as_str(&self) -> &str {
-        match self {
-            Self::HumanEntered => "human-entered",
-            Self::HumanCorrected => "human-corrected",
-            Self::AgentExtracted => "agent-extracted",
-            Self::SystemFetched => "system-fetched",
-            Self::Computed => "computed",
-            Self::SelfAttested => "self-attested",
-            Self::Vendor(value) => value.as_str(),
-        }
-    }
-
-    fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "human-entered" => Some(Self::HumanEntered),
-            "human-corrected" => Some(Self::HumanCorrected),
-            "agent-extracted" => Some(Self::AgentExtracted),
-            "system-fetched" => Some(Self::SystemFetched),
-            "computed" => Some(Self::Computed),
-            "self-attested" => Some(Self::SelfAttested),
-            value if value.starts_with("x-") => Some(Self::Vendor(value.to_string())),
-            _ => None,
-        }
-    }
-}
-
-impl Serialize for MutationSource {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for MutationSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::from_wire(value.as_str()).ok_or_else(|| {
-            D::Error::custom(format!(
-                "invalid mutation source {value:?}; expected a reserved literal or x-* token"
-            ))
-        })
-    }
-}
-
-/// Verification strength for a case-state mutation.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VerificationLevel {
-    Independent,
-    Attested,
-    Corroborated,
-    Authoritative,
-    /// Vendor-namespaced verification token. SHOULD carry an `x-` prefix.
-    Vendor(String),
-}
-
-impl VerificationLevel {
-    /// Canonical wire token for this verification level.
-    #[must_use]
-    pub const fn as_str(&self) -> &str {
-        match self {
-            Self::Independent => "independent",
-            Self::Attested => "attested",
-            Self::Corroborated => "corroborated",
-            Self::Authoritative => "authoritative",
-            Self::Vendor(value) => value.as_str(),
-        }
-    }
-
-    fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "independent" => Some(Self::Independent),
-            "attested" => Some(Self::Attested),
-            "corroborated" => Some(Self::Corroborated),
-            "authoritative" => Some(Self::Authoritative),
-            value if value.starts_with("x-") => Some(Self::Vendor(value.to_string())),
-            _ => None,
-        }
-    }
-}
-
-impl Serialize for VerificationLevel {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for VerificationLevel {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::from_wire(value.as_str()).ok_or_else(|| {
-            D::Error::custom(format!(
-                "invalid verification level {value:?}; expected a reserved literal or x-* token"
-            ))
-        })
-    }
 }
 
 /// Lifecycle topology (Kernel S4).
@@ -619,6 +486,7 @@ pub struct State {
     // round-trips through the typed model without coercion. Authoring +
     // schema validity ship in this PR; full runtime iteration semantics are
     // tracked as Sub-PR D-2.
+
     /// FEL expression evaluated against case-state at entry into a `ForEach`
     /// state. MUST evaluate to a bounded array; each element drives one
     /// iteration of the body. Required when `kind == ForEach`; ignored on
@@ -676,9 +544,9 @@ pub struct State {
 ///
 /// `ForEach` is a compound-shaped state with iteration semantics: the body
 /// subtree (rooted at `State::initial_state` and stored in `State::states`)
-/// runs once per element of the FEL-evaluated `State::collection`. Per-iteration
+/// runs once per element of the FEL-evaluated `State::iterator`. Per-iteration
 /// case-state bindings expose the current item and index under
-/// `State::item_variable` / `State::index_variable` (defaults `$item` / `$index`).
+/// `State::iterator_var` / `State::index_var` (defaults `$current` / `$index`).
 /// Sequential execution is the canonical semantics; parallel iteration capped
 /// by `State::max_concurrency` is a future extension whose runtime
 /// implementation is tracked separately. Authoring + schema validity ship in
@@ -689,8 +557,6 @@ pub enum StateKind {
     Atomic,
     Compound,
     Parallel,
-    /// JSON wire value is lowercase `foreach` (Kernel schema `lifecycle.states.*.type` enum), not default camelCase `forEach`.
-    #[serde(rename = "foreach")]
     ForEach,
     Final,
 }
@@ -1006,18 +872,24 @@ pub struct Transition {
     /// Target state identifier.
     pub target: String,
 
-    /// Guard expression (FEL). Evaluated in document order.
+    /// Transition guard per Kernel §4.5/§4.6 — evaluated in document order.
+    ///
+    /// Polymorphic per Kernel §4.5.1.1 (landed 2026-05-01): may be a FEL
+    /// expression (string form) or a structured
+    /// [`crate::model::decision_table::DecisionTableGuard`] (object form).
+    /// `serde_json` deserializes either via the untagged
+    /// [`Guard`] enum.
+    ///
+    /// Most existing wos-runtime / wos-lint paths walk only the FEL
+    /// variant; use [`Guard::as_fel_str`] to preserve the legacy
+    /// `Option<&str>` shape those call sites previously got from
+    /// `transition.guard.as_deref()`.
     #[serde(default)]
-    pub guard: Option<String>,
+    pub guard: Option<Guard>,
 
     /// Actions executed during this transition.
     #[serde(default)]
     pub actions: Vec<Action>,
-
-    /// Actor responsible for this transition, when a single actor is named.
-    /// MUST match `actors[].id` and the same lexical pattern as actor `id` values.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub actor: Option<String>,
 
     /// Human-readable description.
     #[serde(default)]

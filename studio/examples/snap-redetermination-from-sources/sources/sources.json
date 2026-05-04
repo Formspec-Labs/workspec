@@ -1,0 +1,63 @@
+{
+  "$wosStudioSource": "1.0",
+  "$comment": "Source vault collective for the 4 source IDs referenced by citations across PolicyObjects, mappings, and the approval package. SourceDocument + 4 SourceVersion entries.",
+  "workspaceId": "ws-snap-redetermination-tx-2026",
+  "sourceVersions": [
+    {
+      "id": "src-cfr-7-273",
+      "documentRef": "doc-cfr-7-273",
+      "versionLabel": "current",
+      "publishedAt": "2024-09-01T00:00:00Z",
+      "ingestedAt": "2026-04-15T09:00:00Z",
+      "ingestedHash": "sha256:f3d2a1...",
+      "ingestFormat": "json-ld",
+      "contentLocales": ["en-US"],
+      "effectivenessRef": "eff-fed-cfr-273-current",
+      "lifecycleState": "approved",
+      "canonicalSourceRef": {
+        "referencedUri": "https://www.ecfr.gov/api/renderer/v1/title-7/section-273.10",
+        "canonicalIdentifier": "7-CFR-273",
+        "publishedFormat": "json-ld"
+      }
+    },
+    {
+      "id": "src-state-tx-snap-manual-ch8",
+      "documentRef": "doc-state-tx-snap-manual",
+      "versionLabel": "Ch. 8 — current",
+      "publishedAt": "2025-01-01T00:00:00Z",
+      "ingestedAt": "2026-04-15T09:30:00Z",
+      "ingestedHash": "sha256:a2b3c4...",
+      "ingestFormat": "pdf",
+      "contentLocales": ["en-US", "es-US"],
+      "effectivenessRef": "eff-state-tx-snap-current",
+      "lifecycleState": "approved"
+    },
+    {
+      "id": "src-office-memo-recert-v3.2",
+      "documentRef": "doc-office-memo-recert",
+      "versionLabel": "v3.2",
+      "publishedAt": "2023-06-15T00:00:00Z",
+      "ingestedAt": "2026-04-15T10:00:00Z",
+      "ingestedHash": "sha256:c4d5e6...",
+      "ingestFormat": "pdf",
+      "contentLocales": ["en-US"],
+      "effectivenessRef": "eff-state-tx-snap-current",
+      "lifecycleState": "superseded",
+      "supersededByRef": "src-fns-corrective-action-2024-q3",
+      "$comment": "§4(a) of this memo restricted appeal-request channels to written-only. The 2024 corrective letter supersedes that section; the rest remains in force."
+    },
+    {
+      "id": "src-fns-corrective-action-2024-q3",
+      "documentRef": "doc-fns-corrective-action",
+      "versionLabel": "2024-Q3",
+      "publishedAt": "2024-09-12T00:00:00Z",
+      "ingestedAt": "2026-04-15T10:30:00Z",
+      "ingestedHash": "sha256:e6f7a8...",
+      "ingestFormat": "pdf",
+      "contentLocales": ["en-US"],
+      "effectivenessRef": "eff-fed-cfr-273-current",
+      "lifecycleState": "approved",
+      "$comment": "Findings 1 + 2 of this letter are superseding inputs to the workflow: Finding 1 mandates phone+in-person+written appeal channel parity; Finding 2 mandates continuation-of-services election content in every Notice of Adverse Action."
+    }
+  ]
+}

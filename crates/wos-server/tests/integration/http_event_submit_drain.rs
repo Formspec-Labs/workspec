@@ -145,7 +145,6 @@ async fn jwt_app_state() -> AppState {
         services,
         runtime,
         event_idempotency: Arc::new(Mutex::new(HashMap::new())),
-        migrate_idempotency: Arc::new(tokio::sync::Mutex::new(wos_server::MigrateIdempotencyCache::default())),
     }
 }
 
@@ -269,11 +268,7 @@ async fn submit_event_advances_configuration_and_emits_provenance() {
         }),
     )
     .await;
-    assert_eq!(
-        status,
-        StatusCode::OK,
-        "submit_event should succeed: {view}"
-    );
+    assert_eq!(status, StatusCode::OK, "submit_event should succeed: {view}");
 
     // (a) head_record present and non-null.
     let head = view
@@ -360,7 +355,8 @@ async fn submit_event_dedup_replays_with_idempotency_token() {
         "idempotencyToken": "tok-1"
     });
 
-    let (status_a, first) = submit_event(app.clone(), &instance_id, &adj_token, body.clone()).await;
+    let (status_a, first) =
+        submit_event(app.clone(), &instance_id, &adj_token, body.clone()).await;
     assert_eq!(status_a, StatusCode::OK);
 
     let prov_after_first = fetch_provenance(app.clone(), &instance_id).await;

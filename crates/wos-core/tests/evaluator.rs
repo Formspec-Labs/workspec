@@ -46,6 +46,7 @@ fn minimal_kernel(initial: &str, states: IndexMap<String, State>) -> KernelDocum
         assurance: None,
         intake: None,
         bindings: Vec::new(),
+        decision_tables: vec![],
         extensions: HashMap::new(),
     }
 }
@@ -109,7 +110,6 @@ fn transition(event: &str, target: &str) -> Transition {
         target: target.to_string(),
         guard: None,
         actions: vec![],
-        actor: None,
         description: None,
         tags: vec![],
     }
@@ -119,9 +119,10 @@ fn guarded_transition(event: &str, target: &str, guard: &str) -> Transition {
     Transition {
         event: Some(TransitionEvent::from_authoring_trigger(event)),
         target: target.to_string(),
-        guard: Some(guard.to_string()),
+        guard: Some(wos_core::model::decision_table::Guard::Fel(
+            guard.to_string(),
+        )),
         actions: vec![],
-        actor: None,
         description: None,
         tags: vec![],
     }
@@ -303,7 +304,6 @@ fn set_data_action_mutates_case_state() {
                 target: "end".to_string(),
                 guard: None,
                 actions: vec![set_action],
-                actor: None,
                 description: None,
                 tags: vec![],
             }],
@@ -771,46 +771,6 @@ fn count_records(eval: &Evaluator, kind: ProvenanceKind) -> usize {
         .count()
 }
 
-/// Counts `OnEntry` records for foreach **body** action hooks only.
-///
-/// Structural `state_entered` records reuse [`ProvenanceKind::OnEntry`] with
-/// `data.state` and no `actionType`; body hooks set `to_state` under
-/// `<foreach-id>:body` and include `actionType` in `data`.
-fn count_foreach_body_on_entry(eval: &Evaluator, foreach_state_id: &str) -> usize {
-    let prefix = format!("{foreach_state_id}:body");
-    eval.provenance()
-        .records()
-        .iter()
-        .filter(|r| {
-            r.record_kind == ProvenanceKind::OnEntry
-                && r.to_state
-                    .as_deref()
-                    .is_some_and(|s| s.starts_with(&prefix))
-                && r.data
-                    .as_ref()
-                    .is_some_and(|d| d.get("actionType").is_some())
-        })
-        .count()
-}
-
-/// Counts `OnExit` records for foreach **body** action hooks only.
-fn count_foreach_body_on_exit(eval: &Evaluator, foreach_state_id: &str) -> usize {
-    let prefix = format!("{foreach_state_id}:body");
-    eval.provenance()
-        .records()
-        .iter()
-        .filter(|r| {
-            r.record_kind == ProvenanceKind::OnExit
-                && r.from_state
-                    .as_deref()
-                    .is_some_and(|s| s.starts_with(&prefix))
-                && r.data
-                    .as_ref()
-                    .is_some_and(|d| d.get("actionType").is_some())
-        })
-        .count()
-}
-
 fn first_record(eval: &Evaluator, kind: ProvenanceKind) -> &wos_core::provenance::ProvenanceRecord {
     eval.provenance()
         .records()
@@ -826,7 +786,10 @@ fn foreach_empty_collection_fires_outgoing_immediately() {
     // exactly one ForEachCompleted provenance record is emitted with
     // iterations=0 and broke=false, and zero iteration-pair records appear.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_state(
@@ -886,7 +849,10 @@ fn foreach_iterates_collection_in_order() {
     // anonymous outgoing transition fires with synthetic event
     // `$foreachComplete`, (e) the foreach state lands on `done`.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_state(
@@ -909,8 +875,10 @@ fn foreach_iterates_collection_in_order() {
         ..minimal_kernel("intake", states)
     })
     .unwrap();
-    eval.case_state_mut()
-        .insert("items".into(), serde_json::json!([{"x": 1}, {"x": 2}]));
+    eval.case_state_mut().insert(
+        "items".into(),
+        serde_json::json!([{"x": 1}, {"x": 2}]),
+    );
 
     let fired = eval.process_event("submit", None, None).unwrap();
     assert!(fired);
@@ -946,7 +914,10 @@ fn foreach_break_condition_terminates_early() {
     // iteration MUST stop with iterations=2 (not 3), broke=true, and the
     // last ForEachIterationCompleted record carries breakTriggered=true.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_state(
@@ -1024,7 +995,10 @@ fn foreach_iteration_bindings_do_not_persist() {
     // overrides) MUST NOT survive after the foreach state completes.
     // Authors that need persistence use `outputPath` (Sub-PR D-3).
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_state(
@@ -1069,7 +1043,10 @@ fn foreach_non_array_collection_is_rejected() {
     // a number / string / object / null causes the runtime to reject with
     // EvalError::ForEach.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_state(
@@ -1106,7 +1083,8 @@ fn foreach_non_array_collection_is_rejected() {
         "error MUST identify the offending state: {msg}"
     );
     assert!(
-        msg.contains("MUST evaluate to a bounded array") || msg.contains("collection"),
+        msg.contains("MUST evaluate to a bounded array")
+            || msg.contains("collection"),
         "error MUST mention the collection contract: {msg}"
     );
 }
@@ -1117,7 +1095,6 @@ fn transition_anonymous(target: &str) -> Transition {
         target: target.to_string(),
         guard: None,
         actions: vec![],
-        actor: None,
         description: None,
         tags: vec![],
     }
@@ -1227,7 +1204,10 @@ fn foreach_body_on_entry_setdata_runs_per_iteration() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1275,10 +1255,9 @@ fn foreach_body_on_entry_setdata_runs_per_iteration() {
         body_mutations.len()
     );
 
-    // Three OnEntry records emitted for the body actions (excluding structural
-    // `state_entered` OnEntry records for intake / loop / done).
+    // Three OnEntry records emitted for the body actions.
     assert_eq!(
-        count_foreach_body_on_entry(&eval, "loop"),
+        count_records(&eval, ProvenanceKind::OnEntry),
         3,
         "OnEntry record MUST be emitted once per body-action invocation per iteration"
     );
@@ -1303,7 +1282,10 @@ fn foreach_body_on_exit_setdata_runs_after_break_condition_fires() {
     };
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1359,9 +1341,9 @@ fn foreach_body_on_exit_setdata_runs_after_break_condition_fires() {
         body_mutations.len()
     );
 
-    // OnEntry + OnExit records: 2 of each (body hooks only).
-    assert_eq!(count_foreach_body_on_entry(&eval, "loop"), 2);
-    assert_eq!(count_foreach_body_on_exit(&eval, "loop"), 2);
+    // OnEntry + OnExit records: 2 of each.
+    assert_eq!(count_records(&eval, ProvenanceKind::OnEntry), 2);
+    assert_eq!(count_records(&eval, ProvenanceKind::OnExit), 2);
 }
 
 #[test]
@@ -1375,7 +1357,10 @@ fn foreach_body_actions_skipped_for_empty_collection() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1408,9 +1393,9 @@ fn foreach_body_actions_skipped_for_empty_collection() {
         "body.onEntry MUST NOT execute when the collection is empty"
     );
     assert_eq!(
-        count_foreach_body_on_entry(&eval, "loop"),
+        count_records(&eval, ProvenanceKind::OnEntry),
         0,
-        "no body actions ⇒ no foreach-body OnEntry hook records"
+        "no body actions ⇒ no OnEntry records"
     );
 }
 
@@ -1438,7 +1423,10 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
     )]);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1471,7 +1459,7 @@ fn foreach_body_actions_observe_current_item_binding_in_setdata_value() {
         eval.case_state().get("currentItem").is_none(),
         "iteration binding MUST NOT persist after foreach completes"
     );
-    assert_eq!(count_foreach_body_on_entry(&eval, "loop"), 3);
+    assert_eq!(count_records(&eval, ProvenanceKind::OnEntry), 3);
 }
 
 // ── ForEach outputPath + mergeStrategy (Sub-PR D-4) ───────────────────────
@@ -1483,7 +1471,10 @@ fn foreach_output_path_collect_appends_each_item_to_array() {
     // one per iteration. After three iterations, `caseFile.results` is the
     // input collection element-for-element (atomic body, identity capture).
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1548,7 +1539,10 @@ fn foreach_output_path_collect_appends_to_existing_array() {
     // workflow patterns where multiple foreach states funnel into a single
     // accumulator.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1576,8 +1570,10 @@ fn foreach_output_path_collect_appends_to_existing_array() {
     .unwrap();
     eval.case_state_mut()
         .insert("items".into(), serde_json::json!(["new1", "new2"]));
-    eval.case_state_mut()
-        .insert("results".into(), serde_json::json!(["existing1"]));
+    eval.case_state_mut().insert(
+        "results".into(),
+        serde_json::json!(["existing1"]),
+    );
 
     eval.process_event("submit", None, None).unwrap();
 
@@ -1594,7 +1590,10 @@ fn foreach_output_path_shallow_replaces_top_level_keys() {
     // has its top-level keys merged into the existing object at outputPath.
     // Later iterations overwrite earlier keys when names collide.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1642,7 +1641,10 @@ fn foreach_output_path_deep_recursively_merges_objects() {
     // mergeStrategy=deep: nested objects merge key-by-key. Non-object
     // collisions are replaced wholesale; arrays are NOT element-merged.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1705,7 +1707,10 @@ fn foreach_output_path_collect_rejects_non_array_existing() {
     // collect MUST reject — author intent (collect) and runtime state are
     // inconsistent.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1731,8 +1736,7 @@ fn foreach_output_path_collect_rejects_non_array_existing() {
         ..minimal_kernel("intake", states)
     })
     .unwrap();
-    eval.case_state_mut()
-        .insert("items".into(), serde_json::json!([{}]));
+    eval.case_state_mut().insert("items".into(), serde_json::json!([{}]));
     eval.case_state_mut().insert(
         "results".into(),
         serde_json::Value::String("not-an-array".into()),
@@ -1753,7 +1757,10 @@ fn foreach_output_path_shallow_rejects_non_object_item() {
     // mergeStrategy=shallow requires per-iteration items to be objects;
     // a primitive item (string / number / null) MUST be rejected.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1799,7 +1806,10 @@ fn foreach_output_path_persists_after_foreach_completes() {
     // outputPath exists. Sanity-check: after the foreach completes, the
     // accumulated outputPath value is still readable from case_state.
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         State {
@@ -1927,7 +1937,10 @@ fn foreach_compound_body_walks_substates_to_final() {
     let body = compound_body("validate", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -1976,7 +1989,10 @@ fn foreach_compound_body_walks_substates_to_final() {
 
     // Final value of caseFile.lastValidation: "ok" (set by the second
     // iteration's body run).
-    assert_eq!(eval.case_state()["lastValidation"], serde_json::json!("ok"));
+    assert_eq!(
+        eval.case_state()["lastValidation"],
+        serde_json::json!("ok")
+    );
 }
 
 #[test]
@@ -1996,7 +2012,6 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                     target: "rejected".to_string(),
                     guard: Some("false".to_string()),
                     actions: vec![],
-                    actor: None,
                     description: None,
                     tags: vec![],
                 },
@@ -2008,7 +2023,6 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
                         "caseFile.outcome",
                         serde_json::json!("accepted"),
                     )],
-                    actor: None,
                     description: None,
                     tags: vec![],
                 },
@@ -2028,7 +2042,10 @@ fn foreach_compound_body_guard_branches_pick_first_eligible() {
     let body = compound_body("decide", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2082,7 +2099,10 @@ fn foreach_compound_body_stuck_substate_errors() {
     let body = compound_body("stuck", body_substates);
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2128,7 +2148,10 @@ fn foreach_compound_body_missing_initial_state_errors() {
     };
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2169,7 +2192,10 @@ fn foreach_unsupported_body_kind_errors() {
     };
 
     let mut states = IndexMap::new();
-    states.insert("intake".into(), atomic(vec![transition("submit", "loop")]));
+    states.insert(
+        "intake".into(),
+        atomic(vec![transition("submit", "loop")]),
+    );
     states.insert(
         "loop".into(),
         foreach_with_body(
@@ -2203,4 +2229,244 @@ fn foreach_unsupported_body_kind_errors() {
             && (msg.contains("Parallel") || msg.contains("parallel")),
         "error message MUST identify body.kind: {msg}"
     );
+}
+
+// ── Decision-table guard end-to-end (Kernel §4.5.1.2) ───────────
+
+/// End-to-end: a kernel doc declaring a `decisionTables[]` entry plus a
+/// transition guarded by a `DecisionTableGuard` that points at it. The
+/// transition fires (or doesn't) based on case state and the
+/// hit-policy/output-cell evaluation per Kernel §4.5.1.2.
+///
+/// Pre-fix: the `as_fel_str` short-circuit at `eval.rs:505,585` returned
+/// `None` for `Guard::DecisionTable`, which `evaluate_guard` interpreted
+/// as "no guard", so the transition fired UNCONDITIONALLY regardless of
+/// case state — a workflow could not actually depend on a decision-table
+/// guard. This test would pass either way for the eligible case but
+/// would fire (incorrectly) for the ineligible case under the old code.
+#[test]
+fn decision_table_guard_routes_to_table_evaluator() {
+    use wos_core::model::decision_table::{
+        DecisionTable, DecisionTableGuard, DecisionTableGuardKind, DecisionTableInput,
+        DecisionTableOutput, DecisionTableRow, FelType, Guard, HitPolicy,
+    };
+
+    let table = DecisionTable {
+        id: "snap-elig".to_string(),
+        description: Some("SNAP income/household-size eligibility".to_string()),
+        inputs: vec![
+            DecisionTableInput {
+                name: "income".to_string(),
+                kind: FelType::Number,
+                description: None,
+            },
+            DecisionTableInput {
+                name: "householdSize".to_string(),
+                kind: FelType::Integer,
+                description: None,
+            },
+        ],
+        outputs: vec![DecisionTableOutput {
+            name: "eligible".to_string(),
+            kind: FelType::Boolean,
+            description: None,
+        }],
+        rows: vec![
+            DecisionTableRow {
+                id: "r-1or2-person".to_string(),
+                input_cells: vec![
+                    "householdSize <= 2".to_string(),
+                    "income <= 2500".to_string(),
+                ],
+                output_cells: vec!["true".to_string()],
+                priority: None,
+                rationale: Some("FFY26 1-2 person FPL bracket".to_string()),
+            },
+            DecisionTableRow {
+                id: "r-3or4-person".to_string(),
+                input_cells: vec![
+                    "householdSize >= 3".to_string(),
+                    "householdSize <= 4".to_string(),
+                    "income <= 4500".to_string(),
+                ],
+                output_cells: vec!["true".to_string()],
+                priority: None,
+                rationale: None,
+            },
+        ],
+        hit_policy: HitPolicy::First,
+    };
+
+    let mut bindings = IndexMap::new();
+    bindings.insert("income".to_string(), "caseFile.monthlyIncome".to_string());
+    bindings.insert(
+        "householdSize".to_string(),
+        "caseFile.householdSize".to_string(),
+    );
+    let guard = DecisionTableGuard {
+        kind: DecisionTableGuardKind::DecisionTable,
+        table_ref: "snap-elig".to_string(),
+        output_column: "eligible".to_string(),
+        input_bindings: bindings,
+        on_no_match: None,
+    };
+
+    let mut states = IndexMap::new();
+    states.insert(
+        "screening".into(),
+        atomic(vec![Transition {
+            event: Some(TransitionEvent::from_authoring_trigger("screen")),
+            target: "approved".into(),
+            guard: Some(Guard::DecisionTable(guard)),
+            actions: vec![],
+            description: None,
+            tags: vec![],
+        }]),
+    );
+    states.insert("approved".into(), final_state());
+
+    let mut doc = minimal_kernel("screening", states);
+    doc.decision_tables = vec![table];
+
+    // Eligible case: 1-person household with $1,200 monthly income
+    // matches r-1or2-person → eligible=true → transition fires.
+    {
+        let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 1});
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        assert!(eval.configuration().contains("screening"));
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(fired, "eligible case should fire the transition");
+        assert!(eval.configuration().contains("approved"));
+        assert!(!eval.configuration().contains("screening"));
+        let evals = eval.guard_evaluations();
+        assert_eq!(evals.len(), 1);
+        assert!(evals[0].result);
+        assert_eq!(
+            evals[0].expression, "decisionTable(snap-elig).eligible",
+            "expression carries the synthesized decisionTable trace label"
+        );
+        // Row-scope inputs surfaced under their declared names.
+        let inputs = &evals[0].inputs;
+        assert_eq!(
+            inputs.pointer("/income"),
+            Some(&serde_json::json!(1200)),
+            "row scope exposes input bindings under their declared names"
+        );
+        assert_eq!(
+            inputs.pointer("/householdSize"),
+            Some(&serde_json::json!(1))
+        );
+    }
+
+    // Ineligible case: 5-person household — no row matches → guard false →
+    // transition does NOT fire. This is the regression-defining case: under
+    // the old `as_fel_str` short-circuit it would have fired regardless.
+    {
+        let case = serde_json::json!({"monthlyIncome": 1200, "householdSize": 5});
+        let mut eval =
+            Evaluator::with_time_and_case_state(doc.clone(), 0, Some(&case)).unwrap();
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(
+            !fired,
+            "ineligible case must NOT fire the transition (pre-fix bug regressed silently here)"
+        );
+        assert!(eval.configuration().contains("screening"));
+        let evals = eval.guard_evaluations();
+        assert_eq!(evals.len(), 1);
+        assert!(!evals[0].result);
+    }
+
+    // Edge: 2-person household at exactly $2500 boundary → matches first
+    // row (the boundary is inclusive per the cell expression).
+    {
+        let case = serde_json::json!({"monthlyIncome": 2500, "householdSize": 2});
+        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(&case)).unwrap();
+        let fired = eval.process_event("screen", None, None).unwrap();
+        assert!(fired, "boundary case should fire");
+    }
+}
+
+/// Verify that a FEL-string guard and a decision-table guard with
+/// identical effective semantics produce the same dispatch outcome — the
+/// polymorphic `Guard` field routes correctly through the dispatcher in
+/// either form.
+#[test]
+fn fel_and_decision_table_guards_agree_on_equivalent_predicates() {
+    use wos_core::model::decision_table::{
+        DecisionTable, DecisionTableGuard, DecisionTableGuardKind, DecisionTableInput,
+        DecisionTableOutput, DecisionTableRow, FelType, Guard, HitPolicy,
+    };
+
+    fn run_with_guard(
+        guard: Guard,
+        decision_tables: Vec<DecisionTable>,
+        case: &serde_json::Value,
+    ) -> bool {
+        let mut states = IndexMap::new();
+        states.insert(
+            "start".into(),
+            atomic(vec![Transition {
+                event: Some(TransitionEvent::from_authoring_trigger("go")),
+                target: "end".into(),
+                guard: Some(guard),
+                actions: vec![],
+                description: None,
+                tags: vec![],
+            }]),
+        );
+        states.insert("end".into(), final_state());
+
+        let mut doc = minimal_kernel("start", states);
+        doc.decision_tables = decision_tables;
+
+        let mut eval = Evaluator::with_time_and_case_state(doc, 0, Some(case)).unwrap();
+        eval.process_event("go", None, None).unwrap()
+    }
+
+    let table = DecisionTable {
+        id: "ge-zero".to_string(),
+        description: None,
+        inputs: vec![DecisionTableInput {
+            name: "x".to_string(),
+            kind: FelType::Number,
+            description: None,
+        }],
+        outputs: vec![DecisionTableOutput {
+            name: "ok".to_string(),
+            kind: FelType::Boolean,
+            description: None,
+        }],
+        rows: vec![DecisionTableRow {
+            id: "r1".to_string(),
+            input_cells: vec!["x >= 0".to_string()],
+            output_cells: vec!["true".to_string()],
+            priority: None,
+            rationale: None,
+        }],
+        hit_policy: HitPolicy::First,
+    };
+    let mut bindings = IndexMap::new();
+    bindings.insert("x".to_string(), "caseFile.x".to_string());
+    let dt_guard = Guard::DecisionTable(DecisionTableGuard {
+        kind: DecisionTableGuardKind::DecisionTable,
+        table_ref: "ge-zero".to_string(),
+        output_column: "ok".to_string(),
+        input_bindings: bindings,
+        on_no_match: None,
+    });
+
+    for x in [-1, 0, 1, 100] {
+        let case = serde_json::json!({"x": x});
+        let fel_fires = run_with_guard(
+            Guard::Fel("caseFile.x >= 0".to_string()),
+            vec![],
+            &case,
+        );
+        let dt_fires = run_with_guard(dt_guard.clone(), vec![table.clone()], &case);
+        assert_eq!(
+            fel_fires, dt_fires,
+            "FEL and DecisionTable guards must agree for x={x}: fel={fel_fires}, dt={dt_fires}"
+        );
+    }
 }
