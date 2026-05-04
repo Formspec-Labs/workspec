@@ -10,7 +10,7 @@ Governance layer between Formspec (intake) and Trellis (integrity). Parent [`../
 | Owner operating preferences | [`../.claude/user_profile.md`](../.claude/user_profile.md) |
 | Stack vision + WOS section | [`../VISION.md`](../VISION.md) |
 | Platform decision register | [`../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md`](../thoughts/specs/2026-04-22-platform-decisioning-forks-and-options.md) |
-| **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md) |
+| **End-state wos-server architecture** (zero-trust posture, adapter cluster, EventStore composing Trellis crates, build sequence) | [`../flowspec-server/crates/wos-server/VISION.md`](../flowspec-server/crates/wos-server/VISION.md) |
 | **Studio (Authoring) layer** — separate workspace under `studio/`, repo-extractable | [`studio/CLAUDE.md`](studio/CLAUDE.md) |
 | Case Portal (the runtime case-management UI; renamed 2026-05-02 from `studio/`) | [`case-portal/README.md`](case-portal/README.md) |
 | Parent repo guide | [`../CLAUDE.md`](../CLAUDE.md) |
@@ -79,7 +79,7 @@ Apply after stack-wide heuristics (in [`../VISION.md`](../VISION.md)):
 - **Signature shortcut rule.** Product shortcuts may exist only as workflow-lite paths over the same WOS `SignatureAffirmation` semantics and Trellis custody/export path. Do not create a second meaning of "signed."
 - **FEL is the only expression language.** FEEL / DMN / SHACL are on the rejection list. FEL drives guards, equity expressions, condition events, restricted-domain equity profile.
 - **Rust is the spec authority.** `wos-core` is the semantics library; `wos-runtime` is in-memory durable-execution adapter + conformance oracle; Restate is initial default production adapter behind `DurableRuntime`. Do not add spec behavior in a scripting layer when it belongs in the Rust center.
-- **Reference-server auth invariants.** Global logout bumps `auth_epoch` + revokes sessions in one txn; password rotation flows only through `Storage::set_user_password_hash` (hash + epoch + revoke atomic); `upsert_user` never touches `password_hash` / `auth_epoch`; realtime `kernel:update` re-runs `verify` per event so role/revoke changes apply without waiting for token expiry. Full contract: [`crates/wos-server/PARITY.md`](crates/wos-server/PARITY.md) ▎ Auth contract, mirrored in [`crates/wos-server/README.md`](crates/wos-server/README.md) Auth + Storage + Realtime auth model.
+- **Reference-server auth invariants.** Global logout bumps `auth_epoch` + revokes sessions in one txn; password rotation flows only through `Storage::set_user_password_hash` (hash + epoch + revoke atomic); `upsert_user` never touches `password_hash` / `auth_epoch`; realtime `kernel:update` re-runs `verify` per event so role/revoke changes apply without waiting for token expiry. Full contract: [`../flowspec-server/crates/wos-server/PARITY.md`](../flowspec-server/crates/wos-server/PARITY.md) ▎ Auth contract, mirrored in [`../flowspec-server/crates/wos-server/README.md`](../flowspec-server/crates/wos-server/README.md) Auth + Storage + Realtime auth model.
 
 ## Architecture
 
@@ -95,7 +95,7 @@ New runtime capabilities MUST be implementable in the in-memory adapter AND the 
 
 ## End-state wos-server architecture
 
-Detailed in [`crates/wos-server/VISION.md`](crates/wos-server/VISION.md). Summary, load-bearing for any reference-server architectural decision:
+The `wos-server*` cluster has moved to [`flowspec-server`](../flowspec-server/) (chore 3.2). The architecture document is now at [`../flowspec-server/crates/wos-server/VISION.md`](../flowspec-server/crates/wos-server/VISION.md). Summary, load-bearing for any reference-server architectural decision:
 
 - **Data-and-workflow zero trust** layered on identity-and-network zero trust. Server processes never hold case content plaintext at rest. Three deployment modes (SBA / Federal / Sovereign) declared per deployment with declaration matching observable behavior.
 - **Trellis IS the database.** One Postgres database per tenant; two schemas — `canonical` (Trellis events: hash-chained, signed, encrypted payloads) and `projections` (derived metadata, mutable, rebuildable by replay, plaintext-content-free). Single `EventStore` port — no separate `Storage` + `AuditSink` split. Single transaction per write.
@@ -139,7 +139,7 @@ Workspace depends on `fel-core` at `../formspec/crates/fel-core`. The supported 
 
 ## Topology awareness
 
-Checked out as `formspec-stack/wos-spec/` alongside sibling repos `formspec-stack/formspec/` and `formspec-stack/trellis/`. Path coupling via `../formspec/` and `../trellis/` — not submodules. Commits here are separate; bump the `formspec-stack` submodule pointer when landing meaningful work. **Code review:** inspect the real diff with `git -C wos-spec status` and `git -C wos-spec diff`. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
+Checked out as `formspec-stack/wos-spec/` alongside sibling repos `formspec-stack/formspec/`, `formspec-stack/trellis/`, and `formspec-stack/flowspec-server/`. The `wos-server*` crates live in `../flowspec-server/crates/` (relocated chore 3.2). Path coupling via `../formspec/`, `../trellis/`, and `../flowspec-server/` — not submodules. Commits here are separate; bump the `formspec-stack` submodule pointer when landing meaningful work. **Code review:** inspect the real diff with `git -C wos-spec status` and `git -C wos-spec diff`. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
 
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>

@@ -7,9 +7,12 @@
 # `/dev/tcp` (GNU/Linux bash only; macOS /bin/bash lacks /dev/tcp).
 #
 # Run from any cwd; resolves the wos-spec workspace root from this script's location.
+# wos-server-runtime-restate has moved to flowspec-server (chore 3.2); cargo commands
+# below use --manifest-path to address the flowspec-server workspace instead.
 set -euo pipefail
 
 WOS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FLOWSPEC_SERVER_ROOT="$(cd "$WOS_ROOT/../flowspec-server" && pwd)"
 cd "$WOS_ROOT"
 
 RESTATE_IMAGE="${WOS_RESTATE_SERVER_IMAGE:-docker.restate.dev/restatedev/restate:1.6.2}"
@@ -45,10 +48,10 @@ if ! curl -sf "http://127.0.0.1:9070/deployments" >/dev/null 2>&1; then
 fi
 
 echo "Building wos-restate-worker..."
-cargo build -p wos-server-runtime-restate --bin wos-restate-worker
+cargo build --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate --bin wos-restate-worker
 
 echo "Starting worker on :9080..."
-./target/debug/wos-restate-worker &
+"$FLOWSPEC_SERVER_ROOT/target/debug/wos-restate-worker" &
 WORKER_PID=$!
 
 # Worker serves HTTP/2 prior-knowledge; probe TCP listen (nc when available, else bash /dev/tcp on Linux).
@@ -69,10 +72,10 @@ curl -sSf "http://127.0.0.1:9070/deployments" \
 
 export WOS_RESTATE_IT_URL=http://127.0.0.1:8080
 echo "Running ingress smoke tests (ignored tests, require Restate)..."
-cargo test -p wos-server-runtime-restate ingress_create_load_probe_smoke -- --ignored --nocapture
-cargo test -p wos-server-runtime-restate ingress_drain_lifecycle_smoke -- --ignored --nocapture
-cargo test -p wos-server-runtime-restate ingress_duplicate_create_is_terminal -- --ignored --nocapture
-cargo test -p wos-server-runtime-restate ingress_malformed_event_is_terminal -- --ignored --nocapture
-cargo test -p wos-server-runtime-restate ingress_load_nonexistent_is_terminal -- --ignored --nocapture
+cargo test --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate ingress_create_load_probe_smoke -- --ignored --nocapture
+cargo test --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate ingress_drain_lifecycle_smoke -- --ignored --nocapture
+cargo test --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate ingress_duplicate_create_is_terminal -- --ignored --nocapture
+cargo test --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate ingress_malformed_event_is_terminal -- --ignored --nocapture
+cargo test --manifest-path "$FLOWSPEC_SERVER_ROOT/Cargo.toml" -p wos-server-runtime-restate ingress_load_nonexistent_is_terminal -- --ignored --nocapture
 
 echo "Restate ingress smoke OK (B.0 + B.1 + D.1 terminal)."

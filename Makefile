@@ -79,7 +79,7 @@ test-core: rust-test python-test
 
 rust-test:
 	@echo "Running Rust workspace tests (nextest)."
-	@echo "Note: discovery for large integration binaries (e.g. wos-server) can take a while before PASS lines appear."
+	@echo "Note: discovery for large integration binaries can take a while before PASS lines appear."
 	$(CARGO) nextest run --workspace --no-fail-fast
 	@echo "Running wos-conformance Restate parity slice (feature restate-tests)."
 	$(CARGO) nextest run -p wos-conformance --features restate-tests --test r6_restate_conformance_slice --no-fail-fast
