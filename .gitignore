@@ -12,3 +12,9 @@ __pycache__/
 
 # Claude Code agent infrastructure (worktrees, session metadata)
 .claude/
+
+# Node / JS build + test artifacts
+node_modules/
+dist/
+playwright-report/
+test-results/
