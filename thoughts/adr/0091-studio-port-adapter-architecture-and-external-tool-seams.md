@@ -1,6 +1,6 @@
 # ADR-0091: Studio port/adapter architecture + external-tool adapter seams
 
-**Status:** Proposed 2026-05-04
+**Status:** Proposed 2026-05-04 · Amended 2026-05-04 (validation)
 **Date:** 2026-05-04
 **Deciders:** WOS Working Group (Studio sub-team)
 **Author:** Studio authoring layer (Stage 7)
@@ -14,6 +14,131 @@
 - ADR 0089 (sibling — `ProjectionTarget` is one of these ports)
 - ADR 0090 (sibling — `ExportSink` is the destination side of `ProjectionTarget`)
 - ADR-0073 (parent — `IntakeHandoff`; precedent for adapter-shaped seams)
+- ADR-0084 (parent — PLN-0381 identity attestation Studio anchor; strict-subset placeholder for shared identity-ports)
+
+---
+
+## Amendment 2026-05-04 — Cognee deferred, server-core split, identity-ports sequencing, KnowledgeQueryService
+
+Four §2 decisions tightened or added after parent-spec validation
+(`wos-expert` + `spec-expert` 2026-05-04) and a follow-on owner
+note about Formspec's chat as a future external knowledge
+consumer.
+
+### §2.2 — KnowledgeMemoryAdapter: Cognee deferred to Stage 10+
+
+**Original (now superseded):** Cognee listed as "S8+ exploratory"
+reference adapter for `KnowledgeMemoryAdapter`.
+
+**Amended:** **Cognee is NOT used in v1.** Stage 8 ships *boring*
+reference adapters:
+- `wos-studio-knowledge-graph-pg` — Postgres recursive CTE for
+  `PolicyKnowledgeMap` traversal queries.
+- `wos-studio-retrieval-pgvector` — pgvector for `RetrievalIndex`.
+
+`KnowledgeMemoryAdapter` seam stays open at the architecture
+level; Cognee re-evaluation is a **Stage 10+ research item with
+measurable criteria** (retrieval quality vs Postgres baseline at
+agency-scale corpus, query latency, ops cost).
+
+**Rationale.** Cognee is young, opinionated, and would couple
+v1's correctness story to its evolution and governance gaps.
+Boring database tools (Postgres, pgvector) are well-understood
+operationally; one Postgres database serves canonical +
+projections + graph + retrieval. Single backup story; single
+transaction model; single ops surface. The scale where Postgres
+recursive CTEs fail is the scale where the workspace would be
+sharded anyway (typical agency regulatory graph: ~10K policy
+objects, ~50K edges).
+
+### §2.4 — Identity-ports sequencing (was §2.4 open)
+
+**Original (now superseded):** "Stage 8 default: define
+Studio-side traits with the same shape as the parent's;
+reconcile in Stage 9+ if a shared crate proves useful."
+
+**Amended:** **Build on ADR-0084 strict-subset placeholder for
+Stage 8; promote to a shared `crates/wos-identity-ports/` crate
+when parent PLN-0381 ratifies.**
+
+`studio/specs/identity-and-attestation.md` explicitly says
+Studio's job is to *bind* PLN-0381 primitives, not invent them.
+ADR-0084 already pins the Studio-side `AttestationEnvelope`
+placeholder as a strict subset of parent PLN-0381's expected
+shape, with `$ref` migration when ratified. A shared crate is
+the structural form of that convergence.
+
+**Sequencing.** Don't extract the shared crate prematurely —
+parent PLN-0381 is unratified. Stage 8 builds Studio's
+`IdentityProvider` / `KeyManager` against the ADR-0084
+placeholder; promotion to the shared crate happens **at the same
+moment** parent PLN-0381 ratifies and Studio swaps the `$ref`.
+Both products take the same migration once.
+
+### §2.5 — Stage 7 contract-code location: split at Stage 8 (was §2.1 open)
+
+**Original (now superseded):** "Stage 8 default is to extend
+`wos-studio-types`; promote to a dedicated crate only if the
+trait surface grows past what the boundary guard sustains."
+
+**Amended:** **Move `arch.rs` out of `wos-studio-types` when the
+first Stage 8 adapter lands.** Two new crates:
+- `studio/crates/wos-studio-server-core/` — port traits + adapter
+  seam traits + type aliases. Stable, slow-changing.
+- `studio/crates/wos-studio-server/` — composition root: REST
+  API, worker queue, dependency injection. Iterates fast.
+
+`wos-studio-types` returns to its original ~30-line shim role
+(`wos-core::studio_api` re-exports only).
+
+**Rationale.** Contract code (stable) and composition code
+(fast-iterating) want different crates from day one. Adapter
+crates depend on `wos-studio-server-core`, never on
+`wos-studio-types`. Build-graph stays clean. Future repo
+extraction (`git filter-repo --subdirectory studio/`) produces
+a self-consistent tree without reshape. ~2 hours of file moves +
+Cargo.toml updates today; avoids superlinear build-time growth
+forever.
+
+### §2.6 — `KnowledgeQueryService` placeholder port (NEW)
+
+A new port name reserves architectural space for Studio's
+reviewed knowledge graph being consumed by **external runtime
+readers** (distinct from `ProjectionTarget`, which is build-time
+emit).
+
+**First anticipated consumer:** Formspec's authoring chat. When
+a form designer in Formspec asks "what does the regulation say
+about household income?", Formspec's chat queries Studio's
+`KnowledgeQueryService` rather than maintaining its own knowledge
+base. Same source of truth as Studio's authoring chat — a policy
+author and a form designer working on the same SNAP redetermina-
+tion get the **same answer to the same question**.
+
+**Operations** (wire-format pending Stage 9+ first consumer):
+- Semantic search ("what regulations cover this concept?").
+- Traceability ("what authority backs this claim, and through
+  which sources?").
+- Concept resolution ("what does the registry call household
+  income, and what fields satisfy it?") — used by
+  `DataRequirement` satisfier resolution per ADR 0089 §2.8.
+- Effectivity check ("is this rule still in force on date D in
+  jurisdiction J?").
+
+**Posture.** Read-only. Same permission gating, source-use
+policy, audit-log primitives that Studio uses internally extend
+to external consumers without reshape. Wire format: REST + JSON
+(matches "documents over the wire, no Rust-API coupling" rule
+from ADR 0089 §2.4 amended).
+
+**Stage.** Placeholder at Stage 7. Lands when first external
+consumer (Formspec chat candidate) is ready; not Stage 8.
+Reference-architecture spec encodes as `SA-MUST-arch-033` and
+joins the seam catalog row.
+
+**Future consumers** beyond Formspec chat: report generators,
+briefing-memo composers, public knowledge bases, regulator-
+facing portals. Same port; same posture.
 
 ---
 

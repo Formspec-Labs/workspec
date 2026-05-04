@@ -1,6 +1,6 @@
 # ADR-0087: Studio persistence + projection model
 
-**Status:** Proposed 2026-05-04
+**Status:** Proposed 2026-05-04 · Amended 2026-05-04 (validation)
 **Date:** 2026-05-04
 **Deciders:** WOS Working Group (Studio sub-team)
 **Author:** Studio authoring layer (Stage 7)
@@ -11,6 +11,41 @@
 - ADR 0086 (parent — reference architecture)
 - ADR 0088 (sibling — AI extraction; defines AI-output recording for replay)
 - ADR 0090 (sibling — publish/export boundary)
+
+---
+
+## Amendment 2026-05-04 — Trellis-anchored workspace-genesis BLOCKED
+
+A pre-validation recommendation proposed upgrading §2.3 row-0
+genesis hash from "constant zero / workspace-derived" to
+**Trellis-anchored at workspace creation** (via `custodyHook`
+PLN-0385 four-field append). Validation against
+[`specs/kernel/custody-hook-encoding.md`](../../specs/kernel/custody-hook-encoding.md)
+returned **conflicts** on three concrete axes:
+
+1. **TypeID prefix mismatch.** `custody-hook-encoding.md:65–77`
+   requires the first append-field to be `caseId` with TypeID
+   prefix `case` decoding to UUIDv7. A workspace is not a case;
+   reusing `case_<workspaceUuid>` mis-types the seam.
+2. **Event-type namespace not registered.** `eventType` MUST
+   match `wos.<layer>.<recordKind>` where `<layer> ∈ {kernel,
+   governance, ai, assurance}`. `wos.authoring.workspace-created`
+   requires kernel-level addition of `authoring` as a fifth
+   layer — that is parent PLN-0384 work, not a Stage 8 Studio
+   decision.
+3. **Trellis Case Ledger semantics mismatch.** Trellis is
+   per-case-keyed; workspace-genesis is a non-case event with no
+   anchor target without a separate ledger scope.
+
+**Decision:** §2.3 stays as originally specified — Stage 8 ships
+**workspace-derived genesis hash** (no Trellis call). External
+workspace-genesis attestation requires a parent kernel amendment
+(registered `workspace` family prefix + `authoring` layer in
+PLN-0384's event-types taxonomy). That amendment is queued as a
+separate ADR escalation, NOT as part of Stage 8.
+
+Reference-architecture spec encodes this as `SA-MUST-arch-066`
+"Workspace-genesis external attestation — blocked at Stage 7."
 
 ---
 

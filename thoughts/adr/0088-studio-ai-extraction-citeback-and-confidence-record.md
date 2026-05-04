@@ -1,6 +1,6 @@
 # ADR-0088: Studio AI extraction — cite-back, ConfidenceRecord, structured-output stance
 
-**Status:** Proposed 2026-05-04
+**Status:** Proposed 2026-05-04 · Amended 2026-05-04 (validation)
 **Date:** 2026-05-04
 **Deciders:** WOS Working Group (Studio sub-team)
 **Author:** Studio authoring layer (Stage 7)
@@ -12,6 +12,98 @@
 - ADR 0087 (sibling — persistence; defines AI-output recording for replay)
 - ADR 0091 (sibling — adapter seams; defines `KnowledgeMemoryAdapter`)
 - Parent [`specs/ai/ai-integration.md`](../../specs/ai/ai-integration.md) §3.4 (AI extraction provenance)
+
+---
+
+## Amendment 2026-05-04 — verifier identity, policy stance, ConfidenceRecord file
+
+Three §2 decisions tightened after parent-spec validation
+(`wos-expert` 2026-05-04). All amendments make Studio's stance
+**stricter and more enforceable** than the original Stage 7
+draft.
+
+### §2.1 — ConfidenceRecord serialization location
+
+**Original (now superseded):** "serialized into a new
+`wos-studio-confidence.schema.json` `$def` (Stage 8 deliverable)" —
+the `$def` framing implied a sub-schema inside another file.
+
+**Amended:** ConfidenceRecord lands in its **own schema file**,
+`studio/schemas/wos-studio-confidence.schema.json`. Other
+schemas (`wos-studio-provenance.schema.json` AI subtype;
+review-queue UI; future scenario-confidence; future
+mapping-confidence) `$ref` into it.
+
+**Rationale.** ConfidenceRecord is multi-consumer (AI extraction
+today; review UIs and scenario reports tomorrow). A `$def`
+inside provenance schema couples its evolution to AILineage's
+release cadence and produces confusing diffs ("provenance schema
+changed for an AI-only reason"). Own file = clean change set.
+Studio schema count goes from 15 to 16 — below the operational-
+pain threshold.
+
+### §2.4 — Verifier model identity (was open question)
+
+**Original (now superseded):** "Stage 8 default: same provider,
+different temperature/seed; Stage 9+ revisits for independence."
+
+**Amended:** **Always-different model family.** Stage 8 ships two
+`ModelAdapter` instances configured as extractor + verifier with
+different model families (e.g., Claude Opus extracts, Claude
+Sonnet or GPT-5 verifies). Provider may be the same or different;
+the load-bearing axis is *model family*, not *provider*.
+
+**Rationale.** Same model family makes the same systematic
+mistakes; same-family verification rubber-stamps the extractor.
+Different temperature/seed catches transients but misses
+provider-correlated failure modes. Independence is the audit
+story; same-provider-different-model-family meets that story at
+half the integration cost of always-different-provider.
+
+**Enforcement.** WOS spec is silent on this axis (validated
+2026-05-04 against `specs/ai/ai-integration.md`,
+`specs/ai/agent-config.md`, `specs/ai/drift-monitor.md` — no
+hits for verifier / cross-model). The rule therefore lives at
+the **Studio tier**:
+- Reference-architecture spec encodes it as `SA-MUST-arch-085`
+  "Verifier model independence."
+- New Studio lint rule `RA-LINT-085` (S2 tier) MUST fire on
+  workspace AI configuration if extractor and verifier share
+  a model family.
+
+Without lint enforcement, the rule erodes silently across
+refactors. With it, the rule is durable.
+
+### §2.6 — Source / model-use policy enforcement (was open question)
+
+**Original (now superseded):** "Stage 8 default: imperative checks
+(small, audit-able); Stage 9+ revisits if policy proliferation
+justifies a declarative language."
+
+**Amended:** **Typed declarative Rust structs at the Studio API
+boundary.** Define `SourceUsePolicy` and `ModelUsePolicy` as
+typed enums + structs with compile-time exhaustive matching.
+Per-workspace policies serialize as JSON; load at workspace boot;
+cache in memory; sign in the ApprovalPackage.
+
+**Rationale.** Imperative checks scattered across handlers are
+unmaintainable past ~10 rules. OPA/Cedar industrial-grade policy
+infrastructure is overkill for "which AI can read which sources."
+Typed structs split the difference: compile-time exhaustiveness,
+zero runtime infra, audit-friendly.
+
+Source/model-use policy is **authoring-tier**, not workflow-
+runtime; it does NOT violate the parent "FEL is the only
+expression language" commitment (validated 2026-05-04 — FEL
+binds workflow guards, not Studio admission control). It does
+NOT displace `PolicyEngineBinding` (which composes at workflow
+runtime).
+
+**Promotion path.** `PolicyEngineBinding` (OPA/Cedar/XACML) is
+admitted at scale (>50 rules per workspace, or
+attribute-based-access requirements). Until then, typed structs.
+
+Reference-architecture spec encodes this as `SA-MUST-arch-086`.
 
 ---
 

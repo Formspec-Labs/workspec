@@ -96,9 +96,11 @@ where one exists; new abstractions are justified inline.
 | Component | Owner spec / artifact |
 |---|---|
 | **WorkflowIntent Authoring** | [`workflow-intent.md`](workflow-intent.md) |
-| **Form Intent Authoring** | NOT IN STUDIO — Formspec owns form definition. Studio projects via the Formspec ProjectionTarget adapter. |
-| **DecisionRule + DecisionTable Authoring** | [`policy-object-model.md`](policy-object-model.md) §"DecisionRule"; [`binding-and-integration.md`](binding-and-integration.md) §"DecisionTable" + §"DMNImport" |
-| **Data Requirements Authoring** | [`../VISION.md`](../VISION.md) §9.5 (DataElement). **OPEN — see §"Open questions":** whether to introduce a unified `DataRequirement` first-class object. |
+| **Form Intent Authoring** | NOT IN STUDIO — Formspec owns form definition (per `specs/core/spec.md` AD-01 "Schema is data, not code"). Studio's Form Projection emits Formspec source JSON over the wire (per ADR 0089 §2.4 amended 2026-05-04); no Rust-API coupling between products. |
+| **DecisionModel Authoring** (knowledge tier) | Unified per ADR 0089 §2.7 (amended 2026-05-04): one knowledge-tier `DecisionModel` PolicyObject subsumes the prior `DecisionRule` + the structured form of `DMNImport`. Rule-form vs table-form is a slot, not a separate kind. Cited in [`policy-object-model.md`](policy-object-model.md) at the next spec revision. |
+| **DecisionBinding Authoring** (binding tier) | Unified per ADR 0089 §2.7: one binding-tier `DecisionBinding` subsumes the prior `DecisionTable` (multi-row form) and projects to kernel `decisionTables[*]` + `DecisionTableGuard` per Kernel §4.5.1. Cited in [`binding-and-integration.md`](binding-and-integration.md) at the next spec revision. |
+| **DMN one-pass importer** | `DMNImport` becomes a one-way DMN→DecisionModel transpiler at the boundary; the Studio-internal artifact is a DecisionModel (knowledge-tier), not a parallel kind. Parent "DMN one-way import only" commitment (Kernel §4.5.1.5) preserved. |
+| **Requirement family Authoring** | First-class `DataRequirement` PolicyObject kind (per ADR 0089 §2.8 amended 2026-05-04) sibling to existing `EvidenceRequirement`. Future siblings reserved: `AccessRequirement`, `IdentityRequirement`. **Satisfier seam:** a Requirement points at the artifact that satisfies it via Formspec `semanticType` (registry-mediated, per `schemas/definition.schema.json:682`) or an `x-wos-satisfies` extension on the Definition — NEVER raw field-key equality (which collapses on multi-form / multi-jurisdiction stacks). |
 | **Integration Binding Authoring** | [`binding-and-integration.md`](binding-and-integration.md) |
 
 #### Validation layer
@@ -114,8 +116,8 @@ where one exists; new abstractions are justified inline.
 | Component | Owner spec / artifact |
 |---|---|
 | **Workflow Projection** | [`compiler-contract.md`](compiler-contract.md); impl `wos-studio-compiler` (9 phases) |
-| **Form Projection** | [`../../crates/wos-formspec-binding/`](../../crates/wos-formspec-binding) (intake-handoff seam, ADR 0073). Stage 8 wires Studio→Formspec authoring projection. |
-| **Decision Projection** | Pending DecisionModel resolution (see §"Open questions") |
+| **Form Projection** | Studio emits Formspec source JSON (per ADR 0089 §2.4 amended); Formspec compiler consumes it like any author-emitted Definition. [`../../crates/wos-formspec-binding/`](../../crates/wos-formspec-binding) covers the existing intake-handoff seam (ADR 0073); Stage 8 adds the authoring-time emit path. |
+| **Decision Projection** | Emits unified DecisionModel + DecisionBinding (per ADR 0089 §2.7); single emit pipeline replaces the three-kind composition. |
 | **Integration Binding Projection** | [`binding-and-integration.md`](binding-and-integration.md); emit pipeline pending |
 | **ApprovalPackage Builder** | [`review-and-approval.md`](review-and-approval.md) |
 | **ExportBundle Builder** | [`compiler-contract.md`](compiler-contract.md) Phase 9 |
@@ -214,15 +216,16 @@ boundary guard test mirroring
 adapter seams; they MUST NOT become normative dependencies. Stage 7
 specifies the seams; Stage 8+ ships reference adapters.
 
-| Seam | Purpose | Reference-adapter candidates |
-|---|---|---|
-| `KnowledgeMemoryAdapter` | Vector + graph memory for retrieval-assisted authoring | Cognee (prototype only — see governance caveat) |
-| `DataConnectorAdapter` | Source ingestion (corpora, systems-of-record) | dlt, Airbyte |
-| `MetadataCatalogAdapter` | Catalog / schema registry for systems-of-record | OpenMetadata, DataHub |
-| `LineageAdapter` | Data-lineage interop | OpenLineage |
-| `DataContractAdapter` | Data-contract emission | ODCS, Data Contract spec |
-| `QualityCheckAdapter` | Data-quality checks over ingested sources / projected outputs | Great Expectations, Soda |
-| `ProjectionTarget` (≡ `ExportSink`) | Output sink (see §"Projection target model") | WOS, Formspec, decision, integration, scenario, approval, export-bundle, future report |
+| Seam | Purpose | Reference-adapter candidates | Earliest stage |
+|---|---|---|---|
+| `KnowledgeMemoryAdapter` | Vector + graph memory for retrieval-assisted authoring | Cognee (research-only; see caveat) | **Stage 10+ research item** with measurable criteria. Not Stage 8. |
+| `DataConnectorAdapter` | Source ingestion (corpora, systems-of-record) | dlt, Airbyte | Stage 9+ |
+| `MetadataCatalogAdapter` | Catalog / schema registry for systems-of-record | OpenMetadata, DataHub | Stage 9+ |
+| `LineageAdapter` | Data-lineage interop | OpenLineage | Stage 9+ |
+| `DataContractAdapter` | Data-contract emission | ODCS, Data Contract spec | Stage 9+ |
+| `QualityCheckAdapter` | Data-quality checks over ingested sources / projected outputs | Great Expectations, Soda | Stage 9+ |
+| `ProjectionTarget` (≡ `ExportSink`) | Output sink (see §"Projection target model") | WOS, Formspec, decision, integration, scenario, approval, export-bundle, future report | Stage 7 contract; Stage 8 first impl |
+| `KnowledgeQueryService` (read-only) | Runtime knowledge queries by external consumers (Formspec chat, future reports / briefings / public knowledge bases). Distinct from `ProjectionTarget` (build-time emit) — this is runtime read. | Studio-internal REST + JSON over the wire | **Placeholder** — landed when first external consumer (Formspec chat candidate) is ready; not Stage 8. |
 
 `SA-MUST-arch-031` — Studio's structured-output stance is JSON
 Schema + OpenAPI first. This matches the existing schema-first WOS
@@ -251,6 +254,29 @@ Until validated, the canonical source-of-truth remains Studio's
 typed model (`wos-studio-model`) + Source Vault + Policy Knowledge
 Map; external knowledge-memory sits behind the adapter as a
 retrieval/index accelerant.
+
+**v1 stance (amended 2026-05-04 per ADR 0091):** Stage 8 ships
+*boring* reference adapters for graph + retrieval — Postgres
+recursive CTE for `PolicyKnowledgeMap`, pgvector for
+`RetrievalIndex`. Cognee is NOT used in v1. Re-evaluation is a
+Stage 10+ research item with measurable criteria (retrieval
+quality vs Postgres baseline, query latency at agency-scale
+corpus, ops cost). The seam stays open; the substrate choice
+defers.
+
+`SA-MUST-arch-033` — `KnowledgeQueryService` is a read-only
+runtime port (NOT a build-time `ProjectionTarget`) for external
+consumers querying Studio's reviewed knowledge graph. Stage 7
+names it as a placeholder; it lands when the first external
+consumer (e.g., Formspec's authoring chat) is ready. Operations:
+semantic search, traceability ("what authority backs this claim"),
+concept resolution ("what does the registry call household
+income, and what fields satisfy it"), effectivity check ("is this
+rule still in force on date D in jurisdiction J"). Wire format:
+REST + JSON; same posture as the rest of Studio's external
+surface; no Rust-API coupling. Same permission gating, source-use
+policy, and audit-log primitives that Studio uses internally
+extend to external consumers without reshape.
 
 ### Projection target model
 
@@ -346,6 +372,20 @@ lines 15–28). Studio still requires:
 - `SA-MUST-arch-065` — Source / model-use policy controls (which
   sources may feed which extractions; which models are permitted;
   per-tenant policy bindings).
+- `SA-MUST-arch-066` — **Workspace-genesis external attestation —
+  blocked at Stage 7.** External anchoring of workspace existence
+  via the WOS `custodyHook` seam was evaluated and rejected for
+  v1 (per ADR 0087 amendment 2026-05-04, validated against
+  `specs/kernel/custody-hook-encoding.md` 2026-05-04). The
+  `custodyHook` four-field append is per-case-keyed (TypeID
+  prefix `case`, eventType `wos.<layer>.<recordKind>` with layer
+  ∈ {kernel, governance, ai, assurance}); workspace-genesis is a
+  non-case event with no registered prefix or layer namespace.
+  Stage 8 anchors the ledger genesis to a workspace-derived hash
+  only (per ADR 0087 §2.3); external attestation requires a
+  parent kernel amendment (registered `workspace` family prefix +
+  `authoring` layer in PLN-0384's event-types taxonomy) tracked
+  as a separate ADR escalation.
 
 #### Authoring invariants
 
@@ -378,6 +418,27 @@ lines 15–28). Studio still requires:
   retrieval set hash, validator verdicts, verifier result, timing.
 - `SA-MUST-arch-084` — Human approval before durable high-impact
   behavior.
+- `SA-MUST-arch-085` — **Verifier model independence.** The verifier
+  invocation (per `SA-MUST-arch-082` confidence record) MUST run a
+  **different model family** from the primary extractor (e.g.,
+  Claude Opus extracts, Claude Sonnet or GPT-5 verifies). Same-
+  model-family verification rubber-stamps the extractor's
+  systematic biases; family independence is what makes the second
+  read genuinely independent. Provider may be the same or
+  different; the load-bearing axis is *model family*, not
+  *provider*. WOS spec is currently silent on this axis (per ADR
+  0088 amendment 2026-05-04 + parent validation 2026-05-04); this
+  invariant is Studio-side and enforced by Studio lint rule
+  `RA-LINT-085` against workspace AI configuration.
+- `SA-MUST-arch-086` — **Source / model-use policy** is enforced
+  at the Studio API boundary via typed declarative policy structs
+  in Rust (`SourceUsePolicy`, `ModelUsePolicy`), per ADR 0088 §2.6
+  amended 2026-05-04. Promotion to `PolicyEngineBinding`
+  (OPA/Cedar) is admitted at scale (>50 rules or attribute-based
+  access) but not required at v1. The FEL-as-only-expression-
+  language commitment binds workflow-runtime guards, not
+  Studio-tier admission control (per parent validation
+  2026-05-04).
 
 #### Replay invariant
 
@@ -542,52 +603,44 @@ Stage 8+ adapters realize them:
 
 ## Open questions
 
-These block sections of the implementation; each must resolve
-before the corresponding adapter can ship.
+Most prior open questions resolved 2026-05-04 after parent-spec
+validation by `wos-expert` + `spec-expert` (Formspec). Resolutions
+are encoded in ADRs 0087–0091 amendments and in the new
+`SA-MUST-arch-085`, `SA-MUST-arch-086`, `SA-MUST-arch-066`,
+`SA-MUST-arch-033`. The remainder is genuinely open.
 
-### Repo-grounded
+### Resolved 2026-05-04
 
-- **DecisionModel unification.** Today: `DecisionRule` (policy
-  object) + `DecisionTable` + `DMNImport` (binding). Should Stage
-  7 introduce a unified `DecisionModel` object? Affects Decision
-  Projection and the projection-target catalog.
-- **DataRequirement first-class status.** `DataElement` exists
-  ([`../VISION.md`](../VISION.md) §9.5); should Stage 7 promote
-  `DataRequirement` to a first-class object distinct from
-  `EvidenceRequirement`? Affects Stage 8 slice.
-- **Authoring Ledger persistence port shape.** Record exists; port
-  signatures, signing algorithm (Ed25519 per actor vs HMAC), and
-  hash-chain framing pending — owned by ADR 0087.
-- **Form-projection adapter shape.** Wrap Formspec's existing
-  compiler with an adapter, or stand up a Studio-side intermediate
-  representation? `wos-formspec-binding` covers intake handoff,
-  not authoring projection.
-- **Studio dependency on parent `wos-server-ports`.** Does Studio
-  share `IdentityProvider` / `KeyManager` definitions with
-  `crates/wos-server`, or define its own?
-- **Stage 7 contract-code location.** New crate
-  `studio/crates/wos-studio-server-core/` (or analogous), or
-  extension of `wos-studio-types`? Stage 7 starts with the
-  conservative choice (extend `wos-studio-types`); Stage 8 may
-  promote to a dedicated crate.
+| Question | Resolution | Owner |
+|---|---|---|
+| DecisionModel unification | Unify within tier: knowledge-tier `DecisionModel` + binding-tier `DecisionBinding`; `DMNImport` becomes a one-pass importer producing `DecisionModel` | ADR 0089 §2.7 |
+| DataRequirement first-class status | Promoted to first-class PolicyObject kind; sibling to `EvidenceRequirement`; satisfier seam via `semanticType` / `x-wos-satisfies`, NOT raw field-key equality | ADR 0089 §2.8 |
+| Form-projection adapter shape | Studio emits Formspec source JSON; Formspec compiler treats it as ordinary author-emitted Definition; zero Rust-API coupling | ADR 0089 §2.4 (amended) |
+| Verifier model identity | Always-different model family (`SA-MUST-arch-085`); enforced by Studio lint `RA-LINT-085` | ADR 0088 §2.4 (amended) |
+| Source / model-use policy enforcement | Typed declarative Rust structs at API boundary (`SA-MUST-arch-086`); promote to `PolicyEngineBinding` only at scale | ADR 0088 §2.6 (amended) |
+| ConfidenceRecord schema location | Own file: `wos-studio-confidence.schema.json`; not a `$def` in another schema | ADR 0088 §2.1 (amended) |
+| KnowledgeMemoryAdapter / Cognee | Skip for v1; Postgres recursive CTE + pgvector as boring reference adapters; Cognee Stage 10+ research item with measurable criteria | ADR 0091 §2.2 (amended); `SA-MUST-arch-032` v1 stance |
+| Stage 7 contract-code location | Split to `wos-studio-server-core` when first adapter lands at Stage 8; `arch.rs` moves out of `wos-studio-types` | ADR 0091 §2.5 (amended) |
+| Studio dependency on parent identity ports | Build on ADR-0084 strict-subset placeholder; promote to shared `wos-identity-ports` crate when parent PLN-0381 ratifies | ADR 0091 §2.4 (amended) |
+| Workspace-genesis external attestation via `custodyHook` | **BLOCKED** at Stage 7 — `custodyHook` is per-case-keyed; workspace-genesis is non-case event with no registered prefix or layer namespace; deferred pending parent kernel amendment (PLN-0384 layer expansion) | `SA-MUST-arch-066`; ADR 0087 §2.3 (amended) |
 
-### External-tool grounded
+### Still open
 
-- **Cognee under governance.** Pre-flight checklist
-  (`SA-MUST-arch-032`) must be validated before any production
-  wiring.
-- **Verifier model identity.** Same provider as primary extractor,
-  or always different?
-- **`ConfidenceRecord` schema.** Exact field set — ADR 0088 owns.
-- **Source / model-use policy enforcement.** Declarative policy
-  language vs imperative checks at the API boundary?
-
-### Maximalist directions
-
-Continuous corpus subscriptions (`CorpusFeed`); multi-modal
-ingestion (parser extensions); cross-org federation
-(`PolicyKnowledgeMap` + ledger interop); per-tenant model
-fine-tuning; runtime-observation feedback (wos-server → Studio).
+- **Authoring Ledger persistence port shape — verifier of chain
+  on cold reads.** Stage 8 default: per-row Ed25519 signature +
+  prev-hash chain (per ADR 0087 §2.3–2.4). Cold-read verifier
+  performance + pagination shape pending Stage 8 wire-up.
+- **`KnowledgeQueryService` operations contract.** `SA-MUST-arch-033`
+  names the operations; the wire-format JSON Schema (semantic
+  search response, traceability response, concept resolution
+  response, effectivity response) lands when the first external
+  consumer (Formspec chat candidate) is ready, not Stage 8.
+- **Maximalist:** continuous corpus subscriptions (`CorpusFeed`);
+  multi-modal ingestion (parser extensions); cross-org federation
+  (`PolicyKnowledgeMap` + ledger interop); per-tenant model
+  fine-tuning; runtime-observation feedback (wos-server → Studio);
+  external workspace-genesis attestation (gated on PLN-0384 kernel
+  amendment per `SA-MUST-arch-066`).
 
 ## Cross-references
 
