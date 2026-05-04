@@ -1,9 +1,0 @@
-[
-  ["wf.json", {
-    "$wosStudioWorkspace": "1.0",
-    "id": "ws-1",
-    "reviewerRoles": [
-      {"id": "compliance", "requiredForPublication": true}
-    ]
-  }]
-]

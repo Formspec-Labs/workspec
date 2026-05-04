@@ -1,7 +1,0 @@
-[
-  ["wfi.json", {
-    "$wosStudioWorkflowIntent": "1.0",
-    "id": "wfi-1",
-    "protectedCategoryRefs": ["age", "race"]
-  }]
-]
