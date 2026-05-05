@@ -7,16 +7,34 @@
 //! it, and asserts key structural properties.
 
 use std::fs;
+use std::path::{Path, PathBuf};
 use wos_core::KernelDocument;
+
+fn workspace_root() -> PathBuf {
+    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root is two levels above crates/wos-core")
+        .to_path_buf();
+
+    let cwd = std::env::current_dir().ok();
+    for candidate in [Some(manifest_root), cwd].into_iter().flatten() {
+        for ancestor in candidate.ancestors() {
+            if ancestor.join("fixtures").is_dir()
+                && ancestor.join("schemas/wos-workflow.schema.json").is_file()
+            {
+                return ancestor.to_path_buf();
+            }
+        }
+    }
+    panic!("could not resolve workspace root with fixtures/ and schemas/");
+}
 
 /// Loads and deserializes a kernel fixture by filename.
 fn load_fixture(name: &str) -> KernelDocument {
-    let path = format!(
-        "{}/fixtures/kernel/{name}",
-        env!("CARGO_MANIFEST_DIR").replace("/crates/wos-core", "")
-    );
+    let path = workspace_root().join("fixtures/kernel").join(name);
     let json =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
     serde_json::from_str(&json)
         .unwrap_or_else(|e| panic!("failed to deserialize fixture {name}: {e}"))
 }
@@ -568,10 +586,7 @@ fn non_kernel_fixtures_do_not_parse() {
         "purchase-order-provenance.json",
     ];
     for name in non_kernel {
-        let path = format!(
-            "{}/fixtures/kernel/{name}",
-            env!("CARGO_MANIFEST_DIR").replace("/crates/wos-core", "")
-        );
+        let path = workspace_root().join("fixtures/kernel").join(name);
         let json = fs::read_to_string(&path).unwrap();
         let result: Result<KernelDocument, _> = serde_json::from_str(&json);
         assert!(result.is_err(), "{name} should not parse as KernelDocument");

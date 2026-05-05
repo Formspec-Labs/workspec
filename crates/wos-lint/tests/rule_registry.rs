@@ -258,11 +258,23 @@ fn lint_registry_src() -> String {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let manifest_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
         .expect("workspace root is two levels above CARGO_MANIFEST_DIR")
-        .to_path_buf()
+        .to_path_buf();
+
+    let cwd = std::env::current_dir().ok();
+    for candidate in [Some(manifest_root), cwd].into_iter().flatten() {
+        for ancestor in candidate.ancestors() {
+            if ancestor.join("fixtures").is_dir()
+                && ancestor.join("schemas/wos-workflow.schema.json").is_file()
+            {
+                return ancestor.to_path_buf();
+            }
+        }
+    }
+    panic!("could not resolve workspace root with fixtures/ and schemas/");
 }
 
 fn collect_test_source_text() -> String {

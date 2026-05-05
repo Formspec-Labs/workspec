@@ -2831,11 +2831,23 @@ fn ai023_severity_is_error() {
 }
 
 fn wos_spec_workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
-        .expect("wos-spec workspace root is two levels above wos-lint crate")
-        .to_path_buf()
+        .expect("workspace root is two levels above wos-lint crate")
+        .to_path_buf();
+
+    let cwd = std::env::current_dir().ok();
+    for candidate in [Some(manifest_root), cwd].into_iter().flatten() {
+        for ancestor in candidate.ancestors() {
+            if ancestor.join("fixtures").is_dir()
+                && ancestor.join("schemas/wos-workflow.schema.json").is_file()
+            {
+                return ancestor.to_path_buf();
+            }
+        }
+    }
+    panic!("could not resolve workspace root with fixtures/ and schemas/");
 }
 
 /// K-049 LoadBearing fixture: `k-049-load-bearing-self-loop.json`

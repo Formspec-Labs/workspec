@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use wos_core::HoldType;
@@ -19,9 +19,29 @@ const STANDARD_HOLD_TYPE_TOKENS: &[&str] = &[
     "legal-hold",
 ];
 
+fn workspace_root() -> PathBuf {
+    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root is two levels above crates/wos-core")
+        .to_path_buf();
+
+    let cwd = std::env::current_dir().ok();
+    for candidate in [Some(manifest_root), cwd].into_iter().flatten() {
+        for ancestor in candidate.ancestors() {
+            if ancestor.join("fixtures").is_dir()
+                && ancestor.join("schemas/wos-workflow.schema.json").is_file()
+            {
+                return ancestor.to_path_buf();
+            }
+        }
+    }
+    panic!("could not resolve workspace root with fixtures/ and schemas/");
+}
+
 #[test]
 fn standard_hold_types_match_workflow_schema_enum() {
-    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schemas/wos-workflow.schema.json");
+    let schema_path = workspace_root().join("schemas/wos-workflow.schema.json");
     let raw = fs::read_to_string(&schema_path)
         .unwrap_or_else(|e| panic!("read {}: {e}", schema_path.display()));
     let root: Value = serde_json::from_str(&raw).expect("workflow schema JSON");
