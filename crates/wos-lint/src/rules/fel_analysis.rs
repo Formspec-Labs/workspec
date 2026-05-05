@@ -33,7 +33,7 @@ use std::sync::LazyLock;
 
 use fel_core::{
     ast::{BinaryOp, Expr, PathSegment, UnaryOp},
-    builtin_function_catalog, parse,
+    builtin_function_catalog, builtin_function_catalog_for, parse, Package,
 };
 use serde_json::Value;
 
@@ -626,7 +626,8 @@ fn check_only_builtin_functions(
     path: &str,
     diagnostics: &mut Vec<LintDiagnostic>,
 ) {
-    let builtin_names: HashSet<&str> = builtin_function_catalog().iter().map(|e| e.name).collect();
+    let builtin_names: HashSet<&str> =
+        builtin_function_catalog_for(Package::Universal).map(|e| e.name).collect();
 
     walk_expr(expr, &mut |e| {
         if let Expr::FunctionCall { name, .. } = e {
