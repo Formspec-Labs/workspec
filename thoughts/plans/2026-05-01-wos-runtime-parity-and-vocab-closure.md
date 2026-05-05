@@ -27,7 +27,7 @@
 
 Per project discipline (see parent CLAUDE.md, "Sequential ADRs, not phased deliverables"), this plan does not number phases. Each item is independently executable and gated only by data dependencies, not calendar. Items mature through ratchets (`schema_doc_zero_regression`, `open_string_leaf_ratchet`, conformance suite, `cargo nextest run --workspace`), not through a Gantt position.
 
-Repo-hygiene items (CI parity, `wos-server*` → `flowspec-server`, `formspec-internal` rename, `focusconsulting` submodule deletion) are owned by parent [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../../../thoughts/plans/2026-05-01-platform-repository-architecture.md); this plan does not duplicate them.
+Repo-hygiene items (CI parity, `wos-server*` → `workspec-server`, `formspec-internal` rename, `focusconsulting` submodule deletion) are owned by parent [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../../../thoughts/plans/2026-05-01-platform-repository-architecture.md); this plan does not duplicate them.
 
 **Pre-flight:** treat baselines and file:line citations as authoritative when committed. Reference state by `git log --oneline -- wos-spec/` for history; the durable inventory artifact (**C0**) and `open_string_leaf_ratchet.rs` are the load-bearing records for open-leaf work.
 

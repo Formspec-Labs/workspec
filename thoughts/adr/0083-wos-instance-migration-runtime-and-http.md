@@ -29,7 +29,7 @@ Lands as a method on the existing `WosRuntime` (NOT a separate trait/crate). `Mi
 
 ### D2 — HTTP route home (settled 2026-05-01)
 
-`POST /api/instances/:id/migrate` lives in `wos-server` per WS-042 (currently in `crates/wos-server/`). Once `thoughts/plans/2026-05-01-platform-repository-architecture.md` §3.2 (`wos-server*` → `flowspec-server`) lands, the route relocates with the crate; the API shape is stable.
+`POST /api/instances/:id/migrate` lives in `wos-server` per WS-042 (currently in `crates/wos-server/`). Once `thoughts/plans/2026-05-01-platform-repository-architecture.md` §3.2 (`wos-server*` → `workspec-server`) lands, the route relocates with the crate; the API shape is stable.
 
 **Why:** Consistent with all other instance-lifecycle routes (`/events`, `/drain`, `/holds`) which live in `wos-server/src/http/instances.rs`. Route stability across repository rename is the established convention.
 
@@ -74,4 +74,4 @@ Landed in-tree:
 - WOS Kernel `spec.md` §9.6, §11.1–§11.2
 - [`../../crates/wos-server/TODO.md`](../../crates/wos-server/TODO.md) — **WS-042**
 - [`../../T4-TODO.md`](../../T4-TODO.md) — vendor `x-*` assurance / posture follow-on
-- [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../plans/2026-05-01-platform-repository-architecture.md) — §3.2 `wos-server*` → `flowspec-server` rename
+- [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../plans/2026-05-01-platform-repository-architecture.md) — §3.2 `wos-server*` → `workspec-server` rename

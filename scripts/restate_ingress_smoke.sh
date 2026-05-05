@@ -7,12 +7,12 @@
 # `/dev/tcp` (GNU/Linux bash only; macOS /bin/bash lacks /dev/tcp).
 #
 # Run from any cwd; resolves the wos-spec workspace root from this script's location.
-# wos-server-runtime-restate has moved to flowspec-server (chore 3.2); cargo commands
-# below use --manifest-path to address the flowspec-server workspace instead.
+# wos-server-runtime-restate has moved to workspec-server (chore 3.2); cargo commands
+# below use --manifest-path to address the workspec-server workspace instead.
 set -euo pipefail
 
 WOS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FLOWSPEC_SERVER_ROOT="$(cd "$WOS_ROOT/../flowspec-server" && pwd)"
+FLOWSPEC_SERVER_ROOT="$(cd "$WOS_ROOT/../workspec-server" && pwd)"
 cd "$WOS_ROOT"
 
 RESTATE_IMAGE="${WOS_RESTATE_SERVER_IMAGE:-docker.restate.dev/restatedev/restate:1.6.2}"
