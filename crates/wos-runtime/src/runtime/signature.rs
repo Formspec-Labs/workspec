@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use fel_core::{evaluate, has_error_diagnostics, parse, types::FelValue};
+use fel_core::{evaluate, has_error_diagnostics, parse, types::Value};
 use serde::{Deserialize, Serialize};
 use wos_core::context::EvalContext;
 use wos_core::instance::{ActiveTask, CaseInstance, PendingEvent};
@@ -1422,7 +1422,7 @@ fn step_selected(
             "signature guard '{guard}' produced evaluation errors"
         )));
     }
-    Ok(matches!(result.value, FelValue::Boolean(true)))
+    Ok(matches!(result.value, Value::Boolean(true)))
 }
 
 fn assurance_rank(value: &str) -> u8 {

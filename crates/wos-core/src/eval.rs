@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use fel_core::{
-    ast::Expr, dependencies::extract_dependencies, evaluate, fel_to_json, parse, types::FelValue,
+    ast::Expr, dependencies::extract_dependencies, evaluate, fel_to_json, parse, types::Value,
 };
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -1302,7 +1302,7 @@ impl Evaluator {
             .map_err(|e| EvalError::Guard(format!("parse error in '{guard_expr}': {e}")))?;
 
         let result = evaluate(&parsed, &env);
-        let passed = matches!(result.value, FelValue::Boolean(true));
+        let passed = matches!(result.value, Value::Boolean(true));
 
         let inputs = build_guard_inputs(&parsed, &self.case_state, event_data);
         self.guard_evaluations.push(GuardEvaluation {
@@ -1370,7 +1370,7 @@ impl Evaluator {
             message: format!("breakCondition parse error in '{expression}': {e}"),
         })?;
         let result = evaluate(&parsed, &env);
-        Ok(matches!(result.value, FelValue::Boolean(true)))
+        Ok(matches!(result.value, Value::Boolean(true)))
     }
 
     /// Walk a compound `body` substate graph to a Final state (Sub-PR D-5).
@@ -1779,7 +1779,7 @@ impl Evaluator {
         let outer_ctx = EvalContext::from_case_state(&self.case_state, event_data);
         let outer_env = outer_ctx.to_fel_environment();
 
-        let mut row_scope_fields: HashMap<String, FelValue> = HashMap::new();
+        let mut row_scope_fields: HashMap<String, Value> = HashMap::new();
         for input_decl in &table.inputs {
             let binding_expr = guard.input_bindings.get(&input_decl.name).ok_or_else(|| {
                 EvalError::Guard(format!(
@@ -1816,8 +1816,8 @@ impl Evaluator {
                 })?;
                 let result = evaluate(&parsed, &row_env);
                 match result.value {
-                    FelValue::Boolean(true) => {}
-                    FelValue::Boolean(false) => {
+                    Value::Boolean(true) => {}
+                    Value::Boolean(false) => {
                         all_true = false;
                         break;
                     }
@@ -1969,7 +1969,7 @@ impl Evaluator {
         })?;
         let result = evaluate(&parsed_out, &row_env);
         let passed = match result.value {
-            FelValue::Boolean(b) => b,
+            Value::Boolean(b) => b,
             other => {
                 return Err(EvalError::Guard(format!(
                     "K-053: decisionTable output cell on row '{}' (table '{table_ref}') did not evaluate to boolean (got {})",
@@ -2603,7 +2603,7 @@ fn build_guard_inputs(
 /// expression and groups by namespace), the row scope is the complete
 /// per-row evaluation context for the table — namespace-free by spec
 /// (Kernel §4.5.1.3) — so the snapshot mirrors it directly.
-fn row_scope_to_json(scope: &HashMap<String, FelValue>) -> serde_json::Value {
+fn row_scope_to_json(scope: &HashMap<String, Value>) -> serde_json::Value {
     let mut out = serde_json::Map::new();
     for (name, value) in scope {
         out.insert(name.clone(), fel_to_json(value));

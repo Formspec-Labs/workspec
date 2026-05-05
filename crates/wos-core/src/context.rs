@@ -68,24 +68,24 @@ impl EvalContext {
     ///
     /// Flattens the typed context into the flat namespace that FEL expects.
     pub fn to_fel_environment(&self) -> fel_core::MapEnvironment {
-        use fel_core::types::FelValue;
+        use fel_core::types::Value;
 
         let mut fields = HashMap::new();
 
         // Case file as object + dotted paths for both access patterns.
-        let case_pairs: Vec<(String, FelValue)> = self
+        let case_pairs: Vec<(String, Value)> = self
             .case_file
             .iter()
             .map(|(k, v)| (k.clone(), json_to_fel_value(v)))
             .collect();
-        fields.insert("caseFile".to_string(), FelValue::Object(case_pairs.clone()));
+        fields.insert("caseFile".to_string(), Value::Object(case_pairs.clone()));
         for (k, v) in &case_pairs {
             fields.insert(format!("caseFile.{k}"), v.clone());
         }
 
         // Event data as object + dotted paths.
         if let Some(event_val) = &self.event {
-            let event_pairs: Vec<(String, FelValue)> = event_val
+            let event_pairs: Vec<(String, Value)> = event_val
                 .as_object()
                 .map(|obj| {
                     obj.iter()
@@ -93,7 +93,7 @@ impl EvalContext {
                         .collect()
                 })
                 .unwrap_or_default();
-            fields.insert("event".to_string(), FelValue::Object(event_pairs.clone()));
+            fields.insert("event".to_string(), Value::Object(event_pairs.clone()));
             for (k, v) in &event_pairs {
                 fields.insert(format!("event.{k}"), v.clone());
             }
@@ -101,14 +101,14 @@ impl EvalContext {
 
         // Instance metadata as object + dotted paths.
         if !self.instance.is_empty() {
-            let instance_pairs: Vec<(String, FelValue)> = self
+            let instance_pairs: Vec<(String, Value)> = self
                 .instance
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_fel_value(v)))
                 .collect();
             fields.insert(
                 "instance".to_string(),
-                FelValue::Object(instance_pairs.clone()),
+                Value::Object(instance_pairs.clone()),
             );
             for (k, v) in &instance_pairs {
                 fields.insert(format!("instance.{k}"), v.clone());
@@ -128,6 +128,6 @@ impl EvalContext {
 ///
 /// Delegates to `fel_core::json_to_fel` which correctly handles all
 /// JSON types including nested objects and arrays.
-fn json_to_fel_value(value: &serde_json::Value) -> fel_core::FelValue {
+fn json_to_fel_value(value: &serde_json::Value) -> fel_core::Value {
     fel_core::json_to_fel(value)
 }

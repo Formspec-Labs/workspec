@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 
-use fel_core::{MapEnvironment, evaluate, json_to_fel, parse, types::FelValue};
+use fel_core::{MapEnvironment, evaluate, json_to_fel, parse, types::Value};
 
 use crate::model::ai::{AIIntegrationDocument, DeonticConstraints, NullBehavior, ViolationAction};
 use crate::model::kernel::ImpactLevel;
@@ -685,9 +685,9 @@ fn evaluate_fel_expression(
     let env = MapEnvironment::with_fields(fields);
     let result = evaluate(&parsed, &env);
     match result.value {
-        FelValue::Boolean(true) => FelResult::True,
-        FelValue::Boolean(false) => FelResult::False,
-        FelValue::Null => FelResult::Null,
+        Value::Boolean(true) => FelResult::True,
+        Value::Boolean(false) => FelResult::False,
+        Value::Null => FelResult::Null,
         _ => FelResult::False,
     }
 }
