@@ -3,18 +3,15 @@
 # Variables
 CARGO = cargo
 PYTEST = python3 -m pytest
-NPM = npm
-CASE_PORTAL_DIR = case-portal
 
 # Targets
 .PHONY: all build test test-core lint clean help \
 	rust-build rust-test rust-check \
 	python-test \
-	case-portal-build case-portal-test case-portal-lint case-portal-clean case-portal-install case-portal-types \
 	postgres-up postgres-down \
 	restate-ingress-smoke
 
-# Default target: build and test everything (parent Rust + Python + case-portal)
+# Default target: build and test everything (Rust + Python schema regression)
 all: build test
 
 help:
@@ -24,9 +21,9 @@ help:
 	@echo ""
 	@echo "Primary Targets:"
 	@echo "  all                  Build and test everything"
-	@echo "  build                Build parent Rust workspace and Case Portal frontend"
-	@echo "  test                 Run all tests (parent Rust, parent Python, Case Portal)"
-	@echo "  test-core            Run parent Rust + Python tests only (skip Case Portal)"
+	@echo "  build                Build the Rust workspace"
+	@echo "  test                 Run all tests (Rust, Python schema regression)"
+	@echo "  test-core            Same as test (alias)"
 	@echo "  lint                 Run all linters and checks"
 	@echo "  clean                Remove build artifacts"
 	@echo ""
@@ -46,28 +43,18 @@ help:
 	@echo "Restate (WS-094 Phase 4):"
 	@echo "  restate-ingress-smoke  Docker Restate + worker + ignored ingress test (needs Docker; worker probe uses nc or bash /dev/tcp)"
 	@echo ""
-	@echo "Studio (Authoring) Targets:"
-	@echo "  Studio (Authoring) lives in the sibling repo policy-studio/ (extracted 2026-05-04)."
-	@echo "  Build/test from there: (cd ../policy-studio && cargo build --workspace / cargo nextest run --workspace)."
-	@echo ""
-	@echo "Case Portal (Frontend) Targets:"
-	@echo "  case-portal-build    Build Case Portal frontend (formerly 'studio-build')"
-	@echo "  case-portal-test     Run Case Portal vitest suite"
-	@echo "  case-portal-lint     Run Case Portal type checks"
-	@echo "  case-portal-types    Generate WOS types for Case Portal"
-	@echo "  case-portal-install  Install Case Portal dependencies"
+	@echo "Sibling repos (extracted 2026-05-04):"
+	@echo "  Studio (Authoring) lives in policy-studio/ — (cd ../policy-studio && cargo build --workspace)"
+	@echo "  Case Portal lives in case-portal/ — (cd ../case-portal && npm install && npm run build)"
 
 # Build
-build: rust-build case-portal-build
+build: rust-build
 
 rust-build:
 	$(CARGO) build --workspace
 
-case-portal-build: case-portal-install
-	cd $(CASE_PORTAL_DIR) && $(NPM) run build
-
 # Test
-test: rust-test python-test case-portal-test
+test: rust-test python-test
 
 # Rust + Python schema tests only (no Studio Vitest). Use for a faster inner
 # loop; root CI `make test-wos-spec` intentionally stays aligned with full `test`.
@@ -97,33 +84,17 @@ restate-ingress-smoke:
 python-test:
 	$(PYTEST) tests/schemas -q
 
-case-portal-test: case-portal-install
-	cd $(CASE_PORTAL_DIR) && $(NPM) run test
-
-# Studio (Authoring) extracted to sibling repo policy-studio/ on 2026-05-04.
-# Build / test / lint / clean from that repo's own Makefile (or cargo directly).
+# Studio (Authoring) and Case Portal extracted to sibling repos on 2026-05-04.
+# Their build/test/lint/clean live in those repos' own Makefiles.
 
 # Lint & Check
-lint: rust-check case-portal-lint
+lint: rust-check
 
 rust-check:
 	$(CARGO) check --workspace
 
-case-portal-lint: case-portal-install
-	cd $(CASE_PORTAL_DIR) && $(NPM) run lint
-
-case-portal-types: case-portal-install
-	cd $(CASE_PORTAL_DIR) && $(NPM) run types:gen
-
 # Clean
-clean: rust-clean case-portal-clean
+clean: rust-clean
 
 rust-clean:
 	$(CARGO) clean
-
-case-portal-clean:
-	cd $(CASE_PORTAL_DIR) && $(NPM) run clean
-
-# Setup
-case-portal-install:
-	cd $(CASE_PORTAL_DIR) && $(NPM) install
