@@ -133,13 +133,13 @@ python3 -m pytest tests/schemas -q
 cargo nextest run --workspace
 ```
 
-Workspace depends on `fel-core` at `../formspec/crates/fel-core`. The supported topology is `formspec-stack/wos-spec/` as a sibling of `formspec-stack/formspec/` and `formspec-stack/trellis/`. Standalone clones do not build until hosted published packages exist.
+Workspace depends on `fel-core` at `../formspec/crates/fel-core`. The supported topology is `formspec-stack/work-spec/` as a sibling of `formspec-stack/formspec/` and `formspec-stack/trellis/`. Standalone clones do not build until hosted published packages exist.
 
 **Coverage ratchets (CI gates):** `schema_doc_zero_regression`, `every_promoted_*_rule_has_executable_or_annotated_evidence`, `every_load_bearing_conformance_rule_has_at_least_two_executable_fixtures`, `discover_and_report_promotion_candidates`.
 
 ## Topology awareness
 
-Checked out as `formspec-stack/wos-spec/` alongside sibling repos `formspec-stack/formspec/`, `formspec-stack/trellis/`, and `formspec-stack/workspec-server/`. The `wos-server*` crates live in `../workspec-server/crates/` (relocated chore 3.2). Path coupling via `../formspec/`, `../trellis/`, and `../workspec-server/` — not submodules. Commits here are separate; bump the `formspec-stack` submodule pointer when landing meaningful work. **Code review:** inspect the real diff with `git -C wos-spec status` and `git -C wos-spec diff`. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
+Checked out as `formspec-stack/work-spec/` alongside sibling repos `formspec-stack/formspec/`, `formspec-stack/trellis/`, and `formspec-stack/workspec-server/`. The `wos-server*` crates live in `../workspec-server/crates/` (relocated chore 3.2). Path coupling via `../formspec/`, `../trellis/`, and `../workspec-server/` — not submodules. Commits here are separate; bump the `formspec-stack` submodule pointer when landing meaningful work. **Code review:** inspect the real diff with `git -C work-spec status` and `git -C work-spec diff`. Never `--amend`, `--force`, or `--no-verify` without owner sanction. AI-authored commits end with:
 
 ```
 Co-Authored-By: Claude <noreply@anthropic.com>
