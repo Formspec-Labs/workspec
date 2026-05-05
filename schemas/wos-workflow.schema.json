@@ -1842,6 +1842,20 @@
             }
           ],
           "description": "Either a FEL expression (string form) or a structured decision-table reference (object form) per Kernel \u00a74.5.1. The object form lets authors keep table-shaped decision logic as a first-class structure through the substrate without flattening to chained FEL. Round-tripping is lossless. Both forms produce a boolean used by \u00a74.6 transition resolution; both are stateless.",
+          "examples": [
+            "caseFile.eligibilityScore >= 0.85",
+            "caseFile.documentsComplete && !caseFile.holdActive",
+            {
+              "kind": "decisionTable",
+              "ref": "eligibilityTable",
+              "outputColumn": "eligible",
+              "inputBindings": {
+                "income": "caseFile.household.income.monthlyGross",
+                "householdSize": "caseFile.household.size"
+              },
+              "onNoMatch": "false"
+            }
+          ],
           "x-lm": {
             "critical": true,
             "intent": "Where every conditional logic decision lives \u2014 accepts FEL-string (highest-traffic FEL surface) or DecisionTableGuard (structured table form per \u00a74.5.1), lint-checked for syntax / cross-state / function-set / boolean-shape / table-row-coverage / hit-policy correctness"
