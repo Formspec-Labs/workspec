@@ -34,7 +34,7 @@ repository = "https://github.com/formspec/formspec"
 # checkout topology. wos-spec does not build standalone until hosted
 # published packages of fel-core exist.
 [workspace.dependencies]
-fel-core = { path = "../formspec/crates/fel-core" }
+fel-core = { path = "../fel-core" }
 
 [profile.dev]
 # Trim debug metadata and increase codegen parallelism for faster compile-test loops.
