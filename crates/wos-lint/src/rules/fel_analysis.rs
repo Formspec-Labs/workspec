@@ -239,7 +239,7 @@ pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
 /// Set of Core FEL builtins whose return type is boolean.
 ///
 /// Derived at first use from `fel_core::builtin_function_catalog()` by
-/// filtering entries whose signature string ends with `-> boolean`. This
+/// filtering entries whose `returns` field is `FelType::Boolean`. This
 /// keeps AI-058 honest against spec drift: adding a new boolean-returning
 /// builtin in `fel-core` immediately makes it allowlisted here, and a
 /// name like `isBoolean` that never existed in the catalog correctly
