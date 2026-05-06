@@ -40,6 +40,20 @@ use serde_json::Value;
 use crate::diagnostic::LintDiagnostic;
 use crate::document::{DocumentKind, WosDocument, WosProject};
 
+/// Format a [`fel_core::Error`] for lint output; appends lexer char span when present.
+fn fel_parse_failure_message(prefix: &str, err: &fel_core::Error) -> String {
+    let mut msg = format!("{prefix}: {err}");
+    match err {
+        fel_core::Error::Parse(pe) => {
+            if let Some(sp) = &pe.span {
+                use std::fmt::Write;
+                let _ = write!(msg, " (chars {}..{})", sp.start, sp.end);
+            }
+        }
+    }
+    msg
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -165,7 +179,10 @@ fn check_capability_preconditions(
                     diagnostics.push(LintDiagnostic::t2_error(
                         "AI-057",
                         path,
-                        format!("capability precondition is not valid FEL: {err}"),
+                        fel_parse_failure_message(
+                            "capability precondition is not valid FEL",
+                            &err,
+                        ),
                     ));
                 }
                 Ok(expr) => {
@@ -351,7 +368,7 @@ fn check_guard_expression(expr_str: &str, path: &str, diagnostics: &mut Vec<Lint
             diagnostics.push(LintDiagnostic::t2_error(
                 "K-012",
                 path,
-                format!("guard expression is not valid FEL: {err}"),
+                fel_parse_failure_message("guard expression is not valid FEL", &err),
             ));
             return;
         }
@@ -430,7 +447,10 @@ fn check_escalation_conditions(
                     diagnostics.push(LintDiagnostic::t2_error(
                         "AI-024",
                         &path,
-                        format!("escalation condition is not valid FEL: {err}"),
+                        fel_parse_failure_message(
+                            "escalation condition is not valid FEL",
+                            &err,
+                        ),
                     ));
                     continue;
                 }
@@ -488,7 +508,10 @@ fn check_smt_expression(
             diagnostics.push(LintDiagnostic::t2_error(
                 "AG-010",
                 path,
-                format!("verifiable constraint is not valid FEL: {err}"),
+                fel_parse_failure_message(
+                    "verifiable constraint is not valid FEL",
+                    &err,
+                ),
             ));
             return;
         }
@@ -526,7 +549,7 @@ fn check_expression_syntax(
         diagnostics.push(LintDiagnostic::t2_error(
             rule_id,
             path,
-            format!("expression is not valid FEL: {err}"),
+            fel_parse_failure_message("expression is not valid FEL", &err),
         ));
     }
 }
