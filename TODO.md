@@ -239,6 +239,8 @@ Work items, architecture, and adapter sequencing → [`crates/wos-server/TODO.md
 - **#50 EU AI Act alignment** `[7 / 5 / 4]` (**28**) — Art. 13-14 alignment spec.
 - **#53 OMB M-24-10 compliance** `[6 / 4 / 3]` (**18**) — process-documentation-shaped; overlaps Assurance + impact-level plumbing.
 
+- [ ] **§5.6 Repositioning/demo artifacts — gap closure vs handoff** `[4 / 2 / 2]` (**8**) — Verify README.md leads with two-claim framing (not "AI-native" tagline) per handoff §5.6, and author a demo narrative (requirement → workflow trace) once `wos-synth` is stable. Partially satisfied by `POSITIONING.md`; gap closure never explicitly verified. Gate: none (lightweight docs).
+
 ### Interoperability + speculative (trigger-gated)
 
 - **SCXML interoperability** `[3 / 6 / 2]` (**6**) — bidirectional WOS ↔ SCXML mapping. Trigger: ecosystem demand.
