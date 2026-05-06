@@ -5,6 +5,7 @@
 //! Constructs the evaluation context from case state, event data, and
 //! instance metadata. Layers enrich the context through seams (S7.3).
 
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 /// Evaluation context for FEL expression evaluation.
@@ -73,19 +74,19 @@ impl EvalContext {
         let mut fields = HashMap::new();
 
         // Case file as object + dotted paths for both access patterns.
-        let case_pairs: Vec<(String, Value)> = self
+        let case_map: IndexMap<String, Value> = self
             .case_file
             .iter()
             .map(|(k, v)| (k.clone(), json_to_fel_value(v)))
             .collect();
-        fields.insert("caseFile".to_string(), Value::Object(case_pairs.clone()));
-        for (k, v) in &case_pairs {
+        fields.insert("caseFile".to_string(), Value::Object(case_map.clone()));
+        for (k, v) in &case_map {
             fields.insert(format!("caseFile.{k}"), v.clone());
         }
 
         // Event data as object + dotted paths.
         if let Some(event_val) = &self.event {
-            let event_pairs: Vec<(String, Value)> = event_val
+            let event_map: IndexMap<String, Value> = event_val
                 .as_object()
                 .map(|obj| {
                     obj.iter()
@@ -93,24 +94,24 @@ impl EvalContext {
                         .collect()
                 })
                 .unwrap_or_default();
-            fields.insert("event".to_string(), Value::Object(event_pairs.clone()));
-            for (k, v) in &event_pairs {
+            fields.insert("event".to_string(), Value::Object(event_map.clone()));
+            for (k, v) in &event_map {
                 fields.insert(format!("event.{k}"), v.clone());
             }
         }
 
         // Instance metadata as object + dotted paths.
         if !self.instance.is_empty() {
-            let instance_pairs: Vec<(String, Value)> = self
+            let instance_map: IndexMap<String, Value> = self
                 .instance
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_fel_value(v)))
                 .collect();
             fields.insert(
                 "instance".to_string(),
-                Value::Object(instance_pairs.clone()),
+                Value::Object(instance_map.clone()),
             );
-            for (k, v) in &instance_pairs {
+            for (k, v) in &instance_map {
                 fields.insert(format!("instance.{k}"), v.clone());
             }
         }

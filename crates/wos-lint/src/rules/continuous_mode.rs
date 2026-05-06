@@ -125,6 +125,14 @@ fn path_from_fel(expr: &Expr) -> Option<Vec<Segment>> {
             append_segments(&mut out, segments);
             Some(out)
         }
+        Expr::VarRef {
+            name,
+            path: segments,
+        } => {
+            let mut out = vec![Segment::Dot(name.clone())];
+            append_segments(&mut out, segments);
+            Some(out)
+        }
         Expr::ContextRef { name, tail, .. } => {
             let mut out = vec![Segment::Dot(name.clone())];
             for part in tail {

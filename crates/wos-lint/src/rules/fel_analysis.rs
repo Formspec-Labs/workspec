@@ -562,6 +562,18 @@ fn check_no_related_case_refs(
                     ));
                 }
             }
+            Expr::VarRef { name, .. } => {
+                if is_related_case_name(name) {
+                    diagnostics.push(LintDiagnostic::t2_error(
+                        rule_id,
+                        path,
+                        format!(
+                            "guard references related-case field '{name}'; guards must not access \
+                             related case state"
+                        ),
+                    ));
+                }
+            }
             Expr::ContextRef { name, .. } => {
                 if is_related_case_name(name) {
                     diagnostics.push(LintDiagnostic::t2_error(
@@ -696,7 +708,13 @@ fn let_value_references_name(expr: &Expr, names: &HashSet<String>) -> bool {
         if let Expr::FieldRef { name: Some(n), .. } = e {
             if names.contains(n) {
                 found = true;
-                return true; // short-circuit
+                return true;
+            }
+        }
+        if let Expr::VarRef { name: n, .. } = e {
+            if names.contains(n) {
+                found = true;
+                return true;
             }
         }
         false
@@ -770,7 +788,10 @@ fn check_linear_arithmetic(
 fn contains_variable(expr: &Expr) -> bool {
     let mut found = false;
     walk_expr(expr, &mut |e| {
-        if matches!(e, Expr::FieldRef { .. } | Expr::ContextRef { .. }) {
+        if matches!(
+            e,
+            Expr::FieldRef { .. } | Expr::VarRef { .. } | Expr::ContextRef { .. }
+        ) {
             found = true;
             return true; // short-circuit
         }
@@ -895,7 +916,7 @@ fn is_literal_expr(expr: &Expr) -> bool {
 
 fn is_simple_access_expr(expr: &Expr) -> bool {
     match expr {
-        Expr::FieldRef { .. } | Expr::ContextRef { .. } => true,
+        Expr::FieldRef { .. } | Expr::VarRef { .. } | Expr::ContextRef { .. } => true,
         Expr::PostfixAccess { expr: inner, .. } => is_simple_access_expr(inner.as_ref()),
         _ => false,
     }
@@ -910,6 +931,20 @@ pub(super) fn simple_access_path_string(expr: &Expr) -> Option<String> {
         } => {
             let root = name.as_deref()?;
             let mut s = root.to_string();
+            for seg in segments {
+                let PathSegment::Dot(part) = seg else {
+                    return None;
+                };
+                s.push('.');
+                s.push_str(part);
+            }
+            Some(s)
+        }
+        Expr::VarRef {
+            name,
+            path: segments,
+        } => {
+            let mut s = name.clone();
             for seg in segments {
                 let PathSegment::Dot(part) = seg else {
                     return None;
@@ -993,6 +1028,7 @@ fn visit_children(expr: &Expr, f: &mut impl FnMut(&Expr)) {
         | Expr::DateLiteral(_)
         | Expr::DateTimeLiteral(_)
         | Expr::FieldRef { .. }
+        | Expr::VarRef { .. }
         | Expr::ContextRef { .. } => {}
 
         Expr::Array(elements) => {
