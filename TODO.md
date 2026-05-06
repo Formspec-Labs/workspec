@@ -43,7 +43,8 @@ Pick from the top. Each item has a gate (what unblocks it) and a plan or ADR.
 | Task ID | Tracks | Deliverable | Depends on |
 |---------|--------|-------------|------------|
 | **WOS-T4** | Do next **#1** | Signature Profile end-to-end — WOS center landed; cross-repo: Trellis COC rendering + Studio UI + vendor assurance floor | T4-10 (COC renderer) · T4-11 (Studio UI) · T4-12 (shared bundle) · vendor x-* assurance floor (gated on PLN-0384) |
-| **WOS-T5** | Do next **#6** | Multi-step session DAG topology — author-time schema restoration + runtime API topology surface | None — schema-only; definitions recoverable from git `e7c46c0f^` |
+| **WOS-T5** | Do next **#7** | Multi-step session DAG topology — author-time schema restoration + runtime API topology surface | None — schema-only; definitions recoverable from git `e7c46c0f^` |
+| **WOS-T6** | Do next **#6** | ADR 0092 TypeID-in-URN landing — schema regex update, delete `to_instance_urn`/`urn_scope_and_date`/`task_urn`/`instance_urn`, rewrite `wos-core` URN parsers, update ~55 test fixtures, 10 spec docs, case-portal regen | ADR 0092 acceptance; plan [`thoughts/plans/2026-05-06-adr0092-typeid-urn-identity-landing.md`](thoughts/plans/2026-05-06-adr0092-typeid-urn-identity-landing.md) |
 | **WOS-B1** | Backlog | §4.5 structural merges (1 vs 3 PRs) | Owner packaging decision |
 | **WOS-B2** | Backlog | Kernel-Basic profile **LoadBearing** declaration + lint-matrix wire | None |
 | **WOS-B3** | Backlog | [ADR 0065](thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md) authoring-stack closure — MCP↔synth `ToolContext` seam, spike/Q-V0 follow-ups, `wos-bench`, conformance/lint API hygiene | See **ADR 0065 — authoring stack closure** in Backlog |
