@@ -250,7 +250,7 @@ pub(super) fn is_boolean_shaped(expr: &Expr) -> bool {
 static BOOLEAN_RETURNING_BUILTINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     builtin_function_catalog()
         .iter()
-        .filter(|entry| matches!(entry.returns, fel_core::FelType::Boolean))
+        .filter(|entry| matches!(entry.returns, fel_core::extensions::FelType::Boolean))
         .map(|entry| entry.name)
         .collect()
 });
