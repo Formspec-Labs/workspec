@@ -129,7 +129,12 @@ impl WosRuntime {
         // 2. If instance_id is a valid TypeID, extract the prefix.
         // 3. If both are present, they must match.
         // 4. Fall back to the deployment-default tenant.
-        let type_id_tenant = typeid::extract_tenant(&instance_id).map(String::from);
+        let type_id_tenant = typeid::extract_tenant(&instance_id)
+            .map(String::from)
+            .or_else(|| {
+                wos_core::instance::CaseInstance::extract_urn_parts(&instance_id)
+                    .map(|(ns, _, _)| ns.to_string())
+            });
         let tenant = match (requested_tenant, &type_id_tenant) {
             (Some(explicit), Some(prefix)) => {
                 if !typeid::is_valid_tenant(&explicit) {
@@ -153,7 +158,9 @@ impl WosRuntime {
             (None, None) => typeid::DEFAULT_TENANT.to_string(),
         };
 
-        let (instance_id, legacy_alias) = if CaseInstance::is_case_id(&instance_id) {
+        let (instance_id, legacy_alias) = if CaseInstance::is_case_id(&instance_id)
+            || CaseInstance::is_instance_urn(&instance_id)
+        {
             (instance_id, None)
         } else if instance_id.trim().is_empty() {
             (CaseInstance::mint_id(), None)
