@@ -74,6 +74,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::ToolViolation
             | K::EscalationPending
             | K::AutonomyDemotion
+            | K::AutonomyEscalation
             | K::ConfidenceViolation
             | K::ConfidenceDecay
             | K::CumulativeConfidenceViolation
@@ -99,6 +100,10 @@ impl From<K> for ProvenanceAuditTier {
             | K::SamplingDecision
             | K::OverrideViolation
             | K::OverrideRecorded
+            | K::LegalHoldPlaced
+            | K::LegalHoldReleased
+            | K::LegalHoldDestructionRejected
+            | K::ContinuationOfServicesActivated
             | K::PipelineStageCompleted
             | K::PipelineRiskProfile
             | K::PipelineRejection
@@ -117,7 +122,9 @@ impl From<K> for ProvenanceAuditTier {
             | K::CompensationExecuted
             | K::CompensationScopeBoundary
             | K::DelegationViolation
+            | K::InstanceSuspended
             | K::InstanceResumed
+            | K::InstanceTerminated
             | K::StepResultPersisted
             | K::IdempotencyDedup
             | K::InstanceMigrated
@@ -127,12 +134,18 @@ impl From<K> for ProvenanceAuditTier {
             | K::DcrRelationEvaluated
             | K::DcrResolutionError
             | K::ZoneSatisfied
+            | K::DcrZoneViolation
             | K::EquityAlert
+            | K::CircuitBreakerTripped
+            | K::CircuitBreakerReset
+            | K::ShadowModeDivergence
+            | K::DriftAlert
             | K::VerificationReportProduced
             | K::ImmutabilityViolation
             | K::ActivationBlocked
             | K::CalendarIgnored
             | K::NotificationSuppressed
+            | K::ReportTimedOut
             | K::ConfigurationWarning
             | K::RelationshipChanged
             | K::MilestoneFired
@@ -157,10 +170,7 @@ impl From<K> for ProvenanceAuditTier {
             | K::ClockSkewObserved
             | K::CommitAttemptFailure
             | K::AuthorizationRejected
-            | K::MigrationPinChanged
-            | K::ForEachIterationStarted
-            | K::ForEachIterationCompleted
-            | K::ForEachCompleted => Self::Facts,
+            | K::MigrationPinChanged => Self::Facts,
         }
     }
 }

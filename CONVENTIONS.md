@@ -88,7 +88,7 @@ When updating a schema:
 
 - `x-lm.critical: true` marks load-bearing leaf properties. Those nodes MUST meet the stricter `description` and `examples` bar enforced by `SCHEMA-DOC-001`.
 - `x-wos.openStringKind` marks intentional open string leaves. Use it only on string leaves without `enum`, `const`, or `pattern`. Allowed values: `prose`, `fel`, `uri`, `identifier`, `pathExpression`, `hash`, `timestamp`, `tagLabel`. `SCHEMA-OPEN-001` enforces the annotation; it records why the leaf stays open. For the open-string-leaf ratchet (`open_string_leaf_ratchet.rs`), a leaf carrying a **listed** `openStringKind` counts as **constrained** the same way as `enum`/`const`/`pattern` so honest opens lower the baseline without lying about vocabulary closure.
-- Bulk helpers (for example `wos-spec/scripts/annotate_open_string_kinds.py`) assign kinds by heuristics. Treat their output as a draft: spot-check or domain-review important leaves. `lint_schema` plus the open-string ratchet enforce **shape** (allowed kinds, placement rules), not whether a given kind is the best semantic label for each path.
+- Bulk helpers (for example `work-spec/scripts/annotate_open_string_kinds.py`) assign kinds by heuristics. Treat their output as a draft: spot-check or domain-review important leaves. `lint_schema` plus the open-string ratchet enforce **shape** (allowed kinds, placement rules), not whether a given kind is the best semantic label for each path.
 
 ## Sidecar Normative-Contract Audit Rubric (TODO #45)
 

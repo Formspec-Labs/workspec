@@ -109,6 +109,8 @@ pub enum ProvenanceKind {
     EscalationPending,
     /// Autonomy demotion applied (AI S5.5).
     AutonomyDemotion,
+    /// Autonomy escalation approved after configured escalation conditions.
+    AutonomyEscalation,
 
     // ── Confidence (AI S7) ─────────────────────────────────────────
     /// Confidence violation — missing, uncalibrated, or below floor (AI S7).
@@ -148,6 +150,14 @@ pub enum ProvenanceKind {
     SamplingDecision,
     OverrideViolation,
     OverrideRecorded,
+    /// Legal hold was placed over a case or record set.
+    LegalHoldPlaced,
+    /// Legal hold was released by authorized actor or policy.
+    LegalHoldReleased,
+    /// Destruction was rejected because an active legal hold applied.
+    LegalHoldDestructionRejected,
+    /// Continuation of services was activated for an appeal window.
+    ContinuationOfServicesActivated,
 
     // ── Pipeline (WG S8) ───────────────────────────────────────────
     PipelineStageCompleted,
@@ -174,7 +184,11 @@ pub enum ProvenanceKind {
     DelegationViolation,
 
     // ── Durability (Kernel S10) ────────────────────────────────────
+    /// Instance was suspended through a lifecycle-control operation.
+    InstanceSuspended,
     InstanceResumed,
+    /// Instance was terminated through a lifecycle-control operation.
+    InstanceTerminated,
     StepResultPersisted,
     IdempotencyDedup,
     InstanceMigrated,
@@ -186,7 +200,17 @@ pub enum ProvenanceKind {
     DcrRelationEvaluated,
     DcrResolutionError,
     ZoneSatisfied,
+    /// DCR constraint zone violation was observed.
+    DcrZoneViolation,
     EquityAlert,
+    /// Circuit breaker opened because guarded failures crossed threshold.
+    CircuitBreakerTripped,
+    /// Circuit breaker reset after governed cooldown or recovery.
+    CircuitBreakerReset,
+    /// Shadow-mode output diverged materially from the configured baseline.
+    ShadowModeDivergence,
+    /// Drift monitoring produced an alert threshold crossing.
+    DriftAlert,
 
     // ── Verification (Advanced Governance) ─────────────────────────
     VerificationReportProduced,
@@ -196,6 +220,8 @@ pub enum ProvenanceKind {
     // ── Sidecar (Business Calendar, Notification) ──────────────────
     CalendarIgnored,
     NotificationSuppressed,
+    /// Report execution exceeded its wall-clock limit and was terminated.
+    ReportTimedOut,
 
     // ── Configuration warnings (cross-cutting) ──────────────────────
     /// A configuration reference failed to resolve, or a configured
@@ -426,6 +452,7 @@ impl ProvenanceKind {
                 | ProvenanceKind::DeonticBypass
                 | ProvenanceKind::AutonomyComputed
                 | ProvenanceKind::AutonomyDemotion
+                | ProvenanceKind::AutonomyEscalation
                 | ProvenanceKind::OverrideRecorded
                 | ProvenanceKind::PolicyDecision
                 | ProvenanceKind::PipelineRiskProfile

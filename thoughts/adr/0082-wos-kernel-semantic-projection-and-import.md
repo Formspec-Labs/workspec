@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-04-30
 **Scope:** WOS Kernel, WOS Ontology Alignment sidecar
-**Related:** [ADR 0075 (rejection register)](../../../thoughts/adr/0075-rejection-register.md); [ADR 0076 (product-tier consolidation)](../../../thoughts/adr/0076-product-tier-consolidation.md); [`wos-spec/counter-proposal-disposition.md`](../../counter-proposal-disposition.md); [`wos-spec/specs/sidecars/README.md`](../../specs/sidecars/README.md)
+**Related:** [ADR 0075 (rejection register)](../../../thoughts/adr/0075-rejection-register.md); [ADR 0076 (product-tier consolidation)](../../../thoughts/adr/0076-product-tier-consolidation.md); [`work-spec/counter-proposal-disposition.md`](../../counter-proposal-disposition.md); [`work-spec/specs/sidecars/README.md`](../../specs/sidecars/README.md)
 
 ## Context
 

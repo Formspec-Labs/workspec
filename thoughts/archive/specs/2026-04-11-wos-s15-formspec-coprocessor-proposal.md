@@ -4,14 +4,14 @@ date: 2026-04-11
 status: superseded
 merged_into: thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md
 superseded_by: thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md
-sources: .claude-plugin/agents/spec-expert.md + wos-spec-author.md personas; thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md; wos-spec/specs/companions/runtime.md; schemas/response.schema.json
+sources: .claude-plugin/agents/spec-expert.md + wos-spec-author.md personas; thoughts/archive/specs/2026-04-10-formspec-integration-gaps.md; work-spec/specs/companions/runtime.md; schemas/response.schema.json
 ---
 
 > **Superseded as the single handoff doc by** [`2026-04-11-formspec-wos-phase11-integration-master.md`](../../specs/2026-04-11-formspec-wos-phase11-integration-master.md) **(2026-04-11).** This file remains as the detailed §15 paste source; the master merges plan + integration gaps + this draft.
 
 # Concrete proposal: Runtime Companion §15 — Formspec Coprocessor Protocol
 
-This document is a **drop-in outline** for new normative material in `wos-spec/specs/companions/runtime.md` **after §14** (renumber subsequent sections if your publication process requires strict global section IDs; internally references stay “Runtime Companion §15” / “S15”).
+This document is a **drop-in outline** for new normative material in `work-spec/specs/companions/runtime.md` **after §14** (renumber subsequent sections if your publication process requires strict global section IDs; internally references stay “Runtime Companion §15” / “S15”).
 
 It merges:
 
@@ -171,7 +171,7 @@ In **Kernel** spec / `wos-kernel.schema.json` (exact placement follows your `Con
 
 ## §15.8 CaseInstance / active task tracking (informative minimum)
 
-Processors SHOULD persist enough **active task metadata** to recover after crash: at least `{ taskId, definitionUrl, definitionVersion, assignedActor, idempotencyKeysSeen }` (mirror §15.3; use **`definitionVersion`**, not “contract version,” to match Response pinning). The artifact **`wos-spec/schemas/wos-case-instance.schema.json`** exists today but does **not** yet define an **`activeTasks`** (or equivalent) array — **schema gap:** add an optional `activeTasks` array of `ActiveTask` objects in a follow-on PR when S15 lands in prose.
+Processors SHOULD persist enough **active task metadata** to recover after crash: at least `{ taskId, definitionUrl, definitionVersion, assignedActor, idempotencyKeysSeen }` (mirror §15.3; use **`definitionVersion`**, not “contract version,” to match Response pinning). The artifact **`work-spec/schemas/wos-case-instance.schema.json`** exists today but does **not** yet define an **`activeTasks`** (or equivalent) array — **schema gap:** add an optional `activeTasks` array of `ActiveTask` objects in a follow-on PR when S15 lands in prose.
 
 ---
 
@@ -212,7 +212,7 @@ State: **Formspec validation + optional pipeline** constitute the **single gatin
 
 ## Suggested insertion point
 
-**File:** `wos-spec/specs/companions/runtime.md`  
+**File:** `work-spec/specs/companions/runtime.md`  
 **After:** `## 14. Relationship-Triggered Events` (current file ends ~§14.5)  
 **Then:** Add `## 15. Formspec Coprocessor Protocol` with subsections **15.1–15.11** as above; update **§2.2 Host Interface Requirements** to list **§12.9 TaskPresenter** (Formspec coprocessor profile) alongside existing S12 interfaces.
 

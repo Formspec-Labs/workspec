@@ -22,7 +22,7 @@
 
 ## Completion criteria
 
-1. Four CHANGELOG files in `wos-spec/changelogs/{kernel,governance,ai,advanced}.md`.
+1. Four CHANGELOG files in `work-spec/changelogs/{kernel,governance,ai,advanced}.md`.
 2. Tag scheme: `kernel-v1.0.0`, `governance-v1.0.0`, `ai-v0.5.0`, `advanced-v0.1.0` (research). Matches ADR 0063 step 4 convention (no extra project prefix — WOS is its own submodule, no namespace collision).
 3. `COMPATIBILITY-MATRIX.md` declares which stream version ranges are known-good together.
 4. Release workflow has four jobs (one per stream); each job only runs when files matching that stream changed.
@@ -30,18 +30,19 @@
 
 ## File structure
 
-- **Create:** `wos-spec/changelogs/kernel.md`, `governance.md`, `ai.md`, `advanced.md`.
-- **Create:** `wos-spec/COMPATIBILITY-MATRIX.md` — cross-stream version ranges.
+- **Create:** `work-spec/changelogs/kernel.md`, `governance.md`, `ai.md`, `advanced.md`.
+- **Create:** `work-spec/COMPATIBILITY-MATRIX.md` — cross-stream version ranges.
 - **Create:** `.github/workflows/wos-release.yml` — per-stream tagging.
-- **Modify:** `wos-spec/README.md` — update to reference the stream model.
-- **Delete:** any monolithic `wos-spec/CHANGELOG.md` (replaced by the four stream files).
+- **Modify:** `work-spec/README.md` — update to reference the stream model.
+- **Delete:** any monolithic `work-spec/CHANGELOG.md` (replaced by the four stream files).
 
 ---
 
 ## Task 1: Define stream → path mapping
 
 **Files:**
-- Create: `wos-spec/RELEASE-STREAMS.md`
+
+- Create: `work-spec/RELEASE-STREAMS.md`
 
 - [ ] **Step 1.1:** Author a table mapping each stream to its source paths:
 
@@ -59,10 +60,11 @@
 ## Task 2: Create four CHANGELOG files
 
 **Files:**
-- Create: `wos-spec/changelogs/kernel.md`
-- Create: `wos-spec/changelogs/governance.md`
-- Create: `wos-spec/changelogs/ai.md`
-- Create: `wos-spec/changelogs/advanced.md`
+
+- Create: `work-spec/changelogs/kernel.md`
+- Create: `work-spec/changelogs/governance.md`
+- Create: `work-spec/changelogs/ai.md`
+- Create: `work-spec/changelogs/advanced.md`
 
 - [ ] **Step 2.1:** Each file starts with:
 
@@ -85,11 +87,12 @@ Initial release.
 ## Task 3: `COMPAT.md` (adapted from parent-repo conventions)
 
 **Files:**
-- Create: `wos-spec/COMPAT.md`
+
+- Create: `work-spec/COMPAT.md`
 
 **Background (from [open questions Q5 decision, 2026-04-17](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q5-existing-compat-matrix-convention-to-adopt-or-design-one)):** Parent formspec already has [`/COMPAT.md`](../../../COMPAT.md) — a hand-authored matrix with caret/x-range notation, one table per artifact type, per-package cadence + semver discipline. Adopt those **format conventions** verbatim; **adapt the matrix shape** because parent has many-to-many package pins across three ecosystems, while WOS has one kernel + three streams pinning against it. Literal verbatim copy would contort the shape — the file name, cell syntax, and table style match parent; the table structure reflects WOS's kernel-centric compat story.
 
-- [ ] **Step 3.1:** Create `wos-spec/COMPAT.md` with two tables (one per artifact type, mirroring parent's three-table layout even though WOS has two):
+- [ ] **Step 3.1:** Create `work-spec/COMPAT.md` with two tables (one per artifact type, mirroring parent's three-table layout even though WOS has two):
 
 ```markdown
 # WOS Stream Compatibility Matrix
@@ -139,6 +142,7 @@ Hand-authored compatibility matrix for WOS release streams. Cells use SemVer car
 ## Task 4: Changesets + tagging + release workflow (mirror ADR 0063 steps 1–4)
 
 **Files:**
+
 - Create: `.changeset/config.json` — `fixed` groups per stream.
 - Create: `.github/workflows/wos-release.yml`
 - Create: `scripts/wos-publish.mjs` — Rust-publication glue invoked after Changesets computes bumps.
@@ -188,8 +192,9 @@ Hand-authored compatibility matrix for WOS release streams. Cells use SemVer car
 ## Task 5: Update consumer-facing docs
 
 **Files:**
-- Modify: `wos-spec/README.md`
-- Modify: `wos-spec/POSITIONING.md`
+
+- Modify: `work-spec/README.md`
+- Modify: `work-spec/POSITIONING.md`
 
 - [ ] **Step 5.1:** In README, after the two-line pitch, add a "Versioning" section:
 

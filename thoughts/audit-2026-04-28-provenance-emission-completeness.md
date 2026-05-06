@@ -9,14 +9,13 @@ Closes `TODO.md` Do-next item #2 *Provenance emission completeness audit*. Disti
 3. Cross-checked: extracted every `recordKind: "..."` mention from `specs/**/*.md` and verified each named kind maps to an enum variant.
 4. Spot-checked spec MUST→emit clauses (`MUST.*(emit|produce|record|append).*provenance`) against emission paths.
 
-**Audit script:** `/tmp/prov_audit4.sh` (file count per variant across crate axes; run inside `wos-spec/`).
+**Audit script:** `/tmp/prov_audit4.sh` (file count per variant across crate axes; run inside `work-spec/`).
 
 ## Findings
 
 ### Gap 1 — `CapabilityInvocation` recordKind has no Rust variant or emission path (HIGH)
 
 **Update 2026-04-28 (same day, post-audit):** typed Rust slice landed in Session 14 — variant + audit-tier=Facts arm + `ProvenanceRecord::capability_invocation(...)` constructor + `CapabilityInvocationInput<'a>` + 5 unit tests (including a serde round-trip added per review F3 item 1) + module export. Reviewed by `formspec-specs:wos-scout` (semi-formal-code-review): verdict *Land it*, drift survey clean across both schemas, two doc-and-test refinements applied in-session (F1, F3 item 1). Schema MUST is now fulfillable from the typed path. AI-runtime wiring (precondition evaluation site that actually fires the constructor), `wos-export` smoke-test extension, JSON conformance fixture pair, and ergonomic constructor variant grouped under `TODO.md` Do-next #2 (gated on AI-runtime invocation seam design) — the cross-stack typed-path debt is gone; remaining work is local AI-runtime wiring.
-
 
 - **Spec MUST:** `specs/ai/ai-integration.md:159` — *"Every precondition evaluation MUST produce a provenance record with `recordKind: "capabilityInvocation"`."* + `specs/kernel/spec.md:460` reserves the `preconditionNotSatisfied` outcome paired with this discriminator.
 - **Schema:** `schemas/wos-workflow.schema.json:1265-1310` defines `$defs/CapabilityInvocationRecord` with two examples; `FactsTierRecord` composes via `allOf` so every conformant log validates against the MUST.

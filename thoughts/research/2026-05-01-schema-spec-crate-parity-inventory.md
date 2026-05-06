@@ -2,7 +2,7 @@
 
 **Ratchet state 2026-05-01 (authoritative):** every `*.schema.json` under `schemas/` registered in `crates/wos-lint/tests/open_string_leaf_ratchet.rs` has **0** open string leaves (`cargo run -p wos-lint --example schema_string_leaf_report -- <path>`). Prior narrative deltas below the fold remain historical; **per-row `TODO` cells in the tables may be stale** until someone re-runs the regeneration recipe and reconciles IDs.
 
-Historical chain (superseded by ratchet-zero): stable C0 row set `394` → … → repo-wide **302** open (workflow **116** open) after DueProcess / EscalationStep / … slice — then **full C6/C7 closure**: workflow inner-block to **0** open + scripted `x-wos.openStringKind` pass on tooling, case-instance, provenance-log, delivery, ontology-alignment (`wos-spec/scripts/annotate_open_string_kinds.py`) + ratchet table all **0**.
+Historical chain (superseded by ratchet-zero): stable C0 row set `394` → … → repo-wide **302** open (workflow **116** open) after DueProcess / EscalationStep / … slice — then **full C6/C7 closure**: workflow inner-block to **0** open + scripted `x-wos.openStringKind` pass on tooling, case-instance, provenance-log, delivery, ontology-alignment (`work-spec/scripts/annotate_open_string_kinds.py`) + ratchet table all **0**.
 
 ## Regeneration
 

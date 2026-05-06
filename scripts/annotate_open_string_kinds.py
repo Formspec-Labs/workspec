@@ -2,7 +2,7 @@
 """Annotate open string leaves reported by schema_string_leaf_report with x-wos.openStringKind (+ minLength).
 
 Reads CSV from: cargo run -p wos-lint --example schema_string_leaf_report -- <schema> --csv
-Mutates the JSON schema in place. Run from wos-spec/ (workspace root for wos-lint)."""
+Mutates the JSON schema in place. Run from work-spec/ (workspace root for wos-lint)."""
 
 from __future__ import annotations
 

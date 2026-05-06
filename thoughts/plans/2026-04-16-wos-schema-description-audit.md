@@ -14,7 +14,7 @@
 
 ## Prerequisites
 
-- 19 schemas under `wos-spec/schemas/**/*.json`.
+- 19 schemas under `work-spec/schemas/**/*.json`.
 - Existing `x-lm` annotation with `critical`, `intent` fields (see `wos-kernel.schema.json` for examples).
 - Existing lint infrastructure in `crates/wos-lint/`.
 
@@ -29,7 +29,7 @@
 ## File structure
 
 - **Create:** `crates/wos-lint/src/rules/schema_doc.rs` — the `SCHEMA-DOC-001` rule implementation.
-- **Modify:** schemas under `wos-spec/schemas/**` — backfill descriptions and examples.
+- **Modify:** schemas under `work-spec/schemas/**` — backfill descriptions and examples.
 - **Create:** `fixtures/validation/schema-doc-good.json` — schema document passing SCHEMA-DOC-001.
 - **Create:** `fixtures/validation/schema-doc-bad.json` — schema document failing (missing examples on a leaf).
 - **Modify:** `LINT-MATRIX.md` — register the new rule.
@@ -39,6 +39,7 @@
 ## Task 1: Write the failing schema lint rule
 
 **Files:**
+
 - Create: `crates/wos-lint/src/rules/schema_doc.rs`
 - Modify: `crates/wos-lint/src/rules/mod.rs` (register rule)
 
@@ -69,6 +70,7 @@ pub const SCHEMA_DOC_001: RuleMetadata = RuleMetadata {
 ## Task 2: Run the rule against the existing schemas
 
 **Files:**
+
 - No file changes this task — diagnostic pass only.
 
 - [ ] **Step 2.1:** Run `cargo run -p wos-lint -- lint-schemas schemas/` and capture the full offender list. Expect hundreds of violations on first pass. Triage into three buckets:
@@ -83,6 +85,7 @@ pub const SCHEMA_DOC_001: RuleMetadata = RuleMetadata {
 ## Task 3: Backfill descriptions and examples, tier by tier
 
 **Files:**
+
 - Modify: schemas per triage.
 
 Work through tiers in this order to align with release-stream cadence (see [release-trains plan](./2026-04-16-wos-release-trains.md)):
@@ -104,6 +107,7 @@ For each tier:
 ## Task 4: Register the rule in LINT-MATRIX and CI
 
 **Files:**
+
 - Modify: `LINT-MATRIX.md`
 - Modify: `.github/workflows/` whichever runs lint.
 

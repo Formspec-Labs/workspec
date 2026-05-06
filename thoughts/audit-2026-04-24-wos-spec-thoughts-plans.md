@@ -1,6 +1,6 @@
 ---
 date: 2026-04-24
-scope: wos-spec/thoughts/{plans,adr,specs}/ — plans folder + ADR-0059..0061 + Phase-11 integration master
+scope: work-spec/thoughts/{plans,adr,specs}/ — plans folder + ADR-0059..0061 + Phase-11 integration master
 source_count: 24
 archive_candidates: 13
 skill: squashing-specs
@@ -8,13 +8,13 @@ investigator: spec-investigator
 extended: 2026-04-24 — added ADR-0061, ADR-0060, ADR-0059, and 2026-04-11 Phase 11 integration master
 ---
 
-# Audit — wos-spec/thoughts/{plans,adr,specs}/ — 2026-04-24
+# Audit — work-spec/thoughts/{plans,adr,specs}/ — 2026-04-24
 
 Walked **20** plan documents newest-to-oldest on 2026-04-24, then extended the same day to cover three ADRs (0061, 0060, 0059) and one integration spec (2026-04-11 Phase 11 master) — total **24** documents. Sort key for the plans walk: `Date:` YAML when present; else `YYYY-MM-DD-` from filename; for `0059-unified-ledger-*.md` (no date prefix) **mtime** (2026-04-24) so it sorts ahead of filename-dated plans. Same-calendar ties break by filename descending. The four extension docs were investigated as a single batch, also newest-to-oldest (`0061` 2026-04-21 → `0060` 2026-04-21 → `0059` 2026-04-20 → `phase11` 2026-04-11). Supersession chains: **none** declared authoritatively across plans (pre-scan grep hits were colloquial “replaces” in prose, not doc supersession); the Phase 11 master declares supersession of three upstream-Formspec-repo files (out of submodule scope — see §Extension). Per-doc verdicts from `spec-investigator`. Archive-move checklist at the bottom — review before executing.
 
 ## Declared-supersession pre-scan (hint only)
 
-Grep for `(supersedes|replaces|obsoletes|rolls up into|merged into)` under `wos-spec/thoughts/plans/*.md` surfaced only in-line prose (e.g. “replaces K-007 bunching”, “Supersedes nothing”, “replaces the current fixture-count metric”). **No batch superseded** another plan file; the walk did not short-circuit any file.
+Grep for `(supersedes|replaces|obsoletes|rolls up into|merged into)` under `work-spec/thoughts/plans/*.md` surfaced only in-line prose (e.g. “replaces K-007 bunching”, “Supersedes nothing”, “replaces the current fixture-count metric”). **No batch superseded** another plan file; the walk did not short-circuit any file.
 
 ## Summary table
 
@@ -24,7 +24,7 @@ Grep for `(supersedes|replaces|obsoletes|rolls up into|merged into)` under `wos-
 | 2 | `2026-04-20-wos-typed-event-meta-vocabulary.md` | Agentic-worker banner | FULLY RESOLVED | All 10 tasks closed; `TransitionEvent` typed model in schema/Rust/spec. |
 | 3 | `2026-04-18-wos-facts-tier-input-snapshot.md` | Agentic-worker banner | MOSTLY RESOLVED | Schema + Rust + runtime + pytest landed; **K-DET-001** conformance + fixture migration **not** found. |
 | 4 | `2026-04-17-wos-synth-v0-spike.md` | Agentic-worker banner | MOSTLY RESOLVED | Spike crate + retrospective done; live Anthropic iteration metrics still follow-up. |
-| 5 | `2026-04-17-wos-schema-regression-tests.md` | Agentic-worker banner | MOSTLY RESOLVED | Test layers far exceed plan; **dedicated CI job** for `pytest tests/schemas` **not** confirmed (no workflow under `wos-spec/.github`). |
+| 5 | `2026-04-17-wos-schema-regression-tests.md` | Agentic-worker banner | MOSTLY RESOLVED | Test layers far exceed plan; **dedicated CI job** for `pytest tests/schemas` **not** confirmed (no workflow under `work-spec/.github`). |
 | 6 | `2026-04-17-wos-mcp-crate.md` | Agentic-worker banner | FULLY RESOLVED | `wos-mcp` + 22 tools + schemas + integration tests landed. |
 | 7 | `2026-04-17-wos-authoring-crate.md` | Agentic-worker banner | MOSTLY RESOLVED | Core façade + commands landed; some planned helpers / file layout differ from plan. |
 | 8 | `2026-04-16-wos-trace-emitting-conformance.md` | Agentic-worker banner | FULLY RESOLVED | `ConformanceTrace`, golden traces, explain/diff CLIs, schema. |
@@ -61,7 +61,7 @@ Grep for `(supersedes|replaces|obsoletes|rolls up into|merged into)` under `wos-
 
 ### 5. `2026-04-17-wos-schema-regression-tests.md`
 
-**MOSTLY RESOLVED** — `conftest.py` + three-layer tests + large grown suite (255+ tests per `TODO.md`). **Gap:** Task 5 GitHub Actions job for schema regression **not** found in-repo under `wos-spec/.github` (parent repo workflows not re-grepped here).
+**MOSTLY RESOLVED** — `conftest.py` + three-layer tests + large grown suite (255+ tests per `TODO.md`). **Gap:** Task 5 GitHub Actions job for schema regression **not** found in-repo under `work-spec/.github` (parent repo workflows not re-grepped here).
 
 ### 6. `2026-04-17-wos-mcp-crate.md`
 
@@ -77,7 +77,7 @@ Grep for `(supersedes|replaces|obsoletes|rolls up into|merged into)` under `wos-
 
 ### 9. `2026-04-16-wos-synthesis-benchmark.md`
 
-**NOT STARTED** — No `crates/wos-bench/`, no leaderboard doc, single problem file; tracked as lower-priority backlog in `wos-spec/TODO.md` (§5.5).
+**NOT STARTED** — No `crates/wos-bench/`, no leaderboard doc, single problem file; tracked as lower-priority backlog in `work-spec/TODO.md` (§5.5).
 
 ### 10. `2026-04-16-wos-synth-crate.md`
 
@@ -190,6 +190,7 @@ Same-day extension covering three ADRs (`thoughts/adr/`) and one integration mas
 - Precondition `#F5a` (kernel `ProvenanceOutcome` enum) confirmed in `2d890d3` per `COMPLETED.md:167`.
 
 **Staleness flags:**
+
 - Header `Status: Proposed` contradicts code reality — should flip to Accepted/Implemented before archive.
 - §4.2 back-compat shim plan (keep `"$continuous"` as a no-op alias for one release cycle) was skipped: greenfield-cleanup commit `f03ca40` removed authored `"$continuous"` opt-in entirely. Deviation documented only in `COMPLETED.md:319`, not in the ADR.
 - `COMPLETED.md:171, 199` describe F3b as "drafted" / "READY TO EXECUTE" — supersession by `:316-319` documents actual landing. Internal narrative drift, not a code defect.
@@ -211,6 +212,7 @@ Same-day extension covering three ADRs (`thoughts/adr/`) and one integration mas
 **Outstanding (§6.10 — "Closed decisions" verified live):** items 1-7 (prefill bidirectional Mapping, `persistTaskDraft`, multi-form modeling, agent submitters via `actorExtension`, `amended` Response → new amendment task, observability taxonomy, P11-BL-050 publication discipline) all reflected in `runtime.md:861, 863, 920-924`.
 
 **Staleness flags:**
+
 - Frontmatter `status: proposed` contradicts body claims of Landed/Resolved at `:51-53` and §7's all-`[x]` checklist.
 - Doc has been overtaken by ADR-0073 (case initiation + intake handoff, accepted 2026-04-23 per `TODO.md:72`) and ADR-0061 (custodyHook wire format, this batch). Intake-handoff path now has its own typed binding (`wos-formspec-binding::IntakeHandoff` at `crates/wos-formspec-binding/src/lib.rs:72`) plus `IntakeAcceptanceAdapter` in `wos-runtime`. The doc still treats `submitTaskResponse` as the only ingress; doesn't mention public-intake handoff that is now load-bearing for the SBA + SaaS adopter.
 - §6.10 item 7's `P11-BL-050` rule id has no entry in the lint registry — publication discipline honored implicitly; the rule id itself is dead text.
@@ -228,7 +230,7 @@ Deduplicated themes; tag sources.
 
 - [ ] Schema regression: dedicated **`wos-schema-regression`** (or equivalent) GitHub Actions job with path filters — sources: `2026-04-17-wos-schema-regression-tests.md`
 - [ ] Rule coverage: optional **`.github/workflows/wos-coverage.yml`** + `ratchet-check` binary — sources: `2026-04-16-wos-rule-coverage-conformance.md`
-- [ ] Release trains Task 4–5: Changesets `fixed` groups, `scripts/wos-publish.mjs`, `.github/workflows/wos-release.yml`, README Versioning — sources: `2026-04-16-wos-release-trains.md`, `wos-spec/TODO.md` (§4.4 backlog)
+- [ ] Release trains Task 4–5: Changesets `fixed` groups, `scripts/wos-publish.mjs`, `.github/workflows/wos-release.yml`, README Versioning — sources: `2026-04-16-wos-release-trains.md`, `work-spec/TODO.md` (§4.4 backlog)
 - [ ] Synthesis benchmark: entire `wos-bench` plan — sources: `2026-04-16-wos-synthesis-benchmark.md`, dependent criterion in `2026-04-16-wos-synth-crate.md`
 
 ### Conformance / fixtures / facts tier
@@ -277,12 +279,12 @@ Deduplicated themes; tag sources.
 
 ## Cross-ref deltas
 
-*(No `requirements-matrix.md` / `ratification-checklist.md` in `wos-spec/` — deltas are vs `TODO.md` and investigator matrix/spec claims.)*
+*(No `requirements-matrix.md` / `ratification-checklist.md` in `work-spec/` — deltas are vs `TODO.md` and investigator matrix/spec claims.)*
 
 - **`TODO.md`** lists §4.4 release Tasks 4–5 and §5.5 `wos-bench` as backlog — **aligned** with investigator **PARTIAL** / **NOT STARTED** verdicts on those plans (no drift).
 - **`TODO.md`** claims `#24a` / Facts-tier snapshot closed in narrative while **`2026-04-18-wos-facts-tier-input-snapshot.md`** still lists **K-DET-001** + fixture work — **drift** between completed narrative and conformance depth.
 - **`WOS-FEATURE-MATRIX.md`** rows marked ✅ for governance items **without** matching spec/schema prose — **drift** between matrix and normative artifacts (`2026-04-15-wos-custody-and-assurance.md` finding).
-- **Schema regression CI:** `TODO.md` cites `pytest tests/schemas` as a health snapshot, but **no** `wos-spec/.github/workflows/**` references that suite — optional **drift** if parent-repo CI is expected to live only at monorepo root (not verified in this audit run).
+- **Schema regression CI:** `TODO.md` cites `pytest tests/schemas` as a health snapshot, but **no** `work-spec/.github/workflows/**` references that suite — optional **drift** if parent-repo CI is expected to live only at monorepo root (not verified in this audit run).
 
 ### Extension cross-ref deltas
 
@@ -298,18 +300,18 @@ Proposed `git mv` for each **FULLY RESOLVED** plan (per investigator). **Review 
 
 ```bash
 # Archive candidates — review each before running (repo root: formspec)
-git mv wos-spec/thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md wos-spec/thoughts/archive/plans/2026-04-20-wos-typed-event-meta-vocabulary.md
-git mv wos-spec/thoughts/plans/2026-04-17-wos-mcp-crate.md wos-spec/thoughts/archive/plans/2026-04-17-wos-mcp-crate.md
-git mv wos-spec/thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md wos-spec/thoughts/archive/plans/2026-04-16-wos-trace-emitting-conformance.md
-git mv wos-spec/thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md wos-spec/thoughts/archive/plans/2026-04-16-wos-structured-lint-diagnostics.md
-git mv wos-spec/thoughts/plans/2026-04-16-wos-provenance-record-schema-extension.md wos-spec/thoughts/archive/plans/2026-04-16-wos-provenance-record-schema-extension.md
-git mv wos-spec/thoughts/plans/2026-04-15-wos-provenance-export.md wos-spec/thoughts/archive/plans/2026-04-15-wos-provenance-export.md
-git mv wos-spec/thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md wos-spec/thoughts/archive/plans/2026-04-14-wos-spec-section-1-implementation.md
-git mv wos-spec/thoughts/plans/2026-04-13-wos-runtime-crate.md wos-spec/thoughts/archive/plans/2026-04-13-wos-runtime-crate.md
-git mv wos-spec/thoughts/plans/2026-04-10-wos-core-extraction.md wos-spec/thoughts/archive/plans/2026-04-10-wos-core-extraction.md
+git mv work-spec/thoughts/plans/2026-04-20-wos-typed-event-meta-vocabulary.md work-spec/thoughts/archive/plans/2026-04-20-wos-typed-event-meta-vocabulary.md
+git mv work-spec/thoughts/plans/2026-04-17-wos-mcp-crate.md work-spec/thoughts/archive/plans/2026-04-17-wos-mcp-crate.md
+git mv work-spec/thoughts/plans/2026-04-16-wos-trace-emitting-conformance.md work-spec/thoughts/archive/plans/2026-04-16-wos-trace-emitting-conformance.md
+git mv work-spec/thoughts/plans/2026-04-16-wos-structured-lint-diagnostics.md work-spec/thoughts/archive/plans/2026-04-16-wos-structured-lint-diagnostics.md
+git mv work-spec/thoughts/plans/2026-04-16-wos-provenance-record-schema-extension.md work-spec/thoughts/archive/plans/2026-04-16-wos-provenance-record-schema-extension.md
+git mv work-spec/thoughts/plans/2026-04-15-wos-provenance-export.md work-spec/thoughts/archive/plans/2026-04-15-wos-provenance-export.md
+git mv work-spec/thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md work-spec/thoughts/archive/plans/2026-04-14-wos-spec-section-1-implementation.md
+git mv work-spec/thoughts/plans/2026-04-13-wos-runtime-crate.md work-spec/thoughts/archive/plans/2026-04-13-wos-runtime-crate.md
+git mv work-spec/thoughts/plans/2026-04-10-wos-core-extraction.md work-spec/thoughts/archive/plans/2026-04-10-wos-core-extraction.md
 ```
 
-**Ensure** `wos-spec/thoughts/archive/plans/` exists before running (create with `mkdir -p` if needed). **Do not** archive `0059-unified-ledger-as-canonical-event-store.md` under a “resolved implementation plan” rubric — it is a **living program narrative**, not a closed task list.
+**Ensure** `work-spec/thoughts/archive/plans/` exists before running (create with `mkdir -p` if needed). **Do not** archive `0059-unified-ledger-as-canonical-event-store.md` under a “resolved implementation plan” rubric — it is a **living program narrative**, not a closed task list.
 
 ### Extension archive candidates — ADRs + Phase 11 spec
 
@@ -317,19 +319,19 @@ git mv wos-spec/thoughts/plans/2026-04-10-wos-core-extraction.md wos-spec/though
 # Extension archive candidates — review each before running (repo root: formspec)
 
 # Both ADR-0061 and ADR-0060 are Accepted in frontmatter; archive directly.
-git mv wos-spec/thoughts/adr/0061-custody-hook-trellis-wire-format.md wos-spec/thoughts/archive/adr/0061-custody-hook-trellis-wire-format.md
-git mv wos-spec/thoughts/adr/0060-cross-reference-naming-ref-key-id.md wos-spec/thoughts/archive/adr/0060-cross-reference-naming-ref-key-id.md
+git mv work-spec/thoughts/adr/0061-custody-hook-trellis-wire-format.md work-spec/thoughts/archive/adr/0061-custody-hook-trellis-wire-format.md
+git mv work-spec/thoughts/adr/0060-cross-reference-naming-ref-key-id.md work-spec/thoughts/archive/adr/0060-cross-reference-naming-ref-key-id.md
 
 # ADR-0059: BEFORE archiving, edit frontmatter `**Status:** Proposed` → `**Status:** Accepted` (or `Implemented`).
 # Optional: add a one-line note documenting that §4.2 back-compat shim was skipped (`f03ca40`).
-git mv wos-spec/thoughts/adr/0059-continuous-mode-post-mutation-rescan.md wos-spec/thoughts/archive/adr/0059-continuous-mode-post-mutation-rescan.md
+git mv work-spec/thoughts/adr/0059-continuous-mode-post-mutation-rescan.md work-spec/thoughts/archive/adr/0059-continuous-mode-post-mutation-rescan.md
 
 # Phase 11 master: BEFORE archiving, flip frontmatter `status: proposed` → `accepted` (or `landed`).
 # Optional: add a one-line "overtaken by ADR-0073 / ADR-0061" note in the body or frontmatter.
-git mv wos-spec/thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md wos-spec/thoughts/archive/specs/2026-04-11-formspec-wos-phase11-integration-master.md
+git mv work-spec/thoughts/specs/2026-04-11-formspec-wos-phase11-integration-master.md work-spec/thoughts/archive/specs/2026-04-11-formspec-wos-phase11-integration-master.md
 ```
 
-**Ensure** `wos-spec/thoughts/archive/adr/` and `wos-spec/thoughts/archive/specs/` exist before running. **Two of these four require a frontmatter edit before `git mv`** (ADR-0059 and the Phase 11 master) — sequence the edit + move into the same commit so reviewers see the rationale together.
+**Ensure** `work-spec/thoughts/archive/adr/` and `work-spec/thoughts/archive/specs/` exist before running. **Two of these four require a frontmatter edit before `git mv`** (ADR-0059 and the Phase 11 master) — sequence the edit + move into the same commit so reviewers see the rationale together.
 
 ## Recommendations
 
@@ -345,4 +347,4 @@ git mv wos-spec/thoughts/specs/2026-04-11-formspec-wos-phase11-integration-maste
 
 ---
 
-**Hand-off:** Review `wos-spec/thoughts/audit-2026-04-24-wos-spec-thoughts-plans.md`, then run the archive-move blocks in batches after creating `archive/plans/`, `archive/adr/`, and `archive/specs/` if desired. **Two extension archive moves require a one-line frontmatter edit first** (ADR-0059 and the Phase 11 master) — combine edit + move in the same commit. **Archive-candidate count:** 9 **FULLY RESOLVED** implementation plans + 4 extension docs (2 directly archivable + 2 archive-after-frontmatter-flip) = **13 total**. **Cross-ref delta count:** 4 plan-walk bullets + 5 extension bullets = **9 total**.
+**Hand-off:** Review `work-spec/thoughts/audit-2026-04-24-wos-spec-thoughts-plans.md`, then run the archive-move blocks in batches after creating `archive/plans/`, `archive/adr/`, and `archive/specs/` if desired. **Two extension archive moves require a one-line frontmatter edit first** (ADR-0059 and the Phase 11 master) — combine edit + move in the same commit. **Archive-candidate count:** 9 **FULLY RESOLVED** implementation plans + 4 extension docs (2 directly archivable + 2 archive-after-frontmatter-flip) = **13 total**. **Cross-ref delta count:** 4 plan-walk bullets + 5 extension bullets = **9 total**.

@@ -415,6 +415,14 @@ fn audit_layer_for_kind_maps_narrative_only() {
         audit_layer_for_kind(ProvenanceKind::SignatureAffirmation),
         "facts"
     );
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::InstanceSuspended),
+        "facts"
+    );
+    assert_eq!(
+        audit_layer_for_kind(ProvenanceKind::ReportTimedOut),
+        "facts"
+    );
 }
 
 /// Finding 3 regression: every `ProvenanceKind` variant must map to a
@@ -434,6 +442,9 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::IntakeDeferred,
         ProvenanceKind::TimerCreated,
         ProvenanceKind::TimerFired,
+        ProvenanceKind::ForEachIterationStarted,
+        ProvenanceKind::ForEachIterationCompleted,
+        ProvenanceKind::ForEachCompleted,
         ProvenanceKind::TimerCancelled,
         ProvenanceKind::OnEntry,
         ProvenanceKind::OnExit,
@@ -455,6 +466,7 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::ToolViolation,
         ProvenanceKind::EscalationPending,
         ProvenanceKind::AutonomyDemotion,
+        ProvenanceKind::AutonomyEscalation,
         ProvenanceKind::ConfidenceViolation,
         ProvenanceKind::ConfidenceDecay,
         ProvenanceKind::CumulativeConfidenceViolation,
@@ -481,6 +493,10 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::SamplingDecision,
         ProvenanceKind::OverrideViolation,
         ProvenanceKind::OverrideRecorded,
+        ProvenanceKind::LegalHoldPlaced,
+        ProvenanceKind::LegalHoldReleased,
+        ProvenanceKind::LegalHoldDestructionRejected,
+        ProvenanceKind::ContinuationOfServicesActivated,
         ProvenanceKind::PipelineStageCompleted,
         ProvenanceKind::PipelineRiskProfile,
         ProvenanceKind::PipelineRejection,
@@ -499,7 +515,9 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::CompensationExecuted,
         ProvenanceKind::CompensationScopeBoundary,
         ProvenanceKind::DelegationViolation,
+        ProvenanceKind::InstanceSuspended,
         ProvenanceKind::InstanceResumed,
+        ProvenanceKind::InstanceTerminated,
         ProvenanceKind::StepResultPersisted,
         ProvenanceKind::IdempotencyDedup,
         ProvenanceKind::InstanceMigrated,
@@ -509,12 +527,18 @@ fn audit_layer_for_kind_covers_every_variant() {
         ProvenanceKind::DcrRelationEvaluated,
         ProvenanceKind::DcrResolutionError,
         ProvenanceKind::ZoneSatisfied,
+        ProvenanceKind::DcrZoneViolation,
         ProvenanceKind::EquityAlert,
+        ProvenanceKind::CircuitBreakerTripped,
+        ProvenanceKind::CircuitBreakerReset,
+        ProvenanceKind::ShadowModeDivergence,
+        ProvenanceKind::DriftAlert,
         ProvenanceKind::VerificationReportProduced,
         ProvenanceKind::ImmutabilityViolation,
         ProvenanceKind::ActivationBlocked,
         ProvenanceKind::CalendarIgnored,
         ProvenanceKind::NotificationSuppressed,
+        ProvenanceKind::ReportTimedOut,
         ProvenanceKind::ConfigurationWarning,
         ProvenanceKind::RelationshipChanged,
         ProvenanceKind::MilestoneFired,
@@ -544,8 +568,8 @@ fn audit_layer_for_kind_covers_every_variant() {
 
     assert_eq!(
         all.len(),
-        115,
-        "ProvenanceKind has 115 variants at HEAD (101 prior + 14 from ADRs 0066-0071); a new variant upstream MUST add an entry here"
+        131,
+        "ProvenanceKind has 131 variants at HEAD; a new variant upstream MUST add an entry here"
     );
 
     for kind in all {

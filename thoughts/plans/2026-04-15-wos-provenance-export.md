@@ -4,11 +4,11 @@
 
 **Goal:** Implement provenance export from the WOS reference implementation to three industry-standard formats: W3C PROV-O (JSON-LD), IEEE 1849 XES (XML), and OCEL 2.0 (JSON). The spec is fully normative in the Semantic Profile (§§5–6). The internal provenance types are stable. This plan closes the gap between internal provenance and external tooling interop.
 
-**Architecture:** New crate `wos-export` in `wos-spec/crates/wos-export/`. Three modules: `prov_o`, `xes`, `ocel`. The crate takes a `ProvenanceLog` (from `wos-core`) and a `SemanticProfile` export configuration struct and produces serialized output. No changes to the kernel evaluation path — export is a read-only pass over the append-only log. One prerequisite: add `timestamp` to `ProvenanceRecord` in `wos-core` (currently absent; required by all three export formats).
+**Architecture:** New crate `wos-export` in `work-spec/crates/wos-export/`. Three modules: `prov_o`, `xes`, `ocel`. The crate takes a `ProvenanceLog` (from `wos-core`) and a `SemanticProfile` export configuration struct and produces serialized output. No changes to the kernel evaluation path — export is a read-only pass over the append-only log. One prerequisite: add `timestamp` to `ProvenanceRecord` in `wos-core` (currently absent; required by all three export formats).
 
 **Tech Stack:** Rust, `serde_json` (PROV-O JSON-LD + OCEL), `quick-xml` (XES), `wos-core` dependency. No new external ontology tooling.
 
-**Spec anchor:** `wos-spec/specs/profiles/semantic.md` §5 (PROV-O) and §6 (XES/OCEL). Schema: `wos-spec/schemas/profiles/wos-semantic-profile.schema.json` — `provMapping` and `processMining` properties.
+**Spec anchor:** `work-spec/specs/profiles/semantic.md` §5 (PROV-O) and §6 (XES/OCEL). Schema: `work-spec/schemas/profiles/wos-semantic-profile.schema.json` — `provMapping` and `processMining` properties.
 
 ---
 
@@ -17,7 +17,8 @@
 ### Task 0: Add `timestamp` to `ProvenanceRecord`
 
 **Files:**
-- Modify: `wos-spec/crates/wos-core/src/provenance.rs`
+
+- Modify: `work-spec/crates/wos-core/src/provenance.rs`
 
 **Why:** PROV-O requires `prov:atTime` (§5.3), XES requires `time:timestamp` (§6.3), OCEL requires event timestamp (§6.4). Currently `ProvenanceRecord` has no timestamp field.
 
@@ -32,8 +33,9 @@
 - [ ] **Step 0.4:** Run `cargo nextest run -p wos-core -p wos-runtime -p wos-conformance`. All tests must pass.
 
 - [ ] **Step 0.5:** Commit.
+
   ```
-  git add wos-spec/crates/wos-core/src/provenance.rs wos-spec/crates/wos-runtime/src/ wos-spec/crates/wos-conformance/
+  git add work-spec/crates/wos-core/src/provenance.rs work-spec/crates/wos-runtime/src/ work-spec/crates/wos-conformance/
   git commit -m "feat(wos-core): add timestamp field to ProvenanceRecord (export prerequisite)"
   ```
 
@@ -42,11 +44,12 @@
 ## Task 1: Create `wos-export` crate scaffold
 
 **Files:**
-- Create: `wos-spec/crates/wos-export/Cargo.toml`
-- Create: `wos-spec/crates/wos-export/src/lib.rs`
-- Modify: `wos-spec/Cargo.toml` (workspace members)
 
-- [ ] **Step 1.1:** Create `wos-spec/crates/wos-export/Cargo.toml`:
+- Create: `work-spec/crates/wos-export/Cargo.toml`
+- Create: `work-spec/crates/wos-export/src/lib.rs`
+- Modify: `work-spec/Cargo.toml` (workspace members)
+
+- [ ] **Step 1.1:** Create `work-spec/crates/wos-export/Cargo.toml`:
 
   ```toml
   [package]
@@ -63,7 +66,7 @@
   wos-core = { path = "../wos-core" }
   ```
 
-- [ ] **Step 1.2:** Create `wos-spec/crates/wos-export/src/lib.rs` with module declarations:
+- [ ] **Step 1.2:** Create `work-spec/crates/wos-export/src/lib.rs` with module declarations:
 
   ```rust
   //! Provenance export to PROV-O JSON-LD, IEEE 1849 XES, and OCEL 2.0.
@@ -86,13 +89,14 @@
   }
   ```
 
-- [ ] **Step 1.3:** Add `wos-export` to the workspace `members` array in `wos-spec/Cargo.toml`.
+- [ ] **Step 1.3:** Add `wos-export` to the workspace `members` array in `work-spec/Cargo.toml`.
 
 - [ ] **Step 1.4:** Run `cargo check -p wos-export`. Must compile (empty modules are fine at this stage).
 
 - [ ] **Step 1.5:** Commit.
+
   ```
-  git add wos-spec/crates/wos-export/ wos-spec/Cargo.toml
+  git add work-spec/crates/wos-export/ work-spec/Cargo.toml
   git commit -m "feat(wos-export): scaffold crate with module structure"
   ```
 
@@ -101,7 +105,8 @@
 ## Task 2: PROV-O JSON-LD export (`prov_o` module)
 
 **Files:**
-- Create: `wos-spec/crates/wos-export/src/prov_o.rs`
+
+- Create: `work-spec/crates/wos-export/src/prov_o.rs`
 
 **Spec anchor:** Semantic Profile §5.3 (Facts tier mapping), §5.4 (bundle mapping), §5.5 (actor type mapping), §5.6 (conformance requirements).
 
@@ -163,6 +168,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 - [ ] **Step 2.4:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 2.5:** Commit.
+
   ```
   git commit -am "feat(wos-export): PROV-O JSON-LD export (Semantic Profile §5)"
   ```
@@ -172,7 +178,8 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 ## Task 3: XES XML export (`xes` module)
 
 **Files:**
-- Create: `wos-spec/crates/wos-export/src/xes.rs`
+
+- Create: `work-spec/crates/wos-export/src/xes.rs`
 
 **Spec anchor:** Semantic Profile §6.3. Output: valid IEEE 1849-2016 XES XML with Concept, Time, Lifecycle, Organizational, and ID extensions declared.
 
@@ -192,6 +199,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 - [ ] **Step 3.3:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 3.4:** Commit.
+
   ```
   git commit -am "feat(wos-export): XES XML export (Semantic Profile §6.3)"
   ```
@@ -201,7 +209,8 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 ## Task 4: OCEL 2.0 JSON export (`ocel` module)
 
 **Files:**
-- Create: `wos-spec/crates/wos-export/src/ocel.rs`
+
+- Create: `work-spec/crates/wos-export/src/ocel.rs`
 
 **Spec anchor:** Semantic Profile §6.4. Output: valid OCEL 2.0 JSON with `objectTypes`, `eventTypes`, `objects`, `events` top-level keys.
 
@@ -217,6 +226,7 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 - [ ] **Step 4.3:** Run `cargo nextest run -p wos-export`. Must pass.
 
 - [ ] **Step 4.4:** Commit.
+
   ```
   git commit -am "feat(wos-export): OCEL 2.0 JSON export (Semantic Profile §6.4)"
   ```
@@ -226,10 +236,11 @@ The output is a JSON-LD document with `@context` embedding PROV-O and WOS namesp
 ## Task 5: Conformance fixtures
 
 **Files:**
-- Create: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-prov-o.json`
-- Create: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-xes.json`
-- Create: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-ocel.json`
-- Modify: `wos-spec/crates/wos-conformance/tests/` (add export test runner)
+
+- Create: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-prov-o.json`
+- Create: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-xes.json`
+- Create: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-ocel.json`
+- Modify: `work-spec/crates/wos-conformance/tests/` (add export test runner)
 
 Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved) and asserts properties of the exported output (graph node count, event count, required field presence). Fixtures test the export path end-to-end: run the evaluator, collect the provenance log, call `wos_export::prov_o::export` / `xes::export` / `ocel::export`, assert structural properties.
 
@@ -244,8 +255,9 @@ Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved
 - [ ] **Step 5.5:** Run `cargo nextest run -p wos-conformance`. All three new tests must pass.
 
 - [ ] **Step 5.6:** Commit.
+
   ```
-  git add wos-spec/crates/wos-conformance/tests/fixtures/sp-export-*.json wos-spec/crates/wos-conformance/tests/export_conformance.rs
+  git add work-spec/crates/wos-conformance/tests/fixtures/sp-export-*.json work-spec/crates/wos-conformance/tests/export_conformance.rs
   git commit -m "test(wos-conformance): PROV-O, XES, OCEL export conformance fixtures (SP-EXPORT-001–003)"
   ```
 
@@ -258,8 +270,9 @@ Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved
 - [ ] **Step 6.2:** In Appendix A, update the `PROV-O / OCEL / XES export` row from `🟡 (internal)` to `✅`.
 
 - [ ] **Step 6.3:** Commit.
+
   ```
-  git add wos-spec/WOS-IMPLEMENTATION-STATUS.md
+  git add work-spec/WOS-IMPLEMENTATION-STATUS.md
   git commit -m "docs(wos-status): mark provenance export complete"
   ```
 
@@ -268,6 +281,7 @@ Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved
 ## Self-Review
 
 **Spec coverage:**
+
 - PROV-O mapping (§5.3–5.6) — Task 2
 - XES mapping (§6.3) — Task 3
 - OCEL mapping (§6.4) — Task 4
@@ -278,6 +292,7 @@ Each fixture drives a minimal 3-event workflow (Draft → Submitted → Approved
 - Status docs — Task 6
 
 **Known limitations (out of scope for this plan):**
+
 - Higher-tier bundles (`prov:Bundle` for Reasoning/Counterfactual/Narrative, §5.4) — not emitted; the crate documents this as a future extension
 - OCEL case file item object tracking — events link to instance only; per-item E2O links require case file schema introspection (future)
 - SHACL validation of PROV-O output — out of scope; would require an RDF library dependency

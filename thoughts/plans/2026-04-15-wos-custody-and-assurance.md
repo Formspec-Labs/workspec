@@ -4,7 +4,7 @@
 
 **Goal:** Extend the Workflow Orchestration Standard (WOS) with a `custodyHook` seam, a new Assurance layer, and eight feature-level capabilities that emerged from a Trellis-vs-WOS sorting pass. This keeps WOS substrate-neutral (any conformant processor, from trust-the-host monolith to distributed ledger, can adopt it) while giving Trellis a clean upstream to reference.
 
-**Architecture:** WOS Kernel §10 gains a sixth named extension seam (`custodyHook`). A new top-level layer `wos-spec/specs/assurance/` holds identity/attestation/continuity semantics, the named constitutional invariant "Disclosure Posture ≠ Assurance Level" (Invariant 6), and the legal-sufficiency disclaimer. WOS Governance gains three inline extensions: schema upgrade as a named lifecycle operation, quorum-based delegation, and legal hold as a distinct hold type. The `WOS-FEATURE-MATRIX.md` gains new rows reflecting the capability additions. No new WOS section §13 or §15 is introduced — the advisor review flagged those as overreach; a seam replaces §13 and `§15 Deployment Profiles` is dropped entirely.
+**Architecture:** WOS Kernel §10 gains a sixth named extension seam (`custodyHook`). A new top-level layer `work-spec/specs/assurance/` holds identity/attestation/continuity semantics, the named constitutional invariant "Disclosure Posture ≠ Assurance Level" (Invariant 6), and the legal-sufficiency disclaimer. WOS Governance gains three inline extensions: schema upgrade as a named lifecycle operation, quorum-based delegation, and legal hold as a distinct hold type. The `WOS-FEATURE-MATRIX.md` gains new rows reflecting the capability additions. No new WOS section §13 or §15 is introduced — the advisor review flagged those as overreach; a seam replaces §13 and `§15 Deployment Profiles` is dropped entirely.
 
 **Tech Stack:** Markdown (WOS spec prose, BCP 14 normative keywords), JSON Schema (Draft 2020-12, WOS schema files), existing `wos-lint` and `wos-conformance` test harnesses.
 
@@ -28,24 +28,24 @@ Plans 2 and 3 can only be authored after Plan 1's upstream homes exist.
 
 | Path | Responsibility |
 |---|---|
-| `wos-spec/specs/assurance/assurance.md` | New WOS layer spec. Defines assurance-level taxonomy, subject continuity, provider-neutral attestation, Invariant 6 as named constitutional invariant. |
-| `wos-spec/schemas/assurance/wos-assurance.schema.json` | JSON Schema for assurance-level declarations and subject-continuity references. |
+| `work-spec/specs/assurance/assurance.md` | New WOS layer spec. Defines assurance-level taxonomy, subject continuity, provider-neutral attestation, Invariant 6 as named constitutional invariant. |
+| `work-spec/schemas/assurance/wos-assurance.schema.json` | JSON Schema for assurance-level declarations and subject-continuity references. |
 
 ### Files to modify
 
 | Path | Change |
 |---|---|
-| `wos-spec/specs/kernel/spec.md` | Add §10.6 `custodyHook` seam definition; add §7.3 Context Enrichment row for custody; renumber `extensions` seam to §10.7. |
-| `wos-spec/schemas/kernel/wos-kernel.schema.json` | Add optional `custodyHook` property definition. |
-| `wos-spec/specs/governance/workflow-governance.md` | Add §2.9 Schema Upgrade as Named Lifecycle Operation; §4.9 Quorum-Based Delegation; §7.15 Legal Hold (distinct from workflow hold); preamble legal-sufficiency MUST NOT disclaimer. |
-| `wos-spec/schemas/governance/wos-workflow-governance.schema.json` | Add `schemaUpgrade`, `quorumCount` properties; extend `holdPolicies[].holdType` enum to include `legal-hold`. |
-| `wos-spec/WOS-FEATURE-MATRIX.md` | Add capability rows: 2.9 Schema upgrade, 4.9 Quorum delegation, 7.15 Legal hold, 8.11 Custody seam, 8.12 Invariant 6, 14.1 Assurance-level taxonomy, 14.2 Subject continuity, 14.3 Provider-neutral attestation, 14.4 Legal-sufficiency disclaimer. |
-| `wos-spec/WOS-IMPLEMENTATION-STATUS.md` | Update LINT-MATRIX row counts (projected +9 rules); add assurance crate to maturity matrix as 🟡 pending implementation. |
+| `work-spec/specs/kernel/spec.md` | Add §10.6 `custodyHook` seam definition; add §7.3 Context Enrichment row for custody; renumber `extensions` seam to §10.7. |
+| `work-spec/schemas/kernel/wos-kernel.schema.json` | Add optional `custodyHook` property definition. |
+| `work-spec/specs/governance/workflow-governance.md` | Add §2.9 Schema Upgrade as Named Lifecycle Operation; §4.9 Quorum-Based Delegation; §7.15 Legal Hold (distinct from workflow hold); preamble legal-sufficiency MUST NOT disclaimer. |
+| `work-spec/schemas/governance/wos-workflow-governance.schema.json` | Add `schemaUpgrade`, `quorumCount` properties; extend `holdPolicies[].holdType` enum to include `legal-hold`. |
+| `work-spec/WOS-FEATURE-MATRIX.md` | Add capability rows: 2.9 Schema upgrade, 4.9 Quorum delegation, 7.15 Legal hold, 8.11 Custody seam, 8.12 Invariant 6, 14.1 Assurance-level taxonomy, 14.2 Subject continuity, 14.3 Provider-neutral attestation, 14.4 Legal-sufficiency disclaimer. |
+| `work-spec/WOS-IMPLEMENTATION-STATUS.md` | Update LINT-MATRIX row counts (projected +9 rules); add assurance crate to maturity matrix as 🟡 pending implementation. |
 
 ### Files NOT touched in this plan
 
-- `wos-spec/specs/ai/*` — AI layer uses `actorExtension` + `contractHook`; no changes needed for custody.
-- `wos-spec/specs/advanced/*` — advanced capabilities unchanged.
+- `work-spec/specs/ai/*` — AI layer uses `actorExtension` + `contractHook`; no changes needed for custody.
+- `work-spec/specs/advanced/*` — advanced capabilities unchanged.
 - `trellis/**/*` — Plan 3 handles Trellis rewrites after WOS lands.
 - `packages/formspec-*` — Plan 2 handles Formspec extraction.
 
@@ -56,12 +56,13 @@ Plans 2 and 3 can only be authored after Plan 1's upstream homes exist.
 > **Implementation note:** Landed as S10.5 (custodyHook) and S10.6 (extensions), not the S10.6/S10.7 originally specified.
 
 **Files:**
-- Modify: `wos-spec/specs/kernel/spec.md` (§10 Named Extension Seams)
-- Modify: `wos-spec/schemas/kernel/wos-kernel.schema.json`
+
+- Modify: `work-spec/specs/kernel/spec.md` (§10 Named Extension Seams)
+- Modify: `work-spec/schemas/kernel/wos-kernel.schema.json`
 
 - [ ] **Step 1: Read existing §10 seam pattern**
 
-Open `wos-spec/specs/kernel/spec.md` and read §10.1 through §10.5. Confirm the pattern: each seam has `**Purpose:**` line + 3-6 lines of prose describing what higher layers attach.
+Open `work-spec/specs/kernel/spec.md` and read §10.1 through §10.5. Confirm the pattern: each seam has `**Purpose:**` line + 3-6 lines of prose describing what higher layers attach.
 
 - [ ] **Step 2: Insert §10.6 `custodyHook` before §10.5 `extensions`**
 
@@ -94,7 +95,7 @@ In §7.3 Context Enrichment, append a row to the seam-to-variable table:
 
 - [ ] **Step 5: Add custodyHook schema property**
 
-Edit `wos-spec/schemas/kernel/wos-kernel.schema.json`. In the top-level `properties` object (alongside existing `extensions`), add:
+Edit `work-spec/schemas/kernel/wos-kernel.schema.json`. In the top-level `properties` object (alongside existing `extensions`), add:
 
 ```json
 "custodyHook": {
@@ -106,13 +107,13 @@ Edit `wos-spec/schemas/kernel/wos-kernel.schema.json`. In the top-level `propert
 
 - [ ] **Step 6: Validate schema parses**
 
-Run: `python -c "import json; json.load(open('wos-spec/schemas/kernel/wos-kernel.schema.json'))"`
+Run: `python -c "import json; json.load(open('work-spec/schemas/kernel/wos-kernel.schema.json'))"`
 Expected: no output (JSON parses successfully).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wos-spec/specs/kernel/spec.md wos-spec/schemas/kernel/wos-kernel.schema.json
+git add work-spec/specs/kernel/spec.md work-spec/schemas/kernel/wos-kernel.schema.json
 git commit -m "feat(wos-kernel): add custodyHook seam (S10.6)
 
 Adds sixth named extension seam for custody posture declaration.
@@ -126,13 +127,14 @@ Refs: architectural review 2026-04-15"
 ## Task 2: Create new Assurance layer — directory + abstract
 
 **Files:**
-- Create: `wos-spec/specs/assurance/assurance.md`
-- Create: `wos-spec/schemas/assurance/` (empty directory)
+
+- Create: `work-spec/specs/assurance/assurance.md`
+- Create: `work-spec/schemas/assurance/` (empty directory)
 
 - [ ] **Step 1: Create directory structure**
 
 ```bash
-mkdir -p wos-spec/specs/assurance wos-spec/schemas/assurance
+mkdir -p work-spec/specs/assurance work-spec/schemas/assurance
 ```
 
 - [ ] **Step 2: Create `assurance.md` with header, abstract, and normative conventions**
@@ -167,13 +169,13 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 - [ ] **Step 3: Validate markdown parses**
 
-Run: `node -e "require('fs').readFileSync('wos-spec/specs/assurance/assurance.md', 'utf8')"`
+Run: `node -e "require('fs').readFileSync('work-spec/specs/assurance/assurance.md', 'utf8')"`
 Expected: no output (file reads successfully).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add wos-spec/specs/assurance/assurance.md
+git add work-spec/specs/assurance/assurance.md
 git commit -m "feat(wos-assurance): create assurance layer skeleton
 
 New companion layer for identity/attestation/continuity semantics.
@@ -185,7 +187,8 @@ Attaches via provenanceLayer + custodyHook seams."
 ## Task 3: Assurance §2 — Assurance-Level Taxonomy
 
 **Files:**
-- Modify: `wos-spec/specs/assurance/assurance.md` (append §2)
+
+- Modify: `work-spec/specs/assurance/assurance.md` (append §2)
 
 - [ ] **Step 1: Append §2 Assurance Levels section**
 
@@ -226,7 +229,7 @@ A subject's assurance level MAY be upgraded (but not silently downgraded) by rec
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wos-spec/specs/assurance/assurance.md
+git add work-spec/specs/assurance/assurance.md
 git commit -m "feat(wos-assurance): §2 assurance-level taxonomy + upgrade facts"
 ```
 
@@ -235,7 +238,8 @@ git commit -m "feat(wos-assurance): §2 assurance-level taxonomy + upgrade facts
 ## Task 4: Assurance §3 — Subject Continuity
 
 **Files:**
-- Modify: `wos-spec/specs/assurance/assurance.md` (append §3)
+
+- Modify: `work-spec/specs/assurance/assurance.md` (append §3)
 
 - [ ] **Step 1: Append §3 Subject Continuity section**
 
@@ -267,7 +271,7 @@ Implementations MUST NOT:
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wos-spec/specs/assurance/assurance.md
+git add work-spec/specs/assurance/assurance.md
 git commit -m "feat(wos-assurance): §3 subject continuity primitive"
 ```
 
@@ -276,7 +280,8 @@ git commit -m "feat(wos-assurance): §3 subject continuity primitive"
 ## Task 5: Assurance §4 — Invariant 6 (Disclosure Posture ≠ Assurance Level)
 
 **Files:**
-- Modify: `wos-spec/specs/assurance/assurance.md` (append §4)
+
+- Modify: `work-spec/specs/assurance/assurance.md` (append §4)
 
 - [ ] **Step 1: Append §4 Invariant 6 section (one authoritative home)**
 
@@ -308,7 +313,7 @@ This invariant is stated normatively here. Other specifications in the WOS famil
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wos-spec/specs/assurance/assurance.md
+git add work-spec/specs/assurance/assurance.md
 git commit -m "feat(wos-assurance): §4 Invariant 6 (disclosure ≠ assurance) as normative home"
 ```
 
@@ -317,7 +322,8 @@ git commit -m "feat(wos-assurance): §4 Invariant 6 (disclosure ≠ assurance) a
 ## Task 6: Assurance §5 — Provider-Neutral Attestation + §6 Legal-Sufficiency Disclaimer
 
 **Files:**
-- Modify: `wos-spec/specs/assurance/assurance.md` (append §5 and §6)
+
+- Modify: `work-spec/specs/assurance/assurance.md` (append §5 and §6)
 
 - [ ] **Step 1: Append §5 Provider-Neutral Attestation**
 
@@ -352,7 +358,7 @@ Cryptographic controls establish integrity and provenance. Legal admissibility a
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wos-spec/specs/assurance/assurance.md
+git add work-spec/specs/assurance/assurance.md
 git commit -m "feat(wos-assurance): §5 provider-neutral attestation + §6 legal-sufficiency disclaimer"
 ```
 
@@ -361,12 +367,13 @@ git commit -m "feat(wos-assurance): §5 provider-neutral attestation + §6 legal
 ## Task 7: Governance §2.9 — Schema Upgrade as Named Lifecycle Operation
 
 **Files:**
-- Modify: `wos-spec/specs/governance/workflow-governance.md` (add §2.9)
-- Modify: `wos-spec/schemas/governance/wos-workflow-governance.schema.json` (add `schemaUpgrade`)
+
+- Modify: `work-spec/specs/governance/workflow-governance.md` (add §2.9)
+- Modify: `work-spec/schemas/governance/wos-workflow-governance.schema.json` (add `schemaUpgrade`)
 
 - [ ] **Step 1: Locate existing §2 Lifecycle structure in governance spec**
 
-Open `wos-spec/specs/governance/workflow-governance.md` and find the section covering lifecycle/instance migration. Confirm where to insert §2.9.
+Open `work-spec/specs/governance/workflow-governance.md` and find the section covering lifecycle/instance migration. Confirm where to insert §2.9.
 
 - [ ] **Step 2: Insert §2.9 section**
 
@@ -388,7 +395,7 @@ Schema upgrades MAY apply to an individual instance, to all instances of a workf
 
 - [ ] **Step 3: Add `schemaUpgrade` to governance schema**
 
-In `wos-spec/schemas/governance/wos-workflow-governance.schema.json`, add a top-level property:
+In `work-spec/schemas/governance/wos-workflow-governance.schema.json`, add a top-level property:
 
 ```json
 "schemaUpgrade": {
@@ -406,13 +413,13 @@ In `wos-spec/schemas/governance/wos-workflow-governance.schema.json`, add a top-
 
 - [ ] **Step 4: Validate schema**
 
-Run: `python -c "import json; json.load(open('wos-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
+Run: `python -c "import json; json.load(open('work-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
 Expected: no output.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add wos-spec/specs/governance/workflow-governance.md wos-spec/schemas/governance/wos-workflow-governance.schema.json
+git add work-spec/specs/governance/workflow-governance.md work-spec/schemas/governance/wos-workflow-governance.schema.json
 git commit -m "feat(wos-governance): §2.9 schema upgrade as named lifecycle operation"
 ```
 
@@ -421,8 +428,9 @@ git commit -m "feat(wos-governance): §2.9 schema upgrade as named lifecycle ope
 ## Task 8: Governance §4.9 — Quorum-Based Delegation
 
 **Files:**
-- Modify: `wos-spec/specs/governance/workflow-governance.md` (add §4.9)
-- Modify: `wos-spec/schemas/governance/wos-workflow-governance.schema.json` (add `quorumCount` to delegation)
+
+- Modify: `work-spec/specs/governance/workflow-governance.md` (add §4.9)
+- Modify: `work-spec/schemas/governance/wos-workflow-governance.schema.json` (add `quorumCount` to delegation)
 
 - [ ] **Step 1: Insert §4.9 after existing §4 delegation subsections**
 
@@ -447,7 +455,7 @@ The cryptographic mechanism for proving quorum participation (threshold signatur
 
 - [ ] **Step 2: Extend delegation schema with `quorumCount`**
 
-In `wos-spec/schemas/governance/wos-workflow-governance.schema.json`, locate the `delegations[]` item schema and add:
+In `work-spec/schemas/governance/wos-workflow-governance.schema.json`, locate the `delegations[]` item schema and add:
 
 ```json
 "quorumCount": {
@@ -472,12 +480,12 @@ Add a cross-property constraint at the delegation item level:
 
 - [ ] **Step 3: Validate schema**
 
-Run: `python -c "import json; json.load(open('wos-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
+Run: `python -c "import json; json.load(open('work-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add wos-spec/specs/governance/workflow-governance.md wos-spec/schemas/governance/wos-workflow-governance.schema.json
+git add work-spec/specs/governance/workflow-governance.md work-spec/schemas/governance/wos-workflow-governance.schema.json
 git commit -m "feat(wos-governance): §4.9 quorum-based delegation (N-of-M)"
 ```
 
@@ -486,8 +494,9 @@ git commit -m "feat(wos-governance): §4.9 quorum-based delegation (N-of-M)"
 ## Task 9: Governance §7.15 — Legal Hold as Distinct Hold Type
 
 **Files:**
-- Modify: `wos-spec/specs/governance/workflow-governance.md` (add §7.15)
-- Modify: `wos-spec/schemas/governance/wos-workflow-governance.schema.json` (extend `holdType` enum)
+
+- Modify: `work-spec/specs/governance/workflow-governance.md` (add §7.15)
+- Modify: `work-spec/schemas/governance/wos-workflow-governance.schema.json` (extend `holdType` enum)
 
 - [ ] **Step 1: Insert §7.15 after existing §7.14 EU AI Act row (or at end of §7)**
 
@@ -512,7 +521,7 @@ Legal hold is an ORTHOGONAL dimension to workflow lifecycle state. A case MAY si
 
 - [ ] **Step 2: Extend `holdType` enum in schema**
 
-Find the `holdPolicies[].holdType` enum in `wos-spec/schemas/governance/wos-workflow-governance.schema.json` and add `"legal-hold"` to the enum. Example addition:
+Find the `holdPolicies[].holdType` enum in `work-spec/schemas/governance/wos-workflow-governance.schema.json` and add `"legal-hold"` to the enum. Example addition:
 
 ```json
 "holdType": {
@@ -531,12 +540,12 @@ Update the `description` to note that `legal-hold` has distinct semantics per S7
 
 - [ ] **Step 3: Validate schema**
 
-Run: `python -c "import json; json.load(open('wos-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
+Run: `python -c "import json; json.load(open('work-spec/schemas/governance/wos-workflow-governance.schema.json'))"`
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add wos-spec/specs/governance/workflow-governance.md wos-spec/schemas/governance/wos-workflow-governance.schema.json
+git add work-spec/specs/governance/workflow-governance.md work-spec/schemas/governance/wos-workflow-governance.schema.json
 git commit -m "feat(wos-governance): §7.15 legal hold as distinct hold type"
 ```
 
@@ -545,7 +554,8 @@ git commit -m "feat(wos-governance): §7.15 legal hold as distinct hold type"
 ## Task 10: Governance preamble — Legal-Sufficiency Disclaimer Cross-Reference
 
 **Files:**
-- Modify: `wos-spec/specs/governance/workflow-governance.md` (preamble or §1 Introduction)
+
+- Modify: `work-spec/specs/governance/workflow-governance.md` (preamble or §1 Introduction)
 
 - [ ] **Step 1: Insert cross-reference to Assurance §6**
 
@@ -558,7 +568,7 @@ Add a normative paragraph in the governance spec's introduction (or at the start
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wos-spec/specs/governance/workflow-governance.md
+git add work-spec/specs/governance/workflow-governance.md
 git commit -m "feat(wos-governance): cross-reference assurance §6 legal-sufficiency disclaimer"
 ```
 
@@ -567,7 +577,8 @@ git commit -m "feat(wos-governance): cross-reference assurance §6 legal-suffici
 ## Task 11: Create `wos-assurance.schema.json`
 
 **Files:**
-- Create: `wos-spec/schemas/assurance/wos-assurance.schema.json`
+
+- Create: `work-spec/schemas/assurance/wos-assurance.schema.json`
 
 - [ ] **Step 1: Author the schema**
 
@@ -616,12 +627,12 @@ git commit -m "feat(wos-governance): cross-reference assurance §6 legal-suffici
 
 - [ ] **Step 2: Validate schema parses**
 
-Run: `python -c "import json; json.load(open('wos-spec/schemas/assurance/wos-assurance.schema.json'))"`
+Run: `python -c "import json; json.load(open('work-spec/schemas/assurance/wos-assurance.schema.json'))"`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add wos-spec/schemas/assurance/wos-assurance.schema.json
+git add work-spec/schemas/assurance/wos-assurance.schema.json
 git commit -m "feat(wos-assurance): schema for assurance declarations"
 ```
 
@@ -630,7 +641,8 @@ git commit -m "feat(wos-assurance): schema for assurance declarations"
 ## Task 12: Update `WOS-FEATURE-MATRIX.md` with new capability rows
 
 **Files:**
-- Modify: `wos-spec/WOS-FEATURE-MATRIX.md`
+
+- Modify: `work-spec/WOS-FEATURE-MATRIX.md`
 
 - [ ] **Step 1: Read existing section numbering in the matrix**
 
@@ -682,7 +694,7 @@ Note: §13 does NOT exist in the matrix as of this plan; if the current matrix a
 - [ ] **Step 7: Commit**
 
 ```bash
-git add wos-spec/WOS-FEATURE-MATRIX.md
+git add work-spec/WOS-FEATURE-MATRIX.md
 git commit -m "docs(wos-matrix): add capabilities 2.9, 4.9, 7.15, 8.11, 8.12, §14 identity & assurance"
 ```
 
@@ -691,7 +703,8 @@ git commit -m "docs(wos-matrix): add capabilities 2.9, 4.9, 7.15, 8.11, 8.12, §
 ## Task 13: Update `WOS-IMPLEMENTATION-STATUS.md`
 
 **Files:**
-- Modify: `wos-spec/WOS-IMPLEMENTATION-STATUS.md`
+
+- Modify: `work-spec/WOS-IMPLEMENTATION-STATUS.md`
 
 - [ ] **Step 1: Add assurance crate row to §1 Crate Maturity Matrix**
 
@@ -710,7 +723,7 @@ Note that the total rules count will change after new lint rules are authored. A
 - [ ] **Step 3: Commit**
 
 ```bash
-git add wos-spec/WOS-IMPLEMENTATION-STATUS.md
+git add work-spec/WOS-IMPLEMENTATION-STATUS.md
 git commit -m "docs(wos-status): add assurance crate and note pending lint rules"
 ```
 
@@ -719,17 +732,18 @@ git commit -m "docs(wos-status): add assurance crate and note pending lint rules
 ## Task 14: Cross-reference pass — verify no duplicated normative text
 
 **Files:**
+
 - Read (no modifications in this task unless findings surface): multiple
 
 - [ ] **Step 1: Grep for potential Invariant 6 duplication**
 
-Run: `grep -rn "disclosure posture" wos-spec/specs/`
-Expected: the phrase should appear normatively only in `wos-spec/specs/assurance/assurance.md` §4. Other occurrences should be informative references or absent.
+Run: `grep -rn "disclosure posture" work-spec/specs/`
+Expected: the phrase should appear normatively only in `work-spec/specs/assurance/assurance.md` §4. Other occurrences should be informative references or absent.
 
 - [ ] **Step 2: Grep for legal-sufficiency duplication**
 
-Run: `grep -rn "legal admissibility\|legal sufficiency" wos-spec/specs/`
-Expected: normative statement only in `wos-spec/specs/assurance/assurance.md` §6. Other occurrences (e.g., in governance) should be cross-references, not restatements.
+Run: `grep -rn "legal admissibility\|legal sufficiency" work-spec/specs/`
+Expected: normative statement only in `work-spec/specs/assurance/assurance.md` §6. Other occurrences (e.g., in governance) should be cross-references, not restatements.
 
 - [ ] **Step 3: If any restatements found, convert to cross-references**
 
@@ -749,6 +763,7 @@ git commit -m "refactor(wos): deduplicate normative text — single source for I
 Ran inline after writing the above tasks.
 
 **1. Spec coverage:**
+
 - ✅ `custodyHook` seam — Task 1
 - ✅ Assurance layer scaffold — Task 2
 - ✅ Assurance-level taxonomy — Task 3
@@ -767,6 +782,7 @@ Ran inline after writing the above tasks.
 **2. Placeholder scan:** No "TBD", "implement later", "fill in details". Every prose block is complete. Every schema addition is complete JSON. Every commit message is specific.
 
 **3. Type consistency:**
+
 - Assurance levels spelled `L1`/`L2`/`L3`/`L4` consistently across Tasks 3, 11.
 - Disclosure posture enum `anonymous`/`pseudonymous`/`identified`/`public` consistent across Task 5 and Task 11 schema.
 - `quorumCount` / `quorumPool` consistent between Task 8 prose and schema.
@@ -782,5 +798,6 @@ Ran inline after writing the above tasks.
 Plan saved to `thoughts/plans/2026-04-15-wos-custody-and-assurance.md`.
 
 **Follow-up plans** (to be authored after this plan lands):
+
 - **Plan 2:** Extract user-originated signing from Trellis `assurance-traceability.md` into Formspec Response spec (`specs/core/spec.md` or a new `specs/core/signing.md`).
 - **Plan 3:** Trim Trellis specs to reference WOS for substrate-neutral material; remove duplicated Invariant 6 prose; trim `trust-profiles.md`, `projection-runtime-discipline.md`, `assurance-traceability.md` to ledger-specific content only.

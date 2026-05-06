@@ -8,7 +8,7 @@
 //! Pass `--no-fail` to exit `0` even when SCHEMA-DOC-001 reports violations
 //! (useful for local triage while schemas are still being fixed).
 //!
-//! From the `wos-spec/` directory:
+//! From the `work-spec/` directory:
 //! ```text
 //! cargo run -p wos-lint --example count_schema_violations -- schemas/wos-workflow.schema.json
 //! cargo run -p wos-lint --example count_schema_violations -- schemas/wos-workflow.schema.json --list

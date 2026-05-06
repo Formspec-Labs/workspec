@@ -70,7 +70,7 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 ## Documentation
 
-- [x] `wos-spec/README.md`, root `context.md` WOS section, `wos-core/README.md`, `WOS-IMPLEMENTATION-STATUS.md`.
+- [x] `work-spec/README.md`, root `context.md` WOS section, `wos-core/README.md`, `WOS-IMPLEMENTATION-STATUS.md`.
 
 ## Conformance profiles
 
@@ -256,7 +256,7 @@ WOS-side completion contract archived from the earlier `T4-TODO.md` execution fi
 Six tickets cleared in scout-recommended order after Session 15's validation pass. Net change: +1 `ProvenanceKind` variant (`ConfigurationWarning`) bringing HEAD count to 101; 4 new wos-core unit tests; 2 wos-export smoke tests rewritten exhaustively; 1 new Python lint + CI wire; 2 schemas gain `^x-` `patternProperties` blocks; 1 new `NOTES.md`; 3 doc edits normalizing `CaseInitiationRequest` → `IntakeHandoff`.
 
 - [x] **#69 — `wos-export` `camel_cases_all_record_kinds` → all variants.** Both `crates/wos-export/src/prov_o.rs:569-722` and `crates/wos-export/src/xes.rs:575-685` rewritten from hand-list of 3 to exhaustive enumeration of all 101 `ProvenanceKind` variants. Tests assert (a) every record produces one `prov:Activity` / XES event, (b) the export's `wos:actionType` / `concept:name` matches the variant's serde-camelCase round-trip verbatim, (c) every camelCase translation begins with a lowercase letter (prov_o.rs only). Mirrors the `audit_layer_for_kind_covers_every_variant` Finding-3 enumeration discipline. No exporter bugs surfaced; generic dispatch at `prov_o.rs:136` is correct for all variants. 44 wos-export tests pass.
-- [x] **#68 — Schema↔enum drift lint.** New `wos-spec/scripts/check-recordkind-parity.py` walks all `schemas/**/*.json`, finds every `$def` whose `properties.recordKind.const` (or single-element `enum`) pins a literal string, and asserts each literal maps to a `ProvenanceKind` variant under `serde(rename_all = "camelCase")`. Also walks `allOf[].if.properties.recordKind.const` to catch the `CapabilityInvocationRecord`-style if/then guard pattern. Reverse-direction (variants without schema binding) reports as informational; `--strict` upgrades to error. Wired into `wos-spec/.github/workflows/schema-regression.yml` as a separate CI step alongside `check-canonical-seams.py`. Current state: 15 schema bindings against 101 variants; forward parity holds; 94 of 101 variants are runtime-emitted without a schema $def (informational, expected). Reverse-direction enforcement is an intentional follow-up if/when per-kind schema $defs proliferate.
+- [x] **#68 — Schema↔enum drift lint.** New `work-spec/scripts/check-recordkind-parity.py` walks all `schemas/**/*.json`, finds every `$def` whose `properties.recordKind.const` (or single-element `enum`) pins a literal string, and asserts each literal maps to a `ProvenanceKind` variant under `serde(rename_all = "camelCase")`. Also walks `allOf[].if.properties.recordKind.const` to catch the `CapabilityInvocationRecord`-style if/then guard pattern. Reverse-direction (variants without schema binding) reports as informational; `--strict` upgrades to error. Wired into `work-spec/.github/workflows/schema-regression.yml` as a separate CI step alongside `check-canonical-seams.py`. Current state: 15 schema bindings against 101 variants; forward parity holds; 94 of 101 variants are runtime-emitted without a schema $def (informational, expected). Reverse-direction enforcement is an intentional follow-up if/when per-kind schema $defs proliferate.
 - [x] **§4.1 — `x-` extension seam, 2 schemas.** `schemas/conformance/conformance-trace.schema.json` and `schemas/mcp/wos-mcp-tools.schema.json` gained top-level `patternProperties: { "^x-": { "$comment": "Vendor extensions per Kernel spec §10.6 (extensions escape hatch)" } }` blocks matching the precedent in `schemas/kernel/wos-kernel.schema.json:11`. Note: the mcp-tools schema already had an `x-tool-catalog` key at top level paired with `additionalProperties: false`, which would have rejected its own data — adding `patternProperties` aligns the schema with its own usage. JSON validity verified.
 - [x] **#67 — `ProvenanceKind::ConfigurationWarning`.** Variant + audit-tier=Facts + `ConfigurationWarningInput<'a>` + `ProvenanceRecord::configuration_warning(input)` constructor + 4 unit tests (`unresolved_ref_subject_serializes_required_fields`, `render_failure_subject_omits_unresolved_ref`, `drops_context_keys_that_collide_with_required_fields`, `classifies_as_facts`). Carrier for the four spec MUSTs at `drift-monitor.md:77`, `workflow-governance.md:154`, `notification-template.md:199, 222`. `data.subject` discriminator selects the failure site (reserved literals: `drift-monitor.policyRef` | `governance.continuationPolicyRef` | `notification-template.key` | `notification-template.render`; vendor extensions via `x-` prefix). `unresolvedRef` optional (omitted for render-failure subject). Same shape as the Session 14 `CapabilityInvocation` closure. Module export updated. Test enumeration in `provenance/tests.rs` and the wos-export hand-lists (prov_o + xes) extended; assertion counts bumped 100 → 101. Per-variant `wos-runtime` emission wiring is its own follow-up — this slice closes the typed Rust path so future runtime sites can construct schema-conformant records.
 - [x] **#65d — `crates/wos-mcp/NOTES.md` decision record.** New file extracts the hand-rolled JSON-RPC vs `rust-mcp-sdk` rationale from existing code comments at `Cargo.toml:13-21` (feature-analysis retraction, 2026-04-18) and `src/server.rs:1-5` (header retraction). Records: original rationale, retraction context, current shape, why hand-rolled is still in place, when to revisit (3 trigger conditions), and pointers to ADR 0065 production seam discipline (D-3) plus open follow-ups (#65e SDK migration, #65f real MCP client validation).
@@ -472,7 +472,7 @@ closing 4 of 5 pre-D-wave open IDs.
   pins the typed `RetentionPolicy` shape that would unblock STUDIO-DEFER-005.
   Awaiting Studio team review.
 - [x] **K-016 lint rule (parent)** — added to `crates/wos-lint/src/rules/tier1.rs`
-  + registry; 4 sentinel tests in `tier1_rules.rs`; Studio cross-pass
+  - registry; 4 sentinel tests in `tier1_rules.rs`; Studio cross-pass
   test in `lint_pass_xref.rs`.
 
 ### E-wave (10 commits, 273 → 268; renumbered as E0-E10 with E5 + E11 skipped, plus E3 split into E3.1/E3.2)
@@ -591,7 +591,7 @@ F-wave addresses all of them.
   runtime 184 / lint 71 / schema 11 / fixture 1 / coordination 2.
 - **DEFER status:** DEFER-001/002/003 all closed (incl. all
   three Tranches A/B/C); DEFER-004 split + per-kind ratcheted
-  + WORKFLOW closed; DEFER-005 awaiting Studio team review of
+  - WORKFLOW closed; DEFER-005 awaiting Studio team review of
   ADR-0083 r2.
 - **Pre-existing parent failures:** all addressed
   (rule_registry now 5 passed; synth crates compile via
@@ -729,30 +729,30 @@ plus the optional E11 rule-authoring chip from the original E-plan:
 ### E11 — 4 new POM-LINT rules (the optional E-plan chip)
 
 - **E11.1** — Implementations + fixtures + tests:
-  * `POM-LINT-020` (S2, Error) — PolicyObject *past* approved
+  - `POM-LINT-020` (S2, Error) — PolicyObject *past* approved
     (mapped/validated/published/superseded/deprecated/demoted)
     requires matching ApprovalDecision (SA-MUST-pom-020). The
     `approved` state itself is the gate being crossed (snap-shorthand
     pattern accommodated). Reads both
     body.decision.subjectRef and body.subjectRef serialization
     shapes.
-  * `POM-LINT-033` (S4, Error) — AppealRight.outcomeRef MUST equal
+  - `POM-LINT-033` (S4, Error) — AppealRight.outcomeRef MUST equal
     linked Notice's outcomeRef on explicit mismatch
     (SA-MUST-pom-033). Implicit inheritance (no AppealRight
     outcomeRef) permitted as authoring shorthand. Waiver path:
     body.waiverScope='separate-procedure' + body.waivedAt silences.
-  * `POM-LINT-040` (S2, Error) — two approved Deadlines on the
+  - `POM-LINT-040` (S2, Error) — two approved Deadlines on the
     same body.trigger with different body.calendarDaysFromTrigger
     require a Conflict naming both subjects to be filed
     (SA-MUST-pom-040). Tractable lint-time slice; the general
     non-Deadline algorithm stays runtime-pending.
-  * `POM-LINT-051` (S2, Warning) — two deontic constraints
+  - `POM-LINT-051` (S2, Warning) — two deontic constraints
     (Permission/Prohibition/Obligation) sharing (subject, action)
     flagged as composition candidates unless one carries
     body.compositionAttestation='reviewed' (SA-MUST-pom-051).
     Warning severity per spec wording. Effectiveness intersection
     not modeled at lint time.
-  * 8 fixtures (one firing + one silent per rule) + 8 tests.
+  - 8 fixtures (one firing + one silent per rule) + 8 tests.
     Registry count 71 → 75. `BTreeSet` import added to
     workspace_rules.rs.
 - **E11.2** — Marker sweep:
@@ -881,24 +881,24 @@ D: ADRs + reclassify + bookkeeping):
 - **New ADRs:** 0084 (PLN-0381 identity attestation), 0085
   (PLN-0384 event-types taxonomy). Both Status: Proposed.
 - **Verified at I-wave close:**
-  * cd studio && cargo test --workspace: 0 failures.
-  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
-  * python3 studio/tests/pending_ratchet.py: substrate 191 /
+  - cd studio && cargo test --workspace: 0 failures.
+  - python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  - python3 studio/tests/pending_ratchet.py: substrate 191 /
     lint 31 / schema 7 / fixture 0 / coordination 0 = 229.
-  * raw_access_ratchet, fixture_inventory_ratchet, rule_registry,
+  - raw_access_ratchet, fixture_inventory_ratchet, rule_registry,
     api_surface boundary, determinism: all green.
 - **Rules in registry:** 75 (was 70 pre-E8.4).
 - **Verified at H-wave close:**
-  * Studio cargo test --workspace: clean (lib 121, was 113;
+  - Studio cargo test --workspace: clean (lib 121, was 113;
     +8 from E11.1 + 4 from E8.4 + 6 from E8.3 - 2 dup counts).
-  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
-  * python3 studio/tests/pending_ratchet.py: 185/67/11/1/2 = 266.
-  * cargo test -p wos-lint --test rule_registry: 5 passed.
-  * cargo test -p wos-lint --test tier1_rules: 105 passed
+  - python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  - python3 studio/tests/pending_ratchet.py: 185/67/11/1/2 = 266.
+  - cargo test -p wos-lint --test rule_registry: 5 passed.
+  - cargo test -p wos-lint --test tier1_rules: 105 passed
     (includes the 8 K-016 tests from G1).
-  * raw_access_ratchet, fixture_inventory_ratchet, api_surface
+  - raw_access_ratchet, fixture_inventory_ratchet, api_surface
     boundary, determinism: all green.
-  * Pre-existing schema_doc_zero_regression on
+  - Pre-existing schema_doc_zero_regression on
     wos-workflow.schema.json (parent kernel surface) remains for
     parent-team work.
 
@@ -939,7 +939,7 @@ All 3 critical claims verified against the source before fixing.
   (no Scenario.scenarioType discriminator → can only enforce
   existence; sharpen when discriminator lands).
 - **J8** — MAP-LINT-009 ref field list extended with `deadlineRef`
-  + `serviceBindingRef`; comment names policy.
+  - `serviceBindingRef`; comment names policy.
 - **J9** — ADR-0085 demoted-vs-deprecated resolution: distinct
   events at distinct lifecycle phases; cluster grouping
   downgraded to ADVISORY-ONLY.
@@ -962,9 +962,9 @@ All 3 critical claims verified against the source before fixing.
 - **Marker baselines unchanged:** substrate 191 / lint 31 /
   schema 7 / fixture 0 / coordination 0 = 229 markers.
 - **Verified at J-wave close:**
-  * cd studio && cargo test --workspace: 0 failures.
-  * python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
-  * python3 studio/tests/pending_ratchet.py: substrate 191 /
+  - cd studio && cargo test --workspace: 0 failures.
+  - python3 -m pytest studio/tests/schemas: 51 passed, 1 skipped.
+  - python3 studio/tests/pending_ratchet.py: substrate 191 /
     lint 31 / schema 7 / fixture 0 / coordination 0 = 229.
-  * cargo test -p wos-lint --test rule_registry: 5 passed.
-  * cargo test -p wos-lint --test tier1_rules: 105 passed.
+  - cargo test -p wos-lint --test rule_registry: 5 passed.
+  - cargo test -p wos-lint --test tier1_rules: 105 passed.

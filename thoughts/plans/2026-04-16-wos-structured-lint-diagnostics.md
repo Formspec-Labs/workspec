@@ -68,6 +68,7 @@
 ## Task 1: Failing test for diagnostic JSON shape
 
 **Files:**
+
 - Create: `crates/wos-lint/tests/diagnostic_format.rs`
 
 - [x] **Step 1.1:** Write a failing test that runs a known-bad fixture through lint and asserts the JSON output matches a golden:
@@ -91,6 +92,7 @@ fn k023_emits_structured_diagnostic() {
 ## Task 2: Implement `LintDiagnostic`
 
 **Files:**
+
 - Create: `crates/wos-lint/src/diagnostic.rs`
 - Modify: `crates/wos-lint/src/lib.rs` (export)
 
@@ -123,6 +125,7 @@ pub struct LintDiagnostic {
 ## Task 3: Migrate rules to emit `LintDiagnostic`
 
 **Files:**
+
 - Modify: every file under `crates/wos-lint/src/rules/`.
 
 - [x] **Step 3.1:** Change rule signatures from `fn check(doc: &Document) -> Vec<String>` to `fn check(doc: &Document) -> Vec<LintDiagnostic>`.
@@ -142,6 +145,7 @@ pub struct LintDiagnostic {
 ## Task 4: Output formatters
 
 **Files:**
+
 - Modify: `crates/wos-lint/src/main.rs`
 - Create: `crates/wos-lint/src/format/{text,pretty,json}.rs`
 
@@ -154,6 +158,7 @@ pub struct LintDiagnostic {
 ## Task 5: Publish the diagnostic schema
 
 **Files:**
+
 - Create: `schemas/lint/lint-diagnostic.schema.json`
 
 - [x] **Step 5.1:** JSON Schema for `LintDiagnostic`. Include `patternProperties: {"^x-": ...}` and `additionalProperties: false` consistent with §4.1.
@@ -165,7 +170,8 @@ pub struct LintDiagnostic {
 ## Task 6: Document the migration
 
 **Files:**
-- Create: `wos-spec/docs/lint-output-migration.md`
+
+- Create: `work-spec/docs/lint-output-migration.md`
 
 - [x] **Step 6.1:** Explain the breaking change. Previous consumers parsed text output; they now consume JSON or accept the new text format (which is shape-compatible where possible).
 

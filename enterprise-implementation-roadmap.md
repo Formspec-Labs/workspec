@@ -78,7 +78,7 @@ This phase proves the product thesis: that conversational intake can produce str
 
 ### 1.3 Case Management Baseline 📋 🔴 `WOS Kernel` `WOS Governance` `Formspec Coprocessor`
 
-> **WOS dependency (added 2026-04-10, updated 2026-04-12):** The WOS spec suite (18 specs in `wos-spec/`) provides comprehensive governance and workflow semantics that cover most case management requirements at the specification level. This phase should implement WOS governance specs — not design a parallel governance system. The Formspec Coprocessor handoff protocol is now specified in Runtime Companion S15, so the blocker is implementation rather than missing spec design. See `WOS-FEATURE-MATRIX.md` for the full competitive comparison.
+> **WOS dependency (added 2026-04-10, updated 2026-04-12):** The WOS spec suite (18 specs in `work-spec/`) provides comprehensive governance and workflow semantics that cover most case management requirements at the specification level. This phase should implement WOS governance specs — not design a parallel governance system. The Formspec Coprocessor handoff protocol is now specified in Runtime Companion S15, so the blocker is implementation rather than missing spec design. See `WOS-FEATURE-MATRIX.md` for the full competitive comparison.
 
 - 📋 **[WOS]** Case object created from each completed submission — WOS Kernel S4-S5 defines lifecycle topology and case state model; CaseInstance serialization in Runtime S3. **Requires:** implementing the Runtime S15 Formspec Coprocessor handoff.
 - 📋 **[WOS]** Case status lifecycle — WOS provides the framework for arbitrary state definitions (atomic, compound, parallel, final). Specific status names (submitted, in-review, etc.) are workflow authoring decisions using WOS primitives.

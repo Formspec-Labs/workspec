@@ -1,6 +1,6 @@
 //! Emit open string leaves (schema nodes with `type: string` and no enum/const/pattern).
 //!
-//! From `wos-spec/`:
+//! From `work-spec/`:
 //! ```text
 //! cargo run -p wos-lint --example schema_string_leaf_report -- schemas/wos-workflow.schema.json
 //! cargo run -p wos-lint --example schema_string_leaf_report -- schemas/wos-workflow.schema.json --csv

@@ -4,7 +4,7 @@
 **Updated:** 2026-04-11 (v5 — Section 12 inventory synced to landed Runtime + collateral)
 **Author:** Formspec project
 **Status:** Phases 1-3 COMPLETE. Profiles and companion COMPLETE. Phase 4 PLANNED.
-**Draft corpus:** `wos-spec/DRAFTS/` (13 files: v0.1 through v7, agent tier, lifecycle tier, amendments, proposals, schemas)
+**Draft corpus:** `work-spec/DRAFTS/` (13 files: v0.1 through v7, agent tier, lifecycle tier, amendments, proposals, schemas)
 **Delivered:** 18 specs, 18 schemas, 39 document fixtures + 2 harness fixtures (see Section 12 for full inventory)
 
 ---
@@ -585,7 +585,7 @@ These apply regardless of architecture:
 
 Five research documents were reviewed by parallel agents against the implementation plan and kernel spec. This section records the convergent findings, what was adopted, what was rejected, and where the agents overreached.
 
-**Source documents:** `wos-spec/research/` (3 .docx landscape surveys + 1 .md compass artifact + 1 research prompt)
+**Source documents:** `work-spec/research/` (3 .docx landscape surveys + 1 .md compass artifact + 1 research prompt)
 
 ### 9.1 Adopted (integrated into the plan above)
 
@@ -809,7 +809,7 @@ Full audit of all 4 flagged draft files completed 2026-04-09. Results:
 
 The current fixture inventory is 41 JSON files:
 
-- 39 authored document fixtures under `wos-spec/fixtures/`
+- 39 authored document fixtures under `work-spec/fixtures/`
 - 2 kernel harness fixtures in the same tree: `kernel/invalid-documents.json` and `kernel/purchase-order-provenance.json`
 
 Category breakdown:

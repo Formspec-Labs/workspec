@@ -17,7 +17,7 @@ This document defines the WOS-owned authored-record surface that crosses the ker
 
 The **JSON serialization** of the four-field append input (fixtures, tests, and
 debug export) is described here and checked in-repo by
-`wos-spec/tests/schemas/test_custody_hook_encoding.py` (inline Draft 2020-12
+`work-spec/tests/schemas/test_custody_hook_encoding.py` (inline Draft 2020-12
 schema). Author-time anchoring posture for workflows lives under
 [`../../schemas/wos-workflow.schema.json`](../../schemas/wos-workflow.schema.json)
 `custody` (ADR 0076; the former standalone kernel custody JSON Schema was

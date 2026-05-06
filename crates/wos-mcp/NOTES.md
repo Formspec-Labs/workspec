@@ -23,6 +23,7 @@ rolled loop remains the current implementation, but the dependency-weight
 argument no longer justifies it.
 
 **Current shape:**
+
 - `src/server.rs:30-70` defines `Request` / `Response` / `Error` types
   matching the JSON-RPC-2.0 wire format (`jsonrpc: "2.0"`, `id`, `method`,
   `params`, `result`/`error`).
@@ -41,6 +42,7 @@ work item, larger than a dependency-cleanup commit. Migration to
 silence is not proof of dual-entry correctness).
 
 **When to revisit the decision:**
+
 1. The hand-rolled loop diverges meaningfully from JSON-RPC-2.0 — at
    that point ecosystem parity wins.
 2. A consumer requires a transport other than stdio (SSE, HTTP) — at
@@ -60,11 +62,11 @@ already gone.
 
 - MCP plan: `thoughts/plans/2026-04-17-wos-mcp-crate.md` (Open Questions
   Q-A — transport choice).
-- TODO follow-ups: `wos-spec/TODO.md` ADR 0065 cluster items
+- TODO follow-ups: `work-spec/TODO.md` ADR 0065 cluster items
   **#65d** (this note), **#65e** (SDK migration follow-up — `Cargo.toml`
   TODO), **#65f** (real MCP client validation).
-- Cargo.toml feature analysis: `wos-spec/crates/wos-mcp/Cargo.toml:13-21`.
-- Header comment retraction: `wos-spec/crates/wos-mcp/src/server.rs:1-5`.
+- Cargo.toml feature analysis: `work-spec/crates/wos-mcp/Cargo.toml:13-21`.
+- Header comment retraction: `work-spec/crates/wos-mcp/src/server.rs:1-5`.
 
 ## Production seam (ADR 0065 D-3)
 

@@ -4,7 +4,7 @@
 //!
 //! Unlike every other rule in `wos-lint`, which lints WOS *documents* that
 //! carry a `$wos*` marker, this rule lints the **JSON Schema files** under
-//! `wos-spec/schemas/**/*.json` themselves. The schemas are load-bearing
+//! `work-spec/schemas/**/*.json` themselves. The schemas are load-bearing
 //! prompt material for LLM authoring: if a property has no description or
 //! no example, an LLM cannot reliably generate a valid instance.
 //!

@@ -530,12 +530,14 @@
           "type": "string",
           "enum": [
             "formspec",
-            "jsonSchema"
+            "jsonSchema",
+            "freeform"
           ],
-          "description": "Contract binding type for this task when backed by a contract. Drives which renderer the task delivery layer invokes.",
+          "description": "Contract binding type for this task. Drives which renderer the task delivery layer invokes. `formspec` selects the Formspec renderer (typed contract); `jsonSchema` selects a generic JSON-Schema-validated body; `freeform` is a structured task with no machine-validated payload (typical of dismissals or simple acknowledgements). The API projection at `schemas/api/task.schema.json#/$defs/TaskBinding` mirrors this enum byte-for-byte (ADR 0082 D-13 gate 6).",
           "examples": [
             "formspec",
-            "jsonSchema"
+            "jsonSchema",
+            "freeform"
           ]
         },
         "definitionUrl": {

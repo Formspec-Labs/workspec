@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close every checkbox in §1 of `wos-spec/TODO.md` — binding-backed S15 conformance, version-pin enforcement, hierarchical history semantics, milestone firing, business calendar SLA integration, and the six remaining Integration Profile binding kinds — so that WOS can honestly claim "supported in reference runtime" before external engine bindings begin.
+**Goal:** Close every checkbox in §1 of `work-spec/TODO.md` — binding-backed S15 conformance, version-pin enforcement, hierarchical history semantics, milestone firing, business calendar SLA integration, and the six remaining Integration Profile binding kinds — so that WOS can honestly claim "supported in reference runtime" before external engine bindings begin.
 
 **Architecture:** Work happens in the `wos-spec` git submodule (`/Users/mikewolfd/Work/formspec/wos-spec`) across five crates: `wos-core` (typed models, state), `wos-runtime` (execution), `wos-formspec-binding` (coprocessor adapter), `wos-conformance` (fixture harness), `wos-lint` (static analysis). Every slice follows red-green-refactor with new conformance fixtures landing before implementation where the observable behavior is subtle (history, milestones, CloudEvents). Commits land in the submodule; the parent `formspec` repo is bumped once per slice so main-branch bisect stays meaningful.
 
-**Tech Stack:** Rust 2021 workspace, `serde`/`serde_json` for document IO, JSON Schema fixtures under `crates/*/fixtures/` and `wos-spec/fixtures/`, `cargo nextest run -p <crate>` for per-crate runs, `cargo nextest run --workspace` for the full suite.
+**Tech Stack:** Rust 2021 workspace, `serde`/`serde_json` for document IO, JSON Schema fixtures under `crates/*/fixtures/` and `work-spec/fixtures/`, `cargo nextest run -p <crate>` for per-crate runs, `cargo nextest run --workspace` for the full suite.
 
 ---
 
@@ -69,6 +69,7 @@
 **Outcome:** Fixtures can opt into the real `FormspecBinding` by declaring `binding: "formspec"` (or similar) in fixture JSON. At least one existing fixture runs through the real path and remains green.
 
 **Files:**
+
 - Create: `crates/wos-conformance/src/formspec_processor.rs` — test-double `FormspecProcessor` impl that loads a Definition JSON from fixture-embedded data.
 - Modify: `crates/wos-conformance/src/engine.rs:88-155` — conditional binding registration based on fixture field.
 - Modify: `crates/wos-conformance/src/fixture.rs` — add `binding: Option<String>` field (default `"conformance"`).
@@ -79,6 +80,7 @@
 ### Task 1.1 — Add `binding` field to fixture schema
 
 **Files:**
+
 - Modify: `crates/wos-conformance/src/fixture.rs:61-78`
 
 - [ ] **Step 1: Write the failing deserialization test**
@@ -122,6 +124,7 @@ fn fixture_accepts_formspec_binding() {
 cd /Users/mikewolfd/Work/formspec/wos-spec
 cargo nextest run -p wos-conformance --test fixture_shape
 ```
+
 Expected: compile error — field `binding` does not exist on `ConformanceFixture`.
 
 - [ ] **Step 3: Add the field with serde default**
@@ -146,6 +149,7 @@ fn default_binding() -> Option<String> {
 ```bash
 cargo nextest run -p wos-conformance --test fixture_shape
 ```
+
 Expected: 2 passed.
 
 - [ ] **Step 5: Commit**
@@ -160,6 +164,7 @@ git commit -m "feat(wos-conformance): add binding selector to fixture schema"
 ### Task 1.2 — Create test-double `FormspecProcessor`
 
 **Files:**
+
 - Create: `crates/wos-conformance/src/formspec_processor.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -199,6 +204,7 @@ fn processor_rejects_unpinned_envelope() {
 ```bash
 cargo nextest run -p wos-conformance --test formspec_processor_double
 ```
+
 Expected: unresolved module `formspec_processor`.
 
 - [ ] **Step 3: Implement the test-double processor**
@@ -286,6 +292,7 @@ Add `pub mod formspec_processor;` to `crates/wos-conformance/src/lib.rs`.
 ```bash
 cargo nextest run -p wos-conformance --test formspec_processor_double
 ```
+
 Expected: 2 passed.
 
 - [ ] **Step 5: Commit**
@@ -302,6 +309,7 @@ git commit -m "feat(wos-conformance): add FixtureFormspecProcessor test double"
 ### Task 1.3 — Register real binding when fixture opts in
 
 **Files:**
+
 - Modify: `crates/wos-conformance/src/engine.rs:126-146`
 
 - [ ] **Step 1: Write the failing integration test**
@@ -351,6 +359,7 @@ fn engine_defaults_to_conformance_binding() {
 ```bash
 cargo nextest run -p wos-conformance --test formspec_binding_swap
 ```
+
 Expected: `ConformanceResult` has no `binding_used` field.
 
 - [ ] **Step 3: Add `binding_used` to `ConformanceResult`**
@@ -401,6 +410,7 @@ wos-formspec-binding = { path = "../wos-formspec-binding" }
 cargo nextest run -p wos-conformance --test formspec_binding_swap
 cargo nextest run -p wos-conformance
 ```
+
 Expected: 2 new passes, no regression in existing tests.
 
 - [ ] **Step 7: Commit**
@@ -418,6 +428,7 @@ git commit -m "feat(wos-conformance): register FormspecBinding when fixture opts
 ### Task 1.4 — Port one existing fixture to the real binding
 
 **Files:**
+
 - Create: `crates/wos-conformance/fixtures/K-020-provenance-completeness-real-binding.json`
 
 - [ ] **Step 1: Copy and modify the fixture**
@@ -434,6 +445,7 @@ Add `"binding": "formspec"` to the new file. Keep every other field identical.
 ```bash
 cargo nextest run -p wos-conformance
 ```
+
 Expected: the ported fixture is green through the real binding; the original is still green through the stub; total fixture count increments by 1 (102 → 103).
 
 - [ ] **Step 3: Commit**
@@ -474,6 +486,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** Six new fixtures exercise the task lifecycle through `FormspecBinding` and assert on `contract_outcomes`. No existing stub-backed fixture is removed.
 
 **Files:**
+
 - Create fixtures:
   - `crates/wos-conformance/fixtures/S15-001-task-draft-prefill.json`
   - `crates/wos-conformance/fixtures/S15-002-submit-valid.json`
@@ -503,6 +516,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** Every conformance fixture uses `FormspecBinding`. `ConformanceBinding`, `StubValidator`, and their `pub` exports are gone. Pin equality is asserted on re-validation paths, not only initial submit.
 
 **Files:**
+
 - Modify every fixture under `crates/wos-conformance/fixtures/*.json` — add `"binding": "formspec"` (or delete the field so the default becomes `"formspec"` after the default flip).
 - Modify: `crates/wos-conformance/src/fixture.rs` — flip `default_binding()` to return `"formspec"`.
 - Modify: `crates/wos-conformance/src/engine.rs` — drop the `ConformanceBinding` arm of the match.
@@ -530,6 +544,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** `historyState: "deep"` on a compound state causes re-entry after external interruption to restore the full nested configuration; `historyState: "shallow"` restores only the direct substate. `history_store` is written on exit of any state whose parent has a `historyState` declaration.
 
 **Files:**
+
 - Create fixtures (9):
   - `K-H-D1-deep-normal-reentry.json` (depth 1, deep, event interrupts → re-enter, full path restored)
   - `K-H-D1-shallow-normal-reentry.json`
@@ -561,6 +576,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** Milestone conditions are evaluated after each durable data write. Newly-true milestones emit a `MilestoneFired` provenance record, then reactive transitions drain. Milestones do not re-fire once fired within a given case-instance until the underlying state changes.
 
 **Files:**
+
 - Modify: `crates/wos-core/src/provenance.rs:13-156` — add variant `MilestoneFired { milestone_id: String }` to `ProvenanceKind`.
 - Modify: `crates/wos-core/src/instance.rs` — add `fired_milestones: HashSet<String>` to `CaseInstance` (serde default empty).
 - Create: `crates/wos-runtime/src/milestones.rs` — `evaluate_milestones(instance, kernel, pre_state, post_state) -> Vec<ProvenanceRecord>`. Evaluates each milestone's FEL condition against post-state; for any newly-true (not in `fired_milestones`), records the ID and returns a provenance record.
@@ -591,6 +607,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** SLA deadlines computed against an attached `BusinessCalendarDocument` — holidays skipped, operating-hours enforced, timezone-correct. Deadlines computed lazily at check time. `calendarVersion` appears in provenance.
 
 **Files:**
+
 - Create: `crates/wos-core/src/business_calendar/evaluator.rs` (split from the model module; add `next_business_moment(start: DateTime, duration: Duration, calendar: &BusinessCalendarDocument) -> DateTime`).
 - Modify: `crates/wos-runtime/src/runtime.rs:1447-1491` — replace literal deadline comparison with calendar-aware call when a calendar is attached.
 - Modify: `crates/wos-core/src/provenance.rs` — add `calendar_version: Option<String>` to whatever provenance record covers deadline evaluations (likely `TimerFired` or a new `DeadlineEvaluated` variant — decide during execution).
@@ -618,6 +635,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** `IntegrationBinding.kind` becomes a typed enum. Each kind's execution is delegated to an `IntegrationBindingHandler` trait implementation. Request-response becomes the first handler. No behavior change.
 
 **Files:**
+
 - Modify: `crates/wos-runtime/src/integration.rs:62` — replace `pub kind: String` with `pub kind: IntegrationBindingKind`.
 - Add to same file: the `IntegrationBindingKind` enum with variants `RequestResponse`, `EventEmit`, `EventConsume`, `Callback`, `ArazzoSequence`, `Tool`, `PolicyEngine`. `#[serde(rename_all = "kebab-case")]`.
 - Create: `crates/wos-runtime/src/integration_handlers/mod.rs` — `trait IntegrationBindingHandler` with `fn execute(&self, ctx: &mut InvocationCtx, binding: &IntegrationBinding) -> Result<InvocationOutcome, RuntimeError>;`.
@@ -640,6 +658,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** `outputBinding` JSONPath supports member access, index, wildcard, slice. Filter expressions (`[?()]`) and recursive descent (`..`) are rejected at definition load with a clear diagnostic. Profile documented in `specs/profiles/integration.md` §3.3.
 
 **Files:**
+
 - Modify: `crates/wos-runtime/src/runtime.rs:1735-1813` — extend `parse_json_path` with `Wildcard` and `Slice(start, end, step)` segments.
 - Modify: `crates/wos-runtime/src/runtime.rs:1709-1733` — extend `resolve_json_path` to emit arrays for wildcard/slice matches.
 - Modify: `crates/wos-lint/src/rules/` — new rule `I-001-outputbinding-profile`, rejects `..` and `[?(...)]` in any `outputBinding.jsonPath` field.
@@ -663,6 +682,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** `event-emit`, `event-consume`, `callback` handlers execute, emit CloudEvents 1.0 envelopes, correlate callbacks via `subject`, and produce per-kind provenance records. Events missing `id` or `source` are rejected at ingress.
 
 **Files:**
+
 - Create: `crates/wos-runtime/src/integration_handlers/event_emit.rs`
 - Create: `crates/wos-runtime/src/integration_handlers/event_consume.rs`
 - Create: `crates/wos-runtime/src/integration_handlers/callback.rs`
@@ -689,6 +709,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 **Outcome:** Each remaining binding kind executes; Arazzo steps produce per-step provenance; tool reuses the request-response contract; policy-engine decisions normalize to a pinned shape.
 
 **Files:**
+
 - Create: `crates/wos-runtime/src/integration_handlers/arazzo_sequence.rs`
 - Create: `crates/wos-runtime/src/integration_handlers/tool.rs`
 - Create: `crates/wos-runtime/src/integration_handlers/policy_engine.rs`
@@ -709,12 +730,12 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 
 ## Slice 11 — FIN: Counts reconciliation, TODO update, parent bump
 
-**Outcome:** `wos-spec/TODO.md` §1 checkboxes all marked `[x]`. Implementation Status matrix updated. Counts in `TODO.md` header match reality.
+**Outcome:** `work-spec/TODO.md` §1 checkboxes all marked `[x]`. Implementation Status matrix updated. Counts in `TODO.md` header match reality.
 
 **Tasks:**
 
 - [ ] **11.1** Count fixtures: `ls crates/wos-conformance/fixtures/*.json | wc -l` and update the TODO header.
-- [ ] **11.2** Count lint rules: `grep -c "^-" wos-spec/LINT-MATRIX.md` approach, or the existing counting script. Update TODO header (196 → new total).
+- [ ] **11.2** Count lint rules: `grep -c "^-" work-spec/LINT-MATRIX.md` approach, or the existing counting script. Update TODO header (196 → new total).
 - [ ] **11.3** Move every §1 checkbox to `[x]` and push each completed bullet to the "Completed" section at the bottom of the TODO.
 - [ ] **11.4** Update `WOS-IMPLEMENTATION-STATUS.md` with a row per completed slice.
 - [ ] **11.5** Update `WOS-FEATURE-MATRIX.md` cells that now flip green.
@@ -735,7 +756,7 @@ git commit -m "build: bump wos-spec submodule (S15.1)"
 
 ## Execution Handoff
 
-Plan complete and saved to `wos-spec/thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md`.
+Plan complete and saved to `work-spec/thoughts/plans/2026-04-14-wos-spec-section-1-implementation.md`.
 
 Two execution options:
 

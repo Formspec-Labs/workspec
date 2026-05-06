@@ -108,7 +108,7 @@ The Respondent Ledger spec (969 lines) provides a full provider-neutral identity
 
 ## 5. ~~🔴~~ 🟠 Case and Workflow Management
 
-No case management **platform layer** exists. However, the WOS (Workflow Orchestration Standard) spec suite — 18 specs, 18 schemas, 189 lint rules developed in `wos-spec/` — provides comprehensive governance and workflow semantics that cover most of the post-submission workflow requirements at the specification level. The Formspec spec suite provides pre-submission routing. The gap is **SaaS implementation and UI**, not spec design.
+No case management **platform layer** exists. However, the WOS (Workflow Orchestration Standard) spec suite — 18 specs, 18 schemas, 189 lint rules developed in `work-spec/` — provides comprehensive governance and workflow semantics that cover most of the post-submission workflow requirements at the specification level. The Formspec spec suite provides pre-submission routing. The gap is **SaaS implementation and UI**, not spec design.
 
 > **WOS context (added 2026-04-10, updated 2026-04-12):** The WOS spec suite was developed in parallel with this gap analysis. Many items listed below as 🆕 gaps have since been addressed by WOS specifications. The Formspec Coprocessor handoff is now specified in Runtime Companion S15, so the remaining gaps are implementation/UI concerns rather than missing protocol design. See `WOS-FEATURE-MATRIX.md` for the full competitive comparison.
 
@@ -297,7 +297,7 @@ After accounting for spec coverage — including the WOS spec suite (18 specs co
 
 ### The case management gap has been substantially closed by WOS
 
-The WOS spec suite (developed in `wos-spec/`) addresses most of the case management requirements identified in Section 5 at the specification level: lifecycle topology, case state model, task lifecycle with assignment roles, SLA with breach policies, review protocols, due process, delegation of authority, hold policies, structured audit with authority ranking, AI agent governance, and the Formspec coprocessor handoff. The remaining gaps are: reviewer UI/dashboard, bulk triage, workload balancing algorithms, and case notes as a first-class feature. See `WOS-FEATURE-MATRIX.md` for the full competitive comparison.
+The WOS spec suite (developed in `work-spec/`) addresses most of the case management requirements identified in Section 5 at the specification level: lifecycle topology, case state model, task lifecycle with assignment roles, SLA with breach policies, review protocols, due process, delegation of authority, hold policies, structured audit with authority ranking, AI agent governance, and the Formspec coprocessor handoff. The remaining gaps are: reviewer UI/dashboard, bulk triage, workload balancing algorithms, and case notes as a first-class feature. See `WOS-FEATURE-MATRIX.md` for the full competitive comparison.
 
 ### The signature question
 
@@ -348,6 +348,7 @@ ServiceNow and Formspec approach the intake→workflow→case pipeline from oppo
 **Where Formspec should not compete with ServiceNow:** ITSM, CSM, HR Service Delivery — ServiceNow owns these verticals. Customers who need a general-purpose workflow platform today. Any buyer who requires FedRAMP High or IL4/IL5 certification now.
 
 **Where Formspec can win against ServiceNow:**
+
 - Intake-heavy workflows where ServiceNow catalog items are too rigid (benefits applications, grant intake, permitting, document-heavy onboarding)
 - Trust-sensitive use cases where cryptographic audit, AI governance, and deployment flexibility matter more than raw workflow breadth
 - Cost-sensitive buyers who cannot afford ServiceNow licensing for what is fundamentally an intake problem

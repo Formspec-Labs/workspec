@@ -923,6 +923,26 @@
     }
   ],
   "$defs": {
+    "ImpactLevel": {
+      "$comment": "Name-promoted alias of `properties/impactLevel` (Kernel §6 proportionality index). Lifted to `$defs` so consumers — most notably the public API projection in `schemas/api/task.schema.json#/$defs/ImpactLevel` (ADR 0082 D-13 gate 6) — can `$ref` a stable target instead of pointing at the inline `properties` path. Closed enum; the document-level `properties/impactLevel` keeps the inline form for required-key bookkeeping at the root and remains canonical for human authors.",
+      "enum": [
+        "informational",
+        "operational",
+        "rights-impacting",
+        "safety-impacting"
+      ]
+    },
+    "InstanceStatus": {
+      "$comment": "Name-promoted alias of the runtime instance-status enum, originally inlined at `wos-case-instance.schema.json#/properties/status` (ADR 0070 D-5 — `stalled` reframed as a reserved `InstanceStatus` variant). Lifted to `$defs` so the public API projection in `schemas/api/instance.schema.json#/$defs/LifecycleState` (ADR 0082 D-13 gate 6) and any future consumer can `$ref` a stable target. Closed enum: `active` accepts events; `suspended` is paused; `migrating` is mid-version-change; `completed`/`terminated` are irreversible terminal states; `stalled` exhausted the commit retry budget and is recoverable via operator intervention.",
+      "enum": [
+        "active",
+        "suspended",
+        "migrating",
+        "completed",
+        "terminated",
+        "stalled"
+      ]
+    },
     "CaseFile": {
       "type": "object",
       "description": "Structured case data. Either declared inline via fields, or referenced via contractRef. Formspec is the recommended contract binding (kernel contractHook seam).",
@@ -3821,31 +3841,65 @@
         "recordKind": {
           "type": "string",
           "enum": [
+            "agentStateTransition",
+            "agentVersionChange",
+            "amendmentAuthorized",
+            "appealFiled",
             "authorizationAttestation",
             "authorizationRejected",
-            "amendmentAuthorized",
+            "autonomyDemotion",
+            "autonomyEscalation",
             "capabilityInvocation",
             "caseCreated",
             "caseStateMutation",
+            "circuitBreakerReset",
+            "circuitBreakerTripped",
             "clockResolved",
             "clockSkewObserved",
             "clockStarted",
             "commitAttemptFailure",
+            "confidenceDecay",
+            "continuationOfServicesActivated",
             "correctionAuthorized",
+            "cumulativeConfidenceViolation",
+            "dcrZoneViolation",
+            "deonticBypass",
             "determinationAmended",
             "determinationRescinded",
+            "driftAlert",
+            "driftReclassification",
+            "equityAlert",
+            "fallbackAttempt",
+            "fallbackTerminal",
+            "fallbackTriggered",
             "identityAttestation",
+            "instanceMigrated",
+            "instanceResumed",
+            "instanceSuspended",
+            "instanceTerminated",
             "intakeAccepted",
             "intakeDeferred",
             "intakeRejected",
-            "instanceMigrated",
+            "legalHoldDestructionRejected",
+            "legalHoldPlaced",
+            "legalHoldReleased",
             "migrationPinChanged",
+            "milestoneFired",
+            "noticeSent",
+            "overrideRecorded",
+            "reportTimedOut",
             "reinstated",
             "rescissionAuthorized",
+            "samplingDecision",
+            "shadowModeDivergence",
             "signatureAffirmation",
-            "stateTransition"
+            "stateTransition",
+            "timerCancelled",
+            "timerCreated",
+            "timerFired",
+            "zoneSatisfied"
           ],
-          "description": "Provenance record discriminator naming which facts-tier payload shape and processing rules apply. Includes kernel lifecycle and mutation kinds plus ADR-0066/0070/0071 shapes and provenance-log overlays (`caseCreated`, intake outcomes, `signatureAffirmation`) merged at the log `items` allOf seam. Determination snapshot enforcement applies when this value is `stateTransition` and transition tags include `determination`.",
+          "description": "Provenance record discriminator naming which facts-tier payload shape and processing rules apply. Includes kernel lifecycle and mutation kinds (S4.13 milestones, S9.7.7 timer.created/cancelled/fired) plus ADR-0066/0070/0071 shapes and provenance-log overlays (`caseCreated`, intake outcomes, `signatureAffirmation`) merged at the log `items` allOf seam, governance §3.2 noticeSent / §3.5 appealFiled / §7.1 samplingDecision / §7.3 overrideRecorded, AI integration §3.4 agentVersionChange / §4.7 deonticBypass / §5.5 autonomyDemotion / §7.5 confidenceDecay / §7.7 cumulativeConfidenceViolation / §8 fallbackTriggered/Attempt/Terminal / §9 driftReclassification, and advanced §3 equityAlert / §4 zoneSatisfied / §7 agentStateTransition. Determination snapshot enforcement applies when this value is `stateTransition` and transition tags include `determination`. Literal-set MUST stay byte-aligned with the `ProvenanceKind` Rust enum (`crates/wos-core/src/provenance/kind.rs`) per `scripts/check-recordkind-parity.py`.",
           "examples": [
             "stateTransition",
             "caseStateMutation"

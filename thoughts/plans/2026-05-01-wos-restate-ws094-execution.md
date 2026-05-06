@@ -18,7 +18,7 @@ Phases **0–2** below keep **ADR §** / **spec req** on each line. **Phases 3�
 
 ## Phase 0 — Dependency and compile proof (ADR D1, spec R-1.x prep)
 
-- [x] Add `restate-sdk` (**0.8.0** — 0.10+ needs rustc 1.90+) and related deps to [`wos-spec/crates/wos-server-runtime-restate/Cargo.toml`](../../crates/wos-server-runtime-restate/Cargo.toml). **ADR D1**; **spec** preamble.
+- [x] Add `restate-sdk` (**0.8.0** — 0.10+ needs rustc 1.90+) and related deps to [`work-spec/crates/wos-server-runtime-restate/Cargo.toml`](../../crates/wos-server-runtime-restate/Cargo.toml). **ADR D1**; **spec** preamble.
 - [x] Add `src/restate_virtual.rs`: `#[restate_sdk::object]` `WosInstance` + handlers (`probe`, lifecycle). **ADR D1**; **spec R-1.2** groundwork.
 - [x] `cargo check -p wos-server-runtime-restate` and `cargo test -p wos-server-runtime-restate --lib` green. **spec R-6.2** (local unit scope).
 
@@ -27,7 +27,7 @@ Phases **0–2** below keep **ADR §** / **spec req** on each line. **Phases 3�
 ## Phase 1 — `HttpServer` endpoint and discovery (ADR D2, spec R-2.x)
 
 - [x] Export [`restate_virtual::wos_instance_endpoint`](../../crates/wos-server-runtime-restate/src/restate_virtual.rs) (`Endpoint::builder().bind(...)`). **ADR D2**; **spec R-2.1**.
-- [x] Document bind / env in [`wos-spec/crates/wos-server-runtime-restate/src/lib.rs`](../../crates/wos-server-runtime-restate/src/lib.rs) (`WOS_RESTATE_INGRESS_URL`, `WOS_RESTATE_IT_URL` for ignored test). **spec R-2.2**.
+- [x] Document bind / env in [`work-spec/crates/wos-server-runtime-restate/src/lib.rs`](../../crates/wos-server-runtime-restate/src/lib.rs) (`WOS_RESTATE_INGRESS_URL`, `WOS_RESTATE_IT_URL` for ignored test). **spec R-2.2**.
 
 ---
 
@@ -47,7 +47,7 @@ Phases **0–2** below keep **ADR §** / **spec req** on each line. **Phases 3�
 
 **Landed (2026-05-01):**
 
-- [x] **R-6.1 — CI replay:** Root [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) job **`wos-restate-ingress-smoke`**; [`wos-spec/Makefile`](../../Makefile) target **`restate-ingress-smoke`**; [`scripts/restate_ingress_smoke.sh`](../../scripts/restate_ingress_smoke.sh) (Docker **`docker.restate.dev/restatedev/restate:1.6.2`**, `POST /deployments` → `http://host.docker.internal:9080`, worker binary **`wos-restate-worker`**); ignored test **`ingress_create_load_probe_smoke`** with `WOS_RESTATE_IT_URL` (default `http://127.0.0.1:8080` in script).
+- [x] **R-6.1 — CI replay:** Root [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) job **`wos-restate-ingress-smoke`**; [`work-spec/Makefile`](../../Makefile) target **`restate-ingress-smoke`**; [`scripts/restate_ingress_smoke.sh`](../../scripts/restate_ingress_smoke.sh) (Docker **`docker.restate.dev/restatedev/restate:1.6.2`**, `POST /deployments` → `http://host.docker.internal:9080`, worker binary **`wos-restate-worker`**); ignored test **`ingress_create_load_probe_smoke`** with `WOS_RESTATE_IT_URL` (default `http://127.0.0.1:8080` in script).
 - [x] **Ingress wire fix:** No-input handlers (`loadInstance`, `drainOnce`) use **empty POST** bodies (Restate 1.6 rejects spurious `application/json` on those handlers) — [`ingress_http.rs`](../../crates/wos-server-runtime-restate/src/ingress_http.rs).
 - [x] **R-6.2 — selected conformance (supplementary):** [`crates/wos-conformance/tests/r6_restate_conformance_slice.rs`](../../crates/wos-conformance/tests/r6_restate_conformance_slice.rs) — SIG-013 Tier-3 negative + **C.0/C.1** in-memory parity (reference `restate_signature_fixture_runtime` vs `RestateRuntimeAdapter::new`) + **D.1a** terminal cases (does not replace normative **R-6.2** oracle = `runtime-local`).
 - [x] **Trackers:** WS-094 **`[✓]`** for lifecycle-parity scope; **PLN-0333** **`Done`** in [`PLANNING.md`](../../../PLANNING.md); successors **WS-101..WS-105** filed in [`crates/wos-server/TODO.md`](../../crates/wos-server/TODO.md).

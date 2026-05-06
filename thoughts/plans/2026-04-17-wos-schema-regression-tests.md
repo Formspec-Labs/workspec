@@ -29,23 +29,23 @@
 
 ## Completion criteria
 
-1. `wos-spec/tests/schemas/` directory exists with four test files (meta-validity, fixtures, spec examples, plus a shared discovery helper).
-2. Every schema under `wos-spec/schemas/` is meta-validated.
-3. Every fixture under `wos-spec/fixtures/` is validated against its declaring schema.
-4. Every fenced `json` block in `wos-spec/specs/**/*.md` containing a `$wos*` marker is validated.
-5. CI gate: a GitHub Actions job runs `pytest wos-spec/tests/schemas/` on every PR touching `wos-spec/schemas/`, `wos-spec/fixtures/`, or `wos-spec/specs/`.
-6. Running locally via `python3 -m pytest wos-spec/tests/schemas/ -v` passes on current tree.
+1. `work-spec/tests/schemas/` directory exists with four test files (meta-validity, fixtures, spec examples, plus a shared discovery helper).
+2. Every schema under `work-spec/schemas/` is meta-validated.
+3. Every fixture under `work-spec/fixtures/` is validated against its declaring schema.
+4. Every fenced `json` block in `work-spec/specs/**/*.md` containing a `$wos*` marker is validated.
+5. CI gate: a GitHub Actions job runs `pytest work-spec/tests/schemas/` on every PR touching `work-spec/schemas/`, `work-spec/fixtures/`, or `work-spec/specs/`.
+6. Running locally via `python3 -m pytest work-spec/tests/schemas/ -v` passes on current tree.
 
 ## File structure
 
-- **Create:** `wos-spec/tests/__init__.py`
-- **Create:** `wos-spec/tests/schemas/__init__.py`
-- **Create:** `wos-spec/tests/schemas/conftest.py` — shared helpers (schema registry, marker → schema mapping).
-- **Create:** `wos-spec/tests/schemas/test_meta_validity.py` — every schema is valid JSON Schema 2020-12.
-- **Create:** `wos-spec/tests/schemas/test_fixture_validity.py` — every fixture validates against its schema.
-- **Create:** `wos-spec/tests/schemas/test_spec_examples.py` — every json code block in specs validates.
+- **Create:** `work-spec/tests/__init__.py`
+- **Create:** `work-spec/tests/schemas/__init__.py`
+- **Create:** `work-spec/tests/schemas/conftest.py` — shared helpers (schema registry, marker → schema mapping).
+- **Create:** `work-spec/tests/schemas/test_meta_validity.py` — every schema is valid JSON Schema 2020-12.
+- **Create:** `work-spec/tests/schemas/test_fixture_validity.py` — every fixture validates against its schema.
+- **Create:** `work-spec/tests/schemas/test_spec_examples.py` — every json code block in specs validates.
 - **Modify:** `.github/workflows/wos-*.yml` — add pytest step.
-- **Create:** `wos-spec/tests/README.md` — one paragraph explaining the three layers.
+- **Create:** `work-spec/tests/README.md` — one paragraph explaining the three layers.
 
 ---
 
@@ -53,12 +53,12 @@
 
 **Files:**
 
-- Create: `wos-spec/tests/schemas/conftest.py`
+- Create: `work-spec/tests/schemas/conftest.py`
 
 - [ ] **Step 1.1:** Define a marker → schema mapping from the `$wos*` discriminators to schema paths:
 
 ```python
-# wos-spec/tests/schemas/conftest.py
+# work-spec/tests/schemas/conftest.py
 from pathlib import Path
 import json
 import pytest
@@ -100,7 +100,7 @@ def classify(doc: dict) -> str | None:
 
 **Files:**
 
-- Create: `wos-spec/tests/schemas/test_meta_validity.py`
+- Create: `work-spec/tests/schemas/test_meta_validity.py`
 
 - [ ] **Step 2.1:**
 
@@ -119,7 +119,7 @@ def test_schema_is_valid_json_schema_2020_12(schema_path):
     Draft202012Validator.check_schema(data)
 ```
 
-- [ ] **Step 2.2:** Run `python3 -m pytest wos-spec/tests/schemas/test_meta_validity.py -v`. Expect 19 parametrized cases, all passing.
+- [ ] **Step 2.2:** Run `python3 -m pytest work-spec/tests/schemas/test_meta_validity.py -v`. Expect 19 parametrized cases, all passing.
 
 - [ ] **Step 2.3:** Commit. `test(wos): meta-validate every schema as JSON Schema 2020-12`.
 
@@ -127,7 +127,7 @@ def test_schema_is_valid_json_schema_2020_12(schema_path):
 
 **Files:**
 
-- Create: `wos-spec/tests/schemas/test_fixture_validity.py`
+- Create: `work-spec/tests/schemas/test_fixture_validity.py`
 
 - [ ] **Step 3.1:**
 
@@ -164,12 +164,12 @@ def test_fixture_validates(fixture_path, validators):
 
 **Files:**
 
-- Create: `wos-spec/tests/schemas/test_spec_examples.py`
+- Create: `work-spec/tests/schemas/test_spec_examples.py`
 
 - [ ] **Step 4.1:** Port parent Formspec's extractor pattern:
 
 ```python
-"""Every fenced json code block in wos-spec/specs/ validates against its schema."""
+"""Every fenced json code block in work-spec/specs/ validates against its schema."""
 import json
 import re
 from pathlib import Path
@@ -234,10 +234,10 @@ wos-schema-regression:
       with:
         python-version: '3.11'
     - run: python3 -m pip install jsonschema[format] pytest
-    - run: python3 -m pytest wos-spec/tests/schemas/ -v
+    - run: python3 -m pytest work-spec/tests/schemas/ -v
 ```
 
-- [ ] **Step 5.2:** Condition the job on path filters: `wos-spec/schemas/**`, `wos-spec/fixtures/**`, `wos-spec/specs/**/*.md`.
+- [ ] **Step 5.2:** Condition the job on path filters: `work-spec/schemas/**`, `work-spec/fixtures/**`, `work-spec/specs/**/*.md`.
 
 - [ ] **Step 5.3:** Commit. `build: CI gate for WOS schema regression tests`.
 
@@ -245,7 +245,7 @@ wos-schema-regression:
 
 **Files:**
 
-- Create: `wos-spec/tests/README.md`
+- Create: `work-spec/tests/README.md`
 
 - [ ] **Step 6.1:** One paragraph: "Three pytest suites protect the WOS schema surface. Meta-validity asserts every schema is a valid JSON Schema 2020-12 document. Fixture validity runs every fixture through its classified schema. Spec-example validity runs every fenced `json` block in the canonical spec prose. A future schema edit must keep all three green; adding a new schema means adding its entry to `tests/schemas/conftest.py::MARKER_TO_SCHEMA`."
 

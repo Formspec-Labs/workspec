@@ -24,10 +24,10 @@ the parent Formspec monorepo). If running in an isolated environment:
 python3 -m pip install "jsonschema[format]" pytest
 ```
 
-Then, from the `wos-spec/` root (or the parent monorepo):
+Then, from the `work-spec/` root (or the parent monorepo):
 
 ```bash
 python3 -m pytest tests/schemas/ -v
 # or from the parent formspec/ repo:
-python3 -m pytest wos-spec/tests/schemas/ -v
+python3 -m pytest work-spec/tests/schemas/ -v
 ```

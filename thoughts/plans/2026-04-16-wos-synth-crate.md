@@ -100,6 +100,7 @@ The "Why this matters" section below frames the four-crate split by analogy to `
 **Context:** A monolithic `wos-synth` scaffold landed at commit `2815e4d`. That scaffold used a `--features synth` gate to keep Anthropic SDK deps out of default builds — a feature flag, not dependency inversion. This task realigns the scaffold with the DIP split.
 
 **What needs to change:**
+
 - The directory `crates/wos-synth/` becomes `crates/wos-synth-core/` — either via rename or by leaving the loop/trait code in place while extracting the provider code to new sibling crates during this task.
 - The `--features synth` gate is removed from `wos-synth-core` entirely. Extract `wos-synth-anthropic` as a separate crate that unconditionally depends on Anthropic SDK; remove the feature flag from `wos-synth-core` entirely. Crate-level separation is the gate, not a feature flag.
 - The three policy sections from the scaffold's README are preserved but restated in terms of the split:
@@ -108,6 +109,7 @@ The "Why this matters" section below frames the four-crate split by analogy to `
   3. **Benchmark-regressions-do-not-motivate-spec-changes policy:** *Benchmark regressions do not motivate normative-spec changes unless the benchmark is exercising a claim the spec actually makes. Spec PRs whose motivation cites a benchmark failure must be reviewed against this rule.*
 
 **Files:**
+
 - Rename/restructure: `crates/wos-synth/` → `crates/wos-synth-core/` (and extract provider code to new crates).
 - Create: `crates/wos-synth-anthropic/Cargo.toml`, `crates/wos-synth-mock/Cargo.toml`, `crates/wos-synth-cli/Cargo.toml`.
 - Modify: root `Cargo.toml` workspace members.
@@ -168,6 +170,7 @@ cargo build -p wos-synth-anthropic  # also green
 ## Task 2: `Prompter` trait + `MockPrompter`
 
 **Files:**
+
 - Create: `crates/wos-synth-core/src/prompter.rs`
 - Create: `crates/wos-synth-mock/src/lib.rs`
 
@@ -211,6 +214,7 @@ pub struct Completion {
 ## Task 3: Prompt assembly
 
 **Files:**
+
 - Create: `crates/wos-synth-core/src/prompts/generate.rs`
 - Create: `crates/wos-synth-core/src/prompts/repair.rs`
 
@@ -234,6 +238,7 @@ Prompt templates live in `wos-synth-core/src/prompts/`. Pure functions, no IO, n
 ## Task 4: The loop
 
 **Files:**
+
 - Create: `crates/wos-synth-core/src/loop.rs`
 
 The orchestrator lives in `wos-synth-core/src/loop.rs` and calls tools via `ToolContext`, NOT directly via `wos_lint::lint_document` / `wos_conformance::run_fixture`.
@@ -284,6 +289,7 @@ pub async fn synthesize(
 ## Task 4b: `DirectToolContext` stopgap
 
 **Files:**
+
 - Create: `crates/wos-synth-core/src/tool_context/direct.rs`
 
 Implement `DirectToolContext` in `wos-synth-core/src/tool_context/direct.rs` — an in-crate `ToolContext` that wraps `wos-lint` + `wos-conformance` directly. This is a stopgap until `wos-mcp` (see `./2026-04-17-wos-mcp-crate.md`) lands and provides in-process dispatch.
@@ -316,6 +322,7 @@ impl ToolContext for DirectToolContext {
 ## Task 5: Anthropic provider
 
 **Files:**
+
 - Create: `crates/wos-synth-anthropic/src/lib.rs`
 
 This crate is entirely separate from `wos-synth-core`. It unconditionally depends on `anthropic-sdk`, `reqwest`, and `tokio`. No feature flag — crate-level separation is the gate.
@@ -339,6 +346,7 @@ async fn anthropic_integration_smoke() {
 ## Task 6: CLI
 
 **Files:**
+
 - Create: `crates/wos-synth-cli/src/main.rs`
 
 `wos-synth-cli` is a separate crate whose binary is named `wos-synth`. It wires one `Prompter` (`AnthropicPrompter` or `MockPrompter`) + one `ToolContext` (`DirectToolContext` until `wos-mcp` lands) and passes them to `wos_synth_core::synthesize`.
@@ -354,7 +362,8 @@ async fn anthropic_integration_smoke() {
 ## Task 7: Publish synth-trace schema
 
 **Files:**
-- Create: `wos-spec/schemas/synth/synth-trace.schema.json`
+
+- Create: `work-spec/schemas/synth/synth-trace.schema.json`
 
 Trace types (`SynthTrace`, `SynthOutcome`) are defined in `wos-synth-core`. The schema is derived from those types and published to the shared schemas directory.
 

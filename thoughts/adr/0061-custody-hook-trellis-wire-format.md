@@ -134,7 +134,7 @@ The 32-byte SHA-256 output fits the `.size (1..64)` bound on `idempotency_key` i
 
 ### 2.4.1 TypeID format
 
-Both `caseId` and `recordId` use the TypeID format adopted stack-wide from the reference implementation at [`wos-spec/thoughts/examples/temporal-reference-implementation.md`](../examples/temporal-reference-implementation.md).
+Both `caseId` and `recordId` use the TypeID format adopted stack-wide from the reference implementation at [`work-spec/thoughts/examples/temporal-reference-implementation.md`](../examples/temporal-reference-implementation.md).
 
 `{tenant}_{type}_{uuidv7_base32}`
 
@@ -259,7 +259,7 @@ The return contract is part of the ADR because every WOS emission site that stam
 
 ## 4. Follow-on work
 
-This section captures the concrete work the ADR's acceptance unblocks. The cascade tracking is in §5 and [`wos-spec/TODO.md`](../../TODO.md) Do-next #1.
+This section captures the concrete work the ADR's acceptance unblocks. The cascade tracking is in §5 and [`work-spec/TODO.md`](../../TODO.md) Do-next #1.
 
 1. **Land the JSON→dCBOR converter** (in `wos-runtime::custody` initially, or in a new `wos-trellis-binding` sibling crate — decision during acceptance) with a round-trip fixture per WOS record family that crosses `custodyHook` (Kernel Facts-tier, Governance, AI Integration, Assurance). Byte-match Rust + Python.
 2. **Publish the WOS normative encoding section** pinning the §2.2 encoding table and §2.7 conversion-failure rejection list, with Rust as byte authority.
@@ -275,7 +275,7 @@ This section captures the concrete work the ADR's acceptance unblocks. The casca
 
 ## 5. Implementation cascade
 
-Design decisions above are Accepted. Implementation lands through the cascade tracked in [`wos-spec/TODO.md`](../../TODO.md) Do-next **#1** (T1.1–T1.8) and [`trellis/TODO.md`](../../../trellis/TODO.md) Stream 5. No further design signoff required for any cascade item; open new ADRs only if implementation discovers a load-bearing semantic the ADR didn't anticipate.
+Design decisions above are Accepted. Implementation lands through the cascade tracked in [`work-spec/TODO.md`](../../TODO.md) Do-next **#1** (T1.1–T1.8) and [`trellis/TODO.md`](../../../trellis/TODO.md) Stream 5. No further design signoff required for any cascade item; open new ADRs only if implementation discovers a load-bearing semantic the ADR didn't anticipate.
 
 Summary of the cascade (full detail in WOS TODO):
 

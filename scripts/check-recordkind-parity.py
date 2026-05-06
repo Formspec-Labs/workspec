@@ -7,10 +7,10 @@ Schema `$def` shipped with a fixed `recordKind` literal but no matching
 from the typed Rust path.
 
 **Forward direction (enforced).** For every `$def` under any schema in
-`wos-spec/schemas/` whose `properties.recordKind.const` (or single-element
+`work-spec/schemas/` whose `properties.recordKind.const` (or single-element
 `enum`) pins a literal string, that literal MUST equal the camelCase
 serialization of some `ProvenanceKind` variant in
-`wos-spec/crates/wos-core/src/provenance/kind.rs`. Mismatch fails CI.
+`work-spec/crates/wos-core/src/provenance/kind.rs`. Mismatch fails CI.
 
 **Reverse direction (informational, intentionally not enforced).** The
 script also lists variants that have *no* schema `$def` binding them. Most
@@ -23,7 +23,7 @@ Hygiene #68's deferred scope note.
 Mirrors the surface of `scripts/check-canonical-seams.py` (ADR 0077).
 
 Usage:
-  python3 wos-spec/scripts/check-recordkind-parity.py [--root WOS_SPEC_DIR]
+  python3 work-spec/scripts/check-recordkind-parity.py [--root WOS_SPEC_DIR]
                                                        [--strict]
 
 `--strict` upgrades reverse-direction informational warnings to errors.

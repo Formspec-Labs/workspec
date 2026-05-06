@@ -21,7 +21,7 @@ note: >-
 | `thoughts/archive/specs/2026-04-11-wos-s15-formspec-coprocessor-proposal.md` | Refined Runtime §15 / §12.9 draft, executive decisions, pin semantics |
 | `thoughts/plans/2026-04-11-phase11-coprocessor-fel.md` | North star, biases, shipped inventory, sequencing, next actions |
 
-**Normative home:** WOS coprocessor changes now live in `wos-spec/` (Runtime Companion §12.9 / §15, Kernel §9.2 / §11.3, kernel schema, case-instance schema, and typed Rust model). Formspec changes live in `specs/` and `schemas/`. This `thoughts/` file is the Phase 11 integration index; use the WOS specs as the behavior source of truth.
+**Normative home:** WOS coprocessor changes now live in `work-spec/` (Runtime Companion §12.9 / §15, Kernel §9.2 / §11.3, kernel schema, case-instance schema, and typed Rust model). Formspec changes live in `specs/` and `schemas/`. This `thoughts/` file is the Phase 11 integration index; use the WOS specs as the behavior source of truth.
 
 ---
 
@@ -77,7 +77,7 @@ Technical order: **functions → record semantics → coprocessor prose** (autho
 
 1. **FEL-QUANTIFIERS** — **Done** (`every`, `some`, `duration`; wos-lint AG-012 narrowed).
 2. **FEL-RECORDS** — **Done** (Core prose, tests, ADR-0060, WOS grep clean).
-3. **COPROCESSOR** — **Landed** in `wos-spec/specs/companions/runtime.md`, kernel prose, kernel schema, case-instance schema, and typed Rust model. §6 remains the design index, not the normative source.
+3. **COPROCESSOR** — **Landed** in `work-spec/specs/companions/runtime.md`, kernel prose, kernel schema, case-instance schema, and typed Rust model. §6 remains the design index, not the normative source.
 
 ### 5.1 Shipped inventory (Formspec repo)
 
@@ -86,7 +86,7 @@ Technical order: **functions → record semantics → coprocessor prose** (autho
 | Core spec | §3.5.1 / §3.5.4; predicate + object **`$.field`**; `duration` vs `timeDiff`. |
 | `fel-functions.schema.json` | Full builtin catalog aligned with Rust; `timeDiff` two-arg signed seconds; `locale` category. |
 | Rust / Python / engine | `fel-core`, tests, `BUILTIN_NAMES`, conformance `test_fel_functions_schema_names_are_builtin`, engine navigation tests. |
-| WOS | `wos-lint` AG-012; `ai-integration.md` obligation example; `LINT-MATRIX.md` update. `wos-spec/TODO.md` collateral follow-up remains tracked separately. |
+| WOS | `wos-lint` AG-012; `ai-integration.md` obligation example; `LINT-MATRIX.md` update. `work-spec/TODO.md` collateral follow-up remains tracked separately. |
 
 **Rebuild note:** `BUILTIN_NAMES` reads Rust at import time — run `maturin develop` / `make build` so Python `.so` matches `fel-core`.
 
@@ -273,9 +273,9 @@ Rights/safety **`impactLevel`:** processor MUST require ledger / **`submit`** ev
 
 ---
 
-## 7. Publication checklist (land in `wos-spec/` + Formspec)
+## 7. Publication checklist (land in `work-spec/` + Formspec)
 
-- [x] **`wos-spec/specs/companions/runtime.md`:** §15 Formspec Coprocessor; §15.5 / §15.6 full Response validation; §12.9 **TaskPresenter**; Abstract/Scope mention Formspec tasks. §12.3 intentionally remains the `ContractValidator` data-bag seam.
+- [x] **`work-spec/specs/companions/runtime.md`:** §15 Formspec Coprocessor; §15.5 / §15.6 full Response validation; §12.9 **TaskPresenter**; Abstract/Scope mention Formspec tasks. §12.3 intentionally remains the `ContractValidator` data-bag seam.
 - [x] **`wos-kernel.schema.json` + Kernel spec:** `responseMappingRef`, `prefillMappingRef`, `completionEvent`, `failureEvent`; **`contractRef` on `createTask`** prose (bias #4).
 - [x] **`wos-case-instance.schema.json`:** required **`activeTasks`** array plus **`ActiveTask`**.
 - [x] **`$defs`:** `ActiveTask`, `FormspecTaskContext`, `ValidationOutcome` for tooling.

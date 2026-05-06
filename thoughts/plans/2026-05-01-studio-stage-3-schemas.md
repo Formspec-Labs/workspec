@@ -27,7 +27,7 @@ Edit `studio-authoring/CONCEPT-MODEL.md` §6.1:
 - Scenario row: drop the "$ref into wos-tooling scenarios[*]" claim; replace with "standalone schema; conformanceTrace.fixtureRef cites scenario.id at runtime correlation time".
 - Add a paragraph above the table acknowledging the design clarification (preserves CM history; doesn't pretend the previous claim was always right).
 
-### Schema set (14 files in `/home/user/wos-spec/schemas/studio/`)
+### Schema set (14 files in `/home/user/work-spec/schemas/studio/`)
 
 | # | File | Bucket | Marker | Notes |
 |---|---|---|---|---|
@@ -90,6 +90,7 @@ Edit `studio-authoring/CONCEPT-MODEL.md` §6.1:
 - `tests/schemas/fixtures/studio/*.json` — negative fixtures for load-bearing rules
 
 Reference shapes (read-only):
+
 - `schemas/wos-workflow.schema.json` (parent shapes; $ref targets)
 - `schemas/wos-tooling.schema.json` (no scenarios $def; conformanceTrace is the runtime correlate)
 - `studio-authoring/examples/snap-redetermination-from-sources/policy-objects/*.json` (truth artifacts to validate against)
@@ -135,7 +136,7 @@ Stage 2 (16 specs, 34 entities, ~600 SA-MUST IDs across families) complete; read
 
 ## Remediation closing notes (2026-05-02)
 
-This plan was executed (Stage-3 schemas at `ebeed47`, audit fixes at `0cc4928`, per-kind body enforcement at `0acfe09`, K-05X fixtures + Stage 4 plan at `3d3f979`). A subsequent semi-formal code-review pass (three background agents using the methodology at https://raw.githubusercontent.com/mikewolfd/semi-formal-code-review-skill/main/SKILL.md) surfaced **5 critical, 14 major, 10 minor findings**. Several commit messages over-claimed verification posture.
+This plan was executed (Stage-3 schemas at `ebeed47`, audit fixes at `0cc4928`, per-kind body enforcement at `0acfe09`, K-05X fixtures + Stage 4 plan at `3d3f979`). A subsequent semi-formal code-review pass (three background agents using the methodology at <https://raw.githubusercontent.com/mikewolfd/semi-formal-code-review-skill/main/SKILL.md>) surfaced **5 critical, 14 major, 10 minor findings**. Several commit messages over-claimed verification posture.
 
 The remediation plan is captured in the Stage 3 + Stage 4 review-remediation document and lands in 5 waves:
 

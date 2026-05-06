@@ -9,7 +9,7 @@ Per ADR 0077, the canonical six kernel extension seams are:
   - custodyHook
   - extensions (and `x-` keys)
 
-Five names that previously appeared in `wos-spec/CLAUDE.md` were freestanding
+Five names that previously appeared in `work-spec/CLAUDE.md` were freestanding
 fictions with no Kernel §10 backing and have been retired (ADR 0077 D-3):
   - attachmentExtension
   - caseFieldExtension
@@ -19,22 +19,22 @@ fictions with no Kernel §10 backing and have been retired (ADR 0077 D-3):
 
 This script scans normative WOS surfaces for any reappearance of those names
 and fails CI when found. Scope per ADR 0077 lint-rule-candidate section:
-  - Markdown files under `wos-spec/specs/**`
-  - JSON Schema files under `wos-spec/schemas/**` (any text content; in
+  - Markdown files under `work-spec/specs/**`
+  - JSON Schema files under `work-spec/schemas/**` (any text content; in
     practice only `description` and `$comment` strings would carry seam
     names, but flagging property keys catches schema-shape regressions too).
 
 Out of scope (intentionally not scanned):
   - `thoughts/adr/0077-*.md` — the ADR itself enumerates and disposes of the
     invented names; that is the authoritative discussion.
-  - `wos-spec/counter-proposal-disposition.md` — disposition prose
+  - `work-spec/counter-proposal-disposition.md` — disposition prose
     references invented names in its `Seam vocabulary drift` section
     (resolved-by-ADR-0077 marker).
-  - `wos-spec/CLAUDE.md` history; only the current `wos-spec/specs/**` and
-    `wos-spec/schemas/**` text counts.
+  - `work-spec/CLAUDE.md` history; only the current `work-spec/specs/**` and
+    `work-spec/schemas/**` text counts.
 
 Usage:
-  python3 wos-spec/scripts/check-canonical-seams.py [--root WOS_SPEC_DIR]
+  python3 work-spec/scripts/check-canonical-seams.py [--root WOS_SPEC_DIR]
 
 Exits 0 on clean tree, 1 on any violation. Prints `file:line: identifier`
 diagnostics on stderr; clean run prints a single OK line on stdout.

@@ -2,7 +2,7 @@
 
 **Status:** Chore (executable) + tracked decisions. **Not** an ADR; no architectural forks opened. Decision items here are sequenced for future ADR slots when ratification is needed; chore items run independently as gating allows.
 **Date:** 2026-05-01. **Doc revision:** 2026-05-01 (final) — **C6/C7 ratchet-zero** on all `EXPECTED_OPEN_STRING_LEAVES` schemas; **C5 / WS-042** minimal checklist closed (version-indexed kernels + HTTP `Idempotency-Key` + `1.0.0 → 1.1.0` integration proof); **C7** `SCHEMA-OPEN-001` now runs inside `lint_schema`; **C8** implementation tracked in [`2026-05-01-wos-c8-graph-lint-k033-k034.md`](./2026-05-01-wos-c8-graph-lint-k033-k034.md).
-**Scope (achieved for vocab parity):** Open-string-leaf debt is **0** under the current ratchet counter for every production schema in `open_string_leaf_ratchet.rs` (workflow full inner-block closure + honest-open annotation batch on tooling, case-instance, provenance-log, delivery, ontology-alignment via `wos-spec/scripts/annotate_open_string_kinds.py`). **Remaining open tails** are explicit: **C8** graph lint (child plan), **C1** optional `actor_type` serde storage, **C2** `auditCertificate.format` until signature profile ratifies, **PLN-0387** / **WS-090** same-transaction co-write, **D4–D7** items still called out in ADR 0083 where not yet ratified.
+**Scope (achieved for vocab parity):** Open-string-leaf debt is **0** under the current ratchet counter for every production schema in `open_string_leaf_ratchet.rs` (workflow full inner-block closure + honest-open annotation batch on tooling, case-instance, provenance-log, delivery, ontology-alignment via `work-spec/scripts/annotate_open_string_kinds.py`). **Remaining open tails** are explicit: **C8** graph lint (child plan), **C1** optional `actor_type` serde storage, **C2** `auditCertificate.format` until signature profile ratifies, **PLN-0387** / **WS-090** same-transaction co-write, **D4–D7** items still called out in ADR 0083 where not yet ratified.
 
 ---
 
@@ -29,13 +29,13 @@ Per project discipline (see parent CLAUDE.md, "Sequential ADRs, not phased deliv
 
 Repo-hygiene items (CI parity, `wos-server*` → `workspec-server`, `formspec-internal` rename, `focusconsulting` submodule deletion) are owned by parent [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../../../thoughts/plans/2026-05-01-platform-repository-architecture.md); this plan does not duplicate them.
 
-**Pre-flight:** treat baselines and file:line citations as authoritative when committed. Reference state by `git log --oneline -- wos-spec/` for history; the durable inventory artifact (**C0**) and `open_string_leaf_ratchet.rs` are the load-bearing records for open-leaf work.
+**Pre-flight:** treat baselines and file:line citations as authoritative when committed. Reference state by `git log --oneline -- work-spec/` for history; the durable inventory artifact (**C0**) and `open_string_leaf_ratchet.rs` are the load-bearing records for open-leaf work.
 
 **Landed (runtime ⟷ conformance, same plan date):** Conformance **SIG-013** (`crates/wos-conformance/tests/fixtures/SIG-013-policy-assurance-below-floor.json`) now has a direct `wos-runtime` mirror: `submit_task_response_sig013_policy_assurance_below_floor_blocks_affirmation` in `crates/wos-runtime/src/runtime.rs` (`#[cfg(test)]`). It calls `WosRuntime::submit_task_response` with the same kernel/profile fixtures as the conformance case. The harness uses **`Sig013HarnessFormspecAdapter`** (same `"formspec"` binding key as the default test `TestAdapter`) because binding `validate_submission` runs *before* `signature_affirmation_for_submission`; `TestAdapter` only treats `data.approved` as valid and would return `TaskSubmissionResult::Failed { code: "validationFailed", … }` instead of reaching `identity_binding_meets_policy` and the policy-floor `RuntimeError::Signature` string asserted by SIG-013. The fixture `description` field cross-links the test and adapter by name.
 
 **Landed (migration slice, ADR 0083 — 2026-05-01):** [`thoughts/adr/0083-wos-instance-migration-runtime-and-http.md`](../adr/0083-wos-instance-migration-runtime-and-http.md) is **Accepted** for D1/D2/D3/D3b; **C3**/**C4**/**C5** primitives are in-tree. Summary: `WosRuntime::migrate` (+ `MigrationMap` / `MigrationOutcome` / `validate_migration_configuration`), `ProvenanceKind::InstanceMigrated` + `ProvenanceRecord::instance_migrated`, `recordKind: instanceMigrated` on `FactsTierRecord`, `POST /api/instances/:id/migrate` (Supervisor), `RuntimeOps::migrate_instance` (local + explicit unsupported in Restate), unit tests (version bump + `stateNotFound`), HTTP integration for same-version idempotent migrate **and** cross-version `1.0.0 → 1.1.0` with **`Idempotency-Key`** replay (`runtime_lifecycle.rs`). **Storage:** `kernels` primary key `(url, version)`; bundle resolution keyed by `(workflow_url, definition_version)`. **Conformance:** `MIG-001` / `MIG-002` in `migration_conformance.rs`. **Explicitly still open (not WS-042):** durable same-transaction co-write with embedded event store (PLN-0387 / WS-090); full D5 posture (restart-safe dedupe, conflicting-body semantics) per ADR 0083 §Open decisions.
 
-**Landed (WS-094 Phase 4 slice, Restate — 2026-05-01):** Execution plan [`thoughts/plans/2026-05-01-wos-restate-ws094-execution.md`](./2026-05-01-wos-restate-ws094-execution.md) Phase 4 checklist updated. **R-6.1:** parent `.github/workflows/ci.yml` job **`wos-restate-ingress-smoke`**, `wos-spec/Makefile` **`restate-ingress-smoke`**, `wos-spec/scripts/restate_ingress_smoke.sh`, binary **`wos-restate-worker`**, pinned server **`docker.restate.dev/restatedev/restate:1.6.2`**, ignored **`ingress_create_load_probe_smoke`**. **R-6.2 supplementary:** `crates/wos-conformance/tests/r6_restate_conformance_slice.rs` (SIG-013 + C.0/C.1 parity + terminal-failure tests vs `restate_signature_fixture_runtime` / ingress). **PLN-0333** lifecycle row **`Done`**; **WS-094** **`[✓]`**; remainder **WS-101..WS-105** in `wos-server/TODO.md` (tasks, provenance read, adapter migrate, Axum composition, retryable/stall).
+**Landed (WS-094 Phase 4 slice, Restate — 2026-05-01):** Execution plan [`thoughts/plans/2026-05-01-wos-restate-ws094-execution.md`](./2026-05-01-wos-restate-ws094-execution.md) Phase 4 checklist updated. **R-6.1:** parent `.github/workflows/ci.yml` job **`wos-restate-ingress-smoke`**, `work-spec/Makefile` **`restate-ingress-smoke`**, `work-spec/scripts/restate_ingress_smoke.sh`, binary **`wos-restate-worker`**, pinned server **`docker.restate.dev/restatedev/restate:1.6.2`**, ignored **`ingress_create_load_probe_smoke`**. **R-6.2 supplementary:** `crates/wos-conformance/tests/r6_restate_conformance_slice.rs` (SIG-013 + C.0/C.1 parity + terminal-failure tests vs `restate_signature_fixture_runtime` / ingress). **PLN-0333** lifecycle row **`Done`**; **WS-094** **`[✓]`**; remainder **WS-101..WS-105** in `wos-server/TODO.md` (tasks, provenance read, adapter migrate, Axum composition, retryable/stall).
 
 **Landed (D3 Rust tail — 2026-05-01):** `HoldType` enum in `crates/wos-core/src/model/governance.rs` (seven standard literals + `Vendor(String)` matching `^x-[a-z][a-z0-9-]*$`); `HoldPolicy.hold_type` and `ActiveHold.hold_type` use it; `pub use` as `wos_core::HoldType`; HTTP `CreateHoldRequest` typed; integration tests use schema-valid `holdType` tokens (`crates/wos-server/tests/integration/ws_spec_gaps_2.rs`); `governance_deser` asserts + vendor / rejection tests.
 
@@ -49,7 +49,7 @@ Repo-hygiene items (CI parity, `wos-server*` → `workspec-server`, `formspec-in
 
 **Landed (C6 slice — provenance adjunct `recordKind`, 2026-05-01):** Fifteen single-kind `$defs` on `schemas/wos-workflow.schema.json` now pin `properties.recordKind` with `const` (plus `type: "string"`) matching existing `allOf`/`if` arms: `AmendmentAuthorizedRecord`, `AuthorizationAttestationRecord`, `AuthorizationRejectedRecord`, `CapabilityInvocationRecord`, `ClockResolvedRecord`, `ClockSkewObservedRecord`, `ClockStartedRecord`, `CommitAttemptFailureRecord`, `CorrectionAuthorizedRecord`, `DeterminationAmendedRecord`, `DeterminationRescindedRecord`, `IdentityAttestationRecord`, `MigrationPinChangedRecord`, `ReinstatedRecord`, `RescissionAuthorizedRecord`. Ratchet `wos-workflow.schema.json`: **189 → 174**. C0 inventory rows **WS-008**, **WS-027**, **WS-028**, **WS-031**, **WS-035**, **WS-036**, **WS-037**, **WS-038**, **WS-039**, **WS-055**, **WS-056**, **WS-077**, **WS-090**, **WS-111**, **WS-112** marked **CLOSED**. `FactsTierRecord.recordKind` stays the multi-kind **enum** (unchanged `$comment`).
 
-**Landed (C6/C7 ratchet-zero — 2026-05-01):** Remaining open leaves on `wos-workflow.schema.json` closed to **0**; parallel schemas (`wos-tooling`, `wos-case-instance`, `wos-provenance-log`, `wos-delivery`, `wos-ontology-alignment`) annotated via `wos-spec/scripts/annotate_open_string_kinds.py` (heuristic `x-wos.openStringKind` + `minLength: 1`); `EXPECTED_OPEN_STRING_LEAVES` all **0**; `lint_schema` invokes `check_open_string_kinds` (CI-wide **SCHEMA-OPEN-001**).
+**Landed (C6/C7 ratchet-zero — 2026-05-01):** Remaining open leaves on `wos-workflow.schema.json` closed to **0**; parallel schemas (`wos-tooling`, `wos-case-instance`, `wos-provenance-log`, `wos-delivery`, `wos-ontology-alignment`) annotated via `work-spec/scripts/annotate_open_string_kinds.py` (heuristic `x-wos.openStringKind` + `minLength: 1`); `EXPECTED_OPEN_STRING_LEAVES` all **0**; `lint_schema` invokes `check_open_string_kinds` (CI-wide **SCHEMA-OPEN-001**).
 
 **Open tails (post-parity-plan):**
 
@@ -81,7 +81,7 @@ Repo-hygiene items (CI parity, `wos-server*` → `workspec-server`, `formspec-in
 - [x] Sidecar schema property renamed to `correspondenceRole`; descriptions and examples updated.
 - [x] Fixtures / tests updated (search `correspondenceRole` in sidecar + integration paths).
 - [x] Normative sentence in **`specs/sidecars/delivery.md` §4** (correspondenceRole vs kernel `actorType`).
-- [x] Migration note in `COMPLETED.md` flagging the rename as a breaking sidecar property name (session 2026-05-01 — see `wos-spec/COMPLETED.md`).
+- [x] Migration note in `COMPLETED.md` flagging the rename as a breaking sidecar property name (session 2026-05-01 — see `work-spec/COMPLETED.md`).
 
 ---
 
@@ -145,7 +145,7 @@ Already recorded in `T4-TODO.md` ("Vendor `x-*` assurance floor enforcement (def
 
 **Done when:**
 
-- [x] Inventory document committed under `wos-spec/thoughts/research/`.
+- [x] Inventory document committed under `work-spec/thoughts/research/`.
 - [x] Stable row IDs assigned for the inventory snapshot (workflow through `WS-*`, other prefixes per schema).
 - [x] C6 can reference row-ID ranges as work-unit boundaries.
 - [x] Regeneration recipe in-file; diff new `schema_string_leaf_report` CSV output against the snapshot to detect drift.
@@ -266,7 +266,7 @@ Already recorded in `T4-TODO.md` ("Vendor `x-*` assurance floor enforcement (def
 
 **Status 2026-05-01:** **Complete** for ratchet-registered production schemas — `EXPECTED_OPEN_STRING_LEAVES` is **all zeros**; `schema_doc_zero_regression` + `open_string_leaf_ratchet` + `schema_open_string_kind` (via `lint_schema`) are the enforcement surface.
 
-**How it landed:** workflow `$defs` clusters were closed in prior slices (see bullets above through DueProcess / Signature / …); the final tail went **116 → 0** on `wos-workflow.schema.json`; parallel files used `wos-spec/scripts/annotate_open_string_kinds.py` (CSV-driven pointers + heuristic `x-wos.openStringKind`) plus ratchet decrements. **Follow-up:** re-run the C0 regeneration recipe when someone wants per-row `CLOSED` cells to match the walker again.
+**How it landed:** workflow `$defs` clusters were closed in prior slices (see bullets above through DueProcess / Signature / …); the final tail went **116 → 0** on `wos-workflow.schema.json`; parallel files used `work-spec/scripts/annotate_open_string_kinds.py` (CSV-driven pointers + heuristic `x-wos.openStringKind`) plus ratchet decrements. **Follow-up:** re-run the C0 regeneration recipe when someone wants per-row `CLOSED` cells to match the walker again.
 
 **Per-leaf classification:** every open leaf MUST land in one of:
 
@@ -353,7 +353,7 @@ Description still required (SCHEMA-DOC-001 unchanged); the annotation says **why
 - [x] `wos-lint-diagnostic` + `wos-mcp-tools`: every formerly open honest string leaf carries `x-wos.openStringKind`; ratchet baselines **0** each; inventory rows **WL-001..WL-006** and **WM-001** marked **CLOSED** (2026-05-01).
 - [x] All production schemas in the ratchet carry listed `openStringKind` where needed; **`lint_schema`** calls `check_open_string_kinds` (CI-wide **SCHEMA-OPEN-001**, 2026-05-01).
 - [x] `LINT-MATRIX.md` entry for `SCHEMA-OPEN-001`.
-- [x] `x-wos.openStringKind` documented in `wos-spec/CONVENTIONS.md` (includes ratchet alignment: listed `openStringKind` counts as constrained in `inventory_string_leaves`).
+- [x] `x-wos.openStringKind` documented in `work-spec/CONVENTIONS.md` (includes ratchet alignment: listed `openStringKind` counts as constrained in `inventory_string_leaves`).
 
 **Gates:** satisfied with ratchet-zero + `lint_schema` wiring (2026-05-01).
 
@@ -420,25 +420,25 @@ Description still required (SCHEMA-DOC-001 unchanged); the annotation says **why
 - Parent CLAUDE.md "Sequential ADRs, not phased deliverables" memory.
 - Parent [`VISION.md`](../../../VISION.md) — stack-wide commitments.
 - Parent [`thoughts/plans/2026-05-01-platform-repository-architecture.md`](../../../thoughts/plans/2026-05-01-platform-repository-architecture.md) — repo hygiene.
-- `wos-spec/CLAUDE.md` — submodule conventions, schema structure, ratchet gates.
-- `wos-spec/T4-TODO.md` — Signature Profile track + vendor-floor enforcement entry.
-- `wos-spec/COMPLETED.md` — historical record (read backward for context).
-- `wos-spec/thoughts/adr/0083-wos-instance-migration-runtime-and-http.md` — migration ADR.
-- `wos-spec/specs/kernel/spec.md` §9.6, §11.1, §11.2 — instance versioning + migration normative prose.
-- `wos-spec/specs/profiles/signature.md` §2.7, §2.10, §2.13 — signature normative prose.
-- `wos-spec/crates/wos-lint/tests/open_string_leaf_ratchet.rs` — per-schema open-string-leaf baseline table (guardrail during C6; terminal parity when baselines match C0+C7 semantic floor, optionally 0 after counter-definition ADR).
-- `wos-spec/crates/wos-conformance/tests/fixtures/SIG-013-policy-assurance-below-floor.json` — conformance SIG-013 (policy assurance below floor); description links runtime harness.
-- `wos-spec/crates/wos-runtime/src/runtime.rs` — `Sig013HarnessFormspecAdapter`, `runtime_with_kernel_sig013_harness`, `submit_task_response_sig013_policy_assurance_below_floor_blocks_affirmation`; `MigrationMap` / `migrate_*` unit tests.
-- `wos-spec/crates/wos-runtime/src/runtime/instance.rs` — `WosRuntime::migrate` (kernel §11.2, idempotency doc).
-- `wos-spec/crates/wos-server/src/http/instances.rs` — `POST …/migrate`, request validation.
-- `wos-spec/crates/wos-server-runtime-local/src/resolver.rs` — `RuntimeKernelResolver` (typed resolver errors for HTTP mapping).
-- `wos-spec/crates/wos-server/tests/integration/runtime_lifecycle.rs` — `migrate_instance_via_http_same_version_is_idempotent`.
-- `wos-spec/crates/wos-server/TODO.md` — **WS-042** partial vs complete criteria.
+- `work-spec/CLAUDE.md` — submodule conventions, schema structure, ratchet gates.
+- `work-spec/T4-TODO.md` — Signature Profile track + vendor-floor enforcement entry.
+- `work-spec/COMPLETED.md` — historical record (read backward for context).
+- `work-spec/thoughts/adr/0083-wos-instance-migration-runtime-and-http.md` — migration ADR.
+- `work-spec/specs/kernel/spec.md` §9.6, §11.1, §11.2 — instance versioning + migration normative prose.
+- `work-spec/specs/profiles/signature.md` §2.7, §2.10, §2.13 — signature normative prose.
+- `work-spec/crates/wos-lint/tests/open_string_leaf_ratchet.rs` — per-schema open-string-leaf baseline table (guardrail during C6; terminal parity when baselines match C0+C7 semantic floor, optionally 0 after counter-definition ADR).
+- `work-spec/crates/wos-conformance/tests/fixtures/SIG-013-policy-assurance-below-floor.json` — conformance SIG-013 (policy assurance below floor); description links runtime harness.
+- `work-spec/crates/wos-runtime/src/runtime.rs` — `Sig013HarnessFormspecAdapter`, `runtime_with_kernel_sig013_harness`, `submit_task_response_sig013_policy_assurance_below_floor_blocks_affirmation`; `MigrationMap` / `migrate_*` unit tests.
+- `work-spec/crates/wos-runtime/src/runtime/instance.rs` — `WosRuntime::migrate` (kernel §11.2, idempotency doc).
+- `work-spec/crates/wos-server/src/http/instances.rs` — `POST …/migrate`, request validation.
+- `work-spec/crates/wos-server-runtime-local/src/resolver.rs` — `RuntimeKernelResolver` (typed resolver errors for HTTP mapping).
+- `work-spec/crates/wos-server/tests/integration/runtime_lifecycle.rs` — `migrate_instance_via_http_same_version_is_idempotent`.
+- `work-spec/crates/wos-server/TODO.md` — **WS-042** partial vs complete criteria.
 - [`thoughts/research/2026-05-01-schema-spec-crate-parity-inventory.md`](../research/2026-05-01-schema-spec-crate-parity-inventory.md) — stable row-ID inventory (C0).
-- `wos-spec/crates/wos-lint/tests/schema_open_string_kind.rs` — **SCHEMA-OPEN-001** coverage.
-- `wos-spec/crates/wos-conformance/tests/fixtures/MIG-001-migrate-version-bump.json`, `MIG-002-migrate-state-not-found.json` — migration conformance.
-- `wos-spec/thoughts/plans/2026-05-01-wos-restate-ws094-execution.md` — WS-094 Phase 3–4 checklist (Restate).
-- `wos-spec/scripts/restate_ingress_smoke.sh`, `wos-spec/crates/wos-server-runtime-restate/src/bin/wos-restate-worker.rs` — Phase 4 CI replay harness.
-- `wos-spec/crates/wos-conformance/tests/r6_restate_conformance_slice.rs` — R-6.2 supplementary parity slice.
-- `wos-spec/specs/sidecars/delivery.md` — delivery / correspondence prose (**D2**).
+- `work-spec/crates/wos-lint/tests/schema_open_string_kind.rs` — **SCHEMA-OPEN-001** coverage.
+- `work-spec/crates/wos-conformance/tests/fixtures/MIG-001-migrate-version-bump.json`, `MIG-002-migrate-state-not-found.json` — migration conformance.
+- `work-spec/thoughts/plans/2026-05-01-wos-restate-ws094-execution.md` — WS-094 Phase 3–4 checklist (Restate).
+- `work-spec/scripts/restate_ingress_smoke.sh`, `work-spec/crates/wos-server-runtime-restate/src/bin/wos-restate-worker.rs` — Phase 4 CI replay harness.
+- `work-spec/crates/wos-conformance/tests/r6_restate_conformance_slice.rs` — R-6.2 supplementary parity slice.
+- `work-spec/specs/sidecars/delivery.md` — delivery / correspondence prose (**D2**).
 - 2026-05-01 wos-scout parity inventory (run history; regenerable via `cargo run -q --example schema_string_leaf_report` per schema).

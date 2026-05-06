@@ -18,7 +18,7 @@ silently validate without it. Per plan Step 2.7, we MUST NOT fabricate a
 fixture whose only purpose is to justify promotion — that defeats the
 pre-1.0 ratchet.
 
-Scope: `wos-spec/` only. Read-only audit — no lint code changes, no fixture
+Scope: `work-spec/` only. Read-only audit — no lint code changes, no fixture
 changes. Evidence is drawn from:
 
 - Rule implementations: `crates/wos-lint/src/rules/fel_analysis.rs`

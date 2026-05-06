@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Pair every fixture in `wos-spec/fixtures/` with a natural-language problem statement. The set becomes a workflow-synthesis benchmark analogous to SWE-bench: given requirement R, did the LLM + WOS toolchain produce a conformant workflow? Track the rate monthly.
+**Goal:** Pair every fixture in `work-spec/fixtures/` with a natural-language problem statement. The set becomes a workflow-synthesis benchmark analogous to SWE-bench: given requirement R, did the LLM + WOS toolchain produce a conformant workflow? Track the rate monthly.
 
 **Architecture:** A separate `crates/wos-bench/` crate that depends on `wos-synth-core` as a library, plus one `Prompter` provider crate of choice (`wos-synth-mock` by default for CI; `wos-synth-anthropic` for reporting runs). `wos-bench` owns fixture sets, scoring, regression tracking, and result artifacts. `wos-synth-core` owns the provider trait, prompt templates, trace types, and outcome enum. The split (resolved in [open questions Q6](../archive/reviews/2026-04-16-architecture-review-open-questions.md#q6-is-wos-synth-54-and-the-authoring-benchmark-55-one-project-or-two)) keeps the authoring demo separate from the measurement infrastructure; shared primitives prevent drift. `wos-bench` imports `wos-synth-core` for the synthesis loop and selects the provider via CLI flag (not a feature flag): `--provider=mock` or `--provider=anthropic`.
 
@@ -18,7 +18,7 @@ Problem statements live in `benchmarks/problems/*.md`; per-run outputs in `bench
 
 - [§5.4 `wos-synth-core` crate](./2026-04-16-wos-synth-crate.md) landed — the benchmark is the harness for that crate.
 - [§5.3 trace-emitting conformance](./2026-04-16-wos-trace-emitting-conformance.md) — scoring uses trace deltas.
-- Existing fixtures under `wos-spec/fixtures/`.
+- Existing fixtures under `work-spec/fixtures/`.
 
 ## Completion criteria
 
@@ -54,6 +54,7 @@ Per run (all problems together), summarize: converged %, mean step-accuracy, mea
 ## Task 1: Author problem statements for existing fixtures
 
 **Files:**
+
 - Create: `benchmarks/problems/benefits-adjudication.md`
 - Create: `benchmarks/problems/purchase-order-approval.md`
 - Create: `benchmarks/problems/medicaid-redetermination.md`
@@ -94,6 +95,7 @@ A valid WOS kernel document plus governance sidecars (due-process, assertion-gat
 ## Task 2: Benchmark runner as new `wos-bench` crate
 
 **Files:**
+
 - Create: `crates/wos-bench/Cargo.toml`, `src/lib.rs`, `src/main.rs`, `README.md`.
 - Modify: root `Cargo.toml` workspace members.
 
@@ -112,6 +114,7 @@ A valid WOS kernel document plus governance sidecars (due-process, assertion-gat
 ## Task 3: Results aggregation and BENCHMARK.md
 
 **Files:**
+
 - Create: `BENCHMARK.md`
 - Modify: benchmark runner to append to `BENCHMARK.md`.
 
@@ -131,6 +134,7 @@ A valid WOS kernel document plus governance sidecars (due-process, assertion-gat
 ## Task 4: CI integration (optional but recommended)
 
 **Files:**
+
 - Create: `.github/workflows/wos-bench.yml`
 
 - [ ] **Step 4.1:** Scheduled monthly run. Uses secrets for API keys. Posts results as a PR or commit under `benchmarks/runs/`.

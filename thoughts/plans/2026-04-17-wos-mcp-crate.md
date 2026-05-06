@@ -11,6 +11,7 @@
 **Spec anchor:** Formspec parallel at `packages/formspec-mcp/` and open-questions Q6 at `../archive/reviews/2026-04-16-architecture-review-open-questions.md`. Q6 resolved that `wos-synth` (the authoring loop) is a separate crate from `wos-bench` (the benchmark harness); `wos-mcp` is the missing layer that gives both the authoring loop and external agents a single, stable interface to `wos-authoring` helpers.
 
 **Related:**
+
 - `../../../thoughts/adr/0065-wos-authoring-stack-mirrors-formspec.md` — forward-reference; ADR is being landed separately.
 - `./2026-04-17-wos-authoring-crate.md` — `wos-mcp`'s tool handlers are thin wrappers over `wos-authoring::WosProject` methods. `wos-authoring` must exist first; `wos-mcp` tools land incrementally as authoring helpers land.
 - `./2026-04-16-wos-synth-crate.md` — `wos-synth-core` consumes `wos-mcp` via its `ToolContext::Production` implementation. The in-process dispatch entry unblocks `wos-synth` without requiring a subprocess or JSON-RPC plumbing.
@@ -146,6 +147,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 1: Scaffold + JSON-RPC-2.0 transport
 
 **Files:**
+
 - Create: `crates/wos-mcp/Cargo.toml`, `src/lib.rs`, `src/server.rs`, `src/errors.rs`
 - Create: `src/tools/query.rs` (stub — `wos_ping` only)
 - Modify: root `Cargo.toml`
@@ -160,6 +162,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 2: Expose tool handlers as public Rust functions + MCP stdio server over them
 
 **Files:**
+
 - Create: `src/dispatch.rs`
 - Create: `src/registry.rs` (stub — no `WosProject` yet, just the UUID-keyed map skeleton)
 
@@ -172,6 +175,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 3: `ProjectRegistry` + document management tools
 
 **Files:**
+
 - Expand: `src/registry.rs` — full `ProjectRegistry` with `HashMap<Uuid, WosProject>`
 - Create: `src/tools/document.rs` — `wos_create_kernel`, `wos_load_document`, `wos_export_document`, `wos_describe_document`
 
@@ -185,6 +189,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 4: Lifecycle + actor tools
 
 **Files:**
+
 - Create: `src/tools/lifecycle.rs` — `wos_add_state`, `wos_add_transition`, `wos_set_initial_state`, `wos_remove_state`
 - Create: `src/tools/actors.rs` — `wos_add_actor`, `wos_add_actor_extension`
 
@@ -198,6 +203,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 5: Governance + AI tools
 
 **Files:**
+
 - Create: `src/tools/governance.rs` — `wos_add_due_process_path`, `wos_add_assertion_gate`, `wos_set_impact_level`
 - Create: `src/tools/ai.rs` — `wos_add_ai_agent`, `wos_add_deontic_constraint`
 
@@ -211,6 +217,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 ### Task 6: Validation/query tools + tool-catalog schema
 
 **Files:**
+
 - Create: `src/tools/validation.rs` — `wos_lint`, `wos_run_conformance`, `wos_preview_state_graph`
 - Expand: `src/tools/query.rs` — `wos_search`, `wos_list_projects`, `wos_close_project`
 - Create: `schemas/mcp/wos-mcp-tools.schema.json`
@@ -222,7 +229,7 @@ Candidates as of April 2026: `mcp-rust-sdk`, `rust-mcp`, `modelcontextprotocol` 
 - [ ] **Step 6.4:** Implement `wos_search`. Args: `{"project_id": "...", "kind": "state|transition|actor|constraint", "query": "..."}`. Linear scan over the document; returns matching items as a JSON array. Full-text substring match on ID and label fields.
 - [ ] **Step 6.5:** Implement `wos_list_projects` (no project_id needed — list all open projects) and `wos_close_project`. Wire all remaining handlers into `TOOL_HANDLERS`.
 - [ ] **Step 6.6:** Hand-author `schemas/mcp/wos-mcp-tools.schema.json`. Top-level shape: `{"tools": [{"name": "...", "description": "...", "inputSchema": {...}, "outputSchema": {...}}]}`. One entry per tool. Keep parameter schemas minimal but accurate — required fields and their types.
-- [ ] **Step 6.7:** Write the full round-trip integration test in `tests/round_trip.rs`: load the kernel fixture from `wos-spec/fixtures/`, dispatch 10+ tool calls (create, add 3 states, add 2 transitions, set initial state, set impact level, add actor, add AI agent, lint), export, lint again via dispatch, assert zero errors. Use the in-process dispatch path — no subprocess.
+- [ ] **Step 6.7:** Write the full round-trip integration test in `tests/round_trip.rs`: load the kernel fixture from `work-spec/fixtures/`, dispatch 10+ tool calls (create, add 3 states, add 2 transitions, set initial state, set impact level, add actor, add AI agent, lint), export, lint again via dispatch, assert zero errors. Use the in-process dispatch path — no subprocess.
 - [ ] **Step 6.8:** `cargo nextest run -p wos-mcp` passes. Commit: `feat(wos-mcp): validation/query tools + publish tool-catalog schema`.
 
 ---

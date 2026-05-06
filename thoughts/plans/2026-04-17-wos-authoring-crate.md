@@ -234,7 +234,7 @@ pub type AuthoringResult = Result<AuthoringResultOk, ProjectError>;
 - Create: `crates/wos-authoring/src/commands.rs` (stub)
 - Create: `crates/wos-authoring/src/history.rs` (stub)
 - Create: `crates/wos-authoring/src/handlers/mod.rs` (stub)
-- Modify: `wos-spec/Cargo.toml` workspace members
+- Modify: `work-spec/Cargo.toml` workspace members
 
 - [ ] **Step 1.1:** Add `crates/wos-authoring` to workspace `members` in the root `Cargo.toml`.
 

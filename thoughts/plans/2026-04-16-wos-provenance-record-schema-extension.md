@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add eight new optional fields to `ProvenanceRecord` (in `wos-spec/crates/wos-core/src/provenance.rs`) to close the gap between the internal provenance struct and the fields that the Semantic Profile §§5.3, §5.4, §5.5, §6.3, §6.5 mandate in the PROV-O, XES, and OCEL mappings. Once the struct is extended, wire the new fields through the runtime construction sites and the three exporters in `wos-export`, removing every `// TODO(spec-upstream)` comment. The design follows the push-stamped precedent established by Task 0 of `2026-04-15-wos-provenance-export.md`: constructors leave new fields empty/`None`; the runtime and integration handlers populate them at source; legacy fixtures remain tolerant via `#[serde(default)]`.
+**Goal:** Add eight new optional fields to `ProvenanceRecord` (in `work-spec/crates/wos-core/src/provenance.rs`) to close the gap between the internal provenance struct and the fields that the Semantic Profile §§5.3, §5.4, §5.5, §6.3, §6.5 mandate in the PROV-O, XES, and OCEL mappings. Once the struct is extended, wire the new fields through the runtime construction sites and the three exporters in `wos-export`, removing every `// TODO(spec-upstream)` comment. The design follows the push-stamped precedent established by Task 0 of `2026-04-15-wos-provenance-export.md`: constructors leave new fields empty/`None`; the runtime and integration handlers populate them at source; legacy fixtures remain tolerant via `#[serde(default)]`.
 
 **Tech Stack:** Rust, `wos-core`, `wos-runtime`, `wos-export`. No new dependencies.
 
-**Spec anchor:** `wos-spec/specs/profiles/semantic.md` §5.3 (Facts tier PROV-O mapping), §5.4 (higher-tier bundles), §5.5 (actor type mapping), §6.3 (XES mapping), §6.5 (export scope). Schema: `wos-spec/schemas/profiles/wos-semantic-profile.schema.json` — `provMapping` and `processMining` properties.
+**Spec anchor:** `work-spec/specs/profiles/semantic.md` §5.3 (Facts tier PROV-O mapping), §5.4 (higher-tier bundles), §5.5 (actor type mapping), §6.3 (XES mapping), §6.5 (export scope). Schema: `work-spec/schemas/profiles/wos-semantic-profile.schema.json` — `provMapping` and `processMining` properties.
 
 ---
 
@@ -32,7 +32,8 @@ The spec-cited wire names (camelCase) from Appendix C of `semantic.md`: `actorTy
 ## Task 1: Add 8 Fields to `ProvenanceRecord`
 
 **Files:**
-- Modify: `wos-spec/crates/wos-core/src/provenance.rs`
+
+- Modify: `work-spec/crates/wos-core/src/provenance.rs`
 
 All fields are optional strings or `Vec<String>`. All carry `#[serde(default, skip_serializing_if = "Option::is_none")]` (or the Vec equivalent) so any existing fixture that omits them continues to deserialize without error.
 
@@ -91,8 +92,9 @@ All fields are optional strings or `Vec<String>`. All carry `#[serde(default, sk
 - [x] **Step 1.4:** Run `cargo nextest run -p wos-core`. All tests must pass.
 
 - [x] **Step 1.5:** Commit.
+
   ```
-  git add wos-spec/crates/wos-core/src/provenance.rs
+  git add work-spec/crates/wos-core/src/provenance.rs
   git commit -m "feat(wos-core): add audit_layer, actor_type, lifecycle_state, definition_version, inputs/outputs, digests to ProvenanceRecord (SP §5.3–§6.3)"
   ```
 
@@ -101,8 +103,9 @@ All fields are optional strings or `Vec<String>`. All carry `#[serde(default, sk
 ## Task 2: Populate `audit_layer` at Construction Sites
 
 **Files:**
-- Modify: `wos-spec/crates/wos-core/src/provenance.rs` (add tier-classification helper)
-- Modify: `wos-spec/crates/wos-runtime/src/eval.rs` (or wherever records are appended to the log)
+
+- Modify: `work-spec/crates/wos-core/src/provenance.rs` (add tier-classification helper)
+- Modify: `work-spec/crates/wos-runtime/src/eval.rs` (or wherever records are appended to the log)
 
 **Spec anchor:** §5.4 (Facts/Reasoning/Counterfactual/Narrative tier table), §6.5 (export scope filter defaults to Facts).
 
@@ -121,8 +124,9 @@ The tier for a record is deterministic from its `ProvenanceKind`. Kinds at the F
 - [x] **Step 2.4:** Run `cargo nextest run -p wos-core -p wos-runtime`. All must pass.
 
 - [x] **Step 2.5:** Commit.
+
   ```
-  git add wos-spec/crates/wos-core/src/provenance.rs wos-spec/crates/wos-runtime/src/
+  git add work-spec/crates/wos-core/src/provenance.rs work-spec/crates/wos-runtime/src/
   git commit -m "feat(wos-runtime): populate audit_layer on ProvenanceRecord at stamp time (SP §5.4, §6.5)"
   ```
 
@@ -131,12 +135,13 @@ The tier for a record is deterministic from its `ProvenanceKind`. Kinds at the F
 ## Task 3: Populate `actor_type` at Construction Sites
 
 **Files:**
-- Modify: `wos-spec/crates/wos-runtime/src/eval.rs` or the event-processing path that calls `ProvenanceRecord::state_transition` and similar constructors
-- Modify: `wos-spec/crates/wos-runtime/src/integration_handlers/request_response.rs` (already has the `actor_kind_to_string` lookup at line 347–357)
+
+- Modify: `work-spec/crates/wos-runtime/src/eval.rs` or the event-processing path that calls `ProvenanceRecord::state_transition` and similar constructors
+- Modify: `work-spec/crates/wos-runtime/src/integration_handlers/request_response.rs` (already has the `actor_kind_to_string` lookup at line 347–357)
 
 **Spec anchor:** §5.3 (`actorType` row), §5.5 (default mapping: `human` / `system` / `agent`).
 
-The `ActorKind` enum in `wos-spec/crates/wos-core/src/model/kernel.rs` (line 184) already has `Human` and `System`. The AI Integration model carries the `"agent"` discriminator for Layer 2 agents. The `request_response.rs` handler already does the registry lookup at line 347; it just emits `actorType` into the CloudEvent data map rather than onto the `ProvenanceRecord`.
+The `ActorKind` enum in `work-spec/crates/wos-core/src/model/kernel.rs` (line 184) already has `Human` and `System`. The AI Integration model carries the `"agent"` discriminator for Layer 2 agents. The `request_response.rs` handler already does the registry lookup at line 347; it just emits `actorType` into the CloudEvent data map rather than onto the `ProvenanceRecord`.
 
 - [x] **Step 3.1:** In the runtime's stamp pass (same site as Task 2, Step 2.2), add `actor_type` population for records whose `actor_id` is set but `actor_type` is `None`. The stamp pass already has access to the kernel model; perform the same `kernel.actors.iter().find(|a| a.id == actor_id)` lookup as `request_response.rs:347`. Map `ActorKind::Human` → `"human"`, `ActorKind::System` → `"system"`. For IDs that match AI Integration agents (if the runtime context carries that registry), map to `"agent"`.
 
@@ -150,8 +155,9 @@ The `ActorKind` enum in `wos-spec/crates/wos-core/src/model/kernel.rs` (line 184
 - [x] **Step 3.4:** Run `cargo nextest run -p wos-runtime`. All must pass.
 
 - [x] **Step 3.5:** Commit.
+
   ```
-  git add wos-spec/crates/wos-runtime/src/
+  git add work-spec/crates/wos-runtime/src/
   git commit -m "feat(wos-runtime): populate actor_type on ProvenanceRecord at stamp time (SP §5.3, §5.5, §6.3)"
   ```
 
@@ -160,8 +166,9 @@ The `ActorKind` enum in `wos-spec/crates/wos-core/src/model/kernel.rs` (line 184
 ## Task 4: Populate `lifecycle_state`, `definition_version`, `inputs`, `outputs`, Digests
 
 **Files:**
-- Modify: `wos-spec/crates/wos-runtime/src/eval.rs` (state transition records, case mutation records)
-- Modify: `wos-spec/crates/wos-runtime/src/runtime.rs` (integration handler call sites)
+
+- Modify: `work-spec/crates/wos-runtime/src/eval.rs` (state transition records, case mutation records)
+- Modify: `work-spec/crates/wos-runtime/src/runtime.rs` (integration handler call sites)
 
 **Spec anchor:** §5.3 (`lifecycleState`, `definitionVersion`, `inputs`, `outputs`, `inputDigest`, `outputDigest`), §6.3 (XES mapping table).
 
@@ -181,6 +188,7 @@ These fields require access to runtime context beyond the record constructor's p
 - [x] **Step 4.3:** For `StateTransition` and `CaseStateMutation` records, populate `inputs` and `outputs` in the eval path at the record construction site (not in the stamp pass, since the values are available at construction time). For all other kinds, default to `vec![]` (already zero-initialized from Task 1).
 
 - [x] **Step 4.4:** After `inputs` and `outputs` are populated, compute and assign `input_digest` and `output_digest`:
+
   ```rust
   fn digest_of(items: &[String]) -> Option<String> {
       if items.is_empty() {
@@ -191,6 +199,7 @@ These fields require access to runtime context beyond the record constructor's p
       Some(format!("{:x}", Sha256::digest(payload.as_bytes())))
   }
   ```
+
   Add `sha2 = "0.10"` to `wos-export/Cargo.toml` (or `wos-core/Cargo.toml` if the helper lives there).
 
 - [x] **Step 4.5:** Add unit tests:
@@ -203,8 +212,9 @@ These fields require access to runtime context beyond the record constructor's p
 - [x] **Step 4.6:** Run `cargo nextest run -p wos-core -p wos-runtime`. All must pass.
 
 - [x] **Step 4.7:** Commit.
+
   ```
-  git add wos-spec/crates/wos-core/src/ wos-spec/crates/wos-runtime/src/
+  git add work-spec/crates/wos-core/src/ work-spec/crates/wos-runtime/src/
   git commit -m "feat(wos-runtime): populate lifecycle_state, definition_version, inputs/outputs, digests on ProvenanceRecord (SP §5.3, §6.3)"
   ```
 
@@ -213,9 +223,10 @@ These fields require access to runtime context beyond the record constructor's p
 ## Task 5: Unblock `// TODO(spec-upstream)` Markers in Exporters
 
 **Files:**
-- Modify: `wos-spec/crates/wos-export/src/prov_o.rs`
-- Modify: `wos-spec/crates/wos-export/src/xes.rs`
-- Modify: `wos-spec/crates/wos-export/src/ocel.rs`
+
+- Modify: `work-spec/crates/wos-export/src/prov_o.rs`
+- Modify: `work-spec/crates/wos-export/src/xes.rs`
+- Modify: `work-spec/crates/wos-export/src/ocel.rs`
 
 **Spec anchor:** §5.3 (full Facts tier PROV-O triad), §5.5 (actor type mapping), §6.3 (full XES mapping table), §6.5 (audit_layer filter).
 
@@ -252,8 +263,9 @@ With the struct extended and fields populated, the exporters can emit the full m
 - [x] **Step 5.8:** Run `cargo nextest run -p wos-export`. All tests must pass.
 
 - [x] **Step 5.9:** Commit.
+
   ```
-  git add wos-spec/crates/wos-export/src/
+  git add work-spec/crates/wos-export/src/
   git commit -m "feat(wos-export): emit full SP §5.3/§5.5/§6.3 mappings; apply §6.5 audit_layer filter; remove TODO(spec-upstream) markers"
   ```
 
@@ -262,10 +274,11 @@ With the struct extended and fields populated, the exporters can emit the full m
 ## Task 6: Extend SP-EXPORT Conformance Fixtures
 
 **Files:**
-- Modify: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-prov-o.json`
-- Modify: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-xes.json`
-- Modify: `wos-spec/crates/wos-conformance/tests/fixtures/sp-export-ocel.json`
-- Modify: `wos-spec/crates/wos-conformance/tests/export_conformance.rs`
+
+- Modify: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-prov-o.json`
+- Modify: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-xes.json`
+- Modify: `work-spec/crates/wos-conformance/tests/fixtures/sp-export-ocel.json`
+- Modify: `work-spec/crates/wos-conformance/tests/export_conformance.rs`
 
 These fixtures were established in `2026-04-15-wos-provenance-export.md` Task 5. They drive a 3-event workflow (Draft → Submitted → Approved) with a declared actor of type `Human`. Extend them to assert the new field emissions.
 
@@ -291,8 +304,9 @@ These fixtures were established in `2026-04-15-wos-provenance-export.md` Task 5.
 - [x] **Step 6.5:** Run `cargo nextest run -p wos-conformance`. All tests must pass.
 
 - [x] **Step 6.6:** Commit.
+
   ```
-  git add wos-spec/crates/wos-conformance/tests/fixtures/sp-export-*.json wos-spec/crates/wos-conformance/tests/export_conformance.rs
+  git add work-spec/crates/wos-conformance/tests/fixtures/sp-export-*.json work-spec/crates/wos-conformance/tests/export_conformance.rs
   git commit -m "test(wos-conformance): extend SP-EXPORT conformance fixtures for new ProvenanceRecord fields (SP §5.3–§6.5)"
   ```
 
@@ -319,6 +333,6 @@ The following are explicitly excluded from this plan. Each has its own architect
 - **Push-stamped design is consistent with the prior plan.** All new fields default to `None`/`vec![]` at construction; the runtime stamp pass fills them. The `#[serde(default)]` annotations on every new field guarantee legacy fixture tolerance.
 - **Constructors do not grow new parameters.** Eight new fields added; zero new constructor parameters. The runtime-context fields (`audit_layer`, `actor_type`, `lifecycle_state`, `definition_version`) are available only at the stamp-pass level, not at the low-level constructor call site; the digests are derived, not caller-supplied.
 - **Out-of-scope is explicit and bounded.** Bundle wrapping, case-file-item OCEL objects, SHACL validation, and unimplemented tier routes are each named with their architectural prerequisite.
-- **`ActorKind` extension note.** The kernel model at `wos-spec/crates/wos-core/src/model/kernel.rs:184` has only `Human` and `System`. The `"agent"` value for Layer 2 AI agents requires extending `ActorKind` with an `Agent` variant or resolving agent IDs from the AI Integration registry. Task 3 should resolve this against the AI Integration model before implementing the stamp-pass lookup; if `ActorKind::Agent` is not yet present, add it as part of Task 3 or note it as a blocker.
+- **`ActorKind` extension note.** The kernel model at `work-spec/crates/wos-core/src/model/kernel.rs:184` has only `Human` and `System`. The `"agent"` value for Layer 2 AI agents requires extending `ActorKind` with an `Agent` variant or resolving agent IDs from the AI Integration registry. Task 3 should resolve this against the AI Integration model before implementing the stamp-pass lookup; if `ActorKind::Agent` is not yet present, add it as part of Task 3 or note it as a blocker.
 
 **Plan complete.**

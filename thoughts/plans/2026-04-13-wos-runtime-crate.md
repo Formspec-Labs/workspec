@@ -430,7 +430,7 @@ Keep WOS orchestration in `wos-runtime`; keep Formspec semantics behind injected
 
 ## Success Criteria
 
-- `wos-runtime` exists as a new crate in `wos-spec/Cargo.toml`
+- `wos-runtime` exists as a new crate in `work-spec/Cargo.toml`
 - `wos-core` trait parity gaps for Runtime S12 are closed
 - one in-memory runtime can create, persist, reload, and advance a case instance
 - Runtime S15 task submission is implemented in one place, not spread across callers
