@@ -782,13 +782,14 @@
     "TaskOutcomeKind": {
       "enum": [
         "submitted",
+        "completed",
         "dismissed",
         "expired",
         "delegated",
         "escalated",
         "drafted"
       ],
-      "description": "Closed wire taxonomy for `TaskOutcomeEvent.outcome` (ADR 0082 D-12). Reserved literals: `submitted` (final response committed); `dismissed` (actor declined); `expired` (SLA breach without submission); `delegated` (assignment changed via delegation); `escalated` (assignment escalated to a higher authority); `drafted` (a draft save event for downstream observers). No vendor-extension seam: these are the outcomes the public API surfaces to clients; richer kernel-side events live in provenance.",
+      "description": "Closed wire taxonomy for `TaskOutcomeEvent.outcome` (ADR 0082 D-12). Reserved literals: `submitted` (final response committed); `completed` (task response committed and case mutated); `dismissed` (actor declined); `expired` (SLA breach without submission); `delegated` (assignment changed via delegation); `escalated` (assignment escalated to a higher authority); `drafted` (a draft save event for downstream observers). No vendor-extension seam: these are the outcomes the public API surfaces to clients; richer kernel-side events live in provenance.",
       "examples": [
         "submitted"
       ]
