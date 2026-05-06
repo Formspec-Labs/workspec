@@ -25,13 +25,15 @@
       "oneOf": [
         {
           "enum": [
+            "adverse-decision",
+            "appeal-filed",
             "assignment",
-            "sla-warning",
-            "sla-breach",
+            "bundle-completed",
             "escalation",
             "hold-expired",
             "review-activated",
-            "bundle-completed",
+            "sla-breach",
+            "sla-warning",
             "system"
           ]
         },
@@ -40,7 +42,7 @@
           "pattern": "^x-[a-z][a-z0-9-]*$"
         }
       ],
-      "description": "Closed notification event family with vendor-prefixed extension literals. `bundle-completed` is emitted when a case-export bundle (`bundle.schema.json`) transitions to `available`, `expired`, or `failed` so clients can subscribe to the notification feed instead of polling `Bundle.status`; the carrying `Notification.bundleId` points at the addressable resource (REQUIRED when `type == bundle-completed` per ADR 0082 D-11 conditional-required discipline).",
+      "description": "Closed notification event family with vendor-prefixed extension literals. `adverse-decision` is emitted when a case reaches an adverse-determination outcome requiring notice and appeal-window activation. Severity SHOULD be critical. The carrying `Notification.instanceId` points at the case. `appeal-filed` is emitted when an appeal is filed against a case determination. Severity SHOULD be warning. The carrying `Notification.instanceId` points at the originating case. `bundle-completed` is emitted when a case-export bundle (`bundle.schema.json`) transitions to `available`, `expired`, or `failed` so clients can subscribe to the notification feed instead of polling `Bundle.status`; the carrying `Notification.bundleId` points at the addressable resource (REQUIRED when `type == bundle-completed` per ADR 0082 D-11 conditional-required discipline).",
       "examples": [
         "assignment",
         "bundle-completed"
@@ -389,12 +391,14 @@
       "oneOf": [
         {
           "enum": [
+            "adverse-decision",
+            "appeal-filed",
             "assignment",
-            "sla-warning",
-            "sla-breach",
             "escalation",
             "hold-expired",
             "review-activated",
+            "sla-breach",
+            "sla-warning",
             "system"
           ]
         },

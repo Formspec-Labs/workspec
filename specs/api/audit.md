@@ -53,6 +53,19 @@ Projected identity-attestation chain for a single subject across cases. Aggregat
 
 `subjectGlobalId` is the tenant-independent URI subject identifier (`did:web:...`, `urn:idp:subject:...`) per ADR 0068 D-3.1. `attestations` is an array of Facts-tier `ProvenanceRecord` instances cross-`$ref`ed from `provenance.schema.json` (the audit projection is the per-case shape). `highestAssuranceLevel` mirrors the closed-with-vendor-extension `assuranceLevel` taxonomy from `wos-workflow.schema.json` `IdentityAttestationRecord.assuranceLevel`.
 
+#### Taxonomy mapping: assurance-level vocabulary
+
+The `highestAssuranceLevel` wire vocabulary (`low`, `standard`, `high`, `very-high`) is shared with `wos-workflow.schema.json` identity-attestation shapes. The `assurance.md` spec (§2.1) uses a different vocabulary — `L1`, `L2`, `L3`, `L4`. The canonical cross-reference mapping, declared as an `x-wos` annotation on the schema property:
+
+| Assurance spec (§2.1) | Wire vocabulary |
+|---|---|
+| `L1` | `low` |
+| `L2` | `standard` |
+| `L3` | `high` |
+| `L4` | `very-high` |
+
+A future taxonomy unification (ADR TBD) will align the two vocabularies. Until then, consumers translating between the assurance prose and the wire shape MUST use this mapping.
+
 ### `AuditQuerySort`
 
 Closed: `timestamp-asc | timestamp-desc`. No vendor-extension seam — sort orders are normative and a verifier MUST be able to reproduce a result set deterministically.

@@ -38,6 +38,9 @@
       "$ref": "#/$defs/PolicyVersionListOptions"
     },
     {
+      "$ref": "#/$defs/AutonomyEvent"
+    },
+    {
       "$ref": "#/$defs/EscalationEvent"
     },
     {
@@ -112,6 +115,49 @@
         "recommend",
         "act-with-review"
       ]
+    },
+    "AutonomyEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Governance aggregate view of an agent autonomy-level transition. Companion to the per-event Facts-tier provenance records (autonomyEscalation, autonomyDemotion) — this is the governance-query shape. Emitted when an agent's autonomy changes after initial activation due to drift, confidence breach, circuit breaker trip, manual intervention, or calibration expiry. Initial autonomy activation (first-ever assignment from the workflow agents[] declaration) does NOT emit an AutonomyEvent — the declared autonomy level is the source of truth. Read-only at the public API layer.",
+      "required": ["id", "agentId", "eventKind", "occurredAt", "previousLevel", "newLevel"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this autonomy event."
+        },
+        "agentId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "URN of the agent declaration whose autonomy changed."
+        },
+        "eventKind": {
+          "enum": ["escalated", "demoted", "restored"],
+          "description": "Closed autonomy transition kind: escalated (raised), demoted (lowered), restored (returned to declared level)."
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the transition occurred."
+        },
+        "previousLevel": {
+          "$ref": "#/$defs/AutonomyLevel",
+          "description": "Autonomy level before this transition."
+        },
+        "newLevel": {
+          "$ref": "#/$defs/AutonomyLevel",
+          "description": "Autonomy level after this transition."
+        },
+        "trigger": {
+          "enum": ["drift", "confidence-breach", "circuit-breaker", "manual", "calibration-expired"],
+          "description": "Closed trigger taxonomy for the autonomy transition."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text rationale when trigger is manual.",
+          "x-wos": { "openStringKind": "prose" }
+        }
+      }
     },
     "AgentDriftStatus": {
       "description": "Current drift posture of an agent's deployed model relative to its calibration baseline (governance S2 driftMonitoring). Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals: `nominal` (drift signals within calibration window), `watch` (drift trending toward the recalibration threshold but not yet breached), `recalibration-required` (drift exceeded the threshold; agent SHOULD be recalibrated before further use), `demoted` (governance suspended the agent's autonomy until recalibration), `unknown` (no drift observation available — typical for newly-declared agents). Vendor extensions MUST use an `x-` prefix.",
@@ -224,6 +270,19 @@
               "openStringKind": "prose"
             }
           }
+        },
+        "onViolation": {
+          "description": "Enforcement posture when this constraint is violated. Projected from the agent's deontic constraint declaration or the workflow's enforcement policy. Closed-with-vendor-extension enum (ADR 0082 D-12). Reserved literals: reject (processor MUST refuse the violating action), escalate-to-human (processor MUST route the violation to human review), switch-to-assistive (processor MUST downgrade the agent to assistive autonomy for this action), flag (processor MUST record the violation but allow the action to proceed under heightened audit). Vendor extensions MUST use an x- prefix.",
+          "oneOf": [
+            {
+              "enum": ["reject", "escalate-to-human", "switch-to-assistive", "flag"]
+            },
+            {
+              "type": "string",
+              "pattern": "^x-[a-z][a-z0-9-]*$"
+            }
+          ],
+          "examples": ["reject", "escalate-to-human"]
         }
       }
     },
@@ -461,10 +520,11 @@
     "CircuitBreakerSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Circuit-breaker projection on an agent (advanced/advanced-governance.md circuit breaker; advanced-governance.md:387-400). Tracks per-agent failure thresholds and cooldown so governance can short-circuit invocations after a streak of failures; companion: Agent B's `circuitBreakerTripped` / `circuitBreakerReset` Facts record kinds carry the per-event detail.",
+      "description": "Circuit-breaker projection on an agent (advanced/advanced-governance.md circuit breaker; advanced-governance.md:387-400). Tracks per-agent error rate over an evaluation window — the circuit opens when the observed error rate exceeds errorRateThreshold over evaluationWindowSeconds, subject to minimumInvocations. Companion: Agent B's `circuitBreakerTripped` / `circuitBreakerReset` Facts record kinds carry the per-event detail. After a cooldown period (cooldownSeconds), the circuit transitions to half-open and sends probeCount probes; if all succeed it closes, if any fail it re-opens.",
       "required": [
         "enabled",
-        "failureThreshold",
+        "errorRateThreshold",
+        "evaluationWindowSeconds",
         "cooldownSeconds",
         "currentStatus"
       ],
@@ -473,14 +533,30 @@
           "type": "boolean",
           "description": "True when the circuit breaker is configured and live for this agent."
         },
-        "failureThreshold": {
+        "evaluationWindowSeconds": {
           "type": "integer",
           "minimum": 1,
-          "description": "Consecutive failure count that trips the breaker open. Resets on any success.",
-          "examples": [
-            5,
-            10
-          ]
+          "description": "Sliding evaluation window in seconds over which the error rate is computed. Per advanced-governance.md §11.2.",
+          "examples": [300, 900]
+        },
+        "errorRateThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Error rate threshold (0-1) over the evaluation window that triggers circuit opening. Per advanced-governance.md §11.2.",
+          "examples": [0.05, 0.1]
+        },
+        "minimumInvocations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum invocations within the evaluation window before tripping. Per advanced-governance.md §11.2.",
+          "examples": [5, 10]
+        },
+        "probeCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of probe invocations in half-open state before deciding. Per advanced-governance.md §11.2.",
+          "examples": [1, 3]
         },
         "cooldownSeconds": {
           "type": "integer",
@@ -749,6 +825,27 @@
               "humanReviewer"
             ]
           }
+        },
+        "discloseThatAgentAssisted": {
+          "type": "boolean",
+          "description": "When true, the case portal MUST disclose that an AI agent assisted with this workflow. Projected from the workflow's aiOversight.disclosure block. Regulatory motivation: OMB M-24-10, EU AI Act Art. 13."
+        },
+        "discloseModelIdentity": {
+          "type": "boolean",
+          "description": "When true, the case portal MUST disclose the specific AI model used (modelIdentifier). Projected from the workflow's aiOversight.disclosure block. Regulatory motivation: EU AI Act Art. 13 transparency requirements."
+        },
+        "discloseConfidence": {
+          "type": "boolean",
+          "description": "When true, the case portal MUST disclose the agent's confidence score for this output. Projected from the workflow's aiOversight.disclosure block. Regulatory motivation: OMB M-24-10 algorithmic transparency."
+        },
+        "reviewWindow": {
+          "type": "string",
+          "pattern": "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+W)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+S)?)?$",
+          "description": "ISO 8601 duration for the supervisory review window. Present when autonomyLevel is act-with-review. The runtime MUST escalate to human review if this window elapses without review. Pattern excludes business-day forms (PBD) to keep the agent-view projection independent of calendar resolution."
+        },
+        "suppressedPendingIndependentReview": {
+          "type": "boolean",
+          "description": "When true, the agent's current output is suppressed pending independent review per the independentFirst review protocol (governance §4.2). The case portal MUST NOT display agent recommendations while this flag is true."
         }
       }
     },
@@ -1174,6 +1271,17 @@
           "x-wos": {
             "openStringKind": "prose"
           }
+        },
+        "type": {
+          "enum": ["number", "integer", "string", "boolean"],
+          "description": "Resolved parameter type. When absent, consumers MAY infer the type from the value field's JSON type. Present allows consumers to distinguish numeric thresholds (e.g. a deadline value of '30' as integer days vs string identifier '30')."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unit label for numeric parameters (e.g. 'USD', 'days', 'hours', 'percent'). Absent for non-numeric parameters or when the unit is not declared. Surfaced so dashboards can render '30 days' rather than bare '30'.",
+          "x-wos": { "openStringKind": "identifier" },
+          "examples": ["USD", "days", "percent"]
         }
       }
     },

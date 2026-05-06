@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/appeal/v1",
+  "title": "WOS API Appeal",
+  "description": "Public API resource schema for WOS appeals. Appeals are cross-case governance artifacts: an appellant challenges an adverse determination on a closed case instance, triggering a governed review process. The `appeal` entity-type literal is already admitted in the URN alternation at `_common.schema.json#/$defs/WosResourceUrn` (Phase 1). Actor references are `ActorRef` URNs per ADR 0082 D-9; URNs follow the closed `WosResourceUrn` taxonomy per ADR 0082 D-4. Closed taxonomies (status, disposition) per D-12; vendor extensions are NOT permitted — appeal lifecycle and disposition are normative.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/AppealStatus"
+    },
+    {
+      "$ref": "#/$defs/AppealDisposition"
+    },
+    {
+      "$ref": "#/$defs/Appeal"
+    },
+    {
+      "$ref": "#/$defs/AppealCreateRequest"
+    },
+    {
+      "$ref": "#/$defs/AppealListOptions"
+    },
+    {
+      "$ref": "#/$defs/AppealPage"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "AppealStatus": {
+      "enum": [
+        "pending",
+        "accepted",
+        "denied",
+        "withdrawn"
+      ],
+      "description": "Closed appeal lifecycle taxonomy.",
+      "examples": [
+        "pending",
+        "denied"
+      ]
+    },
+    "AppealDisposition": {
+      "enum": [
+        "upheld",
+        "overturned",
+        "remanded",
+        "modified",
+        "dismissed"
+      ],
+      "description": "Closed appeal disposition taxonomy.",
+      "examples": [
+        "upheld",
+        "remanded"
+      ]
+    },
+    "Appeal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Appeal resource against a closed case instance's adverse determination (governance S3.5). An appeal is filed by an appellant actor, reviewed by an adjudicator, and terminates with a closed disposition. This shape is the cross-case authoritative record; per-case projections on `CaseInstanceGovernance` (instance.schema.json) summarize the appeal state for the consuming instance.",
+      "required": [
+        "id",
+        "instanceId",
+        "appellantRef",
+        "filedAt",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this appeal. Entity-type segment MUST be `appeal`."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this appeal was filed against. Entity-type segment MUST be `instance`."
+        },
+        "appellantRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "URN-form reference to the appellant actor."
+        },
+        "filedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the appeal was filed.",
+          "examples": [
+            "2026-05-06T14:30:00Z"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/AppealStatus",
+          "description": "Closed appeal lifecycle posture."
+        },
+        "groundForAppeal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text ground for appeal. Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        },
+        "disposition": {
+          "$ref": "#/$defs/AppealDisposition",
+          "description": "Closed disposition. Present only when status is accepted or denied."
+        },
+        "dispositionAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the disposition was recorded. Present only when disposition is present.",
+          "examples": [
+            "2026-05-15T09:00:00Z"
+          ]
+        },
+        "adjudicatorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "URN-form reference to the adjudicator reviewing the appeal."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when this appeal resource was created.",
+          "examples": [
+            "2026-05-06T14:30:00Z"
+          ]
+        }
+      }
+    },
+    "AppealCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Request body for `POST /api/v1/instances/{id}/appeals` — files an appeal against a closed case instance's adverse determination. The `Idempotency-Key` HTTP header is REQUIRED per ADR 0082 D-16; a repeat request within the retention window returns the original `Appeal` resource unchanged. Server assigns the URN, `filedAt`, and `createdAt`; clients MUST NOT supply them.",
+      "required": [
+        "instanceId",
+        "appellantRef",
+        "groundForAppeal"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN to file the appeal against. Entity-type segment MUST be `instance`. Server validates the instance is in a completed lifecycle state."
+        },
+        "appellantRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "URN-form reference to the appellant actor filing the appeal. Server verifies the appellant has standing to appeal this instance."
+        },
+        "groundForAppeal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text ground for appeal. Open prose.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "AppealListOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Query fields for `GET /api/v1/instances/{id}/appeals`.",
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "When present, restrict results to appeals for this case instance."
+        },
+        "status": {
+          "$ref": "#/$defs/AppealStatus",
+          "description": "When present, restrict results to appeals in this lifecycle posture."
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque resume token returned by the previous page (ADR 0082 D-7)."
+        },
+        "limit": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/PageLimit",
+          "description": "Maximum number of appeals requested for this page (ADR 0082 D-7)."
+        }
+      }
+    },
+    "AppealPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated appeal page (ADR 0082 D-7). Default ordering is `createdAt` ascending so paginating clients observe a stable monotone walk.",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Appeal records in this page.",
+          "items": {
+            "$ref": "#/$defs/Appeal"
+          }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

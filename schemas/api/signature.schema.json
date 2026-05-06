@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.formspec.io/wos-api/signature/v1",
+  "title": "WOS API Signature Ceremony",
+  "description": "Public API resource schema for WOS signature ceremonies. A `SignatureCeremony` is the aggregate projection of a WOS signing ceremony — the FSM state that tracks which signers have signed, declined, or expired across a document or transition. Distinct from `signature` tasks (`task.schema.json` `TaskKind.signature`), `signatureAffirmation` provenance records (`provenance.schema.json` `FactsRecordKind.signatureAffirmation`), and the signature profile author-time declaration (`wos-workflow.schema.json` `signature` embedded block). The ceremony aggregate lets the case portal answer \"who hasn't signed yet?\" and lets an operator inspect the full ceremony FSM without reconstructing from per-task / per-provenance records. Per ADR 0082 D-15 step 6, this domain pairs with `task.schema.json` (per-signer task lifecycle) to close the signature API surface.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SignatureCeremony"
+    },
+    {
+      "$ref": "#/$defs/SignatureCeremonyPage"
+    }
+  ],
+  "$defs": {
+    "ActorRef": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/ActorRef",
+      "description": "Stable actor reference from the identity/governance subsystem (ADR 0082 D-9). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "WosResourceUrn": {
+      "$ref": "https://schemas.formspec.io/wos-api/_common/v1#/$defs/WosResourceUrn",
+      "description": "Public WOS API resource URN (ADR 0082 D-4). Hoisted to `_common.schema.json` per PLN-0404."
+    },
+    "SignerRole": {
+      "enum": [
+        "signer",
+        "witness",
+        "notary",
+        "counter-signer",
+        "approver",
+        "reviewer",
+        "observer",
+        "custodian"
+      ],
+      "description": "Closed signer-role taxonomy per signature profile §2.2."
+    },
+    "SignerStatus": {
+      "enum": [
+        "pending",
+        "notified",
+        "viewed",
+        "signed",
+        "declined",
+        "expired"
+      ],
+      "description": "Closed per-signer lifecycle status. `pending` = signer assigned but not yet notified; `notified` = signer received notification; `viewed` = signer opened the document; `signed` = signer completed signing; `declined` = signer declined to sign; `expired` = signing window closed before signer acted."
+    },
+    "SignerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-signer state within a signature ceremony. Tracks the individual signer's lifecycle from assignment through terminal state.",
+      "required": [
+        "actorRef",
+        "role",
+        "status"
+      ],
+      "properties": {
+        "actorRef": {
+          "$ref": "#/$defs/ActorRef",
+          "description": "URN-form reference to the signer actor."
+        },
+        "role": {
+          "$ref": "#/$defs/SignerRole",
+          "description": "Closed signer-role taxonomy."
+        },
+        "status": {
+          "$ref": "#/$defs/SignerStatus",
+          "description": "Closed per-signer lifecycle."
+        },
+        "signedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the signer completed signing."
+        },
+        "declinedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the signer declined."
+        },
+        "declineReason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-text decline reason.",
+          "x-wos": {
+            "openStringKind": "prose"
+          }
+        }
+      }
+    },
+    "SignatureFlowPattern": {
+      "enum": [
+        "sequential",
+        "parallel",
+        "routed",
+        "free-for-all"
+      ],
+      "description": "Closed signing flow pattern per signature profile §2.3. `sequential` = signers act in order, each gating the next; `parallel` = all signers act independently; `routed` = signers are dispatched by a routing rule (e.g. by role or org unit); `free-for-all` = any signer can act in any order."
+    },
+    "SignatureCeremonyStatus": {
+      "enum": [
+        "awaiting-signatures",
+        "complete",
+        "declined",
+        "expired",
+        "voided"
+      ],
+      "description": "Closed ceremony lifecycle posture. `awaiting-signatures` = ceremony active, signers pending; `complete` = all required signers have signed; `declined` = a signer declined and the ceremony reached a terminal state; `expired` = signing window elapsed; `voided` = ceremony was administratively voided."
+    },
+    "SignatureCeremony": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Aggregate projection of a WOS signing ceremony — the FSM state tracking which signers have signed, declined, or expired across a document or transition.",
+      "required": [
+        "id",
+        "instanceId",
+        "status",
+        "signers",
+        "flowPattern",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Stable public URN for this signature ceremony. Entity-type segment MUST be signature-ceremony."
+        },
+        "instanceId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Case instance URN this ceremony belongs to."
+        },
+        "taskId": {
+          "$ref": "#/$defs/WosResourceUrn",
+          "description": "Optional signature task URN this ceremony is bound to (when the workflow gates a transition on a signature task)."
+        },
+        "documentRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Workflow document or transition identifier being signed.",
+          "x-wos": {
+            "openStringKind": "identifier"
+          }
+        },
+        "flowPattern": {
+          "$ref": "#/$defs/SignatureFlowPattern",
+          "description": "Closed signing flow pattern."
+        },
+        "status": {
+          "$ref": "#/$defs/SignatureCeremonyStatus",
+          "description": "Closed ceremony lifecycle posture."
+        },
+        "signers": {
+          "type": "array",
+          "description": "Ordered signers in this ceremony. Order reflects the flow pattern (sequential = order matters, parallel = order is informational).",
+          "items": {
+            "$ref": "#/$defs/SignerState"
+          }
+        },
+        "intentUri": {
+          "type": "string",
+          "format": "uri",
+          "description": "Registered signing-intent URI from the signature profile §2.11 registry (e.g. 'https://wos-spec.org/signing-intent/esign-consent')."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the ceremony was created."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when the ceremony reached a terminal state (complete, declined, expired, or voided)."
+        },
+        "expiresAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "const": "never"
+            }
+          ],
+          "description": "RFC 3339 UTC timestamp or the literal 'never' sentinel (ADR 0082 D-10) for ceremonies without an expiry window."
+        }
+      }
+    },
+    "SignatureCeremonyPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated signature ceremony page (ADR 0082 D-7).",
+      "required": [
+        "items",
+        "hasMore"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Signature ceremony records in this page.",
+          "items": {
+            "$ref": "#/$defs/SignatureCeremony"
+          }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available from the server."
+        }
+      }
+    }
+  }
+}

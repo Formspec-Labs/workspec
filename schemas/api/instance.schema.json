@@ -35,6 +35,12 @@
       "$ref": "#/$defs/CaseInstanceRelatedList"
     },
     {
+      "$ref": "#/$defs/CompensationLogEntry"
+    },
+    {
+      "$ref": "#/$defs/CompensationLogEntryPage"
+    },
+    {
       "$ref": "#/$defs/EvaluationResult"
     },
     {
@@ -45,6 +51,9 @@
     },
     {
       "$ref": "#/$defs/CorrelationGroupResult"
+    },
+    {
+      "$ref": "#/$defs/CustodyReceipt"
     },
     {
       "$ref": "#/$defs/PerInstanceCorrelationResult"
@@ -161,6 +170,40 @@
           "type": "string",
           "format": "date-time",
           "description": "UTC RFC 3339 timestamp the zone last transitioned out of `none`. Absent when the zone has never triggered."
+        },
+        "pendingActivities": {
+          "type": "array",
+          "description": "Activity identifiers currently in the 'pending' marking within this DCR zone.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "x-wos": { "openStringKind": "identifier" }
+          }
+        },
+        "violatedRelations": {
+          "type": "array",
+          "description": "DCR relations currently in violation within this zone.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["relationType", "source", "target"],
+            "properties": {
+              "relationType": {
+                "enum": ["condition", "response", "include", "exclude", "milestone"],
+                "description": "Closed DCR relation type per advanced-governance.md."
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "x-wos": { "openStringKind": "identifier" }
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "x-wos": { "openStringKind": "identifier" }
+              }
+            }
+          }
         }
       }
     },
@@ -205,6 +248,70 @@
           "householdSize": 3
         }
       ]
+    },
+    "CompensationLogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single entry in the kernel compensation log (Kernel §9.5). Appended when the processor initiates a compensation sequence after a partial correlation-group fan-out failure or an explicit revert action. Read-only at the public API layer.",
+      "required": ["compensationId", "status", "startedAt"],
+      "properties": {
+        "compensationId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Processor-assigned compensation identifier within this instance.",
+          "x-wos": { "openStringKind": "identifier" }
+        },
+        "status": {
+          "enum": ["pending", "executing", "succeeded", "failed"],
+          "description": "Closed compensation lifecycle. pending: queued but not started. executing: revert steps in progress. succeeded: all revert steps completed. failed: one or more revert steps could not be applied."
+        },
+        "pivotStep": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the pivot step — the transition or mutation whose rollback triggered this compensation.",
+          "x-wos": { "openStringKind": "identifier" }
+        },
+        "revertSteps": {
+          "type": "array",
+          "description": "Ordered identifiers of the revert steps to execute.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "x-wos": { "openStringKind": "identifier" }
+          }
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when compensation began."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 UTC timestamp when compensation reached a terminal state (succeeded or failed). Absent while status is pending or executing."
+        }
+      }
+    },
+    "CompensationLogEntryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Cursor-paginated compensation log page (ADR 0082 D-7).",
+      "required": ["items", "hasMore"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Compensation log entries in this page.",
+          "items": { "$ref": "#/$defs/CompensationLogEntry" }
+        },
+        "cursor": {
+          "$ref": "https://schemas.formspec.io/wos-api/pagination/v1#/$defs/CursorToken",
+          "description": "Opaque token for the next page. Omitted when hasMore is false."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "True when another page is available."
+        }
+      }
     },
     "MutationKind": {
       "type": "string",
@@ -585,6 +692,74 @@
         "reviewState": {
           "$ref": "#/$defs/ReviewState",
           "description": "Closed review-protocol posture for this instance."
+        },
+        "adverseDecisionPolicyActive": {
+          "type": "boolean",
+          "description": "When true, the workflow's adverse-decision policy is active for this case. The case portal SHOULD surface notices about appeal rights, deadlines, and continuation-of-services windows."
+        },
+        "reviewProtocolActive": {
+          "$ref": "https://schemas.formspec.io/wos-api/task/v1#/$defs/ReviewProtocolKind",
+          "description": "The review protocol currently active on this case instance. Projected from the workflow's review-protocol declaration. Present only when a review-protocol-governed transition is in the active configuration."
+        },
+        "activeEscalation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Current escalation posture for this instance. Present only when an escalation chain is actively walking. Absent when the instance is not escalated.",
+          "required": ["level"],
+          "properties": {
+            "level": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Current escalation level (1-based)."
+            },
+            "escalatedTo": {
+              "$ref": "#/$defs/ActorRef",
+              "description": "Actor URN the case or task was reassigned to."
+            },
+            "escalatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "RFC 3339 UTC timestamp when this escalation level fired."
+            },
+            "reason": {
+              "$ref": "https://schemas.formspec.io/wos-api/governance/v1#/$defs/EscalationReason",
+              "description": "Cause that triggered the escalation."
+            }
+          }
+        },
+        "activeHoldsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of currently active holds on this instance. The holds subresource carries the per-hold detail."
+        },
+        "activeGovernanceRules": {
+          "type": "array",
+          "description": "Governance rules currently active on this instance's state configuration.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ruleId", "ruleKind", "activatedAt"],
+            "properties": {
+              "ruleId": {
+                "type": "string",
+                "minLength": 1,
+                "x-wos": { "openStringKind": "identifier" }
+              },
+              "ruleKind": {
+                "enum": ["lifecycle-hook", "contract-hook", "review-protocol", "due-process-notice", "assertion-gate"],
+                "description": "Closed governance rule kind taxonomy."
+              },
+              "triggerTag": {
+                "type": "string",
+                "minLength": 1,
+                "x-wos": { "openStringKind": "identifier" }
+              },
+              "activatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
         }
       }
     },
@@ -829,6 +1004,7 @@
     },
     "IncludeKind": {
       "enum": [
+        "compensation",
         "governance",
         "tasks",
         "timers",
@@ -852,6 +1028,10 @@
         "instance": {
           "$ref": "#/$defs/CaseInstance",
           "description": "Base case-instance projection."
+        },
+        "compensation": {
+          "$ref": "#/$defs/CompensationLogEntryPage",
+          "description": "Compensation log subresource. Present only when `include=compensation` was requested. Returns cursor-paginated entries; clients consume the full log via `GET /api/v1/instances/{id}/compensation` for pagination."
         },
         "governance": {
           "$ref": "#/$defs/CaseInstanceGovernance",
@@ -1143,8 +1323,45 @@
           "description": "Convenience marker -- `true` when every entry in `perInstanceResults` has `status == succeeded`, `false` otherwise. When `false`, callers MUST inspect `perInstanceResults` for the per-instance failure surface to drive compensation (cross-cite ADR 0070 cross-layer failure and compensation when ratified)."
         }
       }
-    },
-    "EventSubmissionResponse": {
+  },
+  "CustodyReceipt": {
+    "type": "object",
+    "additionalProperties": false,
+    "description": "Trellis custody-anchoring receipt for a case instance. Projected from the Trellis canonical-event-hash anchor receipt produced when the WOS processor appends provenance records through the custodyHook seam (Kernel §10.5). Read-only at the public API layer — the write path is internal (processor → Trellis via custodyHook).",
+    "required": ["instanceId", "canonicalEventHash", "anchoredAt"],
+    "properties": {
+      "instanceId": {
+        "$ref": "#/$defs/WosResourceUrn",
+        "description": "Case instance URN this custody receipt anchors."
+      },
+      "canonicalEventHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$",
+        "description": "SHA-256 hex digest of the Trellis-anchored canonical event. This is the cryptographic proof that the case's provenance records were anchored on Trellis — a verifier recomputes the hash from the provenance byte stream and compares against this value."
+      },
+      "anchoredAt": {
+        "type": "string",
+        "format": "date-time",
+        "description": "RFC 3339 UTC timestamp when the Trellis anchor was confirmed."
+      },
+      "anchorTarget": {
+        "type": "string",
+        "format": "uri",
+        "description": "Trellis anchor target URI (e.g. OpenTimestamps calendar URL, Rekor transparency log entry, Trillian Merkle tree path). Absent when the deployment uses an anchorless Trellis posture."
+      },
+      "provenanceRecordId": {
+        "$ref": "#/$defs/WosResourceUrn",
+        "description": "Optional Facts-tier provenance record URN whose canonical event this receipt anchors. Absent when the receipt covers a batch of records."
+      },
+      "custodyPosture": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Trellis trust-profile label declared in the workflow's custody block (e.g. 'profile-b', 'lightweight'). Matches the trust-profile the custodyHook was configured with at append time.",
+        "x-wos": { "openStringKind": "identifier" }
+      }
+    }
+  },
+  "EventSubmissionResponse": {
       "type": "object",
       "additionalProperties": false,
       "description": "Response body for `POST /api/v1/instances/{id}/events`. Wraps the kernel `EvaluationResult` (which carries `previousConfiguration`, `newConfiguration`, `eventsFired`, `mutations`) plus the post-evaluation lifecycle posture and the URN of the Facts-tier provenance record the evaluation produced. Clients drive the case-portal UI off the embedded `evaluationResult.mutations` typed array (ADR 0082 D-6) -- the kernel anti-design `caseStateMutations: Record<string, unknown>` is structurally inexpressible. When the submission triggered correlation-group fan-out (Kernel S9.4), `correlationGroupResult` carries the typed per-instance outcomes; absence means no fan-out occurred (single-instance evaluation only).",

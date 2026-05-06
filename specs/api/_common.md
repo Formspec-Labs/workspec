@@ -19,7 +19,7 @@ URN-form principal reference: `actor:<principalClass>:<id-suffix>`. Principal-cl
 
 ### `WosResourceUrn`
 
-Public WOS API resource URN: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. Entity-type segment is the closed taxonomy from ADR 0082 D-4: `instance | task | bundle | delegation | agent | hold | timer | profile | notification | correspondence-message | report-run | provenance-record | actor`. Vendor extensions are NOT permitted in the entity-type segment — public WOS resource families are normative.
+Public WOS API resource URN: `urn:wos:<entity-type>:<workflow-or-scope-id>:<date>:<short-hash>`. Entity-type segment is the closed taxonomy from ADR 0082 D-4: `instance | task | bundle | delegation | appeal | agent | hold | timer | profile | notification | correspondence-message | report-run | provenance-record | signature-ceremony | actor`. Vendor extensions are NOT permitted in the entity-type segment — public WOS resource families are normative.
 
 ## Cross-Reference Discipline
 

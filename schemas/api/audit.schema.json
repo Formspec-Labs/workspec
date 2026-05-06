@@ -340,7 +340,16 @@
               "pattern": "^x-[a-z][a-z0-9-]*$"
             }
           ],
-          "description": "Highest assurance level observed across the attestation chain (closed taxonomy from ADR 0068 D-3.1 + vendor-prefix extension per ADR 0082 D-12). Mirrors `wos-workflow.schema.json` `IdentityAttestationRecord.assuranceLevel`. Computed by the server from the chain; useful for compliance investigators answering 'did this subject ever reach high assurance under this provider?'."
+          "description": "Highest assurance level observed across the attestation chain (closed taxonomy from ADR 0068 D-3.1 + vendor-prefix extension per ADR 0082 D-12). Mirrors `wos-workflow.schema.json` `IdentityAttestationRecord.assuranceLevel`. Computed by the server from the chain; useful for compliance investigators answering 'did this subject ever reach high assurance under this provider?'.",
+          "x-wos": {
+            "assuranceTaxonomyMapping": {
+              "L1": "low",
+              "L2": "standard",
+              "L3": "high",
+              "L4": "very-high"
+            },
+            "note": "The wire vocabulary (low/standard/high/very-high) is shared with wos-workflow.schema.json identity-attestation shapes. The assurance prose (assurance.md §2.1) uses L1-L4. This mapping is the canonical cross-reference. A future taxonomy unification (ADR TBD) will align them."
+          }
         },
         "earliestAttestedAt": {
           "type": "string",

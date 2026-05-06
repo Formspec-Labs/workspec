@@ -46,6 +46,8 @@ Identity uses URNs throughout (ADR 0082 D-4, D-9):
 | `dcrZoneViolation` | `dcrZoneViolation` | DCR constraint-zone condition/response/include/exclude/milestone violation. |
 | `driftAlert` | `driftAlert` | Drift-monitor threshold crossing and resulting drift posture. |
 | `reportTimedOut` | `reportTimedOut` | Report run exceeded `maxDurationSeconds`, failed with `WOS-1408`, and was terminated. |
+| `equityAlert` | (lightweight inline payload — see schema `data.description`) | Equity guardrail threshold breach for a protected category. The `data` bag carries `guardrailId`, `protectedCategoryId`, `disparityScore`, `threshold`, and `occurredAt`. Consumed by the `equity-disparity` report generator (`reports.schema.json`). |
+| `autonomyEscalation`, `autonomyDemotion` | (lightweight inline payload — see schema `data.description`) | Agent autonomy-level transition. The `data` bag carries `previousAutonomyLevel`, `newAutonomyLevel`, `trigger`, and optional `rationale`. The `AutonomyEvent` aggregate on `governance.schema.json` provides the governance-query view; this is the per-event audit record. |
 
 Quorum reductions are not a new reserved `recordKind`. Governance §S4.9 says a quorum MUST NOT be silently reduced; when an implementation reduces quorum, it MUST emit an explicit policy-transition Facts record carrying `quorumReduction`. The parent kind remains the policy action that authorized the change, and the typed field carries `priorRequiredCount`, `newRequiredCount`, `authorityBasis`, and `actorRef`.
 

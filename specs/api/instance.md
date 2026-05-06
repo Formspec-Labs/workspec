@@ -7,7 +7,7 @@
 
 ## Purpose
 
-`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, the resource carries lifecycle and `caseState` only; governance, tasks, timers, holds, and cross-case relationships are subresources and the `?include=` aggregation seam is closed.
+`CaseInstance` is the public projection of a running WOS workflow instance — the case-file state, lifecycle posture, and identity that drive the case-portal and SDK consumers. Greenfield per ADR 0082 D-15: the kernel runtime artifact (`wos-case-instance.schema.json`) and the prior `case-portal/src/ports/types.ts` `CaseInstanceView` are prior art, not this contract. Per ADR 0082 D-3, the resource carries lifecycle and `caseState` only; governance, tasks, timers, holds, compensation, and cross-case relationships are subresources and the `?include=` aggregation seam is closed. `CustodyReceipt` exposes the Trellis custody-anchoring receipt projection; `CompensationLogEntry` and `CompensationLogEntryPage` supply the kernel compensation log (Kernel §9.5).
 
 ## Resource Shape
 
@@ -35,7 +35,8 @@
 Per ADR 0082 D-3, subresource endpoints scale pagination per resource and prevent the "first 50 active tasks always come along" pathology. The closed `?include=` taxonomy (D-3) supports single-call UI views without GraphQL-style open composition.
 
 | Subresource | Endpoint | Schema | `include=` literal | Pagination |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
+| Compensation | `GET /api/v1/instances/{id}/compensation` | `CompensationLogEntryPage` | `compensation` | cursor (D-7) |
 | Governance | `GET /api/v1/instances/{id}/governance` | `CaseInstanceGovernance` | `governance` | not paginated; small bounded set |
 | Tasks | `GET /api/v1/instances/{id}/tasks` | `TaskPage` (from `task.schema.json`) | `tasks` | cursor (D-7) |
 | Timers | `GET /api/v1/instances/{id}/timers` | `CaseInstanceTimerList` | `timers` | not paginated |
@@ -57,9 +58,26 @@ Provenance is intentionally NOT in the `?include=` taxonomy because the cardinal
 
 **Composition.** Filters compose with AND semantics — a record matches when it satisfies every supplied filter independently. `recordKindFilter` is implicitly tier-scoped to Facts (the kernel `recordKind` is a Facts-tier field); supplying `recordKindFilter` alongside `tier=reasoning` is rejected with `WOS-1422` because the cross-tier intersection is empty by construction. Cursor pagination per D-7 still applies on top of the filter set; cursors are opaque, single-use within the issuing deploy, and `WOS-1410` on expiry restarts pagination from the top.
 
-`?include=` is a closed enum (`IncludeKind`): `governance | tasks | timers | holds | related`. Per-section limits (for example `?include=tasks(limit=10)`) are enforced server-side; the inline `tasks` projection uses the lighter `TaskListItem` shape so list views inside the aggregation match the standalone task list. No vendor extensions on `IncludeKind` — closed by design (D-3 framing).
+`?include=` is a closed enum (`IncludeKind`): `compensation | governance | tasks | timers | holds | related`. Per-section limits (for example `?include=tasks(limit=10)`) are enforced server-side; the inline `tasks` projection uses the lighter `TaskListItem` shape so list views inside the aggregation match the standalone task list. No vendor extensions on `IncludeKind` — closed by design (D-3 framing).
 
 The aggregated response shape is `CaseInstanceWithIncludes`: a required `instance` envelope (the same `CaseInstance` shape returned with no `?include=`) plus optional subresource fields. Subresource fields are present only when their literal was requested. This keeps the aggregation seam discoverable and structurally explicit.
+
+## Governance subresource fields
+
+`CaseInstanceGovernance` (the `governance` `include=` literal) carries the enriched governance projection for a case instance. Beyond the required `instanceId`, `delegations` (governance S11), and `reviewState` (closed-with-vendor-extension `none | pending | in-review | cleared | flagged` plus `^x-[a-z]+-` extensions), the following optional fields project governance posture at instance scope:
+
+- `adverseDecisionPolicyActive?: boolean` — when true, the workflow's adverse-decision policy is active. The case portal SHOULD surface notices about appeal rights, deadlines, and continuation-of-services windows (governance §3.6).
+- `reviewProtocolActive?: ReviewProtocolKind` — the review protocol currently active on this instance. Projected from the workflow's review-protocol declaration. Present only when a review-protocol-governed transition is in the active configuration. Cross-`$ref`d from `task.schema.json#/$defs/ReviewProtocolKind`.
+- `activeEscalation?: { level, escalatedTo, escalatedAt, reason }` — current escalation posture. Present only when an escalation chain is actively walking; absent otherwise. `level` (integer >= 1) is the current 1-based escalation level; `escalatedTo` carries the `ActorRef` URN the case was reassigned to; `escalatedAt` is the RFC 3339 UTC timestamp; `reason` carries the `EscalationReason` cause cross-`$ref`d from `governance.schema.json`.
+- `activeHoldsCount?: integer (>= 0)` — count of currently active holds. The holds subresource carries the per-hold detail (governance S12).
+- `activeGovernanceRules?: [ { ruleId, ruleKind, triggerTag?, activatedAt } ]` — governance rules currently active on this instance's state configuration. `ruleKind` is the closed taxonomy `lifecycle-hook | contract-hook | review-protocol | due-process-notice | assertion-gate`. `triggerTag` is an optional identifier for the originating trigger; `activatedAt` is the RFC 3339 timestamp when the rule became active.
+
+## DCR constraint zone state
+
+`DcrConstraintZoneState` (projected on `CaseInstance.dcrZones`) carries per-zone DCR constraint posture for lifecycle states that declare advanced-governance constraint zones (advanced-governance.md §1.2). In addition to the existing `zoneId`, `currentLevel` (closed `none | caution | breach`), and `lastTriggered` (RFC 3339 timestamp of last transition out of `none`), the enriched projection adds:
+
+- `pendingActivities?: string[]` — activity identifiers currently in the 'pending' marking within this DCR zone. Each entry matches an activity name declared in the workflow's constraint-zone declaration.
+- `violatedRelations?: [ { relationType, source, target } ]` — DCR relations currently in violation within this zone. `relationType` is the closed DCR relation taxonomy `condition | response | include | exclude | milestone` per advanced-governance.md. `source` and `target` are identifier-shaped strings naming the activities whose relation is in violation. Empty or absent when no relations are in violation.
 
 ## Endpoints
 
@@ -68,11 +86,13 @@ GET   /api/v1/instances                       -> CaseInstancePage
 POST  /api/v1/instances                       -> CaseInstanceCreateResponse  (Idempotency-Key REQUIRED)
 GET   /api/v1/instances/{id}                  -> CaseInstance | CaseInstanceWithIncludes
 GET   /api/v1/instances/{id}/governance       -> CaseInstanceGovernance
+GET   /api/v1/instances/{id}/compensation      -> CompensationLogEntryPage     (cursor-paginated)
 GET   /api/v1/instances/{id}/tasks            -> TaskPage                    (cursor-paginated)
 GET   /api/v1/instances/{id}/timers           -> CaseInstanceTimerList
 GET   /api/v1/instances/{id}/holds            -> CaseInstanceHoldList
 GET   /api/v1/instances/{id}/related          -> CaseInstanceRelatedList
 GET   /api/v1/instances/{id}/provenance       -> ProvenanceRecordPage        (cursor-paginated)
+GET   /api/v1/instances/{id}/custody           -> CustodyReceipt
 POST  /api/v1/instances/{id}/events           -> EventSubmissionResponse     (Idempotency-Key REQUIRED)
 POST  /api/v1/instances/{id}/suspend          -> CaseInstance                (Idempotency-Key REQUIRED)
 POST  /api/v1/instances/{id}/resume           -> CaseInstance                (Idempotency-Key REQUIRED)
@@ -128,7 +148,7 @@ The kernel-named operation results map to API-side response fields: `instanceMig
 
 `GET /api/v1/instances` and `GET /api/v1/instances/{id}/tasks` and `GET /api/v1/instances/{id}/provenance` use cursor pagination per `api/pagination.schema.json`. Cursors are opaque, single-use within the issuing deploy. Cursor expiry returns `410 Gone` with `WOS-1410` (ADR 0082 D-7). No `total`, `page`, or `pageSize` echo.
 
-The smaller subresources (`governance`, `timers`, `holds`, `related`) are not paginated because the cardinality is bounded by definition (typically single-digit per case).
+The smaller subresources (`governance`, `timers`, `holds`, `related`, `custody`) are not paginated because the cardinality is bounded by definition (typically single-digit per case). `compensation` is cursor-paginated (D-7) because compensation logs may grow unbounded.
 
 ## Idempotency
 

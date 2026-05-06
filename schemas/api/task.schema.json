@@ -543,14 +543,9 @@
             "openStringKind": "identifier"
           }
         },
-        "deadline": {
-          "type": "string",
-          "format": "date-time",
-          "description": "UTC RFC 3339 deadline by which the actor SHOULD submit the response before SLA breach (governance S10.3). DEPRECATED for multi-SLA workflows — use `deadlines` for the full set; this single-valued field is retained for backward compatibility and typically equals `deadlines[0].at` (the earliest enforcing deadline)."
-        },
         "deadlines": {
           "type": "array",
-          "description": "Full set of named SLA / statutory / internal deadlines on this task (governance §10.4.1; workflow-governance.md:548-560). Carries `firstResponse` and `fullResolution` for multi-SLA workflows plus any statutory windows. Empty when the workflow declares no deadlines on this task pattern. The legacy single `deadline` field above remains populated for back-compat consumers; new clients SHOULD read `deadlines` and treat `deadline` as `deadlines[0].at` typically.",
+          "description": "Full set of named SLA / statutory / internal deadlines on this task (governance §10.4.1; workflow-governance.md:548-560). Carries `firstResponse` and `fullResolution` for multi-SLA workflows plus any statutory windows. Empty when the workflow declares no deadlines on this task pattern.",
           "items": {
             "$ref": "#/$defs/TaskDeadline"
           }

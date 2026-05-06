@@ -40,6 +40,18 @@ Optional fields are omitted when absent:
 
 `type == bundle-completed` is emitted when a case-export bundle (`bundle.schema.json`) transitions to a terminal lifecycle state — `available`, `expired`, or `failed` per `BundleStatus`. The notification's `bundleId` URN dereferences to `GET /api/v1/bundles/{urn}` for the resolved bundle metadata; clients subscribe to the notification feed instead of polling `Bundle.status` per case, and at scale the feed is the discoverable observable for bundle completion. `bundleId` is REQUIRED on this type via the conditional `if`/`then` block on `Notification` so the typed payload makes the bundle resource structurally locatable; absence on a `bundle-completed` notification is a contract bug.
 
+## NotificationType Taxonomy
+
+The `type` field is a closed-with-vendor-extension family; vendor extensions use the `^x-[a-z]+-` pattern.
+
+| Literal | Semantics | Recommended severity |
+|---|---|---|
+| `bundle-completed` | Case-export bundle reached a terminal lifecycle state (`BundleStatus`). | `info` (on `available`), `warning` (on `expired`), `critical` (on `failed`) |
+| `adverse-decision` | A governed determination was reached that denies, reduces, or otherwise adversely affects a claimed benefit, right, or access — triggers procedural-review and appeal-path awareness. Emitted under governance §S10.3 escalation when an adverse outcome renders. | `critical` |
+| `appeal-filed` | An interested party has initiated a formal appeal against a prior adverse determination. Emitted to the adjudication authority and any registered observers; carries `instanceId` of the appeal case and `actorRef` of the appellant. | `critical` |
+
+`adverse-decision` enables case-portal UI to surface the "your application was denied / your benefit was reduced" feed item with deep-link to the determination and appeal instructions. `appeal-filed` enables the original adjudicator and oversight dashboard to surface pending-appeal state inline.
+
 ## Endpoints
 
 The public notification feed endpoints are:
