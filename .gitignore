@@ -12,6 +12,8 @@ __pycache__/
 
 # Claude Code agent infrastructure (worktrees, session metadata)
 .claude/
+/node_modules
+/node_modules/
 
 # Studio (Authoring) build artifacts
 studio/dist/
