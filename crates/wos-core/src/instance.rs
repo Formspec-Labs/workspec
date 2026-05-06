@@ -116,6 +116,47 @@ pub struct CaseInstance {
     pub extensions: HashMap<String, serde_json::Value>,
 }
 
+fn parse_instance_urn_segments(rest: &str) -> Option<(&str, &str, &str)> {
+    let (before_id, id) = rest.rsplit_once(':')?;
+    if id.is_empty()
+        || !id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
+    {
+        return None;
+    }
+    if before_id.len() < 12 {
+        return None;
+    }
+    let date_end = before_id.len();
+    let date_start = date_end - 10;
+    if before_id.as_bytes()[date_start - 1] != b':' {
+        return None;
+    }
+    let date = &before_id[date_start..date_end];
+    if !is_date_segment(date) {
+        return None;
+    }
+    let scope = &before_id[..date_start - 1];
+    if scope.is_empty()
+        || !scope
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b':' || b == b'-')
+    {
+        return None;
+    }
+    Some((scope, date, id))
+}
+
+fn is_date_segment(s: &str) -> bool {
+    s.len() == 10
+        && s.as_bytes()[4] == b'-'
+        && s.as_bytes()[7] == b'-'
+        && s.as_bytes()[..4].iter().all(|b| b.is_ascii_digit())
+        && s.as_bytes()[5..7].iter().all(|b| b.is_ascii_digit())
+        && s.as_bytes()[8..10].iter().all(|b| b.is_ascii_digit())
+}
+
 impl CaseInstance {
     /// Extension key where the runtime preserves a creator-supplied identifier
     /// when a canonical case TypeID was minted at `create_instance`.
@@ -131,6 +172,27 @@ impl CaseInstance {
     #[must_use]
     pub fn is_case_id(value: &str) -> bool {
         typeid::is_valid_type_id(value, Some(typeid::CASE_PREFIX))
+    }
+
+    /// Returns whether `value` matches the WOS instance URN shape
+    /// `urn:wos:instance:<scope>:<date>:<id>` per the `WosResourceUrn`
+    /// pattern in `schemas/api/_common.schema.json`.
+    #[must_use]
+    pub fn is_instance_urn(value: &str) -> bool {
+        let rest = match value.strip_prefix("urn:wos:instance:") {
+            Some(r) => r,
+            None => return false,
+        };
+        parse_instance_urn_segments(rest).is_some()
+    }
+
+    /// Extracts `(scope, date, id)` from a valid WOS instance URN.
+    ///
+    /// Returns `None` when `value` is not a valid instance URN.
+    #[must_use]
+    pub fn extract_urn_parts(value: &str) -> Option<(&str, &str, &str)> {
+        let rest = value.strip_prefix("urn:wos:instance:")?;
+        parse_instance_urn_segments(rest)
     }
 
     /// Returns the identifier used for external correlation (CloudEvents
