@@ -4,6 +4,29 @@ Archive of closed-out work items extracted from `TODO.md`. Active backlog and in
 
 ---
 
+## Session 2026-05-06 — Scout-swarm validation + T4-TODO merge + ADR checklist refresh
+
+- [x] **Scout-swarm validation** — 7 parallel wos-scout agents validated all uncompleted TODO.md items against HEAD. 4 stale paths corrected, 3 stale counts fixed, 2 stale gate descriptions updated, 1 factual error corrected (#70 `String` → `RuntimeError`), 3 duplicate items (Backlog #3/#4) removed, 1 new blocker surfaced (ADR 0064 orchestrator gap for #2), 3 material flaws in #7 plan documented. ADR 0066/0067 statuses confirmed as Proposed-but-de-facto-accepted (cluster-ratification gate satisfied; status flips pending).
+- [x] **T4-TODO.md merged into TODO.md item #1** — all active cross-repo tracking consolidated into TODO.md. T4-TODO.md deleted (content merged 2026-05-06).
+- [x] **ADR 0066 checklist refreshed** — items 1 (provenance) and 5 (export, 2/3 paths) marked `[x]`; "six" corrected to "seven" variants (+`Reinstated`); stale `schemas/kernel/wos-provenance-record.schema.json` path corrected to `wos-workflow.schema.json`; Trellis item reference fixed (`17` → `7`).
+- [x] **ADR 0067 checklist refreshed** — item 1 (provenance + schema $defs) and §3 authoring surface marked `[x]`; Trellis item reference fixed (`18` → `8`); §5 export note added (all three export paths still empty for clock kinds).
+- [x] **Duplicate items removed** — `AuthorizationAttestation` and `ADR 0066/0067 implementation` umbrella items removed from Backlog (tracked in Do-next #3-#5).
+- [x] **#70 stale claim fixed** — `Result<_, String>` corrected to `Result<_, RuntimeError>` (the real surface is already typed; the gap is the subset classification, not the wrapper type).
+- [x] **#7 plan revised** — fixture validation gap (`additionalProperties: false` on Advanced block), endpoint placement (`instance.md` not `governance.md`), scope expansion decision documented.
+
+## Moved from TODO.md 2026-05-06 — Completed items cleanup
+
+- [x] **PLN-0406 — `ProvenanceKind` Rust enum extension (14 variants) + match-arm fixes** — landed 2026-05-05. 14 new `ProvenanceKind` variants (`AutonomyEscalation`, `DriftAlert`, `LegalHoldPlaced`/`Released`/`DestructionRejected`, `ContinuationOfServicesActivated`, `InstanceSuspended`/`Resumed`/`Terminated`, `CircuitBreakerTripped`/`Reset`, `ShadowModeDivergence`, `DcrZoneViolation`, `ReportTimedOut`), match-arm fixes at `audit_tier.rs`/`mod.rs`/`tests.rs`, schema enum extended 43→~56 literals, typed payload sub-shapes in `provenance.schema.json`. Final residual from ADR 0082 closure.
+- [x] **WOS-T2** — ADR-0060 cross-reference taxonomy revisit. Workflow Governance now uses `templateKey`, `noticeTemplateKey`, `notificationTemplateKey`, `escalationStepId`; G-063 enforces Notification Template keys; G-066 enforces `BreachPolicy.escalationStepId` resolution; Studio WOS types regenerated.
+- [x] **WOS-T3** — `DurableRuntime` extraction + Temporal/Restate spike. Public backend-neutral trait, in-memory `WosRuntime` adapter, runtime module split, Restate selected as first production backend, Temporal deferred, tenant-scope contract recorded.
+- [x] **ADR 0073 — case initiation and intake handoff** — Landed. Typed `IntakeHandoff` parser/classifier in `wos-formspec-binding`; runtime `accept_intake_handoff` seam in `wos-runtime`; default intake policies; durable replay/persistence; canonical runtime provenance emission; Runtime Companion normative algorithm; Trellis-backed verification vectors. Remaining: one parent-owned shared fixture bundle (convenience-only).
+- [x] **#65d `crates/wos-mcp/NOTES.md`** — decision record for hand-rolled JSON-RPC vs `rust-mcp-sdk`. Landed Session 16.
+- [x] **#67 `ProvenanceKind::ConfigurationWarning`** — variant + audit-tier=Facts + constructor + 4 unit tests. 4 MUST sites follow-up tracked separately. Landed Session 16.
+- [x] **#68 Schema↔enum drift lint** — `check-recordkind-parity.py` walks all schemas, finds recordKind bindings, asserts ProvenanceKind parity. Wired into CI. Landed Session 16.
+- [x] **#69 `wos-export` exhaustive variant test** — `prov_o.rs` and `xes.rs` smoke tests rewritten to enumerate all 101 ProvenanceKind variants. Landed Session 16.
+
+---
+
 ## Session 2026-05-01 — Closed-vocabulary hardening review follow-ups
 
 - [x] **`assurance_rank` IAL/AAL recognition** — `assurance_rank` now recognizes NIST SP 800-63 IAL/AAL labels (`ial1`/`aal1`=1, `ial2`/`aal2`=2, `ial3`/`aal3`=3); previously these returned 0 (unknown). Aligns runtime with Signature Profile §2.7 ("Identity binding is provider-neutral … records authentication method, provider reference, assurance strength"). Behavior change for any prior fixture that relied on IAL labels being unrecognized; SIG-008 (notary, very-high) and SIG-013 (email-otp, low vs standard) cover the new path.
